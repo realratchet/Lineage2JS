@@ -58,7 +58,7 @@ export class FStaticMeshLightInfo implements Constructable_T {
     }
 }
 
-abstract class UStaticMeshInstance extends UObject {
+export abstract class UStaticMeshInstance extends UObject {
     declare public colorStream: FRawColorStream;
     declare public sceneLights: FArray<FStaticMeshLightInfo>;
     declare public environmentLights: FArray<FStaticMeshLightInfo>;
@@ -180,4 +180,3 @@ abstract class UStaticMeshInstance extends UObject {
 }
 
 export default UStaticMeshInstance;
-export { UStaticMeshInstance };

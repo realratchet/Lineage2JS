@@ -310,7 +310,7 @@ function resolveCharacterPartPaths(row: Record<string, any>, hairPieces: Charact
     ];
 }
 
-class DecodeEngine {
+export class DecodeEngine {
     protected assetLoader: AssetLoader = null;
     protected hasSweptCache = false;
     protected cacheCharGrpRows: Record<string, any>[] = null;
@@ -1389,4 +1389,3 @@ class DecodeEngine {
 }
 
 export default DecodeEngine;
-export { DecodeEngine };

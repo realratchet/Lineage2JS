@@ -50,7 +50,7 @@ export type LoadSettings_T = {
     [key: `_${string}`]: any // debug/testing overrides, see core.ts
 };
 
-class DecodeLibraryBuilder {
+export class DecodeLibraryBuilder {
     public readonly library: DecodeLibrary;
 
     protected readonly materialsLoading = new Set<string>();
@@ -450,4 +450,3 @@ class DecodeLibraryBuilder {
 }
 
 export default DecodeLibraryBuilder;
-export { DecodeLibraryBuilder };

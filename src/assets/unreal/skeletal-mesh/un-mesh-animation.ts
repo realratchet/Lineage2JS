@@ -239,7 +239,7 @@ class FAnimSequence {
     }
 }
 
-abstract class UMeshAnimation extends UObject {
+export abstract class UMeshAnimation extends UObject {
     public version: number;
     public refBones: FArray<FNamedBone>;
     public moves: FMotionChunk[];
@@ -343,4 +343,3 @@ export enum SkinNotifyMode_T {
 }
 
 export default UMeshAnimation;
-export { UMeshAnimation };

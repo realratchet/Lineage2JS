@@ -1,6 +1,6 @@
 import DDSConstants from "./dds/dds-constants";
 
-enum ETextureFormat {
+export enum ETextureFormat {
     TEXF_P8,
     TEXF_RGBA7,
     TEXF_RGB16,
@@ -52,7 +52,7 @@ class UPixelFormatInfo {
     public isDXT() { return this.fourCC[0] !== 0; }
 }
 
-enum ETexturePixelFormat {
+export enum ETexturePixelFormat {
     TPF_UNKNOWN,
     TPF_P8,                // 8-bit paletted
     TPF_G8,                // 8-bit grayscale
@@ -78,7 +78,7 @@ enum ETexturePixelFormat {
     TPF_MAX
 };
 
-const PixelFormatInfo = Object.freeze([
+export const PixelFormatInfo = Object.freeze([
     { key: ETexturePixelFormat.TPF_UNKNOWN, value: { fourCC: 0, blockSizeX: 0, blockSizeY: 0, bytesPerBlock: 0, x360AlignX: 0, x360AlignY: 0, float: 0, name: "UNKNOWN" } },	// TPF_UNKNOWN
     { key: ETexturePixelFormat.TPF_P8, value: { fourCC: 0, blockSizeX: 1, blockSizeY: 1, bytesPerBlock: 1, x360AlignX: 0, x360AlignY: 0, float: 0, name: "P8" } },	// TPF_P8
     { key: ETexturePixelFormat.TPF_G8, value: { fourCC: 0, blockSizeX: 1, blockSizeY: 1, bytesPerBlock: 1, x360AlignX: 64, x360AlignY: 64, float: 0, name: "G8" } },	// TPF_G8
@@ -107,4 +107,3 @@ const PixelFormatInfo = Object.freeze([
 }, {} as Record<number, UPixelFormatInfo>));
 
 export default ETextureFormat;
-export { ETextureFormat, PixelFormatInfo, ETexturePixelFormat };

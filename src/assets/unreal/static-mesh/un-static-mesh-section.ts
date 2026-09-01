@@ -1,5 +1,6 @@
 import type { APackage, Constructable_T } from "@l2js/core";
-class FStaticMeshSection implements Constructable_T {
+
+export class FStaticMeshSection implements Constructable_T {
     declare public isStrip: boolean;
     declare public firstIndex: number;      // first index
     declare public firstVertex: number;     // first used vertex
@@ -20,4 +21,3 @@ class FStaticMeshSection implements Constructable_T {
 }
 
 export default FStaticMeshSection;
-export { FStaticMeshSection };

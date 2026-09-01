@@ -1,10 +1,10 @@
 import type { ISchemaValue } from "./dat-schema";
 import { UTF16ContainerType } from "./dat-container";
 
-const CHARACTER_ARMOR_GROUPS: Record<string, string> = { mfighter: "m_human_fighter", ffighter: "f_human_fighter", mdarkelf: "m_dark_elf", fdarkelf: "f_dark_elf", mdwarf: "m_dwarf", fdwarf: "f_dwarf", melf: "m_elf", felf: "f_elf", mmagic: "m_human_mystic", fmagic: "f_human_mystic", morc: "m_orc_fighter", forc: "f_orc_fighter", mshaman: "m_orc_mystic", fshaman: "f_orc_mystic" };
-const CHARACTER_ARMOR_SLOTS = { chest: 10, legs: 11, gloves: 9, boots: 12 };
+export const CHARACTER_ARMOR_GROUPS: Record<string, string> = { mfighter: "m_human_fighter", ffighter: "f_human_fighter", mdarkelf: "m_dark_elf", fdarkelf: "f_dark_elf", mdwarf: "m_dwarf", fdwarf: "f_dwarf", melf: "m_elf", felf: "f_elf", mmagic: "m_human_mystic", fmagic: "f_human_mystic", morc: "m_orc_fighter", forc: "f_orc_fighter", mshaman: "m_orc_mystic", fshaman: "f_orc_mystic" };
+export const CHARACTER_ARMOR_SLOTS = { chest: 10, legs: 11, gloves: 9, boots: 12 };
 
-const SCHEMA_ARMORGRP_DAT: ISchemaValue[] = [
+export const SCHEMA_ARMORGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },
     { type: "uint32", name: "id" },
     { type: "uint32", name: "drop_type" },
@@ -60,4 +60,3 @@ SCHEMA_ARMORGRP_DAT.push(
 );
 
 export default SCHEMA_ARMORGRP_DAT;
-export { CHARACTER_ARMOR_GROUPS, CHARACTER_ARMOR_SLOTS, SCHEMA_ARMORGRP_DAT };

@@ -16,7 +16,7 @@ import type { Vector3Arr } from "@l2js/engine";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 const tmpUp = new Vector3(0, 0, 1);
-class BaseActor extends GameObject implements ICollidable {
+export class BaseActor extends GameObject implements ICollidable {
     public readonly isActor = true;
     declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
@@ -202,4 +202,3 @@ class BaseActor extends GameObject implements ICollidable {
 }
 
 export default BaseActor;
-export { BaseActor };

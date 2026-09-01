@@ -398,7 +398,7 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo | ISunLightD
     // };
 }
 
-function decodeSectorCore(library: DecodeLibrary) {
+export function decodeSectorCore(library: DecodeLibrary) {
     const sector = new SectorObject();
 
     sector.name = library.name;
@@ -481,16 +481,16 @@ function decodeSectorCore(library: DecodeLibrary) {
     return sector;
 }
 
-type SectorStaticMeshDecodeJob_T = StaticMeshBatchJob_T;
+export type SectorStaticMeshDecodeJob_T = StaticMeshBatchJob_T;
 
-function createSectorStaticMeshDecodeJob(library: DecodeLibrary, sector: SectorObject): SectorStaticMeshDecodeJob_T {
+export function createSectorStaticMeshDecodeJob(library: DecodeLibrary, sector: SectorObject): SectorStaticMeshDecodeJob_T {
     const staticMeshGroup = new Group();
     staticMeshGroup.name = "StaticMeshActors";
 
     return createStaticMeshBatchJob(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
 }
 
-function stepSectorStaticMeshDecodeJob(job: SectorStaticMeshDecodeJob_T): boolean {
+export function stepSectorStaticMeshDecodeJob(job: SectorStaticMeshDecodeJob_T): boolean {
     if (!stepStaticMeshBatchJob(job)) return false;
 
     finishSectorStaticMeshes(job.library, job.sector);
@@ -607,7 +607,7 @@ function finishSectorStaticMeshes(library: DecodeLibrary, sector: SectorObject) 
     return sector;
 }
 
-function decodeSectorStaticMeshes(library: DecodeLibrary, sector: SectorObject) {
+export function decodeSectorStaticMeshes(library: DecodeLibrary, sector: SectorObject) {
     const job = createSectorStaticMeshDecodeJob(library, sector);
 
     while (!stepSectorStaticMeshDecodeJob(job)) { }
@@ -615,7 +615,7 @@ function decodeSectorStaticMeshes(library: DecodeLibrary, sector: SectorObject) 
     return sector;
 }
 
-function decodePackage(library: DecodeLibrary) {
+export function decodePackage(library: DecodeLibrary) {
     const sector = decodeSectorCore(library);
     decodeSectorStaticMeshes(library, sector);
 
@@ -967,10 +967,10 @@ function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeI
 
     // debugger;
 
-    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), { 
+    const emitter = new SpriteEmitter(Object.assign(decodeEmitterConfig(info), {
         material,
         spriteDirection: info.spriteDirection,
-        projectionNormal: info.projectionNormal 
+        projectionNormal: info.projectionNormal
     }));
 
     applySimpleProperties(library, emitter, info);
@@ -1016,7 +1016,7 @@ function decodeFogInfo(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     return object;
 }
 
-function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo | EmitterConfig_T): THREE.Object3D {
+export function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo | EmitterConfig_T): THREE.Object3D {
     switch (info.type) {
         case "Group":
         case "Level":
@@ -1042,4 +1042,3 @@ function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstanceDecod
 }
 
 export default decodeObject3D;
-export { decodeObject3D, decodePackage, decodeSectorCore, decodeSectorStaticMeshes, createSectorStaticMeshDecodeJob, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T };

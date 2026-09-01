@@ -8,7 +8,7 @@ export type IBSPLeafDecodeInfo_T = {
     musicId?: number
 };
 
-class FLeaf implements Constructable_T {
+export class FLeaf implements Constructable_T {
     public iZone: number;
     public iPermeating: number;
     public iVolumetric: number;
@@ -36,4 +36,3 @@ class FLeaf implements Constructable_T {
 }
 
 export default FLeaf;
-export { FLeaf };

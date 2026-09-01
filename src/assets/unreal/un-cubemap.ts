@@ -1,6 +1,6 @@
 import UTexture from "./un-texture";
 
-abstract class UCubemap extends UTexture {
+export abstract class UCubemap extends UTexture {
     declare protected faces: [UTexture, UTexture, UTexture, UTexture, UTexture, UTexture];
 
     protected getPropertyMap() {
@@ -11,4 +11,3 @@ abstract class UCubemap extends UTexture {
 }
 
 export default UCubemap;
-export { UCubemap };

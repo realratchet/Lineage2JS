@@ -10,7 +10,7 @@ import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 
 
-async function startCore(interactive: boolean = true): Promise<RenderManager | null> {
+export async function startCore(interactive: boolean = true): Promise<RenderManager | null> {
     // await ensureWasmInitialized();
 
     if ("storage" in navigator)
@@ -389,4 +389,3 @@ async function precacheCharacters(assetManager: AssetManager) {
 }
 
 export default startCore;
-export { startCore };

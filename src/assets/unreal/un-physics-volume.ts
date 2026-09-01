@@ -18,7 +18,7 @@ export type IWaterVolumeDecodeInfo = IBaseObjectDecodeInfo & {
     bsp: IVolumeBspDecodeInfo
 };
 
-abstract class UPhysicsVolume extends UVolume {
+export abstract class UPhysicsVolume extends UVolume {
     declare public readonly isPhysicsVolume: boolean;
 
     declare protected zoneVelocity: FVector;
@@ -151,4 +151,3 @@ abstract class UPhysicsVolume extends UVolume {
 }
 
 export default UPhysicsVolume;
-export { UPhysicsVolume };

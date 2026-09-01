@@ -11,13 +11,13 @@ const _TWO_TO_FIFTEEN = 2 ** 15;
 const _INV_TWO_TO_FIFTEEN = 1 / _TWO_TO_FIFTEEN;
 const _INV_TWO_TO_FIFTEEN_TIMES_PI = _INV_TWO_TO_FIFTEEN * _PI;
 
-enum RotName {
+export enum RotName {
     PITCH,                          // looking up and down (0=Straight Ahead, +Up, -Down).
     YAW,                            // rotating around (running in circles), 0=East, +North, -South.
     ROLL                            // rotation about axis of screen, 0=Straight, +Clockwise, -CCW.
 }
 
-abstract class FRotator extends UObject {
+export abstract class FRotator extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public readonly pitch: number;
@@ -114,4 +114,4 @@ abstract class FRotator extends UObject {
 }
 
 export default FRotator;
-export { FRotator, getRotatorQuaternionElements };
+export { getRotatorQuaternionElements };

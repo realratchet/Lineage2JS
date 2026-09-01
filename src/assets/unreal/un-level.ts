@@ -46,7 +46,7 @@ abstract class ULevelBase extends UObject {
     }
 }
 
-abstract class ULevel extends ULevelBase {
+export abstract class ULevel extends ULevelBase {
     public baseModelId: number;
     public levelInfoId: number;
 
@@ -150,4 +150,3 @@ abstract class ULevel extends ULevelBase {
 }
 
 export default ULevel;
-export { ULevel };

@@ -1,6 +1,6 @@
 import { BufferValue, type APackage, type Constructable_T, type PropertyTag, FPrimitiveArrayLazy } from "@l2js/core";
 
-class FMipmap implements Constructable_T {
+export class FMipmap implements Constructable_T {
     public readonly dataArray = new FPrimitiveArrayLazy(BufferValue.uint8);
 
     public sizeW: number;
@@ -29,4 +29,3 @@ class FMipmap implements Constructable_T {
 }
 
 export default FMipmap;
-export { FMipmap };

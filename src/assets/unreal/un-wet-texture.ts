@@ -18,7 +18,7 @@ export type IWetTextureDecodeInfo = IDataTextureDecodeInfo & {
 // parameters and the drop list.
 
 // ADrop struct, bytes A-D are type-specific (speed/phase/age/size)
-abstract class UADrop extends UObject {
+export abstract class UADrop extends UObject {
     declare public type: EDropType_T;
     declare public depth: number;
     declare public x: number;
@@ -42,7 +42,7 @@ abstract class UADrop extends UObject {
     }
 }
 
-abstract class UWetTexture extends UTexture {
+export abstract class UWetTexture extends UTexture {
     declare protected sourceTexture: UTexture;
     declare protected waveAmp: number;
     declare protected numDrops: number;
@@ -164,4 +164,3 @@ const DROP_TYPE_NAMES: Record<EDropType_T, string> = {
 };
 
 export default UWetTexture;
-export { UWetTexture, UADrop };

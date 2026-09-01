@@ -1,7 +1,7 @@
 import UObject from "./un-object";
 import type { FVector } from "./un-vector";
 
-abstract class FScale extends UObject {
+export abstract class FScale extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public readonly scale: FVector;
@@ -26,7 +26,7 @@ abstract class FScale extends UObject {
     }
 }
 
-enum ESheerAxis_T {
+export enum ESheerAxis_T {
     SHEER_None = 0,
     SHEER_XY = 1,
     SHEER_XZ = 2,
@@ -37,4 +37,3 @@ enum ESheerAxis_T {
 };
 
 export default FScale;
-export { FScale, ESheerAxis_T };

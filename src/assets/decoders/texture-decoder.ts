@@ -159,7 +159,7 @@ function decodeFloat(info: IDataTextureDecodeInfo): DataTexture {
     return texture;
 }
 
-function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
+export function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
@@ -184,10 +184,9 @@ function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapDat
 }
 
 
-function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
+export function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
     let rgbaData: Uint8Array | null = null;
-    let width = 1;
-    let height = 1;
+    let width = 1, height = 1;
 
     try {
         if (info.textureType === "dds") {
@@ -242,4 +241,3 @@ function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
 }
 
 export default decodeTexture;
-export { decodeTexture, decodeTextureAsB64 };

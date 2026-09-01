@@ -1,11 +1,11 @@
-function fourCCToInt32(value: string) {
+export function fourCCToInt32(value: string) {
     return value.charCodeAt(0) +
         (value.charCodeAt(1) << 8) +
         (value.charCodeAt(2) << 16) +
         (value.charCodeAt(3) << 24);
 }
 
-namespace DDSConstants {
+export namespace DDSConstants {
     export const FOURCC_DDS = fourCCToInt32("DDS ");
     export const FOURCC_DXT1 = fourCCToInt32("DXT1");
     export const FOURCC_DXT2 = fourCCToInt32("DXT2");
@@ -220,4 +220,3 @@ namespace DDSConstants {
 }
 
 export default DDSConstants;
-export { DDSConstants, fourCCToInt32 };

@@ -1,5 +1,6 @@
 import type { ISchemaValue } from "./dat-schema";
-const SCHEMA_ZONENAME_E_DAT: ISchemaValue[] = [
+
+export const SCHEMA_ZONENAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "nbr" },
     { type: "uint32", name: "zone_color_id" },
     { type: "uint32", name: "x_world_grid" },
@@ -10,4 +11,3 @@ const SCHEMA_ZONENAME_E_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_ZONENAME_E_DAT;
-export { SCHEMA_ZONENAME_E_DAT };

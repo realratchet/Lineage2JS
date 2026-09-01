@@ -1,5 +1,6 @@
 import type { ISchemaValue } from "./dat-schema";
-const SCHEMA_MOBSKILLANIMGRP_DAT: ISchemaValue[] = [
+
+export const SCHEMA_MOBSKILLANIMGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "npc_id" },
     { type: "uint32", name: "skill_id" },
     { type: "utf16", name: "seq_name" },
@@ -9,4 +10,3 @@ const SCHEMA_MOBSKILLANIMGRP_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_MOBSKILLANIMGRP_DAT;
-export { SCHEMA_MOBSKILLANIMGRP_DAT };

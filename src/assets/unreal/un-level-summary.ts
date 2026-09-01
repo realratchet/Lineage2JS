@@ -1,6 +1,6 @@
 import UObject from "./un-object";
 
-abstract class ULevelSummary extends UObject { 
+export abstract class ULevelSummary extends UObject { 
     declare public readonly title: string;
     declare public readonly author: string;
     declare public readonly levelEnterText: string;
@@ -17,4 +17,3 @@ abstract class ULevelSummary extends UObject {
 }
 
 export default ULevelSummary;
-export { ULevelSummary };

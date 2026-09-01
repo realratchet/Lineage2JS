@@ -4,7 +4,7 @@ import ColorByte from "../../utils/color-byte";
 import { Vector2 } from "three";
 import type { IL2NEnvDecodeInfo } from "@l2js/engine/contracts/config";
 
-function decodeEnv(props: IL2NEnvDecodeInfo): EnvInfo {
+export function decodeEnv(props: IL2NEnvDecodeInfo): EnvInfo {
     const setup = {
         ...props.envSetup,
         timeEnv: Object.fromEntries(Object.entries(props.envSetup.timeEnv).map(([k, v]) => [k, decodeEnvColor(v)])) as any,
@@ -25,4 +25,3 @@ function decodeEnv(props: IL2NEnvDecodeInfo): EnvInfo {
 }
 
 export default decodeEnv;
-export { decodeEnv };

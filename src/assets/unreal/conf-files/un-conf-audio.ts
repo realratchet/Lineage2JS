@@ -28,7 +28,7 @@ function getSet(values: Map<string, string>, prefix: string): SwimSoundSet_T {
     };
 }
 
-class UConfigAudio extends BaseConfigFile {
+export class UConfigAudio extends BaseConfigFile {
     protected swimSound: SwimSoundConfig_T = null;
 
     public load(): this {
@@ -59,4 +59,3 @@ class UConfigAudio extends BaseConfigFile {
 }
 
 export default UConfigAudio;
-export { UConfigAudio };

@@ -13,7 +13,7 @@ export type IMusicVolumeDecodeInfo = IAudioDecodeInfo & {
     bsp: IVolumeBspDecodeInfo
 };
 
-abstract class UMusicVolume extends UVolume {
+export abstract class UMusicVolume extends UVolume {
     declare protected musicId: number;
     declare protected isMusicForced: boolean;
     declare protected isMusicLooped: boolean;
@@ -45,4 +45,3 @@ abstract class UMusicVolume extends UVolume {
 }
 
 export default UMusicVolume;
-export { UMusicVolume };

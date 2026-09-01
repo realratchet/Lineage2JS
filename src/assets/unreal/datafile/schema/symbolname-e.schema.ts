@@ -1,5 +1,6 @@
 import type { ISchemaValue } from "./dat-schema";
-const SCHEMA_SYMBOLNAME_E_DAT: ISchemaValue[] = [
+
+export const SCHEMA_SYMBOLNAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "ASCF", name: "filename" },
     { type: "ASCF", name: "alias" },
@@ -7,4 +8,3 @@ const SCHEMA_SYMBOLNAME_E_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_SYMBOLNAME_E_DAT;
-export { SCHEMA_SYMBOLNAME_E_DAT };

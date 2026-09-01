@@ -60,11 +60,11 @@ async function getCachedFile(sectorName: string, settings: LoadSettings_T): Prom
     }
 }
 
-async function hasCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<boolean> {
+export async function hasCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<boolean> {
     return (await getCachedFile(sectorName, settings)) !== null;
 }
 
-async function loadCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<any | null> {
+export async function loadCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<any | null> {
     const seekable = await openCachedLibrary(sectorName, settings);
 
     if (!seekable) return null;
@@ -77,7 +77,7 @@ async function loadCachedLibrary(sectorName: string, settings: LoadSettings_T): 
     }
 }
 
-async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
+export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
     const file = await getCachedFile(sectorName, settings);
 
     if (!file) return null;
@@ -90,13 +90,13 @@ async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): 
     }
 }
 
-async function loadCachedLibraryBuffer(sectorName: string, settings: LoadSettings_T): Promise<ArrayBuffer | null> {
+export async function loadCachedLibraryBuffer(sectorName: string, settings: LoadSettings_T): Promise<ArrayBuffer | null> {
     const file = await getCachedFile(sectorName, settings);
 
     return file ? file.arrayBuffer() : null;
 }
 
-function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, library: any): void {
+export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, library: any): void {
     if (!isCacheEnabled(settings)) return;
 
     let bytes: Uint8Array;
@@ -111,7 +111,7 @@ function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, librar
     void writeCacheFileSafe(cacheFileName(sectorName, settings), sectorName, bytes);
 }
 
-async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any): Promise<number> {
+export async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any): Promise<number> {
     if (!isCacheEnabled(settings)) return 0;
 
     const bytes = serializeLibrary(library);
@@ -121,7 +121,7 @@ async function storeCachedLibraryDurable(sectorName: string, settings: LoadSetti
     return bytes.length;
 }
 
-async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
+export async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
     if (!isCacheEnabled(settings)) return;
 
     await writeCacheFile(cacheFileName(sectorName, settings), sectorName, new Uint8Array(buffer));
@@ -146,7 +146,7 @@ async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: U
     }
 }
 
-async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> {
+export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> {
     let dir: FileSystemDirectoryHandle;
 
     try {
@@ -183,7 +183,7 @@ async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> {
 }
 
 // Blob URLs are scoped to the thread owning the library.
-function refreshSoundBlobUris(library: any): void {
+export function refreshSoundBlobUris(library: any): void {
     const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array, mimeType: string }>;
 
     if (!soundCache) return;
@@ -198,4 +198,4 @@ function refreshSoundBlobUris(library: any): void {
 }
 
 export type { SeekableLibrary_T };
-export { hasCachedLibrary, loadCachedLibrary, openCachedLibrary, hydrateLibraryFile, loadCachedLibraryBuffer, storeCachedLibrary, storeCachedLibraryDurable, storeCachedLibraryBufferDurable, sweepDecodeCache, refreshSoundBlobUris };
+export { hydrateLibraryFile };

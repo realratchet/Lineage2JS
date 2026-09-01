@@ -40,7 +40,7 @@ export enum ETexClampMode {
     TC_Clamp = 0x01,
 };
 
-abstract class UTexture extends UMaterial {
+export abstract class UTexture extends UMaterial {
     declare public readonly palette: UPlatte;
     declare public readonly internalTime: number[];
     declare public readonly format: ETextureFormat/* = ETextureFormat.TEXF_RGBA8*/;
@@ -355,7 +355,6 @@ abstract class UTexture extends UMaterial {
 }
 
 export default UTexture;
-export { UTexture };
 
 function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
     const width_half = width / 2;

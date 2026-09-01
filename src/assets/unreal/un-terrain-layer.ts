@@ -4,14 +4,14 @@ import type { FRotator } from "./un-rotator";
 import type { FMatrix } from "./un-matrix";
 import type { FVector } from "./un-vector";
 
-enum TextureMapAxis_T {
+export enum TextureMapAxis_T {
     TEXMAPAXIS_XY = 0,
     TEXMAPAXIS_XZ = 1,
     TEXMAPAXIS_YZ = 2,
     TEXMAPAXIS_MAX = 3,
 };
 
-abstract class UTerrainLayer extends UObject {
+export abstract class UTerrainLayer extends UObject {
     declare public readonly map: UTexture;
     declare public readonly alphaMap: UTexture;
     declare public readonly scaleW: number;
@@ -55,4 +55,3 @@ abstract class UTerrainLayer extends UObject {
 }
 
 export default UTerrainLayer;
-export { UTerrainLayer, TextureMapAxis_T };

@@ -3,7 +3,7 @@ import fetchAssetHandle from "../asset-handle";
 import { ASCFType } from "./schema/dat-container";
 import { UEncodedFile, BufferValue, type ValidTypes_T, type ValueTypeNames_T } from "@l2js/core";
 
-class UDataFile extends UEncodedFile {
+export class UDataFile extends UEncodedFile {
     public datarows: Record<string, any>[];
     public readonly schema: readonly ISchemaValue[];
     protected readonly recordCount: number | null;
@@ -69,4 +69,3 @@ function loadSingleValue(readable: UDataFile, type: ValidTypes_T<any> | IDatCont
 }
 
 export default UDataFile;
-export { UDataFile };

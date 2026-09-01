@@ -1,5 +1,6 @@
 import type { ISchemaValue } from "./dat-schema";
-const SCHEMA_SKILLSOUNDGRP_DAT: ISchemaValue[] = [
+
+export const SCHEMA_SKILLSOUNDGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "skill_id" },
     { type: "uint32", name: "skill_level" }
 ];
@@ -28,4 +29,3 @@ SCHEMA_SKILLSOUNDGRP_DAT.push(
 );
 
 export default SCHEMA_SKILLSOUNDGRP_DAT;
-export { SCHEMA_SKILLSOUNDGRP_DAT };

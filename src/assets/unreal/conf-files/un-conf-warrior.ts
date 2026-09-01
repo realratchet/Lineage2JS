@@ -1,7 +1,7 @@
 import BaseConfigFile from "./un-base-config";
 
 // system/lineagewarrior.int declares stance-indexed animation names per playable class.
-type WarriorAnimations_T = {
+export type WarriorAnimations_T = {
     wait: string;
     walk: string;
     run: string;
@@ -21,7 +21,7 @@ const ANIM_KEYS: Record<keyof WarriorAnimations_T, string> = {
     swimWait: "SwimWaitAnimName"
 };
 
-class UConfigWarrior extends BaseConfigFile {
+export class UConfigWarrior extends BaseConfigFile {
     protected readonly classAnimations = new Map<string, WarriorAnimations_T>();
 
     public async load(): Promise<this> {
@@ -62,4 +62,3 @@ class UConfigWarrior extends BaseConfigFile {
 }
 
 export default UConfigWarrior;
-export { UConfigWarrior, type WarriorAnimations_T };

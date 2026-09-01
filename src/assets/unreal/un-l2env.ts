@@ -47,7 +47,7 @@ export type IL2NEnvLightDecodeInfo = {
 
 interface IEnvTime { time: number; }
 
-abstract class FNTimeHSV extends UObject implements IEnvTime {
+export abstract class FNTimeHSV extends UObject implements IEnvTime {
     declare public readonly time: number;
     declare public readonly hue: number;
     declare public readonly sat: number;
@@ -74,7 +74,7 @@ abstract class FNTimeHSV extends UObject implements IEnvTime {
     }
 }
 
-abstract class FNTimeColor extends UObject implements IEnvTime {
+export abstract class FNTimeColor extends UObject implements IEnvTime {
     declare public readonly time: number;
     declare public readonly r: number;
     declare public readonly g: number;
@@ -100,7 +100,7 @@ abstract class FNTimeColor extends UObject implements IEnvTime {
     }
 }
 
-abstract class FNTimeScale extends UObject implements IEnvTime {
+export abstract class FNTimeScale extends UObject implements IEnvTime {
     declare public readonly time: number;
     declare public readonly s: number;
 
@@ -120,7 +120,7 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
     }
 }
 
-abstract class UL2NTimeLight extends UObject {
+export abstract class UL2NTimeLight extends UObject {
     declare public lightTerrain: FArray<FNTimeHSV>;
     declare public lightActor: FArray<FNTimeHSV>;
     declare public lightStaticMesh: FArray<FNTimeHSV>;
@@ -169,7 +169,7 @@ abstract class UL2NTimeLight extends UObject {
     }
 }
 
-abstract class UL2NEnvLight extends UL2NTimeLight {
+export abstract class UL2NEnvLight extends UL2NTimeLight {
     declare public colorSky: FArray<FNTimeColor>;
     declare public colorIndexHaze: FPrimitiveArray<"int32">;
     declare public colorHaze: FArray<FNTimeColor>;
@@ -280,7 +280,7 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
     return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
 }
 
-export { UL2NEnvLight, UL2NTimeLight, EEnvCycle, FNTimeHSV, FNTimeColor, FNTimeScale };
+export { EEnvCycle };
 
 function getEnvType(fileContents: string): EEnvCycle {
     let readOffset = findSection(fileContents, "EnvType");

@@ -1,7 +1,7 @@
 import type { ISchemaValue } from "./dat-schema";
 import { SizedContainerType } from "./dat-container";
 
-const SCHEMA_SYSTEMMSG_E_DAT: ISchemaValue[] = [
+export const SCHEMA_SYSTEMMSG_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "uint32", name: "UNK_0" },
     { type: "ASCF", name: "message" },
@@ -13,4 +13,3 @@ const SCHEMA_SYSTEMMSG_E_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_SYSTEMMSG_E_DAT;
-export { SCHEMA_SYSTEMMSG_E_DAT };

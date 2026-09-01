@@ -5,7 +5,7 @@ import type { DecodeLibraryBuilder } from "../decode-library-builder";
 // BeamEmitter: the worker only carries the beam parameters across, the point
 // generation and ribbon rendering live client side (objects/emitters/beam-emitter.ts).
 
-abstract class UBeamEmitter extends UParticleEmitter {
+export abstract class UBeamEmitter extends UParticleEmitter {
     declare protected beamDistanceRange: FRange;
     declare protected beamEndPoints: any[];
     declare protected determineEndPointBy: number;
@@ -114,4 +114,3 @@ abstract class UBeamEmitter extends UParticleEmitter {
 }
 
 export default UBeamEmitter;
-export { UBeamEmitter };

@@ -8,7 +8,7 @@ function readUTF16(pkg: UEncodedFile): string {
     return pkg.read(new BufferValue(BufferValue.utf16)).value as string;
 }
 
-class ASCFType implements IDatContainerType {
+export class ASCFType implements IDatContainerType {
     public isContainerType = true;
 
     public read(pkg: UEncodedFile): string {
@@ -28,7 +28,7 @@ class ASCFType implements IDatContainerType {
     }
 }
 
-class UTF16ContainerType implements IDatContainerType {
+export class UTF16ContainerType implements IDatContainerType {
     public isContainerType = true;
 
     public read(pkg: UEncodedFile): string[] {
@@ -42,7 +42,7 @@ class UTF16ContainerType implements IDatContainerType {
     }
 }
 
-class UTF16SizedContainerType implements IDatContainerType {
+export class UTF16SizedContainerType implements IDatContainerType {
     public isContainerType = true;
 
     protected size: number | string;
@@ -62,7 +62,7 @@ class UTF16SizedContainerType implements IDatContainerType {
     }
 }
 
-class NumberContainerType implements IDatContainerType {
+export class NumberContainerType implements IDatContainerType {
     public isContainerType = true;
 
     protected dtype: BufferValue<any>;
@@ -85,7 +85,7 @@ class NumberContainerType implements IDatContainerType {
     }
 }
 
-class SizedContainerType implements IDatContainerType {
+export class SizedContainerType implements IDatContainerType {
     public isContainerType = true;
 
     protected dtype: ValueTypeNames_T;
@@ -107,7 +107,7 @@ class SizedContainerType implements IDatContainerType {
     }
 }
 
-class UTF16PairContainerType implements IDatContainerType {
+export class UTF16PairContainerType implements IDatContainerType {
     public isContainerType = true;
 
     public read(pkg: UEncodedFile): [string[], string[]] {
@@ -127,7 +127,7 @@ class UTF16PairContainerType implements IDatContainerType {
     }
 }
 
-class MaterialContainerType implements IDatContainerType {
+export class MaterialContainerType implements IDatContainerType {
     public isContainerType = true;
 
     public read(pkg: UEncodedFile): [number, number][] {
@@ -141,7 +141,7 @@ class MaterialContainerType implements IDatContainerType {
     }
 }
 
-class ConditionalType implements IDatContainerType {
+export class ConditionalType implements IDatContainerType {
     public isContainerType = true;
 
     protected type: ValueTypeNames_T | IDatContainerType;
@@ -162,5 +162,3 @@ class ConditionalType implements IDatContainerType {
         else return this.type.read(pkg, values);
     }
 }
-
-export { ASCFType, ConditionalType, MaterialContainerType, NumberContainerType, SizedContainerType, UTF16ContainerType, UTF16PairContainerType, UTF16SizedContainerType };

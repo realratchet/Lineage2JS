@@ -7,7 +7,7 @@ import type { ITextureDecodeInfo, IDataTextureDecodeInfo } from "../un-texture";
  * transferring the library to the main thread.
  */
 
-function dxt1ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
+export function dxt1ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
     const rgba = new Uint8Array(width * height * 4);
     const blockCountX = (width + 3) >> 2;
     const blockCountY = (height + 3) >> 2;
@@ -88,7 +88,7 @@ function dxt1ToRgba(width: number, height: number, input: Uint8Array): Uint8Arra
     return rgba;
 }
 
-function dxt3ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
+export function dxt3ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
     const rgba = new Uint8Array(width * height * 4);
     const blockCountX = (width + 3) >> 2;
     const blockCountY = (height + 3) >> 2;
@@ -158,7 +158,7 @@ function dxt3ToRgba(width: number, height: number, input: Uint8Array): Uint8Arra
     return rgba;
 }
 
-function dxt5ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
+export function dxt5ToRgba(width: number, height: number, input: Uint8Array): Uint8Array {
     const rgba = new Uint8Array(width * height * 4);
     const blockCountX = (width + 3) >> 2;
     const blockCountY = (height + 3) >> 2;
@@ -248,7 +248,7 @@ function dxt5ToRgba(width: number, height: number, input: Uint8Array): Uint8Arra
  * (pixel-identical output). Unsupported FourCCs keep the "dds" type and fall back
  * to the main-thread DDSLoader path in decodeDDS.
  */
-function convertDDSTextureInfo(info: ITextureDecodeInfo): boolean {
+export function convertDDSTextureInfo(info: ITextureDecodeInfo): boolean {
     if (info.textureType !== "dds") return false;
 
     const header = new Int32Array(info.buffer, 0, 31);
@@ -276,7 +276,7 @@ function convertDDSTextureInfo(info: ITextureDecodeInfo): boolean {
     return true;
 }
 
-function convertDDSMaterialsToRGBA(library: DecodeLibrary) {
+export function convertDDSMaterialsToRGBA(library: DecodeLibrary) {
     for (const info of Object.values(library.materials)) {
         if (!info || (info as ITextureDecodeInfo).textureType !== "dds") continue;
 
@@ -287,5 +287,3 @@ function convertDDSMaterialsToRGBA(library: DecodeLibrary) {
         }
     }
 }
-
-export { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba, convertDDSTextureInfo, convertDDSMaterialsToRGBA };

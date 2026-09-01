@@ -1,7 +1,7 @@
 import UNCelestial from "./un-ncelestial";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
-abstract class UNSun extends UNCelestial {
+export abstract class UNSun extends UNCelestial {
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "SunScale": "celestialScale",
@@ -23,4 +23,3 @@ abstract class UNSun extends UNCelestial {
 }
 
 export default UNSun;
-export { UNSun };

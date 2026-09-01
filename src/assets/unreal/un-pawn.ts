@@ -47,7 +47,7 @@ export type ICharacterArmorSelection = {
     boots: number
 };
 
-abstract class UPawn extends UAActor {
+export abstract class UPawn extends UAActor {
     declare protected mesh: USkeletalMesh;
     declare protected isUnlit: boolean;
 
@@ -78,4 +78,3 @@ abstract class UPawn extends UAActor {
 }
 
 export default UPawn;
-export { UPawn };

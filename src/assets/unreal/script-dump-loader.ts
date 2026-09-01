@@ -83,7 +83,7 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
     throw new Error(`Cannot transfer UnrealScript default '${value.constructor?.name ?? typeof value}'.`);
 }
 
-function dumpObjectScriptProperties(object: UObject): Record<string, ScriptPropertyValue_T> {
+export function dumpObjectScriptProperties(object: UObject): Record<string, ScriptPropertyValue_T> {
     const properties: Record<string, ScriptPropertyValue_T> = {};
 
     for (const name of Map.prototype.keys.call(object.propertyDict))
@@ -251,7 +251,7 @@ function dumpState(state: UState): IScriptStateDecodeInfo {
     };
 }
 
-function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): void {
+export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): void {
     const seenClasses = new Set<string>();
 
     function pullFunction(fn: UFunction) {
@@ -306,7 +306,7 @@ function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): v
         if (cls) pullClass(cls);
 }
 
-function pullScriptDumps(library: DecodeLibrary, ...actorLists: Iterable<UObject>[]): void {
+export function pullScriptDumps(library: DecodeLibrary, ...actorLists: Iterable<UObject>[]): void {
     const classes = new Set<UClass>();
 
     for (const actors of actorLists)
@@ -322,4 +322,3 @@ function pullScriptDumps(library: DecodeLibrary, ...actorLists: Iterable<UObject
 }
 
 export default pullScriptDumps;
-export { pullScriptDumps, pullScriptClasses, dumpObjectScriptProperties };

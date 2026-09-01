@@ -1,7 +1,7 @@
 import UAActor from "./un-aactor";
 import type { FVector } from "./un-vector";
 
-abstract class UNCelestial extends UAActor {
+export abstract class UNCelestial extends UAActor {
     declare protected radius: number;
     declare protected limitMaxRadius: number;
     declare protected lat: number;
@@ -52,4 +52,3 @@ abstract class UNCelestial extends UAActor {
 }
 
 export default UNCelestial;
-export { UNCelestial };

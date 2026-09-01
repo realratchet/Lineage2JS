@@ -1,7 +1,7 @@
 import { BufferValue, type APackage, type UExport, FPrimitiveArrayLazy } from "@l2js/core";
 import UObject from "./un-object";
 
-abstract class USound extends UObject {
+export abstract class USound extends UObject {
     protected fileType: string;
     protected likelihood: number;
     protected data = new FPrimitiveArrayLazy(BufferValue.uint8);
@@ -27,4 +27,3 @@ abstract class USound extends UObject {
 }
 
 export default USound;
-export { USound };

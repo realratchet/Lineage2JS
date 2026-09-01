@@ -1,6 +1,6 @@
 import UAActor from "./un-aactor";
 
-abstract class UPlayerStart extends UAActor {
+export abstract class UPlayerStart extends UAActor {
     // public readonly careUnread = false;
 
     // protected nextNavigationPoint: UPlayerStart;
@@ -91,4 +91,3 @@ abstract class UPlayerStart extends UAActor {
 }
 
 export default UPlayerStart;
-export { UPlayerStart };

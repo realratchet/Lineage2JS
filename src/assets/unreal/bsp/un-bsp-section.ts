@@ -2,7 +2,7 @@ import { type APackage, type Constructable_T, FArray } from "@l2js/core";
 import type { UTexture } from "../un-texture";
 import type { Vector3Arr } from "../library-types";
 
-class FBSPVertex implements Constructable_T {
+export class FBSPVertex implements Constructable_T {
     public position: Vector3Arr;
     public u: number;
     public v: number;
@@ -25,7 +25,7 @@ class FBSPVertex implements Constructable_T {
     }
 }
 
-class FBSPSection implements Constructable_T {
+export class FBSPSection implements Constructable_T {
     public bspVertices = new FArray(FBSPVertex);
     public textureId: number;
     public texture: UTexture;
@@ -52,4 +52,3 @@ class FBSPSection implements Constructable_T {
 }
 
 export default FBSPSection;
-export { FBSPSection, FBSPVertex };

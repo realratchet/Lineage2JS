@@ -79,7 +79,7 @@ class FTerrainRenderCombination {
     }
 }
 
-abstract class ATerrainInfo extends AInfo {
+export abstract class ATerrainInfo extends AInfo {
     declare public readonly terrainMap: UTexture;
     declare public readonly terrainScale: FVector;
     declare public readonly layers: UTerrainLayer[];
@@ -777,4 +777,3 @@ abstract class ATerrainInfo extends AInfo {
 }
 
 export default ATerrainInfo;
-export { ATerrainInfo };

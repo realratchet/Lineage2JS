@@ -1,7 +1,7 @@
 import UNCelestial from "./un-ncelestial";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
-abstract class UNMoon extends UNCelestial {
+export abstract class UNMoon extends UNCelestial {
     public readonly careUnread: boolean = false;
 
     protected isMoonLight: boolean;
@@ -37,4 +37,3 @@ abstract class UNMoon extends UNCelestial {
 }
 
 export default UNMoon;
-export { UNMoon };

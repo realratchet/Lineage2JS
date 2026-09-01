@@ -1,5 +1,6 @@
 import type { ISchemaValue } from "./dat-schema";
-const SCHEMA_ENTEREVENTGRP_DAT: ISchemaValue[] = [
+
+export const SCHEMA_ENTEREVENTGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "uint8", name: "UNK_0" },
     { type: "ASCF", name: "skill_sound" },
@@ -12,4 +13,3 @@ const SCHEMA_ENTEREVENTGRP_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_ENTEREVENTGRP_DAT;
-export { SCHEMA_ENTEREVENTGRP_DAT };

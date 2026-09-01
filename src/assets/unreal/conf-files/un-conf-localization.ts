@@ -1,12 +1,12 @@
 import BaseConfigFile from "./un-base-config";
 
-type LocalizationProperty_T = {
+export type LocalizationProperty_T = {
     name: string;
     index: number;
     value: string;
 };
 
-class UConfigLocalization extends BaseConfigFile {
+export class UConfigLocalization extends BaseConfigFile {
     protected readonly sections = new Map<string, LocalizationProperty_T[]>();
 
     public async load(): Promise<this> {
@@ -40,4 +40,3 @@ class UConfigLocalization extends BaseConfigFile {
 }
 
 export default UConfigLocalization;
-export { UConfigLocalization, type LocalizationProperty_T };

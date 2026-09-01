@@ -17,7 +17,7 @@ export type ClippingRangeConfig_T = {
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
 export type UserConfig_T = { clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; };
 
-class UConfigSystem extends BaseConfigFile {
+export class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
     public readonly definedClippingKeys = new Set<string>();
     public readonly definedDisplayKeys = new Set<string>();
@@ -106,7 +106,7 @@ class UConfigSystem extends BaseConfigFile {
     }
 }
 
-async function getUserConfig(): Promise<UserConfig_T> {
+export async function getUserConfig(): Promise<UserConfig_T> {
     const defaults = new UConfigSystem("assets/system/l2.ini");
     const options = new UConfigSystem("assets/system/Option.ini");
 
@@ -123,4 +123,3 @@ async function getUserConfig(): Promise<UserConfig_T> {
 }
 
 export default UConfigSystem;
-export { UConfigSystem, getUserConfig };

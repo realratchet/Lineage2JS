@@ -3,7 +3,7 @@ import UObject, { type IDecodableStruct } from "./un-object";
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector4Arr } from "./library-types";
 
-abstract class FPlane extends UObject implements IDecodableStruct<Vector4Arr> {
+export abstract class FPlane extends UObject implements IDecodableStruct<Vector4Arr> {
     declare public ["constructor"]: typeof FPlane;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -100,5 +100,4 @@ abstract class FPlane extends UObject implements IDecodableStruct<Vector4Arr> {
 
 }
 
-export { FPlane };
 export default FPlane;

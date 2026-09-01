@@ -1,5 +1,6 @@
 import type { ISchemaValue } from "./dat-schema";
-const SCHEMA_CASTLENAME_E_DAT: ISchemaValue[] = [
+
+export const SCHEMA_CASTLENAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "nbr" },
     { type: "uint32", name: "tag" },
     { type: "uint32", name: "id" },
@@ -9,4 +10,3 @@ const SCHEMA_CASTLENAME_E_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_CASTLENAME_E_DAT;
-export { SCHEMA_CASTLENAME_E_DAT };

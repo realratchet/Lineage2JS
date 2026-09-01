@@ -6,7 +6,7 @@ import ETextureFormat, { ETexturePixelFormat } from "../un-tex-format";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { ITextureDecodeInfo, DecodableTexture_T } from "../un-texture";
 
-class FStaticLightmapTexture implements Constructable_T {
+export class FStaticLightmapTexture implements Constructable_T {
     public data = new FPrimitiveArrayLazy(BufferValue.uint8);
     public dataHalfRes = new FPrimitiveArrayLazy(BufferValue.uint8);
 
@@ -103,7 +103,7 @@ class FLightmapTexture implements Constructable_T {
     }
 }
 
-class FMultiLightmapTexture implements Constructable_T {
+export class FMultiLightmapTexture implements Constructable_T {
     public textures = new FArray(FLightmapTexture);
     public iLightmaps = new FPrimitiveArray(BufferValue.int32);
 
@@ -116,4 +116,3 @@ class FMultiLightmapTexture implements Constructable_T {
 }
 
 export default FMultiLightmapTexture;
-export { FMultiLightmapTexture, FStaticLightmapTexture };

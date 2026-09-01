@@ -35,7 +35,7 @@ class FLightBitmap implements Constructable_T {
 }
 
 
-class FLightmapIndex implements Constructable_T {
+export class FLightmapIndex implements Constructable_T {
     public iLightmapTexture: number;
     public surfaceIndex: number;
     public zoneIndex: number;
@@ -88,4 +88,3 @@ class FLightmapIndex implements Constructable_T {
 }
 
 export default FLightmapIndex;
-export { FLightmapIndex };

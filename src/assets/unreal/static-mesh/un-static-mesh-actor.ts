@@ -67,7 +67,7 @@ function hasStaticLightingData(instance: { color: Float32Array | Uint8Array | nu
     return false;
 }
 
-abstract class UStaticMeshActor extends UAActor {
+export abstract class UStaticMeshActor extends UAActor {
 
     declare protected mesh: UStaticMesh | UTexture;
     declare protected instance: UStaticMeshInstance;
@@ -352,4 +352,3 @@ abstract class UStaticMeshActor extends UAActor {
 }
 
 export default UStaticMeshActor;
-export { UStaticMeshActor };

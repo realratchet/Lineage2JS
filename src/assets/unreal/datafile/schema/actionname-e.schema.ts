@@ -1,7 +1,7 @@
 import type { ISchemaValue } from "./dat-schema";
 import { SizedContainerType } from "./dat-container";
 
-const SCHEMA_ACTIONNAME_E_DAT: ISchemaValue[] = [
+export const SCHEMA_ACTIONNAME_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },
     { type: "uint32", name: "id" },
     { type: "int32", name: "type" },
@@ -15,4 +15,3 @@ const SCHEMA_ACTIONNAME_E_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_ACTIONNAME_E_DAT;
-export { SCHEMA_ACTIONNAME_E_DAT };

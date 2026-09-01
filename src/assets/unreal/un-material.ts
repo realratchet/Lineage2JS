@@ -204,9 +204,9 @@ abstract class UBaseModifier extends UBaseMaterial {
         return this.material?.loadSelf?.().getTextureSize() || null;
     }
 }
-abstract class UMaterial extends UBaseMaterial { }
+export abstract class UMaterial extends UBaseMaterial { }
 
-enum OutputBlending_T {
+export enum OutputBlending_T {
     OB_Normal,
     OB_Masked,
     OB_Modulate,
@@ -287,7 +287,7 @@ enum EAlphaOperation_T {
     }
  */
 
-abstract class UTexEnvMap extends UBaseModifier {
+export abstract class UTexEnvMap extends UBaseModifier {
     declare public readonly type: number;
 
     protected getPropertyMap() {
@@ -307,7 +307,7 @@ abstract class UTexEnvMap extends UBaseModifier {
     }
 }
 
-abstract class UCombiner extends UBaseModifier {
+export abstract class UCombiner extends UBaseModifier {
     declare protected combineOperation: EColorOperation_T;
     declare protected alphaOperation: EAlphaOperation_T;
     declare protected material1: UMaterial;
@@ -372,7 +372,7 @@ enum EFrameBufferBlending {
     FB_Add,
 };
 
-abstract class UFinalBlend extends UBaseModifier {
+export abstract class UFinalBlend extends UBaseModifier {
     declare protected frameBufferBlending: EFrameBufferBlending;
     declare protected doubleSide: boolean;
     declare protected alphaTest: boolean;
@@ -423,7 +423,7 @@ abstract class UFinalBlend extends UBaseModifier {
     }
 }
 
-abstract class UShader extends UMaterial {
+export abstract class UShader extends UMaterial {
     declare protected diffuse: UMaterial;
     declare protected opacity: UMaterial;
     declare protected doubleSide: boolean;
@@ -529,7 +529,7 @@ abstract class UShader extends UMaterial {
     }
 }
 
-abstract class UFadeColor extends UBaseModifier {
+export abstract class UFadeColor extends UBaseModifier {
     declare public readonly color1: FColor;
     declare public readonly color2: FColor;
     declare public readonly period: number;
@@ -565,7 +565,7 @@ abstract class UFadeColor extends UBaseModifier {
     }
 }
 
-abstract class UColorModifier extends UBaseMaterial {
+export abstract class UColorModifier extends UBaseMaterial {
     declare protected color: FColor;
     declare protected doubleSide: boolean;
     declare protected alphaBlend: boolean;
@@ -595,7 +595,7 @@ abstract class UColorModifier extends UBaseMaterial {
     }
 }
 
-abstract class UTexRotator extends UBaseModifier {
+export abstract class UTexRotator extends UBaseModifier {
     declare public readonly matrix: FMatrix;
     declare public readonly type: TexRotationType_T;
     declare public readonly rotation: FRotator;
@@ -671,7 +671,7 @@ abstract class UTexRotator extends UBaseModifier {
 
 
 
-abstract class UTexOscillator extends UBaseModifier {
+export abstract class UTexOscillator extends UBaseModifier {
     declare protected matrix: FMatrix;
     declare protected rateU: number;
     declare protected rateV: number;
@@ -733,7 +733,7 @@ abstract class UTexOscillator extends UBaseModifier {
     }
 }
 
-abstract class UTexCoordSource extends UBaseModifier {
+export abstract class UTexCoordSource extends UBaseModifier {
     public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo {
         return {
             name: this.uuid,
@@ -745,14 +745,14 @@ abstract class UTexCoordSource extends UBaseModifier {
     }
 }
 
-abstract class UVertexColor extends UBaseModifier {
+export abstract class UVertexColor extends UBaseModifier {
     // vertex color modulation isn't supported - combiners treat a null material as absent
     public getDecodeInfo(builder: DecodeLibraryBuilder): string {
         return builder.pullMaterial(this.material);
     }
 }
 
-abstract class UTexPanner extends UBaseModifier {
+export abstract class UTexPanner extends UBaseModifier {
     declare public readonly rate: number;
     declare public readonly z: number;
     declare public readonly matrix: FMatrix;
@@ -787,7 +787,7 @@ abstract class UTexPanner extends UBaseModifier {
     }
 }
 
-abstract class UStaticMeshMaterial extends UBaseMaterial {
+export abstract class UStaticMeshMaterial extends UBaseMaterial {
     declare protected noDynamicShadowCast: boolean;
     declare protected collisionForShadow: boolean;
     declare protected enableCollision: boolean;
@@ -821,4 +821,3 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
-export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource, UVertexColor, UCombiner };

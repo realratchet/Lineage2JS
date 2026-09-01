@@ -1,6 +1,6 @@
 import { type APackage, type Constructable_T, FStringArray } from "@l2js/core";
 
-class FURL implements Constructable_T {
+export class FURL implements Constructable_T {
     public protocol: string;
     public host: string;
     public map: string;
@@ -23,4 +23,3 @@ class FURL implements Constructable_T {
 }
 
 export default FURL;
-export { FURL };

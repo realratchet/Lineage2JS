@@ -64,7 +64,7 @@ class FTerrainSectorRenderPass {
     public maxIndex: number;
 }
 
-abstract class UTerrainSector extends UObject {
+export abstract class UTerrainSector extends UObject {
     declare public boundingBox: FBox;
     declare public offsetX: number;
     declare public offsetY: number;
@@ -839,5 +839,4 @@ abstract class UTerrainSector extends UObject {
 
 
 export default UTerrainSector;
-export { UTerrainSector };
 

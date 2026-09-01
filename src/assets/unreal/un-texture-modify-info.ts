@@ -1,7 +1,7 @@
 import UObject from "./un-object";
 import type { FColor } from "./un-color";
 
-abstract class UTextureModifyInfo extends UObject {
+export abstract class UTextureModifyInfo extends UObject {
     declare public readonly useModify: boolean;
     declare public readonly doubleSide: boolean;
     declare public readonly alphaBlend: boolean;
@@ -24,4 +24,3 @@ abstract class UTextureModifyInfo extends UObject {
 }
 
 export default UTextureModifyInfo;
-export { UTextureModifyInfo };

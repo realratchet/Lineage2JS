@@ -21,7 +21,7 @@ export type IL2FogInfoDecodeInfo = IBaseObjectDecodeInfo & {
     zoneMask: bigint
 };
 
-abstract class UL2FogInfo extends AInfo {
+export abstract class UL2FogInfo extends AInfo {
     declare protected readonly affectRange: FRange;
     declare protected readonly fogRange1: FRange;
     declare protected readonly fogRange2: FRange;
@@ -77,7 +77,7 @@ abstract class UL2FogInfo extends AInfo {
     }
 }
 
-abstract class UL2EnvironmentColorInfo extends UObject {
+export abstract class UL2EnvironmentColorInfo extends UObject {
     declare protected time: number;
     declare protected fogColor: FColor;
     declare protected skyColor: FColor;
@@ -109,4 +109,3 @@ abstract class UL2EnvironmentColorInfo extends UObject {
 }
 
 export default UL2FogInfo;
-export { UL2FogInfo, UL2EnvironmentColorInfo };

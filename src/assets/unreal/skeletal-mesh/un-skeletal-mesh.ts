@@ -307,7 +307,7 @@ class FStaticModelLOD implements Constructable_T {
     }
 }
 
-class FMeshWedge {
+class FMeshWedge implements Constructable_T {
     public iVertex: number;
     public texU: number;
     public texV: number;
@@ -321,7 +321,7 @@ class FMeshWedge {
     }
 }
 
-class FTriangle {
+class FTriangle implements Constructable_T {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
     public materialIndex2: number;
@@ -340,7 +340,7 @@ class FTriangle {
     }
 }
 
-class FVertexInfluence {
+class FVertexInfluence implements Constructable_T {
     public weight: number;
     public iPoint: number;
     public iBone: number;
@@ -354,7 +354,7 @@ class FVertexInfluence {
     }
 }
 
-abstract class USkeletalMesh extends ULodMesh {
+export abstract class USkeletalMesh extends ULodMesh {
 
     protected points2 = new FArray(FMeshVector);
     protected refSkeleton = new FArray(FMeshBone);
@@ -612,7 +612,6 @@ abstract class USkeletalMesh extends ULodMesh {
 }
 
 export default USkeletalMesh;
-export { USkeletalMesh };
 
 const MAX_BONES = 4;
 const MAX_EXTENDED_INFLUENCES = 8;

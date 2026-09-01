@@ -181,7 +181,7 @@ class ByteReader {
     }
 }
 
-function serializeLibrary(root: any): Uint8Array {
+export function serializeLibrary(root: any): Uint8Array {
     const writer = new ByteWriter();
     const memo = new Map<any, number>();
     const chunks: LibraryChunkSource_T[] = [];
@@ -525,7 +525,7 @@ function createDecoder(buffer: ArrayBuffer, metadataOffset: number, entries: Lib
     });
 }
 
-function isSerializedLibrary(buffer: ArrayBuffer): boolean {
+export function isSerializedLibrary(buffer: ArrayBuffer): boolean {
     if (buffer.byteLength < 5) return false;
 
     const view = new DataView(buffer);
@@ -533,7 +533,7 @@ function isSerializedLibrary(buffer: ArrayBuffer): boolean {
     return view.getUint32(0, true) === MAGIC && view.getUint8(4) === FORMAT_VERSION;
 }
 
-function deserializeLibrary(buffer: ArrayBuffer): any {
+export function deserializeLibrary(buffer: ArrayBuffer): any {
     const { chunkCount } = readHeader(buffer);
     const entries = readEntries(buffer, chunkCount);
     const decoder = createDecoder(buffer, HEADER_SIZE + chunkCount * CHUNK_ENTRY_SIZE, entries);
@@ -543,7 +543,7 @@ function deserializeLibrary(buffer: ArrayBuffer): any {
     return decoder.result();
 }
 
-async function deserializeLibraryAsync(buffer: ArrayBuffer): Promise<any> {
+export async function deserializeLibraryAsync(buffer: ArrayBuffer): Promise<any> {
     const { chunkCount } = readHeader(buffer);
     const entries = readEntries(buffer, chunkCount);
     const decoder = createDecoder(buffer, HEADER_SIZE + chunkCount * CHUNK_ENTRY_SIZE, entries);
@@ -560,7 +560,7 @@ async function deserializeLibraryAsync(buffer: ArrayBuffer): Promise<any> {
     }
 }
 
-async function openLibraryFile(file: File): Promise<SeekableLibrary_T> {
+export async function openLibraryFile(file: File): Promise<SeekableLibrary_T> {
     const header = readHeader(await file.slice(0, HEADER_SIZE).arrayBuffer());
     const metadataOffset = HEADER_SIZE + header.chunkCount * CHUNK_ENTRY_SIZE;
     const prefix = await file.slice(0, metadataOffset + header.metadataLength).arrayBuffer();
@@ -668,7 +668,7 @@ function replaceChunkRefs(root: any, values: Map<number, any>): any {
     return replace(root);
 }
 
-async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seekable.library): Promise<any> {
+export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seekable.library): Promise<any> {
     const refs = collectChunkRefs(root, seekable.values);
     const ranges = buildChunkRanges(seekable, refs);
 
@@ -684,5 +684,3 @@ async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seeka
 
     return replaceChunkRefs(root, seekable.values);
 }
-
-export { serializeLibrary, deserializeLibrary, deserializeLibraryAsync, isSerializedLibrary, openLibraryFile, hydrateLibraryFile };

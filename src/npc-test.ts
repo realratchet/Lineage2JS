@@ -93,7 +93,7 @@ function getPriority(npc: INpcDefinition): number {
     return index < 0 ? NPC_PRIORITY_NAMES.length : index;
 }
 
-async function runNpcTest(): Promise<void> {
+export async function runNpcTest(): Promise<void> {
     const params = new URLSearchParams(location.search);
     const start = parseInt(params.get("start") ?? "0", 10) || 0;
     const only = params.get("only")?.split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
@@ -192,4 +192,3 @@ async function runNpcTest(): Promise<void> {
 }
 
 export default runNpcTest;
-export { runNpcTest };

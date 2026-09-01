@@ -58,7 +58,7 @@ function setDecorationMatrix(matrices: number[] | Float32Array, offset: number, 
     matrices[offset + 15] = 1;
 }
 
-abstract class UDecoLayer extends UObject {
+export abstract class UDecoLayer extends UObject {
     declare protected readonly showOnTerrain: number;
     declare protected readonly scaleMap: UTexture;
     declare protected readonly densityMap: UTexture;
@@ -200,4 +200,3 @@ abstract class UDecoLayer extends UObject {
 }
 
 export default UDecoLayer;
-export { UDecoLayer };

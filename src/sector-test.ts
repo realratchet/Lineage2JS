@@ -325,7 +325,7 @@ class SectorRenderTester {
     }
 }
 
-async function runSectorTest(): Promise<void> {
+export async function runSectorTest(): Promise<void> {
     const params = new URLSearchParams(location.search);
     const start = parseInt(params.get("start") ?? "0", 10) || 0;
     const only = params.get("only")?.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
@@ -473,4 +473,3 @@ async function runSectorTest(): Promise<void> {
 }
 
 export default runSectorTest;
-export { runSectorTest };

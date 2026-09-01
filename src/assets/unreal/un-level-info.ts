@@ -2,7 +2,7 @@ import FZoneInfo, { type IInfo, type IBaseZoneDecodeInfo } from "./un-zone-info"
 import type { ULevel } from "./un-level";
 import type { DecodeLibrary } from "./decode-library";
 
-abstract class ULevelInfo extends FZoneInfo implements IInfo {
+export abstract class ULevelInfo extends FZoneInfo implements IInfo {
     declare protected level: ULevel;
 
     public setLevel(level: ULevel) { this.level = level; }
@@ -28,4 +28,3 @@ abstract class ULevelInfo extends FZoneInfo implements IInfo {
 }
 
 export default ULevelInfo;
-export { ULevelInfo };

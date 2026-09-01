@@ -1,6 +1,6 @@
 import UObject from "./un-object";
 
-enum PolyFlags_T {
+export enum PolyFlags_T {
     // Regular in-game flags.
     PF_Invisible = 0x00000001,	// Poly is invisible.
     PF_Masked = 0x00000002,	// Poly should be drawn masked.
@@ -164,7 +164,7 @@ abstract class FPoly extends UObject {
     // // }
 }
 
-abstract class UPolys extends UObject {
+export abstract class UPolys extends UObject {
     // protected polyList: FPoly[];
 
     // protected doLoad(pkg: UPackage, exp: UExport): this {
@@ -218,4 +218,3 @@ abstract class UPolys extends UObject {
 }
 
 export default UPolys;
-export { UPolys, PolyFlags_T };

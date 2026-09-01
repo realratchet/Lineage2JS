@@ -8,7 +8,7 @@ import type { FQuaternion } from "./un-quaternion";
 
 const eps = 1e-8;
 
-abstract class FMatrix extends UObject {
+export abstract class FMatrix extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public readonly planeX: FPlane;
@@ -475,4 +475,3 @@ abstract class FMatrix extends UObject {
 }
 
 export default FMatrix;
-export { FMatrix };

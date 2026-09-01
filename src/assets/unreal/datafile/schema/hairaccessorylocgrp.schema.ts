@@ -1,7 +1,7 @@
 import type { ISchemaValue } from "./dat-schema";
 import { SizedContainerType } from "./dat-container";
 
-const SCHEMA_HAIRACCESSORYLOCGRP_DAT: ISchemaValue[] = [
+export const SCHEMA_HAIRACCESSORYLOCGRP_DAT: ISchemaValue[] = [
     { type: "utf16", name: "name" }
 ];
 
@@ -11,4 +11,3 @@ for (let i = 0x1, suffix = i.toString(16); i < 0xF; i++) {
 }
 
 export default SCHEMA_HAIRACCESSORYLOCGRP_DAT;
-export { SCHEMA_HAIRACCESSORYLOCGRP_DAT };

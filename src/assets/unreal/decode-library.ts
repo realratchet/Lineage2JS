@@ -96,7 +96,7 @@ export type IAudioDecodeInfo = {
     type: "MusicVolume" | "AmbientSoundObject"
 };
 
-class DecodeLibrary {
+export class DecodeLibrary {
     public name: string = "Untitled";
     public brightness: number = 1.0;
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
@@ -162,4 +162,3 @@ class DecodeLibrary {
 }
 
 export default DecodeLibrary;
-export { DecodeLibrary };

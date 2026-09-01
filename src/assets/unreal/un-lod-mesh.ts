@@ -47,7 +47,7 @@ class FMeshMaterial implements Constructable_T {
     }
 }
 
-abstract class ULodMesh extends UMesh {
+export abstract class ULodMesh extends UMesh {
     protected version: number;
     protected vertexCount: number;
     protected verts = new FPrimitiveArray(BufferValue.uint32);
@@ -129,9 +129,6 @@ abstract class ULodMesh extends UMesh {
 }
 
 export default ULodMesh;
-export { ULodMesh };
-
-
 
 class MeshImpostor implements Constructable_T {
     public location: FVector;

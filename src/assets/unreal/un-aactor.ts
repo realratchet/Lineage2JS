@@ -43,7 +43,7 @@ export type IEdgesObjectDecodeInfo = IBaseObjectDecodeInfo & {
     ignoreDepth?: boolean
 };
 
-abstract class UAActor extends UObject {
+export abstract class UAActor extends UObject {
     declare public readonly texModifyInfo: UTextureModifyInfo;
     declare public readonly isDynamicActorFilterState: boolean;
     declare public readonly levelInfo: ULevelInfo;
@@ -321,7 +321,6 @@ abstract class UAActor extends UObject {
 }
 
 export default UAActor;
-export { UAActor };
 
 export enum ERenderStyle_T {
     STY_None,

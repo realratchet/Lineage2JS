@@ -14,7 +14,7 @@ export type ISwayingDecodeInfo = {
 };
 
 // per-axis float triple (MovableStaticMeshActor.uc struct L2RotatorTime - PitchTime/RollTime/YawTime)
-abstract class FL2RotatorTime extends UObject {
+export abstract class FL2RotatorTime extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public pitchTime: number;
@@ -34,7 +34,7 @@ abstract class FL2RotatorTime extends UObject {
 
 // bounded rotational oscillation around the placed rotation (cpp/l2_editor_leak/Engine/Classes/MovableStaticMeshActor.uc,
 // defaultproperties Physics=PHYS_L2Movement bStatic=False bUseL2RotatorRandomStart=True)
-abstract class UMovableStaticMeshActor extends UStaticMeshActor {
+export abstract class UMovableStaticMeshActor extends UStaticMeshActor {
 
     declare protected l2MovementTag: string[];
     declare protected l2AccelRatio: FL2RotatorTime;
@@ -78,4 +78,3 @@ abstract class UMovableStaticMeshActor extends UStaticMeshActor {
 }
 
 export default UMovableStaticMeshActor;
-export { UMovableStaticMeshActor, FL2RotatorTime };

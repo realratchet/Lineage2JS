@@ -141,7 +141,7 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
     if (!actor.findComponent("pawnRenderable")) actor.addComponent(new PawnRenderableComponent(renderManager));
 }
 
-class AssetManager implements IEngineComponent<GameManager> {
+export class AssetManager implements IEngineComponent<GameManager> {
     protected isTicking: boolean = false;
     protected loadSettings: LoadSettings_T;
     protected glCapabilities: WebGLCapabilities;
@@ -760,4 +760,3 @@ function sectorDistance(cameraPosition: THREE.Vector3, x: number, y: number): nu
 }
 
 export default AssetManager;
-export { AssetManager };

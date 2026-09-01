@@ -31,7 +31,7 @@ export enum EMoverEncroachType_T {
 }
 
 // Likely for doors and stuff
-abstract class UMover extends UStaticMeshActor {
+export abstract class UMover extends UStaticMeshActor {
     public readonly careUnread: boolean = false;
 
     declare protected moverGlideType: EMoverGlideType_T;
@@ -118,4 +118,3 @@ function getMoverEncroachType(value: EMoverEncroachType_T): IMoverDecodeInfo["mo
 }
 
 export default UMover;
-export { UMover };

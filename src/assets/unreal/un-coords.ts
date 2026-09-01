@@ -5,7 +5,7 @@ import FScale from "./un-scale";
 import FVector from "./un-vector";
 import UObject from "./un-object";
 
-abstract class FCoords extends UObject {
+export abstract class FCoords extends UObject {
     declare public ["constructor"]: typeof FCoords;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -185,7 +185,6 @@ abstract class FCoords extends UObject {
 }
 
 export default FCoords;
-export { FCoords };
 
 function multiplyAxis(coords: FCoords, inVector: FVector) {
     const outVector = FVector.make();

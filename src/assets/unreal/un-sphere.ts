@@ -3,7 +3,7 @@ import type { Vector3Arr } from "./library-types";
 
 export type ISphereDecodeInfo = { center: Vector3Arr, radius: number };
 
-abstract class USphere extends FPlane {
+export abstract class USphere extends FPlane {
     // public center: FVector = new FVector();
     // public radius: number;
 
@@ -19,4 +19,3 @@ abstract class USphere extends FPlane {
 }
 
 export default USphere;
-export { USphere };

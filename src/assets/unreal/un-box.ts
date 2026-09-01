@@ -5,7 +5,7 @@ import type { Vector3Arr } from "./library-types";
 
 export type IBoxDecodeInfo = { isValid: boolean, min: Vector3Arr, max: Vector3Arr };
 
-abstract class FBox extends UObject {
+export abstract class FBox extends UObject {
     declare ["constructor"]: typeof FBox;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -115,4 +115,3 @@ abstract class FBox extends UObject {
 }
 
 export default FBox;
-export { FBox };

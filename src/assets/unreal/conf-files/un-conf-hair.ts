@@ -149,7 +149,7 @@ function parseSection(section: string, lines: string[]): IDynamicHairConfigDecod
     return { section, structuralStiffness, structuralDamping, shearStiffness, shearDamping, gravity, velocityDamping, collisionResponse, safeFactor, drawCollisionObject, planes, spheres, actions };
 }
 
-class UConfigHair extends BaseConfigFile {
+export class UConfigHair extends BaseConfigFile {
     protected readonly sections = new Map<string, IDynamicHairConfigDecodeInfo>();
 
     public load(): this {
@@ -203,4 +203,3 @@ class UConfigHair extends BaseConfigFile {
 }
 
 export default UConfigHair;
-export { UConfigHair };

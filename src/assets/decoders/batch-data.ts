@@ -463,7 +463,7 @@ function mortonKey(position: number[] | undefined): number {
     return key;
 }
 
-function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManifest_T {
+export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManifest_T {
     const manifest: StaticMeshBatchManifest_T = { batches: [], unbatchable: [] };
 
     (library as any).staticMeshBatches = manifest;
@@ -605,4 +605,3 @@ function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManife
 }
 
 export default buildStaticMeshBatchData;
-export { buildStaticMeshBatchData };

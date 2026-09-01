@@ -3,11 +3,11 @@ import { LightEffect_T } from "./un-light";
 import type { FVector } from "./un-vector";
 import type { FColor } from "./un-color";
 
-function sampleLightColor(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): FColor {
+export function sampleLightColor(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): FColor {
     return null;
 }
 
-function sampleLightIntensity(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
+export function sampleLightIntensity(light: any, sampPosition /* param_1 */: FVector, sampNormal /* param_2 */: FVector): number {
     let lightEffect: LightEffect_T; // char
     let fVar2: number; // float
     let fVar3: number; // float10
@@ -115,8 +115,6 @@ function sampleLightIntensity(light: any, sampPosition /* param_1 */: FVector, s
     }
     return 0.0;
 }
-
-export { sampleLightColor, sampleLightIntensity };
 
 
 

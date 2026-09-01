@@ -3,7 +3,7 @@ import UObject, { type IDecodableStruct } from "./un-object";
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector3Arr } from "./library-types";
 
-abstract class FRange extends UObject implements IDecodableStruct<Range_T> {
+export abstract class FRange extends UObject implements IDecodableStruct<Range_T> {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public min: number;
@@ -30,7 +30,7 @@ abstract class FRange extends UObject implements IDecodableStruct<Range_T> {
     public rand() { return this.max + (this.min - this.max) * Math.random(); }
 }
 
-abstract class FRangeVector extends UObject implements IDecodableStruct<RangeVector_T> {
+export abstract class FRangeVector extends UObject implements IDecodableStruct<RangeVector_T> {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare protected x: FRange;
@@ -68,7 +68,6 @@ abstract class FRangeVector extends UObject implements IDecodableStruct<RangeVec
 }
 
 export default FRange;
-export { FRange, FRangeVector };
 
 type Range_T = [number, number];
 type RangeVector_T = { min: Vector3Arr, max: Vector3Arr };

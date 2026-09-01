@@ -2,7 +2,7 @@ import FColor from "./un-color";
 import { type APackage, type UExport, FArray } from "@l2js/core";
 import UObject from "./un-object";
 
-abstract class UPlatte extends UObject {
+export abstract class UPlatte extends UObject {
     public colors: FArray<FColor>
     // public readonly skipRemaining = true;
 
@@ -16,4 +16,3 @@ abstract class UPlatte extends UObject {
 }
 
 export default UPlatte;
-export { UPlatte };

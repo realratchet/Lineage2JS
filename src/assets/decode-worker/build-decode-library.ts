@@ -4,7 +4,7 @@ import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ULevel } from "@l2js/engine/un-level";
 
-function buildDecodeLibrary(pkg: APackage, sectorName: string, settings: LoadSettings_T) {
+export function buildDecodeLibrary(pkg: APackage, sectorName: string, settings: LoadSettings_T) {
     const decodeLibrary = new DecodeLibrary();
     const builder = new DecodeLibraryBuilder(decodeLibrary, settings);
 
@@ -24,4 +24,3 @@ function buildDecodeLibrary(pkg: APackage, sectorName: string, settings: LoadSet
 }
 
 export default buildDecodeLibrary;
-export { buildDecodeLibrary };

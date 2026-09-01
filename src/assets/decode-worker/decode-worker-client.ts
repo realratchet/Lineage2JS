@@ -27,7 +27,7 @@ async function waitForWorkers(promises: Promise<void>[]): Promise<void> {
     await Promise.all(promises);
 }
 
-class DecodeWorkerClient {
+export class DecodeWorkerClient {
     protected slots: WorkerSlot_T[] = [];
     protected pending = new Map<number, PendingRequest_T>();
     protected nextRequestId = 1;
@@ -484,4 +484,3 @@ class DecodeWorkerClient {
 }
 
 export default DecodeWorkerClient;
-export { DecodeWorkerClient };

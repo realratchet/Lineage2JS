@@ -46,7 +46,7 @@ class GMathSingleton {
 
 let instance: GMathSingleton = null;
 
-function GMath() {
+export function GMath() {
     if (!instance)
         instance = new GMathSingleton();
 
@@ -54,4 +54,3 @@ function GMath() {
 }
 
 export default GMath;
-export { GMath };

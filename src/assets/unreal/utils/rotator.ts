@@ -1,8 +1,9 @@
 
 import type { QuaternionArr } from "../library-types";
+
 const _TWO_PI = 2 * Math.PI;
 
-function getRotatorQuaternionElements(pitch: number, yaw: number, roll: number, target: QuaternionArr = [0, 0, 0, 1]): QuaternionArr {
+export function getRotatorQuaternionElements(pitch: number, yaw: number, roll: number, target: QuaternionArr = [0, 0, 0, 1]): QuaternionArr {
     const SR = sinRotator(roll),
         SP = sinRotator(pitch),
         SY = sinRotator(yaw),
@@ -73,4 +74,3 @@ function sinRotator(value: number): number {
 }
 
 export default getRotatorQuaternionElements;
-export { getRotatorQuaternionElements };

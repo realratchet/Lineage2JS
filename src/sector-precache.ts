@@ -133,7 +133,7 @@ async function buildSectorCache(view: PrecacheView_T, loadSettings: LoadSettings
     document.title = cancelled ? "Sector cache canceled" : "Sector cache complete";
 }
 
-async function runSectorPrecache(loadSettings: LoadSettings_T): Promise<void> {
+export async function runSectorPrecache(loadSettings: LoadSettings_T): Promise<void> {
     const view = createView();
 
     try {
@@ -147,4 +147,3 @@ async function runSectorPrecache(loadSettings: LoadSettings_T): Promise<void> {
 }
 
 export default runSectorPrecache;
-export { runSectorPrecache };

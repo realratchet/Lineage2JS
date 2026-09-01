@@ -19,7 +19,7 @@ export type ILightDecodeInfo = IBaseObjectDecodeInfo & {
 };
 
 
-abstract class ULight extends UAActor {
+export abstract class ULight extends UAActor {
     declare public readonly effect: LightEffect_T;
     declare public readonly brightness: number;
     declare public readonly radius: number;
@@ -171,7 +171,7 @@ abstract class ULight extends UAActor {
     }
 }
 
-enum LightEffect_T {
+export enum LightEffect_T {
     LE_None = 0x00,
     LE_TorchWaver = 0x01,
     LE_FireWaver = 0x02,
@@ -195,7 +195,7 @@ enum LightEffect_T {
     LE_QuadraticNonIncidence = 0x14
 }
 
-enum LightType_T {
+export enum LightType_T {
     LT_None = 0x0,
     LT_Steady = 0x1,
     LT_Pulse = 0x2,
@@ -211,7 +211,6 @@ enum LightType_T {
 };
 
 export default ULight;
-export { ULight, LightEffect_T, LightType_T };
 
 function LODWORD(x: number) { return x & 0xFFFFFFFF };
 

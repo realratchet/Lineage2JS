@@ -116,7 +116,7 @@ export type CoreStructsReturnType_T<T extends CoreStructs_T> =
     : T extends "Coords" ? FCoords
     : never;
 
-class UPackage extends APackage {
+export class UPackage extends APackage {
     protected async readArrayBuffer() {
         const response = await fetchAssetHandle(this.path);
         const readable = await response.getReadable();
@@ -175,7 +175,7 @@ enum ERunningOS {
 };
 
 
-class UCorePackage extends UPackage implements CorePackage_T {
+export class UCorePackage extends UPackage implements CorePackage_T {
     public readonly isCore = true;
     public readonly isEngine = false;
     public readonly isNative = false;
@@ -235,7 +235,7 @@ class UCorePackage extends UPackage implements CorePackage_T {
     public static readonly GUnicode = true;
 }
 
-class UEnginePackage extends UPackage implements EnginePackage_T {
+export class UEnginePackage extends UPackage implements EnginePackage_T {
     public readonly isCore = false;
     public readonly isEngine = true;
     public readonly isNative = false;
@@ -281,7 +281,7 @@ class UEnginePackage extends UPackage implements EnginePackage_T {
 }
 
 
-class UNativePackage extends ANativePackage {
+export class UNativePackage extends ANativePackage {
 
     public getStructConstructor<T extends typeof CoreUObject = typeof CoreUObject>(constructorName: string): new () => T {
         let Constructor: any;
@@ -744,8 +744,6 @@ class UNativePackage extends ANativePackage {
 }
 
 export default UPackage;
-export { UPackage, UNativePackage, UEnginePackage, UCorePackage };
-
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;

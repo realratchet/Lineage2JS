@@ -1,9 +1,9 @@
 import type { ISchemaValue } from "./dat-schema";
 import { UTF16SizedContainerType } from "./dat-container";
 
-const CHARGRP_RECORD_COUNT = 15; // L2FileEdit C4/chargrp.ddf RECCNT.
+export const CHARGRP_RECORD_COUNT = 15; // L2FileEdit C4/chargrp.ddf RECCNT.
 
-const SCHEMA_CHARGRP_DAT: ISchemaValue[] = [
+export const SCHEMA_CHARGRP_DAT: ISchemaValue[] = [
     { type: "utf16", name: "face_icon" },
     { type: "uint32", name: "cnt_hm" },
     { type: "uint32", name: "cnt_ht" },
@@ -42,4 +42,3 @@ const SCHEMA_CHARGRP_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_CHARGRP_DAT;
-export { CHARGRP_RECORD_COUNT, SCHEMA_CHARGRP_DAT };

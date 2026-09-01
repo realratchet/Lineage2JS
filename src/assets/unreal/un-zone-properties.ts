@@ -9,7 +9,7 @@ export type IBSPZoneDecodeInfo_T = {
     zoneInfo: IBaseZoneDecodeInfo
 };
 
-class FZoneProperties implements Constructable_T {
+export class FZoneProperties implements Constructable_T {
     public connectivity: bigint;
     public visibility: bigint;
     public lastRenderTime: number;
@@ -38,4 +38,3 @@ class FZoneProperties implements Constructable_T {
 }
 
 export default FZoneProperties;
-export { FZoneProperties };

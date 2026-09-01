@@ -33,7 +33,7 @@ export type IBaseZoneDecodeInfo = {
     colors?: any[]
 };
 
-abstract class FZoneInfo extends AInfo implements IInfo {
+export abstract class FZoneInfo extends AInfo implements IInfo {
     declare public readonly isFogZone: boolean;
     declare public readonly hasTerrain: boolean;
 
@@ -143,4 +143,3 @@ abstract class FZoneInfo extends AInfo implements IInfo {
 }
 
 export default FZoneInfo;
-export { FZoneInfo };

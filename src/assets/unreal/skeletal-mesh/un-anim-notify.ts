@@ -117,17 +117,17 @@ export enum EViewShakeType_T {
     VST_DOWNUP
 };
 
-abstract class UAnimNotify extends UObject {
+export abstract class UAnimNotify extends UObject {
     public getDecodeInfo(_builder: DecodeLibraryBuilder): IAnimationNotifyObjectDecodeInfo {
         return { type: "native", className: (this.constructor as any).friendlyName, objectName: this.name };
     }
 }
 
-abstract class UAnimNotifyIdleSound extends UAnimNotify { }
-abstract class UAnimNotifyMatSubAction extends UAnimNotify { }
-abstract class UAnimNotifyScripted extends UAnimNotify { }
-abstract class UAnimNotifyScript extends UAnimNotify { }
-abstract class UAnimNotifySound extends UAnimNotify {
+export abstract class UAnimNotifyIdleSound extends UAnimNotify { }
+export abstract class UAnimNotifyMatSubAction extends UAnimNotify { }
+export abstract class UAnimNotifyScripted extends UAnimNotify { }
+export abstract class UAnimNotifyScript extends UAnimNotify { }
+export abstract class UAnimNotifySound extends UAnimNotify {
     declare protected sound: USound | null;
     declare protected volume: number;
     declare protected radius: number;
@@ -179,14 +179,14 @@ abstract class UAnimNotifySound extends UAnimNotify {
     }
 }
 
-abstract class UAnimNotifySwimSound extends UAnimNotify {
+export abstract class UAnimNotifySwimSound extends UAnimNotify {
     public getDecodeInfo(_builder: DecodeLibraryBuilder): IAnimationSwimSoundNotifyDecodeInfo {
         return { type: "swimSound", className: "AnimNotify_SwimSound", objectName: this.name, surface: null, underwater: null };
     }
 }
 
-abstract class UAnimNotifyDestroyEffect extends UAnimNotify { }
-abstract class UAnimNotifyEffect extends UAnimNotify {
+export abstract class UAnimNotifyDestroyEffect extends UAnimNotify { }
+export abstract class UAnimNotifyEffect extends UAnimNotify {
     declare protected effectClass: UObject | null;
     declare protected bone: string;
     declare protected offsetLocation: FVector;
@@ -237,12 +237,12 @@ abstract class UAnimNotifyEffect extends UAnimNotify {
     }
 }
 
-abstract class UAnimNotifyAttackVoice extends UAnimNotify { }
-abstract class UAnimNotifyChanneling extends UAnimNotify { }
-abstract class UAnimNotifyAttackPreShot extends UAnimNotify { }
-abstract class UAnimNotifyAttackShot extends UAnimNotify { }
-abstract class UAnimNotifyAttackItem extends UAnimNotify { }
-abstract class UAnimNotifyScreenFade extends UAnimNotify {
+export abstract class UAnimNotifyAttackVoice extends UAnimNotify { }
+export abstract class UAnimNotifyChanneling extends UAnimNotify { }
+export abstract class UAnimNotifyAttackPreShot extends UAnimNotify { }
+export abstract class UAnimNotifyAttackShot extends UAnimNotify { }
+export abstract class UAnimNotifyAttackItem extends UAnimNotify { }
+export abstract class UAnimNotifyScreenFade extends UAnimNotify {
     declare protected fadeOutDuration: number;
     declare protected fadeOutColor: FColor;
     declare protected blackOutDuration: number;
@@ -270,7 +270,7 @@ abstract class UAnimNotifyScreenFade extends UAnimNotify {
     }
 }
 
-abstract class UAnimNotifyViewShake extends UAnimNotify {
+export abstract class UAnimNotifyViewShake extends UAnimNotify {
     declare protected shakeType: EViewShakeType_T;
     declare protected shakeIntensity: number;
     declare protected shakeVector: FVector;
@@ -307,7 +307,6 @@ abstract class UAnimNotifyViewShake extends UAnimNotify {
     }
 }
 
-abstract class UAnimNotifyBoneScale extends UAnimNotify { }
+export abstract class UAnimNotifyBoneScale extends UAnimNotify { }
 
 export default UAnimNotify;
-export { UAnimNotify, UAnimNotifyIdleSound, UAnimNotifyMatSubAction, UAnimNotifyScripted, UAnimNotifyScript, UAnimNotifySound, UAnimNotifySwimSound, UAnimNotifyDestroyEffect, UAnimNotifyEffect, UAnimNotifyAttackVoice, UAnimNotifyChanneling, UAnimNotifyAttackPreShot, UAnimNotifyAttackShot, UAnimNotifyAttackItem, UAnimNotifyScreenFade, UAnimNotifyViewShake, UAnimNotifyBoneScale };

@@ -18,7 +18,7 @@ export type IAmbientSoundObjectDecodeInfo = IAudioDecodeInfo & {
     randomChance: number,
 };
 
-abstract class UAmbientSoundObject extends UAActor {
+export abstract class UAmbientSoundObject extends UAActor {
     declare public readonly sound: USound;
     declare public readonly radius: number;
     declare public readonly volume: number;
@@ -85,7 +85,7 @@ abstract class UAmbientSoundObject extends UAActor {
     }
 }
 
-enum ASType1_T {
+export enum ASType1_T {
     AST1_Always,
     AST1_Day,
     AST1_Night,
@@ -100,4 +100,3 @@ const AS_TYPE_NAMES: Record<ASType1_T, AmbientSoundTypes_T> = {
 };
 
 export default UAmbientSoundObject;
-export { UAmbientSoundObject, ASType1_T };

@@ -1,7 +1,7 @@
 import type { ISchemaValue } from "./dat-schema";
 import { ConditionalType, SizedContainerType } from "./dat-container";
 
-const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [
+export const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },
     { type: "uint32", name: "id" },
     { type: "uint32", name: "drop_type" },
@@ -61,4 +61,3 @@ const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_WEAPONGRP_DAT;
-export { SCHEMA_WEAPONGRP_DAT };

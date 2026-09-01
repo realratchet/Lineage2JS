@@ -64,7 +64,7 @@ import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
 // addImpExtension("USK", "Effect");
 // addImpExtension("U", "Script", "State", "Class", "Struct", "Function", "Enum", ...impProperties, "Texture");
 
-// class AssetLoader {
+// export class AssetLoader {
 //     // private packages = new Map<string, Map<SupportedExtensions_T, UPackage>>();
 //     // // private packageByName = new Map<string, UPackage>();
 
@@ -160,7 +160,6 @@ import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
 // }
 
 // export default AssetLoader;
-// export { AssetLoader };
 
 // function importToPkgName(pkgName: string, impType: SupportedImports_T) {
 //     if (!impToType.has(impType))
@@ -199,7 +198,7 @@ import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
 // }
 
 
-class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePackage, ANativePackage> {
+export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePackage, ANativePackage> {
 
     protected pkgRefCounts = new Map<string, number>();
 
@@ -253,4 +252,3 @@ class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePackage, A
 }
 
 export default AssetLoader;
-export { AssetLoader };

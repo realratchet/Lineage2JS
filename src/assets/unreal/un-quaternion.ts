@@ -2,7 +2,7 @@ import FVector from "./un-vector";
 import UObject from "./un-object";
 import type { QuaternionArr } from "./library-types";
 
-abstract class FQuaternion extends UObject {
+export abstract class FQuaternion extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public x: number;
@@ -70,7 +70,7 @@ abstract class FQuaternion extends UObject {
     }
 }
 
-class FAxis {
+export class FAxis {
     public x = FVector.make();
     public y = FVector.make();
     public z = FVector.make();
@@ -106,4 +106,3 @@ class FAxis {
 }
 
 export default FQuaternion;
-export { FQuaternion, FAxis };

@@ -121,7 +121,7 @@ export type IParticleSoundDecodeInfo = {
     weight: number
 };
 
-abstract class UParticleEmitter extends UObject {
+export abstract class UParticleEmitter extends UObject {
     declare protected actor: UEmitter;
 
     // Acceleration
@@ -670,7 +670,7 @@ function toCloneSafeSetting(value: any, library: DecodeLibrary): any {
     return CLONE_UNSAFE;
 }
 
-abstract class UParticleRevolutionScale extends UObject {
+export abstract class UParticleRevolutionScale extends UObject {
     declare public relTime: number;
     declare public relRevolution: FVector;
 
@@ -686,7 +686,7 @@ abstract class UParticleRevolutionScale extends UObject {
     }
 }
 
-abstract class UParticleTimeScale extends UObject {
+export abstract class UParticleTimeScale extends UObject {
     declare public relSize: number;
     declare public relTime: number;
 
@@ -702,7 +702,7 @@ abstract class UParticleTimeScale extends UObject {
     public toString() { return `ParticleTimeScale=(time=${this.relTime.toFixed(2)}, size=${this.relSize})`; }
 };
 
-abstract class UParticleVelocityScale extends UObject {
+export abstract class UParticleVelocityScale extends UObject {
     declare public relTime: number;
     declare public relVelocity: FVector;
 
@@ -718,7 +718,7 @@ abstract class UParticleVelocityScale extends UObject {
     }
 }
 
-abstract class UParticleSound extends UObject {
+export abstract class UParticleSound extends UObject {
     declare public sound: USound;
     declare public radius: FRange;
     declare public pitch: FRange;
@@ -760,7 +760,7 @@ abstract class UParticleSound extends UObject {
 };
 
 // BeamEmitter.uc structs
-abstract class UParticleBeamEndPoint extends UObject {
+export abstract class UParticleBeamEndPoint extends UObject {
     declare public offset: FRangeVector;
     declare public weight: number;
 
@@ -774,7 +774,7 @@ abstract class UParticleBeamEndPoint extends UObject {
     }
 }
 
-abstract class UParticleBeamScale extends UObject {
+export abstract class UParticleBeamScale extends UObject {
     declare public frequencyScale: FVector;
     declare public relativeLength: number;
 
@@ -786,11 +786,9 @@ abstract class UParticleBeamScale extends UObject {
     }
 }
 
-abstract class UParticle extends UObject {
+export abstract class UParticle extends UObject { };
 
-};
-
-abstract class UParticleColorScale extends UObject {
+export abstract class UParticleColorScale extends UObject {
     declare public relTime: number;
     declare public color: FColor;
 
@@ -807,9 +805,8 @@ abstract class UParticleColorScale extends UObject {
 }
 
 export default UParticleEmitter;
-export { UParticleEmitter, UParticleRevolutionScale, UParticleTimeScale, UParticleSound, UParticleVelocityScale, UParticle, UParticleColorScale, UParticleBeamEndPoint, UParticleBeamScale };
 
-enum EParticleCoordinateSystem_T {
+export enum EParticleCoordinateSystem_T {
     PTCS_Independent, //Initial values (Start Location, Starting Velocity, etc.) are relative to the Emitter actor. Values that change over time, such as acceleration, are relative to the world. (aka absolute)
     PTCS_Relative, //All coordinates are relative to the Emitter actor's position.
     PTCS_Absolute, //All coordinates are absolute world coordinates.
@@ -817,52 +814,52 @@ enum EParticleCoordinateSystem_T {
     PTCS_Spray
 };
 
-enum EParticleEffectAxis_T {
+export enum EParticleEffectAxis_T {
     PTEA_NegativeX,
     PTEA_PositiveZ
 };
 
-enum EParticleMeshSpawning_T {
+export enum EParticleMeshSpawning_T {
     PTMS_None,
     PTMS_Linear,
     PTMS_Random
 };
 
-enum EParticleRotationSource_T {
+export enum EParticleRotationSource_T {
     PTRS_None,
     PTRS_Actor,
     PTRS_Offset,
     PTRS_Normal
 };
 
-enum ESkelLocationUpdate_T {
+export enum ESkelLocationUpdate_T {
     PTSU_None,
     PTSU_SpawnOffset,
     PTSU_Location
 };
 
-enum EParticleCollisionSound_T {
+export enum EParticleCollisionSound_T {
     PTSC_None,
     PTSC_LinearGlobal,
     PTSC_LinearLocal,
     PTSC_Random
 };
 
-enum EParticleVelocityDirection_T {
+export enum EParticleVelocityDirection_T {
     PTVD_None, // This is the default.
     PTVD_StartPositionAndOwner, // Particles move in the direction from the Emitter actor towards their starting location.
     PTVD_OwnerAndStartPosition, // Like PTVD_StartPositionAndOwner, but particles move towards the Emitter actor.
     PTVD_AddRadial // The particle will move outward from the Emitter actor at a rate set by the StartVelocityRadialRange. If the particle starts at 0,0,0 relative to the Emitter, this will have no effect.
 };
 
-enum EParticleStartLocationShape_T {
+export enum EParticleStartLocationShape_T {
     PTLS_Box,
     PTLS_Sphere, // SphereRadiusRange will be used to specify a sphere.
     PTLS_Polar, // StartLocationPolarRange will be used to describe the spawning area with a range of polar coordinates.
     PTLS_All // Combines all of the above. The StartLocationRange will determine the initial location, then the SphereRadiusRange will be added to that, then the StartLocationPolarRange will be added to the result to get the final starting location.
 };
 
-enum EParticleDrawStyle_T {
+export enum EParticleDrawStyle_T {
     PTDS_Regular,   // Just draws the particle textures without any color blending and transparency like the STY_Normal color blending mode for Actors.
     PTDS_AlphaBlend, // Uses the texture's alpha channel to make parts of it transparent like the STY_Alpha color blending mode for Actors.
     PTDS_Modulated, // Like the STY_Modulated color blending mode for Actors.

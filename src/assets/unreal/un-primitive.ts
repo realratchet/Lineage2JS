@@ -12,7 +12,7 @@ export type IBoundsDecodeInfo = {
     box: { min: Vector3Arr, max: Vector3Arr } | null
 };
 
-abstract class UPrimitive extends UObject {
+export abstract class UPrimitive extends UObject {
     declare protected boundingBox: FBox;
     declare protected boundingSphere: FPlane;
 
@@ -62,4 +62,3 @@ abstract class UPrimitive extends UObject {
 }
 
 export default UPrimitive;
-export { UPrimitive };

@@ -1,5 +1,6 @@
 import type { APackage, Constructable_T } from "@l2js/core";
-class FVert implements Constructable_T {
+
+export class FVert implements Constructable_T {
     public pVertex: number;
     public side: number;
 
@@ -13,4 +14,3 @@ class FVert implements Constructable_T {
 }
 
 export default FVert;
-export { FVert };

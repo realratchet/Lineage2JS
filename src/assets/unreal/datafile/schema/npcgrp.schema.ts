@@ -2,7 +2,7 @@ import type { ISchemaValue } from "./dat-schema";
 import { BufferValue } from "@l2js/core";
 import { NumberContainerType, UTF16ContainerType } from "./dat-container";
 
-const SCHEMA_NPCGRP_DAT: ISchemaValue[] = [
+export const SCHEMA_NPCGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },
     { type: "utf16", name: "class" },
     { type: "utf16", name: "mesh" },
@@ -28,4 +28,3 @@ const SCHEMA_NPCGRP_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_NPCGRP_DAT;
-export { SCHEMA_NPCGRP_DAT };

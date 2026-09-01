@@ -2,7 +2,7 @@ import { BufferValue, type APackage, type Constructable_T } from "@l2js/core";
 import { FMatrix } from "../un-matrix";
 import FBox from "../un-box";
 
-class FStaticMeshCollisionNode implements Constructable_T {
+export class FStaticMeshCollisionNode implements Constructable_T {
     declare public vertices: number[]; // vertex
     declare public bounds: FBox;
 
@@ -16,7 +16,7 @@ class FStaticMeshCollisionNode implements Constructable_T {
     }
 }
 
-class FStaticMeshCollisionTriangle implements Constructable_T {
+export class FStaticMeshCollisionTriangle implements Constructable_T {
     declare public matrix: FMatrix;     // looks like 4 planes? some matrix?
     declare public vertices: number[];  // vertex
 
@@ -30,5 +30,3 @@ class FStaticMeshCollisionTriangle implements Constructable_T {
         return this;
     }
 }
-
-export { FStaticMeshCollisionNode, FStaticMeshCollisionTriangle };

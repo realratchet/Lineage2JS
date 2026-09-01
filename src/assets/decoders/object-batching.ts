@@ -11,7 +11,8 @@ import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 type StaticMeshIndexCopy_T = { source: StaticMeshIndexArray_T, target: StaticMeshIndexArray_T, offset: number };
-type StaticMeshBatchJob_T = {
+
+export type StaticMeshBatchJob_T = {
     library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
@@ -140,7 +141,7 @@ export function decodeStaticMeshInstance(
     return { geometry, materials, collider, lights, staticMeshCollision: infoGeo.staticMeshCollision, collisionIndex: (infoGeo as any).collisionIndex as CollisionTriangleIndex_T };
 }
 
-function createStaticMeshBatchJob(
+export function createStaticMeshBatchJob(
     library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
@@ -152,7 +153,7 @@ function createStaticMeshBatchJob(
     return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, indexCopy: null };
 }
 
-function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
+export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
     const { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest } = job;
 
     if (job.indexCopy) {
@@ -265,8 +266,6 @@ export function batchStaticMeshActors(
 
     while (!stepStaticMeshBatchJob(job)) { }
 }
-
-export { createStaticMeshBatchJob, stepStaticMeshBatchJob, StaticMeshBatchJob_T };
 
 function mergeTerrainGeometries(sectors: Terrain[]) {
     let totalVertices = 0;

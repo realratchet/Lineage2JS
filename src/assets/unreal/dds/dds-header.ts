@@ -105,7 +105,7 @@ class DDSHeader10 {
     }
 };
 
-class DDSHeader {
+export class DDSHeader {
     public readonly buffer = new ArrayBuffer(148);
     protected _fourcc = new Uint32Array(this.buffer, 0 * 4, 1);
     protected _size = new Uint32Array(this.buffer, 1 * 4, 1);
@@ -225,7 +225,6 @@ class DDSHeader {
 }
 
 export default DDSHeader;
-export { DDSHeader };
 
 const makeFourCC = (function () {
     const bytes = new DataView(new ArrayBuffer(4));

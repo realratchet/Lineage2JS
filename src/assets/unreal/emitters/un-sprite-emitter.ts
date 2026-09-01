@@ -11,7 +11,7 @@ export type ISpriteEmitterDecodeInfo = IEmitterDecodeInfo & {
 
 export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
 
-abstract class USpriteEmitter extends UParticleEmitter {
+export abstract class USpriteEmitter extends UParticleEmitter {
     declare protected projectionNormal: FVector; // Normal vector of the projection plane used when UseDirectionAs is set to PTDU_Normal, PTDU_UpAndNormal or PTDU_RightAndNormal.
     declare protected realProjectionNormal: FVector;
     declare protected spriteDirection: EParticleDirectionUsage_T; // Here you can specify how the 2D image should be displayed. See EParticleDirectionUsage enum below for details.
@@ -42,9 +42,8 @@ abstract class USpriteEmitter extends UParticleEmitter {
 }
 
 export default USpriteEmitter;
-export { USpriteEmitter };
 
-enum EParticleDirectionUsage_T {
+export enum EParticleDirectionUsage_T {
     PTDU_None, // Always rotates the sprite towards the viewer. The sprites will always look the same, no matter what direction they are viewed from. Size -> UniformSize will be forced to True, so only the X component of Size -> SizeScale can be used to scale the sprites.
     PTDU_Up, // Also rotates the projection plane towards the viewer, but in a special way, so the particle's movement direction will always be in the projection plane.
     PTDU_Right, // Like PTDU_Up, but the particle texture is rotated 90°.

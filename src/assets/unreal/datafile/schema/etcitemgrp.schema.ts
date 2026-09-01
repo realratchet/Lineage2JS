@@ -1,7 +1,7 @@
 import type { ISchemaValue } from "./dat-schema";
 import { SizedContainerType, UTF16PairContainerType } from "./dat-container";
 
-const SCHEMA_ETCITEMGRP_DAT: ISchemaValue[] = [
+export const SCHEMA_ETCITEMGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },
     { type: "uint32", name: "id" },
     { type: "uint32", name: "drop_type" },
@@ -30,4 +30,3 @@ const SCHEMA_ETCITEMGRP_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_ETCITEMGRP_DAT;
-export { SCHEMA_ETCITEMGRP_DAT };

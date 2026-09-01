@@ -1,7 +1,7 @@
 import type { ISchemaValue } from "./dat-schema";
 import { MaterialContainerType } from "./dat-container";
 
-const SCHEMA_RECIPE_C_DAT: ISchemaValue[] = [
+export const SCHEMA_RECIPE_C_DAT: ISchemaValue[] = [
     { type: "ASCF", name: "name" },
     { type: "uint32", name: "id_mk" },
     { type: "uint32", name: "id_recipe" },
@@ -14,4 +14,3 @@ const SCHEMA_RECIPE_C_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_RECIPE_C_DAT;
-export { SCHEMA_RECIPE_C_DAT };

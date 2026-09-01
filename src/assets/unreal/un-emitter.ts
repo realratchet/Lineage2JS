@@ -10,21 +10,11 @@ import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-export type IEmitterSpawnSoundDecodeInfo = {
-    soundName: string;
-    volume: number;
-    radius: number;
-};
-
-export type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & {
-    type: "Emitter";
-    spawnSound?: IEmitterSpawnSoundDecodeInfo;
-    rotating?: IRotatingDecodeInfo;
-};
-
+export type IEmitterSpawnSoundDecodeInfo = { soundName: string; volume: number; radius: number; };
+export type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & { type: "Emitter"; spawnSound?: IEmitterSpawnSoundDecodeInfo; rotating?: IRotatingDecodeInfo; };
 export type EmitterDecodeResult_T = { object: IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
 
-abstract class UEmitter extends UAActor {
+export abstract class UEmitter extends UAActor {
     declare protected emitters: FObjectArray<UObject>;
     protected subEmitterFilter: string[] | null = null;
 
@@ -280,4 +270,3 @@ function isParticleEmitter(emitter: UObject): emitter is UParticleEmitter {
 }
 
 export default UEmitter;
-export { UEmitter };

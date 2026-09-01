@@ -4,7 +4,7 @@ import { PolyFlags_T } from "../un-polys";
 import type { UShader } from "../un-material";
 import type { UBrush } from "../un-brush";
 
-class FBSPSurf implements Constructable_T {
+export class FBSPSurf implements Constructable_T {
     public material: UShader;
 
     public flags: number;       // 4 bytes polygon flags.
@@ -60,4 +60,3 @@ class FBSPSurf implements Constructable_T {
 }
 
 export default FBSPSurf;
-export { FBSPSurf };

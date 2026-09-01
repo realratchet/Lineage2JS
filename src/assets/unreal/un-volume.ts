@@ -14,7 +14,7 @@ export type IVolumeBspDecodeInfo = {
     nodes: IMusicVolumeBspNode[];
 };
 
-abstract class UVolume extends UBrush {
+export abstract class UVolume extends UBrush {
     declare protected locationPriority: number;
 
     protected getPropertyMap(): Record<string, string> {
@@ -82,4 +82,3 @@ abstract class UVolume extends UBrush {
 }
 
 export default UVolume;
-export { UVolume };

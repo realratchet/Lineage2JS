@@ -88,7 +88,7 @@ function getCanonicalStaticMaterialKey(material: any): string {
     });
 }
 
-function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
+export function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
     const source = materials instanceof Array ? materials : [materials];
     const canonical = source.map(material => {
         if (!(material as any)?.isStaticMeshMaterial) return material;
@@ -105,7 +105,7 @@ function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Mater
     return materials instanceof Array ? canonical : canonical[0];
 }
 
-function decodeStaticMeshMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean, sway: boolean, terrainDecoration: boolean = false): THREE.Material | THREE.Material[] {
+export function decodeStaticMeshMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo, vertexColors: boolean, instanced: boolean, sway: boolean, terrainDecoration: boolean = false): THREE.Material | THREE.Material[] {
     if (!info) return null;
 
     const name = info.name;
@@ -700,7 +700,7 @@ function decodeParticleMaterial(library: DecodeLibrary, info: IParticleMaterialD
     }
 }
 
-function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
+export function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): THREE.Material | THREE.Material[] {
     if (!info) {
         console.warn("Undefined material used!");
         return new MeshBasicMaterial({ color: 0xff00ff });
@@ -736,4 +736,3 @@ function decodeMaterial(library: DecodeLibrary, info: IBaseMaterialDecodeInfo): 
 }
 
 export default decodeMaterial;
-export { canonicalizeStaticMeshMaterials, decodeMaterial, decodeStaticMeshMaterial };

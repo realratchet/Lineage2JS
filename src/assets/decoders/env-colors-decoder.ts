@@ -2,7 +2,7 @@ import EnvColor, { TimeColor, TimeHSV, TimeScale } from "../../rendering/env-col
 import type { IL2NEnvLightDecodeInfo, INTimeHSVDecodeInfo, INTimeScaleDecodeInfo } from "@l2js/engine/contracts/env-time";
 
 
-function decodeEnvColor(envColor: IL2NEnvLightDecodeInfo): EnvColor {
+export function decodeEnvColor(envColor: IL2NEnvLightDecodeInfo): EnvColor {
     const type = envColor.type;
     const decodedColor = decodeInfo(envColor.color);
     const decodedAmbient = decodeInfo(envColor.ambient);
@@ -15,7 +15,6 @@ function decodeEnvColor(envColor: IL2NEnvLightDecodeInfo): EnvColor {
 }
 
 export default decodeEnvColor;
-export { decodeEnvColor };
 
 function decodeTimeColor(array: [number, number, number, number, number][]) {
     return array.map(args => new TimeColor(args[0], args[1], args[2], args[3], args[4] ?? 255));

@@ -53,7 +53,7 @@ async function uncachedFetch(path: string): Promise<IReadyAssetHandle> {
     return new ReadAssetHandle(buffer);
 }
 
-async function fetchAssetHandle(path: string): Promise<ILazyAssetHandle> {
+export async function fetchAssetHandle(path: string): Promise<ILazyAssetHandle> {
     if (navigator.storage) return fetchCached(path);
 
     return uncachedFetch(path) as unknown as ILazyAssetHandle;
@@ -109,4 +109,3 @@ class LazyFileSystemHandle implements ILazyAssetHandle {
 }
 
 export default fetchAssetHandle;
-export { fetchAssetHandle };

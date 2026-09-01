@@ -6,7 +6,7 @@ import LandmarkComponent from "./rendering/components/landmark-component";
 
 const tmpCameraTarget = new Vector3();
 
-class Player extends BaseActor {
+export class Player extends BaseActor {
     public readonly isPlayer = true;
     public readonly type = "Player";
 
@@ -36,4 +36,3 @@ class Player extends BaseActor {
 }
 
 export default Player;
-export { Player };

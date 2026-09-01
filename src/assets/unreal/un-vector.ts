@@ -5,7 +5,7 @@ import type { FCoords } from "./un-coords";
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector3Arr } from "./library-types";
 
-abstract class FVector extends UObject implements IDecodableStruct<Vector3Arr> {
+export abstract class FVector extends UObject implements IDecodableStruct<Vector3Arr> {
     // declare protected ["constructor"]: { new(): never } & typeof FVector;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -252,4 +252,3 @@ abstract class FVector extends UObject implements IDecodableStruct<Vector3Arr> {
 
 
 export default FVector;
-export { FVector };

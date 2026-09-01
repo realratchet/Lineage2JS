@@ -1,5 +1,6 @@
 import type { ISchemaValue } from "./dat-schema";
-const SCHEMA_HENNAGRP_E_DAT: ISchemaValue[] = [
+
+export const SCHEMA_HENNAGRP_E_DAT: ISchemaValue[] = [
     { type: "uint32", name: "id" },
     { type: "uint32", name: "dye_id" },
     { type: "ASCF", name: "name" },
@@ -9,4 +10,3 @@ const SCHEMA_HENNAGRP_E_DAT: ISchemaValue[] = [
 ];
 
 export default SCHEMA_HENNAGRP_E_DAT;
-export { SCHEMA_HENNAGRP_E_DAT };

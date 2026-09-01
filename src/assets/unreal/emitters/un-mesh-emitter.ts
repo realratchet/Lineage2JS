@@ -7,7 +7,7 @@ export type IMeshEmitterDecodeInfo = IEmitterDecodeInfo & {
     mesh: { geometry: string, materials: string }
 };
 
-abstract class UMeshEmitter extends UParticleEmitter {
+export abstract class UMeshEmitter extends UParticleEmitter {
     declare protected mesh: UStaticMesh;
 
     public getPropertyMap(): Record<string, string> {
@@ -30,4 +30,3 @@ abstract class UMeshEmitter extends UParticleEmitter {
 }
 
 export default UMeshEmitter;
-export { UParticleEmitter };

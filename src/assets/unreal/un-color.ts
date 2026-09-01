@@ -2,7 +2,7 @@ import { APackage, UExport } from "@l2js/core";
 import UObject from "./un-object";
 import type { ColorArr } from "./library-types";
 
-abstract class FColor extends UObject {
+export abstract class FColor extends UObject {
     declare public ["constructor"]: typeof FColor;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -71,4 +71,3 @@ abstract class FColor extends UObject {
 }
 
 export default FColor;
-export { FColor };

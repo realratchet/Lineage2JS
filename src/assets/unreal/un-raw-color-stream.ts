@@ -1,5 +1,6 @@
 import type { APackage, Constructable_T } from "@l2js/core";
-class FRawColorStream implements Constructable_T {
+
+export class FRawColorStream implements Constructable_T {
     declare private elementCount: number;
     declare private data: DataView;
     declare private revision: number;
@@ -30,4 +31,3 @@ class FRawColorStream implements Constructable_T {
 }
 
 export default FRawColorStream;
-export { FRawColorStream };

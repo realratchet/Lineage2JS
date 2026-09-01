@@ -120,7 +120,7 @@ class FBoxArray implements Constructable_T {
 
 
 
-abstract class UModel extends UPrimitive {
+export abstract class UModel extends UPrimitive {
     protected levelInfo: ULevelInfo
 
     declare protected vectors: FVectorArray;
@@ -663,7 +663,6 @@ abstract class UModel extends UPrimitive {
 }
 
 export default UModel;
-export { UModel };
 
 function boxPushOut(normal: FVector | FPlane, size: FVector) {
     return Math.abs(normal.x * size.x) + Math.abs(normal.y * size.y) + Math.abs(normal.z * size.z);

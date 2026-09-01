@@ -98,7 +98,7 @@ type EnvGlowEffect = {
     finalBlendBlurType: number;
 };
 
-class UConfigEnv extends BaseConfigFile {
+export class UConfigEnv extends BaseConfigFile {
     declare protected envSetup: EnvSetup;
     declare protected fog: EnvFog;
     declare protected waterVolume: EnvWaterVolume;
@@ -347,4 +347,3 @@ class UConfigEnv extends BaseConfigFile {
 }
 
 export default UConfigEnv;
-export { UConfigEnv };

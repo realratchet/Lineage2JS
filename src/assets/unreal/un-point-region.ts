@@ -1,7 +1,7 @@
 import UObject from "./un-object";
 import type { FZoneInfo } from "./un-zone-info";
 
-abstract class UPointRegion extends UObject {
+export abstract class UPointRegion extends UObject {
     declare protected readonly zone: FZoneInfo;
     declare protected readonly indexLeaf: number;
     declare protected readonly zoneNumber: number;
@@ -25,4 +25,3 @@ abstract class UPointRegion extends UObject {
 }
 
 export default UPointRegion;
-export { UPointRegion };
