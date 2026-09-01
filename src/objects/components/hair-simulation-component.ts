@@ -59,11 +59,12 @@ class HairSimulationComponent extends ObjectComponent<BaseActor> {
         const attackEffectFrame = clip ? Number((clip as any).attackEffectFrame) || 0 : 0;
         const attackEndEffectFrame = clip ? Number((clip as any).attackEndEffectFrame) || 0 : 0;
         const isMoving = this.movementComponent.getVelocity().lengthSq() > 0;
+        const isRunning = this.movementComponent.isRunning();
         const isDying = this.movementComponent.isDying();
-        const isBowRunning = weaponType === 5 && this.movementComponent.isRunning();
+        const isBowRunning = weaponType === 5 && isRunning;
         const isSpecialAttack = lowerName.startsWith("spatk01_") || lowerName.startsWith("spatk02_");
 
-        for (const simulation of this.simulations) simulation.update(deltaTime, animationName, animationFrame, 0, attackEffectFrame, attackEndEffectFrame, isMoving, isDying, isBowRunning, isSpecialAttack);
+        for (const simulation of this.simulations) simulation.update(deltaTime, animationName, animationFrame, 0, attackEffectFrame, attackEndEffectFrame, isMoving, isRunning, isDying, isBowRunning, isSpecialAttack);
     }
 
     protected setMeshes(meshes: Mesh[]): void {

@@ -30,6 +30,7 @@ const USER_FORCE_VECTOR_LIMIT = 0.9; // NCBoneSimul::CalcForces 0x76d403.
 const TIP_FORCE_THRESHOLD = 0.8; // NCBoneSimul::CalcForces 0x76d88d.
 const TIP_FORCE_SCALE = 1.3; // NCBoneSimul::CalcForces 0x76d8ac.
 const ACTION_INITIAL_OFFSET = 3; // NCBoneSimul::SetUserForce2/6/7/8.
+const SELECTOR2_RUN_PLANE_DISTANCE = 3.2; // NCBoneSimul::SetUserForce2 0x775259.
 
 type Topology_T = {
     prefix: string;
@@ -231,7 +232,7 @@ class DynamicHairSimulation {
 
     public reset(): void { this.needsReset = true; }
 
-    public update(deltaTime: number, animationName: string, animationFrame: number, attackState: number, attackEffectFrame: number, attackEndEffectFrame: number, isMoving: boolean, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
+    public update(deltaTime: number, animationName: string, animationFrame: number, attackState: number, attackEffectFrame: number, attackEndEffectFrame: number, isMoving: boolean, isRunning: boolean, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
         if (!this.bones || deltaTime < 0 || !Number.isFinite(deltaTime)) throw new Error(`Invalid dynamic hair delta '${deltaTime}'.`);
 
         this.updateAction(animationName, animationFrame, attackState, attackEffectFrame, attackEndEffectFrame, isDying, isBowRunning, isSpecialAttack);
@@ -259,7 +260,7 @@ class DynamicHairSimulation {
             this.needsActionReset = false;
         }
 
-        this.updateCollisionObjects();
+        this.updateCollisionObjects(isRunning);
 
         if (deltaTime > 0 && !skipSimulation) {
             const simulationTime = deltaTime * this.info.config.safeFactor * SIMULATION_TIME_SCALE;
@@ -498,11 +499,13 @@ class DynamicHairSimulation {
         return true;
     }
 
-    protected updateCollisionObjects(): void {
+    protected updateCollisionObjects(isRunning: boolean = false): void {
         for (const plane of this.planes) {
             getObjectWorldMatrix(plane.bone, tmpMatrix);
             tmpNormal.set(0, 1, 0).transformDirection(tmpMatrix);
-            tmpPoint.setFromMatrixPosition(tmpMatrix).addScaledVector(tmpNormal, plane.distance);
+            const distance = this.info.type === 2 && isRunning ? SELECTOR2_RUN_PLANE_DISTANCE : plane.distance;
+
+            tmpPoint.setFromMatrixPosition(tmpMatrix).addScaledVector(tmpNormal, distance);
 
             plane.normal.copy(tmpNormal);
             plane.point.copy(tmpPoint);
