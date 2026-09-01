@@ -21,7 +21,7 @@ import type { IBaseObjectDecodeInfo } from "./decode-library";
 import type { Vector3Arr } from "./library-types";
 import type { IBaseMaterialDecodeInfo } from "./un-material";
 
-type IMaterialTerrainDecodeInfo = IBaseMaterialDecodeInfo & {
+export type IMaterialTerrainDecodeInfo = IBaseMaterialDecodeInfo & {
     materialType: "terrain";
     layers: { map: string, alphaMap: string }[]
 };
@@ -50,11 +50,11 @@ function getTextureRgba(texture: UTexture): Uint8Array {
     return rgba;
 }
 
-enum ETerrainRenderMethod_T {
+export enum ETerrainRenderMethod_T {
     RM_WeightMap = 0,
     RM_CombinedWeightMap = 1,
     RM_AlphaMap = 2
-}
+};
 
 class FTerrainNormalPair implements Constructable_T {
     public normal1 = FVector.make();
@@ -777,5 +777,4 @@ abstract class ATerrainInfo extends AInfo {
 }
 
 export default ATerrainInfo;
-export { ATerrainInfo, ETerrainRenderMethod_T };
-export type { IMaterialTerrainDecodeInfo };
+export { ATerrainInfo };

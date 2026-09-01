@@ -1,10 +1,7 @@
-import { saturationToBrightness } from "./utils/hsv-to-rgb";
 import ULight, { type ILightDecodeInfo } from "./un-light";
 import type { DecodeLibrary } from "./decode-library";
 
-type ISunLightDecodeInfo = Omit<ILightDecodeInfo, "type"> & {
-    type: "Sunlight"
-};
+export type ISunLightDecodeInfo = Omit<ILightDecodeInfo, "type"> & { type: "Sunlight" };
 
 abstract class UNMovableSunLight extends ULight {
     // public lightness: number = 128;
@@ -53,4 +50,3 @@ abstract class UNMovableSunLight extends ULight {
 
 export default UNMovableSunLight;
 export { UNMovableSunLight };
-export type { ISunLightDecodeInfo };

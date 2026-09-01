@@ -6,15 +6,10 @@ import type { FColor } from "../un-color";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { Vector3Arr, Vector4Arr } from "../library-types";
 
-type IAnimationNotifyObjectDecodeInfo = IAnimationSoundNotifyDecodeInfo | IAnimationSwimSoundNotifyDecodeInfo | IAnimationScreenFadeNotifyDecodeInfo | IAnimationViewShakeNotifyDecodeInfo | IAnimationEffectNotifyDecodeInfo | IAnimationNativeNotifyDecodeInfo;
+export type IAnimationNotifyObjectDecodeInfo = IAnimationSoundNotifyDecodeInfo | IAnimationSwimSoundNotifyDecodeInfo | IAnimationScreenFadeNotifyDecodeInfo | IAnimationViewShakeNotifyDecodeInfo | IAnimationEffectNotifyDecodeInfo | IAnimationNativeNotifyDecodeInfo;
+export type IAnimationNativeNotifyDecodeInfo = { type: "native"; className: string; objectName: string; };
 
-type IAnimationNativeNotifyDecodeInfo = {
-    type: "native";
-    className: string;
-    objectName: string;
-};
-
-type IAnimationSoundNotifyDecodeInfo = {
+export type IAnimationSoundNotifyDecodeInfo = {
     type: "sound";
     className: "AnimNotify_Sound";
     objectName: string;
@@ -32,7 +27,7 @@ type IAnimationSoundNotifyDecodeInfo = {
     defaultActorRunSounds: string[];
 };
 
-type IAnimationSwimSoundNotifyDecodeInfo = {
+export type IAnimationSwimSoundNotifyDecodeInfo = {
     type: "swimSound";
     className: "AnimNotify_SwimSound";
     objectName: string;
@@ -40,14 +35,14 @@ type IAnimationSwimSoundNotifyDecodeInfo = {
     underwater: IAnimationSwimSoundSetDecodeInfo | null;
 };
 
-type IAnimationSwimSoundSetDecodeInfo = {
+export type IAnimationSwimSoundSetDecodeInfo = {
     sounds: string[];
     volume: number;
     radius: number;
     random: number;
 };
 
-type IAnimationScreenFadeNotifyDecodeInfo = {
+export type IAnimationScreenFadeNotifyDecodeInfo = {
     type: "screenFade";
     className: "AnimNotify_ScreenFade";
     objectName: string;
@@ -57,7 +52,7 @@ type IAnimationScreenFadeNotifyDecodeInfo = {
     fadeInDuration: number;
 };
 
-type IAnimationViewShakeNotifyDecodeInfo = {
+export type IAnimationViewShakeNotifyDecodeInfo = {
     type: "viewShake";
     className: "AnimNotify_ViewShake";
     objectName: string;
@@ -68,7 +63,7 @@ type IAnimationViewShakeNotifyDecodeInfo = {
     shakeCount: number;
 };
 
-type IAnimationEffectNotifyDecodeInfo = {
+export type IAnimationEffectNotifyDecodeInfo = {
     type: "effect";
     className: "AnimNotify_Effect";
     objectName: string;
@@ -112,7 +107,7 @@ function pullSounds(builder: DecodeLibraryBuilder, values: (USound | null)[]): s
     return names;
 }
 
-enum EViewShakeType_T {
+export enum EViewShakeType_T {
     VST_DAMAGE,
     VST_VIBRATION,
     VST_USER,
@@ -120,13 +115,14 @@ enum EViewShakeType_T {
     VST_DOWN,
     VST_UPDOWN,
     VST_DOWNUP
-}
+};
 
 abstract class UAnimNotify extends UObject {
     public getDecodeInfo(_builder: DecodeLibraryBuilder): IAnimationNotifyObjectDecodeInfo {
         return { type: "native", className: (this.constructor as any).friendlyName, objectName: this.name };
     }
 }
+
 abstract class UAnimNotifyIdleSound extends UAnimNotify { }
 abstract class UAnimNotifyMatSubAction extends UAnimNotify { }
 abstract class UAnimNotifyScripted extends UAnimNotify { }
@@ -182,11 +178,13 @@ abstract class UAnimNotifySound extends UAnimNotify {
         };
     }
 }
+
 abstract class UAnimNotifySwimSound extends UAnimNotify {
     public getDecodeInfo(_builder: DecodeLibraryBuilder): IAnimationSwimSoundNotifyDecodeInfo {
         return { type: "swimSound", className: "AnimNotify_SwimSound", objectName: this.name, surface: null, underwater: null };
     }
 }
+
 abstract class UAnimNotifyDestroyEffect extends UAnimNotify { }
 abstract class UAnimNotifyEffect extends UAnimNotify {
     declare protected effectClass: UObject | null;
@@ -238,6 +236,7 @@ abstract class UAnimNotifyEffect extends UAnimNotify {
         };
     }
 }
+
 abstract class UAnimNotifyAttackVoice extends UAnimNotify { }
 abstract class UAnimNotifyChanneling extends UAnimNotify { }
 abstract class UAnimNotifyAttackPreShot extends UAnimNotify { }
@@ -270,6 +269,7 @@ abstract class UAnimNotifyScreenFade extends UAnimNotify {
         };
     }
 }
+
 abstract class UAnimNotifyViewShake extends UAnimNotify {
     declare protected shakeType: EViewShakeType_T;
     declare protected shakeIntensity: number;
@@ -306,8 +306,8 @@ abstract class UAnimNotifyViewShake extends UAnimNotify {
         };
     }
 }
+
 abstract class UAnimNotifyBoneScale extends UAnimNotify { }
 
 export default UAnimNotify;
-export { EViewShakeType_T, UAnimNotify, UAnimNotifyIdleSound, UAnimNotifyMatSubAction, UAnimNotifyScripted, UAnimNotifyScript, UAnimNotifySound, UAnimNotifySwimSound, UAnimNotifyDestroyEffect, UAnimNotifyEffect, UAnimNotifyAttackVoice, UAnimNotifyChanneling, UAnimNotifyAttackPreShot, UAnimNotifyAttackShot, UAnimNotifyAttackItem, UAnimNotifyScreenFade, UAnimNotifyViewShake, UAnimNotifyBoneScale };
-export type { IAnimationNotifyObjectDecodeInfo, IAnimationNativeNotifyDecodeInfo, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo, IAnimationSwimSoundSetDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo, IAnimationViewShakeNotifyDecodeInfo, IAnimationEffectNotifyDecodeInfo };
+export { UAnimNotify, UAnimNotifyIdleSound, UAnimNotifyMatSubAction, UAnimNotifyScripted, UAnimNotifyScript, UAnimNotifySound, UAnimNotifySwimSound, UAnimNotifyDestroyEffect, UAnimNotifyEffect, UAnimNotifyAttackVoice, UAnimNotifyChanneling, UAnimNotifyAttackPreShot, UAnimNotifyAttackShot, UAnimNotifyAttackItem, UAnimNotifyScreenFade, UAnimNotifyViewShake, UAnimNotifyBoneScale };

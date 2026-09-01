@@ -4,7 +4,7 @@ import UAActor, { type IEdgesObjectDecodeInfo } from "./un-aactor";
 import FVector from "./un-vector";
 import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
 
-type ILightDecodeInfo = IBaseObjectDecodeInfo & {
+export type ILightDecodeInfo = IBaseObjectDecodeInfo & {
     type: "Light",
     dynamic: boolean,
     hsv: [number, number, number],
@@ -319,4 +319,3 @@ const LUT_SIN_RAD = new Array(0x4000).fill(1).map((_, i) => toSin(i) * RAD2DEG)
 
 //     return out;
 // })();
-export type { ILightDecodeInfo };

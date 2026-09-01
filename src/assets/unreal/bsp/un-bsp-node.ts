@@ -1,14 +1,10 @@
-import { BufferValue, type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
+import { type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { FPlane } from "../un-plane";
 import type { Vector4Arr } from "../library-types";
 import type { IBoxDecodeInfo } from "../un-box";
 
-type IBSPNodeCollisionInfo_T = {
-    flags: number[],
-    bounds: IBoxDecodeInfo
-};
-
-type IBSPNodeDecodeInfo_T = {
+export type IBSPNodeCollisionInfo_T = { flags: number[], bounds: IBoxDecodeInfo };
+export type IBSPNodeDecodeInfo_T = {
     children: [number, number],
     plane: Vector4Arr,
     leaves: [number, number],
@@ -26,7 +22,7 @@ type IBSPNodeDecodeInfo_T = {
 };
 
 // Flags associated with a Bsp node.
-enum BspNodeFlags_T {
+export enum BspNodeFlags_T {
     // Flags.
     NF_NotCsg = 0x01,           // Node is not a Csg splitter, i.e. is a transparent poly.
     NF_NotVisBlocking = 0x04,   // Node does not block visibility, i.e. is an invisible collision hull.
@@ -136,5 +132,4 @@ class FBSPNode implements Constructable_T {
 }
 
 export default FBSPNode;
-export { FBSPNode, BspNodeFlags_T };
-export type { IBSPNodeCollisionInfo_T, IBSPNodeDecodeInfo_T };
+export { FBSPNode };

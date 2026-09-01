@@ -12,9 +12,9 @@ export interface IEngineComponent<T extends IEngineComponent<T>> {
 
 const COMPONENT_EVENT_NOT_HANDLED = Symbol("componentEventNotHandled");
 
-type ComponentEventResult_T<T> = T | typeof COMPONENT_EVENT_NOT_HANDLED;
+export type ComponentEventResult_T<T> = T | typeof COMPONENT_EVENT_NOT_HANDLED;
 
-interface IObject {
+export interface IObject {
     addComponent<T extends IComponent<any>>(component: T): T;
     removeComponent(component: IComponent<any>): boolean;
     getComponent<T extends IComponent<any>>(componentName: string): T;
@@ -23,9 +23,9 @@ interface IObject {
     dispatchComponentEvent<T = unknown>(type: string, data?: unknown, source?: IComponent<any>): ComponentEventResult_T<T>;
     updateComponents(currentTime: number, deltaTime: number): void;
     detachComponents(): void;
-}
+};
 
-interface IComponent<TParent extends IObject = IObject> {
+export interface IComponent<TParent extends IObject = IObject> {
     readonly componentName: string;
     readonly updateOrder?: number;
     setParent(parent: TParent | null): this;
@@ -39,7 +39,7 @@ interface IComponent<TParent extends IObject = IObject> {
     onDetach?(): void;
     onUpdate?(currentTime: number, deltaTime: number): void;
     onEvent?(type: string, data: unknown): ComponentEventResult_T<unknown>;
-}
+};
 
 class ComponentCollection<TParent extends IObject> {
     protected readonly parent: TParent;
@@ -180,4 +180,3 @@ class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial exte
 }
 
 export { COMPONENT_EVENT_NOT_HANDLED, GameMesh, GameObject, ObjectComponent };
-export type { ComponentEventResult_T, IComponent, IObject };

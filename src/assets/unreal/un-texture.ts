@@ -2,7 +2,7 @@ import { FMipmap } from "./un-mipmap";
 import decompressDDS from "./dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
-import { BufferValue, type APackage, type UExport, FArray } from "@l2js/core";
+import { type APackage, type UExport, FArray } from "@l2js/core";
 import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
 import UMaterial, { type IBaseMaterialDecodeInfo } from "./un-material";
 import type { UPlatte } from "./un-palette";
@@ -10,25 +10,13 @@ import type { DecodeLibrary } from "./decode-library";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Texture, Vector2 } from "three";
 
-type MapData_T = { texture: Texture, size: Vector2 };
-
-type DecodableTexture_T = "rgba" | "dds" | "g16" | "float" | "wet";
-
-type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
-
-type IAnimatedSpriteDecodeInfo = IBaseMaterialDecodeInfo & {
-    materialType: "sprite",
-    sprites: ITextureDecodeInfo[],
-    framerate: number
-};
-
-type IDataTextureDecodeInfo = ITextureDecodeInfo & {
-    format?: DataTextureFormats_T
-};
-
-type TextureClampMode_T = "wrap" | "clamp";
-
-type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
+export type MapData_T = { texture: Texture, size: Vector2 };
+export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float" | "wet";
+export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
+export type IAnimatedSpriteDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "sprite", sprites: ITextureDecodeInfo[], framerate: number };
+export type IDataTextureDecodeInfo = ITextureDecodeInfo & { format?: DataTextureFormats_T };
+export type TextureClampMode_T = "wrap" | "clamp";
+export type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
     materialType: "texture",
     textureType: DecodableTexture_T,
     buffer: ArrayBuffer,
@@ -47,11 +35,10 @@ type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
     0001000000 ( 64)
     0000100000 ( 32)
 */
-
-enum ETexClampMode {
+export enum ETexClampMode {
     TC_Wrap = 0x00,
     TC_Clamp = 0x01,
-}
+};
 
 abstract class UTexture extends UMaterial {
     declare public readonly palette: UPlatte;
@@ -368,7 +355,7 @@ abstract class UTexture extends UMaterial {
 }
 
 export default UTexture;
-export { UTexture, ETexClampMode };
+export { UTexture };
 
 function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
     const width_half = width / 2;
@@ -433,4 +420,3 @@ function createPlane(width: number, height: number, widthSegments: number, heigh
         normals: new Float32Array(normals)
     };
 }
-export type { MapData_T, DecodableTexture_T, DataTextureFormats_T, IAnimatedSpriteDecodeInfo, IDataTextureDecodeInfo, TextureClampMode_T, ITextureDecodeInfo };

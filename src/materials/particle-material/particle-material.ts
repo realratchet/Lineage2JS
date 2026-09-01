@@ -132,7 +132,6 @@ class AnimatedParticleMaterial extends ShaderMaterial {
 
 export default ParticleMaterial;
 export { ParticleMaterial, AnimatedParticleMaterial };
-export type { ParticleMaterialInitSettings_T };
 
 // Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
 export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) {
@@ -192,7 +191,7 @@ export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) 
     }
 }
 
-type ParticleMaterialInitSettings_T = {
+export type ParticleMaterialInitSettings_T = {
     type: "sprite" | "texture",
     map?: any,
     sprites?: any[],

@@ -22,7 +22,7 @@ import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { IBaseMaterialDecodeInfo, SupportedBlendingTypes_T } from "../un-material";
 import type { Vector4Arr } from "../library-types";
 
-type IBSPSectionDecodeInfo_T = {
+export type IBSPSectionDecodeInfo_T = {
     uuid: string,
     sectionName: string;
     priority: "opaque" | "transparent",
@@ -39,7 +39,7 @@ type IBSPSectionDecodeInfo_T = {
     blendingMode?: SupportedBlendingTypes_T
 };
 
-type IBSPCollisionModelDecodeInfo = {
+export type IBSPCollisionModelDecodeInfo = {
     planes: Vector4Arr[];
     hulls: IBSPNodeCollisionInfo_T[];
 };
@@ -48,8 +48,8 @@ const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
 const MAX_FINAL_VERTICES = 24;      // Max vertices in a Bsp node, post clipping.
 const MAX_ZONES = 64;               // Max zones per level.
 const TEXEL_SCALE = 512;
-const PF_Unlit = 0x00400000; // from UnObj.h line 254
 
+const PF_Unlit = 0x00400000; // from UnObj.h line 254
 const PF_WaterSheet = 0x00080000; // L2.water.trace 17626640: uniquely marks shipped D3DCULL_NONE water sheets.
 
 const nodeCache = new Array<number>();
@@ -736,4 +736,3 @@ type LightmapInfo_T = {
 
 //     return (basis.determinant() < 0) ? -1.0 : +1.0;
 // }
-export type { IBSPSectionDecodeInfo_T, IBSPCollisionModelDecodeInfo };

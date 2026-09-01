@@ -3,7 +3,7 @@ import UObject from "../un-object";
 import type { FRotator } from "../un-rotator";
 import type { Vector3Arr } from "../library-types";
 
-type ISwayingDecodeInfo = {
+export type ISwayingDecodeInfo = {
     tags: string[],
     orgRotator: Vector3Arr,
     rate: Vector3Arr,
@@ -79,4 +79,3 @@ abstract class UMovableStaticMeshActor extends UStaticMeshActor {
 
 export default UMovableStaticMeshActor;
 export { UMovableStaticMeshActor, FL2RotatorTime };
-export type { ISwayingDecodeInfo };

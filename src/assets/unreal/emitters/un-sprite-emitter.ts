@@ -2,14 +2,14 @@ import FVector from "../un-vector";
 import UParticleEmitter, { type IEmitterDecodeInfo } from "./un-particle-emitter"
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-type ISpriteEmitterDecodeInfo = IEmitterDecodeInfo & {
+export type ISpriteEmitterDecodeInfo = IEmitterDecodeInfo & {
     type: "SpriteEmitter",
     texture: string,
     spriteDirection?: SpriteDirections_T,
     projectionNormal?: [number, number, number]
 };
 
-type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
 
 abstract class USpriteEmitter extends UParticleEmitter {
     declare protected projectionNormal: FVector; // Normal vector of the projection plane used when UseDirectionAs is set to PTDU_Normal, PTDU_UpAndNormal or PTDU_RightAndNormal.
@@ -65,4 +65,3 @@ const directionNames = {
     [EParticleDirectionUsage_T.PTDU_RightAndNormal]: "rightNormal",
     [EParticleDirectionUsage_T.PTDU_Scale]: "scale",
 } as Record<EParticleDirectionUsage_T, SpriteDirections_T>;
-export type { ISpriteEmitterDecodeInfo, SpriteDirections_T };

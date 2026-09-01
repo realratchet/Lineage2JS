@@ -18,7 +18,7 @@ import type { UModel } from "./model/un-model";
 import type { Matrix4Arr, Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-type IActorCollisionDecodeInfo = {
+export type IActorCollisionDecodeInfo = {
     collideActors: boolean,
     collideWorld: boolean,
     blockActors: boolean,
@@ -31,12 +31,12 @@ type IActorCollisionDecodeInfo = {
     collisionHeight: number
 };
 
-type IRotatingDecodeInfo = {
+export type IRotatingDecodeInfo = {
     rotator: Vector3Arr,
     rate: Vector3Arr
 };
 
-type IEdgesObjectDecodeInfo = IBaseObjectDecodeInfo & {
+export type IEdgesObjectDecodeInfo = IBaseObjectDecodeInfo & {
     type: "Edges",
     geometry: string,
     color?: [number, number, number],
@@ -395,4 +395,3 @@ export enum EL2EventCmd_T {
     LEC_Show,
     LEC_Play
 };
-export type { IActorCollisionDecodeInfo, IRotatingDecodeInfo, IEdgesObjectDecodeInfo };

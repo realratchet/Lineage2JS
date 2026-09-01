@@ -10,19 +10,19 @@ import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-type IEmitterSpawnSoundDecodeInfo = {
+export type IEmitterSpawnSoundDecodeInfo = {
     soundName: string;
     volume: number;
     radius: number;
 };
 
-type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & {
+export type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & {
     type: "Emitter";
     spawnSound?: IEmitterSpawnSoundDecodeInfo;
     rotating?: IRotatingDecodeInfo;
 };
 
-type EmitterDecodeResult_T = { object: IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
+export type EmitterDecodeResult_T = { object: IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
 
 abstract class UEmitter extends UAActor {
     declare protected emitters: FObjectArray<UObject>;
@@ -281,4 +281,3 @@ function isParticleEmitter(emitter: UObject): emitter is UParticleEmitter {
 
 export default UEmitter;
 export { UEmitter };
-export type { IEmitterSpawnSoundDecodeInfo, IEmitterActorDecodeInfo };

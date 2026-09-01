@@ -7,7 +7,7 @@ import type { UAActor } from "./un-aactor";
 import type { Vector3Arr } from "./library-types";
 import type { ISphereDecodeInfo } from "./un-sphere";
 
-type IBoundsDecodeInfo = {
+export type IBoundsDecodeInfo = {
     sphere?: ISphereDecodeInfo,
     box: { min: Vector3Arr, max: Vector3Arr } | null
 };
@@ -63,4 +63,3 @@ abstract class UPrimitive extends UObject {
 
 export default UPrimitive;
 export { UPrimitive };
-export type { IBoundsDecodeInfo };

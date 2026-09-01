@@ -2,30 +2,13 @@ import type { ScriptBytecodeEntry_T, UClass, UFunction, UObject, UState, UStruct
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector3Arr } from "./library-types";
 
-type ScriptBytecodeValue_T = number | string | null | Vector3Arr | IScriptBytecodeOffsetDecodeInfo | IScriptBytecodeLabelDecodeInfo;
+export type ScriptBytecodeValue_T = number | string | null | Vector3Arr | IScriptBytecodeOffsetDecodeInfo | IScriptBytecodeLabelDecodeInfo;
+export type IScriptBytecodeOffsetDecodeInfo = { virtualOffset: number, entryIndex: number };
+export type IScriptBytecodeLabelDecodeInfo = IScriptBytecodeOffsetDecodeInfo & { name: string };
+export type IScriptBytecodeEntryDecodeInfo = { virtualOffset: number, type: string, value: ScriptBytecodeValue_T, tokenName?: string };
+export type IScriptProgramDecodeInfo = { virtualSize: number, entries: IScriptBytecodeEntryDecodeInfo[] };
 
-type IScriptBytecodeOffsetDecodeInfo = {
-    virtualOffset: number,
-    entryIndex: number
-};
-
-type IScriptBytecodeLabelDecodeInfo = IScriptBytecodeOffsetDecodeInfo & {
-    name: string,
-};
-
-type IScriptBytecodeEntryDecodeInfo = {
-    virtualOffset: number,
-    type: string,
-    value: ScriptBytecodeValue_T,
-    tokenName?: string
-};
-
-type IScriptProgramDecodeInfo = {
-    virtualSize: number,
-    entries: IScriptBytecodeEntryDecodeInfo[]
-};
-
-type IScriptFieldDecodeInfo = {
+export type IScriptFieldDecodeInfo = {
     id: string,
     name: string,
     type: PropertyTypes_T,
@@ -33,7 +16,7 @@ type IScriptFieldDecodeInfo = {
     flags: number
 };
 
-type IScriptFunctionDecodeInfo = {
+export type IScriptFunctionDecodeInfo = {
     id: string,
     owner: string,
     name: string,
@@ -45,7 +28,7 @@ type IScriptFunctionDecodeInfo = {
     program: IScriptProgramDecodeInfo
 };
 
-type IScriptStateDecodeInfo = {
+export type IScriptStateDecodeInfo = {
     id: string,
     owner: string,
     name: string,
@@ -58,14 +41,15 @@ type IScriptStateDecodeInfo = {
     program: IScriptProgramDecodeInfo
 };
 
-type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
+export type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
     superClassId: string | null,
     classFlags: number,
     stateIds: string[],
     defaults: Record<string, ScriptPropertyValue_T>
 };
 
-type ScriptPropertyValue_T = number | boolean | string | null | ScriptPropertyValue_T[] | { [key: string]: ScriptPropertyValue_T };
+export type ScriptPropertyValue_T = number | boolean | string | null | ScriptPropertyValue_T[] | { [key: string]: ScriptPropertyValue_T };
+
 function getOwnerId(id: string): string {
     const index = id.lastIndexOf(".");
 
@@ -339,4 +323,3 @@ function pullScriptDumps(library: DecodeLibrary, ...actorLists: Iterable<UObject
 
 export default pullScriptDumps;
 export { pullScriptDumps, pullScriptClasses, dumpObjectScriptProperties };
-export type { ScriptBytecodeValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptBytecodeLabelDecodeInfo, IScriptBytecodeEntryDecodeInfo, IScriptProgramDecodeInfo, IScriptFieldDecodeInfo, IScriptFunctionDecodeInfo, IScriptStateDecodeInfo, IScriptClassDecodeInfo, ScriptPropertyValue_T };

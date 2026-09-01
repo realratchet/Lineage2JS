@@ -1,25 +1,10 @@
 import BaseConfigFile from "./un-base-config";
 import type { Vector3Arr } from "../library-types";
 
-type IDynamicHairCollisionPlaneDecodeInfo = {
-    bone: string;
-    distance: number;
-};
-
-type IDynamicHairCollisionSphereDecodeInfo = {
-    bone: string;
-    offset: Vector3Arr;
-    radius: number;
-};
-
-type IDynamicHairActionDecodeInfo = {
-    name: string;
-    initial: boolean;
-    initialOffset: Vector3Arr;
-    sphereIndices: number[];
-};
-
-type IDynamicHairConfigDecodeInfo = {
+export type IDynamicHairCollisionPlaneDecodeInfo = { bone: string; distance: number; };
+export type IDynamicHairCollisionSphereDecodeInfo = { bone: string; offset: Vector3Arr; radius: number; };
+export type IDynamicHairActionDecodeInfo = { name: string; initial: boolean; initialOffset: Vector3Arr; sphereIndices: number[]; };
+export type IDynamicHairConfigDecodeInfo = {
     section: string;
     structuralStiffness: number;
     structuralDamping: number;
@@ -219,4 +204,3 @@ class UConfigHair extends BaseConfigFile {
 
 export default UConfigHair;
 export { UConfigHair };
-export type { IDynamicHairCollisionPlaneDecodeInfo, IDynamicHairCollisionSphereDecodeInfo, IDynamicHairActionDecodeInfo, IDynamicHairConfigDecodeInfo };

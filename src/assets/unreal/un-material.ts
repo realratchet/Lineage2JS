@@ -7,7 +7,7 @@ import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { ParticleBlendModes_T } from "./emitters/un-particle-emitter";
 import type { ColorArr, Vector3Arr, EulerArr } from "./library-types";
 
-type IDecodedParameter = {
+export type IDecodedParameter = {
     uniforms: Record<string, any>,
     defines: Record<string, any>,
     isUsingMap: boolean,
@@ -17,68 +17,26 @@ type IDecodedParameter = {
     uvIndex?: number
 };
 
-type IDecodedSpriteParameter = IDecodedParameter & {
+export type IDecodedSpriteParameter = IDecodedParameter & {
     isSprite: true,
     sprites: any[],
     framerate: number
 };
 
-type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
+export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
+export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend" | "texCoordSource";
 
-type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend" | "texCoordSource";
+export type IBaseMaterialDecodeInfo = { name?: string, materialType: DecodableMaterial_T, color?: boolean };
+export type ISolidMaterialDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "solid", solidColor: number };
+export type ILightmappedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "lightmapped", material: string, lightmap: string | null };
+export type IMaterialGroupDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "group", materials: string[] };
+export type IParticleMaterialDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "particle", material: string | null, blendingMode: ParticleBlendModes_T, opacity: number };
+export type IMaterialModifier = { type: string };
+export type IBaseLightingMaterialModifier = IMaterialModifier & { type: "Lighting", mode: "Ambient" | "Directional" };
+export type ILightAmbientMaterialModifier = IBaseLightingMaterialModifier & { mode: "Ambient", color: ColorArr, brightness: number };
+export type ILightDirectionalMaterialModifier = IBaseLightingMaterialModifier & { mode: "Directional", color: ColorArr, brightness: number, direction: Vector3Arr };
 
-type IBaseMaterialDecodeInfo = {
-    name?: string,
-    materialType: DecodableMaterial_T,
-    color?: boolean
-};
-
-type ISolidMaterialDecodeInfo = IBaseMaterialDecodeInfo & {
-    materialType: "solid",
-    solidColor: number
-};
-
-type ILightmappedDecodeInfo = IBaseMaterialDecodeInfo & {
-    materialType: "lightmapped",
-    material: string,
-    lightmap: string | null
-};
-
-type IMaterialGroupDecodeInfo = IBaseMaterialDecodeInfo & {
-    materialType: "group",
-    materials: string[]
-};
-
-type IParticleMaterialDecodeInfo = IBaseMaterialDecodeInfo & {
-    materialType: "particle",
-    material: string | null,
-    blendingMode: ParticleBlendModes_T,
-    opacity: number
-};
-
-type IMaterialModifier = {
-    type: string
-};
-
-type IBaseLightingMaterialModifier = IMaterialModifier & {
-    type: "Lighting",
-    mode: "Ambient" | "Directional"
-};
-
-type ILightAmbientMaterialModifier = IBaseLightingMaterialModifier & {
-    mode: "Ambient",
-    color: ColorArr,
-    brightness: number
-};
-
-type ILightDirectionalMaterialModifier = IBaseLightingMaterialModifier & {
-    mode: "Directional",
-    color: ColorArr,
-    brightness: number,
-    direction: Vector3Arr
-};
-
-type IShaderDecodeInfo = IBaseMaterialDecodeInfo & {
+export type IShaderDecodeInfo = IBaseMaterialDecodeInfo & {
     materialType: "shader",
     diffuse: string,
     opacity: string,
@@ -96,21 +54,14 @@ type IShaderDecodeInfo = IBaseMaterialDecodeInfo & {
     visible: boolean
 };
 
-type ITexPannerDecodeInfo = IBaseMaterialModifierDecodeInfo & {
+export type ITexPannerDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     modifierType: "panTexture",
-    transform: {
-        matrix: number[],
-        rate: number,
-        map: string
-    }
+    transform: { matrix: number[], rate: number, map: string }
 };
 
-type IBaseMaterialModifierDecodeInfo = IBaseMaterialDecodeInfo & {
-    materialType: "modifier",
-    modifierType: DecodableMaterialModifier_T
-};
+export type IBaseMaterialModifierDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "modifier", modifierType: DecodableMaterialModifier_T };
 
-type IFadeColorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
+export type IFadeColorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     modifierType: "fadeColor",
     fadeColors: {
         color1: number[],
@@ -121,7 +72,7 @@ type IFadeColorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     }
 };
 
-type ITexRotatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
+export type ITexRotatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     modifierType: "rotateTexture",
     transform: {
         matrix: number[],
@@ -136,7 +87,7 @@ type ITexRotatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     }
 };
 
-type ITexOscillatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
+export type ITexOscillatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     modifierType: "oscillateTexture",
     transform: {
         matrix: number[],
@@ -154,13 +105,9 @@ type ITexOscillatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     }
 };
 
-type ITexEnvMapDecodeInfo = IBaseMaterialModifierDecodeInfo & {
-    modifierType: "envMapTexture",
-    envMapType: "world" | "camera",
-    map: string
-};
+export type ITexEnvMapDecodeInfo = IBaseMaterialModifierDecodeInfo & { modifierType: "envMapTexture", envMapType: "world" | "camera", map: string };
 
-type IColorModifierDecodeInfo = IBaseMaterialModifierDecodeInfo & {
+export type IColorModifierDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     modifierType: "colorModifier",
     material: string,
     modifierColor: ColorArr,
@@ -168,7 +115,7 @@ type IColorModifierDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     alphaBlend: boolean
 };
 
-type IFinalBlendDecodeInfo = IBaseMaterialModifierDecodeInfo & {
+export type IFinalBlendDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     modifierType: "finalBlend",
     material: string,
     blendingMode: SupportedBlendingTypes_T,
@@ -180,13 +127,8 @@ type IFinalBlendDecodeInfo = IBaseMaterialModifierDecodeInfo & {
     depthTest: boolean
 };
 
-type ITexCoordSourceDecodeInfo = IBaseMaterialModifierDecodeInfo & {
-    modifierType: "texCoordSource",
-    material: string,
-    uvIndex: number
-};
-
-type ICombinerDecodeInfo = IBaseMaterialDecodeInfo & {
+export type ITexCoordSourceDecodeInfo = IBaseMaterialModifierDecodeInfo & { modifierType: "texCoordSource", material: string, uvIndex: number };
+export type ICombinerDecodeInfo = IBaseMaterialDecodeInfo & {
     materialType: "combiner",
     combineMode: number, // 0=material1 1=modulate 2=modulate2x 3=modulate4x 4=add 5=subtract 6=alphaBlend 7=material2 - see UCombiner.getDecodeInfo
     material1: string,
@@ -197,7 +139,7 @@ type ICombinerDecodeInfo = IBaseMaterialDecodeInfo & {
     alphaFrom2: boolean
 };
 
-type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
+export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
 
 abstract class UBaseMaterial extends UObject {
     // public readonly skipRemaining = true;
@@ -880,5 +822,3 @@ abstract class UStaticMeshMaterial extends UBaseMaterial {
 
 export default UMaterial;
 export { UMaterial, UStaticMeshMaterial, UShader, UFadeColor, UTexRotator, UTexPanner, UColorModifier, UTexOscillator, UFinalBlend, OutputBlending_T, UTexEnvMap, UTexCoordSource, UVertexColor, UCombiner };
-export type { SupportedBlendingTypes_T };
-export type { IDecodedParameter, IDecodedSpriteParameter, DecodableMaterial_T, DecodableMaterialModifier_T, IBaseMaterialDecodeInfo, ISolidMaterialDecodeInfo, ILightmappedDecodeInfo, IMaterialGroupDecodeInfo, IParticleMaterialDecodeInfo, IMaterialModifier, IBaseLightingMaterialModifier, ILightAmbientMaterialModifier, ILightDirectionalMaterialModifier, IShaderDecodeInfo, ITexPannerDecodeInfo, IBaseMaterialModifierDecodeInfo, IFadeColorDecodeInfo, ITexRotatorDecodeInfo, ITexOscillatorDecodeInfo, ITexEnvMapDecodeInfo, IColorModifierDecodeInfo, IFinalBlendDecodeInfo, ITexCoordSourceDecodeInfo, ICombinerDecodeInfo };

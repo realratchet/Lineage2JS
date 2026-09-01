@@ -4,18 +4,14 @@ import type { FColor } from "./un-color";
 import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
 import type { Vector3Arr, ColorArr } from "./library-types";
 
-type IWaterVolumeDecodeInfo = IBaseObjectDecodeInfo & {
+export type IWaterVolumeDecodeInfo = IBaseObjectDecodeInfo & {
     type: "WaterVolume",
     priority: number,
     fluidFriction: number,
     gravity: Vector3Arr,
     terminalVelocity: number,
     zoneVelocity: Vector3Arr,
-    fog: {
-        color: ColorArr,
-        start: number,
-        end: number
-    } | null,
+    fog: { color: ColorArr, start: number, end: number } | null,
     cellophane: ColorArr | null,
     waitHitEffect: string | null,
     runHitEffect: string | null,
@@ -82,42 +78,42 @@ abstract class UPhysicsVolume extends UVolume {
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
-    //         "LocationPriority": "locationPriority",
-    //         "LocationName": "locationName",
-    //         "DecoList": "decoList",
+            //         "LocationPriority": "locationPriority",
+            //         "LocationName": "locationName",
+            //         "DecoList": "decoList",
 
-    //         "bPainCausing": "_bPainCausing",
+            //         "bPainCausing": "_bPainCausing",
             "ZoneVelocity": "zoneVelocity",
             "Gravity": "gravity",
-    //         "GroundFriction": "_groundFriction",
+            //         "GroundFriction": "_groundFriction",
             "TerminalVelocity": "terminalVelocity",
-    //         "DamagePerSec": "_damagePerSec",
-    //         "DamageType": "_damageType",
+            //         "DamagePerSec": "_damagePerSec",
+            //         "DamageType": "_damageType",
             "Priority": "priority",
-    //         "EntrySound": "_entrySound",
-    //         "ExitSound": "_exitSound",
-    //         "EntryActor": "_entryActor",
-    //         "ExitActor": "_exitActor",
+            //         "EntrySound": "_entrySound",
+            //         "ExitSound": "_exitSound",
+            //         "EntryActor": "_entryActor",
+            //         "ExitActor": "_exitActor",
             "FluidFriction": "fluidFriction",
-    //         "ViewFlash": "_viewFlash",
-    //         "ViewFog": "_viewFog",
-    //         "bDestructive": "_bDestructive",
-    //         "bNoInventory": "_bNoInventory",
-    //         "bMoveProjectiles": "_bMoveProjectiles",
-    //         "bBounceVelocity": "_bBounceVelocity",
-    //         "bNeutralZone": "_bNeutralZone",
+            //         "ViewFlash": "_viewFlash",
+            //         "ViewFog": "_viewFog",
+            //         "bDestructive": "_bDestructive",
+            //         "bNoInventory": "_bNoInventory",
+            //         "bMoveProjectiles": "_bMoveProjectiles",
+            //         "bBounceVelocity": "_bBounceVelocity",
+            //         "bNeutralZone": "_bNeutralZone",
             "bWaterVolume": "isWaterVolume",
-    //         "PainTimer": "_painTimer",
+            //         "PainTimer": "_painTimer",
             "bUseDistanceFogColor": "useDistanceFogColor",
             "bUseCellophane": "useCellophane",
             "CellophaneColor": "cellophaneColor",
-    //         "KExtraLinearDamping": "_kExtraLinearDamping",
-    //         "KExtraAngularDamping": "_kExtraAngularDamping",
-    //         "KBuoyancy": "_kBuoyancy",
-    //         "NextPhysicsVolume": "_nextPhysicsVolume",
+            //         "KExtraLinearDamping": "_kExtraLinearDamping",
+            //         "KExtraAngularDamping": "_kExtraAngularDamping",
+            //         "KBuoyancy": "_kBuoyancy",
+            //         "NextPhysicsVolume": "_nextPhysicsVolume",
             "bL2WaterVolume": "isL2WaterVolume",
-    //         "bL2StepVolume": "_bL2StepVolume",
-    //         "StepSoundID": "_stepSoundID",
+            //         "bL2StepVolume": "_bL2StepVolume",
+            //         "StepSoundID": "_stepSoundID",
 
             "WaitHitEffect": "waitHitEffect",
             "RunHitEffect": "runHitEffect",
@@ -156,4 +152,3 @@ abstract class UPhysicsVolume extends UVolume {
 
 export default UPhysicsVolume;
 export { UPhysicsVolume };
-export type { IWaterVolumeDecodeInfo };

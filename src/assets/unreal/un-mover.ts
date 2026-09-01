@@ -3,7 +3,7 @@ import FRotator from "./un-rotator";
 import type { FVector } from "./un-vector";
 import type { Vector3Arr, QuaternionArr } from "./library-types";
 
-type IMoverDecodeInfo = {
+export type IMoverDecodeInfo = {
     initialState: string,
     keyNum: number,
     keyPositions: Vector3Arr[],
@@ -18,12 +18,12 @@ type IMoverDecodeInfo = {
     moverEncroachType: "stop" | "return" | "crush" | "ignore"
 };
 
-enum EMoverGlideType_T {
+export enum EMoverGlideType_T {
     MV_MoveByTime,
     MV_GlideByTime
 }
 
-enum EMoverEncroachType_T {
+export enum EMoverEncroachType_T {
     ME_StopWhenEncroach,
     ME_ReturnWhenEncroach,
     ME_CrushWhenEncroach,
@@ -118,5 +118,4 @@ function getMoverEncroachType(value: EMoverEncroachType_T): IMoverDecodeInfo["mo
 }
 
 export default UMover;
-export { UMover, EMoverEncroachType_T, EMoverGlideType_T };
-export type { IMoverDecodeInfo };
+export { UMover };

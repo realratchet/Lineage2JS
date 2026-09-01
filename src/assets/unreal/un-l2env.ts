@@ -1,25 +1,23 @@
 import { EEnvCycle } from "./env-consts";
 import FPlane from "./un-plane";
 import hsvToRgb from "./utils/hsv-to-rgb";
-import GMath from "./un-gmath";
 import { APackage, UExport, type ANativePackage, type EnginePackage_T, type FPrimitiveArray, type PropertyTag, type UStruct, FArray } from "@l2js/core";
 import UObject from "./un-object";
 import type { ColorArr } from "./library-types";
+import { findSection, consumeNextValue, consumeHSV, consumeRGB, consumeScale } from "./conf-files/conf-parser";
 
-type INTimeColorDecodeInfo = [number, number, number, number];
+export type INTimeColorDecodeInfo = [number, number, number, number];
+export type INTimeHSVDecodeInfo = [number, number, number, number];
+export type INTimeScaleDecodeInfo = [number, number];
 
-type INTimeHSVDecodeInfo = [number, number, number, number];
-
-type INTimeScaleDecodeInfo = [number, number];
-
-type IL2NTimeLightDecodeInfo = {
+export type IL2NTimeLightDecodeInfo = {
     terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
     actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
     staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
     bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] }
 };
 
-type IL2NEnvLightDecodeInfo = {
+export type IL2NEnvLightDecodeInfo = {
     type: EEnvCycle,
     light: IL2NTimeLightDecodeInfo,
     color: {
@@ -282,15 +280,6 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
     return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
 }
 
-
-import {
-    findSection,
-    consumeNextValue,
-    consumeHSV,
-    consumeRGB,
-    consumeScale
-} from "./conf-files/conf-parser";
-
 export { UL2NEnvLight, UL2NTimeLight, EEnvCycle, FNTimeHSV, FNTimeColor, FNTimeScale };
 
 function getEnvType(fileContents: string): EEnvCycle {
@@ -394,4 +383,3 @@ function loadRGB(fileContents: string, sectionName: string, pkgNative: ANativePa
 
     return array;
 }
-export type { INTimeColorDecodeInfo, INTimeHSVDecodeInfo, INTimeScaleDecodeInfo, IL2NTimeLightDecodeInfo, IL2NEnvLightDecodeInfo };

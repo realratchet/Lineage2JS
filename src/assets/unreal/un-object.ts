@@ -1,11 +1,7 @@
 import CoreUObject from "@l2js/core";
 import type { DecodeLibrary } from "./decode-library";
 
-// math structs that serialize through the standard decode method,
-// same encodings ([x,y,z] tuples, [min,max]) as the rest of decoding
-type IDecodableStruct<T = unknown> = {
-    getDecodeInfo(library: DecodeLibrary): T;
-};
+export type IDecodableStruct<T = unknown> = { getDecodeInfo(library: DecodeLibrary): T; };
 
 type MakeParams_T<T> = ConstructorParameters<{ new(): never } & T>;
 
@@ -30,4 +26,3 @@ const UObject = CoreUObject as unknown as typeof EngineUObject;
 
 export default UObject;
 export { UObject };
-export type { IDecodableStruct };

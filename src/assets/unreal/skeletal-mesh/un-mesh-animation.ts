@@ -3,27 +3,15 @@ import UObject from "../un-object";
 import UAnimNotify, { type IAnimationNotifyObjectDecodeInfo } from "./un-anim-notify";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-type ISkinNotifyEntryDecodeInfo = {
-    time: number;
-    skinIndex: number;
-};
-
-type IFixedSkinNotifyDecodeInfo = {
-    mode: "fixed";
-    frameCount: number;
-    timeline: ISkinNotifyEntryDecodeInfo[];
-};
-
-type IGroupedSkinNotifyDecodeInfo = {
+export type ISkinNotifyEntryDecodeInfo = { time: number; skinIndex: number; };
+export type IFixedSkinNotifyDecodeInfo = { mode: "fixed"; frameCount: number; timeline: ISkinNotifyEntryDecodeInfo[]; };
+export type IGroupedSkinNotifyDecodeInfo = {
     mode: "grouped";
     frameCount: number;
-    groups: {
-        startFrame: number;
-        timeline: ISkinNotifyEntryDecodeInfo[];
-    }[];
+    groups: { startFrame: number; timeline: ISkinNotifyEntryDecodeInfo[]; }[];
 };
 
-type IRandomSkinNotifyDecodeInfo = {
+export type IRandomSkinNotifyDecodeInfo = {
     mode: "random";
     frameCount: number;
     intervalMin: number;
@@ -31,13 +19,8 @@ type IRandomSkinNotifyDecodeInfo = {
     timeline: ISkinNotifyEntryDecodeInfo[];
 };
 
-type ISkinNotifyDecodeInfo = IFixedSkinNotifyDecodeInfo | IGroupedSkinNotifyDecodeInfo | IRandomSkinNotifyDecodeInfo;
-
-type IAnimationNotifyDecodeInfo = {
-    time: number;
-    name: string;
-    object: IAnimationNotifyObjectDecodeInfo | null;
-};
+export type ISkinNotifyDecodeInfo = IFixedSkinNotifyDecodeInfo | IGroupedSkinNotifyDecodeInfo | IRandomSkinNotifyDecodeInfo;
+export type IAnimationNotifyDecodeInfo = { time: number; name: string; object: IAnimationNotifyObjectDecodeInfo | null; };
 
 function decodeNotifyObject(builder: DecodeLibraryBuilder, notify: CoreUObject): IAnimationNotifyObjectDecodeInfo {
     if (!notify) return null;
@@ -353,12 +336,11 @@ abstract class UMeshAnimation extends UObject {
     }
 }
 
-enum SkinNotifyMode_T {
+export enum SkinNotifyMode_T {
     Fixed,
     Grouped,
     Random
 }
 
 export default UMeshAnimation;
-export { UMeshAnimation, type SkinNotifyMode_T };
-export type { ISkinNotifyEntryDecodeInfo, IFixedSkinNotifyDecodeInfo, IGroupedSkinNotifyDecodeInfo, IRandomSkinNotifyDecodeInfo, ISkinNotifyDecodeInfo, IAnimationNotifyDecodeInfo };
+export { UMeshAnimation };

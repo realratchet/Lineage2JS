@@ -1168,7 +1168,7 @@ class ActorState {
     }
 }
 
-type DesiredState_T = {
+export type DesiredState_T = {
     position: Vector3;
     actor: Object3D | null;
     swimToDepth: boolean;
@@ -1177,8 +1177,8 @@ type DesiredState_T = {
     faceTarget: Object3D | null;
 };
 
-type PhysicsMode_T = "none" | "walking" | "falling" | "swimming" | "flying";
-type PawnMovementState_T = "idle" | "walking" | "running" | "dying" | "falling" | "swimming" | "swimmingIdle";
+export type PhysicsMode_T = "none" | "walking" | "falling" | "swimming" | "flying";
+export type PawnMovementState_T = "idle" | "walking" | "running" | "dying" | "falling" | "swimming" | "swimmingIdle";
 
 function fixedTurn(current: number, desired: number, deltaRate: number): number {
     current &= 65535;
@@ -1214,4 +1214,3 @@ function twoWallAdjust(desiredDir: Vector3, delta: Vector3, hitNormal: Vector3, 
 
 export default PawnMovementComponent;
 export { PAWN_TELEPORTED_EVENT, PawnMovementComponent };
-export type { PawnMovementState_T };

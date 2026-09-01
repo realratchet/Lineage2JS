@@ -7,7 +7,7 @@ import type RotatingObject from "../../objects/rotating-object";
 import type PhysicsManager from "../physics-manager";
 import type UIManager from "../../game/ui-manager";
 
-interface IPhysicsComponent<TParent extends IObject = IObject> extends IComponent<TParent> {
+export interface IPhysicsComponent<TParent extends IObject = IObject> extends IComponent<TParent> {
     readonly isPhysicsComponent: boolean;
     isPhysicsAdded(manager: PhysicsManager): boolean;
     onPhysicsAdded(manager: PhysicsManager): void;
@@ -128,4 +128,3 @@ class RotatingComponent extends PhysicsComponent<RotatingObject & IObject> {
 }
 
 export { ColliderComponent, MoverComponent, PhysicsComponent, RotatingComponent };
-export type { IPhysicsComponent };

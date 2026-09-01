@@ -3,11 +3,10 @@ import { CastToken_T, ExprToken_T } from "@l2js/core";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo } from "@l2js/engine/contracts/script";
 
-type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
+export type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
+export type ScriptProperties_T = Map<string, ScriptValue_T> | Record<string, ScriptValue_T>;
 
-type ScriptProperties_T = Map<string, ScriptValue_T> | Record<string, ScriptValue_T>;
-
-type ScriptNativeCall_T = {
+export type ScriptNativeCall_T = {
     index: number,
     name: string,
     args: ScriptArgument_T[],
@@ -15,7 +14,7 @@ type ScriptNativeCall_T = {
     context: ScriptHost_T
 };
 
-type ScriptHost_T = {
+export type ScriptHost_T = {
     scriptClassId: string,
     scriptProperties?: ScriptProperties_T,
     getUnrealScriptProperty?(id: string): ScriptValue_T,
@@ -25,14 +24,14 @@ type ScriptHost_T = {
     callUnrealNative?(call: ScriptNativeCall_T): ScriptValue_T
 };
 
-type ScriptSlot_T = {
+export type ScriptSlot_T = {
     get(): ScriptValue_T,
     set(value: ScriptValue_T): void
 };
 
-type ScriptArgument_T = ScriptValue_T | ScriptSlot_T;
+export type ScriptArgument_T = ScriptValue_T | ScriptSlot_T;
 
-type ScriptFrame_T = {
+export type ScriptFrame_T = {
     fn: IScriptFunctionDecodeInfo,
     self: ScriptHost_T,
     context: ScriptHost_T,
@@ -724,4 +723,3 @@ class UnScriptVM {
 
 export default UnScriptVM;
 export { UnScriptVM, isScriptSlot }
-export type { ScriptArgument_T, ScriptHost_T, ScriptNativeCall_T, ScriptProperties_T, ScriptSlot_T, ScriptValue_T };

@@ -7,21 +7,13 @@ import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo } from "./decode-li
 import type { ColorArr, Vector2Arr, Vector3Arr } from "./library-types";
 import type { IBoxDecodeInfo } from "./un-box";
 
-type IInfo = { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; };
+export type IInfo = { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; };
+export type IZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Zone" };
+export type ISkyZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Sky" };
+export type ISectorDecodeInfo = IBaseZoneDecodeInfo & { type: "Sector" };
+export type IZoneFogInfo = { start: number, end: number, color: ColorArr };
 
-type IZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Zone" };
-
-type ISkyZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Sky" };
-
-type ISectorDecodeInfo = IBaseZoneDecodeInfo & { type: "Sector" };
-
-type IZoneFogInfo = {
-    start: number,
-    end: number,
-    color: ColorArr
-};
-
-type IBaseZoneDecodeInfo = {
+export type IBaseZoneDecodeInfo = {
     type: "Sector" | "Zone" | "Sky",
     uuid: string,
     name?: string,
@@ -152,4 +144,3 @@ abstract class FZoneInfo extends AInfo implements IInfo {
 
 export default FZoneInfo;
 export { FZoneInfo };
-export type { IInfo, IZoneDecodeInfo, ISkyZoneDecodeInfo, ISectorDecodeInfo, IZoneFogInfo, IBaseZoneDecodeInfo };

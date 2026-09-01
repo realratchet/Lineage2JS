@@ -19,18 +19,11 @@ import type { FBox } from "../un-box";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { IGeometryDecodeInfo, IBaseObjectDecodeInfo, IBaseMeshObjectDecodeInfo } from "../decode-library";
 
-type IStaticMeshObjectDecodeInfo = IBaseMeshObjectDecodeInfo & {
-    type: "StaticMesh",
-    sway?: IStaticMeshSwayDecodeInfo
-};
-
-type IStaticMeshSwayDecodeInfo = {
-    pivotZ: number,
-    frequency: number,
-    maxAngle: number
-};
-
-type IStaticMeshCollisionDecodeInfo = {
+export type IStaticMeshObjectDecodeInfo = IBaseMeshObjectDecodeInfo & { type: "StaticMesh", sway?: IStaticMeshSwayDecodeInfo };
+export type IStaticMeshSwayDecodeInfo = { pivotZ: number, frequency: number, maxAngle: number };
+export type IMaterialInstancedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "instance", baseMaterial: string, modifiers: string[] };
+export type StaticMeshDecodeResult_T = { object: IStaticMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, materials: [string, IBaseMaterialDecodeInfo][], colorMaterials: string[] };
+export type IStaticMeshCollisionDecodeInfo = {
     useSimpleLineCollision: boolean;
     useSimpleBoxCollision: boolean;
     collisionModel: IBSPCollisionModelDecodeInfo | null;
@@ -38,16 +31,7 @@ type IStaticMeshCollisionDecodeInfo = {
     bounds: Float32Array;
 };
 
-type IMaterialInstancedDecodeInfo = IBaseMaterialDecodeInfo & {
-    materialType: "instance",
-    baseMaterial: string,
-    modifiers: string[]
-};
-
-type StaticMeshDecodeResult_T = { object: IStaticMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, materials: [string, IBaseMaterialDecodeInfo][], colorMaterials: string[] };
-
 const triggerDebuggerOnUnsupported = true;
-
 
 abstract class UStaticMesh extends UPrimitive {
     declare protected materials: FArray<UStaticMeshMaterial>;
@@ -504,4 +488,3 @@ abstract class UStaticMesh extends UPrimitive {
 
 export default UStaticMesh;
 export { UStaticMesh, FStaticMeshTriangle };
-export type { IStaticMeshObjectDecodeInfo, IStaticMeshSwayDecodeInfo, IStaticMeshCollisionDecodeInfo, IMaterialInstancedDecodeInfo };

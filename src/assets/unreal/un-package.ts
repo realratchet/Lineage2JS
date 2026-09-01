@@ -63,7 +63,7 @@ import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
 import * as AnimNotify from "./skeletal-mesh/un-anim-notify";
 
-type NativeClientTypes_T =
+export type NativeClientTypes_T =
     | NativeTypes_T
     | "NMovableSunLight"
     | "NSun"
@@ -99,7 +99,7 @@ type NativeClientTypes_T =
     | "AnimNotify_ViewShake"
     | "AnimNotify_BoneScale";
 
-type CoreStructs_T =
+export type CoreStructs_T =
     | "Vector"
     | "Plane"
     | "Box"
@@ -107,7 +107,7 @@ type CoreStructs_T =
     | "Color"
     | "Coords";
 
-type CoreStructsReturnType_T<T extends CoreStructs_T> =
+export type CoreStructsReturnType_T<T extends CoreStructs_T> =
     | T extends "Vector" ? FVector
     : T extends "Plane" ? FPlane
     : T extends "Box" ? FBox
@@ -115,8 +115,6 @@ type CoreStructsReturnType_T<T extends CoreStructs_T> =
     : T extends "Color" ? FColor
     : T extends "Coords" ? FCoords
     : never;
-
-
 
 class UPackage extends APackage {
     protected async readArrayBuffer() {
@@ -747,7 +745,7 @@ class UNativePackage extends ANativePackage {
 
 export default UPackage;
 export { UPackage, UNativePackage, UEnginePackage, UCorePackage };
-export type { NativeClientTypes_T };
+
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;

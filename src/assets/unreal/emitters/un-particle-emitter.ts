@@ -15,7 +15,7 @@ import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { DecodeLibrary, IBaseObjectDecodeInfo } from "../decode-library";
 import type { Vector4Arr, Vector3Arr, QuaternionArr, ColorArr } from "../library-types";
 
-type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
+export type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
     acceleration: Vector3Arr,
     lifetime: [number, number],
     maxParticles: number,
@@ -51,9 +51,9 @@ type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
     settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
 };
 
-type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
+export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 
-type EmitterConfig_T = {
+export type EmitterConfig_T = {
     type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter",
     name?: string,
     blendingMode: ParticleBlendModes_T,
@@ -111,12 +111,8 @@ type EmitterConfig_T = {
     settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
 };
 
-type Fade_T = {
-    time: number,
-    color: ColorArr
-};
-
-type IParticleSoundDecodeInfo = {
+export type Fade_T = { time: number, color: ColorArr };
+export type IParticleSoundDecodeInfo = {
     soundName: string, // resolved against the sector's soundBlobCache, see SectorObject.getSoundUri
     radius: [number, number],
     pitch: [number, number],
@@ -935,4 +931,3 @@ const ENUM_SETTING_NAMES: Record<string, Record<number, string>> = {
         [EParticleCollisionSound_T.PTSC_Random]: "random"
     }
 };
-export type { IEmitterDecodeInfo, ParticleBlendModes_T, EmitterConfig_T, Fade_T, IParticleSoundDecodeInfo };

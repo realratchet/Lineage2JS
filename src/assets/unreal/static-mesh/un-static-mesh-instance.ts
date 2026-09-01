@@ -7,14 +7,14 @@ import type { DecodeLibrary } from "../decode-library";
 import type { Matrix4Arr } from "../library-types";
 import type { IStaticMeshObjectDecodeInfo } from "./un-static-mesh";
 
-type ILightInstanceDecodeInfo = {
+export type ILightInstanceDecodeInfo = {
     matrix: Matrix4Arr,
     flags: ArrayBuffer,
     scene: [string, number, number][],
     environment: [string, number, number][]
 };
 
-type IStaticMeshInstanceDecodeInfo = {
+export type IStaticMeshInstanceDecodeInfo = {
     uuid?: string,
     name?: string,
     type: "StaticMeshInstance",
@@ -72,7 +72,7 @@ abstract class UStaticMeshInstance extends UObject {
     public getDecodeInfo(library: DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;
-    
+
         for (let i = 0; i < len; i++) {
             const [r, g, b] = this.colorStream.getColor(i);
             const offset = i * 3;
@@ -181,4 +181,3 @@ abstract class UStaticMeshInstance extends UObject {
 
 export default UStaticMeshInstance;
 export { UStaticMeshInstance };
-export type { ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo };

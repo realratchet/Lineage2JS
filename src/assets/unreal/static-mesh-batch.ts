@@ -1,12 +1,13 @@
 
 import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
-type BatchElementGroup_T = {
+
+export type BatchElementGroup_T = {
     start: number;
     count: number;
     materialIndex: number;
-}
+};
 
-type BatchElement_T = {
+export type BatchElement_T = {
     uuid: string;
     boundsMin: number[];
     boundsMax: number[];
@@ -14,16 +15,16 @@ type BatchElement_T = {
     zoneMask: bigint;
     isRangeIgnored: boolean;
     leaves: number[] | null; // bsp leaves holding the actor, for per-element pvs culling
-}
+};
 
-type BatchLightEntry_T = {
+export type BatchLightEntry_T = {
     light: string;
     flags: Uint8Array;
     vertexRangeStart?: number;
     vertexRangeEnd?: number;
-}
+};
 
-type StaticMeshBatchInfo_T = {
+export type StaticMeshBatchInfo_T = {
     uuid: string;
     name: string;
     geometry: string; // key into library.geometries
@@ -33,11 +34,9 @@ type StaticMeshBatchInfo_T = {
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
     perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[];
     batchElements: BatchElement_T[];
-}
+};
 
-type StaticMeshBatchManifest_T = {
+export type StaticMeshBatchManifest_T = {
     batches: StaticMeshBatchInfo_T[];
     unbatchable: IStaticMeshActorDecodeInfo[];
-}
-
-export type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T };
+};

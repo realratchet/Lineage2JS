@@ -4,7 +4,7 @@ import { convertDDSTextureInfo } from "./dds/dxt-decode";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { IBaseMaterialDecodeInfo } from "./un-material";
 
-type IWetTextureDecodeInfo = IDataTextureDecodeInfo & {
+export type IWetTextureDecodeInfo = IDataTextureDecodeInfo & {
     textureType: "wet",
     waveAmp: number,
     dropsX: number,
@@ -116,7 +116,7 @@ abstract class UWetTexture extends UTexture {
 function isTextureInfo(info: IBaseMaterialDecodeInfo): info is ITextureDecodeInfo { return info.materialType === "texture"; }
 
 // ADrop.Type (UnFractal.h)
-enum EDropType_T {
+export enum EDropType_T {
     DROP_FixedDepth,
     DROP_PhaseSpot,
     DROP_ShallowSpot,
@@ -164,5 +164,4 @@ const DROP_TYPE_NAMES: Record<EDropType_T, string> = {
 };
 
 export default UWetTexture;
-export { UWetTexture, UADrop, EDropType_T };
-export type { IWetTextureDecodeInfo };
+export { UWetTexture, UADrop };

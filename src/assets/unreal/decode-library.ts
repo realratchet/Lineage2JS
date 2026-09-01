@@ -17,7 +17,7 @@ import type { EmitterConfig_T } from "./emitters/un-particle-emitter";
 import type { IStaticMeshCollisionDecodeInfo } from "./static-mesh/un-static-mesh";
 import type { IBoundsDecodeInfo } from "./un-primitive";
 
-type DecodableObject_T =
+export type DecodableObject_T =
     | "Group"
     | "Level"
     | "TerrainInfo"
@@ -41,12 +41,12 @@ type DecodableObject_T =
     | "WaterVolume"
     | "L2FogInfo";
 
-type IBaseObjectOrInstanceDecodeInfo = {
+export type IBaseObjectOrInstanceDecodeInfo = {
     uuid: string,
     type: DecodableObject_T | "StaticMeshInstance"
 };
 
-type IBaseObjectDecodeInfo = IBaseObjectOrInstanceDecodeInfo & {
+export type IBaseObjectDecodeInfo = IBaseObjectOrInstanceDecodeInfo & {
     type: DecodableObject_T,
     name?: string,
     scriptClassId?: string,
@@ -63,12 +63,12 @@ type IBaseObjectDecodeInfo = IBaseObjectOrInstanceDecodeInfo & {
     isRangeIgnored?: boolean
 };
 
-type IBaseMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
+export type IBaseMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     geometry: string,
     materials?: string
 };
 
-type IGeometryDecodeInfo = {
+export type IGeometryDecodeInfo = {
     attributes: {
         positions?: Float32Array;
         normals?: Float32Array;
@@ -90,7 +90,7 @@ type IGeometryDecodeInfo = {
     bounds?: IBoundsDecodeInfo
 };
 
-type IAudioDecodeInfo = {
+export type IAudioDecodeInfo = {
     uuid: string,
     name: string,
     type: "MusicVolume" | "AmbientSoundObject"
@@ -163,4 +163,3 @@ class DecodeLibrary {
 
 export default DecodeLibrary;
 export { DecodeLibrary };
-export type { DecodableObject_T, IBaseObjectOrInstanceDecodeInfo, IBaseObjectDecodeInfo, IBaseMeshObjectDecodeInfo, IGeometryDecodeInfo, IAudioDecodeInfo };

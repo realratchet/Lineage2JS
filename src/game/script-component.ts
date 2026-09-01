@@ -4,12 +4,8 @@ import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../
 const SCRIPT_CALL_EVENT = "scriptCall";
 const SCRIPT_NATIVE_EVENT = "scriptNative";
 
-type ScriptCallEvent_T = {
-    name: string,
-    args: ScriptValue_T[]
-};
-
-type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
+export type ScriptCallEvent_T = { name: string, args: ScriptValue_T[] };
+export type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
 
 class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & ScriptHost_T> extends ObjectComponent<TParent> {
     public readonly componentName = "script";
@@ -91,4 +87,3 @@ class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & ScriptH
 }
 
 export { COMPONENT_EVENT_NOT_HANDLED, SCRIPT_CALL_EVENT, SCRIPT_NATIVE_EVENT, ScriptComponent };
-export type { ScriptCallEvent_T, ScriptObjectFactory_T };

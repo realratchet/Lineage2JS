@@ -2,12 +2,9 @@ import UParticleEmitter, { type IEmitterDecodeInfo } from "./un-particle-emitter
 import type { UStaticMesh } from "../static-mesh/un-static-mesh";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-type IMeshEmitterDecodeInfo = IEmitterDecodeInfo & {
+export type IMeshEmitterDecodeInfo = IEmitterDecodeInfo & {
     type: "MeshEmitter",
-    mesh: {
-        geometry: string,
-        materials: string
-    }
+    mesh: { geometry: string, materials: string }
 };
 
 abstract class UMeshEmitter extends UParticleEmitter {
@@ -34,4 +31,3 @@ abstract class UMeshEmitter extends UParticleEmitter {
 
 export default UMeshEmitter;
 export { UParticleEmitter };
-export type { IMeshEmitterDecodeInfo };

@@ -26,7 +26,7 @@ import type { UMusicVolume } from "./un-music-volume";
 import type { UAmbientSoundObject } from "./un-ambient-sound";
 import type { Vector3Arr } from "./library-types";
 
-type LoadSettings_T = {
+export type LoadSettings_T = {
     loadTerrain?: boolean,
     loadBaseModel?: boolean,
     loadStaticModels?: boolean,
@@ -451,4 +451,3 @@ class DecodeLibraryBuilder {
 
 export default DecodeLibraryBuilder;
 export { DecodeLibraryBuilder };
-export type { LoadSettings_T };

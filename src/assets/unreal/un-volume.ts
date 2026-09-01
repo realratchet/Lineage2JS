@@ -1,14 +1,14 @@
 import UBrush from "./un-brush";
 import type { Vector4Arr, Matrix4Arr } from "./library-types";
 
-type IMusicVolumeBspNode = {
+export type IMusicVolumeBspNode = {
     plane: Vector4Arr;
     iFront: number;
     iBack: number;
     isCsg: boolean;
 };
 
-type IVolumeBspDecodeInfo = {
+export type IVolumeBspDecodeInfo = {
     isRootOutside: boolean;
     worldToLocal: Matrix4Arr;
     nodes: IMusicVolumeBspNode[];
@@ -29,8 +29,8 @@ abstract class UVolume extends UBrush {
         const matrixTA = localToWorld.transposeAdjoint();
         const pX = localToWorld.planeX, pY = localToWorld.planeY, pZ = localToWorld.planeZ;
         const det = pX.x * (pY.y * pZ.z - pY.z * pZ.y)
-                  - pX.y * (pY.x * pZ.z - pY.z * pZ.x)
-                  + pX.z * (pY.x * pZ.y - pY.y * pZ.x);
+            - pX.y * (pY.x * pZ.z - pY.z * pZ.x)
+            + pX.z * (pY.x * pZ.y - pY.y * pZ.x);
 
         const nodes: IMusicVolumeBspNode[] = brush.getBspNodes().map((node: any) => {
             const plane = node.plane;
@@ -83,4 +83,3 @@ abstract class UVolume extends UBrush {
 
 export default UVolume;
 export { UVolume };
-export type { IMusicVolumeBspNode, IVolumeBspDecodeInfo };

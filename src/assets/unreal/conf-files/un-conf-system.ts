@@ -2,7 +2,7 @@
 import BaseConfigFile from "./un-base-config";
 import { consumeNextValue } from "./conf-parser";
 
-type ClippingRangeConfig_T = {
+export type ClippingRangeConfig_T = {
     staticMesh: number;
     staticMeshLod: number;
     pawn: number;
@@ -14,16 +14,8 @@ type ClippingRangeConfig_T = {
     pawnMax: number;
 };
 
-type DisplayConfig_T = {
-    brightness: number;
-    contrast: number;
-    gamma: number;
-};
-
-type UserConfig_T = {
-    clippingRange: ClippingRangeConfig_T;
-    display: DisplayConfig_T;
-};
+export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
+export type UserConfig_T = { clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; };
 
 class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
@@ -131,5 +123,4 @@ async function getUserConfig(): Promise<UserConfig_T> {
 }
 
 export default UConfigSystem;
-export { getUserConfig };
-export type { ClippingRangeConfig_T, DisplayConfig_T, UserConfig_T };
+export { UConfigSystem, getUserConfig };

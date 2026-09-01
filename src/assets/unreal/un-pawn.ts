@@ -3,7 +3,7 @@ import type { USkeletalMesh, ISkinnedMeshObjectDecodeInfo } from "./skeletal-mes
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
 
-type INpcDefinition = {
+export type INpcDefinition = {
     id: number;
     name: string;
     className: string;
@@ -12,7 +12,7 @@ type INpcDefinition = {
     enterEvent: INpcEnterEvent | null;
 };
 
-type INpcEnterEvent = {
+export type INpcEnterEvent = {
     sound: string;
     soundVolume: number;
     soundRadius: number;
@@ -22,7 +22,7 @@ type INpcEnterEvent = {
     animation: string;
 };
 
-type ICharacterGroup = {
+export type ICharacterGroup = {
     index: number,
     name: string,
     faceVariants: number,
@@ -31,19 +31,16 @@ type ICharacterGroup = {
     armor: ICharacterArmorOptions
 };
 
-type ICharacterArmorOption = {
-    id: number,
-    label: string
-};
+export type ICharacterArmorOption = { id: number, label: string };
 
-type ICharacterArmorOptions = {
+export type ICharacterArmorOptions = {
     chest: ICharacterArmorOption[],
     legs: ICharacterArmorOption[],
     gloves: ICharacterArmorOption[],
     boots: ICharacterArmorOption[]
 };
 
-type ICharacterArmorSelection = {
+export type ICharacterArmorSelection = {
     chest: number,
     legs: number,
     gloves: number,
@@ -82,4 +79,3 @@ abstract class UPawn extends UAActor {
 
 export default UPawn;
 export { UPawn };
-export type { INpcDefinition, INpcEnterEvent, ICharacterGroup, ICharacterArmorOption, ICharacterArmorOptions, ICharacterArmorSelection };

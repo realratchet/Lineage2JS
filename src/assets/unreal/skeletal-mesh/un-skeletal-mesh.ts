@@ -1,4 +1,4 @@
-import { BufferValue, type APackage, type UExport, FArray, FArrayLazy, FIndexArray, FPrimitiveArray, FPrimitiveArrayLazy } from "@l2js/core";
+import { BufferValue, type APackage, type UExport, FArray, FArrayLazy, FIndexArray, FPrimitiveArray, FPrimitiveArrayLazy, Constructable_T } from "@l2js/core";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
 import ULodMesh from "../un-lod-mesh";
@@ -12,17 +12,9 @@ import type { IGeometryDecodeInfo, IBaseObjectDecodeInfo } from "../decode-libra
 import type { ArrGeometryGroup, Vector3Arr, QuaternionArr } from "../library-types";
 import type { IDynamicHairConfigDecodeInfo } from "../conf-files/un-conf-hair";
 
-type IAnimationSequenceDecodeInfo = {
-    attackEffectFrame: number;
-    attackEndEffectFrame: number;
-};
-
-type IDynamicHairDecodeInfo = {
-    type: number;
-    config: IDynamicHairConfigDecodeInfo;
-};
-
-type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
+export type IAnimationSequenceDecodeInfo = { attackEffectFrame: number; attackEndEffectFrame: number; };
+export type IDynamicHairDecodeInfo = { type: number; config: IDynamicHairConfigDecodeInfo; };
+export type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     type: "SkinnedMesh";
     geometry: string;
     materials?: string;
@@ -46,7 +38,7 @@ type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     };
 };
 
-type IBoneDecodeInfo = IBaseObjectDecodeInfo & {
+export type IBoneDecodeInfo = IBaseObjectDecodeInfo & {
     type: "Bone",
     name: string,
     position: Vector3Arr,
@@ -55,17 +47,17 @@ type IBoneDecodeInfo = IBaseObjectDecodeInfo & {
     parent: number
 };
 
-type IKeyframeDecodeInfo_T = {
+export type IKeyframeDecodeInfo_T = {
     name: string,
     times: Float32Array,
     values: Float32Array,
     type: "Vector" | "Quaternion"
-}
+};
 
-type SkeletalMeshDecodeResult_T = { object: ISkinnedMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, material: IMaterialGroupDecodeInfo };
-type SkinIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
+export type SkeletalMeshDecodeResult_T = { object: ISkinnedMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, material: IMaterialGroupDecodeInfo };
+export type SkinIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 
-class FMeshVector {
+class FMeshVector implements Constructable_T {
     public x: number;
     public y: number;
     public z: number;
@@ -79,7 +71,7 @@ class FMeshVector {
     }
 }
 
-class FMeshCoords {
+class FMeshCoords implements Constructable_T {
     public origin = new FMeshVector();
     public xAxis = new FMeshVector();
     public yAxis = new FMeshVector();
@@ -95,7 +87,7 @@ class FMeshCoords {
     }
 }
 
-class FWeightIndex {
+class FWeightIndex implements Constructable_T {
     public boneInfIndices: FPrimitiveArray<"uint16"> = new FPrimitiveArray(BufferValue.uint16);
     public startBoneInf: number;
 
@@ -107,7 +99,7 @@ class FWeightIndex {
     }
 }
 
-class FBoneInfluence {
+class FBoneInfluence implements Constructable_T {
     public boneWeight: number;
     public boneIndex: number;
 
@@ -119,7 +111,7 @@ class FBoneInfluence {
     }
 }
 
-class FJointPos {
+class FJointPos implements Constructable_T {
     public rotation: FQuaternion;
     public position: FVector;
     public scale: FVector;
@@ -138,7 +130,7 @@ class FJointPos {
 
 }
 
-class FMeshBone {
+class FMeshBone implements Constructable_T {
     public boneName: string;
     public flags: number;
     public bonePos = new FJointPos();
@@ -160,7 +152,7 @@ class FMeshBone {
     }
 }
 
-class FMeshNorm {
+class FMeshNorm implements Constructable_T {
     public x = 10;
     public y = 10;
     public z = 10;
@@ -174,7 +166,7 @@ class FMeshNorm {
     }
 }
 
-class FSkinPoint {
+class FSkinPoint implements Constructable_T {
     public point: FVector;
     public normal: FMeshNorm;
 
@@ -187,7 +179,7 @@ class FSkinPoint {
     }
 }
 
-class FSkelMeshSection {
+class FSkelMeshSection implements Constructable_T {
     public materialIndex: number;
     public minStreamIndex: number;
     public minWedgeIndex: number;
@@ -217,7 +209,7 @@ class FSkelMeshSection {
     }
 }
 
-class FAnimMeshVertex {
+class FAnimMeshVertex implements Constructable_T {
     public position: FVector;
     public normal: FVector;
     public texU: number;
@@ -234,7 +226,7 @@ class FAnimMeshVertex {
     }
 }
 
-class FSkinVertexStream {
+class FSkinVertexStream implements Constructable_T {
     public revision: number;
     public isPartial: boolean;
     public isStreamCallback: boolean;
@@ -250,7 +242,7 @@ class FSkinVertexStream {
     }
 }
 
-class FTriangleLOD {
+class FTriangleLOD implements Constructable_T {
     public indices: [number, number, number] = new Array(3) as [number, number, number];
     public materialIndex: number;
 
@@ -264,7 +256,7 @@ class FTriangleLOD {
         return this;
     }
 }
-class FStaticModelLOD {
+class FStaticModelLOD implements Constructable_T {
     public skinningData = new FPrimitiveArray(BufferValue.uint32);
     public skinPoints = new FArray(FSkinPoint);
     public numSoftWedges: number;
@@ -276,7 +268,7 @@ class FStaticModelLOD {
     public vertexInfluences = new FArrayLazy(FVertexInfluence);
     public wedges = new FArrayLazy(FMeshWedge);
     public faces = new FArrayLazy(FTriangleLOD);
-    public points = new FArrayLazy(FVector);
+    public points = new FArrayLazy(FVector.class());
     public lodHysteresis: number;
     public numSharedVertices: number;
     public lodMaxInfluences: number;
@@ -475,7 +467,7 @@ abstract class USkeletalMesh extends ULodMesh {
 
         if (numInfs > maxBoneInfluences)
             console.warn(`Too many bone influences ${numInfs} > ${maxBoneInfluences} for ${this.name}`);
-    
+
 
         const animations: Record<string, IKeyframeDecodeInfo_T[]> = {};
         const animationSequences: Record<string, IAnimationSequenceDecodeInfo> = {};
@@ -1073,4 +1065,3 @@ class FBoneCoord {
 
 function makeVector(v: { x: number, y: number, z: number }) { return FVector.make(v.x, v.y, v.z); }
 function makeQuaternion(v: { x: number, y: number, z: number, w: number }) { return FQuaternion.make(v.x, v.y, v.z, v.w); }
-export type { IAnimationSequenceDecodeInfo, IDynamicHairDecodeInfo, ISkinnedMeshObjectDecodeInfo, IBoneDecodeInfo, IKeyframeDecodeInfo_T };

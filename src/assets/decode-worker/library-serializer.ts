@@ -44,7 +44,7 @@ type LibraryChunkEntry_T = { offset: number, length: number };
 type LibraryChunkRef_T = { isLibraryChunk: true, index: number, kind: number, byteLength: number };
 type LibraryChunkSource_T = { kind: number, bytes: Uint8Array };
 type LibraryChunkRange_T = { offset: number, end: number, refs: LibraryChunkRef_T[] };
-type SeekableLibrary_T = { file: File, library: any, entries: LibraryChunkEntry_T[], values: Map<number, any> };
+export type SeekableLibrary_T = { file: File, library: any, entries: LibraryChunkEntry_T[], values: Map<number, any> };
 
 const TYPED_ARRAY_KINDS: (new (buffer: ArrayBuffer, byteOffset?: number, length?: number) => ArrayBufferView)[] = [
     Int8Array, Uint8Array, Uint8ClampedArray,
@@ -685,5 +685,4 @@ async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seeka
     return replaceChunkRefs(root, seekable.values);
 }
 
-export type { SeekableLibrary_T };
 export { serializeLibrary, deserializeLibrary, deserializeLibraryAsync, isSerializedLibrary, openLibraryFile, hydrateLibraryFile };

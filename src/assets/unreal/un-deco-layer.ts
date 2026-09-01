@@ -9,7 +9,7 @@ import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-type ITerrainDecorationDecodeInfo = IBaseObjectDecodeInfo & {
+export type ITerrainDecorationDecodeInfo = IBaseObjectDecodeInfo & {
     type: "TerrainDecoration",
     terrainSegment: string,
     mesh: IStaticMeshObjectDecodeInfo,
@@ -201,4 +201,3 @@ abstract class UDecoLayer extends UObject {
 
 export default UDecoLayer;
 export { UDecoLayer };
-export type { ITerrainDecorationDecodeInfo };

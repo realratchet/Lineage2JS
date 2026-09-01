@@ -3,7 +3,7 @@ import type { FZoneInfo, IBaseZoneDecodeInfo } from "./un-zone-info";
 import type { ULevelInfo } from "./un-level-info";
 import type { DecodeLibrary } from "./decode-library";
 
-type IBSPZoneDecodeInfo_T = {
+export type IBSPZoneDecodeInfo_T = {
     connectivity: bigint,
     visibility: bigint,
     zoneInfo: IBaseZoneDecodeInfo
@@ -39,4 +39,3 @@ class FZoneProperties implements Constructable_T {
 
 export default FZoneProperties;
 export { FZoneProperties };
-export type { IBSPZoneDecodeInfo_T };

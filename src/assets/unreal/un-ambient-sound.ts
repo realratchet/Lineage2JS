@@ -4,9 +4,8 @@ import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
 import type { IAudioDecodeInfo } from "./decode-library";
 
-type AmbientSoundTypes_T = "always" | "day" | "night" | "water";
-
-type IAmbientSoundObjectDecodeInfo = IAudioDecodeInfo & {
+export type AmbientSoundTypes_T = "always" | "day" | "night" | "water";
+export type IAmbientSoundObjectDecodeInfo = IAudioDecodeInfo & {
     type: "AmbientSoundObject",
     position: Vector3Arr,
     refDistance: number,
@@ -102,4 +101,3 @@ const AS_TYPE_NAMES: Record<ASType1_T, AmbientSoundTypes_T> = {
 
 export default UAmbientSoundObject;
 export { UAmbientSoundObject, ASType1_T };
-export type { AmbientSoundTypes_T, IAmbientSoundObjectDecodeInfo };

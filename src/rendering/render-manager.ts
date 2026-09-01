@@ -37,7 +37,7 @@ import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { IEmitterSpawnSoundDecodeInfo } from "@l2js/engine/contracts/emitter";
 
-type HTMLViewportElement_T = HTMLDivElement;
+export type HTMLViewportElement_T = HTMLDivElement;
 
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
@@ -2496,4 +2496,3 @@ function reportShaderErrors(gl: WebGL2RenderingContext, program: any) {
 
 export default RenderManager;
 export { RenderManager };
-export type { HTMLViewportElement_T };

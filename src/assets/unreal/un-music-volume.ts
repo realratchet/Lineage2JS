@@ -2,7 +2,7 @@ import UVolume, { type IVolumeBspDecodeInfo } from "./un-volume";
 import type { DecodeLibrary, IAudioDecodeInfo } from "./decode-library";
 import type { IBoundsDecodeInfo } from "./un-primitive";
 
-type IMusicVolumeDecodeInfo = IAudioDecodeInfo & {
+export type IMusicVolumeDecodeInfo = IAudioDecodeInfo & {
     type: "MusicVolume",
     musicId: number,
     isMusicForced: boolean,
@@ -46,4 +46,3 @@ abstract class UMusicVolume extends UVolume {
 
 export default UMusicVolume;
 export { UMusicVolume };
-export type { IMusicVolumeDecodeInfo };

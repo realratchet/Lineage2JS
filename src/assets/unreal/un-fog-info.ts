@@ -8,7 +8,7 @@ import type { FColor } from "./un-color";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-type IL2FogInfoDecodeInfo = IBaseObjectDecodeInfo & {
+export type IL2FogInfoDecodeInfo = IBaseObjectDecodeInfo & {
     type: "L2FogInfo",
     affectRange: { A: number, B: number },
     fogRange1: { A: number, B: number },
@@ -110,4 +110,3 @@ abstract class UL2EnvironmentColorInfo extends UObject {
 
 export default UL2FogInfo;
 export { UL2FogInfo, UL2EnvironmentColorInfo };
-export type { IL2FogInfoDecodeInfo };

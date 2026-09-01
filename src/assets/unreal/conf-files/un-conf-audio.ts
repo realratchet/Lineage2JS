@@ -1,16 +1,7 @@
 import BaseConfigFile from "./un-base-config";
 
-type SwimSoundSet_T = {
-    sounds: string[];
-    volume: number;
-    radius: number;
-    random: number;
-};
-
-type SwimSoundConfig_T = {
-    surface: SwimSoundSet_T;
-    underwater: SwimSoundSet_T;
-};
+export type SwimSoundSet_T = { sounds: string[]; volume: number; radius: number; random: number; };
+export type SwimSoundConfig_T = { surface: SwimSoundSet_T; underwater: SwimSoundSet_T; };
 
 function getValue(values: Map<string, string>, name: string): string {
     const value = values.get(name.toLowerCase());
@@ -69,4 +60,3 @@ class UConfigAudio extends BaseConfigFile {
 
 export default UConfigAudio;
 export { UConfigAudio };
-export type { SwimSoundConfig_T, SwimSoundSet_T };

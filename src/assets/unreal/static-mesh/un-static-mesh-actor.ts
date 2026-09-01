@@ -16,7 +16,7 @@ import type { Vector3Arr } from "../library-types";
 import type { ISwayingDecodeInfo } from "./un-movable-static-mesh-actor";
 import type { IMoverDecodeInfo } from "../un-mover";
 
-type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
+export type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
     actorName: string;
     type: "StaticMeshActor",
     instance: IStaticMeshInstanceDecodeInfo,
@@ -353,4 +353,3 @@ abstract class UStaticMeshActor extends UAActor {
 
 export default UStaticMeshActor;
 export { UStaticMeshActor };
-export type { IStaticMeshActorDecodeInfo };

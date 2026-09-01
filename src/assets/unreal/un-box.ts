@@ -3,8 +3,7 @@ import UObject from "./un-object";
 import type { FMatrix } from "./un-matrix";
 import type { Vector3Arr } from "./library-types";
 
-type IBoxDecodeInfo = { isValid: boolean, min: Vector3Arr, max: Vector3Arr };
-
+export type IBoxDecodeInfo = { isValid: boolean, min: Vector3Arr, max: Vector3Arr };
 
 abstract class FBox extends UObject {
     declare ["constructor"]: typeof FBox;
@@ -117,4 +116,3 @@ abstract class FBox extends UObject {
 
 export default FBox;
 export { FBox };
-export type { IBoxDecodeInfo };

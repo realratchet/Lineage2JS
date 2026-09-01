@@ -11,7 +11,9 @@ import type { Vector3Arr } from "./library-types";
 import type { IDataTextureDecodeInfo, ITextureDecodeInfo } from "./un-texture";
 import type { IBaseMaterialDecodeInfo } from "./un-material";
 
-type ITerrainSegmentDecodeInfo = IBaseMeshObjectDecodeInfo & {
+export type HeightMapInfo_T = { data: Uint16Array, info: ITextureDecodeInfo, edgeTurns: Int32Array };
+
+export type ITerrainSegmentDecodeInfo = IBaseMeshObjectDecodeInfo & {
     type: "TerrainSegment",
     terrainInfoUuid?: string,
     lighting?: {
@@ -27,7 +29,7 @@ type ITerrainSegmentDecodeInfo = IBaseMeshObjectDecodeInfo & {
     heightmapY: number
 };
 
-type IMaterialTerrainSegmentDecodeInfo = IBaseMaterialDecodeInfo & {
+export type IMaterialTerrainSegmentDecodeInfo = IBaseMaterialDecodeInfo & {
     materialType: "terrainSegment";
     terrainMaterial: string,
     uvs: ITextureDecodeInfo
@@ -838,7 +840,4 @@ abstract class UTerrainSector extends UObject {
 
 export default UTerrainSector;
 export { UTerrainSector };
-export type { HeightMapInfo_T };
 
-type HeightMapInfo_T = { data: Uint16Array, info: ITextureDecodeInfo, edgeTurns: Int32Array };
-export type { ITerrainSegmentDecodeInfo, IMaterialTerrainSegmentDecodeInfo };

@@ -7,7 +7,7 @@ import type { UMaterial } from "../un-material";
 import type { Vector2Arr, ColorArr } from "../library-types";
 import type { IL2NEnvLightDecodeInfo } from "../un-l2env";
 
-type ILNEnvSetupDecodeInfo = {
+export type ILNEnvSetupDecodeInfo = {
     isClock: boolean,
     startTime: number,
     timeRatio: number,
@@ -21,7 +21,7 @@ type ILNEnvSetupDecodeInfo = {
     clouds: string[],
 };
 
-type IL2NEnvDecodeInfo = {
+export type IL2NEnvDecodeInfo = {
     envSetup: ILNEnvSetupDecodeInfo,
     fog: {
         ranges: Vector2Arr[];
@@ -348,4 +348,3 @@ class UConfigEnv extends BaseConfigFile {
 
 export default UConfigEnv;
 export { UConfigEnv };
-export type { ILNEnvSetupDecodeInfo, IL2NEnvDecodeInfo };
