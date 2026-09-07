@@ -18,9 +18,9 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     public onDetach(): void { this.release(); }
 
     public spawnEnter(event: INpcEnterEvent): void {
+        this.dispatchEvent(NPC_ENTER_EVENT, event);
         this.getComponent<PawnMovementComponent>("pawnMovement").startEnterRise(event.isRise);
         this.getComponent<AnimationComponent>("animation").playEnter(event.animation);
-        this.dispatchEvent(NPC_ENTER_EVENT, event);
     }
 
     public onAnimationFinished(action: AnimationAction): void {
