@@ -1,7 +1,7 @@
 import { AnimationAction } from "three";
 import { ObjectComponent } from "../../game/components";
 import { NPC_ENTER_EVENT } from "../../audio/components/sound-component";
-import type AnimationComponent from "../animation-component";
+import type AnimationComponent from "./animation-component";
 import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
 import type { ScriptComponent } from "../../game/script-component";
 import type BaseActor from "../../base-actor";
