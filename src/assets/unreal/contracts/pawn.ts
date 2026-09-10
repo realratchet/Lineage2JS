@@ -1,1 +1,1 @@
-export type { INpcDefinition, INpcEnterEvent, ICharacterGroup, ICharacterArmorOption, ICharacterArmorOptions, ICharacterArmorSelection } from "../un-pawn";
+export type { INpcDefinition, INpcEnterEvent, NpcSkillAttack_T, NpcSkillSound_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T, NpcSkillAttachOn_T, ICharacterGroup, ICharacterArmorOption, ICharacterArmorOptions, ICharacterArmorSelection } from "../un-pawn";
