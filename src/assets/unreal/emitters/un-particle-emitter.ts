@@ -305,9 +305,9 @@ export abstract class UParticleEmitter extends UObject {
 
     declare protected _independentSprayAccel: any;
 
-    declare protected _forcedLifeTime: any;
-    declare protected _forcedFade: any;
-    declare protected _forcedMaxParticles: any;
+    declare protected forcedLifeTime: boolean;
+    declare protected forcedFade: boolean;
+    declare protected forcedMaxParticles: boolean;
 
     declare protected _owner: any;
     declare protected _initialized: any;
@@ -482,9 +482,9 @@ export abstract class UParticleEmitter extends UObject {
 
 
             "IndependentSprayAccel": "_independentSprayAccel",
-            "ForcedLifeTime": "_forcedLifeTime",
-            "ForcedFade": "_forcedFade",
-            "ForcedMaxParticles": "_forcedMaxParticles",
+            "ForcedLifeTime": "forcedLifeTime",
+            "ForcedFade": "forcedFade",
+            "ForcedMaxParticles": "forcedMaxParticles",
 
             "Owner": "_owner",
             "Initialized": "_initialized",
@@ -580,9 +580,9 @@ export abstract class UParticleEmitter extends UObject {
             startLocationPolarRange: this.startLocationPolarRange?.loadSelf().getDecodeInfo(library),
             addVelocityMultiplierRange: this.addVelocityMultiplierRange?.loadSelf().getDecodeInfo(library),
             velocityLossRange: this.velocityLossRange?.loadSelf().getDecodeInfo(library),
-            forcedLifeTime: this._forcedLifeTime,
-            forcedFade: this._forcedFade,
-            forcedMaxParticles: this._forcedMaxParticles,
+            forcedLifeTime: this.forcedLifeTime,
+            forcedFade: this.forcedFade,
+            forcedMaxParticles: this.forcedMaxParticles,
             particlesPerSecond: this.particlesPerSecond,
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
             blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
