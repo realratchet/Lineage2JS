@@ -48,13 +48,16 @@ export type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
     velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
     warmupTime?: number,
     warmupTicksPerSecond?: number,
+    forcedLifeTime?: boolean,
+    forcedFade?: boolean,
+    forcedMaxParticles?: boolean,
     settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
 };
 
 export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 
 export type EmitterConfig_T = {
-    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter",
+    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter" | "VertMeshEmitter",
     name?: string,
     blendingMode: ParticleBlendModes_T,
     uniformScale?: boolean,
@@ -80,6 +83,8 @@ export type EmitterConfig_T = {
     startLocationPolarRange?: { min: Vector3Arr, max: Vector3Arr },
     addVelocityMultiplierRange?: { min: Vector3Arr, max: Vector3Arr },
     velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
+    forcedLifeTime?: boolean,
+    forcedFade?: boolean,
     forcedMaxParticles?: boolean,
     sounds?: IParticleSoundDecodeInfo[],
     initial: {
@@ -575,6 +580,8 @@ export abstract class UParticleEmitter extends UObject {
             startLocationPolarRange: this.startLocationPolarRange?.loadSelf().getDecodeInfo(library),
             addVelocityMultiplierRange: this.addVelocityMultiplierRange?.loadSelf().getDecodeInfo(library),
             velocityLossRange: this.velocityLossRange?.loadSelf().getDecodeInfo(library),
+            forcedLifeTime: this._forcedLifeTime,
+            forcedFade: this._forcedFade,
             forcedMaxParticles: this._forcedMaxParticles,
             particlesPerSecond: this.particlesPerSecond,
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
@@ -627,7 +634,7 @@ const REQUIRED_SETTINGS = [
     "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
     "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
-    "initialDelayRange",
+    "initialDelayRange", "startVelocityRadialRange",
     "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
     "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
     "isUsingCollision", "isUsingColorFromMesh", "isUsingColorScale", "isUsingRandomSubdiv",

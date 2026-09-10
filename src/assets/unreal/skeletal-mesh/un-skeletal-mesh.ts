@@ -209,7 +209,7 @@ class FSkelMeshSection implements Constructable_T {
     }
 }
 
-class FAnimMeshVertex implements Constructable_T {
+export class FAnimMeshVertex implements Constructable_T {
     public position: FVector;
     public normal: FVector;
     public texU: number;

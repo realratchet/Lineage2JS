@@ -9,7 +9,50 @@ export type INpcDefinition = {
     className: string;
     mesh: string;
     textures: string[];
+    skillAttacks: NpcSkillAttack_T[];
     enterEvent: INpcEnterEvent | null;
+};
+
+export type NpcSkillAttack_T = {
+    id: number;
+    level: number;
+    name: string;
+    animation: string;
+    animationCategory: string;
+    castStyle: number;
+    hitTime: number;
+    isMultiShot: boolean;
+    flyingTime: number;
+    visualEffect: string;
+    actions: NpcSkillEffectAction_T[];
+    nativeEffects: string[];
+    nativeSoundPhases: NpcSkillEffectPhase_T[];
+    nativeFinalShotOnly: boolean;
+    nativeTransientRejected: boolean;
+    sounds: NpcSkillSound_T[];
+};
+
+export type NpcSkillSound_T = { phase: NpcSkillEffectPhase_T, sound: string, volume: number, radius: number };
+
+export type NpcSkillEffectPhase_T = "casting" | "shot" | "explosion";
+
+// EAttachMethod ordinals from the leaked EngineClasses.h, converted to member names at the decode boundary
+export type NpcSkillAttachOn_T = "none" | "rightHand" | "leftHand" | "boneSpecified" | "aliasSpecified" | "trail";
+
+export type NpcSkillEffectAction_T = {
+    phase: NpcSkillEffectPhase_T;
+    specificStage: number;
+    effectClass: string;
+    attachOn: NpcSkillAttachOn_T;
+    attachBoneName: string;
+    isAbsolute: boolean;
+    spawnDelay: number;
+    useCharacterRotation: boolean;
+    offset: Vector3Arr;
+    relativeToCylinder: boolean;
+    spawnOnTarget: boolean;
+    sizeScale: boolean;
+    onMultiTarget: boolean;
 };
 
 export type INpcEnterEvent = {

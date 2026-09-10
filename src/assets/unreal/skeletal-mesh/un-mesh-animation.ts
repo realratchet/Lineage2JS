@@ -1,4 +1,4 @@
-import { BufferValue, type APackage, type UObject as CoreUObject, type UExport, FArray, FIndexArray, FPrimitiveArray } from "@l2js/core";
+import { BufferValue, type APackage, type UObject as CoreUObject, type UExport, FArray, FIndexArray, FPrimitiveArray, type Constructable_T } from "@l2js/core";
 import UObject from "../un-object";
 import UAnimNotify, { type IAnimationNotifyObjectDecodeInfo } from "./un-anim-notify";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
@@ -188,7 +188,7 @@ class FSkinNotify {
     }
 }
 
-class FAnimSequence {
+export class FAnimSequence implements Constructable_T {
     public bookmark: number;
     public unkVar0: number;
     public name: string;
@@ -255,8 +255,6 @@ export abstract class UMeshAnimation extends UObject {
 
             notifications[i] = { time: notify.time, name: notify.name, object: decodeNotifyObject(builder, notifyObject) };
         }
-
-        notifications.sort((a, b) => a.time - b.time);
 
         return notifications;
     }
