@@ -4,7 +4,7 @@ import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-componen
 import { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
 import LocalSpaceSkeleton from "../local-space-skeleton";
-import type AnimationComponent from "../animation-component";
+import type AnimationComponent from "./animation-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { ICollidable } from "../objects";
@@ -34,6 +34,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
     protected readonly renderManager: RenderManager;
     protected base: (ICollidable & Object3D) = null;
     protected readonly basedActors = new Set<ICollidable>();
+    protected readonly scriptChildren = new Set<Object3D>();
     protected readonly basePosition = new Vector3();
     protected readonly baseQuaternion = new Quaternion();
     protected readonly baseRelativePosition = new Vector3();
@@ -108,6 +109,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
     public getBasePosition(): Vector3 { return this.basePosition; }
     public getBaseQuaternion(): Quaternion { return this.baseQuaternion; }
     public getBaseRelativePosition(): Vector3 { return this.baseRelativePosition; }
+    public getScriptChildren(): ReadonlySet<Object3D> { return this.scriptChildren; }
 
     public setBase(actor: ICollidable | null): boolean {
         const parent = this.getParent();
@@ -151,7 +153,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         this.baseRelativePosition.copy(this.getParent().position).sub(tmpBasePosition).applyQuaternion(tmpBaseInverseQuaternion.copy(tmpBaseQuaternion).invert());
     }
 
-    public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number): boolean {
+    public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number, absolute: boolean = false): boolean {
         const parent = this.getParent();
         const oldBase = (object as any).scriptBase as BaseActor;
 
@@ -160,7 +162,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         for (const mesh of this.getComponent<AnimationComponent>("animation").getMeshes()) {
             const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
 
-            if (!skeleton || !skeleton.attachObject(object, boneNameOrIndex)) continue;
+            if (!skeleton || !skeleton.attachObject(object, boneNameOrIndex, absolute)) continue;
 
             const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
             let relativeLocation: ScriptValue_T = null;
@@ -228,6 +230,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
 
         (object as any).scriptOwner = parent;
         setScriptObjectProperty(object, "Owner", parent);
+        this.scriptChildren.add(object);
 
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
@@ -241,6 +244,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
 
         (object as any).scriptOwner = null;
         setScriptObjectProperty(object, "Owner", null);
+        this.scriptChildren.delete(object);
 
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 

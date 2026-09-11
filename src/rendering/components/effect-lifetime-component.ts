@@ -13,9 +13,24 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
         this.renderManager = renderManager;
     }
 
-    public onPhysicsTick(_currentTime: number, _deltaTime: number, _actors: BaseActor[]): boolean {
+    public onPhysicsTick(_currentTime: number, deltaTime: number, _actors: BaseActor[]): boolean {
         const effect = this.getParent();
+        const properties = (effect as any).scriptProperties;
+        const lifeSpan = properties?.get("LifeSpan");
         let root: THREE.Object3D = effect;
+
+        if (lifeSpan !== undefined && lifeSpan !== 0) {
+            if (!Number.isFinite(lifeSpan)) throw new Error(`Invalid LifeSpan for '${effect.name}'.`);
+
+            // Engine.dll TickAuthoritative 0x8651eb..0x865226: zero disables; expiry precedes physics.
+            const remaining = lifeSpan - deltaTime * 0.001;
+
+            properties.set("LifeSpan", remaining);
+            if (remaining <= 0.0001) {
+                this.renderManager.removeTransientEffect(effect);
+                return true;
+            }
+        }
 
         while (root.parent) root = root.parent;
 

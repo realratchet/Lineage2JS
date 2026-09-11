@@ -306,6 +306,54 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
         if (cls) pullClass(cls);
 }
 
+export function pullScriptClassFunctions(library: DecodeLibrary, classes: Iterable<UClass>): void {
+    const seenClasses = new Set<string>();
+
+    function pullClass(cls: UClass): void {
+        cls = cls.loadSelf();
+
+        const id = getObjectId(cls);
+
+        if (seenClasses.has(id)) return;
+        if (id in library.scriptClasses) return;
+
+        seenClasses.add(id);
+
+        const superClass = cls.superField as UClass;
+
+        if (superClass && !superClass.exp?.isFake) pullClass(superClass);
+        if (cls.exp?.isFake) return;
+
+        const functions = cls.childFunctions;
+
+        for (const fn of functions) {
+            const functionId = getObjectId(fn);
+
+            if (!(functionId in library.scriptFunctions)) library.scriptFunctions[functionId] = dumpFunction(fn);
+        }
+
+        library.scriptClasses[id] = {
+            id,
+            owner: getOwnerId(id),
+            name: cls.objectName,
+            flags: cls.getStateFlags(),
+            probeMask: cls.getProbeMask(),
+            ignoreMask: cls.getIgnoreMask(),
+            labelTableVirtualOffset: cls.getLabelTableOffset(),
+            fields: dumpFields(cls),
+            functionIds: functions.map(fn => getObjectId(fn)),
+            program: { virtualSize: 0, entries: [] },
+            superClassId: superClass ? getObjectId(superClass) : null,
+            classFlags: cls.getClassFlags(),
+            stateIds: [],
+            defaults: dumpClassDefaults(cls)
+        };
+    }
+
+    for (const cls of classes)
+        if (cls) pullClass(cls);
+}
+
 export function pullScriptDumps(library: DecodeLibrary, ...actorLists: Iterable<UObject>[]): void {
     const classes = new Set<UClass>();
 

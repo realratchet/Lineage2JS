@@ -31,11 +31,11 @@ import type InputManager from "../game/input-manager";
 import type WaterEffectsComponent from "../physics/components/water-effects-component";
 import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
+import NPawnLightComponent from "./components/pawn-light-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
 import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
-import type { IEmitterSpawnSoundDecodeInfo } from "@l2js/engine/contracts/emitter";
 
 export type HTMLViewportElement_T = HTMLDivElement;
 
@@ -46,6 +46,7 @@ const tmpPawnWorldPos = new Vector3();
 const tmpPawnSunAmbient = new ColorByte();
 const arrPawnLights: DynamicLight[] = [];
 const arrLightingObjects: THREE.Object3D[] = [];
+const arrPawnEffects: Object3D[] = [];
 const tmpShadowDirection = new Vector3(0, 0, -1);
 const arrShadowCasters: THREE.Object3D[] = [];
 const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, sized to the pawn collision cylinder
@@ -92,6 +93,7 @@ type PawnLightingState_T = {
     zoneIndex: number | null,
     lightingZoneIndex: number | null,
     envVersion: number,
+    pawnLightVersion: number,
     ambientR: number,
     ambientG: number,
     ambientB: number,
@@ -947,17 +949,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const object = effect as Object3D & IObject;
 
-        if (!object.findComponent("effectLifetime")) object.addComponent(new EffectLifetimeComponent(this));
+        const lifetime = object.findComponent<EffectLifetimeComponent>("effectLifetime") || object.addComponent(new EffectLifetimeComponent(this));
 
         this.scene.add(effect);
+        this.physicsManager.registerPhysicsComponent(lifetime);
         this.physicsManager.registerSimulationObjects(effect);
-
-        const spawnSound = (effect as any).spawnSound as (IEmitterSpawnSoundDecodeInfo & { dataUri: string }) | null;
-
-        if (spawnSound) {
-            effect.getWorldPosition(tmpPawnWorldPos);
-            this.audioManager.playOneShotSound(spawnSound.dataUri, tmpPawnWorldPos, spawnSound.volume / 255, 1, spawnSound.radius, spawnSound.radius * 100);
-        }
 
         if (owner) owner.gainScriptChild(effect);
         this.needsUpdate = true;
@@ -991,6 +987,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public removePawn(pawn: BaseActor): void {
         if (!this.physicsManager.removePawn(pawn)) return;
+
+        arrPawnEffects.length = 0;
+        for (const effect of pawn.getScriptChildren()) arrPawnEffects.push(effect);
+        this.scene.traverse(object => {
+            if ((object as any).scriptBase === pawn && !arrPawnEffects.includes(object)) arrPawnEffects.push(object);
+        });
+        for (const effect of arrPawnEffects) this.removeTransientEffect(effect);
 
         pawn.removeFromParent();
 
@@ -1123,6 +1126,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             zoneIndex: null,
             lightingZoneIndex: null,
             envVersion: -1,
+            pawnLightVersion: -1,
             ambientR: -1,
             ambientG: -1,
             ambientB: -1,
@@ -1160,6 +1164,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
         const envVersion = this.environment.getEnvVersion();
         const ambientChanged = state.envVersion !== envVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
+        const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
+        const pawnLightVersion = pawnLights ? pawnLights.version : -1;
         let relevantLightsChanged = false;
         let relevantLightUpdated = false;
 
@@ -1184,7 +1190,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
             state.lightingZoneIndex = state.zoneIndex;
         }
 
-        if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated) return;
+        if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
+
+        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getRenderSphere());
 
         arrLightingObjects.length = 0;
         arrLightingObjects.push(actor);
@@ -1195,10 +1203,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (const child of object.children) arrLightingObjects.push(child);
 
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
-                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient);
+                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined);
         }
 
         state.envVersion = envVersion;
+        state.pawnLightVersion = pawnLightVersion;
         state.ambientR = sunAmbient.r;
         state.ambientG = sunAmbient.g;
         state.ambientB = sunAmbient.b;
@@ -1343,8 +1352,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
                     const pendingSounds = (child as any).pendingSounds;
                     if (pendingSounds.length) {
-                        if (sector) for (const snd of pendingSounds)
-                            this.audioManager.playOneShotSound(sector.getSoundUri(snd.soundName), snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
+                        for (const snd of pendingSounds)
+                            if (snd.dataUri || sector) this.audioManager.playOneShotSound(snd.dataUri || sector.getSoundUri(snd.soundName), snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
                         pendingSounds.length = 0;
                     }
                 } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;

@@ -1,12 +1,13 @@
-import { Matrix4, Object3D, Skeleton, SkinnedMesh } from "three";
+import { Matrix4, Object3D, Skeleton, SkinnedMesh, Vector3 } from "three";
 
 const tmpMeshInverse = new Matrix4();
 const tmpBoneMatrix = new Matrix4();
 const tmpIdentity = new Matrix4();
+const tmpAttachmentOffset = new Vector3();
 
 function frozenUpdateMatrixWorld(): void { }
 
-type BoneAttachment_T = { object: Object3D, bone: number, usesBindMatrix: boolean };
+type BoneAttachment_T = { object: Object3D, bone: number, usesBindMatrix: boolean, absolute?: Object3D };
 
 // three skins through world space, where float32 quantizes a vertex to ~0.03 units at level coordinates - a whole frame of idle motion
 export class LocalSpaceSkeleton extends Skeleton {
@@ -19,7 +20,7 @@ export class LocalSpaceSkeleton extends Skeleton {
     protected ownsBones: boolean = false;
     protected visibleAttachmentCount = 0;
 
-    public attachObject(object: Object3D, boneNameOrIndex: string | number): boolean {
+    public attachObject(object: Object3D, boneNameOrIndex: string | number, absolute: boolean = false): boolean {
         if (this.parents === null) this.claimBones();
         if (!this.ownsBones) return false;
 
@@ -32,19 +33,28 @@ export class LocalSpaceSkeleton extends Skeleton {
         const bone = this.bones[index];
         const attachment = this.attachments.find(attachment => attachment.object === object);
         const oldBone = attachment?.bone;
+        let anchor: Object3D = null;
 
-        bone.add(object);
+        if (attachment?.absolute) attachment.absolute.removeFromParent();
+        if (absolute) {
+            anchor = new Object3D();
+            anchor.updateMatrixWorld = frozenUpdateMatrixWorld;
+            anchor.updateWorldMatrix = frozenUpdateMatrixWorld;
+            bone.add(anchor);
+            anchor.add(object);
+        } else bone.add(object);
         bone.updateWorldMatrix = frozenUpdateMatrixWorld;
 
         if (attachment) {
             attachment.bone = index;
             attachment.usesBindMatrix = true;
+            attachment.absolute = anchor;
 
             if (oldBone !== index && !this.attachments.some(entry => entry !== attachment && entry.bone === oldBone))
                 this.bones[oldBone].updateWorldMatrix = Object3D.prototype.updateWorldMatrix;
         }
         else {
-            this.attachments.push({ object, bone: index, usesBindMatrix: true });
+            this.attachments.push({ object, bone: index, usesBindMatrix: true, absolute: anchor });
             this.visibleAttachmentCount++;
             this.bones[0].visible = true;
         }
@@ -61,6 +71,7 @@ export class LocalSpaceSkeleton extends Skeleton {
 
         const bone = this.attachments[index].bone;
 
+        if (this.attachments[index].absolute) this.attachments[index].absolute.removeFromParent();
         this.attachments.splice(index, 1);
         object.removeFromParent();
         this.visibleAttachmentCount--;
@@ -110,6 +121,19 @@ export class LocalSpaceSkeleton extends Skeleton {
             if (attachment.usesBindMatrix)
                 bones[attachment.bone].matrixWorld.multiplyMatrices(this.mesh.matrixWorld, this.mesh.bindMatrixInverse).multiply(locals[attachment.bone]);
             else bones[attachment.bone].matrixWorld.multiplyMatrices(this.mesh.matrixWorld, locals[attachment.bone]);
+
+            if (attachment.absolute) {
+                // Engine.dll SetAttachmentLocation 0x94b99d: offset in mesh space, RelativeRotation copied directly at 0x94b9eb.
+                const position = attachment.object.position;
+                const origin = bones[attachment.bone].matrixWorld.elements;
+
+                tmpBoneMatrix.multiplyMatrices(this.mesh.matrixWorld, this.mesh.bindMatrixInverse);
+                tmpAttachmentOffset.copy(position).applyMatrix4(tmpBoneMatrix);
+                tmpAttachmentOffset.x += origin[12] - tmpBoneMatrix.elements[12] - position.x;
+                tmpAttachmentOffset.y += origin[13] - tmpBoneMatrix.elements[13] - position.y;
+                tmpAttachmentOffset.z += origin[14] - tmpBoneMatrix.elements[14] - position.z;
+                attachment.absolute.matrixWorld.identity().setPosition(tmpAttachmentOffset);
+            }
 
             attachment.object.updateMatrixWorld(true);
         }

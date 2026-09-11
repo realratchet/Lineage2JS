@@ -46,6 +46,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected actorAnimations: Record<string, AnimationClip> = {};
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
+    protected animationTweenEndTime = 0;
     protected isAnimationsInit = false;
     protected readonly basicActorAnimations: BasicActorAnimations_T = {
         idle: null,
@@ -122,7 +123,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
             if (channel !== 0) throw new Error(`UnrealScript IsAnimating channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
 
-            return !!this.animationNotifyAction && this.animationNotifyAction.isRunning();
+            return this.isAnimating();
         }
 
         if (call.index !== 0 || name !== "getanimparams") return COMPONENT_EVENT_NOT_HANDLED;
@@ -143,6 +144,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
     public getMeshes(): readonly Mesh[] { return this.meshes; }
     public getAction(): AnimationAction { return this.animationNotifyAction; }
+    public getAnimationNames(): string[] { return Object.keys(this.actorAnimations); }
+    public getAnimationClip(name: string): AnimationClip { return this.actorAnimations[Object.keys(this.actorAnimations).find(key => key.toLowerCase() === name.toLowerCase())]; }
+    public isAnimating(): boolean {
+        const action = this.animationNotifyAction;
+
+        return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.renderManager.mixer.time < this.animationTweenEndTime);
+    }
 
     public setMeshes(meshes: Mesh[]): void {
         const parent = this.getParent();
@@ -163,13 +171,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.renderManager.invalidatePawnLighting(parent);
     }
 
-    public getBoneWorldPosition(name: string, target: Vector3): Vector3 {
+    public getBoneWorldPosition(name: string | number, target: Vector3): Vector3 {
         for (const mesh of this.meshes) {
             const skeleton = (mesh as any).skeleton as THREE.Skeleton;
 
             if (!skeleton) continue;
 
-            const bone = skeleton.bones.find(bone => bone.name === name);
+            const bone = typeof name === "number" ? skeleton.bones[name] : skeleton.bones.find(bone => bone.name === name);
 
             if (bone) return bone.getWorldPosition(target);
         }
@@ -247,6 +255,9 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public onAnimationFinished(action: AnimationAction, isDying: boolean): boolean {
         if (action !== this.animationNotifyAction) return false;
 
+        this.onUpdate(0, 0);
+        if (action !== this.animationNotifyAction) return true;
+
         this.animationNotifyTime = 0;
 
         if (isDying) {
@@ -271,7 +282,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public isPlayingOneShot(animationName: string): boolean {
         const action = this.animationNotifyAction;
 
-        return !!action && action.isRunning() && action.loop === LoopOnce && action.getClip().name.toLowerCase() === animationName.toLowerCase();
+        return this.isAnimating() && action.loop === LoopOnce && action.getClip().name.toLowerCase() === animationName.toLowerCase();
     }
 
     public play(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME, rate: number = 1, loop: boolean = true, restart: boolean = false): void {
@@ -284,6 +295,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const sourceClip = this.actorAnimations[resolvedName];
         const clip = loop ? sourceClip : getOnceAnimation(sourceClip);
         const mixer = this.renderManager.mixer;
+        const tweenEndTime = mixer.time + Math.max(0, tweenTime);
         let notifyAction: AnimationAction = null;
         let didBegin = false;
 
@@ -302,8 +314,10 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             nextAct.clampWhenFinished = !loop;
 
             if (currAct === nextAct) {
-                if (restart || !nextAct.isRunning()) {
-                    nextAct.reset().play();
+                if (restart || !nextAct.isScheduled() || !nextAct.enabled || nextAct.paused) {
+                    nextAct.reset();
+                    if (tweenTime > 0) nextAct.startAt(tweenEndTime);
+                    nextAct.play();
                     didBegin = true;
                 }
                 continue;
@@ -314,19 +328,23 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             if (prevAct) prevAct.stop();
             nextAct.reset();
 
-            if (currAct && (currAct.isRunning() || currAct.enabled && currAct.paused)) {
+            if (currAct && currAct.isScheduled() && currAct.enabled) {
                 this.prevAnimations.set(mesh, currAct);
                 currAct.crossFadeTo(nextAct, tweenTime, false);
             } else if (currAct) currAct.stop();
 
+            // Engine.dll PlayAnim 0x943c41 / UpdateAnimation 0x94a549: tween before frame zero.
+            if (tweenTime > 0) nextAct.startAt(tweenEndTime);
             nextAct.play();
             didBegin = true;
         }
 
-        if (this.animationNotifyAction !== notifyAction) {
+        if (this.animationNotifyAction !== notifyAction || didBegin) {
             this.animationNotifyAction = notifyAction;
             this.animationNotifyTime = notifyAction ? notifyAction.time : 0;
         }
+
+        if (didBegin) this.animationTweenEndTime = tweenEndTime;
 
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
@@ -341,6 +359,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         this.animationNotifyAction = null;
         this.animationNotifyTime = 0;
+        this.animationTweenEndTime = 0;
     }
 
     public release(): void {

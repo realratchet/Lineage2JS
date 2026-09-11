@@ -70,7 +70,12 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
         return this.dispatchEvent<ScriptValue_T>(SCRIPT_NATIVE_EVENT, call);
     }
 
-    public createObject(classId: string): ScriptHost_T { return this.objectFactory(classId); }
+    public createObject(classId: string): ScriptHost_T {
+        const object = this.objectFactory(classId);
+
+        this.vm.initializeHost(object);
+        return object;
+    }
     public hasFunction(name: string): boolean { return this.vm.hasScriptFunction(this.classId, name); }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {

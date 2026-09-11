@@ -1,7 +1,7 @@
 import "../style/style.scss";
 import startCore from "./core";
-import runNpcTest from "./npc-test";
-import runSectorTest from "./sector-test";
+import runNpcTest from "../tools/npc-test";
+import runSectorTest from "../tools/sector-test";
 
 const params = new URLSearchParams(location.search);
 

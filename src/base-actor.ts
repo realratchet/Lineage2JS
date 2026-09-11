@@ -10,6 +10,7 @@ import PawnMovementComponent, { PawnMovementState_T } from "./physics/components
 import AnimationComponent from "./objects/components/animation-component";
 import TransformComponent from "./objects/components/transform-component";
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
+import NpcAttackComponent, { type NpcAttackSelection_T, type NpcAttack_T } from "./objects/components/npc-attack-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
 import { COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
 import { ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
@@ -21,6 +22,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public readonly isActor = true;
     declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
+    public effectSpawnBoneIndex: number = null;
 
     protected renderManager: RenderManager;
     protected readonly movementComponent: PawnMovementComponent;
@@ -46,6 +48,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
         this.scriptComponent = component;
         this.addComponent(component);
+        this.setCollisionSize(this.getStoredUnrealScriptProperty("CollisionRadius") as number, this.getStoredUnrealScriptProperty("CollisionHeight") as number);
     }
 
     public beginPlay(): void { this.scriptComponent?.beginPlay(); }
@@ -141,18 +144,29 @@ export class BaseActor extends GameObject implements ICollidable {
         this.updatePresentation(currentTime, deltaTime);
     }
 
-    public getBoneWorldPosition(name: string, target: Vector3): Vector3 { return this.animationComponent.getBoneWorldPosition(name, target); }
+    public getBoneWorldPosition(name: string | number, target: Vector3): Vector3 { return this.animationComponent.getBoneWorldPosition(name, target); }
 
-    public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number): boolean { return this.getComponent<TransformComponent>("transform").attachObjectToBone(object, boneNameOrIndex); }
+    public getEffectTargetLocation(target: Vector3): Vector3 {
+        // Retail Engine.u Pawn.GetEffTargetLocation directly uses EffectSpawnBoneIdx; no SpineBone fallback.
+        const index = this.scriptComponent ? this.getUnrealScriptProperty("EffectSpawnBoneIdx") as number : this.effectSpawnBoneIndex;
+
+        if (!Number.isInteger(index)) throw new Error(`${this.name} has no effect target bone index.`);
+
+        return this.getBoneWorldPosition(Math.max(0, index), target);
+    }
+
+    public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number, absolute: boolean = false): boolean { return this.getComponent<TransformComponent>("transform").attachObjectToBone(object, boneNameOrIndex, absolute); }
     public detachBoneObject(object: Object3D): boolean { return this.getComponent<TransformComponent>("transform").detachBoneObject(object); }
     public gainScriptChild(object: Object3D): void { this.getComponent<TransformComponent>("transform").gainScriptChild(object); }
     public loseScriptChild(object: Object3D): void { this.getComponent<TransformComponent>("transform").loseScriptChild(object); }
+    public getScriptChildren(): ReadonlySet<Object3D> { return this.getComponent<TransformComponent>("transform").getScriptChildren(); }
 
     public getRenderSphere(): Sphere { return this.getComponent<PawnRenderableComponent>("pawnRenderable").getRenderSphere(); }
 
     public setMeshes(meshes: Mesh[]): void { this.animationComponent.setMeshes(meshes); }
 
     public setAnimations(animations: Record<string, AnimationClip>): void { this.animationComponent.setAnimations(animations); }
+    public getAnimationNames(): string[] { return this.animationComponent.getAnimationNames(); }
     public stopAnimations(): void { this.animationComponent.stop(); }
 
     // materials and textures stay - material-decoder hands those out of name-keyed shared caches
@@ -179,6 +193,10 @@ export class BaseActor extends GameObject implements ICollidable {
     public onAnimationFinished(action: AnimationAction): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").onAnimationFinished(action); }
 
     public playDeathAnimation(onFinished: (actor: BaseActor) => void): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").playDeath(onFinished); }
+
+    public getNpcAttacks(): readonly NpcAttack_T[] { return this.getComponent<NpcAttackComponent>("npcAttack").getAttacks(); }
+    public attack(target: BaseActor, selection: NpcAttackSelection_T): void { this.getComponent<NpcAttackComponent>("npcAttack").attack(target, selection); }
+    public stopAttack(): void { this.getComponent<NpcAttackComponent>("npcAttack").stop(); }
 
     public isPlayingOneShotAnimation(animationName: string): boolean { return this.animationComponent.isPlayingOneShot(animationName); }
     public playAnimation(animationName: string, tweenTime: number = 0.1, rate: number = 1, loop: boolean = true, restart: boolean = false): void { this.animationComponent.play(animationName, tweenTime, rate, loop, restart); }

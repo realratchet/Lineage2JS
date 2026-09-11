@@ -599,7 +599,7 @@ export abstract class UParticleEmitter extends UObject {
                     values: this.velocityScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.velocityScaleRepeats
                 } : null,
-                revolution: this.isUsingRevolutionScale && (this.revolutionScale?.length ?? 0) > 1 ? {
+                revolution: this.isUsingRevolutionScale && (this.revolutionScale?.length ?? 0) > 0 ? {
                     values: this.revolutionScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.revolutionScaleRepeats
                 } : null

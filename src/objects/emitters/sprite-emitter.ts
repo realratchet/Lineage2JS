@@ -1,4 +1,4 @@
-import ParticleMaterial, { type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
+import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 import { Mesh, PlaneGeometry, Vector3 } from "three";
 import * as THREE from "three";
@@ -44,12 +44,14 @@ export class SpriteEmitter extends BaseEmitter {
         // Both camera-facing sprites and PTDU_Normal use one basis for the whole
         // emitter, so neither needs a mesh/draw call per particle. Velocity-driven
         // modes still require a per-particle basis and stay on the legacy path.
-        this.isInstancedRendering = this.spriteDirection === "camera" || this.spriteDirection === "normal";
+        // Animated textures select a frame per particle age.
+        this.isInstancedRendering = this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal");
     }
 
     protected initParticleMesh() {
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
-        const mesh = new ParticleMesh(new ParticleMaterial({ ...this.material, usesSubdivision }));
+        const settings = { ...this.material, usesSubdivision };
+        const mesh = new ParticleMesh(this.material.type === "sprite" ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings));
         mesh.spriteDirection = this.spriteDirection;
         mesh.projectionNormal = this.projectionNormal;
         return mesh;
@@ -68,11 +70,12 @@ export class SpriteEmitter extends BaseEmitter {
 
 export default SpriteEmitter;
 
-class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
+class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
     public spriteDirection: SpriteDirections_T = "camera";
     public projectionNormal: THREE.Vector3 = new Vector3(0, 0, 1);
+    public particleRef: SpriteParticle_T = null;
 
-    public constructor(material: ParticleMaterial) {
+    public constructor(material: ParticleMaterial | AnimatedParticleMaterial) {
         super(geometry, material);
     }
 
@@ -101,10 +104,7 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
         const up = tmpUp;
         const right = tmpRight;
 
-        // Get velocity direction if particle is attached
-        const particle = (this as any).particleRef;
-        const velocity = particle ? particle.velocity : null;
-        const hasVelocity = velocity && velocity.lengthSq() > 0.0001;
+        const particle = this.particleRef;
 
         if (this.spriteDirection === "normal") {
             direction.set(this.projectionNormal.x, this.projectionNormal.y, this.projectionNormal.z).normalize();
@@ -127,11 +127,12 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             // - UE +Up maps to Threejs +Y
             // Let's just follow UE math directly but reverse the cross product order due to handedness.
 
-        } else if (hasVelocity && (this.spriteDirection === "up" || this.spriteDirection === "upNormal" ||
+        } else if (particle && (this.spriteDirection === "up" || this.spriteDirection === "upNormal" ||
                    this.spriteDirection === "right" || this.spriteDirection === "rightNormal" ||
                    this.spriteDirection === "forward")) {
 
-            direction.copy(velocity).normalize();
+            // Engine.dll FillVertexBuffer 0x97a72d: Location - OldLocation.
+            direction.subVectors(particle.position, particle.oldLocation).normalize();
             const projTemp = tmpProjTemp;
 
             if (this.spriteDirection === "upNormal" || this.spriteDirection === "rightNormal") {
@@ -185,8 +186,8 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
 
         const normal = tmpNormal.crossVectors(right, up).normalize();
 
-        const matrix = tmpMatrix.makeBasis(right, up, normal);
-        this.quaternion.setFromRotationMatrix(matrix);
+        this.matrix.copy(tmpMatrix.makeBasis(right, up, normal)).scale(this.scale).setPosition(this.position);
+        this.matrixWorld.multiplyMatrices(this.parent.matrixWorld, this.matrix);
     };
 }
 
@@ -195,3 +196,5 @@ type SpriteEmitterConfig_T = EmitterConfig_T & {
     spriteDirection?: SpriteDirections_T;
     projectionNormal?: [number, number, number];
 };
+
+type SpriteParticle_T = { position: Vector3, oldLocation: Readonly<Vector3>, spin: number };

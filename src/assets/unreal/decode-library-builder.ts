@@ -1,7 +1,7 @@
 import type { UClass } from "@l2js/core";
 import type { UObject } from "./un-object";
 import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
-import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses } from "./script-dump-loader";
+import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
 import type { HeightMapInfo_T, UTerrainSector, ITerrainSegmentDecodeInfo } from "./un-terrain-sector";
 import type UPhysicsVolume from "./un-physics-volume";
 import type { UMaterial } from "./un-material";
@@ -261,6 +261,7 @@ export class DecodeLibraryBuilder {
     public pullScriptClasses(classes: Iterable<UClass>): void {
         pullScriptClasses(this.library, classes);
     }
+    public pullScriptClassFunctions(classes: Iterable<UClass>): void { pullScriptClassFunctions(this.library, classes); }
 
     public pullScriptDumps(...actorLists: Iterable<UObject>[]): void {
         pullScriptDumps(this.library, ...actorLists);

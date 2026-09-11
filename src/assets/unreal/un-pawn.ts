@@ -24,8 +24,10 @@ export type NpcSkillAttack_T = {
     isMultiShot: boolean;
     flyingTime: number;
     visualEffect: string;
+    hasVisualEffect: boolean;
     actions: NpcSkillEffectAction_T[];
     nativeEffects: string[];
+    nativeEffectGroup?: string;
     nativeSoundPhases: NpcSkillEffectPhase_T[];
     nativeFinalShotOnly: boolean;
     nativeTransientRejected: boolean;

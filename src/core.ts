@@ -26,7 +26,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         },
         cache: {
             enabled: true,
-            version: 18 // bump when decode logic changes, invalidates all previously cached assets
+            version: 0 // bump when decode logic changes, invalidates all previously cached assets
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",

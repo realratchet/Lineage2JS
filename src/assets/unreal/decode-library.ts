@@ -16,6 +16,7 @@ import type { QuaternionArr, Vector3Arr, EulerArr, ArrGeometryGroup, IndexLikeAr
 import type { EmitterConfig_T } from "./emitters/un-particle-emitter";
 import type { IStaticMeshCollisionDecodeInfo } from "./static-mesh/un-static-mesh";
 import type { IBoundsDecodeInfo } from "./un-primitive";
+import type { NpcSkillAttack_T } from "./un-pawn";
 
 export type DecodableObject_T =
     | "Group"
@@ -34,6 +35,7 @@ export type DecodableObject_T =
     | "Emitter"
     | "SpriteEmitter"
     | "MeshEmitter"
+    | "VertMeshEmitter"
     | "BeamEmitter"
     | "Zone"
     | "Sky"
@@ -139,6 +141,8 @@ export class DecodeLibrary {
     public readonly scriptStates: Record<string, IScriptStateDecodeInfo> = {};
     public readonly effectTemplates: Record<string, IBaseObjectDecodeInfo> = {};
     public readonly actorTemplates: Record<string, ISkinnedMeshObjectDecodeInfo> = {};
+    public readonly npcSkillAttacks: NpcSkillAttack_T[] = [];
+    public effectSpawnBoneIndex: number = null;
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public isSkyLevel = false;
     public readonly skyLevel: {

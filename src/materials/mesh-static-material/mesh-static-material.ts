@@ -10,6 +10,7 @@ const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "
 
 // Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
 export const NUM_ACTOR_LIGHTS = 4;
+const MAX_HARDWARE_LIGHTS = 8; // D3DDrv SetPawnLight RVA 0x1c7b2.
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
 type ApplyParams_T = {
@@ -428,17 +429,19 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.uniforms.actorAmbient = new Uniform(new Color(0, 0, 0));
         this.uniforms.actorScaledGlow = new Uniform(1);
         this.uniforms.numActorLights = new Uniform(0);
-        this.uniforms.actorLights = new Uniform(Array.from({ length: NUM_ACTOR_LIGHTS }, () => ({
+        this.uniforms.actorLights = new Uniform(Array.from({ length: MAX_HARDWARE_LIGHTS }, () => ({
             position: new Vector3(),
             direction: new Vector3(),
             color: new Color(0, 0, 0),
             radius: 0,
             cone: 0,
-            effect: 0
+            effect: 0,
+            isPawnLight: false,
+            attenuation: new Vector2()
         })));
 
         this.defines["USE_ACTOR_LIGHTS"] = "";
-        this.defines["NUM_ACTOR_LIGHTS"] = NUM_ACTOR_LIGHTS;
+        this.defines["NUM_ACTOR_LIGHTS"] = MAX_HARDWARE_LIGHTS;
 
         this.needsUpdate = true;
 
@@ -449,6 +452,16 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         delete this.defines["USE_AMBIENT"];
         delete this.defines["USE_LIGHTMAP"];
         this.needsUpdate = true;
+        return this;
+    }
+
+    public copy(source: this): this {
+        super.copy(source);
+        this.sprites = source.sprites;
+        this.spriteEntries = source.spriteEntries;
+        this.proceduralMaps = source.proceduralMaps;
+        this.isUpdatable = source.isUpdatable;
+
         return this;
     }
 
@@ -505,4 +518,3 @@ type MeshStaticMaterialParameters_T = {
         alphaFrom2: boolean
     }
 };
-

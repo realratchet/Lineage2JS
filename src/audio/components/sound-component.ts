@@ -6,7 +6,7 @@ import type BaseActor from "../../base-actor";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
-import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
+import type { INpcEnterEvent, NpcSkillSound_T } from "@l2js/engine/contracts/pawn";
 
 export const ANIMATION_NOTIFY_EVENT = "animationNotify";
 export const NPC_ENTER_EVENT = "npcEnter";
@@ -24,6 +24,15 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
     }
 
     public setLibrary(library: DecodeLibrary): this { this.library = library; return this; }
+
+    public playSkillSound(info: NpcSkillSound_T): void {
+        const soundName = this.library.sounds[info.sound];
+
+        if (!soundName) throw new Error(`Skill sound '${info.sound}' failed to decode.`);
+
+        // Engine.dll APawn::PlaySkillSound 0x797e55: volume / 255, table radius, pitch 1.
+        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`);
+    }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
         switch (type) {

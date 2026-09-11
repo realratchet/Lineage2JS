@@ -5,7 +5,7 @@ import BaseEmitter from "./base-emitter";
 import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
 export class MeshEmitter extends BaseEmitter {
-    protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
+    protected materials: ParticleMaterialInitSettings_T | (ParticleMaterialInitSettings_T | THREE.Material)[];
     protected geometry: THREE.BufferGeometry;
 
     public constructor(config: MeshEmitterConfig_T) {
@@ -24,6 +24,8 @@ export class MeshEmitter extends BaseEmitter {
     protected initParticleMesh() {
         const materialConfigs = this.materials instanceof Array ? this.materials : [this.materials];
         const materials = materialConfigs.map(m => {
+            if ((m as THREE.Material).isMaterial) return (m as THREE.Material).clone();
+
             const isSprite = m.type === "sprite";
 
             return new MeshEmitterMaterial({
@@ -55,5 +57,5 @@ class ParticleMesh extends Mesh {
 
 type MeshEmitterConfig_T = EmitterConfig_T & {
     geometry: THREE.BufferGeometry,
-    materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[]
+    materials: ParticleMaterialInitSettings_T | (ParticleMaterialInitSettings_T | THREE.Material)[]
 };

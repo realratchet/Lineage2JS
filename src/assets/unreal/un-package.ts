@@ -24,6 +24,8 @@ import UMusicVolume from "./un-music-volume";
 import UConvexVolume from "./un-convex-volume";
 import UEmitter from "./un-emitter";
 import UMeshEmitter from "./emitters/un-mesh-emitter";
+import UVertMesh from "./un-vert-mesh";
+import UVertMeshEmitter from "./emitters/un-vert-mesh-emitter";
 import USpriteEmitter from "./emitters/un-sprite-emitter";
 import FRotator from "./un-rotator";
 import UCamera from "./un-camera";
@@ -61,10 +63,14 @@ import UPawn from "./un-pawn";
 import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
+import USkillVisualEffect, { USkillAction, FSkillActionInfo, USkillActionLocateEffect, USkillActionSwordTrail } from "./un-skill-visual-effect";
 import * as AnimNotify from "./skeletal-mesh/un-anim-notify";
 
 export type NativeClientTypes_T =
     | NativeTypes_T
+    | "VertMesh"
+    | "WaterHitEmitter"
+    | "VertMeshEmitter"
     | "NMovableSunLight"
     | "NSun"
     | "NMoon"
@@ -81,6 +87,7 @@ export type NativeClientTypes_T =
     | "SkillAction"
     | "SkillAction_LocateEffect"
     | "SkillAction_SwordTrail"
+    | "NSkillProjectile"
     | "AnimNotify"
     | "AnimNotify_IdleSound"
     | "AnimNotify_MatSubAction"
@@ -311,7 +318,7 @@ export class UNativePackage extends ANativePackage {
             case "L2EnvironmentColorInfo": Constructor = UL2EnvironmentColorInfo; break;
 
             case "L2RotatorTime": Constructor = FL2RotatorTime; break;
-            case "SkillActionInfo": Constructor = UObject; break;
+            case "SkillActionInfo": Constructor = FSkillActionInfo; break;
 
             // structs we dont care about yet
             case "InterpCurve":
@@ -334,6 +341,7 @@ export class UNativePackage extends ANativePackage {
             case "ParticleColorScale": Constructor = PEmitter.UParticleColorScale; break;
             case "ParticleTimeScale": Constructor = PEmitter.UParticleTimeScale; break;
             case "ParticleVelocityScale": Constructor = PEmitter.UParticleVelocityScale; break;
+            case "ParticleRevolutionScale": Constructor = PEmitter.UParticleRevolutionScale; break;
 
             default:
                 debugger;
@@ -389,6 +397,7 @@ export class UNativePackage extends ANativePackage {
             //         case "Player": Constructor = UPlayer; break;
             //         case "MeshInstance": Constructor = UMeshInstance; break;
             case "SkeletalMesh": Constructor = USkeletalMesh; break;
+            case "VertMesh": Constructor = UVertMesh; break;
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
             case "Texture": Constructor = UTexture; break;
@@ -396,8 +405,10 @@ export class UNativePackage extends ANativePackage {
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
+            case "NSkillProjectile": Constructor = UEmitter; break; // ANSkillProjectile : ANProjectile : AEmitter (EngineClasses.h 3832/3866)
             case "WaterHitEmitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;
+            case "VertMeshEmitter": Constructor = UVertMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
             case "BeamEmitter": Constructor = UBeamEmitter; break;
 
@@ -440,11 +451,12 @@ export class UNativePackage extends ANativePackage {
             case "AntiPortalActor":
             case "Pawn":
             case "LineagePlayerController":
-            case "AmbientSound":
-            case "SkillVisualEffect":
-            case "SkillAction":
-            case "SkillAction_LocateEffect":
-            case "SkillAction_SwordTrail": Constructor = UObject; break;
+            case "AmbientSound": Constructor = UObject; break;
+
+            case "SkillVisualEffect": Constructor = USkillVisualEffect; break;
+            case "SkillAction": Constructor = USkillAction; break;
+            case "SkillAction_LocateEffect": Constructor = USkillActionLocateEffect; break;
+            case "SkillAction_SwordTrail": Constructor = USkillActionSwordTrail; break;
 
             case "AnimNotify": Constructor = AnimNotify.UAnimNotify; break;
             case "AnimNotify_IdleSound": Constructor = AnimNotify.UAnimNotifyIdleSound; break;

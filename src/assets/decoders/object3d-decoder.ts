@@ -6,7 +6,9 @@ import Terrain from "../../objects/terrain";
 import CollidingMesh from "../../objects/colliding-mesh";
 import SpriteEmitter from "../../objects/emitters/sprite-emitter";
 import MeshEmitter from "../../objects/emitters/mesh-emitter";
+import VertMeshEmitter from "../../objects/emitters/vert-mesh-emitter";
 import BeamEmitter from "../../objects/emitters/beam-emitter";
+import type { BaseEmitter } from "../../objects/emitters/base-emitter";
 import DynamicLight, { ColorHSV } from "../../objects/dynamic-light";
 import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance, makeSwayAttribute, stepStaticMeshBatchJob, StaticMeshBatchJob_T } from "./object-batching";
 import MovableObject from "../../objects/movable-object";
@@ -99,7 +101,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
     if (info.name) object.name = info.name;
     if (info.scriptClassId) {
         (object as any).scriptClassId = info.scriptClassId;
-        (object as any).scriptProperties = new Map(Object.entries(info.scriptProperties || {}));
+        (object as any).scriptProperties = new Map(Object.entries(structuredClone(info.scriptProperties || {})));
     }
     if (info.position) object.position.fromArray(info.position);
     if (info.scale) object.scale.fromArray(info.scale);
@@ -117,6 +119,7 @@ type EmitterSpawnSound_T = IEmitterSpawnSoundDecodeInfo & { dataUri: string };
 
 class EmitterActor extends GameObject {
     public spawnSound: EmitterSpawnSound_T = null;
+    public speedRate: number = 1;
     public readonly emitterRotation = new Quaternion();
 
     protected emitterRotator: Rotator = null;
@@ -125,6 +128,33 @@ class EmitterActor extends GameObject {
     protected rateYaw: number = 0;
     protected rateRoll: number = 0;
     protected rotationTime: number;
+
+    public getSpeedRate(): number {
+        const speedRate = (this as any).scriptProperties?.get("SpeedRate") ?? this.speedRate;
+
+        if (!Number.isFinite(speedRate)) throw new Error(`Emitter '${this.name}' has invalid SpeedRate '${speedRate}'.`);
+
+        return speedRate;
+    }
+
+    public adjustParticleLife(lifetime: number): void {
+        if (!Number.isFinite(lifetime) || lifetime < 0) throw new Error(`Invalid emitter lifetime '${lifetime}'.`);
+
+        const emitters = this.children as BaseEmitter[];
+        let maxLifetime = 0;
+
+        for (const emitter of emitters) maxLifetime = Math.max(maxLifetime, emitter.getForcedLifeTime());
+
+        const delta = lifetime - maxLifetime;
+        const lightLifeSpan = this.scriptProperties.get("EL_LifeSpan") as number;
+
+        if (!Number.isFinite(lightLifeSpan)) throw new Error(`Emitter '${this.name}' has no EL_LifeSpan default.`);
+
+        // Engine.dll SetParticleLifeTimeRange 0x8a2e09 / SpawnEmitterLight 0x8a3b3a.
+        this.scriptProperties.set("EL_LifeSpan", lightLifeSpan + delta);
+
+        for (const emitter of emitters) emitter.adjustParticleLife(lifetime, delta);
+    }
 
     public setRotating(info: IRotatingDecodeInfo): void {
         this.emitterRotator = new Rotator(...info.rotator);
@@ -141,7 +171,7 @@ class EmitterActor extends GameObject {
             return;
         }
 
-        const dt = (currentTime - this.rotationTime) / 1000;
+        const dt = (currentTime - this.rotationTime) / 1000 * this.getSpeedRate();
 
         this.emitterRotator.pitch += this.ratePitch * dt;
         this.emitterRotator.yaw += this.rateYaw * dt;
@@ -153,6 +183,8 @@ class EmitterActor extends GameObject {
 
 function decodeEmitterObject(library: DecodeLibrary, info: IEmitterActorDecodeInfo) {
     const object = decodeSimpleObject(library, EmitterActor, info);
+
+    object.speedRate = info.speedRate;
 
     if (info.spawnSound) {
         const sound = library.soundBlobCache.get(info.spawnSound.soundName);
@@ -860,7 +892,8 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
 
     prepareSkinnedMaterials(materials, extendedBoneInfluences);
 
-    mesh.position.fromArray(info.meshOrigin);
+    mesh.meshOrigin.fromArray(info.meshOrigin);
+    mesh.position.copy(mesh.meshOrigin);
     mesh.quaternion.fromArray(info.meshRotOriginQuaternion);
     mesh.scale.fromArray(info.meshScale);
 
@@ -932,6 +965,9 @@ function decodeEmitterConfig(info: IEmitterDecodeInfo) {
         velocityLossRange: info.velocityLossRange,
         warmupTime: info.warmupTime,
         warmupTicksPerSecond: info.warmupTicksPerSecond,
+        forcedLifeTime: info.forcedLifeTime,
+        forcedFade: info.forcedFade,
+        forcedMaxParticles: info.forcedMaxParticles,
         settings: info.settings
     };
 }
@@ -954,6 +990,26 @@ function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo)
     return emitter;
 }
 
+
+function decodeVertMeshEmitter(library: DecodeLibrary, info: any) {
+    const geometry = info.mesh ? fetchGeometry(info.mesh.geometry) : null;
+
+    if (geometry) {
+        geometry.morphAttributes.position = info.mesh.frames.map(frame => new BufferAttribute(frame, 3));
+        geometry.morphAttributes.normal = info.mesh.normals.map(frame => new BufferAttribute(frame, 3));
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+    }
+
+    const materials = info.mesh ? info.mesh.materials.map(material => info.useMeshBlendMode
+        ? decodeMaterial(library, library.materials[material])
+        : decodeMaterial(library, { materialType: "particle", material, opacity: info.opacity, blendingMode: info.blendingMode } as IParticleMaterialDecodeInfo)) : [];
+    const emitter = new VertMeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials, framerate: info.mesh ? info.mesh.framerate : 0, useMeshBlendMode: info.useMeshBlendMode, renderTwoSided: info.renderTwoSided, useParticleColor: info.useParticleColor }));
+
+    applySimpleProperties(library, emitter, info);
+
+    return emitter;
+}
 
 function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
     const material = decodeMaterial(library, {
@@ -1033,6 +1089,7 @@ export function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstan
         case "SkinnedMesh": return decodeSkinnedMesh(library, info as ISkinnedMeshObjectDecodeInfo);
         case "SpriteEmitter": return decodeSpriteEmitter(library, info as ISpriteEmitterDecodeInfo);
         case "MeshEmitter": return decodeMeshEmitter(library, info as IMeshEmitterDecodeInfo);
+        case "VertMeshEmitter": return decodeVertMeshEmitter(library, info);
         case "BeamEmitter": return decodeBeamEmitter(library, info);
         case "L2FogInfo": return decodeFogInfo(library, info as IBaseZoneDecodeInfo);
         case "Zone":

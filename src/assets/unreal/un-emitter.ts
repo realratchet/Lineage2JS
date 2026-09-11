@@ -11,7 +11,7 @@ import type { Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
 export type IEmitterSpawnSoundDecodeInfo = { soundName: string; volume: number; radius: number; };
-export type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & { type: "Emitter"; spawnSound?: IEmitterSpawnSoundDecodeInfo; rotating?: IRotatingDecodeInfo; };
+export type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & { type: "Emitter"; speedRate: number; spawnSound?: IEmitterSpawnSoundDecodeInfo; rotating?: IRotatingDecodeInfo; };
 export type EmitterDecodeResult_T = { object: IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
 
 export abstract class UEmitter extends UAActor {
@@ -23,6 +23,7 @@ export abstract class UEmitter extends UAActor {
     declare protected soundVolume: number;
     declare protected isRotatingEmitter: boolean;
     declare protected rotPerSecond: FRotator;
+    declare protected speedRate: number;
 
     // protected _autoDestroy: any;
     // protected _autoReset: any;
@@ -76,7 +77,7 @@ export abstract class UEmitter extends UAActor {
             // "GlobalOffsetRange": "_globalOffsetRange",
             // "TimeTillResetRange": "_timeTillResetRange",
             // "AutoReplay": "_autoReplay",
-            // "SpeedRate": "_speedRate",
+            "SpeedRate": "speedRate",
             "bRotEmitter": "isRotatingEmitter",
             "RotPerSecond": "rotPerSecond",
             // "FixedBoundingBox": "_fixedBoundingBox",
@@ -192,6 +193,7 @@ export abstract class UEmitter extends UAActor {
             scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
             quaternion: this.rotation.getQuaternionElements(),
             children: this.getEmitterDecodeInfos(builder),
+            speedRate: this.speedRate,
             isRangeIgnored: !!this.isRangeIgnored
         };
 
@@ -222,6 +224,7 @@ export abstract class UEmitter extends UAActor {
             scale: this.scale.getElements().map(v => v * this.drawScale) as [number, number, number],
             quaternion: this.rotation.getQuaternionElements(),
             children: emittersInfo,
+            speedRate: this.speedRate,
             isRangeIgnored: !!this.isRangeIgnored,
             moveEvent: this.l2MoveEvent
         };

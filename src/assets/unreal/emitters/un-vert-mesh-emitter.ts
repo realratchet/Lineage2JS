@@ -18,9 +18,7 @@ abstract class UVertMeshEmitter extends UParticleEmitter {
     }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder) {
-        if (!this.mesh) throw new Error(`VertMeshEmitter '${this.objectName}' has no vertex mesh.`);
-
-        const mesh = this.mesh.loadSelf().getDecodeInfo(builder);
+        const mesh = this.mesh ? this.mesh.loadSelf().getDecodeInfo(builder) : null;
 
         return Object.assign(super.getDecodeInfo(builder), { type: "VertMeshEmitter", mesh, useMeshBlendMode: this.useMeshBlendMode, renderTwoSided: this.renderTwoSided, useParticleColor: this.useParticleColor });
     }

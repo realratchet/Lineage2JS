@@ -308,6 +308,8 @@
         float radius;
         float cone;
         int effect;
+        bool isPawnLight;
+        vec2 attenuation;
     };
 
     uniform ActorLight actorLights[NUM_ACTOR_LIGHTS];
@@ -335,6 +337,14 @@
         float distanceSquared = dot(delta, delta);
         float distance = sqrt(distanceSquared);
         float radiusSquared = light.radius * light.radius;
+
+        if (light.isPawnLight) {
+            if (distance > light.radius || distance == 0.0) return 0.0;
+            // D3DDrv RVA 0x1c99b..0x1c9a5: Theta=0, Phi=PI/2, Falloff=0.
+            if (light.cone >= 0.0 && -dot(delta, light.direction) <= light.cone * distance) return 0.0;
+
+            return 2.0 * max(dot(delta / distance, normal), 0.0) / (light.attenuation.x + light.attenuation.y * distance);
+        }
 
         if (light.effect == LE_CYLINDER) {
             if (distance >= light.radius) return 0.0;

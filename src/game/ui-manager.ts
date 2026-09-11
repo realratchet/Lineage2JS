@@ -3,6 +3,7 @@ import { IEngineComponent } from "./components";
 import Stats from "../rendering/stats";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import type BaseActor from "../base-actor";
+import type { NpcAttackSelection_T } from "../objects/components/npc-attack-component";
 import type GameManager from "./game-manager";
 import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 
@@ -215,13 +216,18 @@ export class UIManager implements IEngineComponent<GameManager> {
         const manRender = this.manGame.getComponent("render");
         const state = {
             selector: "Baium",
+            selectedAttack: "random",
+            selectedTarget: "player",
             spawn: async () => {
                 const request = ++this.npcSpawnRequest;
 
                 if (this.spawnedNpc) {
+                    this.spawnedNpc.stopAttack();
                     manRender.removePawn(this.spawnedNpc);
                     this.spawnedNpc = null;
                 }
+
+                buildAttackControl(null);
 
                 const npc = await manRender.spawnNpc(state.selector);
 
@@ -231,6 +237,7 @@ export class UIManager implements IEngineComponent<GameManager> {
                 }
 
                 this.spawnedNpc = npc;
+                buildAttackControl(npc);
             },
             kill: () => {
                 ++this.npcSpawnRequest;
@@ -239,17 +246,48 @@ export class UIManager implements IEngineComponent<GameManager> {
 
                 if (!npc) return;
 
+                npc.stopAttack();
                 npc.playDeathAnimation(() => {
                     manRender.removePawn(npc);
-                    if (this.spawnedNpc === npc) this.spawnedNpc = null;
+                    if (this.spawnedNpc === npc) {
+                        this.spawnedNpc = null;
+                        buildAttackControl(null);
+                    }
                 });
-            }
+            },
+            attack: () => {
+                const npc = this.spawnedNpc;
+
+                if (!npc) return;
+
+                const selection: NpcAttackSelection_T = state.selectedAttack === "random" ? "random" : Number(state.selectedAttack);
+
+                npc.attack(state.selectedTarget === "self" ? npc : manRender.player, selection);
+            },
+            stop: () => this.spawnedNpc?.stopAttack()
         };
         const folder = this.gui.addFolder("NPC");
+        let attackControl: dat.GUIController = null;
+
+        function buildAttackControl(npc: BaseActor): void {
+            const options: Record<string, string> = { Random: "random" };
+
+            if (attackControl) folder.remove(attackControl);
+
+            if (npc)
+                npc.getNpcAttacks().forEach((attack, index) => options[attack.label] = String(index));
+
+            state.selectedAttack = "random";
+            attackControl = folder.add(state, "selectedAttack", options).name("NPC attacks");
+        }
 
         folder.add(state, "selector").name("Name / ID");
         folder.add(state, "spawn").name("Spawn");
         folder.add(state, "kill").name("Kill");
+        buildAttackControl(null);
+        folder.add(state, "selectedTarget", { Player: "player", Self: "self" }).name("Attack target").onChange(state.stop);
+        folder.add(state, "attack").name("Attack");
+        folder.add(state, "stop").name("Stop");
         folder.open();
     }
 

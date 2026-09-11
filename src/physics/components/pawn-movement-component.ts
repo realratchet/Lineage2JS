@@ -157,6 +157,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public getCollisionRadius() { return this.collisionRadius; }
     public getCollisionHeight() { return this.collisionHeight; }
+    public getDesiredRotationYaw(): number { return this.desiredRotationYaw; }
     public getCollider(): RAPIER.Collider { return this.collider; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
     public getBaseActor(): ICollidable | null { return this.transformComponent.getBase(); }

@@ -24,6 +24,7 @@ import TransformComponent from "../objects/components/transform-component";
 import HairSimulationComponent from "../objects/components/hair-simulation-component";
 import SkinNotifyComponent from "../objects/components/skin-notify-component";
 import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
+import NpcAttackComponent from "../objects/components/npc-attack-component";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 
 const tmpCameraPosition = new Vector3();
@@ -293,6 +294,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         player.setSwimmingAnimation(findAnimation(animations, declared.swim));
         player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
         player.setMeshes(bodyparts);
+        player.effectSpawnBoneIndex = characterLibrary.effectSpawnBoneIndex;
         player.initAnimations();
     }
 
@@ -393,11 +395,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (!position) actor.position.add(npcSpawnOffset);
 
+        let library;
+
         try {
-            await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null);
+            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null);
         } catch (e) {
             throw new Error(`NPC '${npc.id}' (${npc.name}) failed to load mesh '${npc.mesh}' as '${npc.className}': ${(e as Error).message}`);
         }
+
+        actor.addComponent(new NpcAttackComponent(renderManager, actor.getAnimationNames(), library.npcSkillAttacks));
 
         if (!position) {
             tmpNpcFloorStart.copy(actor.position);

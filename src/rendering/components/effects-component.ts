@@ -68,6 +68,18 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
     protected onScriptNative(call: ScriptNativeCall_T): ComponentEventResult_T<ScriptValue_T> {
         const name = call.name.toLowerCase();
 
+        if (name === "kill") {
+            const context = call.context as any;
+
+            if (!context.isObject3D) throw new Error(`'${context.scriptClassId}' cannot be killed as an emitter.`);
+
+            context.traverse((child: any) => {
+                if (child.particlePool) child.kill();
+            });
+
+            return;
+        }
+
         if (call.index === 278 || name === "spawn") {
             const script = this.getComponent<ScriptComponent<BaseActor>>("script");
             const object = script.createObject(call.args[0] as string);
