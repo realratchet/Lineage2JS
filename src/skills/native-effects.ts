@@ -5,8 +5,11 @@ import eU065A from "./native/e-u065-a";
 import eU066A from "./native/e-u066-a";
 import eU067A from "./native/e-u067-a";
 import eU067Hand from "./native/e-u067-hand";
+import eU082 from "./native/e-u082";
+import eU033 from "./native/e-u033";
 import sU010A from "./native/s-u010-a";
 import sU005 from "./native/s-u005";
+import sU003 from "./native/s-u003";
 import pU004A from "./native/p-u004-a";
 import mU019A from "./native/m-u019-a";
 import mU019B from "./native/m-u019-b";
@@ -16,6 +19,7 @@ import mU013A from "./native/m-u013-a";
 import mU013C from "./native/m-u013-c";
 import mU007A from "./native/m-u007-a";
 import mU007B from "./native/m-u007-b";
+import mU009 from "./native/m-u009";
 import mU033A from "./native/m-u033-a";
 import mU033B from "./native/m-u033-b";
 import mU003 from "./native/m-u003";
@@ -32,13 +36,18 @@ import type { NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
 type NativeSkillEffect_T = {
     phase: NpcSkillEffectPhase_T;
     effectClass: string;
-    host: "caster" | "target";
-    owner?: "target";
+    host: "caster" | "target" | "source";
+    owner?: "target" | "none" | "source";
     attach?: "trail" | "rightHand";
-    bone?: number;
+    bone?: number | string;
+    boneProperty?: string;
+    releaseProjectile?: boolean;
+    damageEffect?: boolean;
+    relativeLocation?: [number, number, number];
+    relativeRotation?: [number, number, number];
     isAbsolute?: boolean;
-    rotation?: "caster" | "desiredCaster" | "targetPosition" | "targetDirection" | "hit";
-    position?: "center" | "lastTarget";
+    rotation?: "caster" | "target" | "desiredCaster" | "targetPosition" | "targetDirection" | "hit";
+    position?: "center" | "lastTarget" | "location";
     initialPosition?: "center";
     radiusOffset?: number;
     heightOffset?: number;
@@ -52,12 +61,18 @@ type NativeSkillEffect_T = {
     delay?: number;
     hitDelay?: number;
     offset?: [number, number, number];
-    pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center", rotation?: "hit", radiusOffset?: number };
+    pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center" | "lastTarget", rotation?: "hit", radiusOffset?: number };
     trailerPrePivot?: "casterMeshOrigin";
     projectile?: { target: "caster" | "target", speed?: number, acceleration?: number, path?: [number, number, number][] };
 };
 
 const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
+    "lineageeffect.e_u033_a": eU033.filter(effect => effect.effectClass === "LineageEffect.e_u033_a"),
+    "lineageeffect.e_u033_b": eU033.filter(effect => effect.effectClass === "LineageEffect.e_u033_b"),
+    "lineageeffect.e_u033_c": eU033.filter(effect => effect.effectClass === "LineageEffect.e_u033_c"),
+    "lineageeffect.e_u082_rainbow": eU082.filter(effect => effect.effectClass === "LineageEffect.e_u082_rainbow"),
+    "lineageeffect.e_u082_core": eU082.filter(effect => effect.effectClass === "LineageEffect.e_u082_core"),
+    "lineageeffect.e_u082_a": eU082.filter(effect => effect.effectClass === "LineageEffect.e_u082_a"),
     "lineageeffect.e_u063_a": eU063A,
     "lineageeffect.e_u064_a": eU064A,
     "lineageeffect.e_u064_cloud": eU064Cloud,
@@ -77,6 +92,8 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u013_c": mU013C,
     "lineageeffect.m_u007_a": mU007A,
     "lineageeffect.m_u007_b": mU007B,
+    "lineageeffect.m_u009_a": mU009.filter(effect => effect.effectClass === "LineageEffect.m_u009_a"),
+    "lineageeffect.m_u009_c": mU009.filter(effect => effect.effectClass === "LineageEffect.m_u009_c"),
     "lineageeffect.m_u033_a": mU033A,
     "lineageeffect.m_u033_b": mU033B,
     "lineageeffect.m_u003_a": mU003.filter(effect => effect.effectClass === "LineageEffect.m_u003_a"),
@@ -108,6 +125,13 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
 };
 
 const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> = {
+    bow: {
+        "lineageeffect.s_u003_a": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_a"),
+        "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
+        "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
+        // Engine.dll Explosion 0x7916c7..0x791858: LastTargetLocation minus the rotated target-radius offset.
+        "lineageeffect.p_u004_a": [{ phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2000000476837158, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true }, damageEffect: true }]
+    },
     siegeHammer: {
         // Engine.dll Shot 0x7a9444..0x7a95c5: caster center + target direction * radius * 2, caster rotation, target owner.
         "lineageeffect.p_u004_a": [{ phase: "shot", effectClass: "LineageEffect.p_u004_a", host: "caster", owner: "target", position: "center", rotation: "caster", radiusOffset: 2, offsetRotation: "targetDirection" }]

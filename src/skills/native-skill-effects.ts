@@ -9,6 +9,7 @@ import type { NativeSkillEffect_T } from "./native-effects";
 import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 import type AnimationComponent from "../objects/components/animation-component";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import type EffectsComponent from "../rendering/components/effects-component";
 
 const tmpRotator = new Rotator();
 const tmpPosition = new Vector3();
@@ -31,7 +32,7 @@ function getPawnMeshHeight(pawn: BaseActor, scaled: boolean = true): number {
 }
 
 function getTargetRotation(caster: BaseActor, target: BaseActor, out: Quaternion): void {
-    if (caster === target) { getPawnRotation(caster, out); return; }
+    if (!target || caster === target) { getPawnRotation(caster, out); return; }
 
     target.getWorldPosition(tmpPosition);
     caster.getWorldPosition(tmpCasterPosition);
@@ -82,7 +83,7 @@ export class NativeSkillEffects {
 
     public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: BaseActor, target: BaseActor, script: ScriptComponent<BaseActor>, shotTime: number, addEffect: (effect: Object3D) => void, source: Object3D = caster): void {
         const effect = script.createObject(info.effectClass) as unknown as Object3D;
-        const host = info.host === "caster" ? caster : target;
+        const host = (info.host === "caster" ? caster : info.host === "source" ? source : target) as BaseActor;
 
         if (!(effect as any).isObject3D) throw new Error(`Skill effect '${info.effectClass}' is not an actor.`);
 
@@ -118,6 +119,7 @@ export class NativeSkillEffects {
 
         if (info.rotation === "hit") tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(effect.quaternion);
         else if (info.rotation === "caster") getPawnRotation(caster, effect.quaternion);
+        else if (info.rotation === "target") getPawnRotation(target, effect.quaternion);
         else if (info.rotation === "desiredCaster") {
             const movement = caster.getComponent<PawnMovementComponent>("pawnMovement");
 
@@ -125,7 +127,7 @@ export class NativeSkillEffects {
         }
         else if (info.rotation === "targetPosition") {
             target.getWorldPosition(tmpPosition);
-            tmpRotator.set(0, Math.atan2(tmpPosition.y, tmpPosition.x) * 32768 / Math.PI, 0).toQuaternion(effect.quaternion);
+            tmpRotator.set(0, Math.trunc(Math.atan2(tmpPosition.y, tmpPosition.x) * 65535 / (2 * Math.PI)), 0).toQuaternion(effect.quaternion);
         } else if (info.rotation === "targetDirection") getTargetRotation(caster, target, effect.quaternion);
 
         if (info.radiusOffset !== undefined) {
@@ -159,7 +161,10 @@ export class NativeSkillEffects {
             const sameRotation = !!(effect as any).scriptProperties.get("bTrailerSameRotation");
 
             effect.quaternion.identity();
-            if (sameRotation) getPawnRotation(host, effect.quaternion);
+            if (sameRotation) {
+                if (host.isActor) getPawnRotation(host, effect.quaternion);
+                else host.getWorldQuaternion(effect.quaternion);
+            }
             host.getWorldPosition(tmpPosition);
             if (info.relativeTrailOffset === undefined) this.addTrailer(effect, host, effect.position.clone().sub(tmpPosition), false, sameRotation);
         }
@@ -186,7 +191,7 @@ export class NativeSkillEffects {
             if (light.position === "center") {
                 host.getWorldPosition(tmpLightPosition);
                 tmpLightPosition.z += host.getCollisionHeight();
-            }
+            } else if (light.position === "lastTarget") tmpLightPosition.fromArray((source as any).scriptProperties.get("LastTargetLocation"));
             if (light.spot) {
                 if (light.rotation === "hit") tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(tmpRotation);
                 else tmpRotation.copy(effect.quaternion);
@@ -202,9 +207,36 @@ export class NativeSkillEffects {
         }
 
         if (info.attach === "rightHand" && !caster.attachObjectToBone(effect, "bip01_r_hand")) throw new Error(`${caster.name} has no right-hand bone.`);
-        if (info.bone !== undefined && !host.attachObjectToBone(effect, info.bone, info.isAbsolute)) throw new Error(`${host.name} has no bone ${info.bone}.`);
+        if (info.boneProperty) {
+            const bone = host.getUnrealScriptProperty(info.boneProperty);
+
+            if (typeof bone !== "string") throw new Error(`${host.name} has invalid bone property '${info.boneProperty}': '${bone}'.`);
+
+            // Engine.dll Init 0x7a1883 and PreShot 0x7a446c ignore AttachToBone's return value.
+            if (!host.attachObjectToBone(effect, bone, info.isAbsolute)) console.warn(`[skill-effects] ${host.name} has no bone '${bone}' from '${info.boneProperty}'; '${info.effectClass}' remains unattached.`);
+        } else if (info.bone !== undefined && !host.attachObjectToBone(effect, info.bone, info.isAbsolute)) throw new Error(`${host.name} has no bone ${info.bone}.`);
+
+        if (info.relativeLocation) {
+            (effect as any).scriptProperties.set("RelativeLocation", info.relativeLocation.slice());
+            effect.position.fromArray(info.relativeLocation);
+        }
+        if (info.relativeRotation) {
+            (effect as any).scriptProperties.set("RelativeRotation", info.relativeRotation.slice());
+            tmpRotator.set(...info.relativeRotation).toQuaternion(effect.quaternion);
+        }
+
+        if (info.damageEffect) {
+            const damage = target.getComponent<EffectsComponent>("effects").createDamageEffect();
+
+            // Engine.dll 0x791861..0x7918c0: hit-pawn DamageEffect shares the impact location and HitRot.
+            if (damage) {
+                damage.position.copy(effect.position);
+                damage.quaternion.copy(effect.quaternion);
+                addEffect(damage);
+            }
+        }
     }
 }
 
 export default NativeSkillEffects;
-export { getPawnMeshHeight };
+export { getPawnMeshHeight, getTargetRotation };
