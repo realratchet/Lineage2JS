@@ -44,7 +44,7 @@ export type NativeSkillEffect_T = {
     bone?: number | string;
     boneFallback?: number;
     positionBone?: string;
-    locList?: { delay: number, interval: number };
+    locList?: { delay: number, interval: number, random?: { count: number, range: number } }; // rand isprovided by server
     location?: [number, number, number];
     boneProperty?: string;
     releaseProjectile?: boolean;

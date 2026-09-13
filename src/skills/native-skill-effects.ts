@@ -83,8 +83,19 @@ export class NativeSkillEffects {
 
     public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: BaseActor, target: BaseActor, script: ScriptComponent<BaseActor>, shotTime: number, addEffect: (effect: Object3D) => void, source: Object3D = caster, locList: readonly Vector3Arr[] = []): void {
         if (info.locList) {
-            for (let i = 0; i < locList.length; i++)
-                this.spawn({ ...info, locList: undefined, location: locList[i], delay: shotTime + info.locList.delay + i * info.locList.interval }, skill, caster, target, script, shotTime, addEffect, source);
+            let locations = locList;
+
+            if (locations.length === 0 && info.locList.random) {
+                caster.getWorldPosition(tmpPosition);
+                locations = Array.from({ length: info.locList.random.count }, () => [
+                    tmpPosition.x + (Math.random() * 2 - 1) * info.locList.random.range,
+                    tmpPosition.y + (Math.random() * 2 - 1) * info.locList.random.range,
+                    tmpPosition.z
+                ] as Vector3Arr);
+            }
+
+            for (let i = 0; i < locations.length; i++)
+                this.spawn({ ...info, locList: undefined, location: locations[i], delay: shotTime + info.locList.delay + i * info.locList.interval }, skill, caster, target, script, shotTime, addEffect, source);
             return;
         }
 
