@@ -44,7 +44,7 @@ export type NativeSkillEffect_T = {
     bone?: number | string;
     boneFallback?: number;
     positionBone?: string;
-    locList?: { delay: number, interval: number, random?: { count: number, range: number } }; // rand isprovided by server
+    locList?: { delay: number, interval: number, random?: { count: number, range: number } }; // Server populates LocList.
     location?: [number, number, number];
     boneProperty?: string;
     releaseProjectile?: boolean;
@@ -141,7 +141,7 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
         "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
         "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
         // Engine.dll Explosion 0x7916c7..0x791858: LastTargetLocation minus the rotated target-radius offset.
-        "lineageeffect.p_u004_a": [{ phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2000000476837158, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true }, damageEffect: true }]
+        "lineageeffect.p_u004_a": [{ phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true }, damageEffect: true }]
     },
     siegeHammer: {
         // Engine.dll Shot 0x7a9444..0x7a95c5: caster center + target direction * radius * 2, caster rotation, target owner.
