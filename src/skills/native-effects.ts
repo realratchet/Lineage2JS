@@ -31,15 +31,21 @@ import mU022 from "./native/m-u022";
 import mU021 from "./native/m-u021";
 import mU024 from "./native/m-u024";
 import mU026 from "./native/m-u026";
+import eU802 from "./native/e-u802";
+import eU524 from "./native/e-u524";
 import type { NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
 
-type NativeSkillEffect_T = {
+export type NativeSkillEffect_T = {
     phase: NpcSkillEffectPhase_T;
     effectClass: string;
     host: "caster" | "target" | "source";
     owner?: "target" | "none" | "source";
     attach?: "trail" | "rightHand";
     bone?: number | string;
+    boneFallback?: number;
+    positionBone?: string;
+    locList?: { delay: number, interval: number };
+    location?: [number, number, number];
     boneProperty?: string;
     releaseProjectile?: boolean;
     damageEffect?: boolean;
@@ -56,6 +62,7 @@ type NativeSkillEffect_T = {
     lifeSpan?: "shotTime";
     physics?: "none";
     useSkillSpeed?: boolean;
+    speedRate?: number;
     adjustParticleLife?: boolean | "shotTime";
     scale?: "casterRadius" | "cancelCasterRadius";
     delay?: number;
@@ -67,6 +74,10 @@ type NativeSkillEffect_T = {
 };
 
 const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
+    "lineageeffect.e_u524_meteor": eU524.filter(effect => effect.effectClass === "LineageEffect.e_u524_meteor"),
+    "lineageeffect.e_u524_a": eU524.filter(effect => effect.effectClass === "LineageEffect.e_u524_a"),
+    "lineageeffect.e_u802_fallback": eU802.filter(effect => effect.effectClass === "LineageEffect.e_u802_fallback"),
+    "lineageeffect.e_u802_refract": eU802.filter(effect => effect.effectClass === "LineageEffect.e_u802_refract"),
     "lineageeffect.e_u033_a": eU033.filter(effect => effect.effectClass === "LineageEffect.e_u033_a"),
     "lineageeffect.e_u033_b": eU033.filter(effect => effect.effectClass === "LineageEffect.e_u033_b"),
     "lineageeffect.e_u033_c": eU033.filter(effect => effect.effectClass === "LineageEffect.e_u033_c"),
@@ -161,4 +172,3 @@ function getNativeEffect(name: string, group?: string): NativeSkillEffect_T[] {
 }
 
 export default getNativeEffect;
-export { type NativeSkillEffect_T };

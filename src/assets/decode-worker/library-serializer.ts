@@ -1,5 +1,5 @@
 const MAGIC = 0x4c324443; // "L2DC"
-const FORMAT_VERSION = 2;
+const FORMAT_VERSION = 3;
 const HEADER_SIZE = 13;
 const CHUNK_ENTRY_SIZE = 8;
 const ARRAY_BUFFER_KIND = 0xff;

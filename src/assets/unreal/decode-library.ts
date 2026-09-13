@@ -141,8 +141,11 @@ export class DecodeLibrary {
     public readonly scriptStates: Record<string, IScriptStateDecodeInfo> = {};
     public readonly effectTemplates: Record<string, IBaseObjectDecodeInfo> = {};
     public readonly actorTemplates: Record<string, ISkinnedMeshObjectDecodeInfo> = {};
+    public readonly scriptMeshes: Record<string, ISkinnedMeshObjectDecodeInfo> = {};
+    public readonly scriptMaterials: Record<string, string> = {};
     public readonly npcSkillAttacks: NpcSkillAttack_T[] = [];
     public effectSpawnBoneIndex: number = null;
+    public damageEffect: string = null;
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public isSkyLevel = false;
     public readonly skyLevel: {

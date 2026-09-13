@@ -31,6 +31,9 @@ import type InputManager from "../game/input-manager";
 import type WaterEffectsComponent from "../physics/components/water-effects-component";
 import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
+import type ActorMeshComponent from "./components/actor-mesh-component";
+import type { ScriptComponent } from "../game/script-component";
+import type ActorOwnershipComponent from "../objects/components/actor-ownership-component";
 import NPawnLightComponent from "./components/pawn-light-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
@@ -238,6 +241,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
+    protected readonly actorMeshes = new Set<ActorMeshComponent>();
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
@@ -944,7 +948,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
-    public addTransientEffect(effect: Object3D, owner: BaseActor = null): void {
+    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null): void {
         if (!(effect as any).isGameObject) throw new Error(`Transient effect '${effect.name}' is not a game object.`);
 
         const object = effect as Object3D & IObject;
@@ -955,16 +959,25 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.physicsManager.registerPhysicsComponent(lifetime);
         this.physicsManager.registerSimulationObjects(effect);
 
-        if (owner) owner.gainScriptChild(effect);
+        if (owner) owner.getComponent<ActorOwnershipComponent>("actorOwnership").gainScriptChild(effect);
+        const script = object.findComponent<ScriptComponent>("script");
+
+        if (script) script.beginPlay();
         this.needsUpdate = true;
     }
 
     public removeTransientEffect(effect: Object3D): void {
         const base = (effect as any).scriptBase as BaseActor;
-        const owner = (effect as any).scriptOwner as BaseActor;
+        const owner = (effect as any).scriptOwner as Object3D & IObject;
 
         if (base) base.detachBoneObject(effect);
-        if (owner) owner.loseScriptChild(effect);
+        if (owner) owner.getComponent<ActorOwnershipComponent>("actorOwnership").loseScriptChild(effect);
+
+        const ownership = (effect as Object3D & IObject).findComponent<ActorOwnershipComponent>("actorOwnership");
+
+        // Engine.dll ULevel::DestroyActor 0x859709..0x859734: SetOwner(NULL) on surviving children.
+        if (ownership)
+            for (const child of ownership.getScriptChildren()) ownership.loseScriptChild(child);
 
         this.physicsManager.unregisterSimulationObjects(effect);
         effect.removeFromParent();
@@ -1019,6 +1032,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
     public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
+    public registerActorMesh(component: ActorMeshComponent): void {
+        this.actorMeshes.add(component);
+        this.invalidatePawnLighting(component.getParent());
+    }
+    public unregisterActorMesh(component: ActorMeshComponent): void { this.actorMeshes.delete(component); }
     public registerHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.add(component); }
     public unregisterHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.delete(component); }
 
@@ -1072,6 +1090,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updatePawnShadow();
 
         for (const component of this.pawnRenderables)
+            this.updateActorLighting(component.getParent(), sunAmbient);
+
+        for (const component of this.actorMeshes)
             this.updateActorLighting(component.getParent(), sunAmbient);
     }
 
@@ -2147,6 +2168,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     // polls COMPLETION_STATUS_KHR instead of gl.getProgramInfoLog directly - see checkShaderErrors above
     protected processShaderDiagnostics() {
+        const gl = this.renderer.getContext() as WebGL2RenderingContext;
+
         if (this.parallelShaderCompileExt === undefined)
             this.parallelShaderCompileExt = this.renderer.extensions.get("KHR_parallel_shader_compile") ?? null;
 
@@ -2155,14 +2178,25 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             this.seenPrograms.add(program);
             this.pendingShaderChecks.push(program);
+
+            const destroy = program.destroy;
+
+            program.destroy = () => {
+                const index = this.pendingShaderChecks.indexOf(program);
+
+                // Three's WebGLProgram.destroy deletes the handle needed by deferred diagnostics.
+                if (index >= 0) {
+                    this.pendingShaderChecks.splice(index, 1);
+                    reportShaderErrors(gl, program);
+                }
+                destroy.call(program);
+            };
         }
 
         if (this.pendingShaderChecks.length === 0) return;
 
         const ext = this.parallelShaderCompileExt;
         if (!ext) return; // no non-blocking way to know when it's safe to check - leave queued
-
-        const gl = this.renderer.getContext() as WebGL2RenderingContext;
 
         for (let i = this.pendingShaderChecks.length - 1; i >= 0; i--) {
             const program = this.pendingShaderChecks[i];

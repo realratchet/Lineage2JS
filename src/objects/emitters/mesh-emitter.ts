@@ -14,6 +14,7 @@ export class MeshEmitter extends BaseEmitter {
     }
 
     protected initSettings(config: MeshEmitterConfig_T): void {
+        (this as any).isMeshEmitter = true;
         this.geometry = config.geometry;
         this.materials = config.materials;
 

@@ -3,6 +3,10 @@ import type { NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
 type NativeSkillBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, pending?: string };
 
 const nativeSkillBindings = new Map<string, NativeSkillBinding_T>([
+    // Engine.dll OnReceiveMagicSkillUse 0x75086c; Init 0x7a16f9; Shot 0x7b0d96.
+    ["balakas meteor storm", { effects: ["LineageEffect.e_u524_meteor", "LineageEffect.e_u524_a"], soundPhases: ["casting", "shot"], pending: "server LocLIst inputs and full retail visual/timing verification" }],
+    // Engine.dll Init 0x79e8b8 -> 0x7a1bb6; Shot 0x7b0b7e..0x7b0e33.
+    ["s_balakas_fear", { effects: ["LineageEffect.e_u802_fallback", "LineageEffect.e_u802_refract"], soundPhases: ["casting", "shot"], pending: "retail visual/timing and missing-Dummy05 branch verification" }],
     // Engine.dll SkillEffectShot 0x7ab397; Init exit 0x79e8b8.
     ["s_baium_normal attack", { effects: ["LineageEffect.e_u063_a"], soundPhases: ["casting", "shot"] }],
     // Engine.dll SkillEffectInit 0x79e975; Shot 0x7b0d8e.
@@ -14,6 +18,14 @@ const nativeSkillBindings = new Map<string, NativeSkillBinding_T>([
     // Engine.dll SkillEffectShot 0x7abbb4 / 0x7abd11.
     ["s_group_hold", { effects: ["LineageEffect.e_u067_hand", "LineageEffect.e_u067_a"], soundPhases: ["shot"] }]
 ]);
+
+// Engine.dll Init 0x79c74b; Shot 0x7a9104; Explosion 0x78f4aa; PreShot 0x7a3de7.
+for (const name of ["s_mech_canon", "s_mech_canon8", "s_mech_canon9", "s_mech_canon10", "s_mech_canon11", "s_mech_canon12"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u033_a", "LineageEffect.e_u033_b", "LineageEffect.e_u033_c"], soundPhases: ["shot", "explosion"], pending: "retail visual/timing, no-hit and ownerless impact verification" });
+
+// Engine.dll Init 0x7a17a8, PreShot 0x7a43c0, Shot 0x7afa26, Explosion 0x7916c7.
+for (const name of ["s_npc_bow_attack", "s_npc_bow_attack4", "s_npc_bow_attack6", "s_npc_bow_attack8", "s_npc_bow_attack9"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.s_u003_a", "LineageEffect.s_u003_d", "LineageEffect.s_u003_b", "LineageEffect.p_u004_a"], effectGroup: "bow", soundPhases: ["casting", "shot", "explosion"], pending: "full retail visual/timing verification" });
 
 // Engine.dll Init 0x79e66c -> 0x7a1220; Shot 0x7a90f6 -> 0x7ae0ea.
 for (const name of ["s_npc_thunder_storm", "s_npc_thunder_storm6", "s_npc_thunder_storm7", "s_npc_thunder_storm8", "s_npc_thunder_storm9", "s_npc_stun_attack", "s_npc_stun_attack6", "s_npc_stun_attack7", "s_npc_stun_attack8", "s_npc_stun_attack9", "s_npc_shield_stun"])
@@ -42,6 +54,13 @@ for (const name of ["s_npc_sleep", "s_npc_sleep3", "s_npc_sleep4", "s_npc_sleep5
 // Engine.dll Init 0x79fd84; Shot 0x7af786 -> 0x7af84c -> 0x7ac0c6.
 for (const name of ["s_npc_hold", "s_npc_hold5", "s_npc_hold6", "s_npc_hold7", "s_range_hold_boss_a_", "s_range_hold_boss_a_2", "s_range_hold_boss_a_3", "s_range_hold_boss_a_4", "s_range_hold_boss_a_5", "s_range_hold_boss_a_6", "s_range_hold_boss_a_7", "s_range_hold_boss_a_9", "s_range_hold_boss_a_10"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.m_u013_a", "LineageEffect.m_u013_c"], soundPhases: ["casting", "shot"] });
+
+// Engine.dll Init selector 0x7a20d1 -> 0x79ed7e; Shot slot 0x7b13c8 -> 0x7ac6ac.
+for (const name of ["s_npc_shackle", "s_npc_shackle5"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.m_u009_a", "LineageEffect.m_u009_c"], soundPhases: ["casting", "shot"], pending: "retail visual/timing, multi-target and individual NPC verification" });
+
+// Engine.dll Init 0x7a0dcf; Shot selector 0x7b1659 -> 0x7ac923; PreShot 0x7a43ac returns.
+nativeSkillBindings.set("s_holy_light_burst_boss_a", { effects: ["LineageEffect.e_u082_rainbow", "LineageEffect.e_u082_core", "LineageEffect.e_u082_a"], soundPhases: ["casting", "shot"], pending: "retail visual/timing and named-bone attachment verification" });
 
 // Engine.dll Init selectors 0x7a2221/0x7a2231 and Shot selectors 0x7b15d9/0x7b15e9 share Hold.
 for (const name of ["s_self_range_hold_boss_a_", "s_self_range_hold_boss_a_3", "s_self_range_hold_boss_a_4", "s_hold_boss_a_", "s_hold_boss_a_3", "s_hold_boss_a_6", "s_hold_boss_a_8"])
@@ -88,8 +107,8 @@ for (const name of ["s_mega_storm_strike", "s_summon_mega_storm_strike8", "s_sum
 // Engine.dll Init 0x79c74b; Shot 0x7a9288..0x7a95dd; PreShot 0x7a3de7.
 nativeSkillBindings.set("s_siege_hammer", { effects: ["LineageEffect.p_u004_a"], effectGroup: "siegeHammer", soundPhases: [], pending: "owner-conditioned native view shake, retail visual/timing and individual NPC verification" });
 
-// Engine.dll Init 0x79ff2a; Shot 0x7ada66 / 0x7adb2c; PreShot 0x7a459a -> 0x7a3de7.
-for (const name of ["s_self_haste", "s_self_haste2"])
+// Engine.dll Init 0x79ff2a; Shot 0x7ada66 / 0x7adb2c; PreShot 0x7a40b9 / 0x7a459a -> 0x7a3de7.
+for (const name of ["s_self_haste", "s_self_haste2", "s_clan_might", "s_clan_might3"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.m_u004_a", "LineageEffect.m_u004_b"], soundPhases: ["casting", "shot"], pending: "retail visual/timing, multi-target and individual NPC verification" });
 
 // Engine.dll Init 0x79e67a; Shot 0x7a95fa; PreShot 0x7a40b9 and Explosion 0x78f3f8 return.
@@ -122,6 +141,10 @@ for (const name of ["s_npc_life_chant", "s_npc_life_chant6"])
 // Engine.dll Init 0x7a1309, Shot 0x7af772, PreShot 0x7a43ac and Explosion 0x7916c2 reach default returns.
 for (const name of ["s_npc_hold_strike3", "s_npc_hold_strike4", "s_npc_hold_strike5", "s_npc_hold_strike6", "s_npc_hold_strike7", "s_npc_hold_strike8", "s_npc_hold_strike9"])
     nativeSkillBindings.set(name, { effects: [], soundPhases: [], pending: "native phases have no particles or sound; hit/status reactions and full retail parity unverified" });
+
+// Engine.dll Init selectors 0x7a2304..0x7a2306 -> 0x79c74b; PreShot 0x7a43ac, Shot 0x7b1680 and Explosion 0x7916c2 reach empty returns.
+for (const name of ["balakas lava skin", "balakas trample"])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], pending: "native phases have no particles or sound; hit/buff/status visuals and full retail parity unverified" });
 
 // Engine.dll SpawnNTransientEffect 0x79a59f -> 0x79a7e1 skips success and sound; NActionStop 0x750773.
 for (const name of ["balakas tail stomp", "s_quest_boss_big_body1", "s_quest_boss_dispel_big_body1"])

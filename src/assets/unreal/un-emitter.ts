@@ -1,7 +1,7 @@
 import { FObjectArray } from "@l2js/core";
 import UObject from "./un-object";
 import UParticleEmitter, { type EmitterConfig_T } from "./emitters/un-particle-emitter";
-import UAActor, { type IRotatingDecodeInfo } from "./un-aactor";
+import UAActor, { EDrawType_T, type IRotatingDecodeInfo } from "./un-aactor";
 import FBox from "./un-box";
 import FVector from "./un-vector";
 import type { USound } from "./un-sound";
@@ -11,7 +11,7 @@ import type { Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
 export type IEmitterSpawnSoundDecodeInfo = { soundName: string; volume: number; radius: number; };
-export type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & { type: "Emitter"; speedRate: number; spawnSound?: IEmitterSpawnSoundDecodeInfo; rotating?: IRotatingDecodeInfo; };
+export type IEmitterActorDecodeInfo = IBaseObjectDecodeInfo & { type: "Emitter"; speedRate: number; drawType?: "mesh"; spawnSound?: IEmitterSpawnSoundDecodeInfo; rotating?: IRotatingDecodeInfo; };
 export type EmitterDecodeResult_T = { object: IEmitterActorDecodeInfo, leafIndices: number[], zoneUuid: string };
 
 export abstract class UEmitter extends UAActor {
@@ -145,6 +145,8 @@ export abstract class UEmitter extends UAActor {
     protected getEmitterDecodeInfos(builder: DecodeLibraryBuilder): EmitterConfig_T[] {
         const emittersInfo: EmitterConfig_T[] = [];
 
+        if (this.emitters === null) return emittersInfo;
+
         this.emitters.loadSelf().forEach(emitter => {
             if (!emitter) return;
 
@@ -200,6 +202,7 @@ export abstract class UEmitter extends UAActor {
         const spawnSound = this.getSpawnSoundDecodeInfo(builder);
         const rotating = this.getRotatingDecodeInfo();
 
+        if (this.drawType === EDrawType_T.DT_Mesh) info.drawType = "mesh";
         if (spawnSound) info.spawnSound = spawnSound;
         if (rotating) info.rotating = rotating;
 

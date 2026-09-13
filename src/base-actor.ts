@@ -9,6 +9,7 @@ import { ColliderComponent } from "./physics/components/physics-component";
 import PawnMovementComponent, { PawnMovementState_T } from "./physics/components/pawn-movement-component";
 import AnimationComponent from "./objects/components/animation-component";
 import TransformComponent from "./objects/components/transform-component";
+import ActorOwnershipComponent from "./objects/components/actor-ownership-component";
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
 import NpcAttackComponent, { type NpcAttackSelection_T, type NpcAttack_T } from "./objects/components/npc-attack-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
@@ -35,6 +36,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
         this.renderManager = renderManager;
         this.up.copy(tmpUp);
+        this.addComponent(new ActorOwnershipComponent());
         this.movementComponent = this.addComponent(new PawnMovementComponent(renderManager));
         this.addComponent(new ColliderComponent());
     }
@@ -157,9 +159,9 @@ export class BaseActor extends GameObject implements ICollidable {
 
     public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number, absolute: boolean = false): boolean { return this.getComponent<TransformComponent>("transform").attachObjectToBone(object, boneNameOrIndex, absolute); }
     public detachBoneObject(object: Object3D): boolean { return this.getComponent<TransformComponent>("transform").detachBoneObject(object); }
-    public gainScriptChild(object: Object3D): void { this.getComponent<TransformComponent>("transform").gainScriptChild(object); }
-    public loseScriptChild(object: Object3D): void { this.getComponent<TransformComponent>("transform").loseScriptChild(object); }
-    public getScriptChildren(): ReadonlySet<Object3D> { return this.getComponent<TransformComponent>("transform").getScriptChildren(); }
+    public gainScriptChild(object: Object3D): void { this.getComponent<ActorOwnershipComponent>("actorOwnership").gainScriptChild(object); }
+    public loseScriptChild(object: Object3D): void { this.getComponent<ActorOwnershipComponent>("actorOwnership").loseScriptChild(object); }
+    public getScriptChildren(): ReadonlySet<Object3D> { return this.getComponent<ActorOwnershipComponent>("actorOwnership").getScriptChildren(); }
 
     public getRenderSphere(): Sphere { return this.getComponent<PawnRenderableComponent>("pawnRenderable").getRenderSphere(); }
 
@@ -195,7 +197,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public playDeathAnimation(onFinished: (actor: BaseActor) => void): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").playDeath(onFinished); }
 
     public getNpcAttacks(): readonly NpcAttack_T[] { return this.getComponent<NpcAttackComponent>("npcAttack").getAttacks(); }
-    public attack(target: BaseActor, selection: NpcAttackSelection_T): void { this.getComponent<NpcAttackComponent>("npcAttack").attack(target, selection); }
+    public attack(target: BaseActor, selection: NpcAttackSelection_T, locList: readonly Vector3Arr[] = []): void { this.getComponent<NpcAttackComponent>("npcAttack").attack(target, selection, locList); }
     public stopAttack(): void { this.getComponent<NpcAttackComponent>("npcAttack").stop(); }
 
     public isPlayingOneShotAnimation(animationName: string): boolean { return this.animationComponent.isPlayingOneShot(animationName); }

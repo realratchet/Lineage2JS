@@ -20,7 +20,10 @@ import BSPCollider from "../../objects/bsp-collider";
 import LitSkinnedMesh from "../../objects/lit-skinned-mesh";
 import UnScriptVM from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
-import { GameObject } from "../../game/components";
+import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../../game/components";
+import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
+import ActorOwnershipComponent from "../../objects/components/actor-ownership-component";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArrayAttribute, IBaseObjectDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
@@ -118,6 +121,8 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
 type EmitterSpawnSound_T = IEmitterSpawnSoundDecodeInfo & { dataUri: string };
 
 class EmitterActor extends GameObject {
+    public scriptClassId: string;
+    public scriptProperties: Map<string, ScriptValue_T>;
     public spawnSound: EmitterSpawnSound_T = null;
     public speedRate: number = 1;
     public readonly emitterRotation = new Quaternion();
@@ -128,6 +133,22 @@ class EmitterActor extends GameObject {
     protected rateYaw: number = 0;
     protected rateRoll: number = 0;
     protected rotationTime: number;
+
+    public constructor() {
+        super();
+
+        this.addComponent(new ActorOwnershipComponent());
+    }
+
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        const result = this.dispatchComponentEvent<ScriptValue_T>(SCRIPT_NATIVE_EVENT, call);
+
+        if (result !== COMPONENT_EVENT_NOT_HANDLED) return result;
+        // Preserve UnScriptVM.invokeNative's outer-self dispatch for actor contexts.
+        if (call.self !== this && call.self.callUnrealNative) return call.self.callUnrealNative(call);
+
+        throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${call.context.scriptClassId}'.`);
+    }
 
     public getSpeedRate(): number {
         const speedRate = (this as any).scriptProperties?.get("SpeedRate") ?? this.speedRate;
@@ -140,7 +161,7 @@ class EmitterActor extends GameObject {
     public adjustParticleLife(lifetime: number): void {
         if (!Number.isFinite(lifetime) || lifetime < 0) throw new Error(`Invalid emitter lifetime '${lifetime}'.`);
 
-        const emitters = this.children as BaseEmitter[];
+        const emitters = this.scriptProperties.get("Emitters") as unknown as BaseEmitter[];
         let maxLifetime = 0;
 
         for (const emitter of emitters) maxLifetime = Math.max(maxLifetime, emitter.getForcedLifeTime());
@@ -946,11 +967,7 @@ function decodeEmitterConfig(info: IEmitterDecodeInfo) {
         particlesPerSecond: info.particlesPerSecond,
         blendingMode: info.blendingMode,
         opacity: info.opacity,
-        changesOverLifetime: {
-            scale: info.changesOverLifetime.scale,
-            velocity: (info.changesOverLifetime as any).velocity ?? null,
-            color: (info.changesOverLifetime as any).color ?? null
-        },
+        changesOverLifetime: info.changesOverLifetime,
         fadeIn: info.fadeIn,
         fadeOut: info.fadeOut,
         colorMultiplierRange: info.colorMultiplierRange,
@@ -1012,7 +1029,7 @@ function decodeVertMeshEmitter(library: DecodeLibrary, info: any) {
 }
 
 function decodeSpriteEmitter(library: DecodeLibrary, info: ISpriteEmitterDecodeInfo) {
-    const material = decodeMaterial(library, {
+    const material = info.texture === null ? null : decodeMaterial(library, {
         materialType: "particle",
         material: info.texture,
         opacity: info.opacity,

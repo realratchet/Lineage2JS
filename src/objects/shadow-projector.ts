@@ -39,6 +39,7 @@ const tmpLightPos = new Vector3();
 const tmpClearColor = new Color();
 const arrSwappedObjects: Mesh[] = [];
 const arrSwappedMaterials: (Material | Material[])[] = [];
+const arrHiddenAttachments: Object3D[] = [];
 const arrCasting: Object3D[] = [];
 const arrTraverse: Object3D[] = [];
 
@@ -125,6 +126,7 @@ export class ShadowProjector {
 
         arrSwappedObjects.length = 0;
         arrSwappedMaterials.length = 0;
+        arrHiddenAttachments.length = 0;
 
         for (const caster of arrCasting)
             swapMaterials(caster, this.silhouette);
@@ -135,22 +137,27 @@ export class ShadowProjector {
 
         renderer.getClearColor(tmpClearColor);
 
-        renderer.setRenderTarget(this.target);
-        renderer.setClearColor(0x000000, 0);
-        renderer.clear(true, true, false);
-        renderer.autoClear = false;
+        try {
+            renderer.setRenderTarget(this.target);
+            renderer.setClearColor(0x000000, 0);
+            renderer.clear(true, true, false);
+            renderer.autoClear = false;
 
-        for (const caster of arrCasting) renderer.render(caster, this.camera);
+            for (const caster of arrCasting) renderer.render(caster, this.camera);
 
-        renderer.autoClear = prevAutoClear;
+            renderer.autoClear = prevAutoClear;
 
-        if (SHADOW_BLUR_PASSES > 0) this.blur(renderer);
+            if (SHADOW_BLUR_PASSES > 0) this.blur(renderer);
+        } finally {
+            renderer.autoClear = prevAutoClear;
+            renderer.setRenderTarget(prevTarget);
+            renderer.setClearColor(tmpClearColor, prevClearAlpha);
 
-        renderer.setRenderTarget(prevTarget);
-        renderer.setClearColor(tmpClearColor, prevClearAlpha);
+            for (let i = 0, len = arrSwappedObjects.length; i < len; i++)
+                arrSwappedObjects[i].material = arrSwappedMaterials[i];
 
-        for (let i = 0, len = arrSwappedObjects.length; i < len; i++)
-            arrSwappedObjects[i].material = arrSwappedMaterials[i];
+            for (const attachment of arrHiddenAttachments) attachment.visible = true;
+        }
 
         (GLOBAL_UNIFORMS.shadowMatrix.value as Matrix4)
             .copy(matBias)
@@ -176,6 +183,15 @@ function swapMaterials(root: Object3D, material: Material): void {
     while (arrTraverse.length > 0) {
         const object = arrTraverse.pop()!;
         const mesh = object as Mesh;
+
+        if (!object.visible) continue;
+
+        // FShadowSceneNode::FilterAttachment 0x93dad0 tests bActorShadows, not the owner's flag.
+        if (object !== root && (object as any).scriptProperties?.get("bActorShadows") === false) {
+            arrHiddenAttachments.push(object);
+            object.visible = false;
+            continue;
+        }
 
         for (const child of object.children) arrTraverse.push(child);
 

@@ -26,6 +26,8 @@ import SkinNotifyComponent from "../objects/components/skin-notify-component";
 import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import NpcAttackComponent from "../objects/components/npc-attack-component";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import ActorMeshComponent from "../rendering/components/actor-mesh-component";
+import { ScriptComponent } from "../game/script-component";
 
 const tmpCameraPosition = new Vector3();
 const tmpAttachMatrix = new Matrix4();
@@ -133,7 +135,9 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
     const sound = actor.findComponent<SoundComponent>("sound") || actor.addComponent(new SoundComponent(renderManager.audioManager));
 
     sound.setLibrary(library);
-    if (!actor.findComponent("effects")) actor.addComponent(new EffectsComponent(renderManager));
+    const effects = actor.findComponent<EffectsComponent>("effects") || actor.addComponent(new EffectsComponent(renderManager));
+
+    effects.setLibrary(library);
     if (!actor.findComponent("animation")) actor.addComponent(new AnimationComponent(renderManager));
     if (!actor.findComponent("hairSimulation")) actor.addComponent(new HairSimulationComponent(renderManager));
     if (!actor.findComponent("skinNotify")) actor.addComponent(new SkinNotifyComponent(renderManager));
@@ -341,31 +345,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             applyScriptLocalization(library, classId, localization);
 
-            actor.setScriptRuntime(new UnScriptVM(library), classId, effectClassId => {
-                const info = library.effectTemplates[effectClassId] || library.effectTemplates[effectClassId.toLowerCase()];
+            const vm = new UnScriptVM(library);
 
-                if (!info) {
-                    const actorInfo = library.actorTemplates[effectClassId] || library.actorTemplates[effectClassId.toLowerCase()];
-
-                    if (!actorInfo) throw new Error(`Script object template '${effectClassId}' is not in '${library.name}'.`);
-
-                    const object = decodeObject3D(library, actorInfo) as any;
-
-                    object.scriptClassId = actorInfo.scriptClassId;
-                    return object;
-                }
-
-                const effect = decodeObject3D(library, info) as any;
-
-                effect.scriptProperties.set("Emitters", effect.children);
-
-                effect.children.forEach((emitter: any) => {
-                    emitter.scriptClassId = "Engine.ParticleEmitter";
-                    emitter.isActorAttachedEmitter = true;
-                });
-
-                return effect;
-            });
+            actor.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, library, effectClassId, vm));
             actor.setUnrealScriptProperty("bActorShadows", false); // RenderManager owns the shared pawn projector pass.
 
             if (npcId !== null) actor.setDeathAnimationFromScript();
@@ -380,6 +362,37 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
     protected async getScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
         return this.decodeWorker.getScriptLocalization(scriptClassPath);
+    }
+
+    public createScriptObject(renderManager: RenderManager, library: DecodeLibrary, classId: string, vm: UnScriptVM = new UnScriptVM(library)): any {
+        const info = library.effectTemplates[classId] || library.effectTemplates[classId.toLowerCase()];
+
+        if (!info) {
+            const actorInfo = library.actorTemplates[classId] || library.actorTemplates[classId.toLowerCase()];
+
+            if (!actorInfo) throw new Error(`Script object template '${classId}' is not in '${library.name}'.`);
+
+            const object = decodeObject3D(library, actorInfo) as any;
+
+            object.scriptClassId = actorInfo.scriptClassId;
+            return object;
+        }
+
+        const effect = decodeObject3D(library, info) as any;
+
+        effect.scriptProperties.set("Emitters", effect.children.slice());
+
+        if ((info as any).drawType === "mesh") {
+            effect.addComponent(new ScriptComponent(vm, classId => this.createScriptObject(renderManager, library, classId, vm), info.scriptClassId));
+            effect.addComponent(new ActorMeshComponent(library, renderManager));
+        }
+
+        effect.children.forEach((emitter: any) => {
+            emitter.scriptClassId = "Engine.ParticleEmitter";
+            emitter.isActorAttachedEmitter = true;
+        });
+
+        return effect;
     }
 
     public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null): Promise<BaseActor> {

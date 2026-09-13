@@ -45,10 +45,13 @@ export class SpriteEmitter extends BaseEmitter {
         // emitter, so neither needs a mesh/draw call per particle. Velocity-driven
         // modes still require a per-particle basis and stay on the legacy path.
         // Animated textures select a frame per particle age.
-        this.isInstancedRendering = this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal");
+        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal");
     }
 
     protected initParticleMesh() {
+        // USpriteEmitter::RenderParticles 0x97bf12: null Texture skips drawing, not simulation.
+        if (this.material === null) return null;
+
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
         const settings = { ...this.material, usesSubdivision };
         const mesh = new ParticleMesh(this.material.type === "sprite" ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings));
@@ -192,7 +195,7 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial | Animate
 }
 
 type SpriteEmitterConfig_T = EmitterConfig_T & {
-    material: ParticleMaterialInitSettings_T;
+    material: ParticleMaterialInitSettings_T | null;
     spriteDirection?: SpriteDirections_T;
     projectionNormal?: [number, number, number];
 };

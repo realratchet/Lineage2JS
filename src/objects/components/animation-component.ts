@@ -6,6 +6,7 @@ import { isScriptSlot, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script
 import type { PawnMovementState_T } from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
+import type LocalSpaceSkeleton from "../local-space-skeleton";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
@@ -172,14 +173,16 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public getBoneWorldPosition(name: string | number, target: Vector3): Vector3 {
+        if (typeof name === "string") name = name.replaceAll(" ", "_").toLowerCase();
+
         for (const mesh of this.meshes) {
-            const skeleton = (mesh as any).skeleton as THREE.Skeleton;
+            const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
 
             if (!skeleton) continue;
 
-            const bone = typeof name === "number" ? skeleton.bones[name] : skeleton.bones.find(bone => bone.name === name);
+            const index = typeof name === "number" ? name : skeleton.bones.findIndex(bone => bone.name === name);
 
-            if (bone) return bone.getWorldPosition(target);
+            if (skeleton.bones[index]) return skeleton.getBoneWorldPosition(index, target);
         }
 
         throw new Error(`${this.getParent().type} has no '${name}' bone.`);

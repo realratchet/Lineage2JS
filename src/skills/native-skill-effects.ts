@@ -24,14 +24,14 @@ export function getPawnRotation(pawn: BaseActor, out: Quaternion): void {
     pawn.getWorldQuaternion(out).multiply(tmpMeshCorrection);
 }
 
-function getPawnMeshHeight(pawn: BaseActor, scaled: boolean = true): number {
+export function getPawnMeshHeight(pawn: BaseActor, scaled: boolean = true): number {
     const mesh = pawn.getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh;
     const drawScale = pawn.scriptClassId ? pawn.getUnrealScriptProperty("DrawScale") as number : 1;
 
     return mesh ? mesh.meshOrigin.z * (scaled ? drawScale : 1) : scaled ? pawn.getCollisionHeight() : 0;
 }
 
-function getTargetRotation(caster: BaseActor, target: BaseActor, out: Quaternion): void {
+export function getTargetRotation(caster: BaseActor, target: BaseActor, out: Quaternion): void {
     if (!target || caster === target) { getPawnRotation(caster, out); return; }
 
     target.getWorldPosition(tmpPosition);
@@ -81,12 +81,19 @@ export class NativeSkillEffects {
         this.trailers.push({ effect, host, sameRotation, relative, offset: offset.clone() });
     }
 
-    public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: BaseActor, target: BaseActor, script: ScriptComponent<BaseActor>, shotTime: number, addEffect: (effect: Object3D) => void, source: Object3D = caster): void {
+    public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: BaseActor, target: BaseActor, script: ScriptComponent<BaseActor>, shotTime: number, addEffect: (effect: Object3D) => void, source: Object3D = caster, locList: readonly Vector3Arr[] = []): void {
+        if (info.locList) {
+            for (let i = 0; i < locList.length; i++)
+                this.spawn({ ...info, locList: undefined, location: locList[i], delay: shotTime + info.locList.delay + i * info.locList.interval }, skill, caster, target, script, shotTime, addEffect, source);
+            return;
+        }
+
         const effect = script.createObject(info.effectClass) as unknown as Object3D;
         const host = (info.host === "caster" ? caster : info.host === "source" ? source : target) as BaseActor;
 
         if (!(effect as any).isObject3D) throw new Error(`Skill effect '${info.effectClass}' is not an actor.`);
 
+        if (info.speedRate !== undefined) (effect as any).scriptProperties.set("SpeedRate", info.speedRate);
         if (info.useSkillSpeed) {
             const speed = caster.getUnrealScriptProperty("SkillSpeedRate") as number;
 
@@ -95,6 +102,8 @@ export class NativeSkillEffects {
         }
 
         host.getWorldPosition(effect.position);
+        if (info.location) effect.position.fromArray(info.location);
+        if (info.positionBone) host.getBoneWorldPosition(info.positionBone, effect.position);
         if (info.attach === "trail" && info.position === undefined) {
             const properties = (effect as any).scriptProperties;
             const pivot = properties.get("TrailerPrePivot");
@@ -214,7 +223,9 @@ export class NativeSkillEffects {
 
             // Engine.dll Init 0x7a1883 and PreShot 0x7a446c ignore AttachToBone's return value.
             if (!host.attachObjectToBone(effect, bone, info.isAbsolute)) console.warn(`[skill-effects] ${host.name} has no bone '${bone}' from '${info.boneProperty}'; '${info.effectClass}' remains unattached.`);
-        } else if (info.bone !== undefined && !host.attachObjectToBone(effect, info.bone, info.isAbsolute)) throw new Error(`${host.name} has no bone ${info.bone}.`);
+        } else if (info.bone !== undefined && !host.attachObjectToBone(effect, info.bone, info.isAbsolute)) {
+            if (info.boneFallback === undefined || !host.attachObjectToBone(effect, info.boneFallback, info.isAbsolute)) throw new Error(`${host.name} has no bone ${info.bone}.`);
+        }
 
         if (info.relativeLocation) {
             (effect as any).scriptProperties.set("RelativeLocation", info.relativeLocation.slice());
@@ -239,4 +250,3 @@ export class NativeSkillEffects {
 }
 
 export default NativeSkillEffects;
-export { getPawnMeshHeight, getTargetRotation };

@@ -2,6 +2,7 @@ import { Box3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
 import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
+import Rotator from "../../utils/rotator";
 import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
@@ -21,6 +22,7 @@ const tmpWorldToLocal = new Matrix4();
 const tmpWorldRotation = new Matrix4();
 const tmpFadeColor = new Vector4();
 const tmpParticleQuaternion = new Quaternion();
+const tmpParticleRotator = new Rotator();
 const tmpBoxExpand = new Vector3();
 const tmpSoundWorldPos = new Vector3();
 const tmpVelocityLossRange: Range3_T = { min: new Vector3(), max: new Vector3() };
@@ -94,6 +96,7 @@ export abstract class BaseEmitter extends Object3D {
     protected lastSpawned: number;
     protected isSpinning: boolean;
     protected isSpriteEmitter: boolean = false;
+    protected isMeshEmitter: boolean = false;
     protected spinParticles: boolean;
     protected secondsBeforeInactive: number;
 
@@ -1466,18 +1469,18 @@ export abstract class BaseEmitter extends Object3D {
             let spin = 0;
 
             if (this.isSpinning || this.spinParticles) {
-                // Mapping from un-particle-emitter.ts: X=Pitch, Y=Yaw, Z=Roll
-                const rotPitch = (settings.startSpin.x + settings.time * settings.spinsPerSecond.x) * (Math.PI * 2 / 65536);
-                const rotYaw = (settings.startSpin.y + settings.time * settings.spinsPerSecond.y) * (Math.PI * 2 / 65536);
-                const rotRoll = (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (Math.PI * 2 / 65536);
+                const yaw = settings.startSpin.x + settings.time * settings.spinsPerSecond.x;
+                const pitch = settings.startSpin.y + settings.time * settings.spinsPerSecond.y;
+                const roll = settings.startSpin.z + settings.time * settings.spinsPerSecond.z;
 
                 if (this.isSpriteEmitter) {
-                    spin = rotRoll;
-                    (p as any).spin = rotRoll;
+                    spin = roll * (Math.PI * 2 / 65536);
+                    (p as any).spin = spin;
+                } else if (this.isMeshEmitter) {
+                    // Engine.dll 0x880c37 / 0x9da422: particle X/Y/Z -> FRotator Yaw/Pitch/Roll.
+                    tmpParticleRotator.set(Math.trunc(pitch), Math.trunc(yaw), Math.trunc(roll)).toQuaternion(p.quaternion);
                 } else {
-                    // Native-axis mapping for Mesh Emitters (Z up, no axis swap):
-                    // X = Roll, Y = Yaw, Z = Pitch
-                    p.rotation.set(rotRoll, rotYaw, rotPitch, "XYZ");
+                    p.rotation.set(roll * (Math.PI * 2 / 65536), pitch * (Math.PI * 2 / 65536), yaw * (Math.PI * 2 / 65536), "XYZ");
                 }
             }
 

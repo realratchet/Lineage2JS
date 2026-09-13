@@ -36,7 +36,7 @@ export type NpcSkillAttack_T = {
 
 export type NpcSkillSound_T = { phase: NpcSkillEffectPhase_T, sound: string, volume: number, radius: number };
 
-export type NpcSkillEffectPhase_T = "casting" | "shot" | "explosion";
+export type NpcSkillEffectPhase_T = "casting" | "preshot" | "shot" | "explosion";
 
 // EAttachMethod ordinals from the leaked EngineClasses.h, converted to member names at the decode boundary
 export type NpcSkillAttachOn_T = "none" | "rightHand" | "leftHand" | "boneSpecified" | "aliasSpecified" | "trail";

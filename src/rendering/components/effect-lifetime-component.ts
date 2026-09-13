@@ -1,4 +1,5 @@
 import { PhysicsComponent } from "../../physics/components/physics-component";
+import { EPhysics_T } from "../../assets/unreal/un-aactor";
 import type { IObject } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
@@ -13,8 +14,9 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
         this.renderManager = renderManager;
     }
 
-    public onPhysicsTick(_currentTime: number, deltaTime: number, _actors: BaseActor[]): boolean {
+    public onPhysicsTick(currentTime: number, deltaTime: number, _actors: BaseActor[]): boolean {
         const effect = this.getParent();
+
         const properties = (effect as any).scriptProperties;
         const lifeSpan = properties?.get("LifeSpan");
         let root: THREE.Object3D = effect;
@@ -30,6 +32,15 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
                 this.renderManager.removeTransientEffect(effect);
                 return true;
             }
+        }
+
+        effect.updateComponents(currentTime, deltaTime * 0.001);
+        if (!effect.parent) return true;
+
+        // Engine.dll physTrailer 0x8ce2f6..0x8ce31c: ownerless trailers destroy themselves only with this flag.
+        if (properties?.get("Physics") === EPhysics_T.PHYS_Trailer && properties.get("bTrailerNoOwnerDestroy") && !(effect as any).scriptOwner) {
+            this.renderManager.removeTransientEffect(effect);
+            return true;
         }
 
         while (root.parent) root = root.parent;

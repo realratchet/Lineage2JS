@@ -796,13 +796,47 @@ export class DecodeEngine {
         library.effectTemplates[path] = info;
         library.effectTemplates[cls.name] = info;
 
-        if (pullScript) {
+        if (pullScript || info.drawType === "mesh") {
             builder.pullScriptClasses([cls]);
 
             for (let current = library.scriptClasses[cls.name]; current; current = library.scriptClasses[current.superClassId])
                 for (const [name, value] of Object.entries(current.defaults))
                     if (!(name in info.scriptProperties)) info.scriptProperties[name] = value;
         } else builder.pullScriptClassFunctions([cls]);
+
+        if (info.drawType === "mesh") await this.pullScriptMeshAssets(library, builder, cls.name, info.scriptProperties);
+    }
+
+    protected async pullScriptMeshAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>): Promise<void> {
+        const meshes = new Set<string>();
+        const materials = new Set<string>();
+
+        if (properties.Mesh && properties.Mesh.toLowerCase() !== "none") meshes.add(properties.Mesh);
+        for (const skin of properties.Skins || [])
+            if (skin && skin.toLowerCase() !== "none") materials.add(skin);
+
+        for (let cls = library.scriptClasses[classId]; cls; cls = library.scriptClasses[cls.superClassId])
+            for (const fn of Object.values(library.scriptFunctions)) {
+                if (fn.owner !== cls.id) continue;
+
+                const entries = fn.program.entries;
+
+                for (let i = 0; i < entries.length - 4; i++) {
+                    if (entries[i].type !== "functionRef" || (entries[i].value as string).toLowerCase() !== "core.object.dynamicloadobject") continue;
+                    if (entries[i + 2].type !== "string" || entries[i + 4].type !== "objectRef") continue;
+
+                    const path = entries[i + 2].value as string;
+                    const type = (entries[i + 4].value as string).toLowerCase();
+
+                    if (type === "engine.skeletalmesh") meshes.add(path);
+                    else if (type === "engine.texture" || type === "engine.material") materials.add(path);
+                }
+            }
+
+        for (const path of meshes)
+            if (!library.scriptMeshes[path.toLowerCase()]) library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), false);
+        for (const path of materials)
+            if (!library.scriptMaterials[path.toLowerCase()]) library.scriptMaterials[path.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
     }
 
     protected async pullWaterVolumeEffects(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
@@ -974,6 +1008,7 @@ export class DecodeEngine {
         copyCharacterMaterial(library, bundle, info.materials);
         copyAnimationSounds(library, bundle, sourceInfo.animationNotifies);
         copyScriptClass(library, bundle, entry.scriptClassId);
+        await this.pullPawnEffects(library, builder, npc.className);
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
         await this.pullNpcSkillAttacks(library, builder, npc.skillAttacks);
@@ -1021,6 +1056,7 @@ export class DecodeEngine {
 
             meshInfo.scriptClassId = cls.name;
             builder.pullScriptClasses([cls]);
+            await this.pullPawnEffects(library, builder, scriptClassPath);
             await this.pullScriptEffectTemplates(library, builder);
             await this.pullScriptActorTemplates(library, builder);
         }
@@ -1086,7 +1122,7 @@ export class DecodeEngine {
         }
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
-        await this.pullCharacterEffectTarget(library, row.face_mesh[0]);
+        await this.pullPawnEffects(library, builder, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
 
         if (library.pawnActors.length > 0) await this.pullAnimationNotifyAssets(builder, library.pawnActors[0].animationNotifies);
 
@@ -1171,24 +1207,29 @@ export class DecodeEngine {
         }
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
-        await this.pullCharacterEffectTarget(library, row.face_mesh[0]);
+        await this.pullPawnEffects(library, new DecodeLibraryBuilder(library, settings), `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
 
         if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
+
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
         return library;
     }
 
-    protected async pullCharacterEffectTarget(library: DecodeLibrary, faceMesh: string): Promise<void> {
-        const className = splitObjectPath(faceMesh)[1].replace(/_m\d+_f$/, "");
-        const [pkg, cls] = await this.fetchScriptClass(`LineageWarrior.${className}`);
+    protected async pullPawnEffects(library: DecodeLibrary, builder: DecodeLibraryBuilder, classPath: string): Promise<void> {
+        const [pkg, cls] = await this.fetchScriptClass(classPath);
         const pawn = pkg.newObject(cls);
         const index = pawn.propertyDict.get("EffectSpawnBoneIdx");
+        const damageEffect = pawn.propertyDict.get("DamageEffect") as UClass;
 
-        if (!Number.isInteger(index)) throw new Error(`Character '${className}' has no effect target bone index.`);
+        if (!Number.isInteger(index)) throw new Error(`Pawn '${classPath}' has no effect target bone index.`);
+        if (damageEffect === undefined) throw new Error(`Pawn '${classPath}' has no DamageEffect default.`);
 
         library.effectSpawnBoneIndex = index;
+        library.damageEffect = damageEffect ? damageEffect.name : null;
+        if (damageEffect) await this.pullEffectTemplate(library, builder, damageEffect.name, true);
     }
 
     protected async applyCharacterHairConfig(infos: ISkinnedMeshObjectDecodeInfo[], meshPaths: string[]): Promise<void> {

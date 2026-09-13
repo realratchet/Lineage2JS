@@ -5,11 +5,12 @@ export const SCHEMA_SKILLSOUNDGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "skill_level" }
 ];
 
-for (const effect of ["spelleffect", "shoteffect", "expeffect"]) {
-    for (let i = 1; i <= 3; i++)
+// Engine.dll 0x70afad..0x70b032 serializes cast/shot/explosion per slot.
+for (let i = 1; i <= 3; i++) {
+    for (const effect of ["spelleffect", "shoteffect", "expeffect"])
         SCHEMA_SKILLSOUNDGRP_DAT.push({ type: "utf16", name: `${effect}_sound_${i}` });
 
-    for (let i = 1; i <= 3; i++) {
+    for (const effect of ["spelleffect", "shoteffect", "expeffect"]) {
         SCHEMA_SKILLSOUNDGRP_DAT.push({ type: "float", name: `${effect}_sound_vol_${i}` });
         SCHEMA_SKILLSOUNDGRP_DAT.push({ type: "float", name: `${effect}_sound_rad_${i}` });
     }

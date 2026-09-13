@@ -4,6 +4,7 @@ import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-componen
 import { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
 import LocalSpaceSkeleton from "../local-space-skeleton";
+import { setScriptObjectProperty } from "./actor-ownership-component";
 import type AnimationComponent from "./animation-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
@@ -15,26 +16,11 @@ const tmpBasePosition = new Vector3();
 const tmpBaseQuaternion = new Quaternion();
 const tmpBaseInverseQuaternion = new Quaternion();
 
-function setScriptObjectProperty(object: Object3D, field: string, value: ScriptValue_T): void {
-    const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
-
-    if (!properties) return;
-
-    for (const key of properties.keys())
-        if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === field.toLowerCase()) {
-            properties.set(key, value);
-            return;
-        }
-
-    properties.set(field, value);
-}
-
 export class TransformComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "transform";
     protected readonly renderManager: RenderManager;
     protected base: (ICollidable & Object3D) = null;
     protected readonly basedActors = new Set<ICollidable>();
-    protected readonly scriptChildren = new Set<Object3D>();
     protected readonly basePosition = new Vector3();
     protected readonly baseQuaternion = new Quaternion();
     protected readonly baseRelativePosition = new Vector3();
@@ -109,7 +95,6 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
     public getBasePosition(): Vector3 { return this.basePosition; }
     public getBaseQuaternion(): Quaternion { return this.baseQuaternion; }
     public getBaseRelativePosition(): Vector3 { return this.baseRelativePosition; }
-    public getScriptChildren(): ReadonlySet<Object3D> { return this.scriptChildren; }
 
     public setBase(actor: ICollidable | null): boolean {
         const parent = this.getParent();
@@ -221,35 +206,6 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         return false;
     }
 
-    public gainScriptChild(object: Object3D): void {
-        const parent = this.getParent();
-        const owner = (object as any).scriptOwner as BaseActor;
-
-        if (owner === parent) return;
-        if (owner) owner.loseScriptChild(object);
-
-        (object as any).scriptOwner = parent;
-        setScriptObjectProperty(object, "Owner", parent);
-        this.scriptChildren.add(object);
-
-        const script = this.findComponent<ScriptComponent<BaseActor>>("script");
-
-        if (script?.hasFunction("GainedChild")) script.call("GainedChild", [object as unknown as ScriptHost_T]);
-    }
-
-    public loseScriptChild(object: Object3D): void {
-        const parent = this.getParent();
-
-        if ((object as any).scriptOwner !== parent) return;
-
-        (object as any).scriptOwner = null;
-        setScriptObjectProperty(object, "Owner", null);
-        this.scriptChildren.delete(object);
-
-        const script = this.findComponent<ScriptComponent<BaseActor>>("script");
-
-        if (script?.hasFunction("LostChild")) script.call("LostChild", [object as unknown as ScriptHost_T]);
-    }
 }
 
 export default TransformComponent;

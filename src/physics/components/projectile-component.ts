@@ -2,13 +2,15 @@ import { Euler, Matrix4, Object3D, Vector3 } from "three";
 import { PhysicsComponent } from "./physics-component";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
 import Rotator from "../../utils/rotator";
-import type { IObject } from "../../game/components";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, type IObject } from "../../game/components";
+import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { CollisionQuery_T } from "../collision-world";
 import type NMover from "../mover";
 
-type ProjectileActor_T = Object3D & IObject & { scriptProperties: Map<string, any> };
+export type ProjectileActor_T = Object3D & IObject & { scriptProperties: Map<string, any> };
 
 const tmpDirection = new Vector3();
 const tmpOldPosition = new Vector3();
@@ -18,7 +20,7 @@ const tmpWorldMatrix = new Matrix4();
 const tmpEuler = new Euler(0, 0, 0, "ZYX");
 const tmpRotator = new Rotator();
 
-class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
+export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     public readonly componentName = "nProjectile";
     protected readonly velocity = new Vector3();
     protected readonly acceleration = new Vector3();
@@ -50,7 +52,6 @@ class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         this.velocity.fromArray(properties.get("Velocity"));
         this.acceleration.fromArray(properties.get("Acceleration"));
         properties.set("TargetActor", this.target);
-        properties.set("Physics", EPhysics_T.PHYS_NProjectile);
         this.query = {
             location: effect.position, delta: this.delta,
             extent: new Vector3(properties.get("CollisionRadius"), properties.get("CollisionRadius"), properties.get("CollisionHeight")),
@@ -65,6 +66,20 @@ class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         };
     }
 
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+        if (type !== SCRIPT_NATIVE_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
+
+        const call = data as ScriptNativeCall_T;
+
+        if (call.context !== this.getParent() || call.index !== 3970 && call.name.toLowerCase() !== "setphysics") return COMPONENT_EVENT_NOT_HANDLED;
+
+        const mode = Number(call.args[0]);
+
+        if (mode !== EPhysics_T.PHYS_None && mode !== EPhysics_T.PHYS_NProjectile) throw new Error(`Projectile '${this.getParent().name}' does not implement physics '${mode}'.`);
+
+        this.getParent().scriptProperties.set("Physics", mode);
+    }
+
     public onPhysicsTick(_currentTime: number, deltaTime: number): boolean {
         if (this.hasHit) return false;
 
@@ -72,18 +87,17 @@ class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
 
         const effect = this.getParent();
         const properties = effect.scriptProperties;
+        const mode = properties.get("Physics");
+
+        if (mode === EPhysics_T.PHYS_None) return false;
+        if (mode !== EPhysics_T.PHYS_NProjectile) throw new Error(`Projectile '${effect.name}' does not implement physics '${mode}'.`);
 
         this.target.getEffectTargetLocation(this.targetLocation);
         this.targetLocation.toArray(properties.get("LastTargetLocation"));
 
         if (!this.hasStarted) {
             this.hasStarted = true;
-            if ((effect as any).scriptBase) {
-                tmpWorldMatrix.copy(effect.matrixWorld);
-                (effect as any).scriptBase.detachBoneObject(effect);
-                tmpWorldMatrix.decompose(effect.position, effect.quaternion, effect.scale);
-                this.renderManager.scene.add(effect);
-            } else if (effect.parent !== this.renderManager.scene) this.renderManager.scene.attach(effect);
+            this.detachFromBase();
 
             if (properties.get("bSelfRotation") && !properties.get("bHermiteInterpolation")) {
                 tmpDirection.subVectors(this.targetLocation, effect.position);
@@ -163,6 +177,18 @@ class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         return true;
     }
 
+    public detachFromBase(): void {
+        const effect = this.getParent();
+
+        if ((effect as any).scriptBase) {
+            effect.updateWorldMatrix(true, false);
+            tmpWorldMatrix.copy(effect.matrixWorld);
+            (effect as any).scriptBase.detachBoneObject(effect);
+            tmpWorldMatrix.decompose(effect.position, effect.quaternion, effect.scale);
+            this.renderManager.scene.add(effect);
+        } else if (effect.parent !== this.renderManager.scene) this.renderManager.scene.attach(effect);
+    }
+
     protected setDirection(direction: Vector3, relative: boolean): void {
         const effect = this.getParent();
         const previous = effect.scriptProperties.get("LastTargetRotation");
@@ -182,4 +208,3 @@ class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
 }
 
 export default NProjectileComponent;
-export { NProjectileComponent };

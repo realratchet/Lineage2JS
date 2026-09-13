@@ -2,9 +2,9 @@ import { Color, Object3D, Sphere, Vector2, Vector3 } from "three";
 import { ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 
-type PawnLight_T = { owner: Object3D, position: Vector3, direction: Vector3, targetPosition: Vector3, cone: number, color: Color, radius: number, lifeTime: number, attenuation: Vector2 };
+export type PawnLight_T = { owner: Object3D, position: Vector3, direction: Vector3, targetPosition: Vector3, cone: number, color: Color, radius: number, lifeTime: number, attenuation: Vector2 };
 
-class NPawnLightComponent extends ObjectComponent<BaseActor> {
+export class NPawnLightComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "nPawnLight";
     public version = 0;
     protected readonly lights: PawnLight_T[] = [];
@@ -77,4 +77,3 @@ function lightFalloff(distance: number, radius: number): number {
 }
 
 export default NPawnLightComponent;
-export { type PawnLight_T };

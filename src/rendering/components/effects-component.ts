@@ -3,10 +3,10 @@ import { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT } from "../../audio/components/
 import type { Object3D } from "three";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
-import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import UnScriptVM, { type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import Rotator from "../../utils/rotator";
-import type { Vector3Arr } from "@l2js/engine";
+import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
@@ -16,11 +16,32 @@ const tmpRotator = new Rotator();
 export class EffectsComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "effects";
     protected readonly renderManager: RenderManager;
+    protected library: DecodeLibrary;
+    protected vm: UnScriptVM;
 
     public constructor(renderManager: RenderManager) {
         super();
 
         this.renderManager = renderManager;
+    }
+
+    public setLibrary(library: DecodeLibrary): void {
+        this.library = library;
+        this.vm = new UnScriptVM(library);
+    }
+
+    public createDamageEffect(): Object3D {
+        const parent = this.getParent();
+        const classId = parent.scriptClassId ? parent.getUnrealScriptProperty("DamageEffect") : this.library.damageEffect;
+
+        if (classId === null) return null;
+        if (typeof classId !== "string") throw new Error(`Pawn '${parent.name}' has invalid DamageEffect '${classId}'.`);
+
+        const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, classId, this.vm);
+
+        if (!effect.isObject3D) throw new Error(`DamageEffect '${classId}' is not an actor.`);
+        this.vm.initializeHost(effect);
+        return effect;
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
@@ -102,7 +123,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
 
                 const owner = call.args[1] as any;
 
-                this.renderManager.addTransientEffect(actor, owner && owner.isActor ? owner : null);
+                this.renderManager.addTransientEffect(actor, owner);
             }
 
             return object;

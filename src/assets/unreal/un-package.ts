@@ -376,6 +376,7 @@ export class UNativePackage extends ANativePackage {
 
             case "PlayerStart": Constructor = UPlayerStart; break;
             case "Camera": Constructor = UCamera; break;
+            case "Pawn": Constructor = UPawn; break;
 
             case "PhysicsVolume": Constructor = UPhysicsVolume; break;
             case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
@@ -449,7 +450,6 @@ export class UNativePackage extends ANativePackage {
             case "InterpolationPoint":
             case "Projector":
             case "AntiPortalActor":
-            case "Pawn":
             case "LineagePlayerController":
             case "AmbientSound": Constructor = UObject; break;
 

@@ -630,9 +630,11 @@ export class UnScriptVM {
                 const field = classes[i].fields.find(field => getFieldName(field.name).toLowerCase() === fieldName);
                 const initial = initialProperties.get(fieldName);
 
-                if (initialProperties.has(fieldName) && !(initial === null && field && (field.type as any) === "Struct")) continue;
-                if (properties instanceof Map) properties.set(key ?? name, cloneScriptValue(value));
-                else properties[key ?? name] = cloneScriptValue(value);
+                if (initialProperties.has(fieldName) && !(initial === null && field && ((field.type as any) === "Struct" || (field.type as any) === "Array"))) continue;
+                const initialized = value === null && field && (field.type as any) === "Array" ? [] : cloneScriptValue(value);
+
+                if (properties instanceof Map) properties.set(key ?? name, initialized);
+                else properties[key ?? name] = initialized;
             }
         }
     }

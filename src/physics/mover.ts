@@ -3,7 +3,7 @@ import { Vector3 } from "three";
 const tmpDirection = new Vector3();
 const tmpOldPosition = new Vector3();
 
-class NMover {
+export class NMover {
     protected readonly origin: Vector3;
     protected readonly position: Vector3;
     protected readonly arrPoints: Vector3[];
@@ -70,4 +70,3 @@ class NMover {
 }
 
 export default NMover;
-export { NMover };
