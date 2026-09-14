@@ -107,6 +107,7 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u009_c": mU009.filter(effect => effect.effectClass === "LineageEffect.m_u009_c"),
     "lineageeffect.m_u033_a": mU033A,
     "lineageeffect.m_u033_b": mU033B,
+    "lineageeffect.nspear_sp": [{ phase: "shot", effectClass: "LineageEffect.NSpear_sp", host: "caster", owner: "source", position: "center", rotation: "targetDirection" }],
     "lineageeffect.m_u003_a": mU003.filter(effect => effect.effectClass === "LineageEffect.m_u003_a"),
     "lineageeffect.m_u003_b": mU003.filter(effect => effect.effectClass === "LineageEffect.m_u003_b"),
     "lineageeffect.m_u003_c": mU003.filter(effect => effect.effectClass === "LineageEffect.m_u003_c"),
@@ -142,6 +143,17 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
         "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
         // Engine.dll Explosion 0x7916c7..0x791858: LastTargetLocation minus the rotated target-radius offset.
         "lineageeffect.p_u004_a": [{ phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true }, damageEffect: true }]
+    },
+    stunShot: {
+        "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
+        "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
+        "lineageeffect.m_u003_c": nativeEffects["lineageeffect.m_u003_c"],
+        "lineageeffect.m_u003_b": [{ phase: "shot", effectClass: "LineageEffect.m_u003_b", host: "target", position: "center", rotation: "caster" }],
+        "lineageeffect.p_u004_a": [{ phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "lastTarget", rotation: "hit", damageEffect: true }]
+    },
+    wildSweep: {
+        // Engine.dll SkillEffectShot 0x7ae49b: target-owned impact at the computed target position.
+        "lineageeffect.p_u004_a": [{ phase: "shot", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "center", rotation: "targetDirection", damageEffect: true }]
     },
     siegeHammer: {
         // Engine.dll Shot 0x7a9444..0x7a95c5: caster center + target direction * radius * 2, caster rotation, target owner.

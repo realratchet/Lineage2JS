@@ -86,6 +86,7 @@ export class NativeSkillEffects {
             let locations = locList;
 
             if (locations.length === 0 && info.locList.random) {
+                // Server supplies impact positions; preview samples the configured range when absent.
                 caster.getWorldPosition(tmpPosition);
                 locations = Array.from({ length: info.locList.random.count }, () => [
                     tmpPosition.x + (Math.random() * 2 - 1) * info.locList.random.range,
