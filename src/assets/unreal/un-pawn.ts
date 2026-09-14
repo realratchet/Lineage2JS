@@ -25,6 +25,8 @@ export type NpcSkillAttack_T = {
     flyingTime: number;
     visualEffect: string;
     hasVisualEffect: boolean;
+    passive?: boolean;
+    previewTarget?: "self";
     actions: NpcSkillEffectAction_T[];
     nativeEffects: string[];
     nativeEffectGroup?: string;

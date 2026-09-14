@@ -320,6 +320,15 @@ export class UNativePackage extends ANativePackage {
             case "L2RotatorTime": Constructor = FL2RotatorTime; break;
             case "SkillActionInfo": Constructor = FSkillActionInfo; break;
 
+            case "FFighter":
+            case "baium":
+            case "valakas":
+            case "dre_vanul":
+            case "lesser_basilisk":
+            case "mechanic_golem":
+            case "anakim":
+            case "onyx_beast": Constructor = UPawn; break;
+
             // structs we dont care about yet
             case "InterpCurve":
             case "InterpCurvePoint":
