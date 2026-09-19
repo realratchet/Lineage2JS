@@ -146,7 +146,7 @@ export class BaseActor extends GameObject implements ICollidable {
         this.updatePresentation(currentTime, deltaTime);
     }
 
-    public getBoneWorldPosition(name: string | number, target: Vector3): Vector3 { return this.animationComponent.getBoneWorldPosition(name, target); }
+    public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 { return this.animationComponent.getBoneWorldPosition(name, target, offset); }
 
     public getEffectTargetLocation(target: Vector3): Vector3 {
         // Retail Engine.u Pawn.GetEffTargetLocation directly uses EffectSpawnBoneIdx; no SpineBone fallback.

@@ -1,4 +1,4 @@
-import { Euler, Matrix4, Object3D, Vector3 } from "three";
+import { Euler, Matrix4, Object3D, Quaternion, Vector3 } from "three";
 import { PhysicsComponent } from "./physics-component";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
 import Rotator from "../../utils/rotator";
@@ -29,13 +29,13 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     protected readonly renderManager: RenderManager;
     protected readonly target: BaseActor;
     protected readonly caster: BaseActor;
-    protected readonly onHit: (projectile: ProjectileActor_T) => void;
+    protected readonly onHit: (projectile: ProjectileActor_T, hitActor: boolean) => void;
     protected readonly mover: NMover;
     protected query: CollisionQuery_T;
     protected hasStarted = false;
     protected hasHit = false;
 
-    public constructor(renderManager: RenderManager, caster: BaseActor, target: BaseActor, onHit: (projectile: ProjectileActor_T) => void, mover: NMover = null) {
+    public constructor(renderManager: RenderManager, caster: BaseActor, target: BaseActor, onHit: (projectile: ProjectileActor_T, hitActor: boolean) => void, mover: NMover = null) {
         super();
 
         this.renderManager = renderManager;
@@ -78,6 +78,48 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         if (mode !== EPhysics_T.PHYS_None && mode !== EPhysics_T.PHYS_NProjectile) throw new Error(`Projectile '${this.getParent().name}' does not implement physics '${mode}'.`);
 
         this.getParent().scriptProperties.set("Physics", mode);
+    }
+
+    public prepareInterpolation(factor: number, displacement: Vector3): number {
+        const properties = this.getParent().scriptProperties;
+        const distance = displacement.length();
+
+        // Engine.dll 0x78cbbc..0x78cbc2: Disp and float[0xaae7e4]=550 threshold.
+        properties.set("Disp", distance);
+        if (distance <= 550) return 0;
+
+        // 0x78cbe8..0x78cc1a: float[0xaae7e0]=PI/4, angle then tangent.
+        const angle = Math.PI / 4 - Math.PI / 4 * factor / ((distance - 550) * Math.PI / 4 + factor);
+        const height = distance * Math.tan(angle);
+
+        properties.set("bHermiteInterpolation", true);
+        tmpTangent.copy(displacement);
+        tmpTangent.z += height;
+        tmpTangent.toArray(properties.get("VelInitial"));
+        tmpTangent.z = displacement.z - height;
+        tmpTangent.toArray(properties.get("VelFinal"));
+        // 0x78cca1/0x78ccab: Duration=.4 and bSelfRotation (+0x74 bit 0, used by ANProjectile::Tick).
+        properties.set("Duration", 0.4);
+        properties.set("bSelfRotation", true);
+        return angle;
+    }
+
+    public prepareHermiteInterpolation(displacement: Vector3, rotation: Quaternion, duration: number, tangentScale: number, finalDirectionZ: number): void {
+        const properties = this.getParent().scriptProperties;
+        const distance = displacement.length();
+
+        // Engine.dll 0x7ad0c1/0x7ad157: bHermiteInterpolation and caster-relative Disp.
+        properties.set("bHermiteInterpolation", true);
+        properties.set("Disp", distance);
+        // 0x7ad203..0x7ad266: bone FRotator::Vector, normalized, distance-scaled initial tangent.
+        tmpTangent.set(1, 0, 0).applyQuaternion(rotation).normalize().multiplyScalar(distance * tangentScale).toArray(properties.get("VelInitial"));
+        // 0x7ad15d..0x7ad1ed: normalize displacement, adjust Z, normalize again, distance-scaled final tangent.
+        tmpTangent.copy(displacement).normalize();
+        tmpTangent.z += finalDirectionZ;
+        tmpTangent.normalize().multiplyScalar(distance * tangentScale).toArray(properties.get("VelFinal"));
+        // 0x7ad269/0x7ad273: Duration and bSelfRotation.
+        properties.set("Duration", duration);
+        properties.set("bSelfRotation", true);
     }
 
     public onPhysicsTick(_currentTime: number, deltaTime: number): boolean {
@@ -151,7 +193,8 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
             properties.set("HitRot", [tmpRotator.pitch, tmpRotator.yaw, tmpRotator.roll]);
             properties.set("Physics", EPhysics_T.PHYS_None);
             this.hasHit = true;
-            this.onHit(effect);
+            // Engine.dll physNProjectile 0x8d351d..0x8d3523 passes TargetActor on arrival; processHitWall 0x793380 forwards the hit actor.
+            this.onHit(effect, hit ? !!hit.actor : !!this.target);
 
             // Engine.dll UParticleEmitter::NotifyPreDestroy 0x612750 is empty for sprite/mesh/beam emitters.
             if (!properties.get("bPreDestroy")) this.renderManager.removeTransientEffect(effect);

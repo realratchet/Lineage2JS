@@ -1,4 +1,5 @@
 import type { NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
+import nativeSkillDispatch from "./native-skill-dispatch";
 
 type NativeSkillBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, associatedActors?: boolean, pending?: string };
 
@@ -357,5 +358,32 @@ for (const name of ["s_npc_sonic_storm9", "s_npc_range_hit_down9", "s_npc_hex_sh
 // Engine.dll SpawnNTransientEffect 0x79a59f -> 0x79a7e1 skips success and sound; NActionStop 0x750773.
 for (const name of ["balakas tail stomp", "s_quest_boss_big_body1", "s_quest_boss_dispel_big_body1"])
     nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
+
+// Engine.dll Init 0x79eac7 ->0x79c74b; PreShot selector0x7a45dc=1; Shot0x7b14f5=31; Explosion0x791dcf=9 (sound actor remains null).
+for (const name of ["s_soulless_mp_dot", "s_soulless_mp_dot8", "s_soulless_mp_dot9", "s_soulless_mp_dot10", "s_soulless_mp_dot11", "s_soulless_mp_dot12"])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], pending: "zero-duration preview animation and retail packet timing; native phases have no particles or sound" });
+
+const collisionBindings = new Map<string, NativeSkillBinding_T>([
+    // Engine.dll Init0x79f5c8 and Shot0x7b0749 share the Sleep recipe; exported dispatch separates the empty Hate branch.
+    ["npcHate", nativeSkillBindings.get("s_npc_sleep")],
+    ["empty", { effects: [], soundPhases: [], pending: "zero-duration preview animation and retail packet timing; native phases have no particles or sound" }],
+    ["bow", nativeSkillBindings.get("s_npc_bow_attack")],
+    ["bossStunShot", nativeSkillBindings.get("s_stun_shot_boss_a_2c_1")],
+    // Engine.dll Init 0x7a1220, PreShot 0x7a3de7, Shot 0x7af576, Explosion 0x7918db.
+    ["bossSpearStun", { effects: ["LineageEffect.s_u010_a", "LineageEffect.NSpear_sp", "LineageEffect.s_u505_c"], effectGroup: "bossSpearStun", soundPhases: ["casting", "shot", "explosion"], pending: "spear rendering, retail visual/timing and no-hit verification" }]
+]);
+
+export function getNativeSkillBinding(name: string, id: number): NativeSkillBinding_T {
+    const key = name.toLowerCase();
+    const dispatch = nativeSkillDispatch.get(key);
+
+    if (!dispatch) return nativeSkillBindings.get(key);
+
+    const binding = collisionBindings.get(dispatch.get(id));
+
+    if (!binding) throw new Error(`Native skill '${name}' has no exported dispatch for table ID '${id}'.`);
+
+    return binding;
+}
 
 export default nativeSkillBindings;

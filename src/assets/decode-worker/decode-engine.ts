@@ -15,7 +15,9 @@ import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
-import nativeSkillBindings from "./native-skill-bindings";
+import { getNativeSkillBinding } from "./native-skill-bindings";
+import getNativeEffect from "../../skills/native-effects";
+import mobSkillTable from "./mob-skill-table";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
@@ -336,6 +338,7 @@ export class DecodeEngine {
     protected hasSweptCache = false;
     protected cacheCharGrpRows: Record<string, any>[] = null;
     protected cacheArmorGrpRows: Record<string, any>[] = null;
+    protected cacheWeaponGrpRows: Record<string, any>[] = null;
     protected cacheItemNameRows: Record<string, any>[] = null;
     protected cacheNpcDefinitions: INpcDefinition[] = null;
     protected cacheCharacterBundles = new Map<number, CachedBundle_T>();
@@ -609,13 +612,16 @@ export class DecodeEngine {
         return this.cacheSwimSoundConfig;
     }
 
-    protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string): Promise<string> {
+    protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string, required: boolean = true): Promise<string> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Sound"), { neverUnload: true });
         const lowerName = objectName.toLowerCase();
         const entry = pkg.exportGroups.Sound.find(entry => (entry.export.objectName as string).toLowerCase() === lowerName);
 
-        if (!entry) throw new Error(`Sound '${objectName}' not found in '${packageName}'.`);
+        if (!entry) {
+            if (!required) return null;
+            throw new Error(`Sound '${objectName}' not found in '${packageName}'.`);
+        }
 
         const sound = pkg.fetchObject<USound>(entry.index + 1).loadSelf();
         const soundName = sound.objectName ?? sound.uuid;
@@ -687,19 +693,32 @@ export class DecodeEngine {
             }
 
             // Engine.dll SetMagicInfo 0x79b45e; MagicProcess 0x7b4f65 branches on the resolved object.
-            const native = visual ? null : nativeSkillBindings.get(attack.name.toLowerCase());
+            const native = visual ? null : getNativeSkillBinding(attack.name, attack.id);
 
             if (!visual && !native && visualPath && visualPath.toLowerCase() !== "none")
                 throw new Error(`NPC skill '${attack.name}' visual '${visualPath}' was not found and its native effects are not implemented.`);
 
-            const decoded = Object.assign({}, attack, { hasVisualEffect: !!visual, actions: [] as NpcSkillEffectAction_T[], nativeEffects: native ? native.effects : [], nativeEffectGroup: native?.effectGroup, nativeSoundPhases: native ? native.soundPhases : [], nativeFinalShotOnly: !!native?.finalShotOnly, nativeTransientRejected: !!native?.rejectTransient });
+            const decoded = Object.assign({}, attack, { hasVisualEffect: !!visual, actions: [] as NpcSkillEffectAction_T[], nativeEffects: native ? native.effects : [], nativeEffectGroup: native?.effectGroup, nativeSoundPhases: native ? native.soundPhases : [], nativeFinalShotOnly: !!native?.finalShotOnly, nativeTransientRejected: !!native?.rejectTransient, nativeAssociatedActors: !!native?.associatedActors });
 
             library.npcSkillAttacks.push(decoded);
 
-            for (const path of decoded.nativeEffects) await this.pullEffectTemplate(library, builder, path, true);
-            for (const sound of decoded.sounds) {
+            for (const path of decoded.nativeEffects) {
+                const weapon = getNativeEffect(path, decoded.nativeEffectGroup).find(effect => effect.weaponId !== undefined);
+
+                await this.pullEffectTemplate(library, builder, path, true, weapon?.weaponId);
+            }
+            decoded.sounds = decoded.sounds.slice();
+            for (let i = decoded.sounds.length - 1; i >= 0; i--) {
+                const sound = decoded.sounds[i];
+
                 if (!decoded.hasVisualEffect && !decoded.nativeSoundPhases.includes(sound.phase)) continue;
-                if (!library.sounds[sound.sound]) library.sounds[sound.sound] = await this.pullSoundPath(builder, sound.sound);
+                // Engine.dll PlaySkillSound 0x797cfc/0x797d20 resolves the unchanged FName; 0x797d2b skips NULL.
+                if (!library.sounds[sound.sound]) {
+                    const name = await this.pullSoundPath(builder, sound.sound, false);
+
+                    if (name) library.sounds[sound.sound] = name;
+                    else decoded.sounds.splice(i, 1);
+                }
             }
 
             if (!visual) continue;
@@ -783,7 +802,7 @@ export class DecodeEngine {
         }
     }
 
-    protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string, pullScript: boolean = false): Promise<void> {
+    protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string, pullScript: boolean = false, weaponId?: number): Promise<void> {
         const [pkg, cls] = await this.fetchScriptClass(path);
         const emitter = pkg.newObject<UEmitter>(cls);
 
@@ -803,6 +822,15 @@ export class DecodeEngine {
                 for (const [name, value] of Object.entries(current.defaults))
                     if (!(name in info.scriptProperties)) info.scriptProperties[name] = value;
         } else builder.pullScriptClassFunctions([cls]);
+
+        if (weaponId !== undefined) {
+            const row = (await this.decodeWeaponGrp()).find(row => row.id === weaponId);
+
+            if (!row || row.wpn_mesh.length !== 1 || info.drawType !== "mesh") throw new Error(`Native effect '${path}' cannot load weapon '${weaponId}'.`);
+
+            info.scriptProperties.Mesh = row.wpn_mesh[0];
+            info.scriptProperties.Skins = row.wpn_tex.slice();
+        }
 
         if (info.drawType === "mesh") await this.pullScriptMeshAssets(library, builder, cls.name, info.scriptProperties);
     }
@@ -1485,6 +1513,16 @@ export class DecodeEngine {
         return this.cacheItemNameRows;
     }
 
+    protected async decodeWeaponGrp(): Promise<Record<string, any>[]> {
+        if (this.cacheWeaponGrpRows) return this.cacheWeaponGrpRows;
+
+        const file = await (new UDataFile(SchemasC4.SCHEMA_WEAPONGRP_DAT, "assets/system/Weapongrp.dat").asReadable()).decode();
+
+        this.cacheWeaponGrpRows = file.datarows;
+
+        return this.cacheWeaponGrpRows;
+    }
+
     public async decodeMusicInfo(): Promise<Record<number, string[]>> {
         const file = await (new UDataFile(SchemasC4.SCHEMA_MUSICINFO_DAT, "assets/system/musicinfo.dat").asReadable()).decode();
 
@@ -1571,7 +1609,8 @@ export class DecodeEngine {
             const attacks = skillAttacksByNpcId.get(npcId) || [];
             const id = row.skill_id as number;
             const visual = skillVisualsById.get(id);
-            const attack: NpcSkillAttack_T = { id, level: visual ? visual.level : 1, name: row.skill_name as string, animation: row.seq_name as string, animationCategory: visual ? visual.animationCategory : "", castStyle: visual ? visual.castStyle : 0, hitTime: visual ? visual.hitTime : 0, isMultiShot: visual ? visual.isMultiShot : false, flyingTime: 0, visualEffect: visual ? visual.visualEffect : "None", hasVisualEffect: false, actions: [], nativeEffects: [], nativeSoundPhases: [], nativeFinalShotOnly: false, nativeTransientRejected: false, sounds: [] };
+            const serverSkill = mobSkillTable.get(id);
+            const attack: NpcSkillAttack_T = { id, level: visual ? visual.level : 1, name: row.skill_name as string, animation: row.seq_name as string, animationCategory: visual ? visual.animationCategory : "", castStyle: visual ? visual.castStyle : 0, hitTime: visual ? visual.hitTime : 0, isMultiShot: visual ? visual.isMultiShot : false, flyingTime: 0, visualEffect: visual ? visual.visualEffect : "None", hasVisualEffect: false, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, actions: [], nativeEffects: [], nativeSoundPhases: [], nativeFinalShotOnly: false, nativeTransientRejected: false, nativeAssociatedActors: false, sounds: [] };
             // Engine.dll 0x72e685: GetSkillSoundData matches level, then falls back to level 1.
             const sounds = soundsByIdAndLevel.get(`${id}:${attack.level}`) || soundsByIdAndLevel.get(`${id}:1`);
 

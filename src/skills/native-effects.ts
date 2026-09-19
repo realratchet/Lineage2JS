@@ -72,6 +72,8 @@ export type NativeSkillEffect_T = {
     effectClass: string;
     host: "caster" | "target" | "source";
     targetIsCaster?: boolean;
+    hitActor?: boolean;
+    sourceOwner?: boolean;
     owner?: "target" | "none" | "source";
     attach?: "trail" | "rightHand";
     bone?: number | string;
@@ -92,18 +94,18 @@ export type NativeSkillEffect_T = {
     relativeRotation?: [number, number, number];
     relativeRotationOnNamedBone?: boolean;
     isAbsolute?: boolean;
-    rotation?: "caster" | "target" | "desiredCaster" | "targetPosition" | "targetDirection" | "targetDisplacement" | "hit" | "reverseHitHorizontal" | "bone";
+    rotation?: "zero" | "caster" | "target" | "desiredCaster" | "targetPosition" | "targetDirection" | "targetDisplacement" | "hit" | "reverseHitHorizontal" | "bone";
     position?: "center" | "lastTarget" | "location" | "source" | "meshOrigin";
     initialPosition?: "center";
     radiusOffset?: number;
     forwardOffset?: number;
     heightOffset?: number;
-    offsetRotation?: "caster" | "desiredCaster" | "targetDirection";
+    offsetRotation?: "caster" | "desiredCaster" | "targetDirection" | "hit";
     relativeTrailOffset?: number;
     lifeSpan?: "shotTime" | "firstShotTime";
     lifeSpanOffset?: number;
     physics?: "none";
-    useSkillSpeed?: boolean;
+    useSkillSpeed?: boolean | "sourceOwner" | "target";
     speedRate?: number;
     adjustParticleLife?: boolean | "shotTime";
     scale?: number | "casterRadius" | "cancelCasterRadius" | "targetRadius";
@@ -268,6 +270,11 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
         "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
         "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
         "lineageeffect.p_u004_a": bowImpact
+    },
+    bossSpearStun: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.nspear_sp": sNpcSpearAttack,
+        "lineageeffect.s_u505_c": sStunShotBossA.filter(effect => effect.effectClass === "LineageEffect.s_u505_c")
     },
     spear: {
         "lineageeffect.s_u010_a": sU010A,

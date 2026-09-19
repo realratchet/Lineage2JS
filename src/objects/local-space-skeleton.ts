@@ -3,6 +3,8 @@ import { Matrix4, Object3D, Skeleton, SkinnedMesh, Vector3 } from "three";
 const tmpMeshInverse = new Matrix4();
 const tmpBoneMatrix = new Matrix4();
 const tmpBoneLocal = new Matrix4();
+const tmpBoneRotation = new Matrix4();
+const tmpBoneOffset = new Vector3();
 const tmpIdentity = new Matrix4();
 const tmpAttachmentOffset = new Vector3();
 
@@ -21,14 +23,21 @@ export class LocalSpaceSkeleton extends Skeleton {
     protected ownsBones: boolean = false;
     protected visibleAttachmentCount = 0;
 
-    public getBoneWorldPosition(index: number, target: Vector3): Vector3 {
-        if (this.parents === null) this.claimBones();
-        if (!this.ownsBones) return this.bones[index].getWorldPosition(target);
+    public getBoneWorldPosition(index: number, target: Vector3, offset?: Vector3): Vector3 {
+        this.getBoneWorldMatrix(index, tmpBoneMatrix);
 
-        return target.setFromMatrixPosition(this.getBoneWorldMatrix(index, tmpBoneMatrix));
+        target.setFromMatrixPosition(tmpBoneMatrix);
+        if (offset) target.add(tmpBoneOffset.copy(offset).applyMatrix4(tmpBoneRotation.extractRotation(tmpBoneMatrix)));
+        return target;
     }
 
-    protected getBoneWorldMatrix(index: number, target: Matrix4): Matrix4 {
+    public getBoneWorldMatrix(index: number, target: Matrix4): Matrix4 {
+        if (this.parents === null) this.claimBones();
+        if (!this.ownsBones) {
+            this.bones[index].updateWorldMatrix(true, false);
+            return target.copy(this.bones[index].matrixWorld);
+        }
+
         target.identity();
 
         for (let i = index; i >= 0; i = this.parents[i]) {

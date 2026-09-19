@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, LoopOnce, LoopRepeat, Mesh, Vector3 } from "three";
+import { AnimationAction, AnimationClip, LoopOnce, LoopRepeat, Matrix4, Mesh, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
@@ -172,7 +172,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.renderManager.invalidatePawnLighting(parent);
     }
 
-    public getBoneWorldPosition(name: string | number, target: Vector3): Vector3 {
+    public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 {
         if (typeof name === "string") name = name.replaceAll(" ", "_").toLowerCase();
 
         for (const mesh of this.meshes) {
@@ -182,7 +182,24 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
             const index = typeof name === "number" ? name : skeleton.bones.findIndex(bone => bone.name === name);
 
-            if (skeleton.bones[index]) return skeleton.getBoneWorldPosition(index, target);
+            if (skeleton.bones[index]) return skeleton.getBoneWorldPosition(index, target, offset);
+        }
+
+        throw new Error(`${this.getParent().type} has no '${name}' bone.`);
+    }
+
+    public getBoneWorldMatrix(name: string | number, target: Matrix4, fallback?: number): Matrix4 {
+        if (typeof name === "string") name = name.replaceAll(" ", "_").toLowerCase();
+
+        for (const mesh of this.meshes) {
+            const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
+
+            if (!skeleton) continue;
+
+            let index = typeof name === "number" ? name : skeleton.bones.findIndex(bone => bone.name === name);
+
+            if (index < 0 && fallback !== undefined) index = fallback;
+            if (skeleton.bones[index]) return skeleton.getBoneWorldMatrix(index, target);
         }
 
         throw new Error(`${this.getParent().type} has no '${name}' bone.`);

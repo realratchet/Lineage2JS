@@ -82,9 +82,12 @@ export class NativeSkillEffects {
         this.trailers.push({ effect, host, sameRotation, relative, offset: offset.clone() });
     }
 
-    public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: BaseActor, target: BaseActor, script: ScriptComponent<BaseActor>, shotTime: number, addEffect: (effect: Object3D) => void, source: Object3D = caster, locList: readonly Vector3Arr[] = []): void {
+    public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: BaseActor, target: BaseActor, script: ScriptComponent<BaseActor>, shotTime: number, addEffect: (effect: Object3D) => void, source: Object3D = caster, locList: readonly Vector3Arr[] = [], hitActor: boolean = !!target): void {
         // Engine.dll 0x7aa351..0x7aa35b: reject NULL, then distinguish TargetPawn == caster.
         if (info.targetIsCaster !== undefined && (!target || info.targetIsCaster !== (target === caster))) return;
+        // Engine.dll Explosion 0x78f7cd/0x78fa8d/0x78fab4: hit actor, projectile Owner, then TargetActor.
+        if (info.hitActor !== undefined && (info.hitActor !== hitActor || info.hitActor && !target)) return;
+        if (info.sourceOwner !== undefined && info.sourceOwner !== !!(source as any).scriptOwner) return;
 
         if (info.locList) {
             let locations = locList;
@@ -100,7 +103,7 @@ export class NativeSkillEffects {
             }
 
             for (let i = 0; i < locations.length; i++)
-                this.spawn({ ...info, locList: undefined, location: locations[i], delay: shotTime + info.locList.delay + i * info.locList.interval }, skill, caster, target, script, shotTime, addEffect, source);
+                this.spawn({ ...info, locList: undefined, location: locations[i], delay: shotTime + info.locList.delay + i * info.locList.interval }, skill, caster, target, script, shotTime, addEffect, source, [], hitActor);
             return;
         }
 
@@ -121,9 +124,11 @@ export class NativeSkillEffects {
 
         if (info.speedRate !== undefined) (effect as any).scriptProperties.set("SpeedRate", info.speedRate);
         if (info.useSkillSpeed) {
-            const speed = caster.getUnrealScriptProperty("SkillSpeedRate") as number;
+            const pawn = info.useSkillSpeed === "sourceOwner" ? (source as any).scriptOwner : info.useSkillSpeed === "target" ? target : caster;
+            // Engine.dll 0x78f88b..0x78f89a/0x78fadf..0x78faec: non-pawn Owner supplies rate1.
+            const speed = info.useSkillSpeed === "sourceOwner" && !pawn.isActor ? 1 : pawn.getUnrealScriptProperty("SkillSpeedRate") as number;
 
-            if (!Number.isFinite(speed)) throw new Error(`${caster.name} has invalid SkillSpeedRate '${speed}'.`);
+            if (!Number.isFinite(speed)) throw new Error(`${pawn.name} has invalid SkillSpeedRate '${speed}'.`);
             (effect as any).scriptProperties.set("SpeedRate", speed);
         }
 
@@ -164,7 +169,8 @@ export class NativeSkillEffects {
             effect.position.z += height;
         }
 
-        if (info.rotation === "hit") tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(effect.quaternion);
+        if (info.rotation === "zero") effect.quaternion.identity();
+        else if (info.rotation === "hit") tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(effect.quaternion);
         else if (info.rotation === "reverseHitHorizontal") {
             // Engine.dll 0x7907ac..0x7907db negates incoming XY and clears Z before FVector::Rotation.
             tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(tmpRotation);
@@ -188,6 +194,7 @@ export class NativeSkillEffects {
             if (info.offsetRotation === "caster") getPawnRotation(caster, tmpRotation);
             else if (info.offsetRotation === "desiredCaster") tmpRotator.set(0, caster.getComponent<PawnMovementComponent>("pawnMovement").getDesiredRotationYaw(), 0).toQuaternion(tmpRotation);
             else if (info.offsetRotation === "targetDirection") getTargetRotation(caster, target, tmpRotation);
+            else if (info.offsetRotation === "hit") tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(tmpRotation);
             effect.position.add(tmpPosition.set(info.forwardOffset, 0, 0).applyQuaternion(tmpRotation));
         }
 
