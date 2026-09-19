@@ -33,6 +33,7 @@ export type NpcSkillAttack_T = {
     nativeSoundPhases: NpcSkillEffectPhase_T[];
     nativeFinalShotOnly: boolean;
     nativeTransientRejected: boolean;
+    nativeAssociatedActors: boolean;
     sounds: NpcSkillSound_T[];
 };
 
