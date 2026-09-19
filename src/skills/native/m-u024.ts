@@ -1,6 +1,7 @@
 import type { NativeSkillEffect_T } from "../native-effects";
 
 // Engine.dll Init 0x79f76e..0x79f9ba; Shot 0x7aef96..0x7af281; physTrailer 0x8ce483.
+// Init 0x79f837..0x79f898: direction*radius*2; 0x79f8e6..0x79f8f0: RelativeTrailOffset.X=radius*2.
 const effects: NativeSkillEffect_T[] = [
     { phase: "casting", effectClass: "LineageEffect.m_u024_a", host: "caster", attach: "trail", position: "center", radiusOffset: 2, offsetRotation: "targetDirection", relativeTrailOffset: 2, lifeSpan: "shotTime", pawnLight: { color: [0.7, 0.3, 0.3], radius: 30, spot: true, target: "caster" } },
     { phase: "shot", effectClass: "LineageEffect.m_u024_b", host: "caster", position: "center", radiusOffset: 2, offsetRotation: "targetDirection" },

@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from "three";
+import { Matrix4, Object3D, Quaternion, Vector3 } from "three";
 import Rotator from "../utils/rotator";
 import NPawnLightComponent, { type PawnLight_T } from "../rendering/components/pawn-light-component";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
@@ -17,6 +17,7 @@ const tmpCasterPosition = new Vector3();
 const tmpLightPosition = new Vector3();
 const tmpLightDirection = new Vector3();
 const tmpRotation = new Quaternion();
+const tmpBoneMatrix = new Matrix4();
 const tmpMeshCorrection = new Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
 
 export function getPawnRotation(pawn: BaseActor, out: Quaternion): void {
@@ -31,8 +32,8 @@ export function getPawnMeshHeight(pawn: BaseActor, scaled: boolean = true): numb
     return mesh ? mesh.meshOrigin.z * (scaled ? drawScale : 1) : scaled ? pawn.getCollisionHeight() : 0;
 }
 
-export function getTargetRotation(caster: BaseActor, target: BaseActor, out: Quaternion): void {
-    if (!target || caster === target) { getPawnRotation(caster, out); return; }
+export function getTargetRotation(caster: BaseActor, target: BaseActor, out: Quaternion, useCasterRotation: boolean = true): void {
+    if (!target || caster === target && useCasterRotation) { getPawnRotation(caster, out); return; }
 
     target.getWorldPosition(tmpPosition);
     caster.getWorldPosition(tmpCasterPosition);
@@ -82,6 +83,9 @@ export class NativeSkillEffects {
     }
 
     public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: BaseActor, target: BaseActor, script: ScriptComponent<BaseActor>, shotTime: number, addEffect: (effect: Object3D) => void, source: Object3D = caster, locList: readonly Vector3Arr[] = []): void {
+        // Engine.dll 0x7aa351..0x7aa35b: reject NULL, then distinguish TargetPawn == caster.
+        if (info.targetIsCaster !== undefined && (!target || info.targetIsCaster !== (target === caster))) return;
+
         if (info.locList) {
             let locations = locList;
 
@@ -100,6 +104,16 @@ export class NativeSkillEffects {
             return;
         }
 
+        let targetHeight: number;
+
+        if (info.height === "targetMeshOrigin" || info.height === "targetMeshOriginOrFeet") {
+            const mesh = target.getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh;
+
+            // Engine.dll 0x7a9cd9/0x7aa099 reject non-skeletal targets; 0x7aae11..0x7aae1a falls back to CollisionHeight.
+            if (!mesh && info.height === "targetMeshOrigin") return;
+            targetHeight = target.getWorldPosition(tmpPosition).z + target.getCollisionHeight() - (mesh ? mesh.meshOrigin.z : target.getCollisionHeight());
+        }
+
         const effect = script.createObject(info.effectClass) as unknown as Object3D;
         const host = (info.host === "caster" ? caster : info.host === "source" ? source : target) as BaseActor;
 
@@ -115,7 +129,15 @@ export class NativeSkillEffects {
 
         host.getWorldPosition(effect.position);
         if (info.location) effect.position.fromArray(info.location);
-        if (info.positionBone) host.getBoneWorldPosition(info.positionBone, effect.position);
+        if (info.positionBone && info.rotation !== "bone") host.getBoneWorldPosition(info.positionBone, effect.position, info.boneOffset ? tmpPosition.fromArray(info.boneOffset) : undefined);
+        if (info.positionBoneProperty || info.positionBone && info.rotation === "bone") {
+            const bone = info.positionBone || host.getUnrealScriptProperty(info.positionBoneProperty);
+
+            if (typeof bone !== "string") throw new Error(`${host.name} has invalid bone property '${info.positionBoneProperty}': '${bone}'.`);
+            host.getComponent<AnimationComponent>("animation").getBoneWorldMatrix(bone, tmpBoneMatrix, info.boneFallback);
+            effect.position.setFromMatrixPosition(tmpBoneMatrix);
+            if (info.rotation === "bone") tmpRotator.setFromRotationMatrix(tmpBoneMatrix).toQuaternion(effect.quaternion);
+        }
         if (info.attach === "trail" && info.position === undefined) {
             const properties = (effect as any).scriptProperties;
             const pivot = properties.get("TrailerPrePivot");
@@ -125,9 +147,13 @@ export class NativeSkillEffects {
             effect.position.z += host.getCollisionHeight();
             if (properties.get("bTrailerPrePivot")) effect.position.add(tmpPosition.fromArray(pivot));
         } else if (info.position === "center") effect.position.z += host.getCollisionHeight();
+        // Engine.dll Shot 0x7abdd6..0x7abdd9: Actor.Location.Z - USkeletalMesh.Origin.Z, without DrawScale.
+        else if (info.position === "meshOrigin") effect.position.z += host.getCollisionHeight() - getPawnMeshHeight(host, false);
         else if (info.position === "lastTarget") effect.position.fromArray((source as any).scriptProperties.get("LastTargetLocation"));
+        else if (info.position === "source") source.getWorldPosition(effect.position);
+        if (info.height === "targetFeet") effect.position.z = target.getWorldPosition(tmpPosition).z;
         if (info.heightOffset !== undefined) effect.position.z += info.heightOffset * host.getCollisionHeight();
-        if (info.lifeSpan === "shotTime") (effect as any).scriptProperties.set("LifeSpan", shotTime);
+        if (info.lifeSpan) (effect as any).scriptProperties.set("LifeSpan", shotTime + (info.lifeSpanOffset || 0));
         if (info.physics === "none") (effect as any).scriptProperties.set("Physics", EPhysics_T.PHYS_None);
         if (info.offset) effect.position.add(tmpPosition.fromArray(info.offset));
         if (info.trailerPrePivot === "casterMeshOrigin") {
@@ -139,6 +165,12 @@ export class NativeSkillEffects {
         }
 
         if (info.rotation === "hit") tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(effect.quaternion);
+        else if (info.rotation === "reverseHitHorizontal") {
+            // Engine.dll 0x7907ac..0x7907db negates incoming XY and clears Z before FVector::Rotation.
+            tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(tmpRotation);
+            tmpPosition.set(-1, 0, 0).applyQuaternion(tmpRotation);
+            tmpRotator.set(0, Math.trunc(Math.atan2(tmpPosition.y, tmpPosition.x) * 65535 / (2 * Math.PI)), 0).toQuaternion(effect.quaternion);
+        }
         else if (info.rotation === "caster") getPawnRotation(caster, effect.quaternion);
         else if (info.rotation === "target") getPawnRotation(target, effect.quaternion);
         else if (info.rotation === "desiredCaster") {
@@ -149,24 +181,45 @@ export class NativeSkillEffects {
         else if (info.rotation === "targetPosition") {
             target.getWorldPosition(tmpPosition);
             tmpRotator.set(0, Math.trunc(Math.atan2(tmpPosition.y, tmpPosition.x) * 65535 / (2 * Math.PI)), 0).toQuaternion(effect.quaternion);
-        } else if (info.rotation === "targetDirection") getTargetRotation(caster, target, effect.quaternion);
+        } else if (info.rotation === "targetDirection" || info.rotation === "targetDisplacement") getTargetRotation(caster, target, effect.quaternion, info.rotation === "targetDirection");
+
+        if (info.forwardOffset !== undefined) {
+            tmpRotation.copy(effect.quaternion);
+            if (info.offsetRotation === "caster") getPawnRotation(caster, tmpRotation);
+            else if (info.offsetRotation === "desiredCaster") tmpRotator.set(0, caster.getComponent<PawnMovementComponent>("pawnMovement").getDesiredRotationYaw(), 0).toQuaternion(tmpRotation);
+            else if (info.offsetRotation === "targetDirection") getTargetRotation(caster, target, tmpRotation);
+            effect.position.add(tmpPosition.set(info.forwardOffset, 0, 0).applyQuaternion(tmpRotation));
+        }
 
         if (info.radiusOffset !== undefined) {
             tmpRotation.copy(effect.quaternion);
-            if (info.offsetRotation === "desiredCaster") tmpRotator.set(0, caster.getComponent<PawnMovementComponent>("pawnMovement").getDesiredRotationYaw(), 0).toQuaternion(tmpRotation);
+            if (info.offsetRotation === "caster") getPawnRotation(caster, tmpRotation);
+            else if (info.offsetRotation === "desiredCaster") tmpRotator.set(0, caster.getComponent<PawnMovementComponent>("pawnMovement").getDesiredRotationYaw(), 0).toQuaternion(tmpRotation);
             else if (info.offsetRotation === "targetDirection") getTargetRotation(caster, target, tmpRotation);
             tmpPosition.set(info.radiusOffset * host.getCollisionRadius(), 0, 0).applyQuaternion(tmpRotation);
 
-            // Engine.dll SpawnSkillEffect 0x798449: trailer XY offset applies only when both components are nonzero.
-            if (info.attach !== "trail" || tmpPosition.x !== 0 && tmpPosition.y !== 0) effect.position.add(tmpPosition);
+            if (info.attach === "trail") {
+                // Engine.dll 0x798449..0x798481: XY requires both nonzero; 0x79849b..0x7984a4 adds the supplied Z to TrailerPrePivot.Y.
+                if (tmpPosition.x !== 0 && tmpPosition.y !== 0) {
+                    effect.position.x += tmpPosition.x;
+                    effect.position.y += tmpPosition.y;
+                }
+                effect.position.y += tmpPosition.z;
+            } else effect.position.add(tmpPosition);
         }
+
+        // Engine.dll 0x7a9ccc/0x7a9ce4, 0x7aa08c/0x7aa0a4, 0x7aadf4/0x7aae09 replace offset Z with target Location.Z - mesh Origin.Z.
+        if (targetHeight !== undefined) effect.position.z = targetHeight;
 
         // Engine.dll SpawnSkillEffect 0x7986b5: radius > 11; 0x7986f0: radius * (1/9).
         const radius = caster.getCollisionRadius();
-        let scale = info.scale && radius > 11 ? radius / 9 : 1;
+        let scale = typeof info.scale === "number" ? info.scale : info.scale && radius > 11 ? radius / 9 : 1;
 
         // Engine.dll SkillEffectInit 0x79e9cc: undo Energy Wave's automatic radius scaling.
         if (info.scale === "cancelCasterRadius") scale *= 9 / radius;
+
+        // Engine.dll Shot 0x7a8ed7..0x7a8ee9: target radius / 9, without the casting radius threshold.
+        if (info.scale === "targetRadius") scale = target.getCollisionRadius() / 9;
 
         const delay = info.hitDelay === undefined ? info.delay || 0 : Math.max(0, skill.hitTime + info.hitDelay);
 
@@ -227,23 +280,29 @@ export class NativeSkillEffects {
             this.pawnLights.push({ component: lights, light: lights.add(light.spot && !light.target ? null : effect, light.color, light.radius, light.lifeTime === undefined ? shotTime : light.lifeTime, light.spot ? tmpLightPosition : null, light.spot ? tmpLightDirection : null, light.target ? tmpCasterPosition : null) });
         }
 
+        let hasNamedBone = false;
+
         if (info.attach === "rightHand" && !caster.attachObjectToBone(effect, "bip01_r_hand")) throw new Error(`${caster.name} has no right-hand bone.`);
         if (info.boneProperty) {
             const bone = host.getUnrealScriptProperty(info.boneProperty);
 
             if (typeof bone !== "string") throw new Error(`${host.name} has invalid bone property '${info.boneProperty}': '${bone}'.`);
 
+            hasNamedBone = bone.toLowerCase() !== "none";
+
             // Engine.dll Init 0x7a1883 and PreShot 0x7a446c ignore AttachToBone's return value.
-            if (!host.attachObjectToBone(effect, bone, info.isAbsolute)) console.warn(`[skill-effects] ${host.name} has no bone '${bone}' from '${info.boneProperty}'; '${info.effectClass}' remains unattached.`);
+            // Engine.dll Init 0x79bdea/0x79e29c: NAME_None selects bone 2, an unmatched name does not.
+            if (!host.attachObjectToBone(effect, !hasNamedBone && info.boneFallback !== undefined ? info.boneFallback : bone, info.isAbsolute)) console.warn(`[skill-effects] ${host.name} has no bone '${bone}' from '${info.boneProperty}'; '${info.effectClass}' remains unattached.`);
         } else if (info.bone !== undefined && !host.attachObjectToBone(effect, info.bone, info.isAbsolute)) {
             if (info.boneFallback === undefined || !host.attachObjectToBone(effect, info.boneFallback, info.isAbsolute)) throw new Error(`${host.name} has no bone ${info.bone}.`);
         }
 
-        if (info.relativeLocation) {
+        if (info.relativeLocation && (!info.relativeLocationOnNamedBone || hasNamedBone)) {
             (effect as any).scriptProperties.set("RelativeLocation", info.relativeLocation.slice());
             effect.position.fromArray(info.relativeLocation);
         }
-        if (info.relativeRotation) {
+        // Engine.dll Init 0x7a1984 skips the rotation write on the NAME_None branch.
+        if (info.relativeRotation && (!info.relativeRotationOnNamedBone || hasNamedBone)) {
             (effect as any).scriptProperties.set("RelativeRotation", info.relativeRotation.slice());
             tmpRotator.set(...info.relativeRotation).toQuaternion(effect.quaternion);
         }
