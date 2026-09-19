@@ -28,6 +28,7 @@ import mU004 from "./native/m-u004";
 import mU000 from "./native/m-u000";
 import sQueenAntStrike from "./native/s-queen-ant-strike";
 import sZakenSelfTel from "./native/s-zaken-self-tel";
+import sZakenTelPc from "./native/s-zaken-tel-pc";
 import sZakenDualAttack from "./native/s-zaken-dual-attack";
 import sDietrichSuspension from "./native/s-dietrich-suspension";
 import sGustavWind from "./native/s-gustav-wind";
@@ -137,6 +138,8 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.e_u050_b": sAntarasDebuff,
     "lineageeffect.e_u044_b": sAntarasMouth,
     "lineageeffect.e_u049_a": sAntarasNormalAttack,
+    "lineageeffect.e_u071_a": sZakenTelPc.filter(effect => effect.effectClass === "LineageEffect.e_u071_a"),
+    "lineageeffect.e_u071_b": sZakenTelPc.filter(effect => effect.effectClass === "LineageEffect.e_u071_b"),
     "lineageeffect.m_u027_a": sNpcChillFlame.filter(effect => effect.effectClass === "LineageEffect.m_u027_a"),
     "lineageeffect.m_u027_b": sNpcChillFlame.filter(effect => effect.effectClass === "LineageEffect.m_u027_b"),
     "lineageeffect.e_u034_a": sNpcBeamStraight.filter(effect => effect.effectClass === "LineageEffect.e_u034_a"),
