@@ -56,6 +56,14 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
             } as SpriteParam_T;
         }
 
+        if (parameters.isCubeMap) {
+            if (name !== "shSpecular") throw new Error(`Cubemap is unsupported in ${name}.`);
+
+            defines[`USE_CUBE_MAP_${defName}`] = "";
+            uniforms[`${name}Cube`].value = parameters.uniforms.map.texture;
+            return;
+        }
+
         defines["USE_UV"] = "";
         defines[`USE_MAP_${defName}`] = "";
 
@@ -127,6 +135,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 shDiffuse: new Uniform(null),
                 shOpacity: new Uniform(null),
                 shSpecular: new Uniform(null),
+                shSpecularCube: new Uniform(null),
                 shSpecularMask: new Uniform(null),
                 shMaterial2: new Uniform(null),
 

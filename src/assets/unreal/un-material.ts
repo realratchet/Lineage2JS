@@ -14,7 +14,8 @@ export type IDecodedParameter = {
     transformType: "none" | "pan" | "rotate" | "oscillate" | "envMap" | "envMapWorld",
     sprites?: any[],
     framerate?: number,
-    uvIndex?: number
+    uvIndex?: number,
+    isCubeMap?: boolean
 };
 
 export type IDecodedSpriteParameter = IDecodedParameter & {
@@ -23,10 +24,11 @@ export type IDecodedSpriteParameter = IDecodedParameter & {
     framerate: number
 };
 
-export type DecodableMaterial_T = "modifier" | "texture" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
+export type DecodableMaterial_T = "modifier" | "texture" | "cubemap" | "shader" | "group" | "terrain" | "lightmapped" | "instance" | "terrainSegment" | "sprite" | "solid" | "particle" | "combiner" | "empty";
 export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend" | "texCoordSource";
 
 export type IBaseMaterialDecodeInfo = { name?: string, materialType: DecodableMaterial_T, color?: boolean };
+export type ICubemapDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "cubemap", faces: string[] };
 export type ISolidMaterialDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "solid", solidColor: number };
 export type ILightmappedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "lightmapped", material: string, lightmap: string | null };
 export type IMaterialGroupDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "group", materials: string[] };

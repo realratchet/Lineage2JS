@@ -29,6 +29,10 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
+#ifdef USE_CUBE_MAP_SPECULAR
+    uniform samplerCube shSpecularCube;
+#endif
+
 #if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_MATERIAL2))
     struct TextureData {
         sampler2D texture;
@@ -579,7 +583,13 @@ void main() {
             float mixValue = 1.0 - fadePercent;
             specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
         #else
-            #ifdef USE_MAP_SPECULAR
+            #ifdef USE_CUBE_MAP_SPECULAR
+                vec3 envMapDirection = vReflect;
+                #ifdef USE_ENVMAP_CAMERA
+                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz;
+                #endif
+                specularColor = textureCube(shSpecularCube, vec3(-envMapDirection.x, envMapDirection.yz)).rgb;
+            #elif defined(USE_MAP_SPECULAR)
                 vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
                 specularColor = texelSpecular.rgb;
             #endif

@@ -1,9 +1,9 @@
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
+import { Color, CubeTexture, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
 import type { DecodeLibrary } from "@l2js/engine";
-import type { IBaseMaterialDecodeInfo, IFadeColorDecodeInfo, IDecodedParameter, ITexPannerDecodeInfo, ITexRotatorDecodeInfo, ITexOscillatorDecodeInfo, ITexEnvMapDecodeInfo, IFinalBlendDecodeInfo, ITexCoordSourceDecodeInfo, IColorModifierDecodeInfo, IBaseMaterialModifierDecodeInfo, IDecodedSpriteParameter, IShaderDecodeInfo, ICombinerDecodeInfo, IMaterialGroupDecodeInfo, ILightmappedDecodeInfo, ILightAmbientMaterialModifier, ILightDirectionalMaterialModifier, IBaseLightingMaterialModifier, IMaterialModifier, ISolidMaterialDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
+import type { IBaseMaterialDecodeInfo, ICubemapDecodeInfo, IFadeColorDecodeInfo, IDecodedParameter, ITexPannerDecodeInfo, ITexRotatorDecodeInfo, ITexOscillatorDecodeInfo, ITexEnvMapDecodeInfo, IFinalBlendDecodeInfo, ITexCoordSourceDecodeInfo, IColorModifierDecodeInfo, IBaseMaterialModifierDecodeInfo, IDecodedSpriteParameter, IShaderDecodeInfo, ICombinerDecodeInfo, IMaterialGroupDecodeInfo, ILightmappedDecodeInfo, ILightAmbientMaterialModifier, ILightDirectionalMaterialModifier, IBaseLightingMaterialModifier, IMaterialModifier, ISolidMaterialDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
 import type { IMaterialInstancedDecodeInfo } from "@l2js/engine/contracts/mesh";
 import type { IMaterialTerrainSegmentDecodeInfo, IMaterialTerrainDecodeInfo } from "@l2js/engine/contracts/terrain";
 import type { ITextureDecodeInfo, MapData_T, IAnimatedSpriteDecodeInfo } from "@l2js/engine/contracts/texture";
@@ -169,6 +169,24 @@ function fetchMapTexture(library: DecodeLibrary, info: IBaseMaterialDecodeInfo):
     return decodeParameter(library, info)?.uniforms?.map ?? null;
 }
 
+function decodeCubemap(library: DecodeLibrary, info: ICubemapDecodeInfo): MapData_T {
+    if (info.faces.length !== 6 || info.faces.some(face => !face))
+        throw new Error(`Cubemap '${info.name}' must have six face materials.`);
+
+    const faces = info.faces.map(face => fetchMapTexture(library, library.materials[face]));
+
+    if (faces.length !== 6 || faces.some(face => !face))
+        throw new Error(`Cubemap '${info.name}' must decode six texture faces.`);
+
+    const texture = new CubeTexture(faces.map(face => face.texture));
+    texture.name = info.name ?? "Cubemap";
+    texture.needsUpdate = true;
+
+    if (library.anisotropy >= 0) texture.anisotropy = library.anisotropy;
+
+    return { texture, size: faces[0].size.clone() };
+}
+
 function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | null): { map: MapData_T | null, innerTransforms: any[] } {
     if (materialIndex === null) return { map: null, innerTransforms: [] };
 
@@ -313,15 +331,23 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: ITexOscillator
 
 function decodeTexEnvMapModifer(library: DecodeLibrary, info: ITexEnvMapDecodeInfo): IDecodedParameter {
     const isUsingMap = info.map !== null;
+    const mapInfo = isUsingMap ? library.materials[info.map] : null;
+    const isCubeMap = mapInfo?.materialType === "cubemap";
+
+    const defines: Record<string, any> = {
+        USE_DIFFUSE: "",
+        USE_ENVMAP: "",
+        ENVMAP_MODE_REFLECTION: ""
+    };
+
+    if (info.envMapType === "camera") defines.USE_ENVMAP_CAMERA = "";
 
     return {
         isUsingMap,
+        isCubeMap,
         // UTexEnvMap::GetMatrix 0x879c90 only selects world/camera reflection coordinates.
         transformType: info.envMapType === "world" ? "envMapWorld" : "envMap",
-        defines: {
-            USE_DIFFUSE: "",
-            USE_ENVMAP: ""
-        },
+        defines,
         uniforms: {
             map: isUsingMap ? fetchMapTexture(library, library.materials[info.map]) : null
         }
@@ -421,6 +447,13 @@ function decodeParameter(library: DecodeLibrary, info: IBaseMaterialDecodeInfo):
             uniforms: { map: fetchTexture(library, info as ITextureDecodeInfo) },
             defines: {},
             isUsingMap: true,
+            transformType: "none"
+        }; break;
+        case "cubemap": param = {
+            uniforms: { map: decodeCubemap(library, info as ICubemapDecodeInfo) },
+            defines: {},
+            isUsingMap: true,
+            isCubeMap: true,
             transformType: "none"
         }; break;
         case "shader":
