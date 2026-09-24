@@ -1,4 +1,4 @@
-import { Box3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
+import { Box3, Matrix3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
 import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
@@ -20,6 +20,8 @@ const tmpCurrentAcceleration = new Vector3();
 const tmpOwnerOffset = new Vector3();
 const tmpWorldToLocal = new Matrix4();
 const tmpWorldRotation = new Matrix4();
+const tmpSprayTransform = new Matrix4();
+const tmpSprayVelocityTransform = new Matrix3();
 const tmpFadeColor = new Vector4();
 const tmpParticleQuaternion = new Quaternion();
 const tmpParticleRotator = new Rotator();
@@ -34,6 +36,7 @@ class Particle_T {
     public readonly position = new Vector3();
     public readonly oldLocation = new Vector3();
     public readonly velocity = new Vector3();
+    public readonly acceleration = new Vector3();
     public readonly startSize = new Vector3();
     public readonly spinsPerSecond = new Vector3();
     public readonly startSpin = new Vector3();
@@ -127,6 +130,8 @@ export abstract class BaseEmitter extends Object3D {
     protected useSkeletalLocationAs: SkeletalLocationUse_T;
 
     protected oldOwnerLocation: THREE.Vector3;
+    protected oldSprayMatrix = new Matrix4();
+    protected hasOldSprayMatrix: boolean = false;
     protected lastDeltaTime: number = 0.016;
     protected activeParticles: number = 0;
     protected activeCount: number = 0;
@@ -148,6 +153,7 @@ export abstract class BaseEmitter extends Object3D {
     protected particleIndex: number;
 
     protected coordinateSystem: CoordinateSystem_T;
+    protected isIndependentSprayAccel: boolean;
     protected particles: Particle_T[];
     protected isRespawningDeadParticles: boolean;
     protected forcedLifeTime: boolean = false;
@@ -402,6 +408,7 @@ export abstract class BaseEmitter extends Object3D {
         this.meshSpawning = this.meshSpawning ?? "none";
         this.rotationSource = this.rotationSource ?? "none";
         this.coordinateSystem = this.coordinateSystem ?? "independent";
+        this.isIndependentSprayAccel = this.isIndependentSprayAccel ?? false;
         this.effectAxis = this.effectAxis ?? "negativeX";
         this.getVelocityDirectionFrom = this.getVelocityDirectionFrom ?? "none";
         this.useSkeletalLocationAs = this.useSkeletalLocationAs ?? "none";
@@ -598,6 +605,15 @@ export abstract class BaseEmitter extends Object3D {
 
         particle.position.copy(this.initialSettings.offset);
         randVector(particle.velocity, this.initialSettings.velocity.min, this.initialSettings.velocity.max);
+        if (this.coordinateSystem === "spray") {
+            particle.acceleration.copy(this.acceleration);
+
+            if (this.isIndependentSprayAccel) {
+                this.updateWorldMatrix(true, false);
+                tmpWorldToLocal.copy(this.matrixWorld).invert();
+                particle.acceleration.applyMatrix3(tmpSprayVelocityTransform.setFromMatrix4(tmpWorldToLocal));
+            }
+        }
 
         const applyAll = this.startLocationShape === "all";
         if (applyAll || this.startLocationShape === "box")
@@ -747,7 +763,7 @@ export abstract class BaseEmitter extends Object3D {
             particle.startSize.z = particle.startSize.x;
         }
         particle.scale.copy(particle.startSize);
-        const currentAccel = tmpCurrentAcceleration.copy(this.acceleration);
+        const currentAccel = tmpCurrentAcceleration.copy(this.coordinateSystem === "spray" ? particle.acceleration : this.acceleration);
         if (this.coordinateSystem === "independent") {
             this.parent.updateMatrixWorld();
             tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
@@ -774,6 +790,7 @@ export abstract class BaseEmitter extends Object3D {
                 break;
         }
 
+        // Engine.dll SpawnParticle 0x89f3ce / UpdateParticles 0x8a18f4: PTCS_Spray particles stay in world space after birth.
         if (this.coordinateSystem === "spray") {
             const emitterRotation = (owner as any).emitterRotation as Quaternion;
 
@@ -948,6 +965,31 @@ export abstract class BaseEmitter extends Object3D {
         else
             return 0;
 
+        if (this.coordinateSystem === "spray") {
+            this.updateWorldMatrix(true, false);
+
+            if (this.hasOldSprayMatrix && !this.oldSprayMatrix.equals(this.matrixWorld)) {
+                tmpSprayTransform.copy(this.matrixWorld).invert().multiply(this.oldSprayMatrix);
+                tmpSprayVelocityTransform.setFromMatrix4(tmpSprayTransform);
+
+                for (let i = 0; i < this.activeParticles; i++) {
+                    const particle = this.particles[i];
+
+                    if (!(particle.flags & EParticleFlags_T.PTF_Active)) continue;
+
+                    particle.position.applyMatrix4(tmpSprayTransform);
+                    particle.oldLocation.applyMatrix4(tmpSprayTransform);
+                    particle.startLocation.applyMatrix4(tmpSprayTransform);
+                    particle.revolutionCenter.applyMatrix4(tmpSprayTransform);
+                    particle.velocity.applyMatrix3(tmpSprayVelocityTransform);
+                    particle.acceleration.applyMatrix3(tmpSprayVelocityTransform);
+                }
+            }
+
+            this.oldSprayMatrix.copy(this.matrixWorld);
+            this.hasOldSprayMatrix = true;
+        }
+
         if (!this.rotateVelocityLossRange) {
             this.realVelocityLossRange = this.velocityLossRange;
         } else {
@@ -1082,7 +1124,7 @@ export abstract class BaseEmitter extends Object3D {
             }
 
             if (tickParticle) {
-                particle.velocity.add(currentAcceleration);
+                particle.velocity.add(coordinateSystem === "spray" ? tmpPhysicsVector.copy(particle.acceleration).multiplyScalar(deltaTime) : currentAcceleration);
 
                 // Support Independent Coordinate System:
                 if (coordinateSystem === "independent") {

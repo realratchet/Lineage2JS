@@ -32,6 +32,13 @@ export function getPawnMeshHeight(pawn: BaseActor, scaled: boolean = true): numb
     return mesh ? mesh.meshOrigin.z * (scaled ? drawScale : 1) : scaled ? pawn.getCollisionHeight() : 0;
 }
 
+export function getPawnCastingEffectScale(pawn: BaseActor): number {
+    const scale = pawn.scriptClassId ? pawn.getUnrealScriptProperty("CastingEffectScale") as number : 1;
+
+    if (!Number.isFinite(scale) || scale < 0) throw new Error(`${pawn.name} has invalid CastingEffectScale '${scale}'.`);
+    return scale;
+}
+
 export function getTargetRotation(caster: BaseActor, target: BaseActor, out: Quaternion, useCasterRotation: boolean = true): void {
     if (!target || caster === target && useCasterRotation) { getPawnRotation(caster, out); return; }
 
@@ -221,6 +228,9 @@ export class NativeSkillEffects {
         // Engine.dll SpawnSkillEffect 0x7986b5: radius > 11; 0x7986f0: radius * (1/9).
         const radius = caster.getCollisionRadius();
         let scale = typeof info.scale === "number" ? info.scale : info.scale && radius > 11 ? radius / 9 : 1;
+
+        // Engine.dll SpawnSkillEffect 0x7986dc..0x7986e2: Pawn.CastingEffectScale (+0x170c) multiplies caster radius.
+        if (radius > 11 && (info.scale === "casterRadius" || info.scale === "cancelCasterRadius")) scale *= getPawnCastingEffectScale(caster);
 
         // Engine.dll SkillEffectInit 0x79e9cc: undo Energy Wave's automatic radius scaling.
         if (info.scale === "cancelCasterRadius") scale *= 9 / radius;

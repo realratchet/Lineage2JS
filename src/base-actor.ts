@@ -197,7 +197,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public playDeathAnimation(onFinished: (actor: BaseActor) => void): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").playDeath(onFinished); }
 
     public getNpcAttacks(): readonly NpcAttack_T[] { return this.getComponent<NpcAttackComponent>("npcAttack").getAttacks(); }
-    public attack(target: BaseActor, selection: NpcAttackSelection_T, locList: readonly Vector3Arr[] = []): void { this.getComponent<NpcAttackComponent>("npcAttack").attack(target, selection, locList); }
+    public attack(target: BaseActor, selection: NpcAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void { this.getComponent<NpcAttackComponent>("npcAttack").attack(target, selection, locList, associatedActors, targetExcepted); }
     public stopAttack(): void { this.getComponent<NpcAttackComponent>("npcAttack").stop(); }
 
     public isPlayingOneShotAnimation(animationName: string): boolean { return this.animationComponent.isPlayingOneShot(animationName); }

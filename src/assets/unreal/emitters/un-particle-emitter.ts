@@ -303,7 +303,7 @@ export abstract class UParticleEmitter extends UObject {
 
     declare protected opacity: number;
 
-    declare protected _independentSprayAccel: any;
+    declare protected isIndependentSprayAccel: boolean;
 
     declare protected forcedLifeTime: boolean;
     declare protected forcedFade: boolean;
@@ -481,7 +481,7 @@ export abstract class UParticleEmitter extends UObject {
             "RotateVelocityLossRange": "rotateVelocityLossRange",
 
 
-            "IndependentSprayAccel": "_independentSprayAccel",
+            "IndependentSprayAccel": "isIndependentSprayAccel",
             "ForcedLifeTime": "forcedLifeTime",
             "ForcedFade": "forcedFade",
             "ForcedMaxParticles": "forcedMaxParticles",
@@ -634,7 +634,7 @@ const REQUIRED_SETTINGS = [
     "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
     "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
-    "initialDelayRange", "startVelocityRadialRange",
+    "initialDelayRange", "startVelocityRadialRange", "isIndependentSprayAccel",
     "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
     "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
     "isUsingCollision", "isUsingColorFromMesh", "isUsingColorScale", "isUsingRandomSubdiv",

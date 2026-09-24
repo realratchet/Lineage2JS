@@ -5,7 +5,8 @@ import type { NativeSkillEffect_T } from "../native-effects";
 const effects: NativeSkillEffect_T[] = [
     { phase: "casting", effectClass: "LineageEffect.m_u027_a", host: "caster", attach: "trail", position: "center", relativeTrailOffset: 2, lifeSpan: "shotTime", pawnLight: { color: [0.7, 0, 0], radius: 30, spot: true, target: "caster" } },
     // Engine.dll Shot 0x7ac31a/0x7ac370: trailer, location mode 1; 0x7ac37d..0x7ac392: m_u027_b, target host/owner.
-    { phase: "shot", effectClass: "LineageEffect.m_u027_b", host: "target", owner: "target", attach: "trail" }
+    // Engine.dll 0x7ac244..0x7ac308: bTargetExcepted selects nonnull list entries; even empty/null targets reach sound via 0x7a653a.
+    { phase: "shot", effectClass: "LineageEffect.m_u027_b", host: "target", owner: "target", attach: "trail", associatedActors: "targetExcepted", soundWithoutEffect: true }
 ];
 
 export default effects;

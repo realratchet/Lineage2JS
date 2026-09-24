@@ -71,6 +71,8 @@ export type NativeSkillEffect_T = {
     phase: NpcSkillEffectPhase_T;
     effectClass: string;
     host: "caster" | "target" | "source";
+    associatedActors?: "targetExcepted" | "targetExceptedAndPrimary";
+    soundWithoutEffect?: boolean;
     targetIsCaster?: boolean;
     hitActor?: boolean;
     sourceOwner?: boolean;

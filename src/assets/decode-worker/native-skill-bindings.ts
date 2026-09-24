@@ -291,8 +291,6 @@ for (const name of ["s_greater_heal101", "s_greater_heal111", "s_greater_heal121
 for (const name of ["s_guidance3", "s_vampiric_rage3"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.m_u036_a", "LineageEffect.m_u036_b"], soundPhases: ["casting", "shot"], pending: "retail visual/timing and secondary-target verification" });
 
-nativeSkillBindings.set("s_npc_dispel_atk_war1", { effects: ["LineageEffect.m_u018_a", "LineageEffect.m_u018_b"], soundPhases: ["casting", "shot"], pending: "serialized skill.sp.1069 is absent; native sleep visual used until the exported effect is restored" });
-
 // Engine.dll Init 0x7a217e/0x7a0fca -> 0x7a1220; Shot 0x7b14e5/0x7abe6d -> 0x7af576; Explosion 0x791dbf/0x790941 -> 0x7916c7.
 for (const name of ["s_npc_spear_attack", "s_npc_spear_attack3", "s_power_shot_boss_a_2_"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.s_u010_a", "LineageEffect.NSpear_sp", "LineageEffect.p_u004_a"], effectGroup: "spear", soundPhases: ["casting", "shot", "explosion"], pending: "retail visual/timing and individual NPC verification" });

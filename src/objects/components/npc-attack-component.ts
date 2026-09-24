@@ -4,7 +4,7 @@ import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
 import Rotator from "../../utils/rotator";
 import SoundComponent from "../../audio/components/sound-component";
 import getNativeEffect from "../../skills/native-effects";
-import NativeSkillEffects, { getPawnRotation, getPawnMeshHeight, getTargetRotation } from "../../skills/native-skill-effects";
+import NativeSkillEffects, { getPawnRotation, getPawnMeshHeight, getPawnCastingEffectScale, getTargetRotation } from "../../skills/native-skill-effects";
 import NProjectileComponent from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
@@ -37,7 +37,7 @@ export type NpcAttack_T = {
 
 export type NpcAttackSelection_T = number | "random";
 
-type PendingSkillEffect_T = { dueTime: number, action: NpcSkillEffectAction_T, skill: NpcSkillAttack_T };
+type PendingSkillEffect_T = { dueTime: number, action: NpcSkillEffectAction_T, skill: NpcSkillAttack_T, source: Object3D, target: BaseActor, associatedActors: readonly BaseActor[], initializeProjectile: boolean };
 
 export class NpcAttackComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "npcAttack";
@@ -53,6 +53,8 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
     protected nextAttack: NpcAttack_T = null;
     protected locList: readonly Vector3Arr[] = [];
     protected readonly associatedActors: BaseActor[] = [];
+    protected requestedAssociatedActors: readonly BaseActor[] = null;
+    protected targetExcepted = false;
     protected selection: NpcAttackSelection_T = "random";
     protected currentAttack: NpcAttack_T = null;
     protected attackStartedAt = 0;
@@ -109,6 +111,8 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
         this.nextAttack = null;
         this.locList = [];
         this.associatedActors.length = 0;
+        this.requestedAssociatedActors = null;
+        this.targetExcepted = false;
         this.currentAttack = null;
         this.shotTriggered = false;
         this.lastShotName = null;
@@ -221,8 +225,9 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
 
         this.target = attack.skill?.previewTarget === "self" ? parent : this.requestedTarget;
         this.associatedActors.length = 0;
+        if (this.requestedAssociatedActors) this.associatedActors.push(...this.requestedAssociatedActors);
         // Server supplies AssociatedActor; the offline preview supplies the selected pawn.
-        if (attack.skill?.nativeAssociatedActors) this.associatedActors.push(this.target);
+        else if (attack.skill?.nativeAssociatedActors) this.associatedActors.push(this.target);
         this.nextAttack = null;
         this.currentAttack = attack;
         this.attackStartedAt = currentTime;
@@ -367,16 +372,21 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
 
     public getAttacks(): readonly NpcAttack_T[] { return this.attacks; }
 
-    public attack(target: BaseActor, selection: NpcAttackSelection_T, locList: readonly Vector3Arr[] = []): void {
+    public attack(target: BaseActor, selection: NpcAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void {
         if (!target) throw new Error("NPC attack has no target.");
         if (this.attacks.length === 0) throw new Error(`${this.getParent().name || "NPC"} has no attacks.`);
         if (selection !== "random" && !this.attacks[selection]) throw new Error(`NPC attack '${selection}' does not exist.`);
         if (!Array.isArray(locList) || locList.some(location => !Array.isArray(location) || location.length !== 3 || !location.every(Number.isFinite))) throw new Error(`NPC skill locations must be XYZ triples of finite numbers.`);
+        if (associatedActors !== null && (!Array.isArray(associatedActors) || associatedActors.some(actor => actor !== null && !actor?.isActor))) throw new Error(`NPC skill associated actors must be pawns or null.`);
+        if (typeof targetExcepted !== "boolean") throw new Error(`NPC skill targetExcepted must be a boolean.`);
 
         const parent = this.getParent();
 
         this.stop();
         this.requestedTarget = target;
+        this.requestedAssociatedActors = associatedActors && associatedActors.slice();
+        // Server supplies bTargetExcepted; Engine.dll AddAssociatedActorNotify 0x798239 sets Pawn+0x500.
+        this.targetExcepted = targetExcepted;
         this.target = selection !== "random" && this.attacks[selection].skill?.previewTarget === "self" ? parent : target;
         this.locList = locList.map(location => location.slice() as Vector3Arr);
         this.selection = selection;
@@ -413,6 +423,8 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
         this.pendingEffects.length = 0;
         this.pendingSounds.length = 0;
         this.associatedActors.length = 0;
+        this.requestedAssociatedActors = null;
+        this.targetExcepted = false;
         this.target = null;
         this.requestedTarget = null;
         this.nextAttack = null;
@@ -487,77 +499,96 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
         return this.skillShotTime;
     }
 
-    protected triggerPhase(phase: NpcSkillEffectPhase_T, phaseTime: number, skill: NpcSkillAttack_T = this.currentAttack?.skill, source: Object3D = this.getParent(), target: BaseActor = this.target, hitActor: boolean = !!target): boolean {
+    protected triggerPhase(phase: NpcSkillEffectPhase_T, phaseTime: number, skill: NpcSkillAttack_T = this.currentAttack?.skill, source: Object3D = this.getParent(), target: BaseActor = this.target, hitActor: boolean = !!target, associatedActors: readonly BaseActor[] = this.associatedActors): boolean {
         if (!skill) return false;
         if (skill.previewTarget === "self") target = this.getParent();
 
         const hasVisual = skill.hasVisualEffect;
         let projectileExplosion = false;
+        let nativeEffectSpawned = false;
+        let nativeTargeted = false;
+        let soundWithoutEffect = false;
 
         if (!hasVisual && phase === "shot" && skill.nativeFinalShotOnly && !this.shotTriggered) return false;
         // Engine.dll 0x7ac0d5..0x7ac0e0 returns before particles and Shot sound when AssociatedActor is empty.
-        if (!hasVisual && phase === "shot" && skill.nativeAssociatedActors && this.associatedActors.length === 0) return false;
+        if (!hasVisual && phase === "shot" && skill.nativeAssociatedActors && associatedActors.length === 0) return false;
 
         if (!hasVisual && skill.nativeEffects.length) {
             const script = this.getComponent<ScriptComponent<BaseActor>>("script");
 
-            for (const name of skill.nativeEffects)
-                for (const effect of getNativeEffect(name, skill.nativeEffectGroup))
-                    if (effect.phase === phase && (effect.specificStage === undefined || effect.specificStage === this.stageShot)) {
-                        let effectSource = source;
+            const effects = skill.nativeEffects.flatMap(name => getNativeEffect(name, skill.nativeEffectGroup)).filter(effect => effect.phase === phase && (effect.specificStage === undefined || effect.specificStage === this.stageShot));
+            const targetMode = effects.find(effect => effect.associatedActors)?.associatedActors;
+            nativeTargeted = !!targetMode;
+            soundWithoutEffect = effects.some(effect => effect.soundWithoutEffect);
 
-                        if (effect.releaseProjectile) {
-                            // Engine.dll Shot 0x7afa3a exits without an impact when no prepared arrow exists.
-                            projectileExplosion = true;
-                            // Engine.dll Shot 0x7afa26..0x7afa70: detach, ShotNotify, remove prepared arrow.
-                            if (!target || this.preparedProjectiles.length === 0) continue;
+            // Engine.dll 0x7b003f..0x7b0042 dereferences each range-drain entry without a null guard.
+            if (targetMode === "targetExceptedAndPrimary" && this.targetExcepted && associatedActors.some(actor => !actor)) throw new Error(`Native skill '${skill.name}' requires nonnull associated actors.`);
 
-                            const projectile = this.preparedProjectiles[this.preparedProjectiles.length - 1];
+            // Engine.dll 0x7b03c6 falls through to the primary target after list pairs; 0x7ac101 instead ends Zaken's list branch.
+            const targets = !this.targetExcepted || !targetMode ? [target] : targetMode === "targetExceptedAndPrimary" ? [...associatedActors, target] : associatedActors;
 
-                            projectile.getComponent<NProjectileComponent>("nProjectile").detachFromBase();
-                            projectile.getComponent<ScriptComponent>("script").call("ShotNotify");
-                            this.preparedProjectiles.pop();
-                            effectSource = projectile;
-                        }
+            for (const effectTarget of targets)
+                for (const effect of effects) {
+                    if (targetMode && !effectTarget) continue;
 
-                        this.nativeEffects.spawn(effect, skill, this.getParent(), target, script, effect.lifeSpan === "firstShotTime" ? this.getFirstShotTime() : this.skillShotTime, actor => {
-                            // Engine.dll SpawnSkillEffect 0x79869a..0x7986b0.
-                            if (phase === "casting" && skill.castStyle !== 0 && effect.adjustParticleLife !== false) (actor as any).adjustParticleLife(this.skillShotTime + (effect.adjustParticleLife === "shotTime" ? 0 : 1));
-                            if (effect.projectile) {
-                                const flight = effect.projectile;
-                                const destination = flight.target === "caster" ? this.getParent() : target;
-                                const properties = (actor as any).scriptProperties;
+                    let effectSource = source;
 
-                                destination.getWorldPosition(tmpTargetPosition);
-                                tmpTargetPosition.z += destination.getCollisionHeight();
-                                properties.set("SkillID", skill.id);
-                                properties.get("MagicInfo").MagicID = skill.id;
-                                properties.get("MagicInfo").LevelID = skill.level;
-                                if (flight.speed !== undefined) properties.set("Speed", flight.speed);
-                                if (flight.acceleration !== undefined) properties.set("AccSpeed", flight.acceleration);
-                                if (phase !== "preshot") properties.set("Physics", EPhysics_T.PHYS_NProjectile);
-                                const projectile = new NProjectileComponent(this.renderManager, this.getParent(), destination, (projectile, hitActor) => {
-                                    this.triggerPhase("explosion", this.lastTime, skill, projectile, destination, hitActor);
-                                }, flight.path ? new NMover(actor.position, tmpTargetPosition, flight.path, flight.speed, flight.acceleration) : null);
+                    if (effect.releaseProjectile) {
+                        // Engine.dll Shot 0x7afa3a exits without an impact when no prepared arrow exists.
+                        projectileExplosion = true;
+                        // Engine.dll Shot 0x7afa26..0x7afa70: detach, ShotNotify, remove prepared arrow.
+                        if (!effectTarget || this.preparedProjectiles.length === 0) continue;
 
-                                (actor as any).addComponent(projectile);
-                                if (flight.interpolation !== undefined || flight.hermite) {
-                                    // Engine.dll 0x7ace9b..0x7acf1e: launch origin, effect target location, caster-relative displacement.
-                                    actor.position.toArray(properties.get("LocInitial"));
-                                    destination.getEffectTargetLocation(tmpTargetPosition);
-                                    this.getParent().getWorldPosition(tmpNpcPosition);
-                                    tmpNpcPosition.z += this.getParent().getCollisionHeight();
-                                    tmpTargetPosition.sub(tmpNpcPosition);
-                                    if (flight.hermite) projectile.prepareHermiteInterpolation(tmpTargetPosition, actor.quaternion, flight.hermite.duration, flight.hermite.tangentScale, flight.hermite.finalDirectionZ);
-                                    else projectile.prepareInterpolation(flight.interpolation, tmpTargetPosition);
-                                }
-                                if (phase === "preshot") this.preparedProjectiles.push(actor as Object3D & IObject);
-                                projectileExplosion = true;
-                            }
-                            this.addAttackEffect(actor, effect.owner === "none" ? null : effect.owner === "target" ? target : effect.owner === "source" ? effectSource as Object3D & IObject : this.getParent());
-                        }, effectSource, this.locList, hitActor);
+                        const projectile = this.preparedProjectiles[this.preparedProjectiles.length - 1];
+
+                        projectile.getComponent<NProjectileComponent>("nProjectile").detachFromBase();
+                        projectile.getComponent<ScriptComponent>("script").call("ShotNotify");
+                        this.preparedProjectiles.pop();
+                        effectSource = projectile;
                     }
+
+                    this.nativeEffects.spawn(effect, skill, this.getParent(), effectTarget, script, effect.lifeSpan === "firstShotTime" ? this.getFirstShotTime() : this.skillShotTime, actor => {
+                        nativeEffectSpawned = true;
+                        // Engine.dll SpawnSkillEffect 0x79869a..0x7986b0.
+                        if (phase === "casting" && skill.castStyle !== 0 && effect.adjustParticleLife !== false) (actor as any).adjustParticleLife(this.skillShotTime + (effect.adjustParticleLife === "shotTime" ? 0 : 1));
+                        if (effect.projectile) {
+                            const flight = effect.projectile;
+                            const destination = flight.target === "caster" ? this.getParent() : effectTarget;
+                            const properties = (actor as any).scriptProperties;
+
+                            destination.getWorldPosition(tmpTargetPosition);
+                            tmpTargetPosition.z += destination.getCollisionHeight();
+                            properties.set("SkillID", skill.id);
+                            properties.get("MagicInfo").MagicID = skill.id;
+                            properties.get("MagicInfo").LevelID = skill.level;
+                            if (flight.speed !== undefined) properties.set("Speed", flight.speed);
+                            if (flight.acceleration !== undefined) properties.set("AccSpeed", flight.acceleration);
+                            if (phase !== "preshot") properties.set("Physics", EPhysics_T.PHYS_NProjectile);
+                            const projectile = new NProjectileComponent(this.renderManager, this.getParent(), destination, (projectile, hitActor) => {
+                                this.triggerPhase("explosion", this.lastTime, skill, projectile, destination, hitActor);
+                            }, flight.path ? new NMover(actor.position, tmpTargetPosition, flight.path, flight.speed, flight.acceleration) : null);
+
+                            (actor as any).addComponent(projectile);
+                            if (flight.interpolation !== undefined || flight.hermite) {
+                                // Engine.dll 0x7ace9b..0x7acf1e: launch origin, effect target location, caster-relative displacement.
+                                actor.position.toArray(properties.get("LocInitial"));
+                                destination.getEffectTargetLocation(tmpTargetPosition);
+                                this.getParent().getWorldPosition(tmpNpcPosition);
+                                tmpNpcPosition.z += this.getParent().getCollisionHeight();
+                                tmpTargetPosition.sub(tmpNpcPosition);
+                                if (flight.hermite) projectile.prepareHermiteInterpolation(tmpTargetPosition, actor.quaternion, flight.hermite.duration, flight.hermite.tangentScale, flight.hermite.finalDirectionZ);
+                                else projectile.prepareInterpolation(flight.interpolation, tmpTargetPosition);
+                            }
+                            if (phase === "preshot") this.preparedProjectiles.push(actor as Object3D & IObject);
+                            projectileExplosion = true;
+                        }
+                        this.addAttackEffect(actor, effect.owner === "none" ? null : effect.owner === "target" ? effectTarget : effect.owner === "source" ? effectSource as Object3D & IObject : this.getParent());
+                    }, effectSource, this.locList, hitActor);
+                }
         }
+
+        // Engine.dll 0x7b0e26..0x7b0e33: target-list Shot sound requires a spawned effect.
+        if (!hasVisual && phase === "shot" && nativeTargeted && !nativeEffectSpawned && !soundWithoutEffect) return false;
 
         // Engine.dll: native Init 0x7a1bb6 / Shot 0x7b0e33; serialized phases 0x796a11 / 0x796ca8 / 0x795ebe.
         if (hasVisual || skill.nativeSoundPhases.includes(phase))
@@ -573,11 +604,17 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
             // Engine.dll TriggerShot 0x796b50: zero selects FinalShot, otherwise StageShot.
             if (phase === "shot" && !(action.specificStage === 0 && this.shotTriggered) && action.specificStage !== this.stageShot) continue;
 
-            if (phaseTime > this.lastTime) this.pendingEffects.push({ dueTime: phaseTime, action, skill });
-            else {
-                const effect = this.spawnSkillEffect(action, skill, source, target);
+            // Engine.dll Shot 0x796b6c..0x796b88 / Explosion 0x795e41..0x795e6d: empty lists fall back to the primary target.
+            const multiTarget = phase === "shot" ? !target || action.onMultiTarget && associatedActors.length > 0 : phase === "explosion" && action.onMultiTarget && associatedActors.length > 0;
+            const targets = multiTarget ? associatedActors : [target];
 
-                if ((effect as any).findComponent("nProjectile")) projectileExplosion = true;
+            for (const destination of targets) {
+                if (phaseTime > this.lastTime) this.pendingEffects.push({ dueTime: phaseTime, action, skill, source, target: destination, associatedActors: associatedActors.slice(), initializeProjectile: !multiTarget });
+                else {
+                    const effect = this.spawnSkillEffect(action, skill, source, destination, associatedActors, !multiTarget);
+
+                    if (effect && (effect as any).findComponent("nProjectile")) projectileExplosion = true;
+                }
             }
         }
 
@@ -585,17 +622,20 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     protected updatePendingEffects(currentTime: number): void {
-        for (let i = this.pendingEffects.length - 1; i >= 0; i--) {
+        for (let i = 0; i < this.pendingEffects.length; i++) {
             const pending = this.pendingEffects[i];
 
             if (pending.dueTime > currentTime) continue;
 
-            this.pendingEffects.splice(i, 1);
-            this.spawnSkillEffect(pending.action, pending.skill);
+            this.pendingEffects.splice(i--, 1);
+            this.spawnSkillEffect(pending.action, pending.skill, pending.source, pending.target, pending.associatedActors, pending.initializeProjectile);
         }
     }
 
-    protected spawnSkillEffect(action: NpcSkillEffectAction_T, skill: NpcSkillAttack_T, source: Object3D = this.getParent(), target: BaseActor = this.target): Object3D {
+    protected spawnSkillEffect(action: NpcSkillEffectAction_T, skill: NpcSkillAttack_T, source: Object3D = this.getParent(), target: BaseActor = this.target, associatedActors: readonly BaseActor[] = this.associatedActors, initializeProjectile: boolean = true): Object3D {
+        // Engine.dll LocateEffect 0x795ffa..0x796037 rejects a null selected host.
+        if (action.spawnOnTarget && !target) return null;
+
         const parent = this.getParent();
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
@@ -613,24 +653,27 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
             (effect as any).adjustParticleLife(fixed === 0 ? this.skillShotTime + 0.2 : fixed);
         }
 
-        const host = (action.spawnOnTarget && target ? target : source) as BaseActor;
+        const host = (action.spawnOnTarget ? target : source) as BaseActor;
         const hostIsPawn = !!host.isActor;
         const radius = hostIsPawn ? host.getCollisionRadius() : host.scriptProperties.get("CollisionRadius") as number;
         const height = hostIsPawn ? host.getCollisionHeight() : 0;
         const sourceProjectile = !action.useCharacterRotation && (source as any).findComponent("nProjectile");
         let projectile = false;
 
-        if (action.phase === "shot") {
+        // Engine.dll 0x796c48..0x796c6b: multi-target Notify results bypass projectile initialization.
+        if (action.phase === "shot" && initializeProjectile) {
             const classes = script.getVM().library.scriptClasses;
 
             for (let cls = classes[(effect as any).scriptClassId]; cls; cls = classes[cls.superClassId]) {
                 if (cls.id !== "engine.NSkillProjectile") continue;
 
                 projectile = true;
+                // Engine.dll 0x796c16..0x796c1f copies MagicInfo, including AssociatedActor, into the projectile.
+                const targets = associatedActors.slice();
                 (effect as any).scriptProperties.set("SkillID", skill.id);
                 (effect as any).scriptProperties.set("Physics", EPhysics_T.PHYS_NProjectile);
                 (effect as any).addComponent(new NProjectileComponent(this.renderManager, parent, target, actor => {
-                    this.triggerPhase("explosion", this.lastTime, skill, actor, target);
+                    this.triggerPhase("explosion", this.lastTime, skill, actor, target, !!target, targets);
                 }));
                 break;
             }
@@ -643,9 +686,13 @@ export class NpcAttackComponent extends ObjectComponent<BaseActor> {
                 if (emitter.particlePool) emitter.setDelayed(delay);
             });
 
-        if (action.sizeScale) {
-            const sizeScale = radius * SKILL_EFFECT_RADIUS_SCALE;
+        // Engine.dll LocateEffect 0x79603d..0x796053: target effects and non-pawns do not use CastingEffectScale.
+        let sizeScale = !action.spawnOnTarget && hostIsPawn ? getPawnCastingEffectScale(host) : 1;
 
+        if (action.sizeScale) sizeScale *= radius * SKILL_EFFECT_RADIUS_SCALE;
+
+        // Engine.dll 0x796537: double 0xa97a60 is the SetSizeScale tolerance.
+        if (Math.abs(sizeScale - 1) > 0.0001) {
             effect.traverse((child: any) => {
                 if (typeof child.setSizeScale === "function") child.setSizeScale(sizeScale);
             });
