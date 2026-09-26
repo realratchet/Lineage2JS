@@ -167,9 +167,16 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleKeyDown(event: KeyboardEvent): void {
-        if (document.activeElement?.tagName === "INPUT") return;
-
         const renderManager = this.renderManager;
+
+        if (event.key === "F4" || event.code === "F4") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.manGame.getComponent("ui").toggleDebugView();
+            return;
+        }
+
+        if (document.activeElement?.tagName === "INPUT") return;
 
         if (event.key === "F1" || event.code === "F1") {
             event.preventDefault();
@@ -182,27 +189,6 @@ export class InputManager implements IEngineComponent<GameManager> {
             event.preventDefault();
             event.stopPropagation();
             renderManager.toggleFrustumCulling();
-            return;
-        }
-
-        if (event.key === "F3" || event.code === "F3") {
-            event.preventDefault();
-            event.stopPropagation();
-            renderManager.toggleVisualizer();
-            return;
-        }
-
-        if (event.key === "F4" || event.code === "F4") {
-            event.preventDefault();
-            event.stopPropagation();
-            renderManager.nextVisualizerMode();
-            return;
-        }
-
-        if (event.key === "F5" || event.code === "F5") {
-            event.preventDefault();
-            event.stopPropagation();
-            renderManager.nextVisualizerLeafDetail();
             return;
         }
 

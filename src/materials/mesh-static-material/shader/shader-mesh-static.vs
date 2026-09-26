@@ -34,8 +34,8 @@
     attribute vec4 sway;
 #endif
 
-#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK))
-    #if defined(USE_MAP_DIFFUSE_TRANSFORM) || defined(USE_MAP_OPACITY_TRANSFORM) || defined(USE_MAP_SPECULAR_TRANSFORM) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
+#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_DETAIL))
+    #if defined(USE_MAP_DIFFUSE_TRANSFORM) || defined(USE_MAP_OPACITY_TRANSFORM) || defined(USE_MAP_SPECULAR_TRANSFORM) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM) || defined(USE_MAP_DETAIL_TRANSFORM)
         struct TextureData {
             sampler2D texture;
             vec2 size;
@@ -274,6 +274,50 @@
 
         uniform SpecularMaskData shSpecularMask;
     #endif
+
+    #ifdef USE_MAP_DETAIL_TRANSFORM
+        varying vec2 vUvTransformedDetail;
+
+        struct TransformDetailData {
+            mat3 matrix;
+            #if USE_MAP_DETAIL_TRANSFORM == PAN
+                vec2 rate;
+            #elif USE_MAP_DETAIL_TRANSFORM == ROTATE
+                vec3 rotation;
+                float offsetU;
+                float offsetV;
+                int type;
+                vec3 oscillationRate;
+                vec3 oscillationAmplitude;
+                vec3 oscillationPhase;
+            #elif USE_MAP_DETAIL_TRANSFORM == OSCILLATE
+                float rateU;
+                float rateV;
+                float phaseU;
+                float phaseV;
+                float amplitudeU;
+                float amplitudeV;
+                int typeU;
+                int typeV;
+                float offsetU;
+                float offsetV;
+            #endif
+        };
+
+        struct DetailData {
+            TextureData map;
+            float scale;
+            #if USE_MAP_DETAIL_TRANSFORM != ENVMAP && USE_MAP_DETAIL_TRANSFORM != ENVMAPWORLD
+                TransformDetailData transform;
+                #ifdef USE_MAP_DETAIL_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
+            #endif
+        };
+
+        uniform DetailData shDetail;
+    #endif
 #endif
 
 
@@ -460,7 +504,7 @@ float oscillateAxis(float val, float rate, float phase, float amplitude, float o
     return val;
 }
 
-#if defined(USE_MAP_DIFFUSE_TRANSFORM_CHAIN) || defined(USE_MAP_OPACITY_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN)
+#if defined(USE_MAP_DIFFUSE_TRANSFORM_CHAIN) || defined(USE_MAP_OPACITY_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN) || defined(USE_MAP_DETAIL_TRANSFORM_CHAIN)
     vec2 applyTransformStage(vec2 uv, TransformStage stage, float timeSeconds, vec2 size) {
         if (stage.type == PAN) {
             mat3 m = stage.matrix;
@@ -568,6 +612,33 @@ void main() {
             for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
                 if (i >= shSpecular.numInnerTransforms) continue;
                 vUvTransformedSpecular = applyTransformStage(vUvTransformedSpecular, shSpecular.innerTransforms[i], globalTimeSeconds, shSpecular.map.size);
+            }
+        #endif
+    #endif
+
+    #if defined(USE_UV) && defined(USE_MAP_DETAIL) && defined(USE_MAP_DETAIL_TRANSFORM)
+        #ifdef USE_MAP_DETAIL_UV2
+            vUvTransformedDetail = vUv2;
+        #else
+            vUvTransformedDetail = uv;
+        #endif
+        vUvTransformedDetail *= shDetail.scale;
+        #if USE_MAP_DETAIL_TRANSFORM == PAN
+            mat3 transformDetailMatrix = shDetail.transform.matrix;
+            transformDetailMatrix[2].xy += (shDetail.transform.rate * globalTimeSeconds);
+            vUvTransformedDetail = (transformDetailMatrix * vec3(vUvTransformedDetail, 1)).xy;
+        #elif USE_MAP_DETAIL_TRANSFORM == ROTATE
+            vUvTransformedDetail = rotateUV(vUvTransformedDetail, shDetail.transform.rotation, shDetail.transform.oscillationRate, shDetail.transform.oscillationAmplitude, shDetail.transform.oscillationPhase, shDetail.transform.offsetU, shDetail.transform.offsetV, globalTimeSeconds, shDetail.transform.type, shDetail.map.size);
+            vUvTransformedDetail = (shDetail.transform.matrix * vec3(vUvTransformedDetail, 1)).xy;
+        #elif USE_MAP_DETAIL_TRANSFORM == OSCILLATE
+            vUvTransformedDetail.x = oscillateAxis(vUvTransformedDetail.x, shDetail.transform.rateU, shDetail.transform.phaseU, shDetail.transform.amplitudeU, shDetail.transform.offsetU, shDetail.transform.typeU, globalTimeSeconds, shDetail.map.size.x);
+            vUvTransformedDetail.y = oscillateAxis(vUvTransformedDetail.y, shDetail.transform.rateV, shDetail.transform.phaseV, shDetail.transform.amplitudeV, shDetail.transform.offsetV, shDetail.transform.typeV, globalTimeSeconds, shDetail.map.size.y);
+            vUvTransformedDetail = (shDetail.transform.matrix * vec3(vUvTransformedDetail, 1)).xy;
+        #endif
+        #ifdef USE_MAP_DETAIL_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shDetail.numInnerTransforms) continue;
+                vUvTransformedDetail = applyTransformStage(vUvTransformedDetail, shDetail.innerTransforms[i], globalTimeSeconds, shDetail.map.size);
             }
         #endif
     #endif
@@ -751,6 +822,17 @@ void main() {
             vUvTransformedSpecularMask = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
         #elif USE_MAP_SPECULAR_MASK_TRANSFORM == ENVMAPWORLD
             vUvTransformedSpecularMask = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_DETAIL_TRANSFORM
+        #if USE_MAP_DETAIL_TRANSFORM == ENVMAP
+            vUvTransformedDetail = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_DETAIL_TRANSFORM == ENVMAPWORLD
+            vUvTransformedDetail = vReflect.xy * 0.5 + 0.5;
+        #endif
+        #if USE_MAP_DETAIL_TRANSFORM == ENVMAP || USE_MAP_DETAIL_TRANSFORM == ENVMAPWORLD
+            vUvTransformedDetail *= shDetail.scale;
         #endif
     #endif
 

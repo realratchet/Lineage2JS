@@ -454,6 +454,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public precacheCharacters(): Promise<void> {
+        if (this.loadSettings.cache === false || this.loadSettings.cache?.enabled === false) return Promise.resolve();
+
         return this.decodeWorker.precacheCharacters(this.loadSettings);
     }
 

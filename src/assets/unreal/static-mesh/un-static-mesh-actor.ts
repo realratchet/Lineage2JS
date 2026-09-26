@@ -52,21 +52,6 @@ function getSwayPhase(uuid: string): number {
     return cyrb53(uuid) / Number.MAX_SAFE_INTEGER * Math.PI * 2;
 }
 
-function hasStaticLightingData(instance: { color: Float32Array | Uint8Array | null, lights: ILightInstanceDecodeInfo } | null): boolean {
-    if (!instance) return false;
-
-    if (instance.color)
-        for (let i = 0; i < instance.color.length; i++)
-            if (instance.color[i] !== 0) return true;
-
-    const flags = new Uint8Array(instance.lights.flags);
-
-    for (let i = 0; i < flags.length; i++)
-        if (flags[i] !== 0) return true;
-
-    return false;
-}
-
 export abstract class UStaticMeshActor extends UAActor {
 
     declare protected mesh: UStaticMesh | UTexture;
@@ -204,23 +189,21 @@ export abstract class UStaticMeshActor extends UAActor {
 
         let ambX = 0, ambY = 0, ambZ = 0;
 
-        if (!this.isSunAffected) {
-            if (leaves.length > 0) {
-                const hasIndoorLeaf = leaves.some(leaf => !(xmodel.getZoneActor(leaf.iZone) as any).isSunAffected);
+        if (leaves.length > 0) {
+            const hasIndoorLeaf = leaves.some(leaf => !(xmodel.getZoneActor(leaf.iZone) as any).isSunAffected);
 
-                for (const leaf of leaves) { // seems that precalculated may be wrong for some objects and need to re-calc from zone, already had this regression, not sure why i gone back to using zone vector
-                    const zone = xmodel.getZoneActor(leaf.iZone);
-                    if (hasIndoorLeaf && (zone as any).isSunAffected) continue;
+            for (const leaf of leaves) { // seems that precalculated may be wrong for some objects and need to re-calc from zone, already had this regression, not sure why i gone back to using zone vector
+                const zone = xmodel.getZoneActor(leaf.iZone);
+                if (this.isSunAffected ? (hasIndoorLeaf && !(zone as any).isSunAffected) : (hasIndoorLeaf && (zone as any).isSunAffected)) continue;
 
-                    const amb = zone.ambientVector;
+                const amb = zone.ambientVector;
 
-                    ambX = Math.max(ambX, amb.x);
-                    ambY = Math.max(ambY, amb.y);
-                    ambZ = Math.max(ambZ, amb.z);
-                }
-            } else {
-                [ambX, ambY, ambZ] = this.getZone().ambientVector.getElements();
+                ambX = Math.max(ambX, amb.x);
+                ambY = Math.max(ambY, amb.y);
+                ambZ = Math.max(ambZ, amb.z);
             }
+        } else {
+            [ambX, ambY, ambZ] = this.getZone().ambientVector.getElements();
         }
 
         const ambVector = FColor.fromFloating(ambX, ambY, ambZ).toArray() as number[];
@@ -228,7 +211,6 @@ export abstract class UStaticMeshActor extends UAActor {
             glow: ambActor.ambientGlow,
             vector: ambVector,
             isUnlit: this.isUnlit,
-            hardwareLighting: !this.isUnlit && !this.isSunAffected && ambActor.ambientGlow === 0 && ambVector[0] === 0 && ambVector[1] === 0 && ambVector[2] === 0 && !hasStaticLightingData(instance)
         };
 
         return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);

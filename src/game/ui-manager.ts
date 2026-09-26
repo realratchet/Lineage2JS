@@ -1,11 +1,17 @@
-import * as dat from "dat.gui";
 import { IEngineComponent } from "./components";
 import Stats from "../rendering/stats";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
+import { VisualizerMode, LeafVisualizerDetail } from "../rendering/visualizer";
+import type Visualizer from "../rendering/visualizer";
+import type RenderManager from "../rendering/render-manager";
 import type BaseActor from "../base-actor";
 import type { NpcAttackSelection_T } from "../objects/components/npc-attack-component";
 import type GameManager from "./game-manager";
 import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
+
+type DebugTab = "controls" | "environment" | "bsp" | "statistics" | VisualizerMode.Fogs | VisualizerMode.Audio | VisualizerMode.Emitters;
+type GraphSeries_T = { label: string, color: string, values: number[] };
+type GpuMemoryUsage_T = { used: number, total: number };
 
 export class UIManager implements IEngineComponent<GameManager> {
     public moverPosition = 0;
@@ -15,10 +21,27 @@ export class UIManager implements IEngineComponent<GameManager> {
     public followPlayer = false;
 
     protected manGame: GameManager;
-    protected readonly gui = new dat.GUI({ autoPlace: false, width: 300 });
-    protected readonly worldFolder = this.gui.addFolder("World");
-    protected readonly qualityFolder = this.gui.addFolder("Quality");
     protected readonly stats = new (Stats as any)(0);
+    protected readonly debugView = document.createElement("aside");
+    protected readonly debugTabs = new Map<DebugTab, { button: HTMLButtonElement, panel: HTMLElement }>();
+    protected activeTab: DebugTab = "controls";
+    protected qualitySection: HTMLElement;
+    protected bspMode: HTMLSelectElement;
+    protected leafDetail: HTMLSelectElement;
+    protected leafDetailRow: HTMLElement;
+    protected bspInfoElement: HTMLElement;
+    protected statisticsElement: HTMLElement;
+    protected statisticsCanvas: HTMLCanvasElement;
+    protected statisticsContext: CanvasRenderingContext2D;
+    protected statisticsHistory = { fps: [], frameTime: [], calls: [], triangles: [], heap: [], vram: [] };
+    protected frameStartedAt = 0;
+    protected frameWindowStartedAt = performance.now();
+    protected frameCount = 0;
+    protected frameRate = 0;
+    protected frameTime = 0;
+    protected gpuVendor = "unknown";
+    protected gpuRenderer = "unknown";
+    protected gpuMemoryExtension: any;
     protected characterGroup = 1;
     protected characterFace = 0;
     protected characterHair = 0;
@@ -28,17 +51,33 @@ export class UIManager implements IEngineComponent<GameManager> {
     protected npcSpawnRequest = 0;
 
     public constructor() {
-        Object.assign(this.gui.domElement.style, {
-            position: "fixed",
-            top: "0px",
-            right: "0px",
-            zIndex: "10000"
-        });
-        document.body.appendChild(this.gui.domElement);
-        this.worldFolder.open();
+        this.debugView.className = "debug-view";
+        this.debugView.hidden = true;
 
-        this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+        const header = document.createElement("header");
+        const title = document.createElement("strong");
+        title.textContent = "DEBUG";
+        const hint = document.createElement("span");
+        hint.textContent = "F4 to close";
+        header.append(title, hint);
+        this.stats.dom.classList.add("debug-stats");
+        this.stats.showPanel(0);
         document.body.appendChild(this.stats.dom);
+
+        const tabs = document.createElement("nav");
+        tabs.className = "debug-tabs";
+        const content = document.createElement("div");
+        content.className = "debug-content";
+        this.debugView.append(header, tabs, content);
+        document.body.appendChild(this.debugView);
+
+        this.addDebugTab("controls", "Controls", tabs, content);
+        this.addDebugTab("environment", "Environment", tabs, content);
+        this.addDebugTab("bsp", "BSP", tabs, content);
+        this.addDebugTab("statistics", "Statistics", tabs, content);
+        this.addDebugTab(VisualizerMode.Fogs, "Fogs", tabs, content);
+        this.addDebugTab(VisualizerMode.Audio, "Audio", tabs, content);
+        this.addDebugTab(VisualizerMode.Emitters, "Emitters", tabs, content);
     }
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
@@ -46,270 +85,466 @@ export class UIManager implements IEngineComponent<GameManager> {
 
     public async onInit(): Promise<this> {
         this.addRenderControls();
+        this.addBspControls();
+        this.addStatisticsControls();
+
+        this.attachVisualizerDebugElements(this.manGame.getComponent("render").visualizer);
 
         return this;
     }
 
-    public beginFrame(): void { this.stats.begin(); }
-    public endFrame(): void { this.stats.end(); }
+    public beginFrame(): void {
+        this.frameStartedAt = performance.now();
+        this.stats.begin();
+    }
+
+    public endFrame(): void {
+        const time = performance.now();
+        this.frameTime = time - this.frameStartedAt;
+        this.frameCount++;
+        if (time >= this.frameWindowStartedAt + 1000) {
+            this.frameRate = this.frameCount * 1000 / (time - this.frameWindowStartedAt);
+            this.frameWindowStartedAt = time;
+            this.frameCount = 0;
+        }
+        this.stats.end();
+    }
+
+    public onAfterEngineTick(): void {
+        if (this.debugView.hidden) return;
+
+        const render = this.manGame.getComponent("render");
+        if (this.activeTab === "statistics") {
+            const info = render.renderer.info;
+            const memory = (performance as any).memory;
+            const heap = memory ? memory.usedJSHeapSize / 1048576 : 0;
+            const gpuMemory = this.getGpuMemoryUsage(render);
+            this.pushStatisticsValue(this.statisticsHistory.fps, this.frameRate);
+            this.pushStatisticsValue(this.statisticsHistory.frameTime, this.frameTime);
+            this.pushStatisticsValue(this.statisticsHistory.calls, info.render.calls);
+            this.pushStatisticsValue(this.statisticsHistory.triangles, info.render.triangles);
+            this.pushStatisticsValue(this.statisticsHistory.heap, heap);
+            this.pushStatisticsValue(this.statisticsHistory.vram, gpuMemory.used);
+            this.drawStatisticsGraph();
+            this.statisticsElement.textContent = [
+                `FPS:              ${this.frameRate.toFixed(1)}`,
+                `Frame:            ${this.frameTime.toFixed(2)} ms`,
+                `JS heap:          ${memory ? `${heap.toFixed(1)} / ${(memory.jsHeapSize / 1048576).toFixed(1)} MB` : "unavailable"}`,
+                `VRAM:             ${gpuMemory.total ? `${gpuMemory.used.toFixed(1)} / ${gpuMemory.total.toFixed(1)} MB` : "unavailable"}`,
+                `GPU vendor:       ${this.gpuVendor}`,
+                `GPU renderer:     ${this.gpuRenderer}`,
+                `WebGL:            ${render.renderer.capabilities.isWebGL2 ? "2" : "1"}`,
+                `Viewport:         ${render.lastSize.x} x ${render.lastSize.y} @${window.devicePixelRatio}x`,
+                `Draw calls:       ${info.render.calls}`,
+                `Triangles:        ${info.render.triangles}`,
+                `Lines:            ${info.render.lines}`,
+                `Points:           ${info.render.points}`,
+                `Geometries:       ${info.memory.geometries}`,
+                `Textures:         ${info.memory.textures}`,
+                `Programs:         ${(info as any).programs?.length ?? 0}`
+            ].join("\n");
+            return;
+        }
+
+        if (this.activeTab !== "bsp" || !this.bspInfoElement) return;
+        const sector = render.getSector(render.camera.position);
+        if (!sector) {
+            this.bspInfoElement.textContent = "No sector at camera position";
+            return;
+        }
+
+        const [sectorX, sectorY] = render.getSectorId(render.camera.position);
+        const zone = sector.findPositionZone(render.camera.position);
+        const leaf = sector.findPositionLeaf(render.camera.position);
+        this.bspInfoElement.textContent = [
+            `Mode:             ${this.bspMode.value}`,
+            `Leaf detail:      ${this.leafDetailRow.hidden ? "n/a" : this.leafDetail.value}`,
+            `Sector:            ${sectorX}, ${sectorY}`,
+            `BSP nodes:         ${sector.bspNodes?.length ?? 0}`,
+            `BSP leaves:        ${sector.bspLeaves?.length ?? 0}`,
+            `Zones:             ${sector.bspZones?.length ?? 0}`,
+            `Fog infos:         ${sector.fogInfos.length}`,
+            `Camera zone:       ${zone ?? "---"}`,
+            `Camera leaf:       ${leaf ?? "---"}`,
+            `Visible leaves:    ${sector.visibleLeaves.size}`,
+            `Visible emitters:  ${sector.visibleEmitterUuids.size}`,
+            `Frustum cull:      ${render.frustumCullingEnabled ? "ON" : "OFF"}`,
+            `BSP camera:        ${render.bspHelperActive ? "ON" : "OFF"}`
+        ].join("\n");
+    }
+
+    public attachVisualizerDebugElements(visualizer: Visualizer): void {
+        for (const mode of [VisualizerMode.Fogs, VisualizerMode.Audio, VisualizerMode.Emitters]) {
+            const element = visualizer.getDebugElement(mode);
+            const panel = this.debugTabs.get(mode)!.panel;
+            if (element && element.parentNode !== panel) panel.appendChild(element);
+        }
+    }
+
+    public toggleDebugView(): void {
+        if (!this.debugView.hidden) this.selectDebugTab("controls");
+        this.debugView.hidden = !this.debugView.hidden;
+    }
+
+    protected addDebugTab(key: DebugTab, label: string, tabs: HTMLElement, content: HTMLElement): void {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.classList.toggle("active", key === this.activeTab);
+        button.onclick = () => this.selectDebugTab(key);
+
+        const panel = document.createElement("section");
+        panel.className = "debug-tab-panel";
+        panel.hidden = key !== this.activeTab;
+        content.appendChild(panel);
+        tabs.appendChild(button);
+        this.debugTabs.set(key, { button, panel });
+
+    }
+
+    protected selectDebugTab(tab: DebugTab): void {
+        this.activeTab = tab;
+        this.debugView.classList.toggle("debug-visualizer", tab === VisualizerMode.Fogs || tab === VisualizerMode.Audio || tab === VisualizerMode.Emitters);
+        for (const [key, entry] of this.debugTabs) {
+            entry.button.classList.toggle("active", key === tab);
+            entry.panel.hidden = key !== tab;
+        }
+
+        const render = this.manGame.getComponent("render");
+        if (tab === "controls" || tab === "environment" || tab === "statistics") {
+            if (render.visualizer.isEnabled()) render.toggleVisualizer();
+        } else if (tab === "bsp") {
+            render.setVisualizerMode(this.bspMode.value as VisualizerMode);
+        } else render.setVisualizerMode(tab);
+    }
+
+    protected addBspControls(): void {
+        const panel = this.debugTabs.get("bsp")!.panel;
+        this.bspMode = this.addSelect(panel, "Mode", {
+            None: VisualizerMode.None,
+            Portals: VisualizerMode.Portals,
+            Zones: VisualizerMode.Zones,
+            Leaves: VisualizerMode.Leaves
+        }, VisualizerMode.None, value => {
+            this.leafDetailRow.hidden = value !== VisualizerMode.Leaves;
+            this.selectDebugTab("bsp");
+        });
+        const leafDetail = this.leafDetail = this.addSelect(panel, "Leaf detail", Object.values(LeafVisualizerDetail), LeafVisualizerDetail.Auto, value => {
+            this.manGame.getComponent("render").setVisualizerLeafDetail(value as LeafVisualizerDetail);
+        });
+        this.leafDetailRow = leafDetail.parentElement!;
+        this.leafDetailRow.hidden = true;
+        this.bspInfoElement = document.createElement("pre");
+        this.bspInfoElement.className = "debug-info";
+        this.bspInfoElement.textContent = "Open a loaded sector to inspect BSP state";
+        panel.appendChild(this.bspInfoElement);
+    }
+
+    protected addStatisticsControls(): void {
+        const panel = this.debugTabs.get("statistics")!.panel;
+        const render = this.manGame.getComponent("render");
+        const gl = render.renderer.getContext();
+        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info") as any;
+        this.gpuVendor = String(debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR));
+        this.gpuRenderer = String(debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+        this.gpuMemoryExtension = gl.getExtension("WEBGL_memory_info") || gl.getExtension("GL_NVX_gpu_memory_info");
+        this.statisticsCanvas = document.createElement("canvas");
+        this.statisticsCanvas.className = "debug-graph";
+        this.statisticsCanvas.width = 420;
+        this.statisticsCanvas.height = 180;
+        this.statisticsContext = this.statisticsCanvas.getContext("2d")!;
+        this.statisticsElement = document.createElement("pre");
+        this.statisticsElement.className = "debug-info";
+        panel.append(this.statisticsCanvas, this.statisticsElement);
+        this.addCheckbox(panel, "Show FPS overlay", true, value => this.stats.dom.style.display = value ? "block" : "none");
+    }
+
+    protected getGpuMemoryUsage(render: RenderManager): GpuMemoryUsage_T {
+        if (!this.gpuMemoryExtension) return { used: 0, total: 0 };
+        const gl = render.renderer.getContext();
+        const totalKey = this.gpuMemoryExtension.GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX;
+        const availableKey = this.gpuMemoryExtension.GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX;
+        if (!totalKey || !availableKey) return { used: 0, total: 0 };
+        const total = Number(gl.getParameter(totalKey));
+        const available = Number(gl.getParameter(availableKey));
+        if (!Number.isFinite(total) || !Number.isFinite(available) || total <= 0) return { used: 0, total: 0 };
+        return { used: Math.max(0, total - available) / 1024, total: total / 1024 };
+    }
+
+    protected pushStatisticsValue(values: number[], value: number): void {
+        values.push(value);
+        if (values.length > 120) values.shift();
+    }
+
+    protected drawStatisticsGraph(): void {
+        const rows: [string, GraphSeries_T[]][] = [
+            ["FPS", [{ label: "FPS", color: "#8bd5ff", values: this.statisticsHistory.fps }]],
+            ["Frame ms", [{ label: "ms", color: "#f2b880", values: this.statisticsHistory.frameTime }]],
+            ["Draw calls", [{ label: "calls", color: "#b8e986", values: this.statisticsHistory.calls }]],
+            ["Triangles", [{ label: "tri", color: "#d6a8ff", values: this.statisticsHistory.triangles }]],
+            ["Memory MB", [
+                { label: "JS", color: "#ff91c8", values: this.statisticsHistory.heap },
+                { label: "VRAM", color: "#8ff0d0", values: this.statisticsHistory.vram }
+            ]]
+        ];
+        const graph = this.statisticsContext;
+        const width = this.statisticsCanvas.width;
+        const rowHeight = this.statisticsCanvas.height / rows.length;
+        graph.clearRect(0, 0, width, this.statisticsCanvas.height);
+        graph.fillStyle = "#111";
+        graph.fillRect(0, 0, width, this.statisticsCanvas.height);
+        graph.font = "12px monospace";
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            const [label, series] = rows[rowIndex];
+            const top = rowIndex * rowHeight;
+            const graphLeft = 78;
+            const graphBottom = top + rowHeight - 5;
+            graph.fillStyle = "#aaa";
+            graph.fillText(label, 4, top + 14);
+            graph.strokeStyle = "#333";
+            graph.beginPath();
+            graph.moveTo(graphLeft, graphBottom);
+            graph.lineTo(width - 4, graphBottom);
+            graph.stroke();
+            const max = Math.max(1, ...series.flatMap(item => item.values));
+            for (const item of series) {
+                graph.strokeStyle = item.color;
+                graph.beginPath();
+                for (let i = 0; i < item.values.length; i++) {
+                    const x = graphLeft + (i / Math.max(1, item.values.length - 1)) * (width - graphLeft - 4);
+                    const y = graphBottom - item.values[i] / max * (rowHeight - 20);
+                    if (i === 0) graph.moveTo(x, y);
+                    else graph.lineTo(x, y);
+                }
+                graph.stroke();
+                graph.fillStyle = item.color;
+                const value = item.values[item.values.length - 1] || 0;
+                graph.fillText(`${item.label} ${value.toFixed(1)}`, graphLeft + 5 + series.indexOf(item) * 90, top + 14);
+            }
+        }
+    }
+
+    protected addSection(title: string, open = false, tab: DebugTab = "controls"): HTMLElement {
+        const section = document.createElement("details");
+        section.open = open;
+        section.className = "debug-section";
+        const summary = document.createElement("summary");
+        summary.textContent = title;
+        section.appendChild(summary);
+        this.debugTabs.get(tab)!.panel.appendChild(section);
+        return section;
+    }
+
+    protected addRow(parent: HTMLElement, label: string, control: HTMLElement): HTMLElement {
+        const row = document.createElement("label");
+        row.className = "debug-row";
+        const text = document.createElement("span");
+        text.textContent = label;
+        row.append(text, control);
+        parent.appendChild(row);
+        return row;
+    }
+
+    protected addSelect(parent: HTMLElement, label: string, options: readonly string[] | Record<string, string | number>, value: string, onChange: (value: string) => void): HTMLSelectElement {
+        const select = document.createElement("select");
+        const entries = Array.isArray(options) ? options.map(option => [option, option] as [string, string]) : Object.entries(options).map(([name, option]) => [name, String(option)] as [string, string]);
+        for (const [name, option] of entries) {
+            const element = document.createElement("option");
+            element.textContent = name;
+            element.value = option;
+            select.appendChild(element);
+        }
+        select.value = value;
+        select.onchange = () => onChange(select.value);
+        this.addRow(parent, label, select);
+        return select;
+    }
+
+    protected addCheckbox(parent: HTMLElement, label: string, value: boolean, onChange: (value: boolean) => void): HTMLInputElement {
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = value;
+        input.onchange = () => onChange(input.checked);
+        this.addRow(parent, label, input);
+        return input;
+    }
+
+    protected addRange(parent: HTMLElement, label: string, value: number, min: number, max: number, step: number, onChange: (value: number) => void): HTMLInputElement {
+        const input = document.createElement("input");
+        input.type = "range";
+        input.min = String(min);
+        input.max = String(max);
+        input.step = String(step);
+        input.value = String(value);
+        input.oninput = () => onChange(Number(input.value));
+        this.addRow(parent, label, input);
+        return input;
+    }
+
+    protected addText(parent: HTMLElement, label: string, value: string, onChange: (value: string) => void): HTMLInputElement {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = value;
+        input.onchange = () => onChange(input.value);
+        this.addRow(parent, label, input);
+        return input;
+    }
+
+    protected addButton(parent: HTMLElement, label: string, onClick: () => void): HTMLButtonElement {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.onclick = onClick;
+        parent.appendChild(button);
+        return button;
+    }
 
     protected addRenderControls(): void {
-        const manRender = this.manGame.getComponent("render");
-        const environment = manRender.getEnvironment();
+        const render = this.manGame.getComponent("render");
+        const environment = render.getEnvironment();
+        const world = this.addSection("World", true, "environment");
+        const quality = this.qualitySection = this.addSection("Quality", false, "environment");
+        const sky = this.addSection("Sky", false, "environment");
+        const audio = this.addSection("Audio", false, "environment");
 
-        this.qualityFolder.add(this, "fogPreset", {
-            "1 (2k-8k)": "1",
-            "2 (3k-10k)": "2",
-            "3 (4k-12k)": "3",
-            "4 (5k-14k)": "4",
-            "5 (8k-20k)": "5"
-        }).name("Fog Range");
+        this.addSelect(quality, "Fog Range", {
+            "1 (2k-8k)": "1", "2 (3k-10k)": "2", "3 (4k-12k)": "3", "4 (5k-14k)": "4", "5 (8k-20k)": "5"
+        }, this.fogPreset, value => this.fogPreset = value);
+        this.addCheckbox(world, "Show Level", this.showLevel, value => { this.showLevel = value; render.setLevelVisible(value); });
+        this.addCheckbox(world, "Show Colliders", this.showColliders, value => { this.showColliders = value; render.setCollidersVisible(value); });
+        this.addRange(world, "Door Position", this.moverPosition, 0, 1, 0.01, value => { this.moverPosition = value; render.needsUpdate = true; });
+        this.addCheckbox(sky, "Celestials", render.skyRenderer.config.celestials, value => render.skyRenderer.config.celestials = value);
+        this.addCheckbox(sky, "Haze", render.skyRenderer.config.haze1, value => render.skyRenderer.config.haze1 = value);
+        this.addCheckbox(sky, "Stars/Clouds", render.skyRenderer.config.starsClouds, value => render.skyRenderer.config.starsClouds = value);
+        this.addRange(audio, "Music Volume", render.audioManager.musicVolume, 0, 1, 0.01, value => render.audioManager.musicVolume = value);
+        this.addRange(audio, "Ambient Volume", render.audioManager.ambientVolume, 0, 1, 0.01, value => render.audioManager.ambientVolume = value);
 
-        this.worldFolder.add(this, "showLevel")
-            .name("Show Level")
-            .onChange(v => manRender.setLevelVisible(v));
-
-        this.worldFolder.add(this, "showColliders")
-            .name("Show Colliders")
-            .onChange(v => manRender.setCollidersVisible(v));
-
-        this.worldFolder.add(this, "moverPosition", 0, 1, 0.01)
-            .name("Door Position")
-            .onChange(() => manRender.needsUpdate = true);
-
-        const skyFolder = this.gui.addFolder("Sky Layers");
-        skyFolder.add(manRender.skyRenderer.config, "celestials").name("Celestials");
-        skyFolder.add(manRender.skyRenderer.config, "haze1").name("Haze");
-        skyFolder.add(manRender.skyRenderer.config, "starsClouds").name("Stars/Clouds");
-        // skyFolder.add(manRender.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
-
-        const audioFolder = this.gui.addFolder("Audio");
-        audioFolder.add(manRender.audioManager, "musicVolume", 0, 1, 0.01).name("Music Volume");
-        audioFolder.add(manRender.audioManager, "ambientVolume", 0, 1, 0.01).name("Ambient Volume");
-        audioFolder.open();
-
-        const timeState = {
-            get time() { return environment.getTimeOfDay(); },
-            set time(v) {
-                environment.setTimeOfDay(v);
-                manRender.needsUpdate = true;
-            },
-            get timeScale() { return environment.getTimeScale(); },
-            set timeScale(v) {
-                environment.setTimeScale(v);
-                manRender.needsUpdate = true;
-            }
-        };
-
-        this.worldFolder.add(timeState, "time", 0, 24, 0.01)
-            .name("Time")
-            .listen();
-        this.worldFolder.add(timeState, "timeScale", 0, 100, 0.01)
-            .name("Time Scale");
-
-        const envSignsSkyState = {
-            get signsSky() { return environment.getActiveEnv(); },
-            set signsSky(v) {
-                environment.setActiveEnv(Number(v) as 0 | 1 | 2);
-                manRender.needsUpdate = true;
-            }
-        };
-
-        this.worldFolder.add(envSignsSkyState, "signsSky", { "Normal": 0, "Dusk": 1, "Dawn": 2 })
-            .name("Signs Sky");
+        this.addRange(world, "Time", environment.getTimeOfDay(), 0, 24, 0.01, value => { environment.setTimeOfDay(value); render.needsUpdate = true; });
+        this.addRange(world, "Time Scale", environment.getTimeScale(), 0, 100, 0.01, value => environment.setTimeScale(value));
+        this.addSelect(world, "Signs Sky", { Normal: 0, Dusk: 1, Dawn: 2 }, String(environment.getActiveEnv()), value => { environment.setActiveEnv(Number(value) as 0 | 1 | 2); render.needsUpdate = true; });
     }
 
     public async addCharacterControls(): Promise<void> {
-        const this_ = this, manAsset = this.manGame.getComponent("asset"), manPhys = this.manGame.getComponent("physics"), manRender = this.manGame.getComponent("render");
-        const groups = await manAsset.getCharGroups();
-        const state = { group: this.characterGroup, face: this.characterFace, hair: this.characterHair, hairColour: this.characterHairColour, chest: this.characterArmor.chest, legs: this.characterArmor.legs, gloves: this.characterArmor.gloves, boots: this.characterArmor.boots };
+        const asset = this.manGame.getComponent("asset");
+        const physics = this.manGame.getComponent("physics");
+        const render = this.manGame.getComponent("render");
+        const groups = await asset.getCharGroups();
+        const section = this.addSection("Character");
         const groupOptions: Record<string, number> = {};
-        const folder = this.gui.addFolder("Character");
+        for (const group of groups) groupOptions[group.name] = group.index;
 
-        for (const group of groups)
-            groupOptions[group.name] = group.index;
-
-        let faceControl: dat.GUIController = null;
-        let hairControl: dat.GUIController = null;
-        let hairColourControl: dat.GUIController = null;
-        let armorControls: dat.GUIController[] = [];
-
-        function applyCharacter(): Promise<void> {
-            return manAsset.loadCharacter(manRender, this_.characterGroup, this_.characterFace, this_.characterHair, this_.characterHairColour, this_.characterArmor);
-        }
-
-        function buildArmorControls(): void {
-            const group = groups[this_.characterGroup];
-
-            for (const control of armorControls) folder.remove(control);
-            armorControls = [];
-
-            for (const slot of Object.keys(this_.characterArmor) as (keyof ICharacterArmorSelection)[]) {
-                const options: Record<string, number> = { None: 0 };
-
-                for (const item of group.armor[slot])
-                    options[item.label] = item.id;
-
-                state[slot] = this_.characterArmor[slot];
-                armorControls.push(folder.add(state, slot, options).name(slot[0].toUpperCase() + slot.slice(1)).onChange(async v => {
-                    this_.characterArmor[slot] = Number(v);
-                    await applyCharacter();
-                }));
-            }
-        }
-
-        // a style only ships some of the colours, so the colour options get rebuilt whenever the style changes
-        function buildColourControl(): void {
-            const colours = groups[this_.characterGroup].hairColours[this_.characterHair];
-
-            if (hairColourControl) folder.remove(hairColourControl);
-
-            state.hairColour = this_.characterHairColour = colours.includes(this_.characterHairColour) ? this_.characterHairColour : colours[0];
-
-            hairColourControl = folder.add(state, "hairColour", colours).name("Hair Color").onChange(async v => {
-                this_.characterHairColour = Number(v);
-                await applyCharacter();
-            });
-        }
-
-        function buildVariantControls(): void {
-            const group = groups[this_.characterGroup];
-
-            if (faceControl) folder.remove(faceControl);
-            if (hairControl) folder.remove(hairControl);
-
-            state.face = this_.characterFace = Math.min(this_.characterFace, group.faceVariants - 1);
-            state.hair = this_.characterHair = group.hairStyles.includes(this_.characterHair) ? this_.characterHair : group.hairStyles[0];
-
-            const faceOptions = Array.from({ length: group.faceVariants }, (_, i) => i);
-
-            faceControl = folder.add(state, "face", faceOptions).name("Face").onChange(async v => {
-                this_.characterFace = Number(v);
-                await applyCharacter();
-            });
-
-            hairControl = folder.add(state, "hair", group.hairStyles).name("Hair").onChange(async v => {
-                this_.characterHair = Number(v);
-                buildColourControl();
-                await applyCharacter();
-            });
-
-            buildColourControl();
-            buildArmorControls();
-        }
-
-        folder.add(state, "group", groupOptions).name("Character").onChange(async v => {
-            this.characterGroup = Number(v);
+        this.addSelect(section, "Character", groupOptions, String(this.characterGroup), async value => {
+            this.characterGroup = Number(value);
             this.characterArmor = { chest: 0, legs: 0, gloves: 0, boots: 0 };
             buildVariantControls();
             await applyCharacter();
         });
+        const variants = document.createElement("div");
+        variants.className = "debug-subsection";
+        section.appendChild(variants);
+        this.addCheckbox(section, "Follow Player", this.followPlayer, value => {
+            this.followPlayer = value;
+            this.manGame.getComponent("input").setFollowPlayer(value);
+        });
+        this.addButton(section, "Simulate Pawns", () => physics.simulatePawns());
 
-        folder.add(this, "followPlayer").name("Follow Player").onChange(() => this.manGame.getComponent("input").setFollowPlayer(this.followPlayer));
-        folder.add({ simulate: () => manPhys.simulatePawns() }, "simulate").name("Simulate Pawns");
+        const applyCharacter = (): Promise<void> => asset.loadCharacter(render, this.characterGroup, this.characterFace, this.characterHair, this.characterHairColour, this.characterArmor);
+        const addArmorControls = (group: typeof groups[number]): void => {
+            for (const slot of Object.keys(this.characterArmor) as (keyof ICharacterArmorSelection)[]) {
+                const options: Record<string, number> = { None: 0 };
+                for (const item of group.armor[slot]) options[item.label] = item.id;
+                this.addSelect(variants, slot[0].toUpperCase() + slot.slice(1), options, String(this.characterArmor[slot]), async value => {
+                    this.characterArmor[slot] = Number(value);
+                    await applyCharacter();
+                });
+            }
+        };
+        const buildVariantControls = (): void => {
+            const group = groups[this.characterGroup];
+            variants.innerHTML = "";
+            this.characterFace = Math.min(this.characterFace, group.faceVariants - 1);
+            this.characterHair = group.hairStyles.includes(this.characterHair) ? this.characterHair : group.hairStyles[0];
+            this.addSelect(variants, "Face", Array.from({ length: group.faceVariants }, (_, i) => String(i)), String(this.characterFace), async value => { this.characterFace = Number(value); await applyCharacter(); });
+            this.addSelect(variants, "Hair", group.hairStyles.map(String), String(this.characterHair), async value => { this.characterHair = Number(value); buildVariantControls(); await applyCharacter(); });
+            const colours = group.hairColours[this.characterHair];
+            this.characterHairColour = colours.includes(this.characterHairColour) ? this.characterHairColour : colours[0];
+            this.addSelect(variants, "Hair Color", colours.map(String), String(this.characterHairColour), async value => { this.characterHairColour = Number(value); await applyCharacter(); });
+            addArmorControls(group);
+        };
 
         buildVariantControls();
-        folder.open();
     }
 
     public addNpcControls(): void {
-        const manRender = this.manGame.getComponent("render");
-        const state = {
-            selector: "Baium",
-            selectedAttack: "random",
-            selectedTarget: "player",
-            spawn: async () => {
-                const request = ++this.npcSpawnRequest;
+        const render = this.manGame.getComponent("render");
+        const section = this.addSection("NPC");
+        const state = { selector: "Baium", selectedAttack: "random", selectedTarget: "player" };
+        const attackControls = document.createElement("div");
+        attackControls.className = "debug-subsection";
 
-                if (this.spawnedNpc) {
-                    this.spawnedNpc.stopAttack();
-                    manRender.removePawn(this.spawnedNpc);
-                    this.spawnedNpc = null;
-                }
-
-                buildAttackControl(null);
-
-                const npc = await manRender.spawnNpc(state.selector);
-
-                if (request !== this.npcSpawnRequest) {
-                    manRender.removePawn(npc);
-                    return;
-                }
-
-                this.spawnedNpc = npc;
-                buildAttackControl(npc);
-            },
-            kill: () => {
-                ++this.npcSpawnRequest;
-
-                const npc = this.spawnedNpc;
-
-                if (!npc) return;
-
-                npc.stopAttack();
-                npc.playDeathAnimation(() => {
-                    manRender.removePawn(npc);
-                    if (this.spawnedNpc === npc) {
-                        this.spawnedNpc = null;
-                        buildAttackControl(null);
-                    }
-                });
-            },
-            attack: () => {
-                const npc = this.spawnedNpc;
-
-                if (!npc) return;
-
-                const selection: NpcAttackSelection_T = state.selectedAttack === "random" ? "random" : Number(state.selectedAttack);
-
-                npc.attack(state.selectedTarget === "self" ? npc : manRender.player, selection);
-            },
-            stop: () => this.spawnedNpc?.stopAttack()
-        };
-        const folder = this.gui.addFolder("NPC");
-        let attackControl: dat.GUIController = null;
-
-        function buildAttackControl(npc: BaseActor): void {
+        const buildAttackControl = (npc: BaseActor): void => {
+            attackControls.innerHTML = "";
             const options: Record<string, string> = { Random: "random" };
-
-            if (attackControl) folder.remove(attackControl);
-
-            if (npc)
-                npc.getNpcAttacks().forEach((attack, index) => options[attack.label] = String(index));
-
+            if (npc) npc.getNpcAttacks().forEach((attack, index) => options[attack.label] = String(index));
             state.selectedAttack = "random";
-            attackControl = folder.add(state, "selectedAttack", options).name("NPC attacks");
-        }
+            this.addSelect(attackControls, "NPC attacks", options, state.selectedAttack, value => state.selectedAttack = value);
+        };
 
-        folder.add(state, "selector").name("Name / ID");
-        folder.add(state, "spawn").name("Spawn");
-        folder.add(state, "kill").name("Kill");
+        this.addText(section, "Name / ID", state.selector, value => state.selector = value);
+        const actions = document.createElement("div");
+        actions.className = "debug-actions";
+        this.addButton(actions, "Spawn", async () => {
+            const request = ++this.npcSpawnRequest;
+            if (this.spawnedNpc) {
+                this.spawnedNpc.stopAttack();
+                render.removePawn(this.spawnedNpc);
+                this.spawnedNpc = null;
+            }
+            buildAttackControl(null);
+            const npc = await render.spawnNpc(state.selector);
+            if (request !== this.npcSpawnRequest) return render.removePawn(npc);
+            this.spawnedNpc = npc;
+            buildAttackControl(npc);
+        });
+        this.addButton(actions, "Kill", () => {
+            ++this.npcSpawnRequest;
+            const npc = this.spawnedNpc;
+            if (!npc) return;
+            npc.stopAttack();
+            npc.playDeathAnimation(() => {
+                render.removePawn(npc);
+                if (this.spawnedNpc === npc) {
+                    this.spawnedNpc = null;
+                    buildAttackControl(null);
+                }
+            });
+        });
+        section.appendChild(actions);
+        section.appendChild(attackControls);
         buildAttackControl(null);
-        folder.add(state, "selectedTarget", { Player: "player", Self: "self" }).name("Attack target").onChange(state.stop);
-        folder.add(state, "attack").name("Attack");
-        folder.add(state, "stop").name("Stop");
-        folder.open();
+        this.addSelect(section, "Attack target", { Player: "player", Self: "self" }, state.selectedTarget, value => { state.selectedTarget = value; this.spawnedNpc?.stopAttack(); });
+        const attackActions = document.createElement("div");
+        attackActions.className = "debug-actions";
+        this.addButton(attackActions, "Attack", () => {
+            const npc = this.spawnedNpc;
+            if (npc) npc.attack(state.selectedTarget === "self" ? npc : render.player, state.selectedAttack === "random" ? "random" : Number(state.selectedAttack) as NpcAttackSelection_T);
+        });
+        this.addButton(attackActions, "Stop", () => this.spawnedNpc?.stopAttack());
+        section.appendChild(attackActions);
     }
 
     public addClippingRangeControls(): void {
-        const manAsset = this.manGame.getComponent("asset"), manRender = this.manGame.getComponent("render");
-        const clippingRange = manAsset.userConfig.clippingRange;
-
-        this.qualityFolder.add(clippingRange, "actor", 1, 12, 0.5)
-            .name("Emitter Range")
-            .onChange(() => manRender.invalidateSectorVisibility());
+        const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
+        const clippingRange = asset.userConfig.clippingRange;
+        this.addRange(this.qualitySection, "Emitter Range", clippingRange.actor, 1, 12, 0.5, value => { clippingRange.actor = value; render.invalidateSectorVisibility(); });
     }
 
     public addDisplayGammaControls(): void {
-        const manAsset = this.manGame.getComponent("asset"), manRender = this.manGame.getComponent("render");
-        const display = manAsset.userConfig.display;
+        const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
+        const display = asset.userConfig.display;
         display.gamma = 0;
-
-        const steps = GAMMA_STEPS.reduce((acc, g) => (acc[g.toFixed(1)] = g, acc), { "off": 0 } as Record<string, number>);
-
-        this.qualityFolder.add(display, "gamma", steps)
-            .name("Gamma")
-            .onChange(v => manRender.setDisplayGamma(display, v));
+        const steps = GAMMA_STEPS.reduce((acc, gamma) => (acc[gamma.toFixed(1)] = gamma, acc), { off: 0 } as Record<string, number>);
+        this.addSelect(this.qualitySection, "Gamma", steps, "0", value => render.setDisplayGamma(display, Number(value)));
     }
 }
 

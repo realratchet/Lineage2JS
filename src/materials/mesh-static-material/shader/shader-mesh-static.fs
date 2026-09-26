@@ -33,7 +33,7 @@ uniform float opacity;
     uniform samplerCube shSpecularCube;
 #endif
 
-#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_MATERIAL2))
+#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_MATERIAL2) || defined(USE_MAP_DETAIL))
     struct TextureData {
         sampler2D texture;
         vec2 size;
@@ -56,6 +56,66 @@ uniform float opacity;
         int typeU, typeV; // oscillate
         float offsetU, offsetV; // rotate + oscillate
     };
+#endif
+
+#ifdef USE_DETAIL
+    #if defined(USE_UV) && defined(USE_MAP_DETAIL)
+        #ifdef USE_MAP_DETAIL_TRANSFORM
+            varying vec2 vUvTransformedDetail;
+
+            struct TransformDetailData {
+                mat3 matrix;
+                #if USE_MAP_DETAIL_TRANSFORM == PAN
+                    vec2 rate;
+                #elif USE_MAP_DETAIL_TRANSFORM == ROTATE
+                    vec3 rotation;
+                    float offsetU;
+                    float offsetV;
+                    int type;
+                    vec3 oscillationRate;
+                    vec3 oscillationAmplitude;
+                    vec3 oscillationPhase;
+                #elif USE_MAP_DETAIL_TRANSFORM == OSCILLATE
+                    float rateU;
+                    float rateV;
+                    float phaseU;
+                    float phaseV;
+                    float amplitudeU;
+                    float amplitudeV;
+                    int typeU;
+                    int typeV;
+                    float offsetU;
+                    float offsetV;
+                #endif
+            };
+        #endif
+
+        struct DetailData {
+            TextureData map;
+            float scale;
+            #ifdef USE_MAP_DETAIL_TRANSFORM
+                #if USE_MAP_DETAIL_TRANSFORM != ENVMAP && USE_MAP_DETAIL_TRANSFORM != ENVMAPWORLD
+                    TransformDetailData transform;
+                    #ifdef USE_MAP_DETAIL_TRANSFORM_CHAIN
+                        TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                        int numInnerTransforms;
+                    #endif
+                #endif
+            #endif
+        };
+
+        uniform DetailData shDetail;
+
+        #ifdef USE_MAP_DETAIL_TRANSFORM
+            #if defined(USE_MAP_DETAIL_TRANSFORM)
+                #define UV_DETAIL vUvTransformedDetail
+            #endif
+        #elif defined(USE_MAP_DETAIL_UV2)
+            #define UV_DETAIL vUv2
+        #else
+            #define UV_DETAIL vUv
+        #endif
+    #endif
 #endif
 
 #ifdef USE_DIFFUSE
@@ -456,6 +516,14 @@ void main() {
         #endif
     #endif
 
+    #ifdef USE_DETAIL
+        #ifdef USE_MAP_DETAIL_TRANSFORM
+            diffuseColor.rgb *= texture2D(shDetail.map.texture, UV_DETAIL).rgb * 2.0;
+        #else
+            diffuseColor.rgb *= texture2D(shDetail.map.texture, UV_DETAIL * shDetail.scale).rgb * 2.0;
+        #endif
+    #endif
+
     #ifdef USE_COMBINER
         vec3 color1 = diffuseColor.rgb;
         float alpha1 = diffuseColor.a;
@@ -566,6 +634,7 @@ void main() {
     
     #ifdef USE_SPECULAR
         vec3 specularColor = vec3(1.0);
+        float specularMaskValue = 1.0;
 
         #ifdef USE_FADE
             // UFadeColor::GetColor (UnMaterial.cpp line 332): Time = (TimeSeconds + FadePhase) / FadePeriod
@@ -604,14 +673,20 @@ void main() {
                 // that op's alpha comes from D3DTOP_SELECTARG1, D3DTA_TEXTURE on the mask stage
                 diffuseColor.a = texelSpecularMask.a;
             #else
-                reflectedLight.directDiffuse += texelSpecularMask.a * specularColor;
+                specularMaskValue = texelSpecularMask.a;
             #endif
-        #else
-            reflectedLight.directDiffuse *= specularColor;
         #endif
     #endif
 
     vec3 outgoingLight = reflectedLight.indirectDiffuse + reflectedLight.directDiffuse;
+
+    #if defined(USE_SPECULAR) && !defined(USE_SELF_ILLUMINATION)
+        #ifdef USE_MODULATE_SPECULAR_2X
+            outgoingLight *= specularColor * 2.0;
+        #else
+            outgoingLight += specularMaskValue * specularColor;
+        #endif
+    #endif
 
     #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
         if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {

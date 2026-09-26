@@ -22,6 +22,8 @@ export type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
     buffer: ArrayBuffer,
     wrapS?: TextureClampMode_T, wrapT?: TextureClampMode_T,
     width: number, height: number,
+    detail?: string,
+    detailScale: number,
     twoSided?: boolean,
     isMasked?: boolean,
     isAlphaTexture?: boolean
@@ -66,6 +68,8 @@ export abstract class UTexture extends UMaterial {
     declare public readonly isTwoSided: boolean;
     declare public readonly isAlphaTexture: boolean;
     declare public readonly isMasked: boolean;
+    declare protected detail: UMaterial;
+    declare protected detailScale: number;
 
     declare protected lodSet: number;
 
@@ -90,6 +94,9 @@ export abstract class UTexture extends UMaterial {
             "VClampMode": "wrapT",
 
             "MaxColor": "maxColor",
+
+            "Detail": "detail",
+            "DetailScale": "detailScale",
 
             "MipZero": "mipZero",
 
@@ -164,7 +171,8 @@ export abstract class UTexture extends UMaterial {
         }
     }
 
-    protected decodeTexture(library: DecodeLibrary) {
+    protected decodeTexture(builder: DecodeLibraryBuilder) {
+        const library = builder.library;
         const totalMipCount = this.mipmaps.length;
 
         if (totalMipCount === 0) return { materialType: "empty" };
@@ -322,6 +330,8 @@ export abstract class UTexture extends UMaterial {
             buffer: decodedBuffer,
             width,
             height,
+            detail: builder.pullMaterial(this.detail),
+            detailScale: this.detailScale ?? 8,
             wrapS: this.wrapS === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
             wrapT: this.wrapT === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
             useMipmaps: mipCount > 0,
@@ -338,7 +348,7 @@ export abstract class UTexture extends UMaterial {
             let tex: UTexture = this;
 
             for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
-                sprites.push(tex.loadSelf().decodeTexture(builder.library));
+                sprites.push(tex.loadSelf().decodeTexture(builder));
                 tex = tex.animNext;
             }
 
@@ -350,7 +360,7 @@ export abstract class UTexture extends UMaterial {
             } as IAnimatedSpriteDecodeInfo;
         }
 
-        return this.decodeTexture(builder.library);
+        return this.decodeTexture(builder);
     }
 }
 

@@ -6,13 +6,13 @@ import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vecto
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
 
-const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
+const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask", "shDetail"]);
 
 // Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
 export const NUM_ACTOR_LIGHTS = 4;
 const MAX_HARDWARE_LIGHTS = 8; // D3DDrv SetPawnLight RVA 0x1c7b2.
 
-type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
+type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shDetail" | "shMaterial2";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
     sprites: Record<string, SpriteParam_T>,
@@ -35,6 +35,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         case "shOpacity": defName = "OPACITY"; break;
         case "shSpecular": defName = "SPECULAR"; break;
         case "shSpecularMask": defName = "SPECULAR_MASK"; break;
+        case "shDetail": defName = "DETAIL"; break;
         case "shMaterial2": defName = "MATERIAL2"; break;
     }
 
@@ -116,6 +117,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         const sprites = {};
 
         const defines: Record<string, any> = { USE_FOG: "" };
+
+        if (info.modulateStaticLighting2X !== false) defines["USE_STATIC_LIGHTING_2X"] = "";
+        if (info.modulateSpecular2X === true) defines["USE_MODULATE_SPECULAR_2X"] = "";
         // UniformsLib.lights dropped - NUM_DIR_LIGHTS/NUM_SPOT_LIGHTS/NUM_HEMI_LIGHTS are always
         // 0 here (DynamicLight isn't a THREE.Light), so those ~19 uniforms never compiled in
         const uniforms: Record<string, Uniform> = appendGlobalUniforms(UniformsUtils.merge([
@@ -130,13 +134,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 transformSpecular: new Uniform(null),
 
                 lightMap: new Uniform(null),
-                lightMapIntensity: new Uniform(info.modulateStaticLighting2X === true ? 2 : 1),
+                lightMapIntensity: new Uniform(info.modulateStaticLighting2X !== false ? 2 : 1),
 
                 shDiffuse: new Uniform(null),
                 shOpacity: new Uniform(null),
                 shSpecular: new Uniform(null),
                 shSpecularCube: new Uniform(null),
                 shSpecularMask: new Uniform(null),
+                shDetail: new Uniform(null),
                 shMaterial2: new Uniform(null),
 
                 ambient: new Uniform({
@@ -153,7 +158,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         ]));
 
         function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
-            if (!parameters) return;
+            if (!parameters || (name === "shDetail" && !parameters.isUsingMap)) return;
 
             applyParameters({
                 name,
@@ -168,6 +173,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         apply("shOpacity", info.opacity);
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
+        apply("shDetail", info.detail);
 
         if (info.selfIllumination) defines["USE_SELF_ILLUMINATION"] = "";
 
@@ -508,6 +514,7 @@ type MeshStaticMaterialParameters_T = {
     opacity: IDecodedParameter,
     specular: IDecodedParameter,
     specularMask: IDecodedParameter,
+    detail?: IDecodedParameter,
     side: THREE.Side,
     blendingMode: SupportedBlendingTypes_T,
     transparent: boolean,
@@ -517,6 +524,7 @@ type MeshStaticMaterialParameters_T = {
     modifyFramebufferBlending?: boolean,
     visible: boolean,
     modulateStaticLighting2X?: boolean,
+    modulateSpecular2X?: boolean,
     selfIllumination?: boolean,
     combiner?: {
         combineMode: number,

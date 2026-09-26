@@ -28,7 +28,7 @@ export type DecodableMaterial_T = "modifier" | "texture" | "cubemap" | "shader" 
 export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTexture" | "oscillateTexture" | "envMapTexture" | "colorModifier" | "finalBlend" | "texCoordSource";
 
 export type IBaseMaterialDecodeInfo = { name?: string, materialType: DecodableMaterial_T, color?: boolean };
-export type ICubemapDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "cubemap", faces: string[] };
+export type ICubemapDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "cubemap", faces: (string | null)[] };
 export type ISolidMaterialDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "solid", solidColor: number };
 export type ILightmappedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "lightmapped", material: string, lightmap: string | null };
 export type IMaterialGroupDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "group", materials: string[] };
@@ -46,6 +46,8 @@ export type IShaderDecodeInfo = IBaseMaterialDecodeInfo & {
     specularMask: string,
     selfIllumination: string,
     selfIlluminationMask: string,
+    detail?: string,
+    detailScale: number,
     blendingMode: SupportedBlendingTypes_T,
     depthWrite: boolean,
     depthTest: boolean,
@@ -53,6 +55,7 @@ export type IShaderDecodeInfo = IBaseMaterialDecodeInfo & {
     transparent: boolean,
     alphaTest: number,
     modulateStaticLighting2X: boolean,
+    modulateSpecular2X: boolean,
     visible: boolean
 };
 
@@ -437,8 +440,11 @@ export abstract class UShader extends UMaterial {
     declare protected alphaTest: number;
     declare protected selfIllumination: UMaterial;
     declare protected selfIlluminationMask: UMaterial;
+    declare protected detail: UMaterial;
+    declare protected detailScale: number;
 
     declare protected modulateStaticLighting2X: boolean;
+    declare protected modulateSpecular2X: boolean;
 
     // protected isPerformingLightingOnSpecularPass: boolean = false;
     // protected unkBytes: BufferValue<"buffer">;
@@ -464,11 +470,14 @@ export abstract class UShader extends UMaterial {
 
             "SelfIllumination": "selfIllumination",
             "SelfIlluminationMask": "selfIlluminationMask",
+            "Detail": "detail",
+            "DetailScale": "detailScale",
 
             "AlphaTest": "transparent",
             "AlphaRef": "alphaTest",
 
             "ModulateStaticLighting2X": "modulateStaticLighting2X",
+            "ModulateSpecular2X": "modulateSpecular2X",
 
             // "PerformLightingOnSpecularPass": "isPerformingLightingOnSpecularPass",
             // "Wireframe": "_wireframe",
@@ -485,11 +494,13 @@ export abstract class UShader extends UMaterial {
         const specularMask = builder.pullMaterial(this.specularMask);
         const selfIllumination = specular ? null : builder.pullMaterial(this.selfIllumination);
         const selfIlluminationMask = specular ? null : builder.pullMaterial(this.selfIlluminationMask);
+        const detail = builder.pullMaterial(this.detail);
         const depthWrite = this.depthWrite;
         const doubleSide = this.doubleSide;
         const transparent = this.transparent;
         const alphaTest = this.alphaTest / 255;
-        const modulateStaticLighting2X = this.modulateStaticLighting2X;
+        const modulateStaticLighting2X = this.modulateStaticLighting2X !== false;
+        const modulateSpecular2X = this.modulateSpecular2X === true;
 
         let blendingMode: SupportedBlendingTypes_T;
 
@@ -516,12 +527,15 @@ export abstract class UShader extends UMaterial {
             specularMask,
             selfIllumination,
             selfIlluminationMask,
+            detail,
+            detailScale: this.detailScale ?? 8,
             depthWrite,
             // depthTest: this.depthTest,
             doubleSide,
             transparent,
             alphaTest,
             modulateStaticLighting2X,
+            modulateSpecular2X,
             visible: true,
         } as IShaderDecodeInfo;
     }

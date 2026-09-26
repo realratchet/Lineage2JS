@@ -1421,12 +1421,11 @@ export class DecodeEngine {
     }
 
     public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
+        if (settings.cache === false || settings.cache?.enabled === false) return;
+
         await this.sweepCache(settings);
 
         const groups = await this.decodeCharGroups();
-        const cache = settings.cache;
-
-        if (cache === false || cache?.enabled === false) return;
 
         for (const group of groups) {
             const name = characterBundleCacheName(group.index, group.name);

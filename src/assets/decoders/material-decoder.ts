@@ -139,6 +139,19 @@ export function decodeStaticMeshMaterial(library: DecodeLibrary, info: IBaseMate
 let emptyMapData: MapData_T;
 
 function fetchTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
+    if (!info || (info as any).materialType === "empty") {
+        if (!emptyMapData) {
+            emptyMapData = {
+                texture: new DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, RGBAFormat),
+                size: new Vector2(1, 1)
+            };
+            emptyMapData.texture.name = "EmptyTexture";
+            emptyMapData.texture.needsUpdate = true;
+        }
+
+        return emptyMapData;
+    }
+
     const name = info?.name;
     const namedTexture = name ? getWeakCacheValue(cacheTexturesByName, name) : undefined;
 
@@ -146,15 +159,6 @@ function fetchTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData
 
     if (cacheTextures.has(info))
         return cacheTextures.get(info);
-
-    if (!emptyMapData) {
-        emptyMapData = {
-            texture: new DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, RGBAFormat),
-            size: new Vector2(1, 1)
-        };
-        emptyMapData.texture.name = "EmptyTexture";
-        emptyMapData.texture.needsUpdate = true;
-    }
 
     const data = (info as any).materialType !== "empty" ? _decodeTexture(library, info) : emptyMapData;
 
@@ -170,10 +174,10 @@ function fetchMapTexture(library: DecodeLibrary, info: IBaseMaterialDecodeInfo):
 }
 
 function decodeCubemap(library: DecodeLibrary, info: ICubemapDecodeInfo): MapData_T {
-    if (info.faces.length !== 6 || info.faces.some(face => !face))
-        throw new Error(`Cubemap '${info.name}' must have six face materials.`);
+    if (info.faces.length !== 6)
+        throw new Error(`Cubemap '${info.name}' has ${info.faces.length} faces.`);
 
-    const faces = info.faces.map(face => fetchMapTexture(library, library.materials[face]));
+    const faces = info.faces.map(face => face ? fetchMapTexture(library, library.materials[face]) : fetchTexture(library, null));
 
     if (faces.length !== 6 || faces.some(face => !face))
         throw new Error(`Cubemap '${info.name}' must decode six texture faces.`);
@@ -501,9 +505,13 @@ function decodeCombiner(library: DecodeLibrary, info: ICombinerDecodeInfo): Mesh
 function decodeShader(library: DecodeLibrary, info: IShaderDecodeInfo): MeshStaticMaterial {
     // D3DTSS_COLOROP = D3DTOP_BLENDCURRENTALPHA (L2.dusk_and_dawn.trace call 9416187, TextureStageState2)
     const useSelfIllumination = !info.specular && !!info.selfIllumination && !!info.selfIlluminationMask;
+    const detail = info.detail ? decodeParameter(library, library.materials[info.detail]) : null;
+
+    if (detail) detail.uniforms.detailScale = info.detailScale;
 
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, library.materials[info.diffuse]),
+        detail,
         opacity: decodeParameter(library, library.materials[info.opacity]),
         specular: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIllumination : info.specular]),
         specularMask: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIlluminationMask : info.specularMask]),
@@ -515,6 +523,7 @@ function decodeShader(library: DecodeLibrary, info: IShaderDecodeInfo): MeshStat
         depthTest: info.depthTest,
         visible: info.visible,
         modulateStaticLighting2X: info.modulateStaticLighting2X,
+        modulateSpecular2X: info.modulateSpecular2X,
         selfIllumination: useSelfIllumination
     });
 }
@@ -522,9 +531,13 @@ function decodeShader(library: DecodeLibrary, info: IShaderDecodeInfo): MeshStat
 function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MeshStaticMaterial {
     const isMasked = info.isMasked;
     const isAlpha = info.isAlphaTexture;
+    const detail = info.detail ? decodeParameter(library, library.materials[info.detail]) : null;
+
+    if (detail) detail.uniforms.detailScale = info.detailScale;
 
     return new MeshStaticMaterial({
         diffuse: decodeParameter(library, info),
+        detail,
         opacity: null,
         specular: null,
         specularMask: null,
@@ -556,12 +569,17 @@ function decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecod
 
     const isFinalBlend = info.modifierType === "finalBlend";
     const finalBlend = info as IFinalBlendDecodeInfo;
+    const useSelfIllumination = isShader && !shader.specular && !!shader.selfIllumination && !!shader.selfIlluminationMask;
+    const detail = isShader && shader.detail ? _decodeModifier(library, info, shader.detail) : null;
+
+    if (detail) detail.uniforms.detailScale = shader.detailScale;
 
     return new MeshStaticMaterial({
         diffuse: _decodeModifier(library, info, isShader ? shader.diffuse : materialIndex),
+        detail,
         opacity: isShader ? _decodeModifier(library, info, shader.opacity) : ((isColorMod && colorMod.alphaBlend) ? _decodeModifier(library, info, materialIndex) : null),
-        specular: isShader ? _decodeModifier(library, info, shader.specular) : null,
-        specularMask: isShader ? _decodeModifier(library, info, shader.specularMask) : null,
+        specular: isShader ? _decodeModifier(library, info, useSelfIllumination ? shader.selfIllumination : shader.specular) : null,
+        specularMask: isShader ? _decodeModifier(library, info, useSelfIllumination ? shader.selfIlluminationMask : shader.specularMask) : null,
         side: (isColorMod && colorMod.doubleSide) ? DoubleSide : (isFinalBlend ? (finalBlend.doubleSide ? DoubleSide : FrontSide) : ((info as IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide)),
         blendingMode: isFinalBlend ? finalBlend.blendingMode : (isShader ? shader.blendingMode ?? "normal" : "normal"),
         transparent: isFinalBlend ? finalBlend.transparent : (isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false)),
@@ -569,7 +587,10 @@ function decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecod
         depthTest: isFinalBlend ? finalBlend.depthTest : (isShader ? shader.depthTest ?? true : true),
         modifyFramebufferBlending: isFinalBlend,
         visible: isShader ? shader.visible : true,
-        alphaTest: isFinalBlend ? (finalBlend.alphaTest ? finalBlend.alphaRef : 0) : (isShader ? shader.alphaTest : 0)
+        alphaTest: isFinalBlend ? (finalBlend.alphaTest ? finalBlend.alphaRef : 0) : (isShader ? shader.alphaTest : 0),
+        modulateStaticLighting2X: isShader ? shader.modulateStaticLighting2X : undefined,
+        modulateSpecular2X: isShader ? shader.modulateSpecular2X : undefined,
+        selfIllumination: useSelfIllumination
     });
 }
 

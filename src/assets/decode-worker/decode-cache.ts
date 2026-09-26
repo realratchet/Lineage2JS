@@ -6,7 +6,7 @@ const CACHE_DIR = "decode-cache";
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 function isCacheEnabled(settings: LoadSettings_T): boolean {
-    return settings.cache === false ? false : settings.cache?.enabled ?? true;
+    return !!globalThis.isSecureContext && !!navigator.storage?.getDirectory && (settings.cache === false ? false : settings.cache?.enabled ?? true);
 }
 
 function getCacheVersion(settings: LoadSettings_T): number {

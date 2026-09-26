@@ -90,6 +90,10 @@ class Visualizer {
         this.mode = mode;
         this.updateVisualizations();
     }
+
+    public setLeafDetail(detail: LeafVisualizerDetail): void {
+        this.leafDetail = detail;
+    }
     private portalVisualizations: Object3D[] = [];
     private zoneVisualizations: Object3D[] = [];
     private leafVisualizations: Object3D[] = [];
@@ -116,9 +120,15 @@ class Visualizer {
         this.hudElement = this.initHUD();
         this.audioHudElement = this.initAudioHUD();
         this.emittersHudElement = this.initEmittersHUD();
-        document.body.appendChild(this.hudElement);
-        document.body.appendChild(this.audioHudElement);
-        document.body.appendChild(this.emittersHudElement);
+    }
+
+    public getDebugElement(mode: VisualizerMode): HTMLElement | null {
+        switch (mode) {
+            case VisualizerMode.Fogs: return this.hudElement;
+            case VisualizerMode.Audio: return this.audioHudElement;
+            case VisualizerMode.Emitters: return this.emittersHudElement;
+            default: return null;
+        }
     }
 
     private createHudRow(container: HTMLElement, name: string, prefix: string): void {
@@ -168,14 +178,10 @@ class Visualizer {
         const hud = document.createElement("div");
         hud.id = "env-color-hud-container";
         Object.assign(hud.style, {
-            position: "fixed",
-            top: "10px",
-            left: "10px",
             display: "none",
             flexDirection: "column",
             gap: "10px",
-            pointerEvents: "none",
-            zIndex: "10001"
+            pointerEvents: "none"
         });
 
         const createPanel = (titleText: string) => {
@@ -223,14 +229,10 @@ class Visualizer {
         const hud = document.createElement("div");
         hud.id = "audio-hud-container";
         Object.assign(hud.style, {
-            position: "fixed",
-            top: "10px",
-            left: "10px",
             display: "none",
             flexDirection: "column",
             gap: "10px",
-            pointerEvents: "none",
-            zIndex: "10001"
+            pointerEvents: "none"
         });
 
         const createPanel = (titleText: string) => {
@@ -279,14 +281,10 @@ class Visualizer {
         const hud = document.createElement("div");
         hud.id = "emitters-hud-container";
         Object.assign(hud.style, {
-            position: "fixed",
-            top: "10px",
-            left: "10px",
             display: "none",
             flexDirection: "column",
             gap: "10px",
-            pointerEvents: "none",
-            zIndex: "10001"
+            pointerEvents: "none"
         });
 
         const panel = document.createElement("div");
@@ -679,31 +677,6 @@ class Visualizer {
         this.enabled = !this.enabled;
         this.updateVisibility();
         console.log(`Visualizer ${this.enabled ? "enabled" : "disabled"} (Mode: ${this.mode})`);
-    }
-
-    private static readonly VISUALIZATION_MODES = Object.values(VisualizerMode).filter(mode => mode !== VisualizerMode.None);
-
-    public nextMode(): void {
-        const modes = Visualizer.VISUALIZATION_MODES;
-
-        if (this.mode === VisualizerMode.None || !this.enabled) {
-            this.mode = modes[0];
-            this.enabled = true;
-        } else {
-            const currentIndex = modes.indexOf(this.mode);
-            this.mode = modes[(currentIndex + 1) % modes.length];
-        }
-
-        this.updateVisualizations();
-        console.log(`Visualizer mode: ${this.mode}`);
-    }
-
-    public nextLeafDetail(): void {
-        const details = Object.values(LeafVisualizerDetail);
-
-        const idx = details.indexOf(this.leafDetail);
-        this.leafDetail = details[(idx + 1) % details.length];
-        console.log(`Leaf visualizer detail: ${this.leafDetail}`);
     }
 
     private updateVisibility(): void {
@@ -1421,4 +1394,3 @@ class Visualizer {
 }
 
 export default Visualizer;
-

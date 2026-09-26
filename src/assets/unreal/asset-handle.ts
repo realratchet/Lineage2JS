@@ -54,7 +54,8 @@ async function uncachedFetch(path: string): Promise<IReadyAssetHandle> {
 }
 
 export async function fetchAssetHandle(path: string): Promise<ILazyAssetHandle> {
-    if (navigator.storage) return fetchCached(path);
+    if (globalThis.isSecureContext && navigator.storage?.getDirectory && navigator.locks)
+        return fetchCached(path);
 
     return uncachedFetch(path) as unknown as ILazyAssetHandle;
 }

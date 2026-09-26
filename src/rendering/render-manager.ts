@@ -5,7 +5,7 @@ import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import Player from "../player";
 import type BaseActor from "../base-actor";
-import Visualizer, { VisualizerMode, EmitterDebugInfo } from "./visualizer";
+import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo } from "./visualizer";
 import EnvColor from "./env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
 import SkyRenderer from "./sky-renderer";
@@ -575,13 +575,18 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.refreshVisualizer();
     }
 
-    public nextVisualizerMode(): void {
-        this.visualizer.nextMode();
+    public setVisualizerMode(mode: VisualizerMode): void {
+        this.visualizer.setMode(mode);
+        if (mode === VisualizerMode.None) {
+            if (this.visualizer.isEnabled()) this.visualizer.toggle();
+            return;
+        }
+        if (!this.visualizer.isEnabled()) this.visualizer.toggle();
         this.refreshVisualizer();
     }
 
-    public nextVisualizerLeafDetail(): void {
-        this.visualizer.nextLeafDetail();
+    public setVisualizerLeafDetail(detail: LeafVisualizerDetail): void {
+        this.visualizer.setLeafDetail(detail);
         this.refreshVisualizer(true);
     }
 
@@ -1863,6 +1868,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
                 (this as any).visualizer = new Visualizer(this.scene);
                 this.wireEmitterVisibilityHandlers();
+                this.getParent().getComponent("ui").attachVisualizerDebugElements(this.visualizer);
 
                 this.visualizer.setMode(currentMode);
                 if (wasEnabled && !this.visualizer.isEnabled()) {

@@ -12,13 +12,16 @@ export abstract class UCubemap extends UTexture {
     }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder): ICubemapDecodeInfo {
-        if (!this.faces || this.faces.length !== 6 || this.faces.some(face => !face))
-            throw new Error(`Cubemap '${this.uuid}' must have six faces.`);
+        const faces = this.faces ?? [];
+
+        if (faces.length > 6)
+            throw new Error(`Cubemap '${this.uuid}' has ${faces.length} faces.`);
 
         return {
             name: this.uuid,
             materialType: "cubemap",
-            faces: this.faces.map(face => builder.pullMaterial(face))
+            // FStaticCubemap::GetFace returns NULL for an absent face (UnTex.cpp:2135).
+            faces: Array.from({ length: 6 }, (_, index) => faces[index] ? builder.pullMaterial(faces[index]) : null)
         };
     }
 }
