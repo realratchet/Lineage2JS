@@ -8,8 +8,10 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "casting", effectClass: "LineageEffect.m_u026_b", host: "caster", position: "center", radiusOffset: 1, offsetRotation: "targetDirection", relativeTrailOffset: 1, lifeSpan: "shotTime" },
     // 0x7add07/0x7add27: caster center Z + height*float[0xaae3b0]=height/3.
     { phase: "shot", effectClass: "LineageEffect.m_u026_c", host: "caster", position: "center", heightOffset: 1 / 3, rotation: "caster", projectile: { target: "target" } },
-    // 0x79045f/0x7904cb..0x790501: subtract direction*1.2*hit radius; AddPawnLight 0x790561 -> 0x8b5193..0x8b51b4: radius 30, .2 seconds, white.
-    { phase: "explosion", effectClass: "LineageEffect.m_u026_d", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true } }
+    // 0x79045f/0x7904cb..0x790501: -1.2*actual hit radius; 0x79059d: Owner; 0x790527..0x790561 -> 0x8b5193: Pawn-only white light, radius30, .2s.
+    { phase: "explosion", effectClass: "LineageEffect.m_u026_d", host: "impactActor", owner: "impactActor", hitActor: true, position: "lastTarget", rotation: "hit", radiusOffset: -1.2, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true } },
+    // 0x7904af..0x7904c6 -> 0x790566..0x7905e0: null hit still spawns at LastTargetLocation with null Owner.
+    { phase: "explosion", effectClass: "LineageEffect.m_u026_d", host: "source", owner: "none", hitActor: false, position: "lastTarget", rotation: "hit" }
 ];
 
 export default effects;

@@ -8,7 +8,11 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "shot", effectClass: "LineageEffect.s_u003_b", host: "source", owner: "source", attach: "trail", position: "location", releaseProjectile: true }
 ];
 
-// Engine.dll Explosion 0x7916c7..0x791858: LastTargetLocation minus the rotated target-radius offset.
-export const bowImpact: NativeSkillEffect_T[] = [{ phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true }, damageEffect: true }];
+export const bowImpact: NativeSkillEffect_T[] = [
+    // Engine.dll 0x7916c7 rejects null hits; 0x7917dc lights the actual hit Pawn before either particle spawn.
+    { phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "impactActor", hitActor: true, pawnLightOnly: true, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true, position: "lastTarget", rotation: "hit", radiusOffset: -1.2 } },
+    // 0x7916d0..0x791858: LastTargetLocation - rotated actual-hit radius*1.2; 0x791861: Pawn DamageEffect follows p_u004_a.
+    { phase: "explosion", effectClass: "LineageEffect.p_u004_a", host: "impactActor", owner: "impactActor", hitActor: true, position: "lastTarget", rotation: "hit", radiusOffset: -1.2, damageEffect: true }
+];
 
 export default effects;

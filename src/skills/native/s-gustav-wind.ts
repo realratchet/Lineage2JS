@@ -10,8 +10,12 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "shot", effectClass: "LineageEffect.m_u038_c", host: "caster", owner: "none", position: "center", radiusOffset: 1, rotation: "caster" },
     // 0x7adf22/0x7adf28: caster center + height*float[0xaae3b0]=height/3; 0x7adf55: second m_u038_c; 0x7ae011..0x7ae046: projectile/context.
     { phase: "shot", effectClass: "LineageEffect.m_u038_c", host: "caster", position: "center", heightOffset: 1 / 3, rotation: "caster", projectile: { target: "target" } },
-    // Explosion 0x790620/0x79068c..0x7906c2: LastTargetLocation - HitRot direction*1.2*target radius; 0x790736/0x79075e: m_u038_d, target owner. No pawn light.
-    { phase: "explosion", effectClass: "LineageEffect.m_u038_d", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2 }
+    // 0x7906e9..0x790722: actual-hit Pawn light precedes m_u038_d; mode-0 defaults at 0x8b5193..0x8b51e8.
+    { phase: "explosion", effectClass: "LineageEffect.m_u038_d", host: "impactActor", hitActor: true, pawnLightOnly: true, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true, position: "lastTarget", rotation: "hit", radiusOffset: -1.2 } },
+    // 0x79065a/0x79068c/0x79075e: actual-hit radius and Owner; incoming-direction factor 1.2 at 0x790620.
+    { phase: "explosion", effectClass: "LineageEffect.m_u038_d", host: "impactActor", owner: "impactActor", position: "lastTarget", rotation: "hit", radiusOffset: -1.2, hitActor: true },
+    // 0x790670..0x790687/0x79075e: no-hit uses unadjusted LastTargetLocation, null Owner, no pawn light.
+    { phase: "explosion", effectClass: "LineageEffect.m_u038_d", host: "source", owner: "none", position: "lastTarget", rotation: "hit", hitActor: false }
 ];
 
 export default effects;

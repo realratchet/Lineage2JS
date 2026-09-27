@@ -1,5 +1,8 @@
 import type { NativeSkillEffect_T } from "../native-effects";
 
+// Engine.dll 0x78fa09..0x78fa80, 0x78fc5c..0x78fcd3, 0x78fe8c..0x78ff03: identical native view-shake arguments after each impact.
+const viewShake: NativeSkillEffect_T["viewShake"] = { duration: 6, rotationScale: 1, rotationFrequency: 10000, positionFrequency: 120, direction: "random", rotationAmplitude: 100, rotationVelocity: 400, positionAmplitude: [120, 120, 0], strength: 200, range: 2000 };
+
 // Engine.dll 0x79e838..0x79e874: LifeSpan=ShotTime, RelativeLocation=(245,-120,0); 0x79e860..0x79e87f: rotation=(0,16384,0); 0x79e8b3: AttachToBone.
 const effects: NativeSkillEffect_T[] = [
     // 0x79e7cb/0x79e7cf: explicit SpeedRate1; 0x79e824/0x79e825: caster owner, null host.
@@ -9,10 +12,13 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "shot", effectClass: "LineageEffect.e_u046_b", host: "caster", positionBone: "bone01", boneOffset: [245, -120, 0], rotation: "caster", projectile: { target: "target" }, speedRate: 1 },
     // Engine.dll 0x78fabc..0x78fac2: TargetActor.Location - CollisionHeight; 0x78fae1: Owner pawn rate; 0x78fb03/0x78fb4e: zero rotation, null host/owner.
     { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "target", owner: "none", rotation: "zero", hitActor: true, sourceOwner: true, useSkillSpeed: "sourceOwner" },
+    { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "target", rotation: "zero", hitActor: true, sourceOwner: true, viewShake },
     // 0x78fce0..0x78fd82: ownerless hit uses TargetActor feet and its SkillSpeedRate.
     { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "target", owner: "none", rotation: "zero", hitActor: true, sourceOwner: false, useSkillSpeed: "target" },
+    { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "target", rotation: "zero", hitActor: true, sourceOwner: false, viewShake },
     // 0x78f80b..0x78f879: LastTargetLocation minus rotated unit X; 0x78f87c: Owner required; 0x78f8ac/0x78f8fc: zero rotation, null host/owner.
-    { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "source", owner: "none", position: "lastTarget", rotation: "zero", forwardOffset: -1, offsetRotation: "hit", hitActor: false, sourceOwner: true, useSkillSpeed: "sourceOwner" }
+    { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "source", owner: "none", position: "lastTarget", rotation: "zero", forwardOffset: -1, offsetRotation: "hit", hitActor: false, sourceOwner: true, useSkillSpeed: "sourceOwner" },
+    { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "source", position: "lastTarget", rotation: "zero", forwardOffset: -1, offsetRotation: "hit", hitActor: false, sourceOwner: true, viewShake }
 ];
 
 export default effects;

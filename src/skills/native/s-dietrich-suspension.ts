@@ -7,7 +7,8 @@ const effects: NativeSkillEffect_T[] = [
     // Shot 0x7af364..0x7af3c4: caster center + direction*radius*2; 0x7af376/0x7af37c: supplied rate1; 0x7af408/0x7af413/0x7af414: m_u025_b, caster owner, null host.
     { phase: "shot", effectClass: "LineageEffect.m_u025_b", host: "caster", position: "center", radiusOffset: 2, offsetRotation: "targetDirection", speedRate: 1 },
     // 0x7af4ff..0x7af570: m_u025_c, rate1, no trailer, target host/owner; SpawnSkillEffect 0x798505..0x798523 takes host Location/Rotation.
-    { phase: "shot", effectClass: "LineageEffect.m_u025_c", host: "target", owner: "target", position: "center", rotation: "target", speedRate: 1 }
+    // Engine.dll 0x7af41d..0x7af4e8: bTargetExcepted selects ordered nonnull targets; only list hits reach Shot sound.
+    { phase: "shot", effectClass: "LineageEffect.m_u025_c", host: "target", owner: "target", position: "center", rotation: "target", speedRate: 1, associatedActors: "targetExcepted" }
 ];
 
 export default effects;

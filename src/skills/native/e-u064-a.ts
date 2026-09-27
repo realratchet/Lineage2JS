@@ -1,8 +1,9 @@
 import type { NativeSkillEffect_T } from "../native-effects";
 
 // Engine.dll SkillEffectShot 0x7ab481: caster Rotation, target feet; class string 0xab172c.
+// 0x7ab50d..0x7ab513 and subsequent spawns supply NULL Owner; 0x7ab489 keeps Shot sound without a target.
 const effects: NativeSkillEffect_T[] = [
-    { phase: "shot", effectClass: "LineageEffect.e_u064_a", host: "target", rotation: "caster" },
+    { phase: "shot", effectClass: "LineageEffect.e_u064_a", host: "target", owner: "none", rotation: "caster", targetRequired: "position" },
     // Engine.dll cumulative XY arithmetic / SetDelayed instruction addresses.
     ...[
         [200, -400, 0.5], // 0x7ab51b, 0x7ab534 / 0x7ab595
@@ -17,7 +18,7 @@ const effects: NativeSkillEffect_T[] = [
         [-400, -200, 1.48], // 0x7ab9c4, 0x7ab9de / 0x7aba3c
         [0, 600, 1.6], // 0x7aba4d, 0x7aba67 / 0x7abac5
         [-400, 400, 1.85] // 0x7abad6, 0x7abaf0 / 0x7abb4c
-    ].map(([x, y, delay]) => ({ phase: "shot" as const, effectClass: "LineageEffect.e_u064_a", host: "target" as const, rotation: "caster" as const, offset: [x, y, 0] as [number, number, number], delay }))
+    ].map(([x, y, delay]) => ({ phase: "shot" as const, effectClass: "LineageEffect.e_u064_a", host: "target" as const, owner: "none" as const, rotation: "caster" as const, targetRequired: "position" as const, offset: [x, y, 0] as [number, number, number], delay }))
 ];
 
 export default effects;

@@ -6,8 +6,12 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "casting", effectClass: "LineageEffect.s_u505_a", host: "caster", position: "center", physics: "none", lifeSpan: "shotTime", boneProperty: "LeftHandBone", boneFallback: 2, relativeRotation: [0, 16384, 0], relativeRotationOnNamedBone: true },
     // Engine.dll Shot 0x7af924/0x7af976: s_u505_b, PHYS_None; LeftHandBone at 0x7af987, NAME_None fallback 2 at 0x7af9c5.
     { phase: "shot", effectClass: "LineageEffect.s_u505_b", host: "caster", position: "center", physics: "none", boneProperty: "LeftHandBone", boneFallback: 2 },
-    // Engine.dll Explosion 0x791919..0x7919a6: LastTargetLocation - rotated (1.2 * target radius); s_u505_c at 0x791a6b, target owner at 0x791a8e.
-    { phase: "explosion", effectClass: "LineageEffect.s_u505_c", host: "target", owner: "target", position: "lastTarget", rotation: "hit", radiusOffset: -1.2, damageEffect: true }
+    // Engine.dll 0x7918db rejects null hits; 0x7919ee adds the hit-Pawn white light before DamageEffect and s_u505_c.
+    { phase: "explosion", effectClass: "LineageEffect.s_u505_c", host: "impactActor", hitActor: true, pawnLightOnly: true, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true, position: "lastTarget", rotation: "hit", radiusOffset: -1.2 } },
+    // 0x7919f3..0x791a5f: hit-Pawn DamageEffect first, with hit actor Owner and the shared radius-adjusted impact transform.
+    { phase: "explosion", effectClass: "LineageEffect.s_u505_c", host: "impactActor", owner: "impactActor", hitActor: true, position: "lastTarget", rotation: "hit", radiusOffset: -1.2, damageEffect: "only" },
+    // 0x791a62..0x791ad5: s_u505_c follows DamageEffect; actual-hit CollisionRadius factor1.2 at 0x791919..0x7919a6.
+    { phase: "explosion", effectClass: "LineageEffect.s_u505_c", host: "impactActor", owner: "impactActor", hitActor: true, position: "lastTarget", rotation: "hit", radiusOffset: -1.2 }
 ];
 
 export default effects;

@@ -8,7 +8,7 @@ const effects: NativeSkillEffect_T[] = [
     // Shot 0x7aca18..0x7aca4a: second shot uses GetLHandBoneName, otherwise GetRHandBoneName.
     { ...windOfHand[1], specificStage: 1 },
     { ...windOfHand[1], specificStage: 2, positionBoneProperty: "LeftHandBone" },
-    windOfHand[2]
+    ...windOfHand.filter(effect => effect.phase === "explosion")
 ];
 
 export default effects;

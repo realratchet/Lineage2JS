@@ -35,7 +35,7 @@ import sGustavWind from "./native/s-gustav-wind";
 import sWildCannon from "./native/s-wild-cannon";
 import sEvilShackleBossA from "./native/s-evil-shackle-boss-a";
 import mU016 from "./native/m-u016";
-import mU006 from "./native/m-u006";
+import mU006, { shotEffects as mU006Shot, explosionEffects as mU006Explosion } from "./native/m-u006";
 import sRecharge from "./native/s-recharge";
 import sHealQueenAnt from "./native/s-heal-queen-ant";
 import sGreaterHeal from "./native/s-greater-heal";
@@ -65,22 +65,31 @@ import sStunShotBossA from "./native/s-stun-shot-boss-a";
 import sRange80HpDrain from "./native/s-range-80-hp-drain";
 import sRegeneration from "./native/s-regeneration";
 import sWindWalk from "./native/s-wind-walk";
+import sSiegeHammer from "./native/s-siege-hammer";
+import sDoubleDaggerAttack from "./native/s-double-dagger-attack";
 import type { NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
 
 export type NativeSkillEffect_T = {
     phase: NpcSkillEffectPhase_T;
     effectClass: string;
-    host: "caster" | "target" | "source";
-    associatedActors?: "targetExcepted" | "targetExceptedAndPrimary";
+    host: "caster" | "target" | "source" | "impactActor";
+    associatedActors?: "targetExcepted" | "targetExceptedAndPrimary" | "primaryAndSecondary" | "all";
+    primaryTargetOnly?: boolean;
+    rejectNullAfterSpawn?: boolean;
     soundWithoutEffect?: boolean;
     targetIsCaster?: boolean;
+    targetRequired?: "phase" | "position";
     hitActor?: boolean;
+    hitActorIsMover?: boolean;
     sourceOwner?: boolean;
-    owner?: "target" | "none" | "source";
-    attach?: "trail" | "rightHand";
+    sourceTarget?: boolean;
+    owner?: "target" | "none" | "source" | "impactActor";
+    attach?: "trail";
     bone?: number | string;
+    boneOptional?: boolean;
     boneFallback?: number;
     positionBone?: string;
+    missingBoneStopsPhase?: boolean;
     positionBoneProperty?: string;
     specificStage?: number;
     boneOffset?: [number, number, number];
@@ -88,15 +97,16 @@ export type NativeSkillEffect_T = {
     locList?: { delay: number, interval: number, random?: { count: number, range: number } }; // Server populates LocList.
     location?: [number, number, number];
     boneProperty?: string;
-    releaseProjectile?: boolean;
-    damageEffect?: boolean;
+    preShotBones?: [string, string];
+    releaseProjectile?: true | { first: boolean, spawn: boolean };
+    damageEffect?: boolean | "only" | "associated";
     weaponId?: number;
     relativeLocation?: [number, number, number];
     relativeLocationOnNamedBone?: boolean;
     relativeRotation?: [number, number, number];
     relativeRotationOnNamedBone?: boolean;
     isAbsolute?: boolean;
-    rotation?: "zero" | "caster" | "target" | "desiredCaster" | "targetPosition" | "targetDirection" | "targetDisplacement" | "hit" | "reverseHitHorizontal" | "bone";
+    rotation?: "zero" | "caster" | "target" | "desiredCaster" | "targetPosition" | "targetDirection" | "targetDisplacement" | "hit" | "reverseHitHorizontal" | "hitActorNormal" | "bone";
     position?: "center" | "lastTarget" | "location" | "source" | "meshOrigin";
     initialPosition?: "center";
     radiusOffset?: number;
@@ -107,7 +117,7 @@ export type NativeSkillEffect_T = {
     lifeSpan?: "shotTime" | "firstShotTime";
     lifeSpanOffset?: number;
     physics?: "none";
-    useSkillSpeed?: boolean | "sourceOwner" | "target";
+    useSkillSpeed?: boolean | "sourceOwner" | "sourceTarget" | "target";
     speedRate?: number;
     adjustParticleLife?: boolean | "shotTime";
     scale?: number | "casterRadius" | "cancelCasterRadius" | "targetRadius";
@@ -115,6 +125,8 @@ export type NativeSkillEffect_T = {
     hitDelay?: number;
     offset?: [number, number, number];
     pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center" | "lastTarget", rotation?: "hit", radiusOffset?: number };
+    pawnLightOnly?: boolean;
+    viewShake?: { type?: "damage" | "upDown", duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, direction: "random" | "y" | "fixedY", rotationAmplitude: number, rotationVelocity: number, positionAmplitude: [number, number, number], strength: number, range: number, ownerRequired?: boolean, event?: { name: string, radius: number } };
     trailerPrePivot?: "casterMeshOrigin";
     projectile?: { target: "caster" | "target", speed?: number, acceleration?: number, path?: [number, number, number][], interpolation?: number, hermite?: { duration: number, tangentScale: number, finalDirectionZ: number } };
 };
@@ -157,6 +169,7 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.e_u073_a": sWildCannon.filter(effect => effect.effectClass === "LineageEffect.e_u073_a"),
     "lineageeffect.e_u073_b": sWildCannon.filter(effect => effect.effectClass === "LineageEffect.e_u073_b"),
     "lineageeffect.e_u073_ground": sWildCannon.filter(effect => effect.effectClass === "LineageEffect.e_u073_ground"),
+    "lineageeffect.e_u073_door": sWildCannon.filter(effect => effect.effectClass === "LineageEffect.e_u073_door"),
     "lineageeffect.e_u504_a": sEvilShackleBossA.filter(effect => effect.effectClass === "LineageEffect.e_u504_a"),
     "lineageeffect.e_u504_rh": sEvilShackleBossA.filter(effect => effect.effectClass === "LineageEffect.e_u504_rh"),
     "lineageeffect.e_u504_b": sEvilShackleBossA.filter(effect => effect.effectClass === "LineageEffect.e_u504_b"),
@@ -283,31 +296,29 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
         "lineageeffect.nspear_sp": sNpcSpearAttack,
         "lineageeffect.p_u004_a": bowImpact
     },
-    wildSweep: {
-        // Engine.dll SkillEffectShot 0x7ae49b: target-owned impact at the computed target position.
-        "lineageeffect.p_u004_a": [{ phase: "shot", effectClass: "LineageEffect.p_u004_a", host: "target", owner: "target", position: "center", rotation: "targetDirection", damageEffect: true }]
+    doubleDagger: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.nspear_sp": sDoubleDaggerAttack,
+        "lineageeffect.p_u004_a": bowImpact
     },
     siegeHammer: {
-        // Engine.dll Shot 0x7a9444..0x7a95c5: caster center + target direction * radius * 2, caster rotation, target owner.
-        "lineageeffect.p_u004_a": [{ phase: "shot", effectClass: "LineageEffect.p_u004_a", host: "caster", owner: "target", position: "center", rotation: "caster", radiusOffset: 2, offsetRotation: "targetDirection" }]
+        "lineageeffect.p_u004_a": sSiegeHammer
     },
     flameStrike: {
         "lineageeffect.m_u006_a": nativeEffects["lineageeffect.m_u006_a"],
         "lineageeffect.m_u006_b": nativeEffects["lineageeffect.m_u006_b"],
         "lineageeffect.m_u006_c": nativeEffects["lineageeffect.m_u006_c"],
-        // Engine.dll Explosion 0x791316 / 0x7913a9: primary hit and trailer; no impact light or SkillSpeedRate override.
-        "lineageeffect.m_u006_e": [{ phase: "explosion", effectClass: "LineageEffect.m_u006_e", host: "target", owner: "target", bone: 0, isAbsolute: true }],
-        "lineageeffect.m_u006_d": [{ phase: "explosion", effectClass: "LineageEffect.m_u006_d", host: "target", owner: "target", attach: "trail" }]
+        "lineageeffect.m_u006_e": mU006Explosion.filter(effect => effect.effectClass === "LineageEffect.m_u006_e"),
+        "lineageeffect.m_u006_d": mU006Explosion.filter(effect => effect.effectClass === "LineageEffect.m_u006_d")
     },
     rapidSpear: {
-        "lineageeffect.m_u006_e": [{ phase: "shot", effectClass: "LineageEffect.m_u006_e", host: "target", owner: "target", bone: 0, isAbsolute: true }],
-        "lineageeffect.m_u006_d": [{ phase: "shot", effectClass: "LineageEffect.m_u006_d", host: "target", owner: "target", attach: "trail" }]
+        "lineageeffect.m_u006_e": mU006Shot.filter(effect => effect.effectClass === "LineageEffect.m_u006_e"),
+        "lineageeffect.m_u006_d": mU006Shot.filter(effect => effect.effectClass === "LineageEffect.m_u006_d")
     },
     corpseBurst: {
         "lineageeffect.m_u003_a": nativeEffects["lineageeffect.m_u003_a"],
-        // Engine.dll Shot 0x7a9a40 / 0x7a9ad5: target ownership, SkillSpeedRate; no Blaze explosion light.
-        "lineageeffect.m_u006_e": [{ phase: "shot", effectClass: "LineageEffect.m_u006_e", host: "target", owner: "target", bone: 0, isAbsolute: true, useSkillSpeed: true }],
-        "lineageeffect.m_u006_d": [{ phase: "shot", effectClass: "LineageEffect.m_u006_d", host: "target", owner: "target", attach: "trail", useSkillSpeed: true }]
+        "lineageeffect.m_u006_e": mU006Shot.filter(effect => effect.effectClass === "LineageEffect.m_u006_e"),
+        "lineageeffect.m_u006_d": mU006Shot.filter(effect => effect.effectClass === "LineageEffect.m_u006_d")
     },
     antarasNormalAttackEx: {
         "lineageeffect.e_u049_a": sAntarasNormalAttackEx
