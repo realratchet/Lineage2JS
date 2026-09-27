@@ -132,6 +132,17 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "decodeSkill": {
+            try {
+                const buffer = await engine.decodeSkillBinary(msg.settings, msg.id, msg.level);
+
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+            } catch (e) {
+                console.error(`[decode-worker] failed to decode skill '${msg.id}:${msg.level}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "musicInfo": {
             try {
                 post({ type: "musicInfoDecoded", requestId: msg.requestId, music: await engine.decodeMusicInfo() });

@@ -51,7 +51,7 @@ export abstract class UVertMesh extends ULodMesh {
         const groups: [number, number, number][] = [];
 
         if (!sequence || sequence.frameCount <= 0) throw new Error(`VertMesh '${this.objectName}' has no matching animation sequence.`);
-        if (this.animVerts.getElemCount() !== this.frameVerts * this.animFrames || this.animNormals.getElemCount() !== this.animVerts.getElemCount()) throw new Error(`VertMesh '${this.objectName}' has inconsistent animation frame data.`);
+        if (this.verts.getElemCount() !== this.frameVerts * this.animFrames || this.animNormals.getElemCount() !== this.verts.getElemCount()) throw new Error(`VertMesh '${this.objectName}' has inconsistent animation frame data.`);
         if (sequence.frameStart + sequence.frameCount > this.animFrames) throw new Error(`VertMesh '${this.objectName}' animation exceeds its frame data.`);
 
         for (let f = 0; f < sequence.frameCount; f++) {
@@ -64,7 +64,8 @@ export abstract class UVertMesh extends ULodMesh {
                 if (wedge.vertexIndex >= this.frameVerts) throw new Error(`VertMesh '${this.objectName}' wedge ${i} exceeds its vertex count.`);
 
                 const index = (sequence.frameStart + f) * this.frameVerts + wedge.vertexIndex;
-                const vertex = this.animVerts.getElem(index);
+                // Engine.dll GetFrame 0x9d6a34 reads ULodMesh.Verts (+0x6c), not AnimVerts (+0x148).
+                const vertex = this.verts.getElem(index);
                 const normal = this.animNormals.getElem(index);
 
                 // Engine.dll GetFrame 0x9d6a5d–0x9d6ad7; normal bias 0xaae3ac is 512.

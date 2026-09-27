@@ -575,8 +575,11 @@ export class UnScriptVM {
 
     public constructor(library: DecodeLibrary) {
         this.library = library;
+        this.loadFunctions();
+    }
 
-        for (const fn of Object.values(library.scriptFunctions)) {
+    public loadFunctions(): void {
+        for (const fn of Object.values(this.library.scriptFunctions)) {
             this.functionsById.set(fn.id.toLowerCase(), fn);
 
             let functions = this.functionsByClass.get(fn.owner);

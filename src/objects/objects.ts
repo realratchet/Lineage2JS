@@ -9,6 +9,7 @@ export type ICollidable = THREE.Object3D<THREE.Event> & {
     getCollider(): RAPIER.Collider;
     getColliders?(): RAPIER.Collider[];
     getRigidbody(): RAPIER.RigidBody;
+    getCollisionRadius(): number;
     getCollisionProfile?(): ActorCollisionProfile_T;
     getCollisionPrimitive?(): CollisionPrimitive_T;
     getBaseActor?(): ICollidable | null;

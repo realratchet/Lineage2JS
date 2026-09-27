@@ -12,6 +12,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
     protected readonly spinAttr: InstancedBufferAttribute;
     protected readonly colorAttr: InstancedBufferAttribute;
     protected readonly uvAttr: InstancedBufferAttribute;
+    protected readonly uvBlendAttr: InstancedBufferAttribute;
     protected renderCount = 0;
 
     constructor(material: InstancedParticleMaterial, capacity: number) {
@@ -38,6 +39,10 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
         geometry.setAttribute("instanceSpin", this.spinAttr);
         geometry.setAttribute("instanceColor", this.colorAttr);
         geometry.setAttribute("instanceUV", this.uvAttr);
+        if (material.defines.USE_SUBDIVISION_BLEND !== undefined) {
+            this.uvBlendAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
+            geometry.setAttribute("instanceUVBlend", this.uvBlendAttr);
+        }
 
         // vertex shader computes world offsets from a camera-facing basis, invisible to three's bounding-sphere culling
         this.frustumCulled = false;
@@ -52,12 +57,13 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
             && material.blendDstAlpha === OneFactor;
     }
 
-    public setInstance(index: number, position: THREE.Vector3, scaleX: number, scaleY: number, spin: number, color: THREE.Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number) {
+    public setInstance(index: number, position: THREE.Vector3, scaleX: number, scaleY: number, spin: number, color: THREE.Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number, uvBlend: THREE.Vector3) {
         this.positionAttr.setXYZ(index, position.x, position.y, position.z);
         this.scaleAttr.setXY(index, scaleX, scaleY);
         this.spinAttr.setX(index, spin);
         this.colorAttr.setXYZW(index, color.x, color.y, color.z, color.w);
         this.uvAttr.setXYZW(index, uvOffsetX, uvOffsetY, uvScaleX, uvScaleY);
+        if (this.uvBlendAttr) this.uvBlendAttr.setXYZ(index, uvBlend.x, uvBlend.y, uvBlend.z);
         this.renderCount = Math.max(this.renderCount, index + 1);
     }
 
@@ -76,6 +82,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
         this.markUpdated(this.spinAttr, count);
         this.markUpdated(this.colorAttr, count * 4);
         this.markUpdated(this.uvAttr, count * 4);
+        if (this.uvBlendAttr) this.markUpdated(this.uvBlendAttr, count * 3);
     }
 
     protected markUpdated(attribute: InstancedBufferAttribute, count: number) {

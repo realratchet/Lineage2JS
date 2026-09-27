@@ -4,15 +4,24 @@ import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 export type IMeshEmitterDecodeInfo = IEmitterDecodeInfo & {
     type: "MeshEmitter",
-    mesh: { geometry: string, materials: string }
+    mesh: { geometry: string, materials: string },
+    useMeshBlendMode: boolean,
+    renderTwoSided: boolean,
+    useParticleColor: boolean
 };
 
 export abstract class UMeshEmitter extends UParticleEmitter {
     declare protected mesh: UStaticMesh;
+    declare protected useMeshBlendMode: boolean;
+    declare protected renderTwoSided: boolean;
+    declare protected useParticleColor: boolean;
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
-            "StaticMesh": "mesh"
+            "StaticMesh": "mesh",
+            "UseMeshBlendMode": "useMeshBlendMode",
+            "RenderTwoSided": "renderTwoSided",
+            "UseParticleColor": "useParticleColor"
         });
     }
 
@@ -24,7 +33,10 @@ export abstract class UMeshEmitter extends UParticleEmitter {
 
         return Object.assign(super.getDecodeInfo(builder), {
             type: "MeshEmitter",
-            mesh: builder.pullStaticMesh(this.mesh)
+            mesh: builder.pullStaticMesh(this.mesh),
+            useMeshBlendMode: this.useMeshBlendMode,
+            renderTwoSided: this.renderTwoSided,
+            useParticleColor: this.useParticleColor
         });
     }
 }

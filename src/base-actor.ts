@@ -11,7 +11,7 @@ import AnimationComponent from "./objects/components/animation-component";
 import TransformComponent from "./objects/components/transform-component";
 import ActorOwnershipComponent from "./objects/components/actor-ownership-component";
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
-import NpcAttackComponent, { type NpcAttackSelection_T, type NpcAttack_T } from "./objects/components/npc-attack-component";
+import PawnAttackComponent, { type PawnAttackSelection_T, type PawnAttack_T } from "./objects/components/pawn-attack-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
 import { COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
 import { ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
@@ -46,6 +46,8 @@ export class BaseActor extends GameObject implements ICollidable {
     public get scriptProperties(): Map<string, ScriptValue_T> { return this.scriptComponent ? this.scriptComponent.getProperties() : null; }
 
     public setScriptRuntime(vm: UnScriptVM, classId: string, objectFactory: ScriptObjectFactory_T): void {
+        if (this.scriptComponent) this.removeComponent(this.scriptComponent);
+
         const component = new ScriptComponent<BaseActor>(vm, objectFactory, classId);
 
         this.scriptComponent = component;
@@ -196,9 +198,9 @@ export class BaseActor extends GameObject implements ICollidable {
 
     public playDeathAnimation(onFinished: (actor: BaseActor) => void): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").playDeath(onFinished); }
 
-    public getNpcAttacks(): readonly NpcAttack_T[] { return this.getComponent<NpcAttackComponent>("npcAttack").getAttacks(); }
-    public attack(target: BaseActor, selection: NpcAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void { this.getComponent<NpcAttackComponent>("npcAttack").attack(target, selection, locList, associatedActors, targetExcepted); }
-    public stopAttack(): void { this.getComponent<NpcAttackComponent>("npcAttack").stop(); }
+    public getNpcAttacks(): readonly PawnAttack_T[] { return this.getComponent<PawnAttackComponent>("pawnAttack").getAttacks(); }
+    public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void { this.getComponent<PawnAttackComponent>("pawnAttack").attack(target, selection, locList, associatedActors, targetExcepted); }
+    public stopAttack(): void { this.getComponent<PawnAttackComponent>("pawnAttack").stop(); }
 
     public isPlayingOneShotAnimation(animationName: string): boolean { return this.animationComponent.isPlayingOneShot(animationName); }
     public playAnimation(animationName: string, tweenTime: number = 0.1, rate: number = 1, loop: boolean = true, restart: boolean = false): void { this.animationComponent.play(animationName, tweenTime, rate, loop, restart); }

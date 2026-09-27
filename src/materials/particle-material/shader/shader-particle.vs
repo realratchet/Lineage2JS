@@ -4,6 +4,10 @@ varying vec2 vUv;
 // cell of the atlas this particle shows. xy = offset, zw = scale. Identity (0,0,1,1) for
 // unsubdivided textures.
 uniform vec4 uvOffsetScale;
+#ifdef USE_SUBDIVISION_BLEND
+uniform vec3 subdivisionBlend;
+varying vec3 vSubdivisionBlend;
+#endif
 
 #include <common>
 #include <uv_pars_vertex>
@@ -17,6 +21,9 @@ uniform vec4 uvOffsetScale;
 
 void main() {
     vUv = uv * uvOffsetScale.zw + uvOffsetScale.xy;
+    #ifdef USE_SUBDIVISION_BLEND
+    vSubdivisionBlend = vec3(uv * uvOffsetScale.zw + subdivisionBlend.xy, subdivisionBlend.z);
+    #endif
 
     #include <uv_vertex>
     #include <color_vertex>

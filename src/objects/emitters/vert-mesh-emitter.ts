@@ -1,30 +1,22 @@
-import { DoubleSide, FrontSide } from "three";
 import MeshEmitter from "./mesh-emitter";
 
 class VertMeshEmitter extends MeshEmitter {
     declare protected framerate: number;
     declare protected animFrames: number[];
-    declare protected ignoreParticleColor: boolean;
-    declare protected renderTwoSided: boolean;
 
     protected initSettings(config: any): void {
         if (config.geometry) super.initSettings(config);
         else this.geometry = null;
         this.framerate = config.framerate;
         this.animFrames = [];
+        // Engine.dll 0x9da36e..0x9da3d2 keeps the color wrapper only on the vertex-mesh path.
         this.ignoreParticleColor = config.useMeshBlendMode && !config.useParticleColor;
-        this.renderTwoSided = config.renderTwoSided;
     }
 
     protected initParticleMesh() {
         if (!this.geometry) return null;
 
-        const mesh = super.initParticleMesh();
-
-        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
-            material.side = this.renderTwoSided ? DoubleSide : FrontSide;
-
-        return mesh;
+        return super.initParticleMesh();
     }
 
     protected spawnParticle(...args: Parameters<MeshEmitter["spawnParticle"]>) {
@@ -66,25 +58,6 @@ class VertMeshEmitter extends MeshEmitter {
         }
 
         return result;
-    }
-
-    public update(currentTime: number): void {
-        super.update(currentTime);
-        if (!this.geometry || !this.ignoreParticleColor) return;
-
-        for (const particle of this.particlePool) {
-            if (!particle.visible) continue;
-
-            const mesh = particle.children[0] as THREE.Mesh;
-            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-
-            materials.forEach((material: any, index: number) => {
-                const source = (this.materials as THREE.ShaderMaterial[])[index];
-
-                material.uniforms.diffuse.value.copy(source.uniforms.diffuse.value);
-                material.uniforms.opacity.value = source.uniforms.opacity.value;
-            });
-        }
     }
 }
 

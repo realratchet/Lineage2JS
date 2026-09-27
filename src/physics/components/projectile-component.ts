@@ -9,6 +9,7 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { CollisionQuery_T } from "../collision-world";
 import type NMover from "../mover";
+import type { ICollidable } from "../../objects/objects";
 
 export type ProjectileActor_T = Object3D & IObject & { scriptProperties: Map<string, any> };
 
@@ -29,13 +30,13 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     protected readonly renderManager: RenderManager;
     protected readonly target: BaseActor;
     protected readonly caster: BaseActor;
-    protected readonly onHit: (projectile: ProjectileActor_T, hitActor: boolean) => void;
+    protected readonly onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void;
     protected readonly mover: NMover;
     protected query: CollisionQuery_T;
     protected hasStarted = false;
     protected hasHit = false;
 
-    public constructor(renderManager: RenderManager, caster: BaseActor, target: BaseActor, onHit: (projectile: ProjectileActor_T, hitActor: boolean) => void, mover: NMover = null) {
+    public constructor(renderManager: RenderManager, caster: BaseActor, target: BaseActor, onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void, mover: NMover = null) {
         super();
 
         this.renderManager = renderManager;
@@ -194,7 +195,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
             properties.set("Physics", EPhysics_T.PHYS_None);
             this.hasHit = true;
             // Engine.dll physNProjectile 0x8d351d..0x8d3523 passes TargetActor on arrival; processHitWall 0x793380 forwards the hit actor.
-            this.onHit(effect, hit ? !!hit.actor : !!this.target);
+            this.onHit(effect, hit ? !!hit.actor : !!this.target, hit ? hit.actor : this.target);
 
             // Engine.dll UParticleEmitter::NotifyPreDestroy 0x612750 is empty for sprite/mesh/beam emitters.
             if (!properties.get("bPreDestroy")) this.renderManager.removeTransientEffect(effect);

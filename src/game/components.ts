@@ -153,6 +153,7 @@ export abstract class ObjectComponent<TParent extends IObject = IObject> impleme
 
 export class GameObject extends Object3D implements IObject {
     public readonly isGameObject = true;
+    public scriptOwner: Object3D & IObject = null;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
     public addComponent<T extends IComponent<any>>(component: T): T { return this.componentCollection.add(component); }
@@ -167,6 +168,7 @@ export class GameObject extends Object3D implements IObject {
 
 export class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial extends Material | Material[] = Material | Material[]> extends Mesh<TGeometry, TMaterial> implements IObject {
     public readonly isGameObject = true;
+    public scriptOwner: Object3D & IObject = null;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
     public addComponent<T extends IComponent<any>>(component: T): T { return this.componentCollection.add(component); }
@@ -178,4 +180,3 @@ export class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMateri
     public updateComponents(currentTime: number, deltaTime: number): void { this.componentCollection.update(currentTime, deltaTime); }
     public detachComponents(): void { this.componentCollection.clear(); }
 }
-

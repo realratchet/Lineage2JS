@@ -73,7 +73,7 @@ export type NativeSkillEffect_T = {
     phase: NpcSkillEffectPhase_T;
     effectClass: string;
     host: "caster" | "target" | "source" | "impactActor";
-    associatedActors?: "targetExcepted" | "targetExceptedAndPrimary" | "primaryAndSecondary" | "all";
+    associatedActors?: "targetExcepted" | "targetExceptedAndPrimary" | "primaryAndSecondary" | "primaryPerAssociated" | "all";
     primaryTargetOnly?: boolean;
     rejectNullAfterSpawn?: boolean;
     soundWithoutEffect?: boolean;
@@ -89,7 +89,7 @@ export type NativeSkillEffect_T = {
     boneOptional?: boolean;
     boneFallback?: number;
     positionBone?: string;
-    missingBoneStopsPhase?: boolean;
+    missingBoneStopsPhase?: boolean | "beforeTarget";
     positionBoneProperty?: string;
     specificStage?: number;
     boneOffset?: [number, number, number];
@@ -124,8 +124,9 @@ export type NativeSkillEffect_T = {
     delay?: number;
     hitDelay?: number;
     offset?: [number, number, number];
-    pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center" | "lastTarget", rotation?: "hit", radiusOffset?: number };
+    pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center" | "lastTarget", rotation?: "hit" | "targetDisplacement", radiusOffset?: number };
     pawnLightOnly?: boolean;
+    attackSounds?: boolean;
     viewShake?: { type?: "damage" | "upDown", duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, direction: "random" | "y" | "fixedY", rotationAmplitude: number, rotationVelocity: number, positionAmplitude: [number, number, number], strength: number, range: number, ownerRequired?: boolean, event?: { name: string, radius: number } };
     trailerPrePivot?: "casterMeshOrigin";
     projectile?: { target: "caster" | "target", speed?: number, acceleration?: number, path?: [number, number, number][], interpolation?: number, hermite?: { duration: number, tangentScale: number, finalDirectionZ: number } };

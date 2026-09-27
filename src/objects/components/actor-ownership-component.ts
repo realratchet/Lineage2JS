@@ -3,7 +3,7 @@ import { ObjectComponent, type IObject } from "../../game/components";
 import { ScriptComponent } from "../../game/script-component";
 import type { ScriptHost_T, ScriptValue_T } from "../../ue-script/vm";
 
-type OwnedActor_T = Object3D & IObject & ScriptHost_T;
+type OwnedActor_T = Object3D & IObject;
 
 export function setScriptObjectProperty(object: Object3D, field: string, value: ScriptValue_T): void {
     const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
@@ -33,7 +33,7 @@ export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {
         if (owner) owner.getComponent<ActorOwnershipComponent>("actorOwnership").loseScriptChild(object);
 
         (object as any).scriptOwner = parent;
-        setScriptObjectProperty(object, "Owner", parent);
+        setScriptObjectProperty(object, "Owner", parent as unknown as ScriptHost_T);
         this.scriptChildren.add(object);
 
         const script = this.findComponent<ScriptComponent>("script");

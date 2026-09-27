@@ -53,7 +53,7 @@ export class SpriteEmitter extends BaseEmitter {
         if (this.material === null) return null;
 
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
-        const settings = { ...this.material, usesSubdivision };
+        const settings = { ...this.material, usesSubdivision, blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv };
         const mesh = new ParticleMesh(this.material.type === "sprite" ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings));
         mesh.spriteDirection = this.spriteDirection;
         mesh.projectionNormal = this.projectionNormal;
@@ -65,6 +65,7 @@ export class SpriteEmitter extends BaseEmitter {
         return new InstancedSpriteMesh(new InstancedParticleMaterial({
             ...this.material,
             usesSubdivision,
+            blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv,
             spriteDirection: this.spriteDirection,
             projectionNormal: this.projectionNormal
         }), capacity);

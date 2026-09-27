@@ -8,6 +8,7 @@ export type IMoverDecodeInfo = {
     keyNum: number,
     keyPositions: Vector3Arr[],
     keyQuaternions: QuaternionArr[],
+    hitActorNormal: Vector3Arr,
     moveTime: number,
     stayOpenTime: number,
     delayTime: number,
@@ -45,6 +46,7 @@ export abstract class UMover extends UStaticMeshActor {
     declare protected keyRot: (FRotator | null)[];
     declare protected basePos: FVector;
     declare protected baseRot: FRotator;
+    declare protected hitActorNormal: FVector;
     declare protected initialState: string;
     declare protected moverEncroachType: EMoverEncroachType_T;
 
@@ -61,6 +63,7 @@ export abstract class UMover extends UStaticMeshActor {
             "KeyRot": "keyRot",
             "BasePos": "basePos",
             "BaseRot": "baseRot",
+            "HitActorNormal": "hitActorNormal",
             "InitialState": "initialState",
             "MoverEncroachType": "moverEncroachType"
         });
@@ -94,6 +97,7 @@ export abstract class UMover extends UStaticMeshActor {
                 keyNum: this.keyNum,
                 keyPositions,
                 keyQuaternions,
+                hitActorNormal: this.hitActorNormal.getElements(),
                 moveTime: this.moveTime,
                 stayOpenTime: this.stayOpenTime,
                 delayTime: this.delayTime,

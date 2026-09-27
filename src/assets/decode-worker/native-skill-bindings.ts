@@ -116,7 +116,7 @@ nativeSkillBindings.set("s_dietrich_suspension", { effects: ["LineageEffect.m_u0
 // Engine.dll Init0x7a22a1=10 ->0x7a0915; Shot0x7b160b=32 ->0x7ade48; Explosion0x791e49=5 ->0x7905eb; PreShot0x7a43ac returns.
 nativeSkillBindings.set("s_gustav_wind", { effects: ["LineageEffect.m_u038_a", "LineageEffect.m_u038_b", "LineageEffect.m_u038_c", "LineageEffect.m_u038_d"], soundPhases: ["casting", "shot", "explosion"], pending: "retail visual/timing and target reaction verification" });
 // Engine.dll Init 0x7a229b=18 -> return; Shot 0x7b1605=28 -> 0x7acf2a; Explosion 0x791e43=3 -> 0x7907ac.
-nativeSkillBindings.set("s_wild_cannon", { effects: ["LineageEffect.e_u073_a", "LineageEffect.e_u073_b", "LineageEffect.e_u073_ground"], soundPhases: ["shot", "explosion"], pending: "Mover-target door impact, nullable targets and retail visual/timing verification" });
+nativeSkillBindings.set("s_wild_cannon", { effects: ["LineageEffect.e_u073_a", "LineageEffect.e_u073_b", "LineageEffect.e_u073_ground", "LineageEffect.e_u073_door"], soundPhases: ["shot", "explosion"], pending: "Retail visual/timing verification" });
 
 // Engine.dll Init table 0x7a2130 -> 0x79f5c8; Shot table 0x7b14bc -> 0x7b0749.
 for (const name of ["s_npc_silence", "s_npc_silence6", "s_npc_silence7", "s_npc_silence8", "s_npc_silence9", "s_npc_berserker", "s_npc_berserker2", "s_npc_surrender_to_fire", "s_npc_surrender_to_fire2"])
@@ -180,8 +180,8 @@ for (const name of ["s_npc_twister", "s_npc_twister9", "s_npc_twister_for_slow",
 for (const name of ["s_npc_twister_magic_only", "s_npc_twister_magic_only6", "s_npc_twister_magic_only7", "s_npc_twister_magic_only9"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.m_u026_a", "LineageEffect.m_u026_b", "LineageEffect.m_u026_c", "LineageEffect.m_u026_d"], soundPhases: ["casting", "shot", "explosion"], pending: "retail visual/timing, no-hit-actor, collision and individual NPC verification" });
 
-// Engine.dll Shot 0x7b0e38 and Explosion 0x791ade return without a spawned effect.
-nativeSkillBindings.set("s_antaras_fear", { effects: [], soundPhases: ["shot"], pending: "native status/view behavior and full retail parity" });
+// Engine.dll Shot 0x7b0e38 skips PlaySkillSound at 0x7b0e33; Init/PreShot also return without effects or sound.
+nativeSkillBindings.set("s_antaras_fear", { effects: [], soundPhases: [], pending: "full retail parity" });
 
 // Engine.dll APawn::SkillEffectShot 0x7a9bc8.
 nativeSkillBindings.set("s_antaras_jump", { effects: ["LineageEffect.e_u043_a"], soundPhases: ["shot"] });
@@ -195,14 +195,14 @@ nativeSkillBindings.set("s_antaras_debuff", { effects: ["LineageEffect.e_u050_b"
 // Engine.dll APawn::SkillEffectShot 0x7aacc7.
 nativeSkillBindings.set("s_antaras_mouth", { effects: ["LineageEffect.e_u044_b"], soundPhases: ["shot"] });
 
-// Engine.dll APawn::SkillEffectShot 0x7aa56c.
-nativeSkillBindings.set("s_antaras_normal_attack", { effects: ["LineageEffect.e_u049_a"], soundPhases: ["shot"] });
+// Engine.dll Shot 0x7aa56c..0x7aa91e leaves lastEffect zero at the 0x7b0e26 sound guard.
+nativeSkillBindings.set("s_antaras_normal_attack", { effects: ["LineageEffect.e_u049_a"], soundPhases: [] });
 
 // Engine.dll APawn::SkillEffectInit spawn 0x79e829; SkillEffectShot 0x7ab0e5.
 nativeSkillBindings.set("s_antaras_breath", { effects: ["LineageEffect.e_u046_a", "LineageEffect.e_u046_b", "LineageEffect.e_u046_c"], soundPhases: ["casting", "shot", "explosion"] });
 
 // Engine.dll Shot 0x7aaa61..0x7aaa71 spawns e_u049_a from the left-hand branch.
-nativeSkillBindings.set("s_antaras_normal_attack_ex", { effects: ["LineageEffect.e_u049_a"], effectGroup: "antarasNormalAttackEx", soundPhases: [], pending: "native view/event behavior and full retail parity" });
+nativeSkillBindings.set("s_antaras_normal_attack_ex", { effects: ["LineageEffect.e_u049_a"], effectGroup: "antarasNormalAttackEx", soundPhases: [], pending: "native L2-event behavior and full retail parity" });
 
 // Engine.dll Init selectors 0x7a216a/0x7a2223 -> 0x79f2ca; Shot 0x7ac244: shared Chill Flame/bleed recipe.
 for (const name of ["s_npc_chill_flame", "s_npc_chill_flame6", "s_self_range_bleed_boss_a_", "s_self_range_bleed_boss_a_2", "s_self_range_bleed_boss_a_3", "s_self_range_bleed_boss_a_5", "s_self_range_bleed_boss_a_7", "s_self_range_bleed_boss_a_8", "s_self_range_bleed_boss_a_9", "s_self_range_bleed_boss_a_10"])
@@ -217,7 +217,7 @@ for (const name of ["s_mega_storm_strike", "s_summon_mega_storm_strike8", "s_sum
     nativeSkillBindings.set(name, { effects: ["LineageEffect.m_u000_a", "LineageEffect.m_u000_b", "LineageEffect.m_u000_c", "LineageEffect.m_u000_d"], soundPhases: ["casting", "shot", "explosion"], finalShotOnly: true, pending: "retail visual/timing, low-frame-rate ordering and collision parity; individual summon variants" });
 
 // Engine.dll Init 0x79c74b; Shot 0x7a9288..0x7a95dd; PreShot 0x7a3de7.
-nativeSkillBindings.set("s_siege_hammer", { effects: ["LineageEffect.p_u004_a"], effectGroup: "siegeHammer", soundPhases: [], pending: "owner-conditioned native view shake, retail visual/timing and individual NPC verification" });
+nativeSkillBindings.set("s_siege_hammer", { effects: ["LineageEffect.p_u004_a"], effectGroup: "siegeHammer", soundPhases: [], pending: "retail visual/timing and individual NPC verification" });
 
 // Engine.dll Init 0x79ff2a; Shot 0x7ada66 / 0x7adb2c; PreShot 0x7a40b9 / 0x7a459a -> 0x7a3de7.
 for (const name of ["s_self_haste", "s_self_haste2", "s_clan_might", "s_clan_might3", "s_self_range_might_boss_a_", "s_self_range_might_boss_a_2", "s_self_range_might_boss_a_4", "s_self_range_might_boss_a_6", "s_self_range_might_boss_a_9"])
@@ -251,7 +251,8 @@ for (const name of ["s_npc_corpse_burst", "s_npc_corpse_burst6", "s_npc_corpse_b
 nativeSkillBindings.set("s_cat_recharge", { effects: ["LineageEffect.m_u022_a", "LineageEffect.m_u022_b"], soundPhases: ["casting", "shot"], pending: "retail visual/timing and individual NPC verification" });
 
 // Engine.dll Init 0x7a20bf/0x7a20c3 -> 0x79e3b0; Shot 0x7b1384/0x7b1394 -> 0x7a8d21; PreShot/Explosion return via 0x7a3de7/0x791ade.
-nativeSkillBindings.set("s_heal_queen_ant", { effects: ["LineageEffect.m_u001_a", "LineageEffect.m_u001_b"], soundPhases: ["casting", "shot"], pending: "retail visual/timing and secondary-target verification" });
+// Engine.dll Shot 0x7a8d21..0x7a8d2c checks AssociatedActor count before the primary/list flag.
+nativeSkillBindings.set("s_heal_queen_ant", { effects: ["LineageEffect.m_u001_a", "LineageEffect.m_u001_b"], soundPhases: ["casting", "shot"], associatedActors: true, pending: "retail visual/timing verification" });
 
 // Engine.dll Init 0x7a20bc -> 0x7a1220; Shot 0x7a8bc3 returns; PreShot/Explosion return via 0x7a3de7/0x791ade.
 nativeSkillBindings.set("s_queen_ant_brandish", { effects: ["LineageEffect.s_u010_a"], soundPhases: ["casting"], pending: "retail visual/timing verification" });
@@ -298,12 +299,12 @@ for (const name of ["s_npc_spear_attack", "s_npc_spear_attack3", "s_power_shot_b
 // Engine.dll SkillEffectShot 0x7a99b2 pushes m_u006_e and m_u006_d for skill 4132.
 nativeSkillBindings.set("s_rapid_spear_attack", { effects: ["LineageEffect.m_u006_e", "LineageEffect.m_u006_d"], effectGroup: "rapidSpear", soundPhases: ["casting", "shot"], pending: "native shot placement and timing parity" });
 
-// Engine.dll SkillEffectShot 0x7ae49b for skill 4244 loads LineageEffect.p_u004_a.
+// Engine.dll Init selector 0x7a22a9 -> 0x7a1220; Shot 0x7b1613 -> 0x7ae49b requires FinalShot before the p_u004_a primary/list path.
 for (const name of ["s_npc_wild_sweep", "s_npc_wild_sweep3", "s_npc_wild_sweep4", "s_npc_wild_sweep6", "s_npc_wild_sweep7"])
-    nativeSkillBindings.set(name, { effects: ["LineageEffect.p_u004_a"], effectGroup: "wildSweep", soundPhases: ["shot"] });
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.s_u010_a", "LineageEffect.p_u004_a"], soundPhases: ["casting", "shot"], finalShotOnly: true });
 
-// Engine.dll SkillEffectShot 0x7ae073 selects p_u004_a for skill 4228.
-nativeSkillBindings.set("s_double_dagger_attack", { effects: ["LineageEffect.p_u004_a"], effectGroup: "wildSweep", soundPhases: ["casting"], pending: "native shot placement and timing parity" });
+// Engine.dll Init 0x7a2299 -> 0x7a1220; PreShot 0x7a40cd; Shot 0x7ae073 releases NSpear_sp; Explosion 0x7916c7.
+nativeSkillBindings.set("s_double_dagger_attack", { effects: ["LineageEffect.s_u010_a", "LineageEffect.NSpear_sp", "LineageEffect.p_u004_a"], effectGroup: "doubleDagger", soundPhases: ["casting", "shot", "explosion"] });
 
 // Engine.dll Init 0x79f23b; Shot 0x7ac9b1; Explosion 0x7900fe.
 for (const name of ["s_npc_wind_of_hand", "s_npc_wind_of_hand4", "s_npc_wind_of_hand9", "s_npc_fast_wind_of_hand6", "s_npc_fast_wind_of_hand7"])

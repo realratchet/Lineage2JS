@@ -59,6 +59,7 @@ export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucen
 export type EmitterConfig_T = {
     type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter" | "VertMeshEmitter",
     name?: string,
+    scriptClassId?: string,
     blendingMode: ParticleBlendModes_T,
     uniformScale?: boolean,
     maxParticles: number,
@@ -172,7 +173,7 @@ export abstract class UParticleEmitter extends UObject {
     // Local
     declare protected isAutoDestroyed: boolean; // Determines if this emitter will destroy itself once all particles are gone.
     declare protected isAutoReset: boolean; // Determines if this emitter will reset itself after a specified amount of time.
-    declare protected autoResetTimeRange: number; // The time delay for auto-resets.
+    declare protected autoResetTimeRange: FRange; // The time delay for auto-resets.
     declare protected isDisabled: boolean; // If true, this emitter wont emit anything. Typically used along with TriggerDisabled=true to create a trigger-toggled emitter that starts inactive and only begins emitting once the trigger Event occurs. Also used during testing to disable certain emitters within an emitter system.
     declare protected isFoggingDisabled: boolean; // Determines if particles are affected by distance fog.
     declare protected isRespawningDeadParticles: boolean; // Determines if dead particles (i.e. particles that have exceeded their lifespan or maximum collisions) should be respawned.
@@ -587,7 +588,8 @@ export abstract class UParticleEmitter extends UObject {
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
             blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
             changesOverLifetime: {
-                scale: this.isUsingSizeScale && (this.sizeScale?.length ?? 0) > 1 ? {
+                // Engine.dll UpdateParticles 0x8a0f80..0x8a0f90 accepts a single SizeScale key.
+                scale: this.isUsingSizeScale && (this.sizeScale?.length ?? 0) > 0 ? {
                     values: this.sizeScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.sizeScaleRepeats
                 } : null,
@@ -630,18 +632,18 @@ export abstract class UParticleEmitter extends UObject {
 // settings the emitters read off themselves after the assign and which aren't already
 // covered by explicit EmitterConfig_T fields, scale curves travel via changesOverLifetime
 const REQUIRED_SETTINGS = [
-    "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter",
+    "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter", "autoResetTimeRange", "isAutoDestroyed", "isAutoReset",
     "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
     "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
     "initialDelayRange", "startVelocityRadialRange", "isIndependentSprayAccel",
-    "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
+    "isDisabled", "isFadingIn", "isFadingOut", "isResetOnTrigger", "isRespawningDeadParticles", "isTriggerDisabled", "isBlendBetweenSubdivisions", "isDepthTesting", "isDepthWriting",
     "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
     "isUsingCollision", "isUsingColorFromMesh", "isUsingColorScale", "isUsingRandomSubdiv",
     "isUsingRevolution", "isUsingRevolutionScale", "isUsingSizeScale", "isUsingVelocityScale",
     "isVelocityFromMesh", "maxAbsVelocity", "meshNormal", "meshScaleRange", "meshSpawning",
     "rotateVelocityLossRange", "rotationNormal", "rotationSource", "sizeScaleRepeats",
-    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSound",
+    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawnOnTriggerRange", "spawningSound",
     "spawningSoundIndex", "spawningSoundProbability",
     "startLocationShape", "startSpinRange", "subdivEnd", "subdivStart", "texSubdivU",
     "texSubdivV", "useSkeletalLocationAs", "velocityScaleRepeats"

@@ -26,9 +26,13 @@ export class BSPCollider extends GameObject implements ICollidable {
     protected readonly analyticalPrimitive: CollisionPrimitive_T<"bsp">;
     protected readonly colliders: RAPIER.Collider[] = [];
     protected rigidbody: RAPIER.RigidBody = null;
+    protected readonly collisionRadius: number;
 
-    public constructor(nodes: IBSPNodeDecodeInfo_T[]) {
+    public constructor(nodes: IBSPNodeDecodeInfo_T[], collisionRadius: number) {
         super();
+
+        if (!Number.isFinite(collisionRadius)) throw new Error(`BSP collision has invalid LevelInfo radius '${collisionRadius}'.`);
+        this.collisionRadius = collisionRadius;
 
         (this as any).isCollidable = true;
 
@@ -103,6 +107,7 @@ export class BSPCollider extends GameObject implements ICollidable {
     }
 
     public getCollider(): RAPIER.Collider { return this.colliders[0]; }
+    public getCollisionRadius(): number { return this.collisionRadius; }
     public getColliders(): RAPIER.Collider[] { return this.colliders; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
     public getCollisionPrimitive(): CollisionPrimitive_T { return this.analyticalPrimitive; }

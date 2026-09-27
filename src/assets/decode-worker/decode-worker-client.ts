@@ -241,6 +241,20 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeEffectTemplates", settings, classPaths, soundPaths, scriptClassPaths });
     }
 
+    public async decodeSkill(settings: LoadSettings_T, id: number, level: number): Promise<DecodeLibrary> {
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeSkill(settings, id, level);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "decodeSkill", settings, id, level });
+    }
+
     public resolveNpc(selector: string | number): Promise<INpcDefinition> {
         if (this.mainThreadEngine) return this.mainThreadEngine.resolveNpc(selector);
 

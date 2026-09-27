@@ -159,7 +159,13 @@ export abstract class UEmitter extends UAActor {
 
             const emitterInfo = emitter.setActor(this).getDecodeInfo(builder);
 
-            if (emitterInfo) emittersInfo.push(emitterInfo);
+            if (emitterInfo) {
+                const cls = (emitter.constructor as any).hostClass;
+
+                builder.pullScriptClassFunctions([cls]);
+                emitterInfo.scriptClassId = cls.name;
+                emittersInfo.push(emitterInfo);
+            }
         });
 
         return emittersInfo;

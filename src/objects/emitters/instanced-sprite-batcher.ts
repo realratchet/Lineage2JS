@@ -8,6 +8,7 @@ type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; emitters: a
 
 const tmpAnchor = new Vector3();
 const tmpViewPosition = new Vector3();
+const tmpSubdivBlend = new Vector3();
 const cacheMaterialKey = new WeakMap<ShaderMaterial, { textureUuid: string; key: string }>();
 
 export function isOrderIndependentAdditive(material: any): material is ShaderMaterial {
@@ -61,6 +62,7 @@ class SpriteParticleBatch {
     protected spinAttr: InstancedBufferAttribute;
     protected colorAttr: InstancedBufferAttribute;
     protected uvAttr: InstancedBufferAttribute;
+    protected uvBlendAttr: InstancedBufferAttribute;
     protected readonly anchor = new Vector3();
     protected readonly baseRight = new Vector3();
     protected readonly baseUp = new Vector3();
@@ -136,6 +138,7 @@ class SpriteParticleBatch {
         const spins = this.fixedNormal ? null : this.spinAttr.array as Float32Array;
         const colors = this.colorAttr.array as Float32Array;
         const uvs = this.uvAttr.array as Float32Array;
+        const uvBlends = this.uvBlendAttr ? this.uvBlendAttr.array as Float32Array : null;
 
         const anchor = this.anchor;
         const baseRight = this.baseRight;
@@ -186,7 +189,8 @@ class SpriteParticleBatch {
                     up.copy(baseUp).multiplyScalar(cos).sub(spinTemp.copy(baseRight).multiplyScalar(sin)).multiplyScalar(scaleY);
                 }
 
-                const subdivUV = emitter.computeSubdivUV(emitter.resolveSubdivision(settings), emitter.worldBatchSubdivUV);
+                const subdivision = emitter.resolveSubdivision(settings);
+                const subdivUV = emitter.computeSubdivUV(subdivision, emitter.worldBatchSubdivUV);
 
                 const p3 = count * 3;
                 const p4 = count * 4;
@@ -214,6 +218,12 @@ class SpriteParticleBatch {
                 uvs[p4 + 1] = subdivUV[1];
                 uvs[p4 + 2] = subdivUV[2];
                 uvs[p4 + 3] = subdivUV[3];
+                if (uvBlends) {
+                    emitter.computeSubdivBlend(settings, subdivision, tmpSubdivBlend);
+                    uvBlends[p3] = tmpSubdivBlend.x;
+                    uvBlends[p3 + 1] = tmpSubdivBlend.y;
+                    uvBlends[p3 + 2] = tmpSubdivBlend.z;
+                }
                 sortCenter.add(anchor);
                 count++;
             }
@@ -239,6 +249,7 @@ class SpriteParticleBatch {
             }
             this.markUpdated(this.colorAttr, count * 4);
             this.markUpdated(this.uvAttr, count * 4);
+            if (this.uvBlendAttr) this.markUpdated(this.uvBlendAttr, count * 3);
         }
     }
 
@@ -265,6 +276,7 @@ class SpriteParticleBatch {
         }
         this.colorAttr = make(4);
         this.uvAttr = make(4);
+        if (this.mesh.material.defines.USE_SUBDIVISION_BLEND !== undefined) this.uvBlendAttr = make(3);
 
         if (geometry) {
             // WebGLBindingStates only computes _maxInstanceCount while it is undefined - a stale one clamps every later draw to the original capacity
@@ -280,6 +292,7 @@ class SpriteParticleBatch {
             }
             geometry.setAttribute("instanceColor", this.colorAttr);
             geometry.setAttribute("instanceUV", this.uvAttr);
+            if (this.uvBlendAttr) geometry.setAttribute("instanceUVBlend", this.uvBlendAttr);
         }
     }
 }

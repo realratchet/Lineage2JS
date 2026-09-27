@@ -104,6 +104,7 @@ export class DecodeLibrary {
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
+    public levelInfoCollisionRadius: number;
     public helpersZoneBounds = false;
     public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
     public readonly bspColliders: IBoxDecodeInfo[] = [];
@@ -136,6 +137,7 @@ export class DecodeLibrary {
     public readonly ambientSounds: IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly sounds: Record<string, string> = {};
+    public pawnSounds: L2JS.Engine.IPawnSoundsDecodeInfo = null;
     public readonly scriptClasses: Record<string, IScriptClassDecodeInfo> = {};
     public readonly scriptFunctions: Record<string, IScriptFunctionDecodeInfo> = {};
     public readonly scriptStates: Record<string, IScriptStateDecodeInfo> = {};

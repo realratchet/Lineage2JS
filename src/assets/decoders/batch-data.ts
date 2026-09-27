@@ -54,7 +54,8 @@ function groupActorsForBatching(
             return;
         }
 
-        const batchKey = `${meshGeometry.attributes.colors ? 1 : 0}:${actor.instance.attributes?.colors ? 1 : 0}:${actor.instance.mesh.sway ? 1 : 0}`;
+        // A merged collider must retain one Actor collision profile.
+        const batchKey = `${meshGeometry.attributes.colors ? 1 : 0}:${actor.instance.attributes?.colors ? 1 : 0}:${actor.instance.mesh.sway ? 1 : 0}:${JSON.stringify(collision)}`;
         if (!batchGroups.has(batchKey)) batchGroups.set(batchKey, []);
         batchGroups.get(batchKey)!.push(actor);
     });

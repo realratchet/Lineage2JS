@@ -5,7 +5,7 @@ import { VisualizerMode, LeafVisualizerDetail } from "../rendering/visualizer";
 import type Visualizer from "../rendering/visualizer";
 import type RenderManager from "../rendering/render-manager";
 import type BaseActor from "../base-actor";
-import type { NpcAttackSelection_T } from "../objects/components/npc-attack-component";
+import type { PawnAttackSelection_T } from "../objects/components/pawn-attack-component";
 import type GameManager from "./game-manager";
 import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 
@@ -473,6 +473,18 @@ export class UIManager implements IEngineComponent<GameManager> {
         };
 
         buildVariantControls();
+
+        const skills = this.addSection("Player Skills");
+        const skill = { id: 1012, level: 1 };
+        this.addText(skills, "Skill ID", String(skill.id), value => skill.id = Number(value)).type = "number";
+        this.addText(skills, "Level", String(skill.level), value => skill.level = Number(value)).type = "number";
+        const target = this.addSelect(skills, "Target", { Self: "self", "Spawned NPC": "npc" }, "self", () => {});
+        this.addButton(skills, "Cast", () => {
+            const targetActor = target.value === "npc" ? this.spawnedNpc : render.player;
+            if (!targetActor) throw new Error("Spawn an NPC before casting on it");
+            return asset.castPlayerSkill(render, skill.id, skill.level, targetActor);
+        });
+        this.addButton(skills, "Stop", () => asset.stopPlayerSkill(render));
     }
 
     public addNpcControls(): void {
@@ -527,7 +539,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         attackActions.className = "debug-actions";
         this.addButton(attackActions, "Attack", () => {
             const npc = this.spawnedNpc;
-            if (npc) npc.attack(state.selectedTarget === "self" ? npc : render.player, state.selectedAttack === "random" ? "random" : Number(state.selectedAttack) as NpcAttackSelection_T);
+            if (npc) npc.attack(state.selectedTarget === "self" ? npc : render.player, state.selectedAttack === "random" ? "random" : Number(state.selectedAttack) as PawnAttackSelection_T);
         });
         this.addButton(attackActions, "Stop", () => this.spawnedNpc?.stopAttack());
         section.appendChild(attackActions);

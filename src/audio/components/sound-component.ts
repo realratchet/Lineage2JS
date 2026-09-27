@@ -25,13 +25,45 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
 
     public setLibrary(library: DecodeLibrary): this { this.library = library; return this; }
 
-    public playSkillSound(info: NpcSkillSound_T): void {
+    public playAttackSounds(): void {
+        const profile = this.library.pawnSounds;
+
+        if (!profile) return;
+
+        const actor = this.getParent();
+
+        actor.getWorldPosition(tmpPosition);
+        tmpPosition.z += actor.getCollisionHeight();
+
+        // Engine.dll GetDefenseItemSound 0x8b689b..0x8b6a60: unresolved equipment sound falls back to the pawn profile.
+        const item = profile.item;
+        const itemSound = item && item.sounds.length ? item.sounds[Math.floor(Math.random() * item.sounds.length)] : null;
+        const defense = itemSound ? item : profile.defense;
+        const defenseSound = itemSound || (defense.sounds.length ? defense.sounds[Math.floor(Math.random() * defense.sounds.length)] : null);
+
+        // Engine.dll Action_Attack 0x8bdd15..0x8bddf2: defense then damage at target Location, volume/255 and pitch1.
+        if (defenseSound) this.play(defenseSound, defense.volume / 255, 1, defense.radius, defense.radius * 100, true, `Pawn '${actor.name}' defense`, tmpPosition);
+
+        const damage = profile.damage;
+
+        // Engine.dll GetDamageSound 0x8b717f..0x8b719c / 0x8b7268..0x8b7276: inclusive integer random gate.
+        if (damage.sounds.length === 0 || Math.floor(Math.random() * 100) > damage.random) return;
+
+        const damageSound = damage.sounds[Math.floor(Math.random() * damage.sounds.length)];
+
+        if (damageSound) this.play(damageSound, damage.volume / 255, 1, damage.radius, damage.radius * 100, true, `Pawn '${actor.name}' damage`, tmpPosition);
+    }
+
+    public playSkillSound(info: NpcSkillSound_T, actor: BaseActor = this.getParent()): void {
         const soundName = this.library.sounds[info.sound];
 
         if (!soundName) throw new Error(`Skill sound '${info.sound}' failed to decode.`);
 
+        // Engine.dll 0x797e6f..0x797e98: sound position is the receiving Pawn's Location.
+        actor.getWorldPosition(tmpPosition);
+        tmpPosition.z += actor.getCollisionHeight();
         // Engine.dll APawn::PlaySkillSound 0x797e55: volume / 255, table radius, pitch 1.
-        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`);
+        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition);
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
@@ -127,15 +159,15 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, volume, pitch, radius, radius * 100, attenuate, `UnrealScript ${call.name}`);
     }
 
-    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string): void {
+    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null): void {
         if (!this.library) throw new Error(`${source} has no decode library.`);
 
         const sound = this.library.soundBlobCache.get(soundName);
 
         if (!sound?.uri) throw new Error(`${source} has no decoded sound '${soundName}'.`);
 
-        this.getParent().getWorldPosition(tmpPosition);
-        this.audioManager.playOneShotSound(sound.uri, tmpPosition, volume, pitch, refDistance, maxDistance, attenuate);
+        if (!position) this.getParent().getWorldPosition(tmpPosition);
+        this.audioManager.playOneShotSound(sound.uri, position || tmpPosition, volume, pitch, refDistance, maxDistance, attenuate);
     }
 }
 

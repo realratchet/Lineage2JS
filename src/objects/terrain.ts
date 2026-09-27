@@ -27,6 +27,7 @@ export class Terrain extends GameMesh implements ICollidable {
     protected analyticalIndices: Uint32Array;
     protected readonly analyticalBounds = new Box3();
     protected analyticalPrimitive: CollisionPrimitive_T<"terrain">;
+    protected collisionRadius: number;
 
     public bounds: THREE.Box3;
     protected boundsSize: THREE.Vector3;
@@ -73,7 +74,9 @@ export class Terrain extends GameMesh implements ICollidable {
         this.addComponent(new ColliderComponent());
     }
 
-    public setTerrainField({ bounds, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {
+    public setTerrainField({ bounds, collisionRadius, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {
+        if (!Number.isFinite(collisionRadius)) throw new Error(`Terrain collision has invalid TerrainInfo radius '${collisionRadius}'.`);
+        this.collisionRadius = collisionRadius;
         this.bounds = bounds;
         this.boundsSize = bounds.getSize(new Vector3());
         this.boundsPosition = bounds.getCenter(new Vector3());
@@ -365,6 +368,7 @@ export class Terrain extends GameMesh implements ICollidable {
     }
 
     public getCollider() { return this.collider; }
+    public getCollisionRadius(): number { return this.collisionRadius; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
 
     public createCollider(physicsWorld: RAPIER.World) {
@@ -577,6 +581,7 @@ export type TerrainLightingInfo_T = {
 
 type TerrainFieldInfo_T = {
     bounds: THREE.Box3,
+    collisionRadius: number,
     mapX?: number,
     mapY?: number,
     offsetX?: number,

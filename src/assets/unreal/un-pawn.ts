@@ -11,6 +11,7 @@ export type INpcDefinition = {
     textures: string[];
     skillAttacks: NpcSkillAttack_T[];
     enterEvent: INpcEnterEvent | null;
+    sounds: L2JS.Engine.IPawnSoundsDecodeInfo;
 };
 
 export type NpcSkillAttack_T = {
@@ -21,6 +22,7 @@ export type NpcSkillAttack_T = {
     animationCategory: string;
     castStyle: number;
     hitTime: number;
+    castRange?: number;
     isMultiShot: boolean;
     flyingTime: number;
     visualEffect: string;

@@ -17,6 +17,9 @@ export class LitSkinnedMesh extends SkinnedMesh {
     public isUnlit: boolean = false;
     public dynamicHairInfo: IDynamicHairDecodeInfo = null;
     public readonly meshOrigin = new Vector3();
+    public tagAliases: string[] = [];
+    public tagNames: string[] = [];
+    public tagOrigins: Vector3Arr[] = [];
 
     public constructor(geometry: BufferGeometry, material: Material | Material[]) {
         super(geometry, material);

@@ -27,6 +27,9 @@ export type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     animationSet?: string;
     meshScale: Vector3Arr;
     meshOrigin: Vector3Arr;
+    tagAliases: string[];
+    tagNames: string[];
+    tagOrigins: Vector3Arr[];
     meshRotOrigin: Vector3Arr;
     meshRotOriginQuaternion: QuaternionArr;
     boneSimulationType: number;
@@ -601,6 +604,9 @@ export abstract class USkeletalMesh extends ULodMesh {
                 skinNotifies,
                 meshScale: this.meshScale.getElements(),
                 meshOrigin: this.meshOrigin.getElements(),
+                tagAliases: this.attachAliases,
+                tagNames: this.attachBoneNames,
+                tagOrigins: this.attachCoords.map(coords => [coords.origin.x, coords.origin.y, coords.origin.z]),
                 meshRotOrigin: this.meshRotOrigin.toArray(),
                 meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements(),
                 boneSimulationType: this.boneSimulationType || 0

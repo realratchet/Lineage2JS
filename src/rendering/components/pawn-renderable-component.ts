@@ -8,6 +8,7 @@ const tmpSphere = new Sphere();
 
 export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnRenderable";
+    public isRendered: boolean = false;
     protected readonly renderManager: RenderManager;
     protected readonly localSphere = new Sphere();
     protected readonly worldSphere = new Sphere();
@@ -33,6 +34,10 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         this.localSphere.makeEmpty();
 
         for (const mesh of meshes) {
+            // FDynamicActor::Render 0x8eef4e sets Pawn.bRendered before mesh submission.
+            mesh.onBeforeRender = (_renderer, scene) => {
+                if (scene === this.renderManager.scene) this.isRendered = true;
+            };
             mesh.updateMatrix();
 
             if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();

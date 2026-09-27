@@ -1,4 +1,4 @@
-import { BufferValue, type APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
+import { BufferValue, type APackage, type Constructable_T, type PropertyTag, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
 import FColor from "./un-color";
 import UMesh from "./un-mesh";
 import FRotator from "./un-rotator";
@@ -71,6 +71,15 @@ export abstract class ULodMesh extends UMesh {
     protected authenticationKey: number;
     protected impostor = new MeshImpostor();
     protected lodMeshMaterials = new FObjectArray<UMaterial>();
+
+    protected loadProperty(pkg: APackage, tag: PropertyTag): void {
+        if (tag.name !== "Materials") return super.loadProperty(pkg, tag);
+        if (tag.getTypeName() !== "Array") throw new Error(`LodMesh '${this.objectName}' Materials has type '${tag.getTypeName()}'.`);
+
+        const end = pkg.tell() + tag.dataSize;
+        this.propertyDict.set("Materials", new FObjectArray<UMaterial>().load(pkg, tag));
+        if (pkg.tell() !== end) throw new Error(`LodMesh '${this.objectName}' Materials has ${end - pkg.tell()} unread bytes.`);
+    }
 
     public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);

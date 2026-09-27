@@ -24,7 +24,7 @@ import TransformComponent from "../objects/components/transform-component";
 import HairSimulationComponent from "../objects/components/hair-simulation-component";
 import SkinNotifyComponent from "../objects/components/skin-notify-component";
 import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
-import NpcAttackComponent from "../objects/components/npc-attack-component";
+import PawnAttackComponent from "../objects/components/pawn-attack-component";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import { ScriptComponent } from "../game/script-component";
@@ -54,7 +54,7 @@ const tmpCameraMovement = new Vector3();
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
 export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
-function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo {
+function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo | null {
     const lowerName = name.toLowerCase();
     let cls = library.scriptClasses[classId];
 
@@ -65,7 +65,7 @@ function findScriptField(library: DecodeLibrary, classId: string, name: string):
         cls = cls.superClassId ? library.scriptClasses[cls.superClassId] : null;
     }
 
-    throw new Error(`UnrealScript class '${classId}' has no property '${name}'.`);
+    return null;
 }
 
 function findScriptDefault(library: DecodeLibrary, classId: string, name: string): ScriptPropertyValue_T {
@@ -112,7 +112,8 @@ function applyScriptLocalization(library: DecodeLibrary, classId: string, proper
     for (const property of properties) {
         const field = findScriptField(library, classId, property.name);
 
-        if (!(field.flags & PropertyFlags_T.CPF_Localized)) throw new Error(`UnrealScript property '${field.id}' is not localized.`);
+        // Core.dll LoadLocalized 0x10163cab / 0x1015c19d reads only declared CPF_Localized properties.
+        if (!field || !(field.flags & PropertyFlags_T.CPF_Localized)) continue;
 
         if (property.index < 0) {
             cls.defaults[field.name] = parseLocalizedValue(field, property.value);
@@ -146,6 +147,17 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
     if (!actor.findComponent("pawnRenderable")) actor.addComponent(new PawnRenderableComponent(renderManager));
 }
 
+function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+        for (const [id, value] of Object.entries(source[key]))
+            if (!(id in target[key])) (target[key] as any)[id] = value;
+
+    for (const [name, sound] of source.soundBlobCache) {
+        if (!target.soundBlobCache.has(name)) target.soundBlobCache.set(name, sound);
+        else if (sound.uri) URL.revokeObjectURL(sound.uri);
+    }
+}
+
 export class AssetManager implements IEngineComponent<GameManager> {
     protected isTicking: boolean = false;
     protected loadSettings: LoadSettings_T;
@@ -164,6 +176,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
     protected charGroups: ICharacterGroup[] = null;
     protected effectLibrary: DecodeLibrary = null;
+    protected playerLibrary: DecodeLibrary = null;
+    protected playerSkillRequest = 0;
     protected readonly decodeWorkerPoolSize: number;
     protected readonly maxConcurrentDecodes: number;
     protected readonly lastCameraPosition = new Vector3();
@@ -238,7 +252,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         this.effectLibrary = effectLibrary;
 
-        this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
+        await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
         manRender.waterEffects.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
 
@@ -270,13 +284,26 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return decodeObject3D(this.effectLibrary, info);
     }
 
-    protected applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {
+    protected async applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {
+        const classPath = `LineageWarrior.${this.getClassName(charIndex)}`;
+        const [scriptLibrary, localization] = await Promise.all([this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [classPath]), this.getScriptLocalization(classPath)]);
+        const classId = Object.keys(scriptLibrary.scriptClasses).find(id => id.toLowerCase() === classPath.toLowerCase());
+
+        if (!classId) throw new Error(`Character class '${classPath}' was not decoded.`);
+
+        mergePawnLibrary(characterLibrary, scriptLibrary);
+        applyScriptLocalization(characterLibrary, classId, localization);
         characterLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (characterLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
         const bodyparts = characterLibrary.pawnActors.map(info => decodeObject3D(characterLibrary, info) as THREE.SkinnedMesh);
         const animations = (bodyparts[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
         const player = actor || renderManager.player;
+
+        if (player === renderManager.player) this.stopPlayerSkill(renderManager);
+        const previousAttack = player.findComponent<PawnAttackComponent>("pawnAttack");
+
+        if (previousAttack) player.removeComponent(previousAttack);
 
         if (!animations) throw new Error(`'${characterLibrary.name}' animations failed to decode.`);
 
@@ -298,13 +325,53 @@ export class AssetManager implements IEngineComponent<GameManager> {
         player.setSwimmingAnimation(findAnimation(animations, declared.swim));
         player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
         player.setMeshes(bodyparts);
+        const vm = new UnScriptVM(characterLibrary);
+
+        player.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, characterLibrary, effectClassId, vm));
+        player.setUnrealScriptProperty("bActorShadows", false);
         player.effectSpawnBoneIndex = characterLibrary.effectSpawnBoneIndex;
         player.initAnimations();
+        player.addComponent(new PawnAttackComponent(renderManager, player.getAnimationNames(), []));
+
+        if (player === renderManager.player) this.playerLibrary = characterLibrary;
     }
 
     public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, actor?: BaseActor) {
-        this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor), actor, charIndex);
+        await this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor), actor, charIndex);
         renderManager.needsUpdate = true;
+    }
+
+    public async castPlayerSkill(renderManager: RenderManager, id: number, level: number, target: BaseActor): Promise<void> {
+        if (!target) throw new Error(`Player skill '${id}:${level}' has no target.`);
+        if (!this.playerLibrary) throw new Error(`Player character has not loaded.`);
+
+        this.stopPlayerSkill(renderManager);
+        const request = this.playerSkillRequest;
+        const playerLibrary = this.playerLibrary;
+        const library = await this.decodeWorker.decodeSkill(this.loadSettings, id, level);
+
+        const canceled = request !== this.playerSkillRequest || playerLibrary !== this.playerLibrary;
+
+        if (canceled || !target.parent) {
+            for (const sound of library.soundBlobCache.values())
+                if (sound.uri) URL.revokeObjectURL(sound.uri);
+            if (!canceled) throw new Error(`Player skill '${id}:${level}' target was removed while loading.`);
+            return;
+        }
+
+        const skill = library.npcSkillAttacks[0];
+
+        mergePawnLibrary(playerLibrary, library);
+        renderManager.player.getComponent<ScriptComponent>("script").getVM().loadFunctions();
+        const attack = renderManager.player.getComponent<PawnAttackComponent>("pawnAttack");
+
+        // Server supplies AssociatedActor; the offline player preview supplies the selected pawn.
+        attack.attack(target, attack.addSkill(skill), [], [target]);
+    }
+
+    public stopPlayerSkill(renderManager: RenderManager): void {
+        this.playerSkillRequest++;
+        renderManager.player.findComponent<PawnAttackComponent>("pawnAttack")?.stop();
     }
 
     public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null) {
@@ -380,15 +447,12 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         const effect = decodeObject3D(library, info) as any;
 
-        effect.scriptProperties.set("Emitters", effect.children.slice());
-
         if ((info as any).drawType === "mesh") {
             effect.addComponent(new ScriptComponent(vm, classId => this.createScriptObject(renderManager, library, classId, vm), info.scriptClassId));
             effect.addComponent(new ActorMeshComponent(library, renderManager));
         }
 
         effect.children.forEach((emitter: any) => {
-            emitter.scriptClassId = "Engine.ParticleEmitter";
             emitter.isActorAttachedEmitter = true;
         });
 
@@ -416,7 +480,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             throw new Error(`NPC '${npc.id}' (${npc.name}) failed to load mesh '${npc.mesh}' as '${npc.className}': ${(e as Error).message}`);
         }
 
-        actor.addComponent(new NpcAttackComponent(renderManager, actor.getAnimationNames(), library.npcSkillAttacks));
+        actor.addComponent(new PawnAttackComponent(renderManager, actor.getAnimationNames(), library.npcSkillAttacks));
 
         if (!position) {
             tmpNpcFloorStart.copy(actor.position);

@@ -363,7 +363,7 @@ class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleM
         // view position in emitter space
         const view = camera.getWorldPosition(tmpView);
 
-        (emitter as THREE.Object3D).worldToLocal(view);
+        (particle.parent as THREE.Object3D).worldToLocal(view);
 
         for (let r = 0; r < sheets; r++) {
             // previous-point seed for the first segment: 2 * P0 - P1

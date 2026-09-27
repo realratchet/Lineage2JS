@@ -29,7 +29,7 @@ import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArr
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { IEmitterSpawnSoundDecodeInfo, IEmitterActorDecodeInfo, IEmitterDecodeInfo, IMeshEmitterDecodeInfo, ISpriteEmitterDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 import type { ILightDecodeInfo, ISunLightDecodeInfo } from "@l2js/engine/contracts/light";
-import type { IBaseMaterialDecodeInfo, IShaderDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
+import type { IBaseMaterialDecodeInfo, IMaterialGroupDecodeInfo, IShaderDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
 import type { IRotatingDecodeInfo, IEdgesObjectDecodeInfo, IStaticMeshObjectDecodeInfo, IStaticMeshActorDecodeInfo } from "@l2js/engine/contracts/mesh";
 import type { IBoneDecodeInfo, IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { ITerrainSegmentDecodeInfo, ITerrainDecorationDecodeInfo } from "@l2js/engine/contracts/terrain";
@@ -137,6 +137,7 @@ class EmitterActor extends GameObject {
     public constructor() {
         super();
 
+        (this as any).isEmitterActor = true;
         this.addComponent(new ActorOwnershipComponent());
     }
 
@@ -205,6 +206,8 @@ class EmitterActor extends GameObject {
 function decodeEmitterObject(library: DecodeLibrary, info: IEmitterActorDecodeInfo) {
     const object = decodeSimpleObject(library, EmitterActor, info);
 
+    object.scriptProperties.set("Emitters", object.children.slice());
+    object.scriptProperties.set("FirstSpawnParticle", false);
     object.speedRate = info.speedRate;
 
     if (info.spawnSound) {
@@ -487,7 +490,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.nodeToSection = library.nodeToSection;
     sector.nodeZoneMasks = library.nodeZoneMasks;
 
-    if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes));
+    if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes, library.levelInfoCollisionRadius));
 
     if (library.bspSections && library.bspSections.length > 0) {
         const bspGroup = new Group();
@@ -755,6 +758,7 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
     const terrainInfo = info as any as ITerrainSegmentDecodeInfo;
     const terrain = new Terrain(geometry, materials, {
         bounds,
+        collisionRadius: terrainInfo.collisionRadius,
         mapX: terrainInfo.mapX,
         mapY: terrainInfo.mapY,
         offsetX: terrainInfo.offsetX,
@@ -883,9 +887,29 @@ function prepareSkinnedMaterials(materials: THREE.Material | THREE.Material[], e
     }
 }
 
-function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo) {
+export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo, skins: string[] = null) {
     const geometry = fetchGeometry(library.geometries[info.geometry]);
-    const infoMats = library.materials[info.materials];
+    let infoMats = library.materials[info.materials];
+
+    if (skins?.some(skin => skin && skin.toLowerCase() !== "none")) {
+        if (infoMats?.materialType !== "group") throw new Error(`Actor mesh '${info.name}' has no material group.`);
+
+        const group = infoMats as IMaterialGroupDecodeInfo;
+        const materials = group.materials.map((base, i) => {
+            const path = skins[i];
+
+            if (!path || path.toLowerCase() === "none") return base;
+
+            const uuid = library.scriptMaterials[path.toLowerCase()];
+
+            if (!uuid || !library.materials[uuid]) throw new Error(`Actor skin '${path}' has not been decoded.`);
+            if (library.materials[uuid].materialType === "group") throw new Error(`Actor skin '${path}' is not a single material.`);
+
+            return uuid;
+        });
+
+        infoMats = { ...group, materials };
+    }
 
     // LodMesh wire data is points + wedges only, UE builds vertex normals at load (UnMesh.cpp)
     if (!geometry.getAttribute("normal")) {
@@ -914,6 +938,9 @@ function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecod
     prepareSkinnedMaterials(materials, extendedBoneInfluences);
 
     mesh.meshOrigin.fromArray(info.meshOrigin);
+    mesh.tagAliases = info.tagAliases;
+    mesh.tagNames = info.tagNames;
+    mesh.tagOrigins = info.tagOrigins;
     mesh.position.copy(mesh.meshOrigin);
     mesh.quaternion.fromArray(info.meshRotOriginQuaternion);
     mesh.scale.fromArray(info.meshScale);
@@ -993,14 +1020,15 @@ function decodeMeshEmitter(library: DecodeLibrary, info: IMeshEmitterDecodeInfo)
     const infoGeo = library.geometries[info.mesh.geometry] as IGeometryDecodeInfo;
 
     const geometry = fetchGeometry(infoGeo as IGeometryDecodeInfo);
-    const materials = decodeMaterial(library, {
+    // Engine.dll UMeshEmitter::RenderParticles 0x8808a2: mesh materials bypass ParticleMaterial.
+    const materials = info.useMeshBlendMode ? decodeMaterial(library, library.materials[info.mesh.materials]) : decodeMaterial(library, {
         materialType: "particle",
         material: info.mesh.materials,
         opacity: info.opacity,
         blendingMode: info.blendingMode
     } as IParticleMaterialDecodeInfo) as any as ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
 
-    const emitter = new MeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials }));
+    const emitter = new MeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials, useMeshBlendMode: info.useMeshBlendMode, renderTwoSided: info.renderTwoSided, useParticleColor: info.useParticleColor }));
 
     applySimpleProperties(library, emitter, info);
 

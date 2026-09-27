@@ -1,5 +1,8 @@
 varying vec2 vUv;
 varying vec4 vColor;
+#ifdef USE_SUBDIVISION_BLEND
+varying vec3 vSubdivisionBlend;
+#endif
 
 #include <common>
 #include <uv_pars_fragment>
@@ -17,7 +20,13 @@ void main() {
     vec4 diffuseColor = vColor;
 
     #include <logdepthbuf_fragment>
+    #if defined(USE_MAP) && defined(USE_SUBDIVISION_BLEND)
+    // D3DDrv.dll RVA 0xa912..0xaa2d: texture interpolation replaces alpha, then diffuse modulates RGB only.
+    vec4 sampledDiffuseColor = mix(texture2D(map, vUv), texture2D(map, vSubdivisionBlend.xy), vSubdivisionBlend.z);
+    diffuseColor = vec4(diffuseColor.rgb * sampledDiffuseColor.rgb, sampledDiffuseColor.a);
+    #else
     #include <map_fragment>
+    #endif
     #include <alphamap_fragment>
     #include <alphatest_fragment>
 

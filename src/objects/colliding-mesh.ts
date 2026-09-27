@@ -128,6 +128,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     public getCollider(): Collider { return this.collider; }
     public getRigidbody(): RigidBody { return this.rigidbody; }
     public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
+    public getCollisionRadius(): number { return this.collisionProfile.collisionRadius; }
     public getBasedActors(): ReadonlySet<ICollidable> { return this.basedActors; }
     public addBasedActor(actor: ICollidable) { this.basedActors.add(actor); }
     public removeBasedActor(actor: ICollidable) { this.basedActors.delete(actor); }

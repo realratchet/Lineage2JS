@@ -48,6 +48,7 @@ type CharacterPartPaths_T = [string, string];
 type NpcBundleEntry_T = { meshIndex: number, materials: string, scriptClassId: string | null };
 type NpcBundleManifest_T = { actors: Record<number, NpcBundleEntry_T> };
 type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T };
+type SkillTables_T = { skills: Record<string, any>[], names: Record<string, any>[], sounds: Record<string, any>[] };
 
 const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
 
@@ -341,10 +342,11 @@ export class DecodeEngine {
     protected cacheWeaponGrpRows: Record<string, any>[] = null;
     protected cacheItemNameRows: Record<string, any>[] = null;
     protected cacheNpcDefinitions: INpcDefinition[] = null;
+    protected cacheSkillTables: Promise<SkillTables_T> = null;
     protected cacheCharacterBundles = new Map<number, CachedBundle_T>();
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
-    protected cacheSwimSoundConfig: SwimSoundConfig_T = null;
+    protected cacheAudioConfig: UConfigAudio = null;
     protected cacheHairConfig: UConfigHair = null;
     protected readonly localizationFiles = new Map<string, string>();
     protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
@@ -602,18 +604,50 @@ export class DecodeEngine {
         return [pkg, cls.loadSelf()];
     }
 
-    protected async getSwimSoundConfig(): Promise<SwimSoundConfig_T> {
-        if (this.cacheSwimSoundConfig) return this.cacheSwimSoundConfig;
+    protected async getAudioConfig(): Promise<UConfigAudio> {
+        if (!this.cacheAudioConfig) this.cacheAudioConfig = (await new UConfigAudio("assets/system/alaudio.int").decode()).load();
 
-        const config = await new UConfigAudio("assets/system/alaudio.int").decode();
+        return this.cacheAudioConfig;
+    }
 
-        this.cacheSwimSoundConfig = config.load().getSwimSound();
+    protected async getSwimSoundConfig(): Promise<SwimSoundConfig_T> { return (await this.getAudioConfig()).getSwimSound(); }
 
-        return this.cacheSwimSoundConfig;
+    protected async pullPawnSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, profile: L2JS.Engine.IPawnSoundsDecodeInfo): Promise<void> {
+        library.pawnSounds = { ...profile };
+
+        for (const key of ["defense", "damage", "item"] as const) {
+            const set = profile[key];
+
+            if (!set) continue;
+
+            const arrSounds = await Promise.all(set.sounds.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
+
+            library.pawnSounds[key] = { ...set, sounds: arrSounds } as any;
+        }
+    }
+
+    protected async pullCharacterSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, chestId: number = 0): Promise<void> {
+        const audio = await this.getAudioConfig();
+        const config = audio.getPawnSound("CharSound");
+        const itemConfig = audio.getPawnSound("ItemSound");
+        const armor = chestId ? (await this.decodeArmorGrp()).find(item => item.id === chestId) : null;
+
+        if (chestId && !armor) throw new Error(`Defense item '${chestId}' was not found in armorgrp.`);
+
+        // Engine.dll CharDataLoad 0x70ce21/0x70ce83 caps defense/damage lists at 5/3 without removing NAME_None slots.
+        await this.pullPawnSounds(library, builder, {
+            defense: { sounds: row.snd_def.slice(0, 5), volume: config.volume, radius: config.radius },
+            damage: { sounds: row.snd_dmg.slice(0, 3), volume: config.volume, radius: config.radius, random: config.random },
+            // Engine.dll OnUserInfo 0x74b965..0x74b974; SetPawnResource 0x73bf72..0x73bfcc: DefenseItemClassID is chest slot2.
+            item: armor && armor.tag === 1 ? { sounds: armor.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null
+        });
     }
 
     protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string, required: boolean = true): Promise<string> {
         const [packageName, objectName] = splitObjectPath(path);
+
+        if (!required && !this.assetLoader.hasPackage(packageName, "Sound")) return null;
+
         const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Sound"), { neverUnload: true });
         const lowerName = objectName.toLowerCase();
         const entry = pkg.exportGroups.Sound.find(entry => (entry.export.objectName as string).toLowerCase() === lowerName);
@@ -671,7 +705,7 @@ export class DecodeEngine {
         for (const path of paths) await this.pullEffectTemplate(library, builder, path);
     }
 
-    protected async pullNpcSkillAttacks(library: DecodeLibrary, builder: DecodeLibraryBuilder, attacks: readonly NpcSkillAttack_T[]): Promise<void> {
+    protected async pullNpcSkillAttacks(library: DecodeLibrary, builder: DecodeLibraryBuilder, attacks: readonly NpcSkillAttack_T[], allowNative: boolean = true): Promise<void> {
         const decodedEffects = new Map<string, { actions: NpcSkillEffectAction_T[], flyingTime: number }>();
         const pulledEffects = new Set<string>();
 
@@ -693,10 +727,10 @@ export class DecodeEngine {
             }
 
             // Engine.dll SetMagicInfo 0x79b45e; MagicProcess 0x7b4f65 branches on the resolved object.
-            const native = visual ? null : getNativeSkillBinding(attack.name, attack.id);
+            const native = visual || !allowNative ? null : getNativeSkillBinding(attack.name, attack.id);
 
             if (!visual && !native && visualPath && visualPath.toLowerCase() !== "none")
-                throw new Error(`NPC skill '${attack.name}' visual '${visualPath}' was not found and its native effects are not implemented.`);
+                throw new Error(allowNative ? `NPC skill '${attack.name}' visual '${visualPath}' was not found and its native effects are not implemented.` : `Player skill '${attack.id}:${attack.level}' visual '${visualPath}' was not found; numeric native dispatch is not implemented.`);
 
             const decoded = Object.assign({}, attack, { hasVisualEffect: !!visual, actions: [] as NpcSkillEffectAction_T[], nativeEffects: native ? native.effects : [], nativeEffectGroup: native?.effectGroup, nativeSoundPhases: native ? native.soundPhases : [], nativeFinalShotOnly: !!native?.finalShotOnly, nativeTransientRejected: !!native?.rejectTransient, nativeAssociatedActors: !!native?.associatedActors });
 
@@ -1040,6 +1074,7 @@ export class DecodeEngine {
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
         await this.pullNpcSkillAttacks(library, builder, npc.skillAttacks);
+        await this.pullPawnSounds(library, builder, npc.sounds);
 
         if (npc.enterEvent?.effect && npc.enterEvent.effect.toLowerCase() !== "none")
             await this.pullEffectTemplate(library, builder, npc.enterEvent.effect);
@@ -1117,7 +1152,71 @@ export class DecodeEngine {
         return library;
     }
 
-    protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean): Promise<DecodeLibrary> {
+    protected async decodeSkillTables(): Promise<SkillTables_T> {
+        if (!this.cacheSkillTables) this.cacheSkillTables = this.loadSkillTables();
+
+        return this.cacheSkillTables;
+    }
+
+    protected async loadSkillTables(): Promise<SkillTables_T> {
+        const [skills, names, sounds] = await Promise.all([
+            (new UDataFile(SchemasC4.SCHEMA_SKILLGRP_DAT, "assets/system/skillgrp.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_SKILLNAME_E_DAT, "assets/system/skillname-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_SKILLSOUNDGRP_DAT, "assets/system/skillsoundgrp.dat").asReadable()).decode()
+        ]);
+
+        return { skills: skills.datarows, names: names.datarows, sounds: sounds.datarows };
+    }
+
+    public async decodeSkill(settings: LoadSettings_T, id: number, level: number): Promise<DecodeLibrary> {
+        if (!Number.isSafeInteger(id) || id <= 0 || !Number.isSafeInteger(level) || level <= 0) throw new Error(`Invalid skill ID/level '${id}:${level}'.`);
+
+        const tables = await this.decodeSkillTables();
+        const rows = tables.skills.filter(row => row.skill_id === id && row.skill_level === level);
+
+        if (rows.length !== 1) throw new Error(`Skill '${id}:${level}' has ${rows.length} exact skillgrp rows.`);
+
+        const row = rows[0];
+        const visualEffect = String(row.desc || "None");
+
+        if (visualEffect.toLowerCase() === "none") throw new Error(`Player skill '${id}:${level}' has no serialized visual; numeric native dispatch is not implemented.`);
+        if (row.oper_type !== 0) throw new Error(`Player skill '${id}:${level}' operation type '${row.oper_type}' is not supported.`);
+
+        const name = tables.names.find(entry => entry.id === id && entry.level === level);
+
+        if (!name) throw new Error(`Player skill '${id}:${level}' has no skillname-e row.`);
+
+        const sounds = tables.sounds.find(entry => entry.skill_id === id && entry.skill_level === level) || tables.sounds.find(entry => entry.skill_id === id && entry.skill_level === 1);
+        // Server supplies cast duration; the offline preview uses skillgrp.hit_time.
+        const attack: NpcSkillAttack_T = { id, level, name: name.name, animation: "", animationCategory: row.ani_char, castStyle: row.cast_style, castRange: row.cast_range, hitTime: row.hit_time, isMultiShot: [8, 9, 10].includes(row.cast_style), flyingTime: 0, visualEffect, hasVisualEffect: false, actions: [], nativeEffects: [], nativeSoundPhases: [], nativeFinalShotOnly: false, nativeTransientRejected: false, nativeAssociatedActors: false, sounds: [] };
+
+        if (sounds) {
+            const phases: [string, NpcSkillEffectPhase_T][] = [["spelleffect", "casting"], ["shoteffect", "shot"], ["expeffect", "explosion"]];
+
+            for (const [prefix, phase] of phases)
+                for (let i = 1; i <= 3; i++) {
+                    const sound = sounds[`${prefix}_sound_${i}`] as string;
+
+                    if (sound && sound.toLowerCase() !== "none") attack.sounds.push({ phase, sound, volume: sounds[`${prefix}_sound_vol_${i}`] as number, radius: sounds[`${prefix}_sound_rad_${i}`] as number });
+                }
+        }
+
+        const library = new DecodeLibrary();
+        const builder = new DecodeLibraryBuilder(library, settings);
+
+        library.name = `Skill_${id}_${level}`;
+        await this.pullNpcSkillAttacks(library, builder, [attack], false);
+
+        if (!library.npcSkillAttacks[0].hasVisualEffect) throw new Error(`Player skill '${id}:${level}' has no resolved serialized visual; numeric native dispatch is not implemented.`);
+
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+
+        return library;
+    }
+
+    protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number): Promise<DecodeLibrary> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const library = new DecodeLibrary();
@@ -1151,6 +1250,7 @@ export class DecodeEngine {
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
         await this.pullPawnEffects(library, builder, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
+        await this.pullCharacterSounds(library, builder, row, chestId);
 
         if (library.pawnActors.length > 0) await this.pullAnimationNotifyAssets(builder, library.pawnActors[0].animationNotifies);
 
@@ -1171,7 +1271,7 @@ export class DecodeEngine {
         let cached = this.cacheCharacterBundles.get(charIndex);
 
         if (Object.values(armor).some(id => id !== 0))
-            return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations);
+            return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations, armor.chest);
 
         if (!cached) {
             const seekable = await DecodeCache.openCachedLibrary(cacheName, settings);
@@ -1182,7 +1282,7 @@ export class DecodeEngine {
             }
         }
 
-        if (!cached) return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations);
+        if (!cached) return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations, armor.chest);
 
         const bundle = cached.library;
 
@@ -1236,6 +1336,7 @@ export class DecodeEngine {
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
         await this.pullPawnEffects(library, new DecodeLibraryBuilder(library, settings), `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
+        await this.pullCharacterSounds(library, new DecodeLibraryBuilder(library, settings), row);
 
         if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
 
@@ -1418,6 +1519,10 @@ export class DecodeEngine {
 
     public async decodeEffectTemplatesBinary(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<ArrayBuffer> {
         return serializeLibrary(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths)).buffer as ArrayBuffer;
+    }
+
+    public async decodeSkillBinary(settings: LoadSettings_T, id: number, level: number): Promise<ArrayBuffer> {
+        return serializeLibrary(await this.decodeSkill(settings, id, level)).buffer as ArrayBuffer;
     }
 
     public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
@@ -1635,7 +1740,13 @@ export class DecodeEngine {
             mesh: row.mesh as string,
             textures: [...row.tex1 as string[], ...row.tex2 as string[]].filter(path => path && path.toLowerCase() !== "none"),
             skillAttacks: skillAttacksByNpcId.get(row.tag as number) || [],
-            enterEvent: enterEventsById.get(row.tag as number) || null
+            enterEvent: enterEventsById.get(row.tag as number) || null,
+            // Engine.dll NpcDataLoad 0x73205d/0x7320ad and 0x732103..0x732159.
+            sounds: {
+                defense: { sounds: (row.sound2 as string[]).slice(0, 5), volume: row.soundVolume as number, radius: row.soundRadius as number },
+                damage: { sounds: (row.sound3 as string[]).slice(0, 3), volume: row.soundVolume as number, radius: row.soundRadius as number, random: row.soundRandom as number },
+                item: null
+            }
         }));
 
         return this.cacheNpcDefinitions;

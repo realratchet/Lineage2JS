@@ -1,4 +1,4 @@
-import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, NoBlending, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, ShaderMaterial, UniformsUtils, UniformsLib, Vector4 } from "three";
+import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, NoBlending, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, ShaderMaterial, UniformsUtils, UniformsLib, Vector3, Vector4 } from "three";
 import VERTEX_SHADER from "./shader/shader-particle.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
@@ -25,7 +25,7 @@ export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean
 export class ParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
 
-    constructor({ map, blendingMode, opacity, name, usesSubdivision }: ParticleMaterialInitSettings_T) {
+    constructor({ map, blendingMode, opacity, name, usesSubdivision, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -40,6 +40,11 @@ export class ParticleMaterial extends ShaderMaterial {
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
 
         const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
+
+        if (blendBetweenSubdivisions) {
+            defines.USE_SUBDIVISION_BLEND = "";
+            uniforms.subdivisionBlend = { value: new Vector3() };
+        }
 
         if (uniforms.map.value) {
             defines.USE_MAP = "";
@@ -77,7 +82,7 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
     protected sprites: IDecodedParameter[];
     public readonly isUpdatable = true;
 
-    constructor({ blendingMode, opacity, name, framerate, sprites }: ParticleMaterialInitSettings_T) {
+    constructor({ blendingMode, opacity, name, framerate, sprites, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -92,6 +97,10 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
 
         const defines: Record<string, any> = { USE_MAP: "", USE_FOG: "", USE_ALPHATEST: "" };
+        if (blendBetweenSubdivisions) {
+            defines.USE_SUBDIVISION_BLEND = "";
+            uniforms.subdivisionBlend = { value: new Vector3() };
+        }
         const { isAdditive, ...blendingSettings } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {
@@ -198,5 +207,6 @@ export type ParticleMaterialInitSettings_T = {
     blendingMode: ParticleBlendModes_T,
     opacity: number,
     name: string,
-    usesSubdivision?: boolean
+    usesSubdivision?: boolean,
+    blendBetweenSubdivisions?: boolean
 };

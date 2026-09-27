@@ -16,6 +16,7 @@ export type HeightMapInfo_T = { data: Uint16Array, info: ITextureDecodeInfo, edg
 export type ITerrainSegmentDecodeInfo = IBaseMeshObjectDecodeInfo & {
     type: "TerrainSegment",
     terrainInfoUuid?: string,
+    collisionRadius: number,
     lighting?: {
         lights: { light: string, flags: Uint8Array }[],
         shadowMaps: Uint8Array[],
@@ -106,6 +107,7 @@ export abstract class UTerrainSector extends UObject {
                 uuid: this.uuid,
                 name: this.objectName,
                 type: "TerrainSegment",
+                collisionRadius: info.collisionRadius,
                 geometry: this.uuid,
                 materials: this.uuid,
                 position: [ox, oy, oz]
@@ -340,6 +342,8 @@ export abstract class UTerrainSector extends UObject {
             uuid: this.uuid,
             name: this.objectName,
             terrainInfoUuid: info.uuid,
+            // Engine.dll MultiPointCheck 0x85f6f9..0x85f6fc: terrain hits return ATerrainInfo.
+            collisionRadius: info.collisionRadius,
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,
@@ -839,4 +843,3 @@ export abstract class UTerrainSector extends UObject {
 
 
 export default UTerrainSector;
-

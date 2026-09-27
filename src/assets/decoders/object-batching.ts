@@ -56,6 +56,7 @@ function createBatchObject(
         lightInfo: mergedLightInfo,
         colliderIndices: mergedColliderIndices,
         collisionIndex,
+        collision: actors[0].collision,
         scaledGlow: actors[0].scaledGlow,
         isSunAffected: actors.some(a => a.isSunAffected ?? true),
         ambient: actors[0].ambient

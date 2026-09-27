@@ -242,6 +242,8 @@ export class DecodeLibraryBuilder {
         const sectorMatch = /^(\d+)_(\d+)$/.exec(sectorName);
 
         this.library.brightness = levelInfo.brightness;
+        // Engine.dll MultiPointCheck 0x85f530..0x85f533: BSP hits return LevelInfo.
+        this.library.levelInfoCollisionRadius = levelInfo.collisionRadius;
         this.library.name = level.url.map;
         this.library.isSkyLevel = this.settings.isSkyLevel === true;
         this.library.helpersZoneBounds = this.settings.helpersZoneBounds === true;

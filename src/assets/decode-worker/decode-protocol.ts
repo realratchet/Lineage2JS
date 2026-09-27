@@ -13,6 +13,7 @@ export type DecodeMessage_T = {
 export type PrecacheMessage_T = { type: "precache"; requestId: number; sectorName: string; settings: LoadSettings_T; };
 export type FreeMessage_T = { type: "free"; sectorName: string; };
 export type DecodeEnvMessage_T = { type: "decodeEnv"; requestId: number; };
+export type DecodeSkillMessage_T = { type: "decodeSkill"; requestId: number; settings: LoadSettings_T; id: number; level: number; };
 
 export type DecodeCharacterMessage_T = {
     type: "decodeCharacter";
@@ -65,6 +66,7 @@ export type MainToWorkerMessage_T =
     | PrecacheMessage_T
     | FreeMessage_T
     | DecodeEnvMessage_T
+    | DecodeSkillMessage_T
     | DecodeCharacterMessage_T
     | DecodeSkeletalMeshMessage_T
     | DecodeEffectTemplatesMessage_T

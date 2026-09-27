@@ -5,6 +5,7 @@ import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
 import Rotator from "../../utils/rotator";
 import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 
 const frozenUpdateMatrixWorld = function () { };
 
@@ -13,7 +14,7 @@ const AXIS_Y = new Vector3(0, 1, 0);
 const AXIS_Z = new Vector3(0, 0, 1);
 const ZERO_VECTOR3 = new Vector3();
 const ONE_VECTOR3 = new Vector3(1, 1, 1);
-const ONE_VECTOR4 = new Vector4(1, 1, 1, 1);
+const WHITE_COLOR = new Vector4(255, 255, 255, 255);
 const tmpPhysicsVector = new Vector3();
 const tmpPhysicsVector2 = new Vector3();
 const tmpCurrentAcceleration = new Vector3();
@@ -30,6 +31,7 @@ const tmpSoundWorldPos = new Vector3();
 const tmpVelocityLossRange: Range3_T = { min: new Vector3(), max: new Vector3() };
 
 const tmpSubdivUV: [number, number, number, number] = [0, 0, 1, 1];
+const tmpSubdivBlend = new Vector3();
 
 
 class Particle_T {
@@ -83,6 +85,7 @@ type DrawStyle_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModul
 
 export abstract class BaseEmitter extends Object3D {
     protected readonly isUpdatable = true;
+    public scriptClassId: string;
 
     public warmupGate: boolean = true; // set false by PhysicsManager while a sector's higher-priority tiers are still loading
     public readonly pendingSounds: PendingEmitterSound_T[] = []; // spawning-sound requests queued by spawnParticle(), drained by RenderManager each frame
@@ -100,6 +103,7 @@ export abstract class BaseEmitter extends Object3D {
     protected isSpinning: boolean;
     protected isSpriteEmitter: boolean = false;
     protected isMeshEmitter: boolean = false;
+    protected ignoreParticleColor: boolean = false;
     protected spinParticles: boolean;
     protected secondsBeforeInactive: number;
 
@@ -132,6 +136,7 @@ export abstract class BaseEmitter extends Object3D {
     protected oldOwnerLocation: THREE.Vector3;
     protected oldSprayMatrix = new Matrix4();
     protected hasOldSprayMatrix: boolean = false;
+    protected particleSpace: Object3D = this;
     protected lastDeltaTime: number = 0.016;
     protected activeParticles: number = 0;
     protected activeCount: number = 0;
@@ -144,6 +149,13 @@ export abstract class BaseEmitter extends Object3D {
 
     protected currentSpawnOnTrigger: number = 0;
     protected spawnOnTriggerPPS: number;
+    protected spawnOnTriggerRange: Range_T;
+    protected autoResetTimeRange: Range_T;
+    protected timeTillReset: number;
+    protected isAutoDestroyed: boolean;
+    protected isAutoReset: boolean;
+    protected isTriggerDisabled: boolean;
+    protected isResetOnTrigger: boolean;
 
     protected killPending: boolean = false;
 
@@ -200,6 +212,7 @@ export abstract class BaseEmitter extends Object3D {
     protected spinsPerSecondRange: Range3_T;
     protected clockwiseSpinChance: THREE.Vector3;
     protected isUsingRandomSubdiv: boolean;
+    protected isBlendBetweenSubdivisions: boolean;
     protected subdivStart: number;
     protected subdivEnd: number;
     protected texSubdivU: number;
@@ -272,6 +285,41 @@ export abstract class BaseEmitter extends Object3D {
     public getCurrentTime() { return this.currentTime; }
     public isFinished() { return this.isDisabled || this.allParticlesDead; }
     public kill() { this.killPending = true; }
+    public handlesUnrealNative(_index: number, name: string): boolean { return name.toLowerCase() === "trigger"; }
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        if (call.context === this && call.name.toLowerCase() === "trigger") { this.trigger(); return undefined; }
+        if (call.self !== this && call.self.callUnrealNative) return call.self.callUnrealNative(call);
+
+        throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${call.context.scriptClassId}'.`);
+    }
+    public trigger(): void {
+        // Engine.dll UParticleEmitter::execTrigger 0x89dcae..0x89dcf5.
+        if (!this.isDisabled) return;
+        if (this.isTriggerDisabled) this.isDisabled = false;
+        if (this.isResetOnTrigger) this.reset();
+        if (!this.spawnOnTriggerRange || !Number.isFinite(this.spawnOnTriggerRange.min) || !Number.isFinite(this.spawnOnTriggerRange.max)) throw new Error(`Emitter '${this.name}' has invalid SpawnOnTriggerRange.`);
+
+        this.currentSpawnOnTrigger = Math.trunc(this.currentSpawnOnTrigger + randRange(this.spawnOnTriggerRange.min, this.spawnOnTriggerRange.max));
+        if (this.currentSpawnOnTrigger) this.allParticlesDead = false;
+    }
+    protected reset(): void {
+        if (this.isMeshEmitter) throw new Error(`Emitter '${this.name}' has an unimplemented MeshEmitter Reset override.`);
+        if (!this.autoResetTimeRange || !Number.isFinite(this.autoResetTimeRange.min) || !Number.isFinite(this.autoResetTimeRange.max)) throw new Error(`Emitter '${this.name}' has invalid AutoResetTimeRange.`);
+
+        // UParticleEmitter::Reset 0x89dfd0..0x89e060; visual flags mirror native ActiveParticles=0.
+        this.activeParticles = 0;
+        this.particleIndex = 0;
+        this.otherIndex = 0;
+        this.activeCount = 0;
+        this.allParticlesDead = false;
+        this.warmedUp = false;
+        this.initialDelay = randRange(this.initialDelayRange.min, this.initialDelayRange.max);
+        this.timeTillReset = randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max);
+        if (this.parent) this.oldOwnerLocation.copy(this.parent.position);
+        for (const particle of this.particles) particle.flags = 0;
+        for (const particle of this.particlePool) particle.visible = false;
+        if (this.instancedMesh) this.instancedMesh.clearInstances();
+    }
     public setRenderOrder(renderOrder: number): void {
         this.traverse(object => object.renderOrder = renderOrder);
     }
@@ -306,9 +354,9 @@ export abstract class BaseEmitter extends Object3D {
             const previous = this.instancedMesh;
             this.instancedMesh = new InstancedSpriteMesh(previous.material, count);
             this.instancedMesh.renderOrder = previous.renderOrder;
-            this.remove(previous);
+            previous.removeFromParent();
             previous.geometry.dispose();
-            this.add(this.instancedMesh);
+            this.particleSpace.add(this.instancedMesh);
         }
 
         for (let i = this.particlePool.length; i < count; i++) {
@@ -321,7 +369,7 @@ export abstract class BaseEmitter extends Object3D {
                     particle.children[0].name = this.name + "_" + i + "_vis";
                     particle.children[0].renderOrder = this.renderOrder;
                 }
-                this.add(particle);
+                this.particleSpace.add(particle);
             }
         }
     }
@@ -375,7 +423,7 @@ export abstract class BaseEmitter extends Object3D {
             .map(([relTime, v]) => ({ relativeTime: relTime, relativeRevolution: new Vector3().fromArray(v) }));
         this.revolutionScaleRepeats = config.changesOverLifetime.revolution?.repeats ?? 0;
         this.colorScale = ((config.changesOverLifetime as any).color?.values ?? [])
-            .map(([relTime, c]: [number, number[]]) => ({ relativeTime: relTime, color: new Vector4().fromArray(c.map(v => v / 255)) }));
+            .map(([relTime, c]: [number, number[]]) => ({ relativeTime: relTime, color: new Vector4().fromArray(c) }));
 
         this.initialSettings = {
             particlesPerSecond: config.initial.particlesPerSecond || 0,
@@ -433,6 +481,8 @@ export abstract class BaseEmitter extends Object3D {
         this.meshScaleRange = rangeVec3(this.meshScaleRange);
         this.startSpinRange = rangeVec3(this.startSpinRange);
         this.initialDelayRange = range(this.initialDelayRange) ?? { min: 0, max: 0 };
+        this.spawnOnTriggerRange = range(this.spawnOnTriggerRange);
+        this.autoResetTimeRange = range(this.autoResetTimeRange);
         this.startVelocityRadialRange = range(this.startVelocityRadialRange) ?? { min: 0, max: 0 };
         this.fadeInFactor = vec4(this.fadeInFactor);
         this.fadeOutFactor = vec4(this.fadeOutFactor);
@@ -510,6 +560,12 @@ export abstract class BaseEmitter extends Object3D {
     protected finishConstruction(config: EmitterConfig_T): void {
         this.initSettings(config);
 
+        if (this.coordinateSystem === "spray") {
+            // Engine.dll 0x8a18f4: Spray draws stored world positions, not the attachment's latest pose.
+            this.particleSpace = new ParticleSpace(this.oldSprayMatrix);
+            this.add(this.particleSpace);
+        }
+
         const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
 
         this.particlePool = new Array(poolSize);
@@ -519,7 +575,7 @@ export abstract class BaseEmitter extends Object3D {
         }
 
         if (this.instancedMesh) {
-            this.add(this.instancedMesh);
+            this.particleSpace.add(this.instancedMesh);
 
             for (let i = 0; i < poolSize; i++) {
                 this.particlePool[i] = Particle.init(this, null);
@@ -531,7 +587,7 @@ export abstract class BaseEmitter extends Object3D {
                 particle.name = this.name + "_" + i;
                 if (particle.children[0]) particle.children[0].name = this.name + "_" + i + "_vis";
 
-                this.add(particle);
+                this.particleSpace.add(particle);
             }
         }
 
@@ -593,8 +649,8 @@ export abstract class BaseEmitter extends Object3D {
         // Engine.dll AEmitter::Tick 0x8a538a / 0x8a53f9: SpawnSound follows the first particle, not actor registration.
         const spawnSound = (owner as any).spawnSound;
 
-        if (spawnSound) {
-            (owner as any).spawnSound = null;
+        if (spawnSound && !(owner as any).scriptProperties.get("FirstSpawnParticle")) {
+            (owner as any).scriptProperties.set("FirstSpawnParticle", true);
             owner.getWorldPosition(tmpSoundWorldPos);
             this.pendingSounds.push({ soundName: spawnSound.soundName, dataUri: spawnSound.dataUri, position: [tmpSoundWorldPos.x, tmpSoundWorldPos.y, tmpSoundWorldPos.z], volume: spawnSound.volume / 255, pitch: 1, refDistance: spawnSound.radius, maxDistance: spawnSound.radius * 100 });
         }
@@ -606,6 +662,7 @@ export abstract class BaseEmitter extends Object3D {
         particle.position.copy(this.initialSettings.offset);
         randVector(particle.velocity, this.initialSettings.velocity.min, this.initialSettings.velocity.max);
         if (this.coordinateSystem === "spray") {
+            // Engine.dll 0x89f442..0x89f4ac stores spawn-frame acceleration; 0x8a03d5 reads it per particle.
             particle.acceleration.copy(this.acceleration);
 
             if (this.isIndependentSprayAccel) {
@@ -918,7 +975,6 @@ export abstract class BaseEmitter extends Object3D {
 
         spawnCount = clamp(spawnCount, 0, this.maxActiveParticles);
         if (this.currentSpawnOnTrigger) {
-            __break__();
             spawnCount = clamp(spawnCount, 0, this.currentSpawnOnTrigger);
             this.currentSpawnOnTrigger -= spawnCount;
         }
@@ -1298,7 +1354,7 @@ export abstract class BaseEmitter extends Object3D {
                             r1 = this.colorScale[n - 1].relativeTime;
                         }
                         else {
-                            c1 = ONE_VECTOR4;
+                            c1 = WHITE_COLOR;
                             r1 = 0;
                         }
                         let a;
@@ -1307,8 +1363,14 @@ export abstract class BaseEmitter extends Object3D {
                         else
                             a = 1;
 
-                        // Interpolate between two colors.
+                        // Engine.dll UpdateParticles 0x8a14ab..0x8a153d truncates byte channels; only PTDS_AlphaBlend interpolates alpha.
                         color.lerpVectors(c1, c2, a);
+                        color.set(
+                            Math.trunc(color.x) / 255,
+                            Math.trunc(color.y) / 255,
+                            Math.trunc(color.z) / 255,
+                            this.drawStyle === "alpha" ? Math.trunc(color.w) / 255 : 1
+                        );
                         break;
                     }
                 }
@@ -1469,6 +1531,15 @@ export abstract class BaseEmitter extends Object3D {
         this.lastDeltaTime = dt;
         this.updateParticles(dt);
 
+        // AEmitter::Tick 0x8a547c..0x8a5530: child AutoReset takes precedence; child AutoDestroy then disables only if parent AutoDestroy is clear.
+        if (this.allParticlesDead && this.isAutoDestroyed) {
+            const parentProperties = (owner as any)?.scriptProperties as Map<string, boolean>;
+            const parentAutoReset = parentProperties?.get("AutoReset") === true;
+            const parentAutoDestroy = parentProperties?.get("AutoDestroy") === true;
+
+            if (!parentAutoDestroy && !(this.isAutoReset && !parentAutoReset)) this.isDisabled = true;
+        }
+
         // freezeEmitterParticles only touches p.visible, not instancedMesh - every update() call implies "visible now"
         if (this.instancedMesh) this.instancedMesh.visible = true;
 
@@ -1526,10 +1597,13 @@ export abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            this.computeSubdivUV(this.resolveSubdivision(settings), tmpSubdivUV);
+            const subdivision = this.resolveSubdivision(settings);
+            this.computeSubdivUV(subdivision, tmpSubdivUV);
+            if (this.isSpriteEmitter && this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv)
+                this.computeSubdivBlend(settings, subdivision, tmpSubdivBlend);
 
             if (this.instancedMesh) {
-                this.instancedMesh.setInstance(i, settings.position, settings.scale.x, settings.scale.y, spin, settings.color, tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3]);
+                this.instancedMesh.setInstance(i, settings.position, settings.scale.x, settings.scale.y, spin, settings.color, tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3], tmpSubdivBlend);
                 return;
             }
 
@@ -1548,8 +1622,10 @@ export abstract class BaseEmitter extends Object3D {
                     const smat = mat as any;
                     if (smat.isUpdatable) smat.update(settings.time * 1000);
 
-                    smat.uniforms.diffuse.value.setRGB(settings.color.x, settings.color.y, settings.color.z);
-                    smat.uniforms.opacity.value = settings.color.w;
+                    if (!this.ignoreParticleColor) {
+                        smat.uniforms.diffuse.value.setRGB(settings.color.x, settings.color.y, settings.color.z);
+                        smat.uniforms.opacity.value = settings.color.w;
+                    }
                 } else if ((mat as any).isParticleMaterial) {
                     const pmat = mat as any;
                     if (pmat.isUpdatable) pmat.update(settings.time * 1000);
@@ -1557,6 +1633,7 @@ export abstract class BaseEmitter extends Object3D {
                     pmat.uniforms.diffuse.value.setRGB(settings.color.x, settings.color.y, settings.color.z);
                     pmat.uniforms.opacity.value = settings.color.w;
                     if (pmat.uniforms.uvOffsetScale) pmat.uniforms.uvOffsetScale.value.set(tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3]);
+                    if (pmat.uniforms.subdivisionBlend) pmat.uniforms.subdivisionBlend.value.copy(tmpSubdivBlend);
                 } else {
                     (mat as any).color.setRGB(settings.color.x, settings.color.y, settings.color.z);
                     mat.opacity = settings.color.w;
@@ -1663,6 +1740,17 @@ export abstract class BaseEmitter extends Object3D {
         return clamp(section, 0, this.texSubdivU * this.texSubdivV - 1);
     }
 
+    protected computeSubdivBlend(settings: Particle_T, section: number, out: Vector3): Vector3 {
+        if (section < 0) return out.set(0, 0, settings.color.w);
+
+        // Engine.dll FillVertexBuffer 0x97b0d6..0x97b1e0: final cell holds, blend alpha truncates to a byte.
+        const subDivs = this.subdivEnd ? Math.max(1, this.subdivEnd - this.subdivStart) : this.texSubdivU * this.texSubdivV;
+        const next = section + 1 === subDivs ? section : section + 1;
+        const time = clamp(settings.time / settings.maxLifetime, 0, 1) * subDivs;
+
+        return out.set(Math.floor(next / this.texSubdivV) / this.texSubdivU, (next % this.texSubdivV + 1) / this.texSubdivV, Math.trunc(255 * (time - Math.floor(time))) / 255);
+    }
+
     protected abstract initSettings(info: EmitterConfig_T): void;
     protected abstract initParticleMesh(): THREE.Mesh<THREE.BufferGeometry, ParticleMaterial> | null;
 
@@ -1672,6 +1760,27 @@ export abstract class BaseEmitter extends Object3D {
 }
 
 export default BaseEmitter;
+
+class ParticleSpace extends Object3D {
+    public constructor(matrixWorld: Matrix4) {
+        super();
+
+        this.matrixWorld = matrixWorld;
+        this.matrixAutoUpdate = false;
+        this.matrixWorldAutoUpdate = false;
+    }
+
+    public updateMatrixWorld(force?: boolean): void {
+        for (const child of this.children)
+            if (child.matrixWorldAutoUpdate || force) child.updateMatrixWorld(force);
+    }
+
+    public updateWorldMatrix(_updateParents: boolean, updateChildren: boolean): void {
+        if (updateChildren)
+            for (const child of this.children)
+                if (child.matrixWorldAutoUpdate) child.updateWorldMatrix(false, true);
+    }
+}
 
 class Particle extends Object3D {
     protected readonly particleSystem: BaseEmitter;

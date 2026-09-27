@@ -2,7 +2,7 @@ import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
 
@@ -100,7 +100,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public isUpdatable = false;
 
     // @ts-ignore
-    public constructor(info: MeshStaticMaterialParameters_T = {}) {
+    public constructor(info: MeshStaticMaterialParameters_T = { diffuse: null, opacity: null, specular: null, specularMask: null, side: FrontSide, blendingMode: "normal", transparent: false, depthWrite: true, depthTest: true, visible: true }) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
         // const hasMapSpecularMask = "mapSpecularMask" in parameters && parameters.mapSpecularMask !== null && parameters.mapSpecularMask !== undefined;
         // const hasMapOpacity = "mapOpacity" in parameters && parameters.mapOpacity !== null && parameters.mapOpacity !== undefined;
@@ -472,6 +472,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public copy(source: this): this {
         super.copy(source);
+        // ShaderMaterial.copy clones the shared shadow render target into an unbacked Texture.
+        appendGlobalUniforms(this.uniforms);
         this.sprites = source.sprites;
         this.spriteEntries = source.spriteEntries;
         this.proceduralMaps = source.proceduralMaps;

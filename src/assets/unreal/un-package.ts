@@ -259,6 +259,7 @@ export class UEnginePackage extends UPackage implements EnginePackage_T {
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "VertMesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "SkeletalMesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshInstance");
@@ -506,6 +507,7 @@ export class UNativePackage extends ANativePackage {
         this.registerNativeClass("StaticMesh", "Primitive");
         this.registerNativeClass("Mesh", "Primitive");
         this.registerNativeClass("LodMesh", "Mesh");
+        this.registerNativeClass("VertMesh", "LodMesh");
         this.registerNativeClass("SkeletalMesh", "LodMesh");
         this.registerNativeClass("MeshInstance", "Primitive");
         this.registerNativeClass("LodMeshInstance", "MeshInstance");

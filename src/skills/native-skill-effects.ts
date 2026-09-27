@@ -13,6 +13,7 @@ import type EffectsComponent from "../rendering/components/effects-component";
 import type MovableObject from "../objects/movable-object";
 import type RenderManager from "../rendering/render-manager";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import type SoundComponent from "../audio/components/sound-component";
 
 const tmpRotator = new Rotator();
 const tmpPosition = new Vector3();
@@ -123,6 +124,8 @@ export class NativeSkillEffects {
 
         // Engine.dll 0x78f63c -> 0x78f6f0: an ownerless projectile still lights the hit Pawn without spawning a particle.
         if (info.pawnLightOnly) {
+            // Engine.dll Action_Attack 0x8bdd15..0x8bddf2 precedes its pawn light at 0x8bdf44.
+            if (info.attackSounds && host.isActor) host.getComponent<SoundComponent>("sound").playAttackSounds();
             this.addPawnLight(info.pawnLight, caster, host, source, shotTime);
             return true;
         }
@@ -148,9 +151,8 @@ export class NativeSkillEffects {
         // Engine.dll 0x7a9bec/0x7a9fac/0x7aa5e3/0x7aaccf skip placement, retaining the zero-initialized shake position.
         let hasPosition = info.targetRequired !== "position" || !!target;
 
-        if (!hasPosition && !info.viewShake) return true;
-
-        if (hasPosition && info.missingBoneStopsPhase) {
+        // Engine.dll Breath 0x7ab16a checks the bone before the null target at 0x7ab20c.
+        if ((hasPosition || info.missingBoneStopsPhase === "beforeTarget") && info.missingBoneStopsPhase) {
             const mesh = host.getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh;
 
             // Engine.dll 0x7b0cbb/0x7b0cce keeps Shot sound without a skeletal mesh; 0x7b0d00 exits the phase for a missing name.
@@ -159,8 +161,10 @@ export class NativeSkillEffects {
             const name = info.positionBone.replaceAll(" ", "_").toLowerCase();
 
             if (mesh && !mesh.skeleton.bones.some(bone => bone.name === name)) return false;
-            hasPosition = !!mesh;
+            hasPosition = hasPosition && !!mesh;
         }
+
+        if (!hasPosition && !info.viewShake) return true;
 
         let targetHeight: number;
 
@@ -440,6 +444,11 @@ export class NativeSkillEffects {
         return true;
     }
 
+    public addAttackLight(caster: BaseActor, target: BaseActor): void {
+        // Engine.dll Action_Attack 0x8bde58..0x8bdf44 (-2*radius); AddPawnLight 0x8b518f..0x8b51e8 (white, 30, 0.2).
+        this.addPawnLight({ color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true, position: "center", rotation: "targetDisplacement", radiusOffset: -2 }, caster, target, caster, 0);
+    }
+
     protected addPawnLight(light: NativeSkillEffect_T["pawnLight"], caster: BaseActor, host: BaseActor, source: Object3D, shotTime: number, effect: Object3D = null): void {
         // Engine.dll 0x78f6f0..0x78f6fb: Cast<APawn> rejects non-Pawn impact actors.
         if (!host.isActor) return;
@@ -454,6 +463,8 @@ export class NativeSkillEffects {
         else tmpLightPosition.copy(effect.position);
         if (light.spot) {
             if (light.rotation === "hit") tmpRotator.set(...(source as any).scriptProperties.get("HitRot")).toQuaternion(tmpRotation);
+            // Engine.dll Action_Attack 0x8bde58..0x8bde8c uses target minus caster, including a zero displacement.
+            else if (light.rotation === "targetDisplacement") getTargetRotation(caster, host, tmpRotation, false);
             else tmpRotation.copy(effect.quaternion);
             tmpLightDirection.set(1, 0, 0).applyQuaternion(tmpRotation);
             if (light.radiusOffset !== undefined) tmpLightPosition.addScaledVector(tmpLightDirection, light.radiusOffset * host.getCollisionRadius());

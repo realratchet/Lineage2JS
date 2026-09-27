@@ -9,7 +9,9 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "casting", effectClass: "LineageEffect.e_u046_a", host: "caster", bone: "bone01", relativeLocation: [245, -120, 0], relativeRotation: [0, 16384, 0], lifeSpan: "shotTime", speedRate: 1 },
     // Engine.dll 0x7ab19e..0x7ab234: (245,-120,0) rotated by GetBoneRotation(bone01,1), added to bone origin; 0x7ab23f: caster Rotation.
     // 0x7ab222/0x7ab22f: explicit SpeedRate1; 0x7ab289/0x7ab28a: caster host/owner.
-    { phase: "shot", effectClass: "LineageEffect.e_u046_b", host: "caster", positionBone: "bone01", boneOffset: [245, -120, 0], rotation: "caster", projectile: { target: "target" }, speedRate: 1 },
+    { phase: "shot", effectClass: "LineageEffect.e_u046_b", host: "caster", positionBone: "bone01", missingBoneStopsPhase: "beforeTarget", targetRequired: "position", boneOffset: [245, -120, 0], rotation: "caster", projectile: { target: "target" }, speedRate: 1 },
+    // Engine.dll 0x7ab295..0x7ab2cb uses each list actor; Action_Attack 0x8bde58..0x8bdf44 (-2*radius); AddPawnLight 0x8b518f..0x8b51e8 (white, 30, 0.2).
+    { phase: "shot", effectClass: "LineageEffect.e_u046_b", host: "target", associatedActors: "all", pawnLightOnly: true, attackSounds: true, pawnLight: { color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true, position: "center", rotation: "targetDisplacement", radiusOffset: -2 } },
     // Engine.dll 0x78fabc..0x78fac2: TargetActor.Location - CollisionHeight; 0x78fae1: Owner pawn rate; 0x78fb03/0x78fb4e: zero rotation, null host/owner.
     { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "target", owner: "none", rotation: "zero", hitActor: true, sourceOwner: true, useSkillSpeed: "sourceOwner" },
     { phase: "explosion", effectClass: "LineageEffect.e_u046_c", host: "target", rotation: "zero", hitActor: true, sourceOwner: true, viewShake },

@@ -33,7 +33,8 @@ import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
 import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
-import type ActorOwnershipComponent from "../objects/components/actor-ownership-component";
+import type { ScriptHost_T } from "../ue-script/vm";
+import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
 import NPawnLightComponent from "./components/pawn-light-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
@@ -56,6 +57,7 @@ const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, size
 const tmpViewShakePosition = new Vector3();
 const tmpViewShakeQuaternion = new Quaternion();
 const tmpViewShakeDirection = new Vector3();
+const tmpL2EventPosition = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
@@ -83,6 +85,9 @@ type ViewShakeState_T = {
     rate: number;
     repeats: number;
     countLimit: number;
+    requiresRotationFrequency: boolean;
+    requiresPositionFrequency: boolean;
+    requiresRotationScale: boolean;
 };
 const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
 
@@ -195,11 +200,16 @@ function updateViewShake(state: ViewShakeState_T, deltaTime: number): boolean {
 
     if (state.remainingTime <= 0.0001) return false;
 
+    // FNViewShake::Update (0x7bf7e9..0x7bf893) rejects zero vector channels with zero scalar rates.
+    if ((state.requiresRotationFrequency && state.rate === 0) || (state.requiresPositionFrequency && state.repeats === 0) || (state.requiresRotationScale && state.target === 0)) return false;
+
     if (state.rate !== 0) {
         state.phase = (Math.trunc(state.phase) + Math.trunc(deltaTime * state.rate)) & 0xffff;
-        if (state.phase >= 0x8000) state.phase -= 0x10000;
+        // FNViewShake::Update 0x7bf8d4..0x7bf8ed retains exactly 32768; only greater values wrap.
+        if (state.phase > 0x8000) state.phase -= 0x10000;
 
         if (state.type === "upDown" && state.target > state.savedTarget) {
+            // FNViewShake::Update 0x7bf922..0x7bf956: VST_UPDOWN becomes VST_DOWN at the saved threshold.
             state.type = "down";
             state.target = state.savedTarget;
             state.countLimit = Math.trunc(state.repeats + 2);
@@ -221,6 +231,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly lastSize = new Vector2();
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
+    public keepMinFrameRate: boolean = false; // GL2KeepMinFrameRate; preview uses full detail without adaptive throttling.
     public readonly mixer = new AnimationMixer(this.scene);
     public readonly skyRenderer = new SkyRenderer();
 
@@ -269,6 +280,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
     protected readonly viewShakeStates: ViewShakeState_T[] = [];
+    protected readonly arrL2EventActors: { actor: Object3D & ScriptHost_T, sector: SectorObject }[] = [];
     protected viewShakeDelta = 1 / 60;
     protected readonly screenFadeElement = document.createElement("div");
     protected screenFadeStartedAt = -1;
@@ -751,9 +763,78 @@ export class RenderManager implements IEngineComponent<GameManager> {
             phase: 0,
             rate: info.shakeIntensity * 50,
             repeats,
-            countLimit: Math.trunc(Math.max(direction.x * frameScale, direction.y * frameScale, direction.z * frameScale, repeats) + 2)
+            countLimit: Math.trunc(Math.max(direction.x * frameScale, direction.y * frameScale, direction.z * frameScale, repeats) + 2),
+            requiresRotationFrequency: false,
+            requiresPositionFrequency: false,
+            requiresRotationScale: false
         });
         this.needsUpdate = true;
+    }
+
+    // ALineagePlayerController::AddViewShakeState (0x809d10), VST_DAMAGE/VST_UPDOWN.
+    public addViewShakeState(duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, rotationAmplitude: Vector3, rotationVelocity: Vector3, positionAmplitude: Vector3, position: Vector3, strength: number, range: number, type: "damage" | "upDown" = "damage"): void {
+        // PlayerCalcView (0x80cedb..0x80ceee) stores the prior camera location at controller+0x1bc.
+        const intensity = position.lengthSq() !== 0 && range !== 0 ? strength / Math.cosh(this.camera.position.distanceTo(position) / range) : strength;
+        const frameRate = 1 / this.viewShakeDelta;
+        const frameScale = frameRate < 30 ? frameRate / 30 : 1;
+        const repeats = positionFrequency * frameScale;
+
+        // FVector::SafeNormal (Core.dll 0x1014fc40) zeros squared lengths below 1e-8.
+        this.viewShakeStates.unshift({
+            type,
+            direction: rotationAmplitude.lengthSq() < 1e-8 ? new Vector3() : rotationAmplitude.clone().normalize(),
+            remainingTime: duration,
+            // Engine.dll 0x809f4d..0x809f5c: VST_UPDOWN saves the attenuated threshold and starts at 1.
+            target: type === "upDown" ? 1 : rotationScale * intensity,
+            savedTarget: rotationScale * intensity,
+            phase: 0,
+            rate: rotationFrequency,
+            repeats,
+            countLimit: Math.trunc(Math.max(positionAmplitude.x * frameScale, positionAmplitude.y * frameScale, positionAmplitude.z * frameScale, repeats) + 2),
+            requiresRotationFrequency: rotationVelocity.x === 0 && rotationVelocity.y === 0 && rotationVelocity.z === 0,
+            requiresPositionFrequency: positionAmplitude.x * frameScale === 0 && positionAmplitude.y * frameScale === 0 && positionAmplitude.z * frameScale === 0,
+            requiresRotationScale: rotationAmplitude.x * intensity === 0 && rotationAmplitude.y * intensity === 0 && rotationAmplitude.z * intensity === 0
+        });
+        this.needsUpdate = true;
+    }
+
+    public triggerL2Event(name: string, position: Vector3, radius: number): void {
+        name = name.toLowerCase();
+
+        // Engine.dll 0x7a9ed1..0x7a9f3f: the first Shot only fills Level.L2EventActors.
+        if (this.arrL2EventActors.length === 0) {
+            for (const sector of this.arrLoadedSectors) {
+                sector.traverse(object => {
+                    const actor = object as Object3D & ScriptHost_T;
+                    const tag = actor.scriptProperties instanceof Map ? actor.scriptProperties.get("Tag") : null;
+
+                    if (typeof tag !== "string" || tag.toLowerCase() !== name) return;
+
+                    sector.scriptVM.initializeHost(actor);
+                    this.arrL2EventActors.push({ actor, sector });
+                });
+            }
+            return;
+        }
+
+        // ULevel::ExecL2EventActors (0x8727a0..0x87296d).
+        for (const { actor, sector } of this.arrL2EventActors) {
+            if ((actor.scriptProperties as Map<string, string>).get("Tag").toLowerCase() !== name) continue;
+
+            if (name === "antarascave_smoke" && radius !== 0) {
+                if (position.lengthSq() === 0) continue;
+
+                const distance = actor.getWorldPosition(tmpL2EventPosition).distanceTo(position);
+
+                if (Math.random() >= 1 / Math.cosh(distance / radius)) continue;
+                if (!(actor as any).isEmitterActor) continue;
+
+                // 0x8728f3 clears AEmitter.FirstSpawnParticle (+0x450, bit0).
+                (actor.scriptProperties as Map<string, any>).set("FirstSpawnParticle", false);
+            }
+
+            sector.scriptVM.call(actor, "Trigger", [null, null]);
+        }
     }
 
     protected updateScreenFade(currentTime: number): void {
@@ -798,6 +879,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 this.viewShakeStates.splice(i, 1);
                 continue;
             }
+
+            // FNViewShake::Update 0x7bf8a4 bypasses rotation output when its frequency is zero.
+            if (state.rate === 0) continue;
 
             pitch += Math.trunc(Math.abs(state.direction.y) * state.phase);
             yaw += Math.trunc(Math.abs(state.direction.x) * state.phase);
@@ -964,7 +1048,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.physicsManager.registerPhysicsComponent(lifetime);
         this.physicsManager.registerSimulationObjects(effect);
 
-        if (owner) owner.getComponent<ActorOwnershipComponent>("actorOwnership").gainScriptChild(effect);
+        if (owner) (owner.findComponent<ActorOwnershipComponent>("actorOwnership") || owner.addComponent(new ActorOwnershipComponent())).gainScriptChild(effect);
         const script = object.findComponent<ScriptComponent>("script");
 
         if (script) script.beginPlay();
@@ -2231,6 +2315,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public removeSector(sector: SectorObject) {
         this.pawnLightingStates = new WeakMap();
+
+        for (let i = this.arrL2EventActors.length - 1; i >= 0; i--)
+            if (this.arrL2EventActors[i].sector === sector) this.arrL2EventActors.splice(i, 1);
 
         if (sector.index)
             this.sectors.get(sector.index.x)?.delete(sector.index.y);
