@@ -1,17 +1,22 @@
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT } from "../../audio/components/sound-component";
-import type { Object3D } from "three";
+import { Matrix4, Quaternion, Vector3, type Object3D } from "three";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
 import UnScriptVM, { type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import Rotator from "../../utils/rotator";
 import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
-import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { IAnimationNotifyDecodeInfo, IAnimationEffectNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
+import { getPawnRotation } from "../../skills/native-skill-effects";
+import type AnimationComponent from "../../objects/components/animation-component";
 
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();
+const tmpOffset = new Vector3();
+const tmpRotation = new Quaternion();
+const tmpBoneMatrix = new Matrix4();
 
 export class EffectsComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "effects";
@@ -59,9 +64,76 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
         if (!info) return COMPONENT_EVENT_NOT_HANDLED;
 
         switch (info.type) {
+            case "effect": this.onAnimationEffect(info); return;
             case "screenFade": this.renderManager.screenFadeBlink(info); return;
             case "viewShake": this.renderManager.addViewShake(this.getParent(), info); return;
             default: return COMPONENT_EVENT_NOT_HANDLED;
+        }
+    }
+
+    protected onAnimationEffect(info: IAnimationEffectNotifyDecodeInfo): void {
+        const parent = this.getParent();
+
+        // Engine.dll UAnimNotify_Effect::Notify 0x94cb30 / 0x94ccc8: null class and unrendered pawns do not spawn.
+        if (!info.effectClass || !parent.visible) return;
+        if (info.trailCamera) {
+            debugger;
+            throw new Error(`Animation effect '${info.objectName}' requires TrailCamera.`);
+        }
+
+        const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, info.effectClass, this.vm);
+
+        this.vm.initializeHost(effect);
+        const drawScale = parent.scriptClassId ? parent.getUnrealScriptProperty("DrawScale") as number : 1;
+
+        parent.getWorldPosition(effect.position);
+        getPawnRotation(parent, effect.quaternion);
+        tmpOffset.fromArray(info.offsetLocation).multiplyScalar(drawScale);
+
+        if (!info.attach || info.bone.toLowerCase() === "none") {
+            tmpRotation.copy(effect.quaternion);
+            if (info.bone.toLowerCase() !== "none") {
+                this.getComponent<AnimationComponent>("animation").getBoneWorldMatrix(info.bone, tmpBoneMatrix);
+                effect.position.setFromMatrixPosition(tmpBoneMatrix);
+                tmpRotation.setFromRotationMatrix(tmpBoneMatrix.extractRotation(tmpBoneMatrix));
+            }
+            effect.position.add(tmpOffset.applyQuaternion(tmpRotation));
+            // Engine.dll 0x94cd22 / 0x94cdf2: IndependentRotation retains the initial pawn rotation.
+            if (!info.independentRotation) effect.quaternion.copy(tmpRotation).multiply(tmpRotator.set(...info.offsetRotation).toQuaternion(tmpRotation));
+        }
+
+        this.renderManager.addTransientEffect(effect, parent);
+
+        if (info.tag.toLowerCase() !== "none") effect.scriptProperties.set("Tag", info.tag);
+        const base = parent.getBaseActor() as any;
+
+        // Engine.dll 0x94cf84..0x94cfcb: this authored tag suppresses the effect on non-terrain bases.
+        if (effect.scriptProperties.get("Tag").toLowerCase() === "e_u009_a" && base && !base.isTerrain) {
+            this.renderManager.removeTransientEffect(effect);
+            return;
+        }
+
+        // Engine.dll 0x94cf26..0x94cf38 and 0x94cfde..0x94d000: particle scale and actor draw scale are separate.
+        effect.scale.fromArray(info.drawScale3D).multiplyScalar(info.drawScale);
+        effect.scriptProperties.set("DrawScale", info.drawScale);
+        effect.scriptProperties.set("DrawScale3D", info.drawScale3D.slice());
+        effect.traverse((emitter: any) => {
+            if (!emitter.particlePool) return;
+            emitter.scale.setScalar(info.drawScale > 0 ? 1 / info.drawScale : 1);
+            emitter.setSizeScale(info.effectScale * drawScale);
+        });
+
+        if (info.attach && info.bone.toLowerCase() !== "none") {
+            // Engine.dll 0x94d034..0x94d07f: attachment precedes the relative offset writes.
+            const attached = parent.attachObjectToBone(effect, info.bone);
+
+            tmpOffset.fromArray(info.offsetLocation).multiplyScalar(drawScale);
+            if (attached) {
+                effect.position.copy(tmpOffset);
+                tmpRotator.set(...info.offsetRotation).toQuaternion(effect.quaternion);
+            }
+            effect.scriptProperties.set("RelativeLocation", tmpOffset.toArray());
+            effect.scriptProperties.set("RelativeRotation", info.offsetRotation.slice());
         }
     }
 

@@ -1,0 +1,118 @@
+.skill-viewer {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    bottom: 10px;
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    box-sizing: border-box;
+    background: rgba(12, 12, 12, 0.88);
+    border: 1px solid #333;
+    color: #ddd;
+    font: 12px monospace;
+    z-index: 10;
+
+    header { font-weight: bold; letter-spacing: 1px; }
+
+    input, select, button {
+        background: #1d1d1d;
+        color: #ddd;
+        border: 1px solid #444;
+        font: inherit;
+        padding: 3px 6px;
+    }
+
+    button { cursor: pointer; }
+    button:hover { background: #2a2a2a; }
+
+    .skill-viewer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #aaa;
+    }
+
+    .skill-viewer-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .skill-viewer-list {
+        overflow: auto;
+        border: 1px solid #2a2a2a;
+
+        > div {
+            padding: 2px 6px;
+            cursor: pointer;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        > div:hover { background: #222; }
+        > div.active { background: #2d4460; }
+        > div.matched { color: #e8c86a; }
+    }
+
+    .skill-viewer-skills { flex: 3 1 0; min-height: 80px; }
+    .skill-viewer-npcs { flex: 2 1 0; min-height: 60px; }
+
+    .skill-viewer-spawned {
+        flex: 2 1 0;
+        min-height: 60px;
+
+        > div {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: default;
+        }
+
+        span { flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+        select { max-width: 150px; }
+    }
+
+    .skill-viewer-log {
+        flex: 2 1 0;
+        min-height: 60px;
+        overflow: auto;
+        color: #999;
+        white-space: pre-wrap;
+        word-break: break-word;
+
+        .error { color: #e88; }
+    }
+}
+
+viewport.skill-viewer-viewport {
+    position: absolute;
+    left: 400px;
+    width: calc(100% - 400px);
+}
+
+.skill-viewer-caption {
+    display: none;
+    position: fixed;
+    top: 28px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: #fff;
+    font: bold 30px monospace;
+    text-shadow: 0 0 6px #000, 0 0 2px #000;
+    pointer-events: none;
+    z-index: 11;
+}
+
+body.skill-viewer-recording {
+    .skill-viewer { display: none; }
+    .skill-viewer-caption { display: block; }
+
+    viewport.skill-viewer-viewport {
+        left: 0;
+        width: 100%;
+    }
+}

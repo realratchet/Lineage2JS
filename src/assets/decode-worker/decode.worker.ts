@@ -8,6 +8,8 @@ if (typeof ctx.location.reload !== "function") {
     ctx.location.reload = () => { };
 }
 
+const DECODE_PACKAGE_IDLE_MS = 30000;
+const DECODE_PACKAGE_SWEEP_MS = 5000;
 const engine = new DecodeEngine();
 
 function post(message: WorkerToMainMessage_T, transfer?: Transferable[]) {
@@ -193,3 +195,5 @@ async function processMessages(): Promise<void> {
 }
 
 ctx.onmessage = onMessage;
+
+setInterval(() => { if (!isProcessingMessages) engine.releaseDecodePackages(DECODE_PACKAGE_IDLE_MS); }, DECODE_PACKAGE_SWEEP_MS);

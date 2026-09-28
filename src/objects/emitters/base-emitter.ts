@@ -1495,6 +1495,9 @@ export abstract class BaseEmitter extends Object3D {
         const owner = this.parent as any;
         if (owner && owner.updateEmitterRotation) owner.updateEmitterRotation(currentTime);
 
+        // Engine.dll 0x8a3630 / 0x97a438..0x97a491: Relative particles draw with the emitter's current rotation.
+        if (this.coordinateSystem === "relative" && owner?.emitterRotation) this.quaternion.copy(owner.emitterRotation);
+
         // if (this.name !== "SpriteEmitter3" || this.parent.name !== "Emitter7") return;
 
         if (this.isDisabled)

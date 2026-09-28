@@ -346,6 +346,7 @@ export class DecodeEngine {
     protected cacheCharacterBundles = new Map<number, CachedBundle_T>();
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
+    protected readonly cacheDecodePackages = new Map<APackage, number>();
     protected cacheAudioConfig: UConfigAudio = null;
     protected cacheHairConfig: UConfigHair = null;
     protected readonly localizationFiles = new Map<string, string>();
@@ -556,9 +557,29 @@ export class DecodeEngine {
         return envConfig.getDecodeInfo();
     }
 
+    // one counted ref per package, handed back once nothing decoded from it for a while
+    protected async usingDecodePackage<T extends APackage>(pkg: T): Promise<T> {
+        if (!this.cacheDecodePackages.has(pkg)) await this.assetLoader.using(pkg);
+
+        this.cacheDecodePackages.set(pkg, performance.now());
+
+        return pkg;
+    }
+
+    public releaseDecodePackages(idleMs: number): void {
+        const now = performance.now();
+
+        for (const [pkg, lastUsed] of this.cacheDecodePackages) {
+            if (now - lastUsed < idleMs) continue;
+
+            this.cacheDecodePackages.delete(pkg);
+            this.assetLoader.free(pkg);
+        }
+    }
+
     protected async fetchSkeletalMesh(path: string): Promise<USkeletalMesh> {
         const [packageName, objectName] = splitObjectPath(path);
-        const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Animation"), { neverUnload: true });
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Animation"));
         const lowerName = objectName.toLowerCase();
         const entry = pkg.exportGroups.SkeletalMesh.find(entry => (entry.export.objectName as string).toLowerCase() === lowerName);
 
@@ -569,7 +590,7 @@ export class DecodeEngine {
 
     protected async fetchCharacterMaterial(path: string): Promise<UMaterial> {
         const [packageName, objectName] = splitObjectPath(path);
-        const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Texture"), { neverUnload: true });
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Texture"));
         const lowerName = objectName.toLowerCase();
         const entry = pkg.exports.find(entry => (entry.objectName as string).toLowerCase() === lowerName);
 
@@ -594,7 +615,7 @@ export class DecodeEngine {
 
     protected async fetchScriptClass(path: string): Promise<[APackage, UClass]> {
         const [packageName, objectName] = splitObjectPath(path);
-        const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Script"), { neverUnload: true });
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Script"));
         const lowerName = objectName.toLowerCase();
         const actualName = (pkg.exports.find(entry => (entry.objectName as string).toLowerCase() === lowerName)?.objectName as string) || objectName;
         const cls = pkg.fetchObjectByType<UClass>("Class", actualName);
@@ -648,7 +669,7 @@ export class DecodeEngine {
 
         if (!required && !this.assetLoader.hasPackage(packageName, "Sound")) return null;
 
-        const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Sound"), { neverUnload: true });
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Sound"));
         const lowerName = objectName.toLowerCase();
         const entry = pkg.exportGroups.Sound.find(entry => (entry.export.objectName as string).toLowerCase() === lowerName);
 
@@ -705,6 +726,17 @@ export class DecodeEngine {
         for (const path of paths) await this.pullEffectTemplate(library, builder, path);
     }
 
+    protected async pullAnimationNotifyEffects(builder: DecodeLibraryBuilder, animationNotifies: Record<string, IAnimationNotifyDecodeInfo[]>): Promise<void> {
+        const paths = new Set<string>();
+
+        for (const notifications of Object.values(animationNotifies))
+            for (const notify of notifications)
+                if (notify.object?.type === "effect" && notify.object.effectClass) paths.add(notify.object.effectClass);
+
+        for (const path of paths)
+            if (!builder.library.effectTemplates[path]) await this.pullEffectTemplate(builder.library, builder, path);
+    }
+
     protected async pullNpcSkillAttacks(library: DecodeLibrary, builder: DecodeLibraryBuilder, attacks: readonly NpcSkillAttack_T[], allowNative: boolean = true): Promise<void> {
         const decodedEffects = new Map<string, { actions: NpcSkillEffectAction_T[], flyingTime: number }>();
         const pulledEffects = new Set<string>();
@@ -716,7 +748,7 @@ export class DecodeEngine {
             if (visualPath && visualPath.toLowerCase() !== "none") {
                 const [packageName, groupName, objectName] = splitGroupedObjectPath(visualPath);
 
-                const pkg = await this.assetLoader.using(this.assetLoader.getPackage(packageName, "Effect"), { neverUnload: true });
+                const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Effect"));
 
                 visual = pkg.fetchObjectByType<UObject>("SkillVisualEffect", objectName, groupName);
 
@@ -1033,7 +1065,11 @@ export class DecodeEngine {
             const library = await this.buildNpcBundle(settings, bundleName);
 
             await DecodeCache.storeCachedLibraryDurable(bundleName, settings, library);
-            bundle = { library };
+
+            // the built bundle holds every mesh and texture of its packages, keep the file-backed copy instead
+            const stored = await DecodeCache.openCachedLibrary(bundleName, settings);
+
+            bundle = stored ? { library: stored.library as DecodeLibrary, seekable: stored } : { library };
         }
 
         this.cacheNpcBundles.set(bundleName, bundle);
@@ -1071,6 +1107,7 @@ export class DecodeEngine {
         copyAnimationSounds(library, bundle, sourceInfo.animationNotifies);
         copyScriptClass(library, bundle, entry.scriptClassId);
         await this.pullPawnEffects(library, builder, npc.className);
+        await this.pullAnimationNotifyEffects(builder, info.animationNotifies);
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
         await this.pullNpcSkillAttacks(library, builder, npc.skillAttacks);
@@ -1102,6 +1139,7 @@ export class DecodeEngine {
         const meshInfo = builder.pullSkeletalMesh(mesh, true, texturePaths.length === 0);
 
         await this.pullAnimationNotifyAssets(builder, meshInfo.animationNotifies);
+        await this.pullAnimationNotifyEffects(builder, meshInfo.animationNotifies);
 
         library.name = mesh.objectName;
         library.pawnActors.push(meshInfo);
@@ -1252,7 +1290,10 @@ export class DecodeEngine {
         await this.pullPawnEffects(library, builder, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
         await this.pullCharacterSounds(library, builder, row, chestId);
 
-        if (library.pawnActors.length > 0) await this.pullAnimationNotifyAssets(builder, library.pawnActors[0].animationNotifies);
+        if (library.pawnActors.length > 0) {
+            await this.pullAnimationNotifyAssets(builder, library.pawnActors[0].animationNotifies);
+            await this.pullAnimationNotifyEffects(builder, library.pawnActors[0].animationNotifies);
+        }
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -1337,6 +1378,7 @@ export class DecodeEngine {
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
         await this.pullPawnEffects(library, new DecodeLibraryBuilder(library, settings), `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
         await this.pullCharacterSounds(library, new DecodeLibraryBuilder(library, settings), row);
+        await this.pullAnimationNotifyEffects(new DecodeLibraryBuilder(library, settings), library.pawnActors[0].animationNotifies);
 
         if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
 
