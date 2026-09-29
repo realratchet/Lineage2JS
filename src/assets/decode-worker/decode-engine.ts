@@ -987,11 +987,10 @@ export class DecodeEngine {
             if (meshIndices.has(meshPath)) continue;
 
             const mesh = await this.fetchSkeletalMesh(npc.mesh);
-            const decodeMaterials = definitions.some(other => other.mesh.toLowerCase() === meshPath && other.textures.length === 0);
             let info: ISkinnedMeshObjectDecodeInfo;
 
             try {
-                info = builder.pullSkeletalMesh(mesh, true, decodeMaterials);
+                info = builder.pullSkeletalMesh(mesh, true);
             } catch (e) {
                 throw new Error(`NPC mesh '${npc.mesh}' failed to decode: ${(e as Error).message}`);
             }
@@ -1037,16 +1036,18 @@ export class DecodeEngine {
         for (const npc of definitions) {
             const meshIndex = meshIndices.get(npc.mesh.toLowerCase());
             const meshInfo = library.pawnActors[meshIndex];
-            const materialKey = npc.textures.map(path => path.toLowerCase()).join("|");
+            const materialKey = `${meshInfo.materials}|${npc.textures.map(path => path.toLowerCase()).join("|")}`;
             let materials = meshInfo.materials;
 
-            if (materialKey) {
+            if (npc.textures.length > 0) {
                 materials = materialIds.get(materialKey);
 
                 if (!materials) {
-                    const materialNames: string[] = [];
+                    // USkeletalMeshInstance::GetMaterial (retail 0x949851): absent nonzero skins retain mesh Materials[index].
+                    const materialNames = (library.materials[meshInfo.materials] as IMaterialGroupDecodeInfo).materials.slice();
 
-                    for (const path of npc.textures) {
+                    for (let i = 0; i < npc.textures.length; i++) {
+                        const path = npc.textures[i];
                         const key = path.toLowerCase();
                         let material = textureIds.get(key);
 
@@ -1055,7 +1056,7 @@ export class DecodeEngine {
                             textureIds.set(key, material);
                         }
 
-                        materialNames.push(material);
+                        materialNames[i] = material;
                     }
 
                     materials = `${bundleName}.materials.${materialIds.size}`;
@@ -1164,7 +1165,7 @@ export class DecodeEngine {
         const mesh = await this.fetchSkeletalMesh(`${packageName}.${meshName}`);
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, settings);
-        const meshInfo = builder.pullSkeletalMesh(mesh, true, texturePaths.length === 0);
+        const meshInfo = builder.pullSkeletalMesh(mesh, true);
 
         await this.pullAnimationNotifyAssets(builder, meshInfo.animationNotifies);
         await this.pullAnimationNotifyEffects(builder, meshInfo.animationNotifies);
@@ -1177,7 +1178,9 @@ export class DecodeEngine {
 
             if (!material || material.materialType !== "group") throw new Error(`Skeletal mesh '${packageName}.${meshName}' has no material group.`);
 
-            material.materials = await Promise.all(texturePaths.map(async path => builder.pullMaterial(await this.fetchCharacterMaterial(path))));
+            const skins = await Promise.all(texturePaths.map(async path => builder.pullMaterial(await this.fetchCharacterMaterial(path))));
+
+            skins.forEach((skin, i) => material.materials[i] = skin);
         }
 
         if (scriptClassPath) {
