@@ -154,6 +154,10 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "memoryStats": {
+            post({ type: "memoryStatsDecoded", requestId: msg.requestId, stats: engine.getMemoryStats() });
+            break;
+        }
         case "clientConfig": {
             try {
                 post({ type: "clientConfigDecoded", requestId: msg.requestId, config: await engine.decodeClientConfig() });

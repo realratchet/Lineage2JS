@@ -270,6 +270,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return this;
     }
 
+    public getMemoryStats() { return this.decodeWorker.getMemoryStats(); }
+
     public createLandmarkEffect(classPath: string): THREE.Object3D {
         return this.createEffect(classPath);
     }

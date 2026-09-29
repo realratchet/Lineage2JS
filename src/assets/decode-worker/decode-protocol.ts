@@ -59,6 +59,8 @@ export type NpcsListedMessage_T = { type: "npcsListed"; requestId: number; npcs:
 export type MusicInfoMessage_T = { type: "musicInfo"; requestId: number; }
 export type ClientConfigMessage_T = { type: "clientConfig"; requestId: number; }
 export type ScriptLocalizationMessage_T = { type: "scriptLocalization"; requestId: number; scriptClassPath: string; }
+export type MemoryStatsMessage_T = { type: "memoryStats"; requestId: number; }
+export type WorkerMemoryStats_T = { buffers: number; packages: number; };
 
 export type MainToWorkerMessage_T =
     | InitMessage_T
@@ -76,7 +78,8 @@ export type MainToWorkerMessage_T =
     | PrecacheCharactersMessage_T
     | MusicInfoMessage_T
     | ClientConfigMessage_T
-    | ScriptLocalizationMessage_T;
+    | ScriptLocalizationMessage_T
+    | MemoryStatsMessage_T;
 
 export type ReadyMessage_T = { type: "ready"; }
 export type InitErrorMessage_T = { type: "initError"; message: string; }
@@ -106,6 +109,7 @@ export type MusicInfoDecodedMessage_T = {
 export type ClientConfig_T = { userConfig: UserConfig_T; warriorAnimations: Record<string, WarriorAnimations_T>; };
 export type ClientConfigDecodedMessage_T = { type: "clientConfigDecoded"; requestId: number; config: ClientConfig_T; };
 export type ScriptLocalizationDecodedMessage_T = { type: "scriptLocalizationDecoded"; requestId: number; properties: LocalizationProperty_T[]; };
+export type MemoryStatsDecodedMessage_T = { type: "memoryStatsDecoded"; requestId: number; stats: WorkerMemoryStats_T; };
 
 export type WorkerToMainMessage_T =
     | ReadyMessage_T
@@ -120,4 +124,5 @@ export type WorkerToMainMessage_T =
     | CharactersPrecachedMessage_T
     | MusicInfoDecodedMessage_T
     | ClientConfigDecodedMessage_T
-    | ScriptLocalizationDecodedMessage_T;
+    | ScriptLocalizationDecodedMessage_T
+    | MemoryStatsDecodedMessage_T;

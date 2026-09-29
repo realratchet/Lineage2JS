@@ -1,4 +1,5 @@
 import { IEngineComponent } from "./components";
+import type { WorkerMemoryStats_T } from "../assets/decode-worker/decode-protocol";
 import Stats from "../rendering/stats";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import { VisualizerMode, LeafVisualizerDetail } from "../rendering/visualizer";
@@ -12,6 +13,12 @@ import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 type DebugTab = "controls" | "environment" | "bsp" | "statistics" | VisualizerMode.Fogs | VisualizerMode.Audio | VisualizerMode.Emitters;
 type GraphSeries_T = { label: string, color: string, values: number[] };
 type GpuMemoryUsage_T = { used: number, total: number };
+
+function formatClock(hours: number) {
+    const minutes = Math.round(hours * 60) % 1440;
+
+    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
 
 export class UIManager implements IEngineComponent<GameManager> {
     public moverPosition = 0;
@@ -34,6 +41,8 @@ export class UIManager implements IEngineComponent<GameManager> {
     protected statisticsCanvas: HTMLCanvasElement;
     protected statisticsContext: CanvasRenderingContext2D;
     protected statisticsHistory = { fps: [], frameTime: [], calls: [], triangles: [], heap: [], vram: [] };
+    protected workerMemory: (WorkerMemoryStats_T | null)[] = [];
+    protected workerMemoryPolledAt = 0;
     protected frameStartedAt = 0;
     protected frameWindowStartedAt = performance.now();
     protected frameCount = 0;
@@ -119,6 +128,10 @@ export class UIManager implements IEngineComponent<GameManager> {
             const memory = (performance as any).memory;
             const heap = memory ? memory.usedJSHeapSize / 1048576 : 0;
             const gpuMemory = this.getGpuMemoryUsage(render);
+            if (performance.now() - this.workerMemoryPolledAt > 1000) {
+                this.workerMemoryPolledAt = performance.now();
+                void this.pollWorkerMemory();
+            }
             this.pushStatisticsValue(this.statisticsHistory.fps, this.frameRate);
             this.pushStatisticsValue(this.statisticsHistory.frameTime, this.frameTime);
             this.pushStatisticsValue(this.statisticsHistory.calls, info.render.calls);
@@ -129,7 +142,8 @@ export class UIManager implements IEngineComponent<GameManager> {
             this.statisticsElement.textContent = [
                 `FPS:              ${this.frameRate.toFixed(1)}`,
                 `Frame:            ${this.frameTime.toFixed(2)} ms`,
-                `JS heap:          ${memory ? `${heap.toFixed(1)} / ${(memory.jsHeapSize / 1048576).toFixed(1)} MB` : "unavailable"}`,
+                `JS heap:          ${memory ? `${heap.toFixed(1)} / ${(memory.jsHeapSizeLimit / 1048576).toFixed(1)} MB` : "unavailable"}`,
+                `Package buffers:  ${this.workerMemory.map(stats => stats ? `${(stats.buffers / 1048576).toFixed(0)} MB (${stats.packages})` : "-").join(" / ")}`,
                 `VRAM:             ${gpuMemory.total ? `${gpuMemory.used.toFixed(1)} / ${gpuMemory.total.toFixed(1)} MB` : "unavailable"}`,
                 `GPU vendor:       ${this.gpuVendor}`,
                 `GPU renderer:     ${this.gpuRenderer}`,
@@ -257,6 +271,10 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.statisticsElement.className = "debug-info";
         panel.append(this.statisticsCanvas, this.statisticsElement);
         this.addCheckbox(panel, "Show FPS overlay", true, value => this.stats.dom.style.display = value ? "block" : "none");
+    }
+
+    protected async pollWorkerMemory(): Promise<void> {
+        this.workerMemory = await this.manGame.getComponent("asset").getMemoryStats();
     }
 
     protected getGpuMemoryUsage(render: RenderManager): GpuMemoryUsage_T {
@@ -419,8 +437,24 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.addRange(audio, "Music Volume", render.audioManager.musicVolume, 0, 1, 0.01, value => render.audioManager.musicVolume = value);
         this.addRange(audio, "Ambient Volume", render.audioManager.ambientVolume, 0, 1, 0.01, value => render.audioManager.ambientVolume = value);
 
-        this.addRange(world, "Time", environment.getTimeOfDay(), 0, 24, 0.01, value => { environment.setTimeOfDay(value); render.needsUpdate = true; });
-        this.addRange(world, "Time Scale", environment.getTimeScale(), 0, 100, 0.01, value => environment.setTimeScale(value));
+        const timeRange = this.addRange(world, "Time", environment.getTimeOfDay(), 0, 24, 0.01, value => { environment.setTimeOfDay(value); timeClock.value = formatClock(value); render.needsUpdate = true; });
+        const timeClock = this.addText(world, "Time (HH:MM)", formatClock(environment.getTimeOfDay()), value => {
+            const [hours, minutes = "0"] = value.split(":");
+            const time = Number(hours) + Number(minutes) / 60;
+
+            if (!Number.isFinite(time)) return;
+
+            environment.setTimeOfDay(time);
+            timeRange.value = String(time);
+            render.needsUpdate = true;
+        });
+        const scaleRange = this.addRange(world, "Time Scale", environment.getTimeScale(), 0, 100, 0.01, value => { environment.setTimeScale(value); scaleValue.value = String(value); });
+        const scaleValue = this.addText(world, "Time Scale (x)", String(environment.getTimeScale()), value => {
+            if (!Number.isFinite(Number(value))) return;
+
+            environment.setTimeScale(Number(value));
+            scaleRange.value = value;
+        });
         this.addSelect(world, "Signs Sky", { Normal: 0, Dusk: 1, Dawn: 2 }, String(environment.getActiveEnv()), value => { environment.setActiveEnv(Number(value) as 0 | 1 | 2); render.needsUpdate = true; });
     }
 

@@ -1,6 +1,6 @@
 // import * as _path from "path";
 
-import { AAssetLoader, APackage, type ANativePackage, type AssetListInfo_T, type CorePackageConstructor_T, type EnginePackageConstructor_T, type NativePackageConstructor_T, type PackageConstructor_T } from "@l2js/core";
+import { AAssetLoader, APackage, UField, UObject, LazyPropertyValue, type ANativePackage, type AssetListInfo_T, type CorePackageConstructor_T, type EnginePackageConstructor_T, type NativePackageConstructor_T, type PackageConstructor_T } from "@l2js/core";
 import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
 
 // type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK" | "NATIVE";
@@ -246,8 +246,67 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
             this.pkgRefCounts.set(dep, nc);
         }
 
-        for (const path of deref)
-            this.getPackage(path).free();
+        for (const path of deref) {
+            const freed = this.getPackage(path);
+
+            freed.free();
+
+            // script structure stays pinned, other packages resolve their imports against it
+            for (const entry of freed.exports) {
+                if (!(entry.object instanceof UField)) {
+                    entry.object = null;
+                    continue;
+                }
+
+                unresolveDefaults(this, entry.object);
+            }
+        }
+    }
+}
+
+class ExportRef extends LazyPropertyValue {
+    protected readonly loader: AssetLoader;
+    protected readonly path: string;
+    protected readonly index: number;
+
+    public constructor(loader: AssetLoader, object: UObject) {
+        super();
+
+        this.loader = loader;
+        this.path = (object as any).pkg.path;
+        this.index = object.exp.index;
+    }
+
+    public resolve() { return this.loader.getPackage(this.path).fetchObject(this.index + 1); }
+}
+
+class ExportRefArray extends LazyPropertyValue {
+    protected readonly items: any[];
+
+    public constructor(items: any[]) {
+        super();
+
+        this.items = items;
+    }
+
+    public resolve() { return this.items.map(item => item instanceof ExportRef ? item.resolve() : item); }
+}
+
+function isDataExport(value: any): value is UObject {
+    return value instanceof UObject && !(value instanceof UField) && value.exp !== null && !value.exp.isFake && value.exp.index >= 0;
+}
+
+// class defaults resolve eagerly to mesh and texture instances, which would keep every mesh of a freed package alive through its pinned script class
+function unresolveDefaults(loader: AssetLoader, field: UField) {
+    const dict = Object.getOwnPropertyDescriptor(field, "propertyDict");
+
+    if (!dict) return;
+
+    for (const [key, value] of Map.prototype.entries.call(dict.value)) {
+        if (Array.isArray(value)) {
+            if (value.some(isDataExport))
+                Map.prototype.set.call(dict.value, key, new ExportRefArray(value.map(item => isDataExport(item) ? new ExportRef(loader, item) : item)));
+        } else if (isDataExport(value)) Map.prototype.set.call(dict.value, key, new ExportRef(loader, value));
     }
 }
 

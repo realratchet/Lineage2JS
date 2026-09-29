@@ -10,7 +10,7 @@ import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, deserializeLibrary, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { PrecacheResult_T } from "./decode-protocol";
+import type { PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
@@ -45,7 +45,7 @@ type CharacterBundle_T = {
 };
 type CharacterHairPieces_T = Map<number, Map<number, [string, string][]>>;
 type CharacterPartPaths_T = [string, string];
-type NpcBundleEntry_T = { meshIndex: number, materials: string, scriptClassId: string | null };
+type NpcBundleEntry_T = { meshIndex: number, materials: string, scriptClassId: string | null, effectSpawnBoneIndex: number | null, damageEffect: string | null };
 type NpcBundleManifest_T = { actors: Record<number, NpcBundleEntry_T> };
 type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T };
 type SkillTables_T = { skills: Record<string, any>[], names: Record<string, any>[], sounds: Record<string, any>[] };
@@ -577,6 +577,19 @@ export class DecodeEngine {
         }
     }
 
+    public getMemoryStats(): WorkerMemoryStats_T {
+        let buffers = 0, packages = 0;
+
+        for (const byExt of (this.assetLoader as any).packages.values()) for (const pkg of byExt.values()) {
+            if (!pkg.buffer) continue;
+
+            buffers += pkg.buffer.byteLength;
+            packages++;
+        }
+
+        return { buffers, packages };
+    }
+
     protected async fetchSkeletalMesh(path: string): Promise<USkeletalMesh> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Animation"));
@@ -963,6 +976,7 @@ export class DecodeEngine {
         const materialIds = new Map<string, string>();
         const textureIds = new Map<string, string>();
         const classIds = new Map<string, string | null>();
+        const pawnDefaults = new Map<string, { effectSpawnBoneIndex: number, damageEffect: string | null }>();
         const classes: UClass[] = [];
 
         library.name = bundleName;
@@ -994,10 +1008,10 @@ export class DecodeEngine {
 
             if (classIds.has(classPath)) continue;
 
-            let cls: UClass;
+            let pkg: APackage, cls: UClass;
 
             try {
-                [, cls] = await this.fetchScriptClass(npc.className);
+                [pkg, cls] = await this.fetchScriptClass(npc.className);
             } catch (e) {
                 if (!(e as Error).message.endsWith("not found.")) throw e;
 
@@ -1007,6 +1021,15 @@ export class DecodeEngine {
 
             classIds.set(classPath, cls.name);
             classes.push(cls);
+
+            const pawn = pkg.newObject(cls);
+            const effectSpawnBoneIndex = pawn.propertyDict.get("EffectSpawnBoneIdx");
+            const damageEffect = pawn.propertyDict.get("DamageEffect") as UClass;
+
+            if (!Number.isInteger(effectSpawnBoneIndex)) throw new Error(`Pawn '${npc.className}' has no effect target bone index.`);
+            if (damageEffect === undefined) throw new Error(`Pawn '${npc.className}' has no DamageEffect default.`);
+
+            pawnDefaults.set(classPath, { effectSpawnBoneIndex, damageEffect: damageEffect ? damageEffect.name : null });
         }
 
         builder.pullScriptClasses(classes);
@@ -1041,7 +1064,9 @@ export class DecodeEngine {
                 }
             }
 
-            manifest.actors[npc.id] = { meshIndex, materials, scriptClassId: classIds.get(npc.className.toLowerCase()) };
+            const defaults = pawnDefaults.get(npc.className.toLowerCase());
+
+            manifest.actors[npc.id] = { meshIndex, materials, scriptClassId: classIds.get(npc.className.toLowerCase()), effectSpawnBoneIndex: defaults ? defaults.effectSpawnBoneIndex : null, damageEffect: defaults ? defaults.damageEffect : null };
         }
 
         (library as any).npcBundle = manifest;
@@ -1106,7 +1131,10 @@ export class DecodeEngine {
         copyCharacterMaterial(library, bundle, info.materials);
         copyAnimationSounds(library, bundle, sourceInfo.animationNotifies);
         copyScriptClass(library, bundle, entry.scriptClassId);
-        await this.pullPawnEffects(library, builder, npc.className);
+        // the bundle carries the pawn defaults so a spawn never has to load LineageMonster.u and the mesh packages it imports
+        library.effectSpawnBoneIndex = entry.effectSpawnBoneIndex;
+        library.damageEffect = entry.damageEffect;
+        if (entry.damageEffect) await this.pullEffectTemplate(library, builder, entry.damageEffect, true);
         await this.pullAnimationNotifyEffects(builder, info.animationNotifies);
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
@@ -1508,7 +1536,7 @@ export class DecodeEngine {
         const row = getCharacterRow(rows, charIndex);
         const [packageName, faceName] = splitObjectPath(row.face_mesh[0] as string);
         const [texturePackage] = splitObjectPath(row.face_tex[0] as string);
-        const pkg = await this.assetLoader.load(this.assetLoader.getPackage(packageName, "Animation")); // reading the export table only, no ref-count
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Animation")); // reading the export table only
         const textures = await this.characterTextureNames(row.face_tex[0] as string);
         const pattern = new RegExp(`^${faceName.replace(/_m\d+_f$/, "").toLowerCase()}_m(\\d+)_m00_(ah|bh)$`);
         const styles = new Map<number, Map<number, [string, string][]>>();
@@ -1546,7 +1574,7 @@ export class DecodeEngine {
     }
 
     protected async characterTextureNames(faceTexture: string): Promise<string[]> {
-        const pkg = await this.assetLoader.load(this.assetLoader.getPackage(splitObjectPath(faceTexture)[0], "Texture"));
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(splitObjectPath(faceTexture)[0], "Texture"));
 
         return pkg.exports.map(entry => entry.objectName as string);
     }

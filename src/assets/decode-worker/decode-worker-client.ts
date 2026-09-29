@@ -1,5 +1,5 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
-import type { WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T } from "./decode-protocol";
+import type { WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T } from "./decode-protocol";
 import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
@@ -317,6 +317,12 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "musicInfo" });
     }
 
+    public getMemoryStats(): Promise<(WorkerMemoryStats_T | null)[]> {
+        if (this.mainThreadEngine) return Promise.resolve([this.mainThreadEngine.getMemoryStats()]);
+
+        return Promise.all(this.slots.map((slot, i) => slot.isDead ? null : this.dispatch(i, { type: "memoryStats" })));
+    }
+
     public getClientConfig(): Promise<ClientConfig_T> {
         if (this.mainThreadEngine) return this.mainThreadEngine.decodeClientConfig();
 
@@ -408,6 +414,13 @@ export class DecodeWorkerClient {
                 if (!request) break;
 
                 request.resolve(msg.music);
+                break;
+            }
+            case "memoryStatsDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.stats);
                 break;
             }
             case "charactersPrecached": {
