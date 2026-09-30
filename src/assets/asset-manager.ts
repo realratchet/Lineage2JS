@@ -25,6 +25,8 @@ import HairSimulationComponent from "../objects/components/hair-simulation-compo
 import SkinNotifyComponent from "../objects/components/skin-notify-component";
 import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import PawnAttackComponent from "../objects/components/pawn-attack-component";
+import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
+import { WeaponType } from "./unreal/un-pawn";
 import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import { ScriptComponent } from "../game/script-component";
@@ -376,9 +378,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
         renderManager.player.findComponent<PawnAttackComponent>("pawnAttack")?.stop();
     }
 
-    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null) {
+    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: L2JS.Engine.INpcEquipment | null = null) {
         const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
-        const [library, localization] = await Promise.all([this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId), localizationPromise]);
+        const [library, localization] = await Promise.all([this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment), localizationPromise]);
 
         library.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (library as any).preferCompressedTextures = this.preferCompressedTextures;
@@ -424,6 +426,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         actor.initAnimations();
 
+        if (library.npcBow) {
+            actor.setUnrealScriptProperty("CurWeaponType", WeaponType.WT_BOW);
+            actor.addComponent(new PawnEquipmentComponent(library, renderManager));
+        }
+
         renderManager.needsUpdate = true;
 
         return library;
@@ -461,7 +468,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return effect;
     }
 
-    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null): Promise<BaseActor> {
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<BaseActor> {
         const npc = await this.decodeWorker.resolveNpc(selector);
         const index = npc.mesh.indexOf(".");
 
@@ -477,12 +484,12 @@ export class AssetManager implements IEngineComponent<GameManager> {
         let library;
 
         try {
-            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null);
+            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null, equipment);
         } catch (e) {
             throw new Error(`NPC '${npc.id}' (${npc.name}) failed to load mesh '${npc.mesh}' as '${npc.className}': ${(e as Error).message}`);
         }
 
-        actor.addComponent(new PawnAttackComponent(renderManager, actor.getAnimationNames(), library.npcSkillAttacks));
+        actor.addComponent(new PawnAttackComponent(renderManager, actor.getAnimationNames(), library.npcSkillAttacks, library.npcBow));
 
         if (!position) {
             tmpNpcFloorStart.copy(actor.position);

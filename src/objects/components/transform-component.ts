@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from "three";
+import { Matrix4, Object3D, Quaternion, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
@@ -15,6 +15,7 @@ const tmpRotator = new Rotator();
 const tmpBasePosition = new Vector3();
 const tmpBaseQuaternion = new Quaternion();
 const tmpBaseInverseQuaternion = new Quaternion();
+const tmpBoneMatrix = new Matrix4();
 
 export class TransformComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "transform";
@@ -55,6 +56,14 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         }
 
         switch (name) {
+            case "getbonecoordswithboneindex": {
+                if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' bones.`);
+
+                this.getComponent<AnimationComponent>("animation").getBoneWorldMatrix(Number(call.args[0]), tmpBoneMatrix);
+                const matrix = tmpBoneMatrix.elements;
+
+                return { Origin: [matrix[12], matrix[13], matrix[14]], XAxis: [matrix[0], matrix[1], matrix[2]], YAxis: [matrix[4], matrix[5], matrix[6]], ZAxis: [matrix[8], matrix[9], matrix[10]] };
+            }
             case "attachtobone": {
                 if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' bones.`);
 

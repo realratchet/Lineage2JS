@@ -64,6 +64,9 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
             parent.setUnrealScriptProperty("Controller", null);
 
         script?.destroy();
+        const equipment = parent.findComponent("pawnEquipment");
+
+        if (equipment) parent.removeComponent(equipment);
         this.getComponent<AnimationComponent>("animation").release();
         this.deathAnimationFinishedHandler = null;
         this.isDying = false;

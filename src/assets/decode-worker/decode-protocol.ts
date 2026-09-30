@@ -36,6 +36,7 @@ export type DecodeSkeletalMeshMessage_T = {
     scriptClassPath: string;
     texturePaths: string[];
     npcId: number | null;
+    equipment: L2JS.Engine.INpcEquipment | null;
     includeAnimations: boolean;
 };
 

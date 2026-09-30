@@ -201,13 +201,13 @@ export class DecodeWorkerClient {
         return library;
     }
 
-    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null): Promise<DecodeLibrary> {
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
         const bundleName = npcId === null ? null : getNpcBundleName(packageName);
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
         const includeAnimations = npcId === null || !this.npcAnimationSets.has(animationSet);
 
         if (this.mainThreadEngine) {
-            const library = await this.mainThreadEngine.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations);
+            const library = await this.mainThreadEngine.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment);
 
             if (npcId !== null) this.npcAnimationSets.add(animationSet);
 
@@ -220,7 +220,7 @@ export class DecodeWorkerClient {
 
         if (bundleName !== null) this.npcWorker.set(bundleName, workerIndex);
 
-        const library = await this.dispatch(workerIndex, { type: "decodeSkeletalMesh", settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations });
+        const library = await this.dispatch(workerIndex, { type: "decodeSkeletalMesh", settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, includeAnimations });
 
         if (npcId !== null) this.npcAnimationSets.add(animationSet);
 

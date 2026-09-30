@@ -114,7 +114,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decodeSkeletalMesh": {
             try {
-                const buffer = await engine.decodeSkeletalMeshBinary(msg.settings, msg.packageName, msg.meshName, msg.scriptClassPath, msg.texturePaths, msg.npcId, msg.includeAnimations);
+                const buffer = await engine.decodeSkeletalMeshBinary(msg.settings, msg.packageName, msg.meshName, msg.scriptClassPath, msg.texturePaths, msg.npcId, msg.includeAnimations, msg.equipment);
 
                 post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
             } catch (e) {

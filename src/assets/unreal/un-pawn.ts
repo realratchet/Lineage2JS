@@ -3,6 +3,17 @@ import type { USkeletalMesh, ISkinnedMeshObjectDecodeInfo } from "./skeletal-mes
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
 
+export enum WeaponType {
+    WT_HAND,
+    WT_1HS,
+    WT_2HS,
+    WT_DUAL,
+    WT_POLE,
+    WT_BOW,
+    WT_THROW,
+    WT_DUALFIST
+}
+
 export type INpcDefinition = {
     id: number;
     name: string;

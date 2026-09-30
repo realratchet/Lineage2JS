@@ -223,8 +223,9 @@ export class FAnimSequence implements Constructable_T {
         this.framerate = pkg.read("float");
 
         if (verLicense >= 1) {
-            this.unkVar0 = pkg.read("uint32");
-            this.unkVar1 = pkg.read("uint32");
+            // Engine.dll GetAttackEffFrame 0x8b7448 / GetAttackEndEffFrame 0x8b7488 read FMeshAnimSeq+0x2c/+0x30 as floats.
+            this.unkVar0 = pkg.read("float");
+            this.unkVar1 = pkg.read("float");
 
             if (verLicense >= 2) this.unkVar2 = pkg.read("uint32");
 

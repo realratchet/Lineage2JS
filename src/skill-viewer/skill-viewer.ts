@@ -52,7 +52,7 @@ export class SkillViewerGame extends GameManager {
 }
 
 export async function runSkillViewer(): Promise<void> {
-    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 60 }, decodeWorkerPoolSize: 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
+    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 61 }, decodeWorkerPoolSize: 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
 
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
 

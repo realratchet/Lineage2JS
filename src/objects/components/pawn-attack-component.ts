@@ -5,7 +5,7 @@ import Rotator from "../../utils/rotator";
 import SoundComponent from "../../audio/components/sound-component";
 import getNativeEffect from "../../skills/native-effects";
 import NativeSkillEffects, { getPawnRotation, getPawnMeshHeight, getPawnCastingEffectScale, getTargetRotation } from "../../skills/native-skill-effects";
-import NProjectileComponent from "../../physics/components/projectile-component";
+import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
 import getSkillAnimation from "../../skills/skill-animation";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
@@ -73,8 +73,11 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected skillShotTime = 0;
     protected isActive = false;
     protected lastTime = 0;
+    protected bowProjectile: ProjectileActor_T = null;
+    protected bowPreShotFrame = 0;
+    protected bowShotFrame = 0;
 
-    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[]) {
+    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[], protected readonly bow: L2JS.Engine.INpcBowDecodeInfo = null) {
         super();
 
         this.renderManager = renderManager;
@@ -113,6 +116,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.pendingSounds.length = 0;
         this.attackEffects.length = 0;
         this.preparedProjectiles.length = 0;
+        this.bowProjectile = null;
         this.pendingEffects.length = 0;
         this.target = null;
         this.requestedTarget = null;
@@ -137,6 +141,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         const notify = data as IAnimationNotifyDecodeInfo;
 
         if (!this.currentAttack || this.currentAttack.skill?.castStyle === 0 || notify.object?.type !== "native") return COMPONENT_EVENT_NOT_HANDLED;
+        if (!this.currentAttack.skill && this.bow) return COMPONENT_EVENT_NOT_HANDLED;
 
         const name = notify.object.className.toLowerCase();
 
@@ -226,7 +231,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         parent.getWorldPosition(tmpNpcPosition);
         rangeTarget.getWorldPosition(tmpTargetPosition);
 
-        const attackRange = parent.getCollisionRadius() + target.getCollisionRadius() + (attack.skill?.castRange === undefined ? ATTACK_RANGE_PADDING : Math.max(0, attack.skill.castRange));
+        const range = attack.skill ? attack.skill.castRange : this.bow?.attackRange;
+        const attackRange = parent.getCollisionRadius() + target.getCollisionRadius() + (range === undefined ? ATTACK_RANGE_PADDING : Math.max(0, range));
         const dx = tmpTargetPosition.x - tmpNpcPosition.x;
         const dy = tmpTargetPosition.y - tmpNpcPosition.y;
 
@@ -269,6 +275,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         } else {
             parent.playAnimation(attack.animation, 0.1, 1, false, true);
             this.lastShotName = this.getAttackShotNotify(parent);
+            if (this.bow) this.initBowAttack();
         }
     }
 
@@ -440,6 +447,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.requestedTarget = null;
         this.nextAttack = null;
         this.currentAttack = null;
+        this.bowProjectile = null;
         this.shotTriggered = false;
         this.lastShotName = null;
         this.stageShot = 0;
@@ -454,6 +462,10 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
     protected updateShot(parent: BaseActor, currentTime: number, force: boolean = false): void {
         if (this.shotTriggered || this.currentAttack.skill?.castStyle === 0) return;
+        if (!this.currentAttack.skill && this.bow) {
+            this.updateBowAttack(force);
+            return;
+        }
         // Engine.dll MagicProcess 0x7b516a: synthesize FinalShot only without LastShotName.
         if (this.currentAttack.skill) {
             if (!force || this.lastShotName) return;
@@ -467,6 +479,73 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         if (!force && frame < attackEffectFrame) return;
 
         this.triggerShot(currentTime);
+    }
+
+    protected initBowAttack(): void {
+        const clip = this.getParent().getAnimationAction().getClip() as any;
+
+        this.bowProjectile = null;
+        this.bowPreShotFrame = clip.attackEffectFrame;
+        this.bowShotFrame = clip.attackEndEffectFrame;
+        // Engine.dll BowAttackProcess 0x8c6c29 / 0x8c6e8c; AnimGetAttackShotNotifyTime 0x949c0d..0x949c5f keeps the last matching notify.
+        for (const notify of clip.animationNotifies as IAnimationNotifyDecodeInfo[]) {
+            if (notify.object?.type !== "native") continue;
+            const name = notify.object.className.toLowerCase();
+
+            if (clip.attackEffectFrame < 0 && name === "animnotify_attackpreshot") this.bowPreShotFrame = notify.time;
+            if (clip.attackEndEffectFrame < 0 && name === "animnotify_attackshot") this.bowShotFrame = notify.time;
+        }
+        if (this.bowPreShotFrame < 0) this.bowPreShotFrame = 0;
+        if (this.bowShotFrame < 0) this.bowShotFrame = 0;
+    }
+
+    protected updateBowAttack(force: boolean): void {
+        const parent = this.getParent();
+        const action = parent.getAnimationAction();
+        const frame = action ? action.time / action.getClip().duration : 1;
+
+        if (!this.bowProjectile && (force || frame >= this.bowPreShotFrame)) {
+            const target = this.target;
+            const arrow = parent.getComponent<ScriptComponent>("script").createObject("LineageEffect.NArrow") as unknown as ProjectileActor_T;
+            const properties = arrow.scriptProperties;
+
+            parent.getWorldPosition(arrow.position);
+            getPawnRotation(parent, arrow.quaternion);
+            // Engine.dll SetAtkArrow 0x8c04ae..0x8c0515 scales only DrawScale3D.X by sqrt(radius*height)/sqrt(207).
+            const scale = Math.sqrt(parent.getCollisionRadius() * parent.getCollisionHeight() / 207);
+
+            properties.get("DrawScale3D")[0] *= scale;
+            arrow.scale.x *= scale;
+            const projectile = arrow.addComponent(new NProjectileComponent(this.renderManager, parent, target, (_arrow, hitActor, impactActor) => {
+                // Engine.dll ANProjectile::processHitWall 0x78d5b0: physical impact sounds/light are deferred until arrival.
+                if (hitActor && impactActor === target) {
+                    target.getComponent<SoundComponent>("sound").playAttackSounds();
+                    this.nativeEffects.addAttackLight(parent, target);
+                }
+            }));
+
+            this.addAttackEffect(arrow);
+            // Engine.dll BowAttackProcess 0x8c6cde..0x8c6d22.
+            if (!parent.attachObjectToBone(arrow, parent.getUnrealScriptProperty("RightHandBone") as string)) throw new Error(`Pawn '${parent.name}' cannot attach its arrow to RightHandBone.`);
+            target.getEffectTargetLocation(tmpTargetPosition);
+            tmpTargetPosition.toArray(properties.get("LastTargetLocation"));
+            if (this.bow.curvature > 0) {
+                arrow.getWorldPosition(tmpEffectPosition);
+                projectile.prepareInterpolation(this.bow.curvature, tmpTargetPosition.sub(tmpEffectPosition));
+            }
+            this.bowProjectile = arrow;
+        }
+
+        if (!this.bowProjectile || !force && frame < this.bowShotFrame) return;
+
+        const arrow = this.bowProjectile;
+
+        // Engine.dll BowAttackProcess 0x8c6efb..0x8c6f57: detach, capture LocInitial for Hermite, then ShotNotify.
+        arrow.getComponent<NProjectileComponent>("nProjectile").detachFromBase();
+        if (arrow.scriptProperties.get("bHermiteInterpolation")) arrow.position.toArray(arrow.scriptProperties.get("LocInitial"));
+        arrow.getComponent<ScriptComponent>("script").call("ShotNotify");
+        this.bowProjectile = null;
+        this.shotTriggered = true;
     }
 
     protected triggerShot(currentTime: number, finalShot: boolean = true): void {

@@ -18,6 +18,7 @@ import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/co
 import { getNativeSkillBinding } from "./native-skill-bindings";
 import getNativeEffect from "../../skills/native-effects";
 import mobSkillTable from "./mob-skill-table";
+import { WeaponType } from "@l2js/engine/un-pawn";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
@@ -340,6 +341,7 @@ export class DecodeEngine {
     protected cacheCharGrpRows: Record<string, any>[] = null;
     protected cacheArmorGrpRows: Record<string, any>[] = null;
     protected cacheWeaponGrpRows: Record<string, any>[] = null;
+    protected cacheEtcItemGrpRows: Record<string, any>[] = null;
     protected cacheItemNameRows: Record<string, any>[] = null;
     protected cacheNpcDefinitions: INpcDefinition[] = null;
     protected cacheSkillTables: Promise<SkillTables_T> = null;
@@ -1103,7 +1105,7 @@ export class DecodeEngine {
         return bundle;
     }
 
-    protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean): Promise<DecodeLibrary> {
+    protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean, equipment: L2JS.Engine.INpcEquipment | null): Promise<DecodeLibrary> {
         const npc = await this.resolveNpc(npcId);
         const [packageName] = splitObjectPath(npc.mesh);
         const cached = await this.getNpcBundle(settings, packageName);
@@ -1140,6 +1142,7 @@ export class DecodeEngine {
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
         await this.pullNpcSkillAttacks(library, builder, npc.skillAttacks);
+        await this.pullNpcEquipment(library, builder, equipment);
         await this.pullPawnSounds(library, builder, npc.sounds);
 
         if (npc.enterEvent?.effect && npc.enterEvent.effect.toLowerCase() !== "none")
@@ -1159,8 +1162,8 @@ export class DecodeEngine {
         return library;
     }
 
-    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true): Promise<DecodeLibrary> {
-        if (npcId !== null) return this.decodeNpc(settings, npcId, includeAnimations);
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
+        if (npcId !== null) return this.decodeNpc(settings, npcId, includeAnimations, equipment);
 
         const mesh = await this.fetchSkeletalMesh(`${packageName}.${meshName}`);
         const library = new DecodeLibrary();
@@ -1586,8 +1589,8 @@ export class DecodeEngine {
         return serializeLibrary(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations)).buffer as ArrayBuffer;
     }
 
-    public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations)).buffer as ArrayBuffer;
+    public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<ArrayBuffer> {
+        return serializeLibrary(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment)).buffer as ArrayBuffer;
     }
 
     public async decodeEffectTemplatesBinary(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<ArrayBuffer> {
@@ -1698,6 +1701,36 @@ export class DecodeEngine {
         this.cacheWeaponGrpRows = file.datarows;
 
         return this.cacheWeaponGrpRows;
+    }
+
+    protected async pullNpcEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, equipment: L2JS.Engine.INpcEquipment | null): Promise<void> {
+        if (!equipment || !equipment.rightHand) return;
+
+        const weapon = (await this.decodeWeaponGrp()).find(row => row.id === equipment.rightHand);
+
+        if (!weapon) throw new Error(`NPC equipment references missing weapon '${equipment.rightHand}'.`);
+        if (weapon.handness !== WeaponType.WT_BOW) return;
+        if (weapon.wpn_mesh.length !== 1) throw new Error(`Bow '${weapon.id}' has ${weapon.wpn_mesh.length} meshes.`);
+
+        // Engine.dll User::GetArrowItemID 0x73684b..0x736880, grade jump table 0x7368a4.
+        const ammo = [17, 1341, 1342, 1343, 1344, 1345][weapon.crystal_type];
+
+        if (!ammo) throw new Error(`Bow '${weapon.id}' has unsupported grade '${weapon.crystal_type}'.`);
+        if (!this.cacheEtcItemGrpRows) this.cacheEtcItemGrpRows = (await (new UDataFile(SchemasC4.SCHEMA_ETCITEMGRP_DAT, "assets/system/etcitemgrp.dat").asReadable()).decode()).datarows;
+
+        const arrow = this.cacheEtcItemGrpRows.find(row => row.id === ammo);
+
+        if (!arrow || arrow.mesh_tex_pair[0].length !== 1) throw new Error(`Arrow '${ammo}' has no single mesh.`);
+
+        // Engine.dll APawn::SetAtkArrow 0x8c0322 / 0x8c03a3..0x8c0467.
+        await this.pullEffectTemplate(library, builder, "LineageEffect.NArrow", true);
+        const template = library.effectTemplates["LineageEffect.NArrow"];
+
+        template.scriptProperties.Mesh = arrow.mesh_tex_pair[0][0];
+        template.scriptProperties.Skins = arrow.mesh_tex_pair[1].slice();
+        await this.pullScriptMeshAssets(library, builder, template.scriptClassId, template.scriptProperties);
+        await this.pullScriptMeshAssets(library, builder, null, { Mesh: weapon.wpn_mesh[0], Skins: weapon.wpn_tex });
+        library.npcBow = { weaponMesh: weapon.wpn_mesh[0], weaponSkins: weapon.wpn_tex.slice(), curvature: weapon.curvature, attackRange: equipment.attackRange, ammo };
     }
 
     public async decodeMusicInfo(): Promise<Record<number, string[]>> {

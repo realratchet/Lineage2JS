@@ -353,13 +353,27 @@ class ScriptExecutor {
 
     protected evalCall(opcode: number): ScriptValue_T {
         let fn: IScriptFunctionDecodeInfo;
+        const context = this.frame.context;
+        const script = opcode === ExprToken_T.VirtualFunction && context !== this.frame.self && typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
+        const vm = script ? script.getVM() as UnScriptVM : this.vm;
+        const name = this.next().value as string;
 
-        if (opcode === ExprToken_T.FinalFunction) fn = this.vm.getFunction(this.next().value as string);
-        else fn = this.vm.findFunction(opcode === ExprToken_T.GlobalFunction ? this.frame.self.scriptClassId : this.frame.context.scriptClassId, this.next().value as string);
+        if (opcode === ExprToken_T.FinalFunction) fn = this.vm.getFunction(name);
+        else fn = vm.findFunction(opcode === ExprToken_T.GlobalFunction ? this.frame.self.scriptClassId : context.scriptClassId, name);
 
-        const args = this.readArguments(fn);
+        let args: ScriptArgument_T[];
 
-        return this.vm.invoke(this.frame.context, fn, args, this.frame.self);
+        if (script) {
+            this.frame.context = this.frame.self;
+
+            try {
+                args = this.readArguments(fn);
+            } finally {
+                this.frame.context = context;
+            }
+        } else args = this.readArguments(fn);
+
+        return vm.invoke(context, fn, args, script ? context : this.frame.self);
     }
 
     protected evalNative(entry: IScriptBytecodeEntryDecodeInfo): ScriptValue_T {

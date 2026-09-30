@@ -1135,8 +1135,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.deferredMixerOperations.length = 0;
     }
 
-    public spawnNpc(selector: string | number, position: Vector3 = null): Promise<BaseActor> {
-        return this.manGame.getComponent("asset").spawnNpc(this, selector, position);
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<BaseActor> {
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment);
     }
 
     public listNpcs(): Promise<INpcDefinition[]> {

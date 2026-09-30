@@ -53,23 +53,23 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
         while (this.arrCharacterPreloads.length < count) this.arrCharacterPreloads.push(super.decodeCharacter(settings));
     }
 
-    public decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null): Promise<DecodeLibrary> {
-        const preload = npcId === null ? null : this.cacheNpcPreloads.get(npcId);
+    public decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
+        const preload = npcId === null || equipment !== null ? null : this.cacheNpcPreloads.get(npcId);
 
         if (preload) this.cacheNpcPreloads.delete(npcId);
 
-        return this.consumeSkeletalMesh(preload ? preload.library : super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId), settings, packageName, meshName, scriptClassPath, texturePaths, npcId);
+        return this.consumeSkeletalMesh(preload ? preload.library : super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment), settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment);
     }
 
     // animations travel only with the first decode of a set, and only a consumed library reaches decodeObject3D's cache
-    protected async consumeSkeletalMesh(pending: Promise<DecodeLibrary>, settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number): Promise<DecodeLibrary> {
+    protected async consumeSkeletalMesh(pending: Promise<DecodeLibrary>, settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: L2JS.Engine.INpcEquipment | null): Promise<DecodeLibrary> {
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
         let library = await pending;
 
         if (npcId !== null && !this.consumedAnimationSets.has(animationSet) && !hasAnimations(library)) {
             revokeSounds(library);
             this.npcAnimationSets.delete(animationSet);
-            library = await super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId);
+            library = await super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment);
         }
 
         if (hasAnimations(library)) this.consumedAnimationSets.add(animationSet);
