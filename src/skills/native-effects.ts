@@ -1,10 +1,8 @@
-import eU063A from "./native/e-u063-a";
-import eU064A from "./native/e-u064-a";
-import eU064Cloud from "./native/e-u064-cloud";
-import eU065A from "./native/e-u065-a";
-import eU066A from "./native/e-u066-a";
-import eU067A from "./native/e-u067-a";
-import eU067Hand from "./native/e-u067-hand";
+import sBaiumNormalAttack from "./native/s-baium-normal-attack";
+import sThunderbolt from "./native/s-thunderbolt";
+import sEnergyWave from "./native/s-energy-wave";
+import sEarthQuake from "./native/s-earth-quake";
+import sGroupHold from "./native/s-group-hold";
 import eU082 from "./native/e-u082";
 import eU033 from "./native/e-u033";
 import sU010A from "./native/s-u010-a";
@@ -21,8 +19,7 @@ import mU013C from "./native/m-u013-c";
 import mU007A from "./native/m-u007-a";
 import mU007B from "./native/m-u007-b";
 import mU009 from "./native/m-u009";
-import mU033A from "./native/m-u033-a";
-import mU033B from "./native/m-u033-b";
+import sNpcHydroBlast from "./native/s-npc-hydro-blast";
 import mU003 from "./native/m-u003";
 import mU004 from "./native/m-u004";
 import mU000 from "./native/m-u000";
@@ -174,13 +171,13 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.e_u504_a": sEvilShackleBossA.filter(effect => effect.effectClass === "LineageEffect.e_u504_a"),
     "lineageeffect.e_u504_rh": sEvilShackleBossA.filter(effect => effect.effectClass === "LineageEffect.e_u504_rh"),
     "lineageeffect.e_u504_b": sEvilShackleBossA.filter(effect => effect.effectClass === "LineageEffect.e_u504_b"),
-    "lineageeffect.e_u063_a": eU063A,
-    "lineageeffect.e_u064_a": eU064A,
-    "lineageeffect.e_u064_cloud": eU064Cloud,
-    "lineageeffect.e_u065_a": eU065A,
-    "lineageeffect.e_u066_a": eU066A,
-    "lineageeffect.e_u067_a": eU067A,
-    "lineageeffect.e_u067_hand": eU067Hand,
+    "lineageeffect.e_u063_a": sBaiumNormalAttack,
+    "lineageeffect.e_u064_a": sThunderbolt.filter(effect => effect.effectClass === "LineageEffect.e_u064_a"),
+    "lineageeffect.e_u064_cloud": sThunderbolt.filter(effect => effect.effectClass === "LineageEffect.e_u064_cloud"),
+    "lineageeffect.e_u065_a": sEnergyWave,
+    "lineageeffect.e_u066_a": sEarthQuake,
+    "lineageeffect.e_u067_a": sGroupHold.filter(effect => effect.effectClass === "LineageEffect.e_u067_a"),
+    "lineageeffect.e_u067_hand": sGroupHold.filter(effect => effect.effectClass === "LineageEffect.e_u067_hand"),
     "lineageeffect.s_u010_a": sU010A,
     "lineageeffect.s_u005_a": sU005.filter(effect => effect.effectClass === "LineageEffect.s_u005_a"),
     "lineageeffect.s_u005_b": sU005.filter(effect => effect.effectClass === "LineageEffect.s_u005_b"),
@@ -195,8 +192,8 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u007_b": mU007B,
     "lineageeffect.m_u009_a": mU009.filter(effect => effect.effectClass === "LineageEffect.m_u009_a"),
     "lineageeffect.m_u009_c": mU009.filter(effect => effect.effectClass === "LineageEffect.m_u009_c"),
-    "lineageeffect.m_u033_a": mU033A,
-    "lineageeffect.m_u033_b": mU033B,
+    "lineageeffect.m_u033_a": sNpcHydroBlast.filter(effect => effect.effectClass === "LineageEffect.m_u033_a"),
+    "lineageeffect.m_u033_b": sNpcHydroBlast.filter(effect => effect.effectClass === "LineageEffect.m_u033_b"),
     "lineageeffect.nspear_sp": sNpcSpearAttack,
     "lineageeffect.m_u003_a": mU003.filter(effect => effect.effectClass === "LineageEffect.m_u003_a"),
     "lineageeffect.m_u003_b": mU003.filter(effect => effect.effectClass === "LineageEffect.m_u003_b"),

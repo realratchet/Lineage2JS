@@ -95,9 +95,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public addSkill(skill: NpcSkillAttack_T): number {
-        const animation = skill.animation ? this.animationNames.find(name => name.toLowerCase() === skill.animation.toLowerCase()) : null;
-
-        if (skill.animation && !animation) throw new Error(`Skill '${skill.id}' has no '${skill.animation}' animation.`);
+        const animation = skill.animation || null;
 
         const attack = { label: `Skill ${skill.id}: ${skill.name}`, animation, skill };
         const index = this.attacks.findIndex(entry => entry.skill?.id === skill.id && entry.skill.level === skill.level && entry.animation === animation);
@@ -243,6 +241,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.target = attack.skill?.previewTarget === "self" ? parent : this.requestedTarget;
         this.associatedActors.length = 0;
         if (this.requestedAssociatedActors) this.associatedActors.push(...this.requestedAssociatedActors);
+        // Server supplies the hit list separately from an aura's primary self target.
+        else if (attack.skill?.previewTarget === "self" && attack.skill.actions.some(action => action.onMultiTarget)) this.associatedActors.push(this.requestedTarget);
         // Server supplies AssociatedActor; the offline preview supplies the selected pawn.
         else if (attack.skill && (attack.skill.nativeAssociatedActors || attack.skill.nativeEffects.some(name => getNativeEffect(name, attack.skill.nativeEffectGroup).some(effect => effect.phase === "shot" && effect.pawnLightOnly && effect.associatedActors)))) this.associatedActors.push(this.target);
         this.nextAttack = null;
@@ -305,7 +305,6 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         for (let i = names.length - 1; i >= 0; i--) {
             const clip = animation.getAnimationClip(names[i]);
 
-            if (!clip && names[i].toLowerCase() !== "none") throw new Error(`${parent.name} has no skill animation '${names[i]}'.`);
             times[i] = clip && i !== this.flexibleAnimationIndex ? clip.duration : 0;
             if (!times[i]) continue;
 
@@ -370,8 +369,10 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             if (this.skillAnimationTimes[index] <= 0) continue;
 
             const name = this.skillAnimations[index];
+            const isNone = name.toLowerCase() === "none";
+            if (!isNone && !this.getComponent<AnimationComponent>("animation").getAnimationClip(name)) continue;
             // Engine.dll USkeletalMeshInstance::PlayAnim 0x94406b: negative rates are rejected.
-            if (name.toLowerCase() !== "none" && this.skillAnimationRate >= 0)
+            if (!isNone && this.skillAnimationRate >= 0)
                 this.getParent().playAnimation(name, elapsed === 0 ? this.skillTweenTime : 0, this.skillAnimationRate, index === this.flexibleAnimationIndex, true);
             break;
         }

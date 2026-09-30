@@ -1,8 +1,10 @@
 import type { NativeSkillEffect_T } from "../native-effects";
 
-// Engine.dll SkillEffectShot 0x7ab481: caster Rotation, target feet; class string 0xab172c.
-// 0x7ab50d..0x7ab513 and subsequent spawns supply NULL Owner; 0x7ab489 keeps Shot sound without a target.
 const effects: NativeSkillEffect_T[] = [
+    // Engine.dll Init 0x79e8c5 rejects a null target; 0x79e918..0x79e922 supplies target as host and Owner.
+    { phase: "casting", effectClass: "LineageEffect.e_u064_cloud", host: "target", owner: "target", attach: "trail", scale: "casterRadius", targetRequired: "phase" },
+    // Engine.dll SkillEffectShot 0x7ab481: caster Rotation, target feet; class string 0xab172c.
+    // 0x7ab50d..0x7ab513 and subsequent spawns supply NULL Owner; 0x7ab489 keeps Shot sound without a target.
     { phase: "shot", effectClass: "LineageEffect.e_u064_a", host: "target", owner: "none", rotation: "caster", targetRequired: "position" },
     // Engine.dll cumulative XY arithmetic / SetDelayed instruction addresses.
     ...[

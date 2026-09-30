@@ -87,6 +87,7 @@ export type NativeClientTypes_T =
     | "SkillAction"
     | "SkillAction_LocateEffect"
     | "SkillAction_SwordTrail"
+    | "NProjectile"
     | "NSkillProjectile"
     | "AnimNotify"
     | "AnimNotify_IdleSound"
@@ -416,6 +417,7 @@ export class UNativePackage extends ANativePackage {
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
+            case "NProjectile": Constructor = UEmitter; break;
             case "NSkillProjectile": Constructor = UEmitter; break; // ANSkillProjectile : ANProjectile : AEmitter (EngineClasses.h 3832/3866)
             case "WaterHitEmitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;

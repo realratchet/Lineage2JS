@@ -21,6 +21,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
         geometry.setAttribute("position", baseGeometry.attributes.position);
         geometry.setAttribute("uv", baseGeometry.attributes.uv);
         geometry.instanceCount = 0;
+        geometry.addEventListener("dispose", onGeometryDispose);
 
         super(geometry, material);
 
@@ -99,6 +100,15 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
     // Nothing raycasts individual particle visualizers today, and per-instance
     // picking against a shader-driven billboard offset isn't implemented.
     raycast() { }
+}
+
+function onGeometryDispose(event: THREE.Event): void {
+    const geometry = event.target as InstancedBufferGeometry;
+
+    // WebGLGeometries deletes every attached attribute; the shared quad outlives individual emitters.
+    geometry.setIndex(null);
+    geometry.deleteAttribute("position");
+    geometry.deleteAttribute("uv");
 }
 
 export default InstancedSpriteMesh;

@@ -1136,7 +1136,7 @@ export class DecodeEngine {
         library.effectSpawnBoneIndex = entry.effectSpawnBoneIndex;
         library.damageEffect = entry.damageEffect;
         if (entry.damageEffect) await this.pullEffectTemplate(library, builder, entry.damageEffect, true);
-        await this.pullAnimationNotifyEffects(builder, info.animationNotifies);
+        await this.pullAnimationNotifyEffects(builder, sourceInfo.animationNotifies);
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
         await this.pullNpcSkillAttacks(library, builder, npc.skillAttacks);

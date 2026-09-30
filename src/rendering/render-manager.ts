@@ -253,6 +253,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
+    protected readonly transientGeometries = new WeakMap<Object3D, Set<THREE.BufferGeometry>>();
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
@@ -1044,6 +1045,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const lifetime = object.findComponent<EffectLifetimeComponent>("effectLifetime") || object.addComponent(new EffectLifetimeComponent(this));
 
+        this.retainTransientGeometries(effect);
         this.scene.add(effect);
         this.physicsManager.registerPhysicsComponent(lifetime);
         this.physicsManager.registerSimulationObjects(effect);
@@ -1056,6 +1058,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public removeTransientEffect(effect: Object3D): void {
+        this.retainTransientGeometries(effect);
+
         const base = (effect as any).scriptBase as BaseActor;
         const owner = (effect as any).scriptOwner as Object3D & IObject;
 
@@ -1084,7 +1088,27 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         (effect as Object3D & IObject).detachComponents();
 
+        for (const geometry of this.transientGeometries.get(effect)) this.releaseGeometry(geometry);
+        this.transientGeometries.delete(effect);
+
         this.needsUpdate = true;
+    }
+
+    public retainGeometry(geometry: THREE.BufferGeometry): void { retainResource(geometry); }
+    public releaseGeometry(geometry: THREE.BufferGeometry): void { releaseResource(geometry); }
+
+    protected retainTransientGeometries(effect: Object3D): void {
+        let geometries = this.transientGeometries.get(effect);
+
+        if (!geometries) this.transientGeometries.set(effect, geometries = new Set());
+
+        effect.traverse((object: any) => {
+            // ActorMeshComponent owns skinned meshes; sprite instance buffers are private to each emitter.
+            if (!object.geometry || object.isSkinnedMesh || object.isInstancedSpriteMesh || geometries.has(object.geometry)) return;
+
+            geometries.add(object.geometry);
+            this.retainGeometry(object.geometry);
+        });
     }
 
     public removePawn(pawn: BaseActor): void {
@@ -2353,7 +2377,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 if (!entry.uri) continue;
 
                 this.audioManager.releaseSound(entry.uri);
-                URL.revokeObjectURL(entry.uri);
                 entry.uri = null;
             }
         }
@@ -2434,6 +2457,23 @@ function addResizeListeners(manager: RenderManager) {
 // Name-keyed material caches share resources across neighbouring sectors.
 const resourceRefs = new Map<Disposable_T, number>();
 
+function retainResource(resource: Disposable_T): void {
+    resourceRefs.set(resource, (resourceRefs.get(resource) ?? 0) + 1);
+}
+
+function releaseResource(resource: Disposable_T): void {
+    const refs = resourceRefs.get(resource);
+
+    if (!refs) throw new Error(`Cannot release an unretained render resource.`);
+    if (refs > 1) {
+        resourceRefs.set(resource, refs - 1);
+        return;
+    }
+
+    resourceRefs.delete(resource);
+    resource.dispose();
+}
+
 function collectMaterialResources(material: THREE.Material, target: Set<Disposable_T>) {
     // Uniform textures may be nested under transform chains and sprite-sheet slots.
     const textures = new Set<THREE.Texture>();
@@ -2488,22 +2528,12 @@ function retainSectorResources(sector: SectorObject, root: THREE.Object3D) {
         if (sector.retainedResources.has(resource)) continue;
 
         sector.retainedResources.add(resource);
-        resourceRefs.set(resource, (resourceRefs.get(resource) ?? 0) + 1);
+        retainResource(resource);
     }
 }
 
 function releaseSectorResources(sector: SectorObject) {
-    for (const resource of sector.retainedResources) {
-        const refs = (resourceRefs.get(resource) ?? 1) - 1;
-
-        if (refs > 0) {
-            resourceRefs.set(resource, refs);
-            continue;
-        }
-
-        resourceRefs.delete(resource);
-        resource.dispose();
-    }
+    for (const resource of sector.retainedResources) releaseResource(resource);
 
     sector.retainedResources.clear();
 }

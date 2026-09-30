@@ -130,9 +130,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected async startUnderwaterLoop(playId: number): Promise<void> {
         const dataUri = this.underwaterSoundUri;
 
+        const pendingBuffer = this.loadAmbientBuffer(dataUri);
         await this.ensureUnlocked();
 
-        const buffer = await this.loadAmbientBuffer(dataUri);
+        const buffer = await pendingBuffer;
 
         if (!buffer || !this.isUnderwater || dataUri !== this.underwaterSoundUri || playId !== this.underwaterPlayId) return;
 
@@ -549,9 +550,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     protected async startAmbientSoundAsync(id: string, entry: AmbientChannel_T) {
+        const pendingBuffer = this.loadAmbientBuffer(entry.info.dataUri);
         await this.ensureUnlocked();
 
-        const buffer = await this.loadAmbientBuffer(entry.info.dataUri);
+        const buffer = await pendingBuffer;
         if (!buffer) {
             this.activeAmbientSounds.delete(id);
             return;
@@ -562,7 +564,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.startAmbientSource(id, buffer, entry);
     }
 
-    protected async loadAmbientBuffer(dataUri: string): Promise<AudioBuffer | null> {
+    protected async loadAmbientBuffer(dataUri: string, soundType: string = "ambient"): Promise<AudioBuffer | null> {
         const cached = this.ambientBufferCache.get(dataUri);
         if (cached) return cached;
 
@@ -578,7 +580,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
                 return buffer;
             } catch (e) {
-                console.warn(`Failed to decode ambient sound ${dataUri}`, e);
+                console.warn(`Failed to decode ${soundType} sound ${dataUri}`, e);
                 return null;
             } finally {
                 this.pendingAmbientBuffers.delete(dataUri);
@@ -636,20 +638,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const sourceRadius = refDistance === 0 ? AL_SOURCE_RADIUS_FALLBACK : refDistance;
         const sourceMaxDistance = maxDistance === 0 ? sourceRadius * 100 : maxDistance;
 
+        const pendingBuffer = this.loadAmbientBuffer(dataUri, "one-shot");
         await this.ensureUnlocked();
-
-        let buffer = this.ambientBufferCache.get(dataUri);
-        if (!buffer) {
-            try {
-                const res = await fetch(dataUri);
-                const raw = await res.arrayBuffer();
-                buffer = await this.audioContext.decodeAudioData(raw);
-                this.ambientBufferCache.set(dataUri, buffer);
-            } catch (e) {
-                console.warn(`Failed to decode one-shot sound ${dataUri}`, e);
-                return;
-            }
-        }
+        const buffer = await pendingBuffer;
+        if (!buffer) return;
 
         const gain = this.audioContext.createGain();
         gain.gain.value = volume;
@@ -701,10 +693,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.activeAmbientSounds.delete(id);
     }
 
-    // Sector re-decodes mint new blob URLs, so release unreachable decoded PCM keys.
-    public releaseSound(dataUri: string) {
+    // Sector re-decodes mint new blob URLs, so release the decoded PCM and URL together.
+    public async releaseSound(dataUri: string) {
+        const pending = this.pendingAmbientBuffers.get(dataUri);
+        if (pending) await pending;
+
         this.ambientBufferCache.delete(dataUri);
-        this.pendingAmbientBuffers.delete(dataUri);
+        URL.revokeObjectURL(dataUri);
     }
 
     public updateListenerPosition(px: number, py: number, pz: number, fx: number, fy: number, fz: number, ux: number, uy: number, uz: number) {

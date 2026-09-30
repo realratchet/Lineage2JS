@@ -37,6 +37,7 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
 
             for (const material of materials) material.dispose();
             this.mesh.skeleton.dispose();
+            this.renderManager.releaseGeometry(this.mesh.geometry);
             this.mesh.removeFromParent();
             this.mesh = null;
         }
@@ -51,6 +52,7 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         if (!info) throw new Error(`Actor mesh '${meshPath}' has not been decoded.`);
 
         this.mesh = decodeSkinnedMesh(this.library, info, skins);
+        this.renderManager.retainGeometry(this.mesh.geometry);
 
         this.mesh.isUnlit = !!properties.get("bUnlit");
         this.mesh.ambientGlow = properties.get("AmbientGlow");
@@ -63,7 +65,11 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
 
     public onDetach(): void {
         this.renderManager.unregisterActorMesh(this);
-        if (this.mesh) this.mesh.skeleton.dispose();
+        if (this.mesh) {
+            this.mesh.skeleton.dispose();
+            this.renderManager.releaseGeometry(this.mesh.geometry);
+            this.mesh = null;
+        }
     }
 }
 

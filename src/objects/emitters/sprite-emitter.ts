@@ -165,9 +165,10 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial | Animate
             }
 
         } else {
-            // PTDU_None and PTDU_Scale
-            up.copy(projUp);
-            right.copy(projRight);
+            // Engine.dll FillVertexBuffer 0x97a4ad..0x97a5a3 transforms camera axes into emitter space.
+            tmpMatrix.extractRotation(this.parent.matrixWorld).invert();
+            up.copy(projUp).transformDirection(tmpMatrix);
+            right.copy(projRight).transformDirection(tmpMatrix);
         }
 
         if (particle && particle.spin !== 0) {

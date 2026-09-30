@@ -342,8 +342,9 @@ export abstract class BaseEmitter extends Object3D {
         // Engine.dll SetParticleMaxParticles 0x8a2f6c: truncate the initial rate before multiplying.
         const count = Math.trunc(Math.trunc(this.initialParticlesPerSecond) * (lifetime - (this.lifetimeRange.min + this.lifetimeRange.max) / 2));
 
-        if (!Number.isFinite(count) || count < 0) throw new Error(`Invalid adjusted particle count '${count}' for '${this.name}'.`);
+        if (!Number.isFinite(count)) throw new Error(`Invalid adjusted particle count '${count}' for '${this.name}'.`);
 
+        // Engine.dll 0x8a2f8c stores signed counts; Core.dll FArray::Add 0x10109f7f..82 does not reject negatives.
         this.maxParticles = count;
         if (this.currentTime !== undefined) return;
 
@@ -1145,6 +1146,8 @@ export abstract class BaseEmitter extends Object3D {
                 }
 
                 this.spawnParticle(index, newTime);
+                // Engine.dll 0x8a03c5..0x8a03c8: respawn skips this frame's physics after advancing by NewTime.
+                particle.flags |= EParticleFlags_T.PTF_InitialSpawn;
             }
         }
 
@@ -1310,8 +1313,8 @@ export abstract class BaseEmitter extends Object3D {
             }
 
             if (this.isUsingRevolutionScale) {
-                __break__();
-                if (particle.maxLifetime) {
+                // Engine.dll UParticleEmitter::UpdateParticles 0x8a1058..0x8a1200.
+                if (particle.maxLifetime > 0) {
                     let revolutionRelativeTime = (relativeTime * (this.revolutionScaleRepeats + 1)) % 1;
                     for (let n = 0; n < this.revolutionScale.length; n++) {
                         if (this.revolutionScale[n].relativeTime >= revolutionRelativeTime) {

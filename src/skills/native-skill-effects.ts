@@ -9,6 +9,7 @@ import type { NativeSkillEffect_T } from "./native-effects";
 import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 import type AnimationComponent from "../objects/components/animation-component";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import type LocalSpaceSkeleton from "../objects/local-space-skeleton";
 import type EffectsComponent from "../rendering/components/effects-component";
 import type MovableObject from "../objects/movable-object";
 import type RenderManager from "../rendering/render-manager";
@@ -158,9 +159,8 @@ export class NativeSkillEffects {
             // Engine.dll 0x7b0cbb/0x7b0cce keeps Shot sound without a skeletal mesh; 0x7b0d00 exits the phase for a missing name.
             if (!mesh && !info.viewShake) return true;
 
-            const name = info.positionBone.replaceAll(" ", "_").toLowerCase();
-
-            if (mesh && !mesh.skeleton.bones.some(bone => bone.name === name)) return false;
+            // Engine.dll 0x7b0cf8..0x7b0d00 checks MatchRefBone, including mesh aliases.
+            if (mesh && (mesh.skeleton as LocalSpaceSkeleton).matchRefBone(info.positionBone) < 0) return false;
             hasPosition = hasPosition && !!mesh;
         }
 
@@ -325,7 +325,9 @@ export class NativeSkillEffects {
 
         if (info.attach === "trail") {
             // Engine.dll SpawnSkillEffect 0x79831b initializes trailer rotation to zero.
-            const sameRotation = !!(effect as any).scriptProperties.get("bTrailerSameRotation");
+            const properties = (effect as any).scriptProperties;
+            const trailer = properties.get("Physics") === EPhysics_T.PHYS_Trailer;
+            const sameRotation = trailer && !!properties.get("bTrailerSameRotation");
 
             effect.quaternion.identity();
             if (sameRotation) {
@@ -333,14 +335,25 @@ export class NativeSkillEffects {
                 else host.getWorldQuaternion(effect.quaternion);
             }
             host.getWorldPosition(tmpPosition);
-            if (info.relativeTrailOffset === undefined) this.addTrailer(effect, host, effect.position.clone().sub(tmpPosition), false, sameRotation);
+            // SpawnSkillEffect 0x798306..0x7983b0 spawns at zero; performPhysics 0x8d4695..0x8d46d0 only follows for PHYS_Trailer.
+            if (!trailer && info.position === undefined) {
+                const hasPlacement = info.initialPosition !== undefined || info.bone !== undefined || info.boneProperty !== undefined || info.relativeLocation !== undefined;
+
+                effect.position.set(0, 0, 0);
+                // Without physics or later placement this actor remains stranded at the default spawn origin.
+                if (properties.get("Physics") === EPhysics_T.PHYS_None && !hasPlacement && !info.projectile && !info.pawnLight && !info.damageEffect) {
+                    this.renderManager.removeTransientEffect(effect);
+                    return true;
+                }
+            }
+            if (trailer && info.relativeTrailOffset === undefined) this.addTrailer(effect, host, effect.position.clone().sub(tmpPosition), false, sameRotation);
         }
         if (info.relativeTrailOffset !== undefined) {
             const properties = (effect as any).scriptProperties;
             const offset = properties.get("RelativeTrailOffset");
 
             offset[0] = caster.getCollisionRadius() * info.relativeTrailOffset;
-            this.addTrailer(effect, caster, tmpPosition.fromArray(offset), true, !!properties.get("bTrailerSameRotation"));
+            if (properties.get("Physics") === EPhysics_T.PHYS_Trailer) this.addTrailer(effect, caster, tmpPosition.fromArray(offset), true, !!properties.get("bTrailerSameRotation"));
         }
 
         if (info.initialPosition === "center") {
@@ -369,13 +382,12 @@ export class NativeSkillEffects {
 
             if (info.boneFallback !== undefined) {
                 const mesh = host.getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh;
+                const skeleton = mesh ? mesh.skeleton as LocalSpaceSkeleton : null;
 
                 // Engine.dll 0x7b0c9f..0x7b0cae: fallback index depends on MatchRefBone, not AttachToBone's result.
-                if (!mesh) bone = null;
+                if (!skeleton) bone = null;
                 else if (typeof bone === "string") {
-                    const name = bone.replaceAll(" ", "_").toLowerCase();
-
-                    if (!mesh.skeleton.bones.some(entry => entry.name === name)) bone = info.boneFallback;
+                    if (skeleton.matchRefBone(bone) < 0) bone = info.boneFallback;
                 }
             }
 

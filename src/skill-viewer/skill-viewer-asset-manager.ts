@@ -42,7 +42,6 @@ export class SkillViewerAssetManager extends AssetManager {
                 if (!sound.uri) continue;
 
                 renderManager.audioManager.releaseSound(sound.uri);
-                URL.revokeObjectURL(sound.uri);
             }
     }
 

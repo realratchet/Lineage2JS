@@ -158,7 +158,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         this.stop();
 
-        for (const mesh of this.meshes) parent.remove(mesh);
+        for (const mesh of meshes) this.renderManager.retainGeometry(mesh.geometry);
+        for (const mesh of this.meshes) {
+            parent.remove(mesh);
+            this.renderManager.mixer.uncacheRoot(mesh);
+            this.renderManager.releaseGeometry(mesh.geometry);
+        }
 
         this.meshes = meshes;
 
@@ -173,14 +178,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 {
-        if (typeof name === "string") name = name.replaceAll(" ", "_").toLowerCase();
-
         for (const mesh of this.meshes) {
             const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
 
             if (!skeleton) continue;
 
-            const index = typeof name === "number" ? name : skeleton.bones.findIndex(bone => bone.name === name);
+            const index = typeof name === "number" ? name : skeleton.matchRefBone(name);
 
             if (skeleton.bones[index]) return skeleton.getBoneWorldPosition(index, target, offset);
         }
@@ -189,14 +192,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public getBoneWorldMatrix(name: string | number, target: Matrix4, fallback?: number): Matrix4 {
-        if (typeof name === "string") name = name.replaceAll(" ", "_").toLowerCase();
-
         for (const mesh of this.meshes) {
             const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
 
             if (!skeleton) continue;
 
-            let index = typeof name === "number" ? name : skeleton.bones.findIndex(bone => bone.name === name);
+            let index = typeof name === "number" ? name : skeleton.matchRefBone(name);
 
             if (index < 0 && fallback !== undefined) index = fallback;
             if (skeleton.bones[index]) return skeleton.getBoneWorldMatrix(index, target);
@@ -387,8 +388,10 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         for (const mesh of this.meshes) {
             this.renderManager.mixer.uncacheRoot(mesh);
-            mesh.geometry.dispose();
+            this.renderManager.releaseGeometry(mesh.geometry);
         }
+
+        this.meshes = [];
     }
 }
 

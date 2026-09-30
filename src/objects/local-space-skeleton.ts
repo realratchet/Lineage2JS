@@ -53,13 +53,30 @@ export class LocalSpaceSkeleton extends Skeleton {
         return target;
     }
 
+    public matchRefBone(name: string): number {
+        if (!name || name.toLowerCase() === "none") return -1;
+
+        const mesh = this.mesh as any;
+
+        if (mesh?.isLitSkinnedMesh) {
+            // Engine.dll MatchRefBone 0x947ae7..0x947b8b resolves attach aliases before ref bones.
+            const lowerName = name.toLowerCase();
+            const aliasIndex = mesh.tagAliases.findIndex((alias: string) => alias.toLowerCase() === lowerName);
+
+            if (aliasIndex >= 0) name = mesh.tagNames[aliasIndex];
+        }
+
+        name = name.replaceAll(" ", "_").toLowerCase();
+        return this.bones.findIndex(bone => bone.name === name);
+    }
+
     public attachObject(object: Object3D, boneNameOrIndex: string | number, absolute: boolean = false): boolean {
         if (this.parents === null) this.claimBones();
         if (!this.ownsBones) return false;
 
         const index = typeof boneNameOrIndex === "number"
             ? boneNameOrIndex
-            : this.bones.findIndex(bone => bone.name === boneNameOrIndex.replaceAll(" ", "_").toLowerCase());
+            : this.matchRefBone(boneNameOrIndex);
 
         if (index < 0 || index >= this.bones.length) return false;
 

@@ -192,8 +192,6 @@ function collectResources(root: Object3D, resources: Set<{ dispose(): void }>): 
 
         if (!mesh.isMesh) return;
 
-        resources.add(mesh.geometry);
-
         if (mesh.isSkinnedMesh && mesh.skeleton) resources.add(mesh.skeleton);
 
         for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
