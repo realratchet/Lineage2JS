@@ -8,6 +8,9 @@ for (const id of [3, 100, 223, 245, 4032])
 for (const id of [4, 8, 75, 80, 86, 87, 88, 99, 104, 130, 131, 230, 297, 4176])
     nativeSkillHandlers.set(id, "dash");
 
+for (const id of [16])
+    nativeSkillHandlers.set(id, "mortalBlow");
+
 for (const id of [21, 61, 1012, 1013, 1018, 4025])
     nativeSkillHandlers.set(id, "recharge");
 
@@ -92,6 +95,9 @@ for (const id of [1020, 1217, 1218, 1219, 1258, 1271])
 for (const id of [1220, 1230, 1289, 4042, 4087, 4100, 4157, 4158, 4253, 4254])
     nativeSkillHandlers.set(id, "blaze");
 
+for (const id of [29, 95])
+    nativeSkillHandlers.set(id, "ironPunch");
+
 for (const id of [54])
     nativeSkillHandlers.set(id, "forceBlaster");
 
@@ -109,6 +115,9 @@ for (const id of [1016, 1254])
 
 for (const id of [1092, 1095, 1096, 1097, 1099, 1102, 1104, 1105, 1208, 1209, 1210, 1213, 1246, 1247, 1248, 1366, 1367, 4238])
     nativeSkillHandlers.set(id, "seal");
+
+for (const id of [1100, 1107, 1244])
+    nativeSkillHandlers.set(id, "chillFlame");
 
 for (const id of [1101, 1108, 4104, 4188])
     nativeSkillHandlers.set(id, "blazeQuake");
@@ -131,6 +140,21 @@ for (const id of [1])
 for (const id of [5, 261])
     nativeSkillHandlers.set(id, "sonicSlash");
 
+for (const id of [6])
+    nativeSkillHandlers.set(id, "sonicBlaster");
+
+for (const id of [7])
+    nativeSkillHandlers.set(id, "sonicStorm");
+
+for (const id of [9])
+    nativeSkillHandlers.set(id, "sonicBuster");
+
+for (const id of [17, 81])
+    nativeSkillHandlers.set(id, "forceBuster");
+
+for (const id of [19])
+    nativeSkillHandlers.set(id, "doubleShot");
+
 for (const id of [24])
     nativeSkillHandlers.set(id, "burstShot");
 
@@ -140,14 +164,23 @@ for (const id of [35])
 for (const id of [46, 289])
     nativeSkillHandlers.set(id, "lifeScavenge");
 
+for (const id of [84])
+    nativeSkillHandlers.set(id, "poisonBladeDance");
+
 for (const id of [97, 116, 1034, 1049])
     nativeSkillHandlers.set(id, "sanctuary");
+
+for (const id of [263])
+    nativeSkillHandlers.set(id, "deadlyBlow");
 
 for (const id of [264, 265, 266, 267, 268, 269, 270, 304, 305, 306, 308])
     nativeSkillHandlers.set(id, "song");
 
 for (const id of [271, 272, 273, 274, 275, 276, 277, 307, 309, 310, 311])
     nativeSkillHandlers.set(id, "dance");
+
+for (const id of [279, 1264, 1265])
+    nativeSkillHandlers.set(id, "lightningStrike");
 
 for (const id of [280])
     nativeSkillHandlers.set(id, "burningFist");
@@ -185,8 +218,17 @@ for (const id of [1287])
 for (const id of [314])
     nativeSkillHandlers.set(id, "fatalCounter");
 
+for (const id of [343, 354])
+    nativeSkillHandlers.set(id, "lethalShot");
+
+for (const id of [362])
+    nativeSkillHandlers.set(id, "armorCrush");
+
 for (const id of [1362, 1363, 4633, 4639])
     nativeSkillHandlers.set(id, "chantOfSpirit");
+
+for (const id of [369])
+    nativeSkillHandlers.set(id, "evadeShot");
 
 for (const id of [4235])
     nativeSkillHandlers.set(id, "devastatedRecall");

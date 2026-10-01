@@ -207,8 +207,8 @@ export class SkillEffectPlacement {
 
         if (effect && info.attach === "trail" && info.position === undefined) {
             const pivot = effect.scriptProperties.get("TrailerPrePivot");
-            // Engine.dll SpawnSkillEffect 0x79841e..0x798443: location mode 1 negates scaled mesh Origin.Z.
-            pivot[2] = -getPawnMeshHeight(this.host, effectHost);
+            // Engine.dll SpawnSkillEffect 0x79841e..0x798443: location mode 1 negates scaled mesh Origin.Z; 0x7983de skips it for a null host.
+            if (!info.templatePivot) pivot[2] = -getPawnMeshHeight(this.host, effectHost);
             tmpPosition[2] += this.host.getCollisionHeight(effectHost);
             if (effect.scriptProperties.get("bTrailerPrePivot")) FVector.addElements(tmpPosition, pivot, tmpPosition);
         } else if (info.position === "center") tmpPosition[2] += this.host.getCollisionHeight(effectHost);
@@ -246,6 +246,8 @@ export class SkillEffectPlacement {
             this.host.getPosition(target, tmpPosition2, true);
             getRotatorQuaternionElements(0, Math.trunc(Math.atan2(tmpPosition2[1], tmpPosition2[0]) * 65535 / (2 * Math.PI)), 0, effectRotation);
         } else if (info.rotation === "targetDirection" || info.rotation === "targetDisplacement") getTargetRotation(this.host, caster, target, effectRotation, info.rotation === "targetDirection");
+        // Engine.dll Shot 0x7a4a2b..0x7a4a3f replaces Roll with appFrand() * 16384.
+        if (info.randomRoll) FQuaternion.multiplyElements(effectRotation, getRotatorQuaternionElements(0, 0, Math.trunc(Math.random() * info.randomRoll), tmpRotation), effectRotation);
 
         if (hasPosition && info.forwardOffset !== undefined) {
             const rotation = effectRotation;
@@ -371,6 +373,16 @@ export class SkillEffectPlacement {
 
         addEffect(effect);
         if (info.pawnLight) this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime, effect);
+        if (info.physics === "trailer") {
+            const properties = effect.scriptProperties;
+            // Engine.dll Explosion 0x78eb27..0x78eb46: PHYS_Trailer, bTrailerPrePivot set, bTrailerSameRotation cleared; follows its Owner.
+            properties.set("Physics", EPhysics_T.PHYS_Trailer);
+            properties.set("bTrailerPrePivot", true);
+            properties.set("bTrailerSameRotation", false);
+            FVector.setElements(tmpPosition, ...properties.get("TrailerPrePivot"));
+            tmpPosition[2] += this.host.getCollisionHeight(caster);
+            this.addTrailer(effect, caster, tmpPosition, false, false);
+        }
         let hasNamedBone = false;
         if (info.boneProperty) {
             const bone = effectHost.getUnrealScriptProperty(info.boneProperty);

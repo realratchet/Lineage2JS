@@ -127,6 +127,34 @@ const nativeSkillRecipes = new Map<string, NativeSkillBinding_T>([
     ["hurricane", { effects: ["LineageEffect.m_u038_a", "LineageEffect.m_u038_b", "LineageEffect.m_u038_c", "LineageEffect.m_u038_d"], soundPhases: ["casting", "shot", "explosion"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79eadb / 0x7a3de7 / 0x7abf6e / 0x791ade.
     ["heal", { effects: ["LineageEffect.m_u001_a", "LineageEffect.m_u001_b"], effectGroup: "heal", soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79d3dd / 0x7a3de7 / 0x7a6f9b / 0x78ebbc.
+    ["chillFlame", { effects: ["LineageEffect.m_u028_a", "LineageEffect.m_u028_b", "LineageEffect.m_u028_c"], soundPhases: ["casting", "shot", "explosion"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79bc21 / 0x7a3de7 / 0x7a57a1 / 0x791ade.
+    ["mortalBlow", { effects: ["LineageEffect.s_u001_a", "LineageEffect.s_u001_b"], soundPhases: ["casting", "shot"], pending: "secondary weapon RibbonSet attachment" }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a57a1 / 0x791ade.
+    ["deadlyBlow", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u001_b"], soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79bd1b / 0x7a3de7 / 0x7a4dfe / 0x791ade.
+    ["ironPunch", { effects: ["LineageEffect.s_u006_a", "LineageEffect.s_u006_b"], finalShotOnly: true, soundPhases: ["casting", "shot"], pending: "light type 7 target pawn light at 0x7a4f3c; FNPawnLight+0x50/+0x51 are never initialized" }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a49d4 / 0x78de2c.
+    ["sonicBlaster", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u015_a", "LineageEffect.s_u015_b"], effectGroup: "sonicBlaster", finalShotOnly: true, soundPhases: ["casting", "shot", "explosion"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a49d4 / 0x78dfed.
+    ["sonicStorm", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u015_a", "LineageEffect.s_u015_b", "LineageEffect.m_u006_d"], effectGroup: "sonicStorm", finalShotOnly: true, soundPhases: ["casting", "shot", "explosion"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a5359 / 0x791ade.
+    ["sonicBuster", { effects: ["LineageEffect.s_u010_a", "LineageEffect.m_u006_d", "LineageEffect.m_u006_e"], effectGroup: "sonicBuster", associatedActors: true, soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a534c / 0x791ade.
+    ["poisonBladeDance", { effects: ["LineageEffect.s_u010_a", "LineageEffect.m_u006_d", "LineageEffect.m_u006_e"], effectGroup: "sonicBuster", associatedActors: true, finalShotOnly: true, soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a54c7 / 0x791ade.
+    ["forceBuster", { effects: ["LineageEffect.s_u010_a", "LineageEffect.m_u006_e"], effectGroup: "forceBuster", finalShotOnly: true, soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a7df6 / 0x791ade.
+    ["lightningStrike", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u011_a"], soundPhases: ["casting", "shot"], pending: "light type 7 target pawn lights at 0x7a7ef0/0x7a80ab; FNPawnLight+0x50/+0x51 are never initialized" }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79ba50 / 0x7a43c0 / 0x7afa26 / 0x7916c7.
+    ["doubleShot", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u003_a", "LineageEffect.s_u003_d", "LineageEffect.s_u003_b", "LineageEffect.p_u004_a"], effectGroup: "bow", soundPhases: ["casting", "shot", "explosion"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a43c0 / 0x7afa26 / 0x78e963.
+    ["evadeShot", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u003_d", "LineageEffect.s_u003_b", "LineageEffect.sp_agility_ta"], effectGroup: "evadeShot", soundPhases: ["casting", "shot", "explosion"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79c505 / 0x7a3e0d / 0x7a67de / 0x78e755.
+    ["lethalShot", { effects: ["LineageEffect.s_u509_a", "LineageEffect.s_u003_d", "LineageEffect.s_u509_d", "LineageEffect.s_u509_c", "LineageEffect.s_u509_b", "LineageEffect.s_u509_e"], effectGroup: "lethalShot", soundPhases: ["casting", "shot", "explosion"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79c5fb / 0x7a3de7 / 0x7a6578 / 0x791ade.
+    ["armorCrush", { effects: ["LineageEffect.s_u513_a", "LineageEffect.s_u513_b", "LineageEffect.s_u513_c"], soundPhases: ["casting", "shot"] }],
 ]);
 
 export default nativeSkillRecipes;

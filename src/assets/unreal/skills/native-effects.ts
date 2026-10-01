@@ -83,6 +83,16 @@ import sSiegeHammer from "./native/s-siege-hammer";
 import sDoubleDaggerAttack from "./native/s-double-dagger-attack";
 import sPowerStrike from "./native/s-power-strike";
 import sHeal from "./native/s-heal";
+import mU028 from "./native/m-u028";
+import sU001 from "./native/s-u001";
+import sU006 from "./native/s-u006";
+import sU011 from "./native/s-u011";
+import sU509 from "./native/s-u509";
+import sU513 from "./native/s-u513";
+import { blasterShot, stormShot, blasterExplosion, stormExplosion } from "./native/s-sonic-blaster";
+import sSonicBuster from "./native/s-sonic-buster";
+import sForceBuster from "./native/s-force-buster";
+import sEvadeShot from "./native/s-evade-shot";
 import type { NpcSkillEffectPhase_T } from "../un-pawn";
 
 export type NativeSkillEffect_T = {
@@ -91,6 +101,7 @@ export type NativeSkillEffect_T = {
     host: "caster" | "target" | "source" | "impactActor";
     associatedActors?: "targetExcepted" | "targetExceptedAndPrimary" | "primaryAndSecondary" | "primaryPerAssociated" | "all";
     primaryTargetOnly?: boolean;
+    secondaryTargetOnly?: boolean;
     rejectNullAfterSpawn?: boolean;
     soundWithoutEffect?: boolean;
     targetIsCaster?: boolean;
@@ -135,7 +146,9 @@ export type NativeSkillEffect_T = {
     relativeTrailOffset?: number;
     lifeSpan?: "shotTime" | "firstShotTime";
     lifeSpanOffset?: number;
-    physics?: "none";
+    physics?: "none" | "trailer";
+    templatePivot?: boolean;
+    randomRoll?: number;
     useSkillSpeed?: boolean | "sourceOwner" | "sourceTarget" | "target";
     speedRate?: number;
     adjustParticleLife?: boolean | "shotTime";
@@ -290,7 +303,18 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u026_a": mU026.filter(effect => effect.effectClass === "LineageEffect.m_u026_a"),
     "lineageeffect.m_u026_b": mU026.filter(effect => effect.effectClass === "LineageEffect.m_u026_b"),
     "lineageeffect.m_u026_c": mU026.filter(effect => effect.effectClass === "LineageEffect.m_u026_c"),
-    "lineageeffect.m_u026_d": mU026.filter(effect => effect.effectClass === "LineageEffect.m_u026_d")
+    "lineageeffect.m_u026_d": mU026.filter(effect => effect.effectClass === "LineageEffect.m_u026_d"),
+    "lineageeffect.m_u028_a": mU028.filter(effect => effect.effectClass === "LineageEffect.m_u028_a"),
+    "lineageeffect.m_u028_b": mU028.filter(effect => effect.effectClass === "LineageEffect.m_u028_b"),
+    "lineageeffect.m_u028_c": mU028.filter(effect => effect.effectClass === "LineageEffect.m_u028_c"),
+    "lineageeffect.s_u001_a": sU001.filter(effect => effect.effectClass === "LineageEffect.s_u001_a"),
+    "lineageeffect.s_u001_b": sU001.filter(effect => effect.effectClass === "LineageEffect.s_u001_b"),
+    "lineageeffect.s_u006_a": sU006.filter(effect => effect.effectClass === "LineageEffect.s_u006_a"),
+    "lineageeffect.s_u006_b": sU006.filter(effect => effect.effectClass === "LineageEffect.s_u006_b"),
+    "lineageeffect.s_u011_a": sU011,
+    "lineageeffect.s_u513_a": sU513.filter(effect => effect.effectClass === "LineageEffect.s_u513_a"),
+    "lineageeffect.s_u513_b": sU513.filter(effect => effect.effectClass === "LineageEffect.s_u513_b"),
+    "lineageeffect.s_u513_c": sU513.filter(effect => effect.effectClass === "LineageEffect.s_u513_c")
 };
 
 const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> = {
@@ -406,6 +430,40 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
     },
     antarasNormalAttackEx: {
         "lineageeffect.e_u049_a": sAntarasNormalAttackEx
+    },
+    sonicBlaster: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.s_u015_a": blasterShot,
+        "lineageeffect.s_u015_b": blasterExplosion
+    },
+    sonicStorm: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.s_u015_a": stormShot,
+        "lineageeffect.s_u015_b": stormExplosion.filter(effect => effect.effectClass === "LineageEffect.s_u015_b"),
+        "lineageeffect.m_u006_d": stormExplosion.filter(effect => effect.effectClass === "LineageEffect.m_u006_d")
+    },
+    sonicBuster: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.m_u006_d": sSonicBuster.filter(effect => effect.effectClass === "LineageEffect.m_u006_d"),
+        "lineageeffect.m_u006_e": sSonicBuster.filter(effect => effect.effectClass === "LineageEffect.m_u006_e")
+    },
+    forceBuster: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.m_u006_e": sForceBuster
+    },
+    evadeShot: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
+        "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
+        "lineageeffect.sp_agility_ta": sEvadeShot
+    },
+    lethalShot: {
+        "lineageeffect.s_u509_a": sU509.filter(effect => effect.effectClass === "LineageEffect.s_u509_a"),
+        "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
+        "lineageeffect.s_u509_d": sU509.filter(effect => effect.effectClass === "LineageEffect.s_u509_d"),
+        "lineageeffect.s_u509_c": sU509.filter(effect => effect.effectClass === "LineageEffect.s_u509_c"),
+        "lineageeffect.s_u509_b": sU509.filter(effect => effect.effectClass === "LineageEffect.s_u509_b"),
+        "lineageeffect.s_u509_e": sU509.filter(effect => effect.effectClass === "LineageEffect.s_u509_e")
     }
 };
 

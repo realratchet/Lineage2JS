@@ -228,6 +228,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
                     continue;
                 }
                 if (effect.primaryTargetOnly && effectTarget !== target) continue;
+                if (effect.secondaryTargetOnly && effectTarget === target) continue;
                 if (effect.preShotBones) {
                     // Engine.dll 0x7a40cd..0x7a4123 / 0x7a42ee..0x7a430c.
                     const boneProperty = effect.preShotBones[cast.stagePreShot === 1 ? 0 : 1];
