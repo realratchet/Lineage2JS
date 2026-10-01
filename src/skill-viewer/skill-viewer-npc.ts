@@ -10,7 +10,7 @@ const TARGET_GAP = 10;
 const tmpPosition = new Vector3();
 const tmpFacing = new Vector3();
 
-export type SkillViewerSkill_T = { id: number, name: string, npcs: INpcDefinition[], isNpcOnly?: boolean, level?: number, previewTarget?: "self" };
+export type SkillViewerSkill_T = { id: number, name: string, npcs: INpcDefinition[], isNpcOnly?: boolean, level?: number, hitTime?: number, previewTarget?: "self" };
 export type SkillViewerEntry_T = { definition: INpcDefinition, npc: BaseActor, target: BaseActor };
 
 export class SkillViewerStage {

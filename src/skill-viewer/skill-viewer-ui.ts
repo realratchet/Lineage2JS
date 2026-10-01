@@ -320,10 +320,12 @@ export class SkillViewerUI {
             await this.cast(skill);
 
             const castStarted = performance.now();
+            // skillgrp.hit_time runs up to 300s for summons.
+            const castTimeout = Math.max(RECORD_CAST_TIMEOUT_MS, ((skill.hitTime || 0) + 2) * 1000);
 
-            while (run === this.recordingRun && this.stage.isCasting() && performance.now() - castStarted < RECORD_CAST_TIMEOUT_MS) await wait(100);
+            while (run === this.recordingRun && this.stage.isCasting() && performance.now() - castStarted < castTimeout) await wait(100);
 
-            if (run === this.recordingRun && this.stage.isCasting()) this.log(`cast still running after ${RECORD_CAST_TIMEOUT_MS / 1000}s`, true);
+            if (run === this.recordingRun && this.stage.isCasting()) this.log(`cast still running after ${castTimeout / 1000}s`, true);
 
             await wait(RECORD_TAIL_MS);
         }
