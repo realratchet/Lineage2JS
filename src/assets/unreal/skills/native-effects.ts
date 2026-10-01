@@ -6,7 +6,13 @@ import sGroupHold from "./native/s-group-hold";
 import eU082 from "./native/e-u082";
 import eU033 from "./native/e-u033";
 import sU010A from "./native/s-u010-a";
+import sU010B, { attackEffects as sU010Attack } from "./native/s-u010-b";
+import eU011 from "./native/e-u011";
+import sRecall, { castingEffects as sRecallCasting } from "./native/s-recall";
+import sU015B from "./native/s-u015-b";
 import sU005 from "./native/s-u005";
+import sU007 from "./native/s-u007";
+import sU020 from "./native/s-u020";
 import sU003, { bowImpact } from "./native/s-u003";
 import sNpcSpearAttack from "./native/s-npc-spear-attack";
 import pU004A from "./native/p-u004-a";
@@ -14,6 +20,12 @@ import mU019A from "./native/m-u019-a";
 import mU019B from "./native/m-u019-b";
 import mU018A from "./native/m-u018-a";
 import mU018B from "./native/m-u018-b";
+import sU016 from "./native/s-u016";
+import sU017 from "./native/s-u017";
+import mU017 from "./native/m-u017";
+import mU008 from "./native/m-u008";
+import sU009 from "./native/s-u009";
+import sU012 from "./native/s-u012";
 import mU013A from "./native/m-u013-a";
 import mU013C from "./native/m-u013-c";
 import mU007A from "./native/m-u007-a";
@@ -39,6 +51,11 @@ import sGreaterHeal from "./native/s-greater-heal";
 import sTeleportPc from "./native/s-teleport-pc";
 import mU021 from "./native/m-u021";
 import mU024 from "./native/m-u024";
+import mU034 from "./native/m-u034";
+import mU023 from "./native/m-u023";
+import mU030 from "./native/m-u030";
+import mU044 from "./native/m-u044";
+import mU038 from "./native/m-u038";
 import mU026 from "./native/m-u026";
 import eU802 from "./native/e-u802";
 import eU524 from "./native/e-u524";
@@ -59,12 +76,14 @@ import sSelfRangeHasteBossA from "./native/s-self-range-haste-boss-a";
 import sNpcWeakness from "./native/s-npc-weakness";
 import sNpcAcumenEmpowerBerserker from "./native/s-npc-acumen-empower-berserker";
 import sStunShotBossA from "./native/s-stun-shot-boss-a";
-import sRange80HpDrain from "./native/s-range-80-hp-drain";
+import sRange80HpDrain, { drainEffects } from "./native/s-range-80-hp-drain";
 import sRegeneration from "./native/s-regeneration";
 import sWindWalk from "./native/s-wind-walk";
 import sSiegeHammer from "./native/s-siege-hammer";
 import sDoubleDaggerAttack from "./native/s-double-dagger-attack";
-import type { NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
+import sPowerStrike from "./native/s-power-strike";
+import sHeal from "./native/s-heal";
+import type { NpcSkillEffectPhase_T } from "../un-pawn";
 
 export type NativeSkillEffect_T = {
     phase: NpcSkillEffectPhase_T;
@@ -75,6 +94,7 @@ export type NativeSkillEffect_T = {
     rejectNullAfterSpawn?: boolean;
     soundWithoutEffect?: boolean;
     targetIsCaster?: boolean;
+    targetIsNpc?: boolean;
     targetRequired?: "phase" | "position";
     hitActor?: boolean;
     hitActorIsMover?: boolean;
@@ -94,6 +114,7 @@ export type NativeSkillEffect_T = {
     locList?: { delay: number, interval: number, random?: { count: number, range: number } }; // Server populates LocList.
     location?: [number, number, number];
     boneProperty?: string;
+    bonePropertyRequired?: boolean;
     preShotBones?: [string, string];
     releaseProjectile?: true | { first: boolean, spawn: boolean };
     damageEffect?: boolean | "only" | "associated";
@@ -107,6 +128,7 @@ export type NativeSkillEffect_T = {
     position?: "center" | "lastTarget" | "location" | "source" | "meshOrigin";
     initialPosition?: "center";
     radiusOffset?: number;
+    npcForwardOffset?: number;
     forwardOffset?: number;
     heightOffset?: number;
     offsetRotation?: "caster" | "desiredCaster" | "targetDirection" | "hit";
@@ -123,13 +145,24 @@ export type NativeSkillEffect_T = {
     offset?: [number, number, number];
     pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center" | "lastTarget", rotation?: "hit" | "targetDisplacement", radiusOffset?: number };
     pawnLightOnly?: boolean;
-    attackSounds?: boolean;
+    attackSounds?: boolean | "critical";
     viewShake?: { type?: "damage" | "upDown", duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, direction: "random" | "y" | "fixedY", rotationAmplitude: number, rotationVelocity: number, positionAmplitude: [number, number, number], strength: number, range: number, ownerRequired?: boolean, event?: { name: string, radius: number } };
-    trailerPrePivot?: "casterMeshOrigin";
+    trailerPrePivot?: "casterMeshOrigin" | { meshOriginScale: number, radiusOffset?: number };
     projectile?: { target: "caster" | "target", speed?: number, acceleration?: number, path?: [number, number, number][], interpolation?: number, hermite?: { duration: number, tangentScale: number, finalDirectionZ: number } };
 };
 
 const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
+    "lineageeffect.m_u030_a": mU030.filter(effect => effect.effectClass === "LineageEffect.m_u030_a"),
+    "lineageeffect.m_u030_b": mU030.filter(effect => effect.effectClass === "LineageEffect.m_u030_b"),
+    "lineageeffect.s_u020_a": sU020.filter(effect => effect.effectClass === "LineageEffect.s_u020_a"),
+    "lineageeffect.s_u020_b": sU020.filter(effect => effect.effectClass === "LineageEffect.s_u020_b"),
+    "lineageeffect.s_u020_c": sU020.filter(effect => effect.effectClass === "LineageEffect.s_u020_c"),
+    "lineageeffect.s_u007_a": sU007.filter(effect => effect.effectClass === "LineageEffect.s_u007_a"),
+    "lineageeffect.s_u007_b": sU007.filter(effect => effect.effectClass === "LineageEffect.s_u007_b"),
+    "lineageeffect.m_u023_a": mU023.filter(effect => effect.effectClass === "LineageEffect.m_u023_a"),
+    "lineageeffect.m_u023_b": mU023.filter(effect => effect.effectClass === "LineageEffect.m_u023_b"),
+    "lineageeffect.e_u011_a": eU011,
+    "lineageeffect.s_u002_a": sPowerStrike,
     "lineageeffect.m_u800_a": sNpcAcumenEmpowerBerserker.filter(effect => effect.effectClass === "LineageEffect.m_u800_a"),
     "lineageeffect.m_u800_b": sNpcAcumenEmpowerBerserker.filter(effect => effect.effectClass === "LineageEffect.m_u800_b"),
     "lineageeffect.m_u036_a": sSelfRangeHasteBossA.filter(effect => effect.effectClass === "LineageEffect.m_u036_a"),
@@ -179,6 +212,8 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.e_u067_a": sGroupHold.filter(effect => effect.effectClass === "LineageEffect.e_u067_a"),
     "lineageeffect.e_u067_hand": sGroupHold.filter(effect => effect.effectClass === "LineageEffect.e_u067_hand"),
     "lineageeffect.s_u010_a": sU010A,
+    "lineageeffect.s_u010_b": sU010B,
+    "lineageeffect.s_u015_b": sU015B,
     "lineageeffect.s_u005_a": sU005.filter(effect => effect.effectClass === "LineageEffect.s_u005_a"),
     "lineageeffect.s_u005_b": sU005.filter(effect => effect.effectClass === "LineageEffect.s_u005_b"),
     "lineageeffect.p_u004_a": pU004A,
@@ -186,6 +221,16 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u019_b": mU019B,
     "lineageeffect.m_u018_a": mU018A,
     "lineageeffect.m_u018_b": mU018B,
+    "lineageeffect.s_u016_a": sU016.filter(effect => effect.effectClass === "LineageEffect.s_u016_a"),
+    "lineageeffect.s_u016_b": sU016.filter(effect => effect.effectClass === "LineageEffect.s_u016_b"),
+    "lineageeffect.s_u017_a": sU017.filter(effect => effect.effectClass === "LineageEffect.s_u017_a"),
+    "lineageeffect.s_u017_b": sU017.filter(effect => effect.effectClass === "LineageEffect.s_u017_b"),
+    "lineageeffect.m_u017_a": mU017.filter(effect => effect.effectClass === "LineageEffect.m_u017_a"),
+    "lineageeffect.m_u017_b": mU017.filter(effect => effect.effectClass === "LineageEffect.m_u017_b"),
+    "lineageeffect.m_u008_a": mU008.filter(effect => effect.effectClass === "LineageEffect.m_u008_a"),
+    "lineageeffect.m_u008_b": mU008.filter(effect => effect.effectClass === "LineageEffect.m_u008_b"),
+    "lineageeffect.s_u009_a": sU009,
+    "lineageeffect.s_u012_a": sU012,
     "lineageeffect.m_u013_a": mU013A,
     "lineageeffect.m_u013_c": mU013C,
     "lineageeffect.m_u007_a": mU007A,
@@ -230,6 +275,11 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u024_a": mU024.filter(effect => effect.effectClass === "LineageEffect.m_u024_a"),
     "lineageeffect.m_u024_b": mU024.filter(effect => effect.effectClass === "LineageEffect.m_u024_b"),
     "lineageeffect.m_u024_c": mU024.filter(effect => effect.effectClass === "LineageEffect.m_u024_c"),
+    "lineageeffect.m_u034_a": mU034.filter(effect => effect.effectClass === "LineageEffect.m_u034_a"),
+    "lineageeffect.m_u034_b": mU034.filter(effect => effect.effectClass === "LineageEffect.m_u034_b"),
+    "lineageeffect.m_u034_c": mU034.filter(effect => effect.effectClass === "LineageEffect.m_u034_c"),
+    "lineageeffect.m_u044_a": mU044.filter(effect => effect.effectClass === "LineageEffect.m_u044_a"),
+    "lineageeffect.m_u044_b": mU044.filter(effect => effect.effectClass === "LineageEffect.m_u044_b"),
     "lineageeffect.m_u025_a": sDietrichSuspension.filter(effect => effect.effectClass === "LineageEffect.m_u025_a"),
     "lineageeffect.m_u025_b": sDietrichSuspension.filter(effect => effect.effectClass === "LineageEffect.m_u025_b"),
     "lineageeffect.m_u025_c": sDietrichSuspension.filter(effect => effect.effectClass === "LineageEffect.m_u025_c"),
@@ -244,6 +294,27 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
 };
 
 const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> = {
+    drainHealth: {
+        "lineageeffect.s_u019_a": drainEffects.filter(effect => effect.effectClass === "LineageEffect.s_u019_a"),
+        "lineageeffect.s_u019_b": drainEffects.filter(effect => effect.effectClass === "LineageEffect.s_u019_b"),
+        "lineageeffect.s_u019_c": drainEffects.filter(effect => effect.effectClass === "LineageEffect.s_u019_c")
+    },
+    recall: {
+        "lineageeffect.e_u031_a": sZakenSelfTel.filter(effect => effect.effectClass === "LineageEffect.e_u031_a"),
+        "lineageeffect.e_u005_a": sRecall
+    },
+    partyRecall: {
+        "lineageeffect.e_u031_a": sRecallCasting,
+        "lineageeffect.e_u005_a": sRecall
+    },
+    seedWind: {
+        "lineageeffect.m_u038_a": mU038,
+        "lineageeffect.m_u022_b": nativeEffects["lineageeffect.m_u022_b"]
+    },
+    heal: {
+        "lineageeffect.m_u001_a": sHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_a"),
+        "lineageeffect.m_u001_b": sHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_b")
+    },
     zakenSelfTel: {
         "lineageeffect.e_u031_a": sZakenSelfTel.filter(effect => effect.effectClass === "LineageEffect.e_u031_a"),
         "lineageeffect.e_u005_a": sZakenSelfTel.filter(effect => effect.effectClass === "LineageEffect.e_u005_a")
@@ -251,6 +322,16 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
     zakenDualAttack: {
         "lineageeffect.s_u010_a": sU010A,
         "lineageeffect.p_u004_a": sZakenDualAttack
+    },
+    tripleSlash: {
+        "lineageeffect.s_u010_b": [...sU010B, ...sU010Attack],
+        "lineageeffect.s_u010_a": sU010A
+    },
+    sonicSlash: {
+        // Engine.dll Shot 0x7a5aa7..0x7a5ac1: only StageShot=1 calls Action_Attack.
+        "lineageeffect.s_u010_b": [...sU010B, ...sU010Attack.map(effect => ({ ...effect, specificStage: 1 }))],
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.s_u015_b": sU015B
     },
     queenAntStrike: {
         "lineageeffect.m_u000_c": sQueenAntStrike.filter(effect => effect.effectClass === "LineageEffect.m_u000_c"),
@@ -279,6 +360,7 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
         "lineageeffect.s_u505_c": sStunShotBossA.filter(effect => effect.effectClass === "LineageEffect.s_u505_c")
     },
     bow: {
+        "lineageeffect.s_u010_a": sU010A,
         "lineageeffect.s_u003_a": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_a"),
         "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
         "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
@@ -303,6 +385,10 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
         "lineageeffect.p_u004_a": sSiegeHammer
     },
     flameStrike: {
+        "lineageeffect.s_u010_a": sU010A,
+        "lineageeffect.s_u003_a": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_a"),
+        "lineageeffect.s_u003_d": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_d"),
+        "lineageeffect.s_u003_b": sU003.filter(effect => effect.effectClass === "LineageEffect.s_u003_b"),
         "lineageeffect.m_u006_a": nativeEffects["lineageeffect.m_u006_a"],
         "lineageeffect.m_u006_b": nativeEffects["lineageeffect.m_u006_b"],
         "lineageeffect.m_u006_c": nativeEffects["lineageeffect.m_u006_c"],

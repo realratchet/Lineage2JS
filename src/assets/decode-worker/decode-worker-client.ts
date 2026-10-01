@@ -1,5 +1,5 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
-import type { WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { PlayerSkillInfo_T, WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T } from "./decode-protocol";
 import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
@@ -255,6 +255,16 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeSkill", settings, id, level });
     }
 
+    public listPlayerSkills(): Promise<PlayerSkillInfo_T[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.listPlayerSkills();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "listPlayerSkills" });
+    }
+
     public resolveNpc(selector: string | number): Promise<INpcDefinition> {
         if (this.mainThreadEngine) return this.mainThreadEngine.resolveNpc(selector);
 
@@ -463,6 +473,13 @@ export class DecodeWorkerClient {
                 if (!request) break;
 
                 request.resolve(msg.npcs);
+                break;
+            }
+            case "playerSkillsListed": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.skills);
                 break;
             }
         }

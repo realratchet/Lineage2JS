@@ -1,7 +1,9 @@
-import type { NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
+import type { NpcSkillEffectPhase_T } from "../un-pawn";
 import nativeSkillDispatch from "./native-skill-dispatch";
+import nativeSkillHandlers from "./native-skill-handlers";
+import nativeSkillRecipes from "./native-skill-recipes";
 
-type NativeSkillBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, associatedActors?: boolean, pending?: string };
+export type NativeSkillBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, associatedActors?: boolean, pending?: string };
 
 const nativeSkillBindings = new Map<string, NativeSkillBinding_T>([
     // Engine.dll OnReceiveMagicSkillUse 0x75086c; Init 0x7a16f9; Shot 0x7b0d96.
@@ -376,7 +378,7 @@ export function getNativeSkillBinding(name: string, id: number): NativeSkillBind
     const key = name.toLowerCase();
     const dispatch = nativeSkillDispatch.get(key);
 
-    if (!dispatch) return nativeSkillBindings.get(key);
+    if (!dispatch) return nativeSkillBindings.get(key) || nativeSkillRecipes.get(nativeSkillHandlers.get(id));
 
     const binding = collisionBindings.get(dispatch.get(id));
 

@@ -10,10 +10,11 @@ const TARGET_GAP = 10;
 const tmpPosition = new Vector3();
 const tmpFacing = new Vector3();
 
-export type SkillViewerSkill_T = { id: number, name: string, npcs: INpcDefinition[], isNpcOnly?: boolean };
+export type SkillViewerSkill_T = { id: number, name: string, npcs: INpcDefinition[], isNpcOnly?: boolean, level?: number, previewTarget?: "self" };
 export type SkillViewerEntry_T = { definition: INpcDefinition, npc: BaseActor, target: BaseActor };
 
 export class SkillViewerStage {
+    public readonly isPlayerViewer: boolean = false;
     protected readonly renderManager: RenderManager;
     protected readonly assetManager: SkillViewerAssetManager;
     protected readonly entries: SkillViewerEntry_T[] = [];
@@ -113,7 +114,7 @@ export class SkillViewerStage {
         return failures;
     }
 
-    public cast(skill: SkillViewerSkill_T): string[] {
+    public cast(skill: SkillViewerSkill_T): string[] | Promise<string[]> {
         const skipped: string[] = [];
 
         for (const entry of this.entries) {

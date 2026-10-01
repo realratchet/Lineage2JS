@@ -210,7 +210,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         this.collisionProfile.collideActors = isInteractive;
 
-        if (!this.rigidbody || !isInteractive) return;
+        if (!this.rigidbody || !isInteractive) {
+            this.checkAnimationState();
+            return;
+        }
 
         this.physicsManager.updateDynamicEntries(currentTime);
 
@@ -999,7 +1002,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const isMoving = this.velocity.lengthSq() > 0;
         const state: PawnMovementState_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : "idle";
 
-        if (state === this.actorState.state) return;
+        if (state === this.actorState.state && action) return;
 
         this.actorState.state = state;
         this.getParent().playMovementAnimation(state);

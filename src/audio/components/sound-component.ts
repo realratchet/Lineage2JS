@@ -25,7 +25,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
 
     public setLibrary(library: DecodeLibrary): this { this.library = library; return this; }
 
-    public playAttackSounds(): void {
+    public playAttackSounds(critical: boolean = false): void {
         const profile = this.library.pawnSounds;
 
         if (!profile) return;
@@ -35,14 +35,21 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         actor.getWorldPosition(tmpPosition);
         tmpPosition.z += actor.getCollisionHeight();
 
-        // Engine.dll GetDefenseItemSound 0x8b689b..0x8b6a60: unresolved equipment sound falls back to the pawn profile.
-        const item = profile.item;
-        const itemSound = item && item.sounds.length ? item.sounds[Math.floor(Math.random() * item.sounds.length)] : null;
-        const defense = itemSound ? item : profile.defense;
-        const defenseSound = itemSound || (defense.sounds.length ? defense.sounds[Math.floor(Math.random() * defense.sounds.length)] : null);
+        // Engine.dll Action_Attack 0x8bdb5e selects CriticalSound instead of defense, then still requests DamageSound.
+        if (critical) {
+            const sound = profile.critical;
 
-        // Engine.dll Action_Attack 0x8bdd15..0x8bddf2: defense then damage at target Location, volume/255 and pitch1.
-        if (defenseSound) this.play(defenseSound, defense.volume / 255, 1, defense.radius, defense.radius * 100, true, `Pawn '${actor.name}' defense`, tmpPosition);
+            if (sound.sound) this.play(sound.sound, sound.volume / 255, 1, sound.radius, sound.radius * 100, true, `Pawn '${actor.name}' critical`, tmpPosition);
+        } else {
+            // Engine.dll GetDefenseItemSound 0x8b689b..0x8b6a60: unresolved equipment sound falls back to the pawn profile.
+            const item = profile.item;
+            const itemSound = item && item.sounds.length ? item.sounds[Math.floor(Math.random() * item.sounds.length)] : null;
+            const defense = itemSound ? item : profile.defense;
+            const defenseSound = itemSound || (defense.sounds.length ? defense.sounds[Math.floor(Math.random() * defense.sounds.length)] : null);
+
+            // Engine.dll Action_Attack 0x8bdd15..0x8bddf2: defense then damage at target Location, volume/255 and pitch1.
+            if (defenseSound) this.play(defenseSound, defense.volume / 255, 1, defense.radius, defense.radius * 100, true, `Pawn '${actor.name}' defense`, tmpPosition);
+        }
 
         const damage = profile.damage;
 

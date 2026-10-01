@@ -2,6 +2,7 @@ import UAActor from "./un-aactor"
 import type { USkeletalMesh, ISkinnedMeshObjectDecodeInfo } from "./skeletal-mesh/un-skeletal-mesh";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
+import type { SkillVisualDefinition_T } from "./skills/skill-visual-definition";
 
 export enum WeaponType {
     WT_HAND,
@@ -32,21 +33,15 @@ export type NpcSkillAttack_T = {
     animation: string;
     animationCategory: string;
     castStyle: number;
+    isMagic: boolean;
     hitTime: number;
     castRange?: number;
     isMultiShot: boolean;
     flyingTime: number;
     visualEffect: string;
-    hasVisualEffect: boolean;
+    visual: SkillVisualDefinition_T;
     passive?: boolean;
     previewTarget?: "self";
-    actions: NpcSkillEffectAction_T[];
-    nativeEffects: string[];
-    nativeEffectGroup?: string;
-    nativeSoundPhases: NpcSkillEffectPhase_T[];
-    nativeFinalShotOnly: boolean;
-    nativeTransientRejected: boolean;
-    nativeAssociatedActors: boolean;
     sounds: NpcSkillSound_T[];
 };
 

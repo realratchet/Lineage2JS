@@ -14,6 +14,7 @@ export type PrecacheMessage_T = { type: "precache"; requestId: number; sectorNam
 export type FreeMessage_T = { type: "free"; sectorName: string; };
 export type DecodeEnvMessage_T = { type: "decodeEnv"; requestId: number; };
 export type DecodeSkillMessage_T = { type: "decodeSkill"; requestId: number; settings: LoadSettings_T; id: number; level: number; };
+export type PlayerSkillInfo_T = { id: number; level: number; name: string; animationCategory: string; hitTime: number; castRange: number; previewTarget?: "self"; };
 
 export type DecodeCharacterMessage_T = {
     type: "decodeCharacter";
@@ -52,11 +53,13 @@ export type DecodeEffectTemplatesMessage_T = {
 export type CharGroupsMessage_T = { type: "charGroups"; requestId: number; };
 export type ResolveNpcMessage_T = { type: "resolveNpc"; requestId: number; selector: string | number; };
 export type ListNpcsMessage_T = { type: "listNpcs"; requestId: number; };
+export type ListPlayerSkillsMessage_T = { type: "listPlayerSkills"; requestId: number; };
 export type PrecacheCharactersMessage_T = { type: "precacheCharacters"; requestId: number; settings: LoadSettings_T; };
 export type CharactersPrecachedMessage_T = { type: "charactersPrecached"; requestId: number; };
 export type CharGroupsDecodedMessage_T = { type: "charGroupsDecoded"; requestId: number; groups: ICharacterGroup[]; };
 export type NpcResolvedMessage_T = { type: "npcResolved"; requestId: number; npc: INpcDefinition; };
 export type NpcsListedMessage_T = { type: "npcsListed"; requestId: number; npcs: INpcDefinition[]; };
+export type PlayerSkillsListedMessage_T = { type: "playerSkillsListed"; requestId: number; skills: PlayerSkillInfo_T[]; };
 export type MusicInfoMessage_T = { type: "musicInfo"; requestId: number; }
 export type ClientConfigMessage_T = { type: "clientConfig"; requestId: number; }
 export type ScriptLocalizationMessage_T = { type: "scriptLocalization"; requestId: number; scriptClassPath: string; }
@@ -76,6 +79,7 @@ export type MainToWorkerMessage_T =
     | CharGroupsMessage_T
     | ResolveNpcMessage_T
     | ListNpcsMessage_T
+    | ListPlayerSkillsMessage_T
     | PrecacheCharactersMessage_T
     | MusicInfoMessage_T
     | ClientConfigMessage_T
@@ -122,6 +126,7 @@ export type WorkerToMainMessage_T =
     | CharGroupsDecodedMessage_T
     | NpcResolvedMessage_T
     | NpcsListedMessage_T
+    | PlayerSkillsListedMessage_T
     | CharactersPrecachedMessage_T
     | MusicInfoDecodedMessage_T
     | ClientConfigDecodedMessage_T

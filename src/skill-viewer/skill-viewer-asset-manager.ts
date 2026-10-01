@@ -1,12 +1,17 @@
-import AssetManager from "../assets/asset-manager";
+import AssetManager, { type AssetList_T } from "../assets/asset-manager";
 import SkillViewerDecodeWorkerClient from "./skill-viewer-decode-worker-client";
 import type RenderManager from "../rendering/render-manager";
 import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 const CHARACTER_POOL_SIZE = 20;
 
 export class SkillViewerAssetManager extends AssetManager {
     declare protected decodeWorker: SkillViewerDecodeWorkerClient;
+
+    public constructor(settings: LoadSettings_T, assets: AssetList_T, protected readonly characterPoolSize: number = CHARACTER_POOL_SIZE) {
+        super(settings, assets);
+    }
 
     public async onInit(): Promise<this> {
         const manRender = this.getParent().getComponent("render");
@@ -28,7 +33,7 @@ export class SkillViewerAssetManager extends AssetManager {
         this.warriorAnimations = clientConfig.warriorAnimations;
         this.charGroups = charGroups;
 
-        this.decodeWorker.preloadCharacters(this.loadSettings, CHARACTER_POOL_SIZE);
+        this.decodeWorker.preloadCharacters(this.loadSettings, this.characterPoolSize);
 
         return this;
     }

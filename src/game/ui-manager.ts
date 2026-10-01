@@ -9,6 +9,7 @@ import type BaseActor from "../base-actor";
 import type { PawnAttackSelection_T } from "../objects/components/pawn-attack-component";
 import type GameManager from "./game-manager";
 import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
+import { WeaponType } from "../assets/unreal/un-pawn";
 
 type DebugTab = "controls" | "environment" | "bsp" | "statistics" | VisualizerMode.Fogs | VisualizerMode.Audio | VisualizerMode.Emitters;
 type GraphSeries_T = { label: string, color: string, values: number[] };
@@ -509,14 +510,15 @@ export class UIManager implements IEngineComponent<GameManager> {
         buildVariantControls();
 
         const skills = this.addSection("Player Skills");
-        const skill = { id: 1012, level: 1 };
+        const skill = { id: 1012 };
         this.addText(skills, "Skill ID", String(skill.id), value => skill.id = Number(value)).type = "number";
-        this.addText(skills, "Level", String(skill.level), value => skill.level = Number(value)).type = "number";
+        const weapon = this.addSelect(skills, "Weapon animation (preview)", Object.fromEntries(Object.entries(WeaponType).filter(([, value]) => typeof value === "number").map(([name, value]) => [name, String(value)])), String(render.player.getUnrealScriptProperty("CurWeaponType")), () => {});
         const target = this.addSelect(skills, "Target", { Self: "self", "Spawned NPC": "npc" }, "self", () => {});
         this.addButton(skills, "Cast", () => {
             const targetActor = target.value === "npc" ? this.spawnedNpc : render.player;
             if (!targetActor) throw new Error("Spawn an NPC before casting on it");
-            return asset.castPlayerSkill(render, skill.id, skill.level, targetActor);
+            render.player.setUnrealScriptProperty("CurWeaponType", Number(weapon.value));
+            return asset.castPlayerSkill(render, skill.id, 1, targetActor);
         });
         this.addButton(skills, "Stop", () => asset.stopPlayerSkill(render));
     }

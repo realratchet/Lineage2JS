@@ -4,11 +4,11 @@ type SkillAnimation_T = { names: string[], flexibleIndex: number };
 
 const arrCastAnimations = ["CastShortAnimName", "CastMidAnimName", "CastLongAnimName"];
 const arrMagicAnimations = ["MagicNoTargetAnimName", "MagicShotAnimName", "MagicThrowAnimName"];
-// Engine.dll SetSkillAnim 0x7974fb..0x7977c7: Mix01..09, three SpAtk arrays each.
-const arrMixAnimations = [[10, 18, 25], [8, 17, 26], [8, 14, 21], [8, 13, 22], [9, 14, 23], [11, 12, 19], [11, 12, 20], [8, 15, 24], [10, 16, 27]];
-// Engine.dll SetSkillAnim 0x7972b2..0x7974f6: single-slot categories.
+// Engine.dll SetSkillAnim 0x7974fb..0x7977c7; retail GetSpAtk01AnimName 0x60c1f7 starts at +0x984, unlike the leaked layout.
+const arrMixAnimations = [[9, 17, 24], [7, 16, 25], [7, 13, 20], [7, 12, 21], [8, 13, 22], [10, 11, 18], [10, 11, 19], [7, 14, 23], [9, 15, 26]];
+// Engine.dll SetSkillAnim 0x7972b2..0x7974f6; GetSpAtk27AnimName 0x60c6d7 reads +0xcc4.
 const arrSingleAnimations: Record<string, string> = {
-    M: "PicItemAnimName", N: "SpAtk28AnimName", S: "SpAtk02AnimName", T: "SpAtk03AnimName", U: "SpAtk04AnimName", V: "SpAtk05AnimName", W: "SpAtk06AnimName", X: "SpAtk07AnimName", Y: "ShieldAtkAnimName"
+    M: "PicItemAnimName", N: "SpAtk27AnimName", S: "SpAtk01AnimName", T: "SpAtk02AnimName", U: "SpAtk03AnimName", V: "SpAtk04AnimName", W: "SpAtk05AnimName", X: "SpAtk06AnimName", Y: "ShieldAtkAnimName"
 };
 
 export function getSkillAnimation(pawn: BaseActor, category: string): SkillAnimation_T {

@@ -5,11 +5,10 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
 import UnScriptVM, { type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
-import Rotator from "../../utils/rotator";
+import Rotator, { getPawnRotation } from "../../utils/rotator";
 import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, IAnimationEffectNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
-import { getPawnRotation } from "../../skills/native-skill-effects";
 import type AnimationComponent from "../../objects/components/animation-component";
 
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;

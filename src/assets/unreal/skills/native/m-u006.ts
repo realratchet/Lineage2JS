@@ -2,7 +2,8 @@ import type { NativeSkillEffect_T } from "../native-effects";
 
 // Engine.dll Init 0x7a02f2; Shot 0x7ac80f; Explosion 0x790a86.
 const effects: NativeSkillEffect_T[] = [
-    { phase: "casting", effectClass: "LineageEffect.m_u006_a", host: "caster", attach: "trail", rotation: "desiredCaster", radiusOffset: -2 / 3, scale: "casterRadius" },
+    // 0x7a035b/0x7a0368 and Seed of Fire 0x79d5cb/0x79d5cf supply SpeedRate=1.
+    { phase: "casting", effectClass: "LineageEffect.m_u006_a", host: "caster", attach: "trail", rotation: "desiredCaster", radiusOffset: -2 / 3, scale: "casterRadius", speedRate: 1 },
     { phase: "casting", effectClass: "LineageEffect.m_u006_b", host: "caster", position: "center", heightOffset: 1, physics: "none", adjustParticleLife: "shotTime", pawnLight: { color: [0.6, 0, 0], radius: 30, spot: true, target: "caster" } },
     { phase: "shot", effectClass: "LineageEffect.m_u006_c", host: "caster", position: "center", heightOffset: 1, rotation: "caster", projectile: { target: "target" } },
     // 0x790b8d..0x790c12: actual hit actor, zero transform, rate1, optional absolute bone0; Owner is not required.

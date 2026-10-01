@@ -10,13 +10,12 @@ import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, deserializeLibrary, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
-import { getNativeSkillBinding } from "./native-skill-bindings";
-import getNativeEffect from "../../skills/native-effects";
+import decodeSkillVisuals, { validatePlayerSkillSource } from "../unreal/skills/skill-visual-decoder";
 import mobSkillTable from "./mob-skill-table";
 import { WeaponType } from "@l2js/engine/un-pawn";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
@@ -26,7 +25,7 @@ import { getUserConfig, UserConfig_T } from "@l2js/engine/conf-files/un-conf-sys
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
-import type { ICharacterArmorSelection, INpcDefinition, NpcSkillAttack_T, NpcSkillAttachOn_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T, ICharacterGroup, ICharacterArmorOptions } from "@l2js/engine/contracts/pawn";
+import type { ICharacterArmorSelection, INpcDefinition, NpcSkillAttack_T, NpcSkillEffectPhase_T, ICharacterGroup, ICharacterArmorOptions } from "@l2js/engine/contracts/pawn";
 import type { IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { UEmitter } from "@l2js/engine/un-emitter";
 import type { UMaterial } from "@l2js/engine/un-material";
@@ -196,26 +195,6 @@ function splitObjectPath(path: string): [string, string] {
     const index = path.indexOf(".");
 
     return [path.slice(0, index), path.slice(index + 1)];
-}
-
-function splitGroupedObjectPath(path: string): [string, string, string] {
-    const parts = path.split(".");
-
-    if (parts.length !== 3) throw new Error(`Object path '${path}' is not package.group.object.`);
-
-    return [parts[0], parts[1], parts[2]];
-}
-
-function getAttachOn(attachOn: number): NpcSkillAttachOn_T {
-    switch (attachOn) {
-        case 0: return "none";
-        case 1: return "rightHand";
-        case 2: return "leftHand";
-        case 3: return "boneSpecified";
-        case 4: return "aliasSpecified";
-        case 5: return "trail";
-        default: throw new Error(`Skill action AttachOn '${attachOn}' is not implemented.`);
-    }
 }
 
 function getSkinNotifyIndices(skinNotifies: Record<string, ISkinNotifyDecodeInfo>): Set<number> {
@@ -649,7 +628,11 @@ export class DecodeEngine {
     protected async getSwimSoundConfig(): Promise<SwimSoundConfig_T> { return (await this.getAudioConfig()).getSwimSound(); }
 
     protected async pullPawnSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, profile: L2JS.Engine.IPawnSoundsDecodeInfo): Promise<void> {
-        library.pawnSounds = { ...profile };
+        // Engine.dll Action_Attack reads EtcSound CriticalSound for critical hits.
+        const critical = (await this.getAudioConfig()).getCriticalSound();
+        const criticalSound = critical.sound && critical.sound.toLowerCase() !== "none" ? await this.pullSoundPath(builder, critical.sound, false) : null;
+
+        library.pawnSounds = { ...profile, critical: { ...critical, sound: criticalSound } };
 
         for (const key of ["defense", "damage", "item"] as const) {
             const set = profile[key];
@@ -752,110 +735,8 @@ export class DecodeEngine {
             if (!builder.library.effectTemplates[path]) await this.pullEffectTemplate(builder.library, builder, path);
     }
 
-    protected async pullNpcSkillAttacks(library: DecodeLibrary, builder: DecodeLibraryBuilder, attacks: readonly NpcSkillAttack_T[], allowNative: boolean = true): Promise<void> {
-        const decodedEffects = new Map<string, { actions: NpcSkillEffectAction_T[], flyingTime: number }>();
-        const pulledEffects = new Set<string>();
-
-        for (const attack of attacks) {
-            const visualPath = attack.visualEffect;
-            let visual: UObject = null;
-
-            if (visualPath && visualPath.toLowerCase() !== "none") {
-                const [packageName, groupName, objectName] = splitGroupedObjectPath(visualPath);
-
-                const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Effect"));
-
-                visual = pkg.fetchObjectByType<UObject>("SkillVisualEffect", objectName, groupName);
-
-                // Core.dll StaticLoadObject 0x1016d4f5 -> ULinkerLoad::Create 0x1014dfed uses outer index -1.
-                if (!visual) visual = pkg.fetchObjectByType<UObject>("SkillVisualEffect", objectName);
-
-                if (visual) visual.loadSelf();
-            }
-
-            // Engine.dll SetMagicInfo 0x79b45e; MagicProcess 0x7b4f65 branches on the resolved object.
-            const native = visual || !allowNative ? null : getNativeSkillBinding(attack.name, attack.id);
-
-            if (!visual && !native && visualPath && visualPath.toLowerCase() !== "none")
-                throw new Error(allowNative ? `NPC skill '${attack.name}' visual '${visualPath}' was not found and its native effects are not implemented.` : `Player skill '${attack.id}:${attack.level}' visual '${visualPath}' was not found; numeric native dispatch is not implemented.`);
-
-            const decoded = Object.assign({}, attack, { hasVisualEffect: !!visual, actions: [] as NpcSkillEffectAction_T[], nativeEffects: native ? native.effects : [], nativeEffectGroup: native?.effectGroup, nativeSoundPhases: native ? native.soundPhases : [], nativeFinalShotOnly: !!native?.finalShotOnly, nativeTransientRejected: !!native?.rejectTransient, nativeAssociatedActors: !!native?.associatedActors });
-
-            library.npcSkillAttacks.push(decoded);
-
-            for (const path of decoded.nativeEffects) {
-                const weapon = getNativeEffect(path, decoded.nativeEffectGroup).find(effect => effect.weaponId !== undefined);
-
-                await this.pullEffectTemplate(library, builder, path, true, weapon?.weaponId);
-            }
-            decoded.sounds = decoded.sounds.slice();
-            for (let i = decoded.sounds.length - 1; i >= 0; i--) {
-                const sound = decoded.sounds[i];
-
-                if (!decoded.hasVisualEffect && !decoded.nativeSoundPhases.includes(sound.phase)) continue;
-                // Engine.dll PlaySkillSound 0x797cfc/0x797d20 resolves the unchanged FName; 0x797d2b skips NULL.
-                if (!library.sounds[sound.sound]) {
-                    const name = await this.pullSoundPath(builder, sound.sound, false);
-
-                    if (name) library.sounds[sound.sound] = name;
-                    else decoded.sounds.splice(i, 1);
-                }
-            }
-
-            if (!visual) continue;
-
-            const cached = decodedEffects.get(visualPath.toLowerCase());
-
-            if (cached) {
-                decoded.actions = cached.actions;
-                decoded.flyingTime = cached.flyingTime;
-                continue;
-            }
-
-            const phases: [string, NpcSkillEffectPhase_T][] = [["CastingActions", "casting"], ["ShotActions", "shot"], ["ExplosionActions", "explosion"]];
-
-            decoded.flyingTime = Number(visual.propertyDict.get("FlyingTime")) || 0;
-
-            for (const [property, phase] of phases) {
-                const infos = visual.propertyDict.get(property) as UObject[];
-
-                if (!infos) continue;
-
-                for (const rawInfo of infos) {
-                    const info = rawInfo.loadSelf();
-                    const action = (info.propertyDict.get("Action") as UObject).loadSelf();
-                    const effectClass = action.propertyDict.get("EffectClass") as UClass;
-
-                    if (!effectClass) continue;
-
-                    const offset = action.propertyDict.get("offset") as any;
-                    const effectPath = effectClass.name;
-
-                    decoded.actions.push({
-                        phase,
-                        specificStage: Number(info.propertyDict.get("SpecificStage")) || 0,
-                        effectClass: effectPath,
-                        attachOn: getAttachOn(Number(action.propertyDict.get("AttachOn")) || 0),
-                        attachBoneName: String(action.propertyDict.get("AttachBoneName") || "None"),
-                        isAbsolute: !!action.propertyDict.get("bAbsolute"),
-                        spawnDelay: Number(action.propertyDict.get("SpawnDelay")) || 0,
-                        useCharacterRotation: !!action.propertyDict.get("bUseCharacterRotation"),
-                        offset: offset && typeof offset.getElements === "function" ? offset.getElements() : [0, 0, 0],
-                        relativeToCylinder: !!action.propertyDict.get("bRelativeToCylinder"),
-                        spawnOnTarget: !!action.propertyDict.get("bSpawnOnTarget"),
-                        sizeScale: !!action.propertyDict.get("bSizeScale"),
-                        onMultiTarget: !!action.propertyDict.get("bOnMultiTarget")
-                    });
-
-                    if (pulledEffects.has(effectPath.toLowerCase())) continue;
-
-                    pulledEffects.add(effectPath.toLowerCase());
-                    await this.pullEffectTemplate(library, builder, effectPath);
-                }
-            }
-
-            decodedEffects.set(visualPath.toLowerCase(), { actions: decoded.actions, flyingTime: decoded.flyingTime });
-        }
+    protected async pullNpcSkillAttacks(library: DecodeLibrary, builder: DecodeLibraryBuilder, attacks: readonly NpcSkillAttack_T[]): Promise<void> {
+        await decodeSkillVisuals(library, attacks, async packageName => this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Effect")), (path, pullScript, weaponId) => this.pullEffectTemplate(library, builder, path, pullScript, weaponId), (path, required) => this.pullSoundPath(builder, path, required));
     }
 
     protected async pullScriptActorTemplates(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> {
@@ -1230,6 +1111,28 @@ export class DecodeEngine {
         return this.cacheSkillTables;
     }
 
+    public async listPlayerSkills(): Promise<PlayerSkillInfo_T[]> {
+        const tables = await this.decodeSkillTables();
+        const rows = new Map<number, Record<string, any>>();
+
+        for (const row of tables.skills) {
+            const id = row.skill_id as number;
+            if (id < 1 || id > 1999 || row.oper_type !== 0 && row.oper_type !== 1) continue;
+
+            const current = rows.get(id);
+            if (!current || current.skill_level > row.skill_level) rows.set(id, row);
+        }
+
+        return [...rows.entries()].sort(([a], [b]) => a - b).map(([id, row]) => {
+            const level = row.skill_level as number;
+            const name = tables.names.find(entry => entry.id === id && entry.level === level);
+
+            if (!name) throw new Error(`Player skill '${id}:${level}' has no skillname-e row.`);
+
+            return { id, level, name: name.name as string, animationCategory: row.ani_char as string, hitTime: row.hit_time as number, castRange: row.cast_range as number, previewTarget: mobSkillTable.get(id)?.target ? "self" : undefined };
+        });
+    }
+
     protected async loadSkillTables(): Promise<SkillTables_T> {
         const [skills, names, sounds] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_SKILLGRP_DAT, "assets/system/skillgrp.dat").asReadable()).decode(),
@@ -1251,8 +1154,7 @@ export class DecodeEngine {
         const row = rows[0];
         const visualEffect = String(row.desc || "None");
 
-        if (visualEffect.toLowerCase() === "none") throw new Error(`Player skill '${id}:${level}' has no serialized visual; numeric native dispatch is not implemented.`);
-        if (row.oper_type !== 0) throw new Error(`Player skill '${id}:${level}' operation type '${row.oper_type}' is not supported.`);
+        validatePlayerSkillSource(id, level, row.oper_type);
 
         const name = tables.names.find(entry => entry.id === id && entry.level === level);
 
@@ -1260,7 +1162,8 @@ export class DecodeEngine {
 
         const sounds = tables.sounds.find(entry => entry.skill_id === id && entry.skill_level === level) || tables.sounds.find(entry => entry.skill_id === id && entry.skill_level === 1);
         // Server supplies cast duration; the offline preview uses skillgrp.hit_time.
-        const attack: NpcSkillAttack_T = { id, level, name: name.name, animation: "", animationCategory: row.ani_char, castStyle: row.cast_style, castRange: row.cast_range, hitTime: row.hit_time, isMultiShot: [8, 9, 10].includes(row.cast_style), flyingTime: 0, visualEffect, hasVisualEffect: false, actions: [], nativeEffects: [], nativeSoundPhases: [], nativeFinalShotOnly: false, nativeTransientRejected: false, nativeAssociatedActors: false, sounds: [] };
+        const serverSkill = mobSkillTable.get(id);
+        const attack: NpcSkillAttack_T = { id, level, name: name.name, animation: "", animationCategory: row.ani_char, castStyle: row.cast_style, isMagic: row.is_magic !== 0, castRange: row.cast_range, hitTime: row.hit_time, isMultiShot: [8, 9, 10].includes(row.cast_style), flyingTime: 0, visualEffect, visual: null, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, sounds: [] };
 
         if (sounds) {
             const phases: [string, NpcSkillEffectPhase_T][] = [["spelleffect", "casting"], ["shoteffect", "shot"], ["expeffect", "explosion"]];
@@ -1277,9 +1180,7 @@ export class DecodeEngine {
         const builder = new DecodeLibraryBuilder(library, settings);
 
         library.name = `Skill_${id}_${level}`;
-        await this.pullNpcSkillAttacks(library, builder, [attack], false);
-
-        if (!library.npcSkillAttacks[0].hasVisualEffect) throw new Error(`Player skill '${id}:${level}' has no resolved serialized visual; numeric native dispatch is not implemented.`);
+        await this.pullNpcSkillAttacks(library, builder, [attack]);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -1791,7 +1692,7 @@ export class DecodeEngine {
         ]);
         const soundsByIdAndLevel = new Map(skillSounds.datarows.map(row => [`${row.skill_id}:${row.skill_level}`, row]));
         const namesById = new Map(names.datarows.map(row => [row.id as number, row.name as string]));
-        const skillVisualsById = new Map<number, { level: number, hitTime: number, animationCategory: string, castStyle: number, visualEffect: string, isMultiShot: boolean }>();
+        const skillVisualsById = new Map<number, { level: number, hitTime: number, animationCategory: string, castStyle: number, isMagic: boolean, visualEffect: string, isMultiShot: boolean }>();
         const skillAttacksByNpcId = new Map<number, NpcSkillAttack_T[]>();
         const enterEventsById = new Map(enterEvents.datarows.map(row => [row.id as number, {
             sound: row.skill_sound as string,
@@ -1811,7 +1712,7 @@ export class DecodeEngine {
             // Engine.dll cast_style -> MagicType: 0x7269dc, 0x79b471; IsCastingMultiShotSkill 0x796f00.
             // mobskillanimgrp has no level; preview the base level until server skill data supplies it.
             if (!current || current.level > level)
-                skillVisualsById.set(id, { level, hitTime: row.hit_time as number, animationCategory: row.ani_char as string, castStyle: row.cast_style as number, visualEffect: (row.desc as string) || "None", isMultiShot: [8, 9, 10].includes(row.cast_style as number) });
+                skillVisualsById.set(id, { level, hitTime: row.hit_time as number, animationCategory: row.ani_char as string, castStyle: row.cast_style as number, isMagic: row.is_magic !== 0, visualEffect: (row.desc as string) || "None", isMultiShot: [8, 9, 10].includes(row.cast_style as number) });
         }
 
         for (const row of skillAnimations.datarows) {
@@ -1820,7 +1721,7 @@ export class DecodeEngine {
             const id = row.skill_id as number;
             const visual = skillVisualsById.get(id);
             const serverSkill = mobSkillTable.get(id);
-            const attack: NpcSkillAttack_T = { id, level: visual ? visual.level : 1, name: row.skill_name as string, animation: row.seq_name as string, animationCategory: visual ? visual.animationCategory : "", castStyle: visual ? visual.castStyle : 0, hitTime: visual ? visual.hitTime : 0, isMultiShot: visual ? visual.isMultiShot : false, flyingTime: 0, visualEffect: visual ? visual.visualEffect : "None", hasVisualEffect: false, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, actions: [], nativeEffects: [], nativeSoundPhases: [], nativeFinalShotOnly: false, nativeTransientRejected: false, nativeAssociatedActors: false, sounds: [] };
+            const attack: NpcSkillAttack_T = { id, level: visual ? visual.level : 1, name: row.skill_name as string, animation: row.seq_name as string, animationCategory: visual ? visual.animationCategory : "", castStyle: visual ? visual.castStyle : 0, isMagic: visual ? visual.isMagic : false, hitTime: visual ? visual.hitTime : 0, isMultiShot: visual ? visual.isMultiShot : false, flyingTime: 0, visualEffect: visual ? visual.visualEffect : "None", visual: null, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, sounds: [] };
             // Engine.dll 0x72e685: GetSkillSoundData matches level, then falls back to level 1.
             const sounds = soundsByIdAndLevel.get(`${id}:${attack.level}`) || soundsByIdAndLevel.get(`${id}:1`);
 

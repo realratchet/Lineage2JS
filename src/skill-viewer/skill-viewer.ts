@@ -4,7 +4,8 @@ import PhysicsManager from "../physics/physics-manager";
 import SkillViewerAssetManager from "./skill-viewer-asset-manager";
 import SkillViewerRenderManager from "./skill-viewer-render-manager";
 import SkillViewerFloor from "./skill-viewer-floor";
-import SkillViewerStage from "./skill-viewer-stage";
+import SkillViewerStage from "./skill-viewer-npc";
+import PlayerSkillViewerStage from "./skill-viewer-player";
 import SkillViewerUI from "./skill-viewer-ui";
 import { ZUpOrbitControls } from "../rendering/camera/controllers/zup-orbit-controls";
 import type { AssetList_T } from "../assets/asset-manager";
@@ -16,10 +17,10 @@ const FLOOR_SIZE = 20000;
 export class SkillViewerGame extends GameManager {
     public onFrameError: (error: Error) => void = null;
 
-    public static async initialize(viewport: HTMLViewportElement_T, assets: AssetList_T, loadSettings: LoadSettings_T): Promise<SkillViewerGame> {
+    public static async initialize(viewport: HTMLViewportElement_T, assets: AssetList_T, loadSettings: LoadSettings_T, characterPoolSize?: number): Promise<SkillViewerGame> {
         const game = new SkillViewerGame();
 
-        game.manAsset = new SkillViewerAssetManager(loadSettings, assets);
+        game.manAsset = new SkillViewerAssetManager(loadSettings, assets, characterPoolSize);
         game.manRender = new SkillViewerRenderManager(viewport);
         game.manAudio = new AudioManager();
         game.manPhysics = new PhysicsManager();
@@ -51,18 +52,18 @@ export class SkillViewerGame extends GameManager {
     }
 }
 
-export async function runSkillViewer(): Promise<void> {
-    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 61 }, decodeWorkerPoolSize: 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
+export async function runSkillViewer(isPlayer: boolean = false): Promise<void> {
+    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 62 }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
 
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
 
     viewport.classList.add("skill-viewer-viewport");
 
     const assetList = await (await fetch("asset-list.json")).json();
-    const game = await SkillViewerGame.initialize(viewport, assetList, loadSettings);
+    const game = await SkillViewerGame.initialize(viewport, assetList, loadSettings, isPlayer ? 0 : undefined);
     const renderManager = game.getComponent("render"), assetManager = game.getComponent("asset");
     const controls = new ZUpOrbitControls(renderManager.camera, renderManager.renderer.domElement);
-    const stage = new SkillViewerStage(renderManager, assetManager);
+    const stage = isPlayer ? new PlayerSkillViewerStage(renderManager, assetManager) : new SkillViewerStage(renderManager, assetManager);
     const ui = new SkillViewerUI(stage, controls);
 
     (global as any).renderManager = renderManager;

@@ -112,6 +112,15 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "listPlayerSkills": {
+            try {
+                post({ type: "playerSkillsListed", requestId: msg.requestId, skills: await engine.listPlayerSkills() });
+            } catch (e) {
+                console.error("[decode-worker] failed to list player skills:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "decodeSkeletalMesh": {
             try {
                 const buffer = await engine.decodeSkeletalMeshBinary(msg.settings, msg.packageName, msg.meshName, msg.scriptClassPath, msg.texturePaths, msg.npcId, msg.includeAnimations, msg.equipment);

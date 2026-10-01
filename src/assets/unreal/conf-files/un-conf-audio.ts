@@ -3,7 +3,9 @@ import BaseConfigFile from "./un-base-config";
 export type SwimSoundSet_T = { sounds: string[]; volume: number; radius: number; random: number; };
 export type SwimSoundConfig_T = { surface: SwimSoundSet_T; underwater: SwimSoundSet_T; };
 type PawnSoundSection_T = "CharSound" | "ItemSound";
+type SoundConfigSection_T = PawnSoundSection_T | "EtcSound";
 type PawnSound_T = { volume: number; radius: number; random?: number; };
+type CriticalSound_T = { sound: string; volume: number; radius: number; };
 
 function getSectionValues(contents: string, section: string): Map<string, string> | null {
     const match = new RegExp(`\\[${section}\\]\\r?\\n([\\s\\S]*?)(?:\\r?\\n\\[|$)`).exec(contents);
@@ -48,7 +50,7 @@ function getSet(values: Map<string, string>, prefix: string): SwimSoundSet_T {
     };
 }
 
-function getPawnNumber(values: Map<string, string> | null, section: PawnSoundSection_T, name: string, fallback: number): number {
+function getPawnNumber(values: Map<string, string> | null, section: SoundConfigSection_T, name: string, fallback: number): number {
     const value = values?.get(name.toLowerCase());
 
     if (value === undefined) return fallback;
@@ -63,6 +65,7 @@ function getPawnNumber(values: Map<string, string> | null, section: PawnSoundSec
 export class UConfigAudio extends BaseConfigFile {
     protected swimSound: SwimSoundConfig_T = null;
     protected pawnSounds: Record<PawnSoundSection_T, PawnSound_T> = null;
+    protected criticalSound: CriticalSound_T = null;
 
     public load(): this {
         const contents = this.decodeConfig();
@@ -73,11 +76,18 @@ export class UConfigAudio extends BaseConfigFile {
         this.swimSound = { surface: getSet(values, "WaterSurface"), underwater: getSet(values, "UnderWater") };
         const charSound = getSectionValues(contents, "CharSound");
         const itemSound = getSectionValues(contents, "ItemSound");
+        const etcSound = getSectionValues(contents, "EtcSound");
 
         // Engine.dll GetDamageSound 0x8b7235..0x8b7316 / GetDefenseItemSound 0x8b691f..0x8b6960: missing config defaults.
         this.pawnSounds = {
             CharSound: { volume: getPawnNumber(charSound, "CharSound", "Vol", 255), radius: getPawnNumber(charSound, "CharSound", "Radius", 50), random: getPawnNumber(charSound, "CharSound", "Random", 100) },
             ItemSound: { volume: getPawnNumber(itemSound, "ItemSound", "Vol", 255), radius: getPawnNumber(itemSound, "ItemSound", "Radius", 50) }
+        };
+        // Engine.dll Action_Attack 0x8bdb69..0x8bdbfe reads EtcSound CriticalSound, Vol and Radius.
+        this.criticalSound = {
+            sound: etcSound?.get("criticalsound") ?? "SkillSound.Critical_Hit.Critical_Hit",
+            volume: getPawnNumber(etcSound, "EtcSound", "CriticalSound_Vol", 255),
+            radius: getPawnNumber(etcSound, "EtcSound", "CriticalSound_Radius", 50)
         };
 
         return this;
@@ -93,6 +103,12 @@ export class UConfigAudio extends BaseConfigFile {
         if (!this.pawnSounds) throw new Error(`'${this.path}' was not loaded.`);
 
         return this.pawnSounds[section];
+    }
+
+    public getCriticalSound(): CriticalSound_T {
+        if (!this.criticalSound) throw new Error(`'${this.path}' was not loaded.`);
+
+        return this.criticalSound;
     }
 }
 

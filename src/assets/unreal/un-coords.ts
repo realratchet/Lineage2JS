@@ -4,11 +4,33 @@ import FRotator from "./un-rotator";
 import FScale from "./un-scale";
 import FVector from "./un-vector";
 import UObject from "./un-object";
+import { getRotatorQuaternionElements } from "./utils/rotator";
+import type { QuaternionArr, Vector3Arr } from "./library-types";
+
+const tmpOrthoRotation: QuaternionArr = [0, 0, 0, 1];
+const tmpOrthoAxisY: Vector3Arr = [0, 0, 0];
+const tmpOrthoAxisYInput: Vector3Arr = [0, 1, 0];
 
 export abstract class FCoords extends UObject {
     declare public ["constructor"]: typeof FCoords;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
+    public static getOrthoRotationQuaternionElements(xAxis: Vector3Arr, yAxis: Vector3Arr, zAxis: Vector3Arr, out: QuaternionArr): QuaternionArr {
+        const m11 = xAxis[0], m12 = yAxis[0], m13 = zAxis[0];
+        const m21 = xAxis[1], m22 = yAxis[1], m23 = zAxis[1];
+        const m31 = xAxis[2], m32 = yAxis[2], m33 = zAxis[2];
+        // Retail Core FCoords::OrthoRotation 0x1014f940: double[0x10195450]=32768/PI, truncation at 0x1017cfa0.
+        const pitch = Math.trunc(Math.atan2(m31, Math.hypot(m11, m21)) * 32768 / Math.PI);
+        const yaw = Math.trunc(Math.atan2(m21, m11) * 32768 / Math.PI);
+
+        getRotatorQuaternionElements(pitch, yaw, 0, tmpOrthoRotation);
+        FVector.applyQuaternionElements(tmpOrthoAxisYInput, tmpOrthoRotation, tmpOrthoAxisY);
+        // 0x1014f9f5..0x1014fa3f: atan2(ZAxis dot S.YAxis, YAxis dot S.YAxis).
+        const roll = Math.trunc(Math.atan2(m13 * tmpOrthoAxisY[0] + m23 * tmpOrthoAxisY[1] + m33 * tmpOrthoAxisY[2], m12 * tmpOrthoAxisY[0] + m22 * tmpOrthoAxisY[1] + m32 * tmpOrthoAxisY[2]) * 32768 / Math.PI);
+
+        return getRotatorQuaternionElements(pitch, yaw, roll, out);
+    }
 
     declare public origin: FVector;
     declare public xAxis: FVector;

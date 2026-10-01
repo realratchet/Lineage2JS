@@ -3,12 +3,73 @@ import type { FRotator } from "./un-rotator";
 import type { FMatrix } from "./un-matrix";
 import type { FCoords } from "./un-coords";
 import type { DecodeLibrary } from "./decode-library";
-import type { Vector3Arr } from "./library-types";
+import { getRotatorQuaternionElements } from "./utils/rotator";
+import type { QuaternionArr, Vector3Arr } from "./library-types";
 
 export abstract class FVector extends UObject implements IDecodableStruct<Vector3Arr> {
     // declare protected ["constructor"]: { new(): never } & typeof FVector;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
+    public static setElements(out: Vector3Arr, x: number, y: number, z: number): Vector3Arr {
+        out[0] = x; out[1] = y; out[2] = z;
+        return out;
+    }
+
+    public static addElements(a: Vector3Arr, b: Vector3Arr, out: Vector3Arr): Vector3Arr {
+        return FVector.setElements(out, a[0] + b[0], a[1] + b[1], a[2] + b[2]);
+    }
+
+    public static subElements(a: Vector3Arr, b: Vector3Arr, out: Vector3Arr): Vector3Arr {
+        return FVector.setElements(out, a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    }
+
+    public static scaleElements(a: Vector3Arr, scale: number, out: Vector3Arr): Vector3Arr {
+        return FVector.setElements(out, a[0] * scale, a[1] * scale, a[2] * scale);
+    }
+
+    public static lengthSqElements(a: Vector3Arr): number { return a[0] * a[0] + a[1] * a[1] + a[2] * a[2]; }
+
+    public static safeNormalElements(a: Vector3Arr, out: Vector3Arr): Vector3Arr {
+        const lengthSq = FVector.lengthSqElements(a);
+
+        // Core FVector::SafeNormal 0x1014fc40, double 0x10191798: squared-length cutoff 1e-8.
+        if (lengthSq < 1e-8) return FVector.setElements(out, 0, 0, 0);
+        return FVector.scaleElements(a, 1 / Math.sqrt(lengthSq), out);
+    }
+
+    public static normalElements(a: Vector3Arr, out: Vector3Arr): Vector3Arr {
+        const length = Math.sqrt(FVector.lengthSqElements(a));
+
+        if (length === 0) return FVector.setElements(out, a[0], a[1], a[2]);
+        return FVector.scaleElements(a, 1 / length, out);
+    }
+
+    public static applyQuaternionElements(vector: Vector3Arr, rotation: QuaternionArr, out: Vector3Arr): Vector3Arr {
+        const x = vector[0], y = vector[1], z = vector[2];
+        const qx = rotation[0], qy = rotation[1], qz = rotation[2], qw = rotation[3];
+        const ix = qw * x + qy * z - qz * y;
+        const iy = qw * y + qz * x - qx * z;
+        const iz = qw * z + qx * y - qy * x;
+        const iw = -qx * x - qy * y - qz * z;
+
+        out[0] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
+        out[1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
+        out[2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
+        return out;
+    }
+
+    public static getRotationQuaternionElements(direction: Vector3Arr, out: QuaternionArr): QuaternionArr {
+        // Retail Core FVector::Rotation 0x1014f310: 65535/(2*PI), float-to-int truncation at 0x1017cfa0.
+        const unit = 65535 / (2 * Math.PI);
+
+        return getRotatorQuaternionElements(
+            Math.trunc(Math.atan2(direction[2], Math.hypot(direction[0], direction[1])) * unit),
+            Math.trunc(Math.atan2(direction[1], direction[0]) * unit),
+            0,
+            out
+        );
+    }
 
     declare public x: number;
     declare public y: number;

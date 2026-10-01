@@ -10,4 +10,7 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "shot", effectClass: "LineageEffect.s_u019_c", host: "target", position: "center", rotation: "caster", associatedActors: "targetExceptedAndPrimary", projectile: { target: "caster", speed: 0.1, acceleration: 450, path: [[-0.2, 0, 40], [1, 0, 0]] } }
 ];
 
+// Engine.dll Shot 0x7a5035..0x7a5347 -> 0x7b06da: same effects/path, primary target only; null target exits before sound.
+export const drainEffects: NativeSkillEffect_T[] = effects.map(effect => effect.phase === "shot" ? { ...effect, associatedActors: undefined, targetRequired: "phase", speedRate: effect.projectile ? undefined : 1 } : effect);
+
 export default effects;

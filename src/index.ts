@@ -8,5 +8,5 @@ const params = new URLSearchParams(location.search);
 
 if (params.has("npcTest")) runNpcTest();
 else if (params.has("sectorTest")) runSectorTest();
-else if (params.has("skillViewer")) runSkillViewer();
+else if (params.has("skillViewer")) runSkillViewer(params.get("skillViewer") === "player");
 else startCore();

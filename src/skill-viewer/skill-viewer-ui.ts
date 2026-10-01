@@ -1,7 +1,6 @@
 import "../../style/skill-viewer.scss";
 import { Box3, Vector3 } from "three";
-import type SkillViewerStage from "./skill-viewer-stage";
-import type { SkillViewerEntry_T, SkillViewerSkill_T } from "./skill-viewer-stage";
+import type { SkillViewerStage, SkillViewerEntry_T, SkillViewerSkill_T } from "./skill-viewer-npc";
 import type BaseActor from "../base-actor";
 import type AnimationComponent from "../objects/components/animation-component";
 import type { ZUpOrbitControls } from "../rendering/camera/controllers/zup-orbit-controls";
@@ -55,12 +54,14 @@ export class SkillViewerUI {
         title.textContent = "SKILL VIEWER";
 
         this.search.type = "text";
-        this.search.placeholder = "skill id / name, npc id / name";
+        this.search.placeholder = stage.isPlayerViewer ? "skill id / name" : "skill id / name, npc id / name";
         this.search.oninput = () => this.applyFilter();
 
         const skillNav = this.createActions([["◀", () => this.stepSkill(-1)], ["▶", () => this.stepSkill(1)]]);
         const npcNav = this.createActions([["◀", () => this.setPage(this.page - 1)], ["▶", () => this.setPage(this.page + 1)]]);
-        const actions = this.createActions([["Spawn page", () => this.spawnPage()], ["Cast", () => this.cast()], ["Stop", () => this.stage.stop()], ["Clear", () => this.clear()], ["Focus", () => this.focus()], ["Record", () => void this.record()]]);
+        const buttons: [string, () => void][] = [["Cast", () => void this.cast()], ["Stop", () => this.stage.stop()], ["Clear", () => this.clear()], ["Focus", () => this.focus()], ["Record", () => void this.record()]];
+        if (!stage.isPlayerViewer) buttons.unshift(["Spawn page", () => this.spawnPage()]);
+        const actions = this.createActions(buttons);
 
         this.skillHeader.className = "skill-viewer-header";
         this.npcHeader.className = "skill-viewer-header";
@@ -72,7 +73,9 @@ export class SkillViewerUI {
         this.skillHeader.append(this.skillTitle, skillNav);
         this.npcHeader.append(this.npcTitle, npcNav);
 
-        this.root.append(title, this.search, this.skillHeader, this.skillList, this.npcHeader, this.npcList, actions, this.spawnedList, this.logElement);
+        this.root.append(title, this.search, this.skillHeader, this.skillList);
+        if (!stage.isPlayerViewer) this.root.append(this.npcHeader, this.npcList);
+        this.root.append(actions, this.spawnedList, this.logElement);
         document.body.appendChild(this.root);
 
         this.caption.className = "skill-viewer-caption";
@@ -84,10 +87,15 @@ export class SkillViewerUI {
     }
 
     public async init(): Promise<void> {
-        this.log("loading NPC skill groups...");
+        this.log(this.stage.isPlayerViewer ? "loading player skills..." : "loading NPC skill groups...");
         this.skills = await this.stage.getSkills();
         this.log(`${this.skills.length} skills`);
         this.applyFilter();
+        const selected = Number(new URLSearchParams(location.search).get("skill"));
+        const skill = this.skills.find(skill => skill.id === selected);
+
+        if (skill) this.selectSkill(skill);
+        if (this.stage.isPlayerViewer) await this.spawnPage();
     }
 
     public log(message: string, isError: boolean = false): void {
@@ -160,9 +168,9 @@ export class SkillViewerUI {
 
             const npcs = this.getSkillNpcs(skill);
 
-            row.textContent = skill.isNpcOnly ? `npc ${skill.id} ${skill.name} · no skill group` : `${skill.id} ${skill.name} · ${npcs.length}`;
+            row.textContent = this.stage.isPlayerViewer ? `${skill.id} ${skill.name}` : skill.isNpcOnly ? `npc ${skill.id} ${skill.name} · no skill group` : `${skill.id} ${skill.name} · ${npcs.length}`;
             if (npcs !== skill.npcs) row.textContent += ` · ${npcs.slice(0, 2).map(npc => npc.name).join(", ")}${npcs.length > 2 ? ` +${npcs.length - 2}` : ""}`;
-            row.title = "double click to spawn and cast";
+            row.title = this.stage.isPlayerViewer ? "double click to cast" : "double click to spawn and cast";
             row.onclick = () => this.selectSkill(skill);
             row.ondblclick = () => void this.spawnAndCast(this.getPageNpcs());
             (row as any).skill = skill;
@@ -184,6 +192,7 @@ export class SkillViewerUI {
         }
 
         this.renderNpcs();
+        if (this.stage.isPlayerViewer) this.renderSpawned();
     }
 
     protected stepSkill(offset: number): void {
@@ -192,7 +201,7 @@ export class SkillViewerUI {
         if (index < 0 || index >= this.filtered.length) return;
 
         this.selectSkill(this.filtered[index]);
-        void this.spawnPage();
+        if (!this.stage.isPlayerViewer) void this.spawnPage();
     }
 
     protected setPage(page: number): void {
@@ -238,7 +247,7 @@ export class SkillViewerUI {
     }
 
     protected async spawn(npcs: SkillViewerSkill_T["npcs"]): Promise<void> {
-        if (!this.skill || npcs.length === 0) return;
+        if (!this.skill || !this.stage.isPlayerViewer && npcs.length === 0) return;
 
         const skill = this.skill;
 
@@ -246,7 +255,7 @@ export class SkillViewerUI {
 
         const failures = await this.stage.spawn(npcs, message => this.log(message));
 
-        this.log(`${this.stage.getEntries().length}/${npcs.length} spawned for ${skill.id} ${skill.name}`);
+        this.log(`${this.stage.getEntries().length}/${this.stage.isPlayerViewer ? 1 : npcs.length} spawned for ${skill.id} ${skill.name}`);
 
         for (const failure of failures) this.log(`spawn failed: ${failure}`, true);
 
@@ -261,7 +270,7 @@ export class SkillViewerUI {
 
         await this.spawn(npcs);
 
-        if (this.skill === skill) this.cast();
+        if (this.skill === skill) await this.cast();
     }
 
     protected async record(): Promise<void> {
@@ -271,6 +280,10 @@ export class SkillViewerUI {
         const batches: { skill: SkillViewerSkill_T, npcs: SkillViewerSkill_T["npcs"] }[] = [];
 
         for (const skill of skills) {
+            if (this.stage.isPlayerViewer) {
+                batches.push({ skill, npcs: [] });
+                continue;
+            }
             const npcs = this.stage.getCastableNpcs(skill, this.getSkillNpcs(skill));
 
             for (let i = 0; i < npcs.length; i += PAGE_SIZE) batches.push({ skill, npcs: npcs.slice(i, i + PAGE_SIZE) });
@@ -304,7 +317,7 @@ export class SkillViewerUI {
 
             if (run !== this.recordingRun) break;
 
-            this.cast(skill);
+            await this.cast(skill);
 
             const castStarted = performance.now();
 
@@ -347,6 +360,16 @@ export class SkillViewerUI {
         for (const entry of this.stage.getEntries()) {
             const row = document.createElement("div");
             const label = document.createElement("span");
+
+            if (this.stage.isPlayerViewer) {
+                label.textContent = `${entry.npc.name} → ${this.skill?.previewTarget === "self" ? "Self (preview)" : entry.target.name}`;
+                label.title = "focus";
+                label.onclick = () => this.focus();
+                row.ondblclick = () => void this.cast();
+                row.append(label, this.createActions([["Cast", () => void this.cast()]]));
+                this.spawnedList.appendChild(row);
+                continue;
+            }
             const select = document.createElement("select");
             const attacks = entry.npc.getNpcAttacks();
 
@@ -373,17 +396,22 @@ export class SkillViewerUI {
         }
     }
 
-    protected cast(skill: SkillViewerSkill_T = this.skill): void {
+    protected async cast(skill: SkillViewerSkill_T = this.skill): Promise<void> {
         if (!skill) return;
 
-        const skipped = this.stage.cast(skill);
+        try {
+            const skipped = await this.stage.cast(skill);
 
-        for (const name of skipped) this.log(skill.isNpcOnly ? `${name}: has no attacks` : `${name}: skill ${skill.id} is passive or has no animation, not castable`, true);
+            for (const name of skipped) this.log(skill.isNpcOnly ? `${name}: has no attacks` : `${name}: skill ${skill.id} is passive or has no animation, not castable`, true);
+        } catch (error) {
+            this.stage.stop();
+            this.log(`${skill.id} ${skill.name}: ${(error as Error).message}`, true);
+        }
     }
 
     protected clear(): void {
         this.stage.clear();
-        this.spawnedList.innerHTML = "";
+        this.renderSpawned();
     }
 
     protected focus(): void {
@@ -393,7 +421,10 @@ export class SkillViewerUI {
 
         arrFocusPoints.length = 0;
 
-        for (const entry of entries) collectPosePoints(entry.npc, arrFocusPoints);
+        for (const entry of entries) {
+            collectPosePoints(entry.npc, arrFocusPoints);
+            if (this.stage.isPlayerViewer) collectPosePoints(entry.target, arrFocusPoints);
+        }
 
         this.fitCamera(arrFocusPoints);
     }

@@ -11,6 +11,7 @@ import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
 import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "./decoders/object3d-decoder";
 import decodeEnv from "./decoders/env-decoder";
 import DecodeWorkerClient from "./decode-worker/decode-worker-client";
+import type { PlayerSkillInfo_T } from "./decode-worker/decode-protocol";
 import { AnimationClip, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "../objects/zone-object";
 import UnScriptVM from "../ue-script/vm";
@@ -345,7 +346,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         renderManager.needsUpdate = true;
     }
 
-    public async castPlayerSkill(renderManager: RenderManager, id: number, level: number, target: BaseActor): Promise<void> {
+    public async castPlayerSkill(renderManager: RenderManager, id: number, level: number, target: BaseActor, previewRange?: number): Promise<void> {
         if (!target) throw new Error(`Player skill '${id}:${level}' has no target.`);
         if (!this.playerLibrary) throw new Error(`Player character has not loaded.`);
 
@@ -364,6 +365,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         }
 
         const skill = library.npcSkillAttacks[0];
+
+        if (previewRange !== undefined) skill.castRange = previewRange;
 
         mergePawnLibrary(playerLibrary, library);
         renderManager.player.getComponent<ScriptComponent>("script").getVM().loadFunctions();
@@ -517,6 +520,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public listNpcs(): Promise<INpcDefinition[]> {
         return this.decodeWorker.listNpcs();
     }
+
+    public listPlayerSkills(): Promise<PlayerSkillInfo_T[]> { return this.decodeWorker.listPlayerSkills(); }
 
     protected getClassName(charIndex: number): string {
         const group = this.charGroups.find(group => group.index === charIndex);

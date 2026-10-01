@@ -1,9 +1,15 @@
-import { Matrix4, Quaternion, Vector3 } from "three";
+import { Matrix4, Quaternion, Vector3, type Object3D } from "three";
 import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
 import type { QuaternionArr } from "@l2js/engine";
 
 const tmpRotation = new Quaternion();
 const tmpYAxis = new Vector3();
+const tmpMeshCorrection = new Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
+
+export function getPawnRotation(pawn: Object3D, out: Quaternion): void {
+    // PawnMovementComponent renders pawn yaw with -PI/2; emitters use UE axes directly.
+    pawn.getWorldQuaternion(out).multiply(tmpMeshCorrection);
+}
 
 export class Rotator {
     public pitch: number;
