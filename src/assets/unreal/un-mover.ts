@@ -1,13 +1,38 @@
-import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+import UStaticMeshActor, { type IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
 import FRotator from "./un-rotator";
+import type { FVector } from "./un-vector";
+import type { Vector3Arr, QuaternionArr } from "./library-types";
 
-enum EMoverGlideType_T {
+export type IMoverDecodeInfo = {
+    initialState: string,
+    keyNum: number,
+    keyPositions: Vector3Arr[],
+    keyQuaternions: QuaternionArr[],
+    hitActorNormal: Vector3Arr,
+    moveTime: number,
+    stayOpenTime: number,
+    delayTime: number,
+    collisionRadius: number,
+    collisionHeight: number,
+    isGliding: boolean,
+    triggerOnceOnly: boolean,
+    moverEncroachType: "stop" | "return" | "crush" | "ignore"
+};
+
+export enum EMoverGlideType_T {
     MV_MoveByTime,
     MV_GlideByTime
 }
 
+export enum EMoverEncroachType_T {
+    ME_StopWhenEncroach,
+    ME_ReturnWhenEncroach,
+    ME_CrushWhenEncroach,
+    ME_IgnoreWhenEncroach
+}
+
 // Likely for doors and stuff
-abstract class UMover extends UStaticMeshActor {
+export abstract class UMover extends UStaticMeshActor {
     public readonly careUnread: boolean = false;
 
     declare protected moverGlideType: EMoverGlideType_T;
@@ -17,11 +42,13 @@ abstract class UMover extends UStaticMeshActor {
     declare protected stayOpenTime: number;
     declare protected delayTime: number;
     declare protected triggerOnceOnly: boolean;
-    declare protected keyPos: (GA.FVector | null)[];
-    declare protected keyRot: (GA.FRotator | null)[];
-    declare protected basePos: GA.FVector;
-    declare protected baseRot: GA.FRotator;
+    declare protected keyPos: (FVector | null)[];
+    declare protected keyRot: (FRotator | null)[];
+    declare protected basePos: FVector;
+    declare protected baseRot: FRotator;
+    declare protected hitActorNormal: FVector;
     declare protected initialState: string;
+    declare protected moverEncroachType: EMoverEncroachType_T;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -36,13 +63,15 @@ abstract class UMover extends UStaticMeshActor {
             "KeyRot": "keyRot",
             "BasePos": "basePos",
             "BaseRot": "baseRot",
-            "InitialState": "initialState"
+            "HitActorNormal": "hitActorNormal",
+            "InitialState": "initialState",
+            "MoverEncroachType": "moverEncroachType"
         });
     }
 
-    protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> {
-        const keyPositions: GD.Vector3Arr[] = [];
-        const keyQuaternions: GD.QuaternionArr[] = [];
+    protected getActorDecodeInfo(): Partial<IStaticMeshActorDecodeInfo> {
+        const keyPositions: Vector3Arr[] = [];
+        const keyQuaternions: QuaternionArr[] = [];
 
         for (let i = 0; i < this.numKeys; i++) {
             const keyPos = this.keyPos[i];
@@ -68,17 +97,28 @@ abstract class UMover extends UStaticMeshActor {
                 keyNum: this.keyNum,
                 keyPositions,
                 keyQuaternions,
+                hitActorNormal: this.hitActorNormal.getElements(),
                 moveTime: this.moveTime,
                 stayOpenTime: this.stayOpenTime,
                 delayTime: this.delayTime,
                 collisionRadius: this.collisionRadius,
                 collisionHeight: this.collisionHeight,
                 isGliding: this.moverGlideType === EMoverGlideType_T.MV_GlideByTime,
-                triggerOnceOnly: this.triggerOnceOnly
+                triggerOnceOnly: this.triggerOnceOnly,
+                moverEncroachType: getMoverEncroachType(this.moverEncroachType)
             }
         };
     }
 }
 
+function getMoverEncroachType(value: EMoverEncroachType_T): IMoverDecodeInfo["moverEncroachType"] {
+    switch (value) {
+        case EMoverEncroachType_T.ME_StopWhenEncroach: return "stop";
+        case EMoverEncroachType_T.ME_ReturnWhenEncroach: return "return";
+        case EMoverEncroachType_T.ME_CrushWhenEncroach: return "crush";
+        case EMoverEncroachType_T.ME_IgnoreWhenEncroach: return "ignore";
+        default: throw new Error(`Unknown mover encroach type '${value}'.`);
+    }
+}
+
 export default UMover;
-export { UMover, EMoverGlideType_T };

@@ -1,19 +1,49 @@
-import UObject from "@l2js/core";
+import { type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
+import UObject from "./un-object";
 import FBox from "./un-box";
-import { BufferValue } from "@l2js/core";
-import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
-import FVector from "@client/assets/unreal/un-vector";
-import { ETerrainRenderMethod_T } from "@client/assets/unreal/un-terrain-info";
+import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
+import FVector from "./un-vector";
+import { ETerrainRenderMethod_T, ATerrainInfo } from "./un-terrain-info";
+import type { ULight } from "./un-light";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { IGeometryDecodeInfo, IBaseMeshObjectDecodeInfo } from "./decode-library";
+import type { Vector3Arr } from "./library-types";
+import type { IDataTextureDecodeInfo, ITextureDecodeInfo } from "./un-texture";
+import type { IBaseMaterialDecodeInfo } from "./un-material";
 
-type TerrainSegmentDecodeResult_T = { object: GD.ITerrainSegmentDecodeInfo, geometry: GD.IGeometryDecodeInfo, material: GD.IMaterialTerrainSegmentDecodeInfo };
+export type HeightMapInfo_T = { data: Uint16Array, info: ITextureDecodeInfo, edgeTurns: Int32Array };
 
-class FTerrainLightInfo implements C.IConstructable {
+export type ITerrainSegmentDecodeInfo = IBaseMeshObjectDecodeInfo & {
+    type: "TerrainSegment",
+    terrainInfoUuid?: string,
+    collisionRadius: number,
+    lighting?: {
+        lights: { light: string, flags: Uint8Array }[],
+        shadowMaps: Uint8Array[],
+        shadowMapTimes: number[]
+    },
+    mapX: number,
+    mapY: number,
+    offsetX: number,
+    offsetY: number,
+    heightmapX: number,
+    heightmapY: number
+};
+
+export type IMaterialTerrainSegmentDecodeInfo = IBaseMaterialDecodeInfo & {
+    materialType: "terrainSegment";
+    terrainMaterial: string,
+    uvs: ITextureDecodeInfo
+};
+
+type TerrainSegmentDecodeResult_T = { object: ITerrainSegmentDecodeInfo, geometry: IGeometryDecodeInfo, material: IMaterialTerrainSegmentDecodeInfo };
+
+class FTerrainLightInfo implements Constructable_T {
     public lightIndex: number;
-    public light: GA.ULight;
+    public light: ULight;
     public visibilityBitmap = new FPrimitiveArray(BufferValue.uint8);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.lightIndex = pkg.read("compat32");
 
         if (this.lightIndex !== 0) this.light = pkg.fetchObject(this.lightIndex);
@@ -25,7 +55,7 @@ class FTerrainLightInfo implements C.IConstructable {
 }
 
 class FTerrainSectorRenderPass {
-    public info: GA.ATerrainInfo;
+    public info: ATerrainInfo;
     public renderCombinationNum: number;
 
     public indices: number[];
@@ -35,11 +65,11 @@ class FTerrainSectorRenderPass {
     public maxIndex: number;
 }
 
-abstract class UTerrainSector extends UObject {
+export abstract class UTerrainSector extends UObject {
     declare public boundingBox: FBox;
     declare public offsetX: number;
     declare public offsetY: number;
-    declare public info: GA.ATerrainInfo;
+    declare public info: ATerrainInfo;
     declare protected hasShadows: boolean;
     declare protected shadowCount: number;
 
@@ -50,7 +80,7 @@ abstract class UTerrainSector extends UObject {
     declare public quadsXActual: number;
     declare public quadsYActual: number;
 
-    declare pkg: C.APackage;
+    declare pkg: APackage;
 
     // likely mesh lights?
     declare protected lightInfos: FArray<FTerrainLightInfo>;
@@ -66,7 +96,7 @@ abstract class UTerrainSector extends UObject {
         return { offsetX: this.offsetX, offsetY: this.offsetY, quadsX: this.quadsXActual, quadsY: this.quadsYActual };
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder, info: GA.ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): TerrainSegmentDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder, info: ATerrainInfo, { data, info: iTerrainMap, edgeTurns }: HeightMapInfo_T): TerrainSegmentDecodeResult_T {
         const library = builder.library;
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oy, z: oz } = center;
@@ -77,10 +107,11 @@ abstract class UTerrainSector extends UObject {
                 uuid: this.uuid,
                 name: this.objectName,
                 type: "TerrainSegment",
+                collisionRadius: info.collisionRadius,
                 geometry: this.uuid,
                 materials: this.uuid,
                 position: [ox, oy, oz]
-            } as GD.ITerrainSegmentDecodeInfo,
+            } as ITerrainSegmentDecodeInfo,
             geometry: null,
             material: null
         };
@@ -285,8 +316,8 @@ abstract class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: this.boundingBox.min.sub(center).getElements() as GD.Vector3Arr,
-                    max: this.boundingBox.max.sub(center).getElements() as GD.Vector3Arr
+                    min: this.boundingBox.min.sub(center).getElements() as Vector3Arr,
+                    max: this.boundingBox.max.sub(center).getElements() as Vector3Arr
                 } : null
             }
         };
@@ -304,13 +335,15 @@ abstract class UTerrainSector extends UObject {
                 width: 17 * 17,
                 height: layerCount + 2,
                 format: "rg"
-            } as GD.IDataTextureDecodeInfo
-        } as GD.IMaterialTerrainSegmentDecodeInfo;
+            } as IDataTextureDecodeInfo
+        } as IMaterialTerrainSegmentDecodeInfo;
 
-        const objectInfo: GD.ITerrainSegmentDecodeInfo = {
+        const objectInfo: ITerrainSegmentDecodeInfo = {
             uuid: this.uuid,
             name: this.objectName,
             terrainInfoUuid: info.uuid,
+            // Engine.dll MultiPointCheck 0x85f6f9..0x85f6fc: terrain hits return ATerrainInfo.
+            collisionRadius: info.collisionRadius,
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,
@@ -339,7 +372,7 @@ abstract class UTerrainSector extends UObject {
         };
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -810,7 +843,3 @@ abstract class UTerrainSector extends UObject {
 
 
 export default UTerrainSector;
-export { UTerrainSector };
-export type { HeightMapInfo_T };
-
-type HeightMapInfo_T = { data: Uint16Array, info: GD.ITextureDecodeInfo, edgeTurns: Int32Array };

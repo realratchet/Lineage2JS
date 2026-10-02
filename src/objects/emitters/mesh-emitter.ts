@@ -1,10 +1,17 @@
-import MeshEmitterMaterial from "@client/materials/mesh-emitter-material/mesh-emitter-material";
-import { DoubleSide, Mesh } from "three";
+import MeshEmitterMaterial from "../../materials/mesh-emitter-material/mesh-emitter-material";
+import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
+import { DoubleSide, FrontSide, Mesh } from "three";
 import BaseEmitter from "./base-emitter";
+import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
-class MeshEmitter extends BaseEmitter {
-    protected materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[];
+export class MeshEmitter extends BaseEmitter {
+    declare protected materials: (ParticleMaterialInitSettings_T | THREE.Material)[];
     protected geometry: THREE.BufferGeometry;
+    declare protected useMeshBlendMode: boolean;
+    declare protected renderTwoSided: boolean;
+    declare protected useParticleColor: boolean;
+    declare protected isDepthTesting: boolean;
+    declare protected isDepthWriting: boolean;
 
     public constructor(config: MeshEmitterConfig_T) {
         super(config);
@@ -12,16 +19,23 @@ class MeshEmitter extends BaseEmitter {
     }
 
     protected initSettings(config: MeshEmitterConfig_T): void {
+        (this as any).isMeshEmitter = true;
         this.geometry = config.geometry;
-        this.materials = config.materials;
+        this.materials = Array.isArray(config.materials) ? config.materials : [config.materials];
+        this.useMeshBlendMode = config.useMeshBlendMode;
+        this.renderTwoSided = config.renderTwoSided;
+        this.useParticleColor = config.useParticleColor;
+        // Engine.dll 0x880bdf selects the original material even after UseParticleColor's wrapper at 0x880bae.
+        this.ignoreParticleColor = config.useMeshBlendMode;
 
         if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
         this.particleGeometryRadius = this.geometry.boundingSphere.radius;
     }
 
     protected initParticleMesh() {
-        const materialConfigs = this.materials instanceof Array ? this.materials : [this.materials];
-        const materials = materialConfigs.map(m => {
+        const materials = this.materials.map(m => {
+            if ((m as THREE.Material).isMaterial) return (m as THREE.Material).clone();
+
             const isSprite = m.type === "sprite";
 
             return new MeshEmitterMaterial({
@@ -29,10 +43,11 @@ class MeshEmitter extends BaseEmitter {
                 sprites: isSprite ? m.sprites.map(s => s.uniforms.map.texture) : undefined,
                 framerate: m.framerate,
                 blendingMode: m.blendingMode as any,
-                side: DoubleSide,
+                // Engine.dll 0x880929..0x8809d7: ParticleMaterial inherits emitter culling and depth flags.
+                side: this.renderTwoSided ? DoubleSide : FrontSide,
                 transparent: true,
-                depthWrite: false,
-                depthTest: true
+                depthWrite: this.isDepthWriting,
+                depthTest: this.isDepthTesting
             });
         });
 
@@ -44,7 +59,6 @@ class MeshEmitter extends BaseEmitter {
 }
 
 export default MeshEmitter;
-export { MeshEmitter };
 
 class ParticleMesh extends Mesh {
     constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]) {
@@ -52,7 +66,10 @@ class ParticleMesh extends Mesh {
     }
 }
 
-type MeshEmitterConfig_T = GD.EmitterConfig_T & {
+type MeshEmitterConfig_T = EmitterConfig_T & {
     geometry: THREE.BufferGeometry,
-    materials: ParticleMaterialInitSettings_T | ParticleMaterialInitSettings_T[]
+    materials: ParticleMaterialInitSettings_T | THREE.Material | (ParticleMaterialInitSettings_T | THREE.Material)[],
+    useMeshBlendMode: boolean,
+    renderTwoSided: boolean,
+    useParticleColor: boolean
 };

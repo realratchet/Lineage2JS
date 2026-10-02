@@ -1,6 +1,16 @@
-import { UObject } from "@l2js/core";
-import UTexture from "./un-texture";
-import { convertDDSTextureInfo } from "@client/assets/decoders/dxt-decode";
+import UObject from "./un-object";
+import UTexture, { type ITextureDecodeInfo, type IDataTextureDecodeInfo } from "./un-texture";
+import { convertDDSTextureInfo } from "./dds/dxt-decode";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { IBaseMaterialDecodeInfo } from "./un-material";
+
+export type IWetTextureDecodeInfo = IDataTextureDecodeInfo & {
+    textureType: "wet",
+    waveAmp: number,
+    dropsX: number,
+    dropsY: number,
+    drops: { type: string, depth: number, x: number, y: number, byteA: number, byteB: number, byteC: number, byteD: number }[]
+};
 
 // WetTexture: a WaterTexture whose simulated water field displaces SourceTexture
 // horizontally each tick. The simulation itself runs client side
@@ -8,7 +18,7 @@ import { convertDDSTextureInfo } from "@client/assets/decoders/dxt-decode";
 // parameters and the drop list.
 
 // ADrop struct, bytes A-D are type-specific (speed/phase/age/size)
-abstract class UADrop extends UObject {
+export abstract class UADrop extends UObject {
     declare public type: EDropType_T;
     declare public depth: number;
     declare public x: number;
@@ -32,8 +42,8 @@ abstract class UADrop extends UObject {
     }
 }
 
-abstract class UWetTexture extends UTexture {
-    declare protected sourceTexture: GA.UTexture;
+export abstract class UWetTexture extends UTexture {
+    declare protected sourceTexture: UTexture;
     declare protected waveAmp: number;
     declare protected numDrops: number;
     declare protected drops: UADrop[];
@@ -51,7 +61,7 @@ abstract class UWetTexture extends UTexture {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo | string {
         const source = this.sourceTexture?.loadSelf();
         const sourceUuid = source ? builder.pullMaterial(source) : null;
         const info = sourceUuid ? builder.library.materials[sourceUuid] : null;
@@ -83,7 +93,7 @@ abstract class UWetTexture extends UTexture {
                 byteD: d.byteD ?? 0
             }));
 
-        const wetInfo: GD.IWetTextureDecodeInfo = {
+        const wetInfo: IWetTextureDecodeInfo = {
             name: this.uuid,
             materialType: "texture",
             textureType: "wet",
@@ -103,10 +113,10 @@ abstract class UWetTexture extends UTexture {
     }
 }
 
-function isTextureInfo(info: GD.IBaseMaterialDecodeInfo): info is GD.ITextureDecodeInfo { return info.materialType === "texture"; }
+function isTextureInfo(info: IBaseMaterialDecodeInfo): info is ITextureDecodeInfo { return info.materialType === "texture"; }
 
 // ADrop.Type (UnFractal.h)
-enum EDropType_T {
+export enum EDropType_T {
     DROP_FixedDepth,
     DROP_PhaseSpot,
     DROP_ShallowSpot,
@@ -154,4 +164,3 @@ const DROP_TYPE_NAMES: Record<EDropType_T, string> = {
 };
 
 export default UWetTexture;
-export { UWetTexture, UADrop, EDropType_T };

@@ -1,20 +1,19 @@
 
-import DynamicLight from "@client/objects/dynamic-light";
-import { SectorObject } from "@client/objects/zone-object";
-import { BufferAttribute, Matrix4, Mesh, Vector3 } from "three";
-import type { L2Environment } from "@client/rendering/l2-env";
-import { ColorByte } from "@client/utils/color-byte";
+import DynamicLight from "./dynamic-light";
+import { SectorObject } from "./zone-object";
+import { BufferAttribute, Matrix4, Vector3 } from "three";
+import type { L2Environment } from "../rendering/l2-env";
+import { ColorByte } from "../utils/color-byte";
+import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
+import { GameMesh } from "../game/components";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
+const tmpHardwareCenter = new Vector3();
 // const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
+const arrHardwareLights: DynamicLight[] = [];
 
-// Vertex indices a light actually influences, decoded once from its flags bitmask
-// (LSB-first per byte). The dynamic pass runs per animated light per frame, and
-// walking every vertex of a batched geometry just to test bits dominated the frame
-// time (~20M vertex×light iterations/frame in the 18_20 necropolis). rangeStart/rangeEnd
-// (mergeMeshLightFlags, batch-data.ts) narrow the scan to the actors that reference the light.
 const affectedVertexCache = new WeakMap<Uint8Array, Uint32Array>();
 
 function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart: number = 0, rangeEnd: number = vertexCount): Uint32Array {
@@ -39,14 +38,14 @@ function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart:
 
 type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, instance?: DynamicLight };
 
-class LitActorMesh extends Mesh {
+export class LitActorMesh extends GameMesh {
     public readonly isUpdatable: boolean = true;
 
-    protected lightInfo?: MeshLight;
+    protected lightInfo?: MeshLight_T;
     protected scaledGlow: number;
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
-    protected ambient?: { glow: number, vector: number[], isUnlit: boolean };
+    protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
 
     public isBatch?: boolean;
     public batchActorUuids?: string[];
@@ -71,12 +70,12 @@ class LitActorMesh extends Mesh {
     public needsRelightPass?: boolean; // set by zone-object.ts when a batch element's visibility flips
     protected vertexToElement?: Uint32Array;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight_T, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
         this.scaledGlow = props.scaledGlow ?? 1.0;
-        this.isSunAffected = props.isSunAffected ?? true; // Default to true for backwards compatibility
+        this.isSunAffected = props.isSunAffected ?? true;
         this.ambient = props.ambient;
 
         if (this.lightInfo || (this.ambient && !this.ambient.isUnlit) || this.isSunAffected) {
@@ -120,9 +119,6 @@ class LitActorMesh extends Mesh {
     protected perVertexGlow?: Float32Array;
     protected perVertexGlowSource?: unknown;
 
-    // Per-vertex scaledGlow lookup, replicating the original sequential range scan:
-    // an actor's glow applies until its range ends, the last actor's glow carries
-    // past the end. Built once - batch ranges never change after decode.
     protected getPerVertexGlow(perActorAmbient: { startVertex: number, count: number, scaledGlow: number }[], vertexCount: number): Float32Array {
         if (this.perVertexGlowSource !== perActorAmbient || this.perVertexGlow?.length !== vertexCount) {
             const arr = new Float32Array(vertexCount);
@@ -147,7 +143,6 @@ class LitActorMesh extends Mesh {
         return this.perVertexGlow;
     }
 
-    // vertex -> batch element index, same order as elemVisibility (batch-data.ts)
     protected getVertexToElement(perActorAmbient: { startVertex: number, count: number }[], vertexCount: number): Uint32Array {
         if (!this.vertexToElement || this.vertexToElement.length !== vertexCount) {
             const arr = new Uint32Array(vertexCount);
@@ -207,15 +202,63 @@ class LitActorMesh extends Mesh {
         }
     }
 
+    protected computeHardwareLighting(sector: SectorObject, target: Uint8ClampedArray) {
+        const attrPositions = this.geometry.getAttribute("position");
+        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, scaledGlow: number, isSunAffected: boolean, ambient: typeof this.ambient }[] | undefined;
+
+        if (perActorAmbient) {
+            for (let ei = 0; ei < perActorAmbient.length; ei++) {
+                const actor = perActorAmbient[ei];
+                if (!actor.ambient?.hardwareLighting) continue;
+
+                const elem = this.batchElements![ei];
+                const min = elem.boundsMin, max = elem.boundsMax;
+                const dx = max[0] - min[0], dy = max[1] - min[1], dz = max[2] - min[2];
+
+                tmpHardwareCenter.set((min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5);
+                this.computeHardwareLightingRange(sector, target, actor.startVertex, actor.count, actor.scaledGlow, actor.isSunAffected, Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.5);
+            }
+        } else if (this.ambient?.hardwareLighting) {
+            if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
+
+            tmpHardwareCenter.copy(this.geometry.boundingSphere!.center).applyMatrix4(this.matrixWorld);
+            const radius = this.geometry.boundingSphere!.radius * this.matrixWorld.getMaxScaleOnAxis();
+
+            this.computeHardwareLightingRange(sector, target, 0, attrPositions.count, this.scaledGlow, this.isSunAffected, radius);
+        }
+    }
+
+    protected computeHardwareLightingRange(sector: SectorObject, target: Uint8ClampedArray, startVertex: number, count: number, scaledGlow: number, isSunAffected: boolean, radius: number) {
+        sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, isSunAffected);
+
+        const attrPositions = this.geometry.getAttribute("position");
+        const attrNormals = this.geometry.getAttribute("normal");
+
+        for (const light of arrHardwareLights) {
+            if (light.isDynamic || light.isTimeBased) continue;
+
+            const col = light.color;
+
+            for (let vi = startVertex, end = startVertex + count; vi < end; vi++) {
+                tmpVertex.fromBufferAttribute(attrPositions, vi).applyMatrix4(this.matrixWorld);
+                tmpNormal.fromBufferAttribute(attrNormals, vi).transformDirection(this.matrixWorld);
+
+                const intensity = scaledGlow * 0.5 * this.sampleIntensity(light, tmpVertex, tmpNormal);
+
+                if (intensity > 0) {
+                    target[vi * 3] += Math.floor(col.r * intensity);
+                    target[vi * 3 + 1] += Math.floor(col.g * intensity);
+                    target[vi * 3 + 2] += Math.floor(col.b * intensity);
+                }
+            }
+        }
+    }
+
     protected lastEnvVersion: number = -1;
-    // the blended env-light index/lerp that actually drives the static cache, not raw
-    // time - matches Terrain.update, since raw time is never equal frame to frame once
-    // timeScale != 0 and was forcing a full per-vertex recompute every single frame
     protected lastStaticEnvIndex: number = -1;
     protected lastStaticEnvNextIndex: number = -1;
     protected lastStaticEnvLerp: number = -1;
 
-    // true until the first lighting pass ran (see Terrain.needsInitialLighting)
     public get needsInitialLighting(): boolean {
         return !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
     }
@@ -245,8 +288,6 @@ class LitActorMesh extends Mesh {
             dynamicEnv: environment.filter(isDynamic)
         };
 
-        // only cache once every referenced light resolved, so lights that stream in
-        // later than the mesh still get picked up by a retry on the next update
         if (sets.all.every(l => l.instance)) this.lightSets = sets;
 
         return sets;
@@ -260,7 +301,6 @@ class LitActorMesh extends Mesh {
         const attrColors = this.geometry.getAttribute("lighting");
         const colorArray = attrColors.array as Uint8ClampedArray;
 
-        // Check if any lights need updating
         let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
 
         const currentEnvVersion = env.getEnvVersion();
@@ -269,9 +309,6 @@ class LitActorMesh extends Mesh {
             staticCacheDirty = true;
         }
 
-        // Collect and augment light info (cached - a light's static/dynamic
-        // classification is immutable, and this used to allocate fresh arrays of
-        // hundreds of entries on every update of every mesh)
         const { all: allLights, staticScene, staticEnv, dynamicScene, dynamicEnv } = this.resolveLightSets(sector);
 
         if (staticEnv.length >= 2) {
@@ -294,17 +331,14 @@ class LitActorMesh extends Mesh {
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
-        // Return early if no lighting parameters have changed
         if (!staticCacheDirty && !anyDynamicLightNeedsUpdate && !this.needsRelightPass) return;
 
-        // dynamic pass below filters by elemVisibility - a batch's .visible flag covers every merged actor
         const perActorAmbientForFilter = this.perActorAmbient as { startVertex: number, count: number }[] | undefined;
         const canFilterByVisibility = !!this.elemVisibility && !!perActorAmbientForFilter;
         const vertexToElement = canFilterByVisibility ? this.getVertexToElement(perActorAmbientForFilter!, colorArray.length / 3) : undefined;
         const relight = canFilterByVisibility && !staticCacheDirty && !anyDynamicLightNeedsUpdate ? this.elemRelight : undefined;
         const filterVisibility = relight ?? (canFilterByVisibility ? this.elemVisibility : undefined);
 
-        // Rebuild static cache if necessary
         if (staticCacheDirty) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length)
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
@@ -364,8 +398,6 @@ class LitActorMesh extends Mesh {
                 this.staticLightingCache.fill(0);
             }
 
-            // not filtered by elemVisibility, unlike the dynamic pass - staticLightingCache is a
-            // persistent baseline and needsRelightPass can't backfill a skipped contribution later
             if (this.lightInfo) this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
 
             // if (staticEnv.length > 0)
@@ -376,9 +408,10 @@ class LitActorMesh extends Mesh {
                 if (lerp < 1.0) this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, 1.0 - lerp);
                 if (lerp > 0.0) this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, lerp);
             } else if (staticEnv.length === 1) this.computeLighting(sector, staticEnv, this.staticLightingCache, 1.0);
+
+            this.computeHardwareLighting(sector, this.staticLightingCache);
         }
 
-        // Apply static cache to the vertex attribute
         if (relight) {
             for (let ei = 0; ei < relight.length; ei++) {
                 if (!relight[ei]) continue;
@@ -388,7 +421,6 @@ class LitActorMesh extends Mesh {
             }
         } else colorArray.set(this.staticLightingCache!);
 
-        // Apply dynamic pass (lights that change over time or move)
         if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0, filterVisibility, vertexToElement);
         if (dynamicEnv.length >= 2) {
             const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(dynamicEnv.length);
@@ -398,8 +430,6 @@ class LitActorMesh extends Mesh {
 
         this.needsRelightPass = false;
 
-        // three only clears updateRange once it uploads - an unrendered attribute keeps a stale
-        // partial range that would then clip the next full pass
         let rangeOffset = 0;
         let rangeCount = -1;
 
@@ -432,11 +462,10 @@ class LitActorMesh extends Mesh {
     }
 }
 
-export interface MeshLight {
+export type MeshLight_T = {
     matrix: Matrix4,
     scene: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number }[],
     environment: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number }[]
 }
 
 export default LitActorMesh;
-export { LitActorMesh }

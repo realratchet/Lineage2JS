@@ -1,11 +1,11 @@
-import fetchAssetHandle from "@client/assets/asset-handle";
+import fetchAssetHandle from "../asset-handle";
 import { UEncodedFile } from "@l2js/core";
 
 let decoder: TextDecoder = null;
 
 function getInstance() { return decoder = decoder ?? new TextDecoder("euc-kr"); }
 
-abstract class BaseConfigFile extends UEncodedFile {
+export abstract class BaseConfigFile extends UEncodedFile {
     protected decoder = getInstance();
     protected async readArrayBuffer() {
         const response = await fetchAssetHandle(this.path);
@@ -36,4 +36,3 @@ abstract class BaseConfigFile extends UEncodedFile {
 }
 
 export default BaseConfigFile;
-export { BaseConfigFile };

@@ -1,6 +1,6 @@
 import "./un-object-mixin";
-import { ANativePackage, APackage, UObject } from "@l2js/core";
-import type { UObject as UObject_ } from "@l2js/core/src/unreal/un-object";
+import { ANativePackage, APackage, type AAssetLoader, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UClass, type UExport, type UImport, type UName, type UObject as CoreUObject, type UStruct, addClassDependency, addPackageDependendency } from "@l2js/core";
+import UObject from "./un-object";
 import UModel from "./model/un-model";
 import ULevel from "./un-level";
 import FScale from "./un-scale";
@@ -18,11 +18,14 @@ import ULight from "./un-light";
 import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
 import UPlayerStart from "./un-player-start";
 import UPhysicsVolume from "./un-physics-volume";
+import UDefaultPhysicsVolume from "./un-physics";
 import UBlockingVolume from "./un-blocking-volume";
 import UMusicVolume from "./un-music-volume";
 import UConvexVolume from "./un-convex-volume";
 import UEmitter from "./un-emitter";
 import UMeshEmitter from "./emitters/un-mesh-emitter";
+import UVertMesh from "./un-vert-mesh";
+import UVertMeshEmitter from "./emitters/un-vert-mesh-emitter";
 import USpriteEmitter from "./emitters/un-sprite-emitter";
 import FRotator from "./un-rotator";
 import UCamera from "./un-camera";
@@ -44,25 +47,67 @@ import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
 import FCoords from "./un-coords";
-import FQuaternion from "@client/assets/unreal/un-quaternion";
-import UStaticMeshInstance from "@client/assets/unreal/static-mesh/un-static-mesh-instance";
-import UStaticMesh from "@client/assets/unreal/static-mesh/un-static-mesh";
-import { addClassDependency, addPackageDependendency } from "@l2js/core/src/unreal/un-package";
-import ULevelSummary from "@client/assets/unreal/un-level-summary";
-import USound from "@client/assets/unreal/un-sound";
-import UAmbientSoundObject from "@client/assets/unreal/un-ambient-sound";
-import UMover from "@client/assets/unreal/un-mover";
-import * as NEnv from "@client/assets/unreal/un-l2env";
+import FQuaternion from "./un-quaternion";
+import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
+import UStaticMesh from "./static-mesh/un-static-mesh";
+import ULevelSummary from "./un-level-summary";
+import USound from "./un-sound";
+import UAmbientSoundObject from "./un-ambient-sound";
+import UMover from "./un-mover";
+import * as NEnv from "./un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
-import UMovableStaticMeshActor, { FL2RotatorTime } from "@client/assets/unreal/static-mesh/un-movable-static-mesh-actor";
-import UL2FogInfo, { UL2EnvironmentColorInfo } from "@client/assets/unreal/un-fog-info";
-import { fetchAssetHandle } from "@client/assets/asset-handle";
-import UPawn from "@client/assets/unreal/un-pawn";
-import USkeletalMesh from "@client/assets/unreal/skeletal-mesh/un-skeletal-mesh";
-import USkeletalMeshInstance from "@client/assets/unreal/un-skeletal-mesh-instance";
-import UMeshAnimation from "@client/assets/unreal/skeletal-mesh/un-mesh-animation";
+import UMovableStaticMeshActor, { FL2RotatorTime } from "./static-mesh/un-movable-static-mesh-actor";
+import UL2FogInfo, { UL2EnvironmentColorInfo } from "./un-fog-info";
+import { fetchAssetHandle } from "./asset-handle";
+import UPawn from "./un-pawn";
+import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
+import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
+import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
+import USkillVisualEffect, { USkillAction, FSkillActionInfo, USkillActionLocateEffect, USkillActionSwordTrail } from "./un-skill-visual-effect";
+import * as AnimNotify from "./skeletal-mesh/un-anim-notify";
 
-type CoreStructs_T =
+export type NativeClientTypes_T =
+    | NativeTypes_T
+    | "VertMesh"
+    | "WaterHitEmitter"
+    | "VertMeshEmitter"
+    | "NMovableSunLight"
+    | "NSun"
+    | "NMoon"
+    | "L2FogInfo"
+    | "L2SeamlessInfo"
+    | "L2NTimeLight"
+    | "L2NEnvLight"
+    | "SceneManager"
+    | "MovableStaticMeshActor"
+    | "Combiner"
+    | "VertexColor"
+    | "LineagePlayerController"
+    | "SkillVisualEffect"
+    | "SkillAction"
+    | "SkillAction_LocateEffect"
+    | "SkillAction_SwordTrail"
+    | "NProjectile"
+    | "NSkillProjectile"
+    | "AnimNotify"
+    | "AnimNotify_IdleSound"
+    | "AnimNotify_MatSubAction"
+    | "AnimNotify_Scripted"
+    | "AnimNotify_Script"
+    | "AnimNotify_Sound"
+    | "AnimNotify_SwimSound"
+    | "AnimNotify_DestroyEffect"
+    | "AnimNotify_Effect"
+    | "AnimNotify_AttackVoice"
+    | "AnimNotify_Channeling"
+    | "AnimNotify_AttackPreShot"
+    | "AnimNotify_AttackShot"
+    | "AnimNotify_AttackItem"
+    | "AnimNotify_ScreenFade"
+    | "AnimNotify_ViewShake"
+    | "AnimNotify_BoneScale";
+
+export type CoreStructs_T =
     | "Vector"
     | "Plane"
     | "Box"
@@ -70,18 +115,16 @@ type CoreStructs_T =
     | "Color"
     | "Coords";
 
-type CoreStructsReturnType_T<T extends CoreStructs_T> =
-    | T extends "Vector" ? GA.FVector
-    : T extends "Plane" ? GA.FPlane
-    : T extends "Box" ? GA.FBox
-    : T extends "Matrix" ? GA.FMatrix
-    : T extends "Color" ? GA.FColor
-    : T extends "Coords" ? GA.FCoords
+export type CoreStructsReturnType_T<T extends CoreStructs_T> =
+    | T extends "Vector" ? FVector
+    : T extends "Plane" ? FPlane
+    : T extends "Box" ? FBox
+    : T extends "Matrix" ? FMatrix
+    : T extends "Color" ? FColor
+    : T extends "Coords" ? FCoords
     : never;
 
-
-
-class UPackage extends APackage {
+export class UPackage extends APackage {
     protected async readArrayBuffer() {
         const response = await fetchAssetHandle(this.path);
         const readable = await response.getReadable();
@@ -91,12 +134,12 @@ class UPackage extends APackage {
 
     public toBuffer(): ArrayBuffer { throw new Error("Method not implemented."); }
 
-    // public addDependencies(pkg: C.APackage, ...deps: ["Struct" | "Class", CoreStructs_T][]): void {
+    // public addDependencies(pkg: APackage, ...deps: ["Struct" | "Class", CoreStructs_T][]): void {
     //     const pkgCore = pkg.loader.getCorePackage();
     //     const pkgNative = pkg.loader.getNativePackage();
 
     //     for (let [clsType, clsName] of deps) {
-    //         const cls = pkgCore.fetchObjectByType<C.UClass>(clsType, clsName);
+    //         const cls = pkgCore.fetchObjectByType<UClass>(clsType, clsName);
 
     //         if (!cls) throw new Error(`Could not find '${clsName}' of type '${clsType}'`);
 
@@ -111,14 +154,14 @@ class UPackage extends APackage {
             if (exp.export.isFake)
                 return;
 
-            const obj = this.fetchObject<C.UStruct>(exp.index + 1);
+            const obj = this.fetchObject<UStruct>(exp.index + 1);
 
 
             obj.loadSelf().buildClass(native);
         });
 
         //     this.exportGroups["Class"].forEach(exp => {
-        //         const obj = this.fetchObject<C.UClass>(exp.index + 1);
+        //         const obj = this.fetchObject<UClass>(exp.index + 1);
 
         //         obj.loadSelf().buildClass(native);
         //     });
@@ -140,7 +183,7 @@ enum ERunningOS {
 };
 
 
-class UCorePackage extends UPackage implements C.ICorePackage {
+export class UCorePackage extends UPackage implements CorePackage_T {
     public readonly isCore = true;
     public readonly isEngine = false;
     public readonly isNative = false;
@@ -200,12 +243,12 @@ class UCorePackage extends UPackage implements C.ICorePackage {
     public static readonly GUnicode = true;
 }
 
-class UEnginePackage extends UPackage implements C.IEnginePackage {
+export class UEnginePackage extends UPackage implements EnginePackage_T {
     public readonly isCore = false;
     public readonly isEngine = true;
     public readonly isNative = false;
 
-    protected addClassDependencies(nameTable: C.UName[], nameHash: Map<string, number>, imports: C.UImport[], exports: C.UExport<UObject>[]): void {
+    protected addClassDependencies(nameTable: UName[], nameHash: Map<string, number>, imports: UImport[], exports: UExport<UObject>[]): void {
         addPackageDependendency(nameTable, nameHash, imports, "Native");
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Font");
@@ -216,6 +259,9 @@ class UEnginePackage extends UPackage implements C.IEnginePackage {
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "ConvexVolume");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Mesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "VertMesh");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "SkeletalMesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "StaticMesh");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "MeshInstance");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "LodMeshInstance");
@@ -244,10 +290,9 @@ class UEnginePackage extends UPackage implements C.IEnginePackage {
 }
 
 
-class UNativePackage extends ANativePackage {
+export class UNativePackage extends ANativePackage {
 
-    public getStructConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: string): new () => T
-    public getStructConstructor<T extends typeof UObject = typeof UObject>(constructorName: string): new () => T {
+    public getStructConstructor<T extends typeof CoreUObject = typeof CoreUObject>(constructorName: string): new () => T {
         let Constructor: any;
 
         switch (constructorName) {
@@ -275,7 +320,16 @@ class UNativePackage extends ANativePackage {
             case "L2EnvironmentColorInfo": Constructor = UL2EnvironmentColorInfo; break;
 
             case "L2RotatorTime": Constructor = FL2RotatorTime; break;
-            case "SkillActionInfo": Constructor = UObject; break;
+            case "SkillActionInfo": Constructor = FSkillActionInfo; break;
+
+            case "FFighter":
+            case "baium":
+            case "valakas":
+            case "dre_vanul":
+            case "lesser_basilisk":
+            case "mechanic_golem":
+            case "anakim":
+            case "onyx_beast": Constructor = UPawn; break;
 
             // structs we dont care about yet
             case "InterpCurve":
@@ -297,6 +351,8 @@ class UNativePackage extends ANativePackage {
 
             case "ParticleColorScale": Constructor = PEmitter.UParticleColorScale; break;
             case "ParticleTimeScale": Constructor = PEmitter.UParticleTimeScale; break;
+            case "ParticleVelocityScale": Constructor = PEmitter.UParticleVelocityScale; break;
+            case "ParticleRevolutionScale": Constructor = PEmitter.UParticleRevolutionScale; break;
 
             default:
                 debugger;
@@ -306,8 +362,7 @@ class UNativePackage extends ANativePackage {
         return Constructor;
     }
 
-    protected getNonNativeConstructor<T extends typeof UObject_ = typeof UObject_>(constructorName: C.NativeTypes_T): new () => T
-    protected getNonNativeConstructor<T extends typeof UObject = typeof UObject>(constructorName: GA.NativeClientTypes_T): new () => T {
+    protected getNonNativeConstructor<T extends typeof CoreUObject = typeof CoreUObject>(constructorName: NativeClientTypes_T): new () => T {
         let Constructor: any;
 
         switch (constructorName) {
@@ -332,8 +387,10 @@ class UNativePackage extends ANativePackage {
 
             case "PlayerStart": Constructor = UPlayerStart; break;
             case "Camera": Constructor = UCamera; break;
+            case "Pawn": Constructor = UPawn; break;
 
             case "PhysicsVolume": Constructor = UPhysicsVolume; break;
+            case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
             case "BlockingVolume": Constructor = UBlockingVolume; break;
             case "MusicVolume": Constructor = UMusicVolume; break;
             case "ConvexVolume": Constructor = UConvexVolume; break;
@@ -352,6 +409,7 @@ class UNativePackage extends ANativePackage {
             //         case "Player": Constructor = UPlayer; break;
             //         case "MeshInstance": Constructor = UMeshInstance; break;
             case "SkeletalMesh": Constructor = USkeletalMesh; break;
+            case "VertMesh": Constructor = UVertMesh; break;
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
             case "Texture": Constructor = UTexture; break;
@@ -359,7 +417,11 @@ class UNativePackage extends ANativePackage {
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
+            case "NProjectile": Constructor = UEmitter; break;
+            case "NSkillProjectile": Constructor = UEmitter; break; // ANSkillProjectile : ANProjectile : AEmitter (EngineClasses.h 3832/3866)
+            case "WaterHitEmitter": Constructor = UEmitter; break;
             case "MeshEmitter": Constructor = UMeshEmitter; break;
+            case "VertMeshEmitter": Constructor = UVertMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
             case "BeamEmitter": Constructor = UBeamEmitter; break;
 
@@ -400,13 +462,31 @@ class UNativePackage extends ANativePackage {
             case "InterpolationPoint":
             case "Projector":
             case "AntiPortalActor":
-            case "Pawn":
             case "LineagePlayerController":
-            case "AmbientSound":
-            case "SkillVisualEffect":
-            case "SkillAction":
-            case "SkillAction_LocateEffect":
-            case "SkillAction_SwordTrail": Constructor = UObject; break;
+            case "AmbientSound": Constructor = UObject; break;
+
+            case "SkillVisualEffect": Constructor = USkillVisualEffect; break;
+            case "SkillAction": Constructor = USkillAction; break;
+            case "SkillAction_LocateEffect": Constructor = USkillActionLocateEffect; break;
+            case "SkillAction_SwordTrail": Constructor = USkillActionSwordTrail; break;
+
+            case "AnimNotify": Constructor = AnimNotify.UAnimNotify; break;
+            case "AnimNotify_IdleSound": Constructor = AnimNotify.UAnimNotifyIdleSound; break;
+            case "AnimNotify_MatSubAction": Constructor = AnimNotify.UAnimNotifyMatSubAction; break;
+            case "AnimNotify_Scripted": Constructor = AnimNotify.UAnimNotifyScripted; break;
+            case "AnimNotify_Script": Constructor = AnimNotify.UAnimNotifyScript; break;
+            case "AnimNotify_Sound": Constructor = AnimNotify.UAnimNotifySound; break;
+            case "AnimNotify_SwimSound": Constructor = AnimNotify.UAnimNotifySwimSound; break;
+            case "AnimNotify_DestroyEffect": Constructor = AnimNotify.UAnimNotifyDestroyEffect; break;
+            case "AnimNotify_Effect": Constructor = AnimNotify.UAnimNotifyEffect; break;
+            case "AnimNotify_AttackVoice": Constructor = AnimNotify.UAnimNotifyAttackVoice; break;
+            case "AnimNotify_Channeling": Constructor = AnimNotify.UAnimNotifyChanneling; break;
+            case "AnimNotify_AttackPreShot": Constructor = AnimNotify.UAnimNotifyAttackPreShot; break;
+            case "AnimNotify_AttackShot": Constructor = AnimNotify.UAnimNotifyAttackShot; break;
+            case "AnimNotify_AttackItem": Constructor = AnimNotify.UAnimNotifyAttackItem; break;
+            case "AnimNotify_ScreenFade": Constructor = AnimNotify.UAnimNotifyScreenFade; break;
+            case "AnimNotify_ViewShake": Constructor = AnimNotify.UAnimNotifyViewShake; break;
+            case "AnimNotify_BoneScale": Constructor = AnimNotify.UAnimNotifyBoneScale; break;
 
             default: // objects that we never saw before
                 debugger;
@@ -429,6 +509,7 @@ class UNativePackage extends ANativePackage {
         this.registerNativeClass("StaticMesh", "Primitive");
         this.registerNativeClass("Mesh", "Primitive");
         this.registerNativeClass("LodMesh", "Mesh");
+        this.registerNativeClass("VertMesh", "LodMesh");
         this.registerNativeClass("SkeletalMesh", "LodMesh");
         this.registerNativeClass("MeshInstance", "Primitive");
         this.registerNativeClass("LodMeshInstance", "MeshInstance");
@@ -449,10 +530,10 @@ class UNativePackage extends ANativePackage {
         this.registerNativeClass("Client", "Object");
     }
 
-    // public readonly nativeClassess = new Map<C.NativeTypes_T, typeof UObject>();
+    // public readonly nativeClassess = new Map<NativeTypes_T, typeof UObject>();
 
 
-    // constructor(loader: C.AAssetLoader) {
+    // constructor(loader: AAssetLoader) {
     //     super(loader, "__native__.u");
     // }
 
@@ -688,7 +769,6 @@ class UNativePackage extends ANativePackage {
 }
 
 export default UPackage;
-export { UPackage, UNativePackage, UEnginePackage, UCorePackage };
 
 (global.console as any).assert = function (cond: Function, text: string, dontThrow: boolean) {
     if (cond) return;
@@ -768,4 +848,3 @@ export { UPackage, UNativePackage, UEnginePackage, UCorePackage };
 
 //     return { imp, exp };
 // }
-

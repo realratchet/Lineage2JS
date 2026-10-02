@@ -1,47 +1,54 @@
-import FArray from "@l2js/core/src/unreal/un-array";
+import { type APackage, type Constructable_T, FArray } from "@l2js/core";
+import type { UTexture } from "../un-texture";
+import type { Vector3Arr } from "../library-types";
 
-class FBSPSection implements C.IConstructable {
-    public bspVertices = new FArray(FBSPVertex);
-    public textureId: number;
-    public texture: GA.UTexture;
+export class FBSPVertex implements Constructable_T {
+    public position: Vector3Arr;
+    public u: number;
+    public v: number;
+    public u2: number;
+    public v2: number;
+    public normal: Vector3Arr | null;
 
-    public unkInt0: number;
-    public unkInt1: number;
-    public unkInt2: number;
-    public unkInt3: number;
+    public load(pkg: APackage): this {
+        const hasNormal = pkg.header.getArchiveFileVersion() >= 109;
+        const data = pkg.read(hasNormal ? 10 * 4 : 7 * 4);
 
-    public load(pkg: C.APackage): this {
-        this.bspVertices.load(pkg);
-        this.unkInt0 = pkg.read("int32");
-
-        this.textureId = pkg.read("compat32");
-
-        this.unkInt1 = pkg.read("int32");
-        this.unkInt2 = pkg.read("int32");
-        this.unkInt3 = pkg.read("int32");
-
-        this.texture = pkg.fetchObject<GA.UTexture>(this.textureId);
+        this.position = [data.getFloat32(0, true), data.getFloat32(4, true), data.getFloat32(8, true)];
+        this.u = data.getFloat32(12, true);
+        this.v = data.getFloat32(16, true);
+        this.u2 = data.getFloat32(20, true);
+        this.v2 = data.getFloat32(24, true);
+        this.normal = hasNormal ? [data.getFloat32(28, true), data.getFloat32(32, true), data.getFloat32(36, true)] : null;
 
         return this;
     }
 }
 
-class FBSPVertex implements C.IConstructable {
-    public unkArr0: DataView;
-    public unkArr1: DataView;
+export class FBSPSection implements Constructable_T {
+    public bspVertices = new FArray(FBSPVertex);
+    public textureId: number;
+    public texture: UTexture;
 
-    public load(pkg: C.APackage): this {
+    public revision: number;
+    public numNodes: number;
+    public polyFlags: number;
+    public lightmapTextureIndex: number;
 
-        const ver = pkg.header.getArchiveFileVersion();
+    public load(pkg: APackage): this {
+        this.bspVertices.load(pkg);
+        this.revision = pkg.read("int32");
 
-        this.unkArr0 = pkg.read(7 * 4); // 7 floats;
+        this.textureId = pkg.read("compat32");
 
-        if (0x6c < ver)
-            this.unkArr1 = pkg.read(3 * 4); // 3 floats
+        this.numNodes = pkg.read("int32");
+        this.polyFlags = pkg.read("int32");
+        this.lightmapTextureIndex = pkg.read("int32");
+
+        this.texture = pkg.fetchObject<UTexture>(this.textureId);
 
         return this;
     }
 }
 
 export default FBSPSection;
-export { FBSPSection, FBSPVertex };

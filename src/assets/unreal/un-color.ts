@@ -1,6 +1,8 @@
-import { APackage, UExport, UObject } from "@l2js/core";
+import { APackage, UExport } from "@l2js/core";
+import UObject from "./un-object";
+import type { ColorArr } from "./library-types";
 
-abstract class FColor extends UObject {
+export abstract class FColor extends UObject {
     declare public ["constructor"]: typeof FColor;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
@@ -56,7 +58,7 @@ abstract class FColor extends UObject {
 
     getBrightness() { return (this.g * 3.0 + this.b + this.b + this.r) * 0.0006510417; }
 
-    toArray(array: number[] | ArrayLike<number> | GD.ColorArr = [], offset = 0) {
+    toArray(array: number[] | ArrayLike<number> | ColorArr = [], offset = 0) {
         (array as number[])[offset] = this.r;
         (array as number[])[offset + 1] = this.g;
         (array as number[])[offset + 2] = this.b;
@@ -69,4 +71,3 @@ abstract class FColor extends UObject {
 }
 
 export default FColor;
-export { FColor };

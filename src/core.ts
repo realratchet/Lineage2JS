@@ -1,23 +1,24 @@
-import * as dat from "dat.gui";
-import RenderManager from "./rendering/render-manager";
-import { Box3, Vector3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
+import RenderManager, { type HTMLViewportElement_T } from "./rendering/render-manager";
+import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
-import AssetManager from "@client/assets/asset-manager";
-import runSectorPrecache from "@client/sector-precache";
+import AssetManager from "./assets/asset-manager";
+import runSectorPrecache from "./sector-precache";
+import GameManager from "./game/game-manager";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
 
 
-async function startCore() {
+export async function startCore(interactive: boolean = true): Promise<RenderManager | null> {
     // await ensureWasmInitialized();
 
-    if ("storage" in navigator)
+    if (globalThis.isSecureContext && "storage" in navigator)
         await navigator.storage.persist();
 
     const startTime = performance.now();
 
-    const loadSettings: GD.LoadSettings_T = {
+    const loadSettings: LoadSettings_T = {
         helpersZoneBounds: false,
         batching: {
             terrain: true,
@@ -25,13 +26,14 @@ async function startCore() {
         },
         cache: {
             enabled: true,
-            version: 6 // bump when decode logic changes, invalidates all previously cached sectors
+            version: 62 // bump when decode logic changes, invalidates all previously cached assets
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",
         loadTerrain: true,
         loadBaseModel: true,
         loadStaticModels: true,
+        loadExtendedBoneInfluences: true,
         loadEmitters: true,
         loadAudio: true,
         _loadEmitterList: [],
@@ -89,14 +91,14 @@ async function startCore() {
 
     if (new URLSearchParams(location.search).has("precacheSectors")) {
         await runSectorPrecache(loadSettings);
-        return;
+        return null;
     }
 
     // debugger;
-    const viewport = document.querySelector("viewport") as HTMLViewportElement;
+    const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
     const assetList = await (await fetch("asset-list.json")).json();
-    const assetManager = new AssetManager(loadSettings, assetList.supported);
-    const renderManager = new RenderManager(viewport, assetManager);
+    const engine = await GameManager.initialize(viewport, assetList, loadSettings);
+    const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");
 
     (global as any).renderManager = renderManager;
 
@@ -104,17 +106,20 @@ async function startCore() {
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
 
-    await assetManager.initialize(renderManager);
+    if (interactive) {
+        uiManager.addClippingRangeControls();
+        uiManager.addDisplayGammaControls();
+        uiManager.addNpcControls();
+        await uiManager.addCharacterControls();
 
-    renderManager.addClippingRangeControls();
-    renderManager.addDisplayGammaControls();
-    
+        void precacheCharacters(assetManager);
+    }
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
     // await _decodeMonster(renderManager, assetLoader, "LineageMonsters");
 
 
-    
+
 
     // const classess = [];
 
@@ -154,7 +159,7 @@ async function startCore() {
     // debugger;
 
 
-    
+
     // pkgEngine.loadNativeClasses();
 
 
@@ -295,9 +300,9 @@ async function startCore() {
     // await assetManager.setAlwaysLoaded(renderManager, assetLoader.getPackage("20_22", "Level")); // dion
 
 
-    
 
-    
+
+
     // renderManager.addSector(await _decodePackage(renderManager, assetLoader, "20_21", loadSettings));  
 
     // assetLoader.free(assetLoader.getPackage("20_21", "Level"));
@@ -361,7 +366,7 @@ async function startCore() {
 
     // Load global sky level
 
-    
+
 
     console.info(`System has loaded in ${(performance.now() - startTime) / 1000}s!`);
 
@@ -370,8 +375,17 @@ async function startCore() {
     // renderManager.enableZoneCulling = false;
     renderManager.scene.add(objectGroup);
     renderManager.scene.add(new BoxHelper(objectGroup));
-    renderManager.startRendering();
+    engine.startTicking(performance.now());
+
+    return renderManager;
+}
+
+async function precacheCharacters(assetManager: AssetManager) {
+    try {
+        await assetManager.precacheCharacters();
+    } catch (e) {
+        console.warn(`[characters] precache failed:`, e);
+    }
 }
 
 export default startCore;
-export { startCore };

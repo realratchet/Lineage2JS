@@ -2,11 +2,9 @@
 // would drag the package graph along are normalized/nulled with path-tagged warnings) and collects every
 // reachable ArrayBuffer as the transfer list - `exclude` buffers skip transfer, they would detach worker-side
 
-function isNonIndexKey(key: string): boolean {
-    return !/^\d+$/.test(key);
-}
+function isNonIndexKey(key: string): boolean { return !/^\d+$/.test(key); }
 
-function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>): ArrayBuffer[] {
+export function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>): ArrayBuffer[] {
     const buffers = new Set<ArrayBuffer>();
     const sanitizedValues = new Map<any, any>(); // original -> replacement, preserves aliasing
     const visited = new Set<any>();
@@ -141,4 +139,3 @@ function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>): Array
 }
 
 export default prepareLibraryForTransfer;
-export { prepareLibraryForTransfer };

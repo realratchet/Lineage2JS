@@ -1,6 +1,7 @@
-import ParticleMaterial from "@client/materials/particle-material/particle-material";
-import { BufferAttribute, BufferGeometry, Mesh, Vector3 } from "three";
+import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
+import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
+import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
 // BeamEmitter: every particle is a beam made of HighFrequencyPoints points along a
 // low frequency noise path, rendered as RotatingSheets camera-facing ribbons
@@ -32,12 +33,12 @@ type BeamSettings_T = {
     dynamicTimeBetweenNoiseRange: [number, number]
 };
 
-type BeamEmitterConfig_T = GD.EmitterConfig_T & { material: ParticleMaterialInitSettings_T, beam: BeamSettings_T };
+type BeamEmitterConfig_T = EmitterConfig_T & { material: ParticleMaterialInitSettings_T, beam: BeamSettings_T };
 
 // EBeamEndPointType values
 const PTEP_Velocity = 0, PTEP_Distance = 1, PTEP_Offset = 2, PTEP_Actor = 3, PTEP_TraceOffset = 4, PTEP_OffsetAsAbsolute = 5;
 
-const randRange = (min: number, max: number) => min + Math.random() * (max - min);
+function randRange(min: number, max: number): number { return min + Math.random() * (max - min); }
 
 function randVec(range: BeamRangeVec_T | undefined, out: THREE.Vector3): THREE.Vector3 {
     if (!range) return out.set(0, 0, 0);
@@ -74,8 +75,13 @@ function scaleNoise(factors: BeamScale_T[], repeats: number, i: number, count: n
 const tmpBeamDirection = new Vector3();
 const tmpBeamEndPoint = new Vector3();
 const tmpBeamNoise = new Vector3();
+const tmpBeamOwnerOffset = new Vector3();
+const tmpBeamOwnerPosition = new Vector3();
+const tmpBeamOldOwnerPosition = new Vector3();
+const tmpBeamWorldScale = new Vector3();
+const tmpBeamWorldQuaternion = new Quaternion();
 
-class BeamEmitter extends BaseEmitter {
+export class BeamEmitter extends BaseEmitter {
     protected beam: BeamSettings_T;
     protected sheetsUsed: number;
     protected timeSinceLastDynamicNoise = 0;
@@ -122,7 +128,8 @@ class BeamEmitter extends BaseEmitter {
         geometry.setIndex(new BufferAttribute(indices, 1));
         geometry.boundingSphere = null;
 
-        const mesh = new BeamMesh(geometry, new ParticleMaterial(this.material));
+        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(this.material) : new ParticleMaterial(this.material);
+        const mesh = new BeamMesh(geometry, material);
 
         mesh.emitter = this;
         mesh.frustumCulled = false;
@@ -255,6 +262,38 @@ class BeamEmitter extends BaseEmitter {
             this.boundingBox.expandByPoint(this.tmpVec.set(points[i], points[i + 1], points[i + 2]));
     }
 
+    protected updateParticles(deltaTime: number): number {
+        if (this.coordinateSystem === "independent" && this.parent) {
+            this.parent.getWorldPosition(tmpBeamOwnerPosition);
+            tmpBeamOldOwnerPosition.copy(this.oldOwnerLocation);
+
+            if (this.parent.parent) this.parent.parent.localToWorld(tmpBeamOldOwnerPosition);
+
+            tmpBeamOwnerOffset.subVectors(tmpBeamOwnerPosition, tmpBeamOldOwnerPosition);
+
+            if (tmpBeamOwnerOffset.lengthSq() > 0) {
+                // UBeamEmitter::UpdateParticles treats non-relative HFPoints as world-space.
+                this.getWorldQuaternion(tmpBeamWorldQuaternion).invert();
+                this.getWorldScale(tmpBeamWorldScale);
+                tmpBeamOwnerOffset.applyQuaternion(tmpBeamWorldQuaternion).divide(tmpBeamWorldScale);
+
+                for (const particle of this.particlePool) {
+                    const points = (particle as any).beamPoints as Float32Array | undefined;
+
+                    if (!points) continue;
+
+                    for (let i = 0; i < points.length; i += 3) {
+                        points[i] -= tmpBeamOwnerOffset.x;
+                        points[i + 1] -= tmpBeamOwnerOffset.y;
+                        points[i + 2] -= tmpBeamOwnerOffset.z;
+                    }
+                }
+            }
+        }
+
+        return super.updateParticles(deltaTime);
+    }
+
     // dynamic noise timing, whole steps of the sampled interval
     public beamDynamicNoiseSteps(currentTime: number): number {
         if (this.lastNoiseTime < 0) this.lastNoiseTime = currentTime;
@@ -276,7 +315,7 @@ class BeamEmitter extends BaseEmitter {
 
 const tmpRight = new Vector3(), tmpUp = new Vector3(), tmpPrev = new Vector3(), tmpPoint = new Vector3(), tmpNoise = new Vector3(), tmpView = new Vector3();
 
-class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial> {
+class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
     public emitter: BeamEmitter = null;
 
     onBeforeRender = (_renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
@@ -324,7 +363,7 @@ class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial> {
         // view position in emitter space
         const view = camera.getWorldPosition(tmpView);
 
-        (emitter as THREE.Object3D).worldToLocal(view);
+        (particle.parent as THREE.Object3D).worldToLocal(view);
 
         for (let r = 0; r < sheets; r++) {
             // previous-point seed for the first segment: 2 * P0 - P1
@@ -366,4 +405,3 @@ class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial> {
 }
 
 export default BeamEmitter;
-export { BeamEmitter };

@@ -1,8 +1,20 @@
-import UStaticMeshActor from "./un-static-mesh-actor";
-import { UObject } from "@l2js/core";
+import UStaticMeshActor, { type IStaticMeshActorDecodeInfo } from "./un-static-mesh-actor";
+import UObject from "../un-object";
+import type { FRotator } from "../un-rotator";
+import type { Vector3Arr } from "../library-types";
+
+export type ISwayingDecodeInfo = {
+    tags: string[],
+    orgRotator: Vector3Arr,
+    rate: Vector3Arr,
+    max: Vector3Arr,
+    accelRatio: Vector3Arr,
+    maxRandom: boolean,
+    randomStart: boolean
+};
 
 // per-axis float triple (MovableStaticMeshActor.uc struct L2RotatorTime - PitchTime/RollTime/YawTime)
-abstract class FL2RotatorTime extends UObject {
+export abstract class FL2RotatorTime extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public pitchTime: number;
@@ -17,20 +29,20 @@ abstract class FL2RotatorTime extends UObject {
         });
     }
 
-    public getElements(): GD.Vector3Arr { return [this.pitchTime ?? 0, this.yawTime ?? 0, this.rollTime ?? 0]; }
+    public getElements(): Vector3Arr { return [this.pitchTime ?? 0, this.yawTime ?? 0, this.rollTime ?? 0]; }
 }
 
 // bounded rotational oscillation around the placed rotation (cpp/l2_editor_leak/Engine/Classes/MovableStaticMeshActor.uc,
 // defaultproperties Physics=PHYS_L2Movement bStatic=False bUseL2RotatorRandomStart=True)
-abstract class UMovableStaticMeshActor extends UStaticMeshActor {
+export abstract class UMovableStaticMeshActor extends UStaticMeshActor {
 
     declare protected l2MovementTag: string[];
     declare protected l2AccelRatio: FL2RotatorTime;
     declare protected useL2RotatorMaxRandom: boolean;
     declare protected useL2RotatorRandomStart: boolean;
-    declare protected l2RotatorRate: GA.FRotator;
-    declare protected l2RotatorMax: GA.FRotator;
-    declare protected l2OrgRotator: GA.FRotator;
+    declare protected l2RotatorRate: FRotator;
+    declare protected l2RotatorMax: FRotator;
+    declare protected l2OrgRotator: FRotator;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -44,7 +56,7 @@ abstract class UMovableStaticMeshActor extends UStaticMeshActor {
         });
     }
 
-    protected getActorDecodeInfo(): Partial<GD.IStaticMeshActorDecodeInfo> {
+    protected getActorDecodeInfo(): Partial<IStaticMeshActorDecodeInfo> {
         if (!this.l2RotatorRate && !this.l2RotatorMax) return {};
 
         // L2OrgRotator is runtime-written by native init (bL2InitMove), zeroed in placed data - sway centers on the placed rotation
@@ -60,10 +72,9 @@ abstract class UMovableStaticMeshActor extends UStaticMeshActor {
                 accelRatio: this.l2AccelRatio ? this.l2AccelRatio.getElements() : [0, 0, 0],
                 maxRandom: !!this.useL2RotatorMaxRandom,
                 randomStart: this.useL2RotatorRandomStart !== false
-            } as GD.ISwayingDecodeInfo
+            } as ISwayingDecodeInfo
         };
     }
 }
 
 export default UMovableStaticMeshActor;
-export { UMovableStaticMeshActor, FL2RotatorTime };

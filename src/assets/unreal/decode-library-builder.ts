@@ -1,20 +1,71 @@
-import DecodeLibrary from "./decode-library";
-import type { HeightMapInfo_T } from "./un-terrain-sector";
+import type { UClass } from "@l2js/core";
+import type { UObject } from "./un-object";
+import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
+import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
+import type { HeightMapInfo_T, UTerrainSector, ITerrainSegmentDecodeInfo } from "./un-terrain-sector";
+import type UPhysicsVolume from "./un-physics-volume";
+import type { UMaterial } from "./un-material";
+import type { FStaticLightmapTexture } from "./model/un-multilightmap-texture";
+import type { UStaticMesh, IStaticMeshObjectDecodeInfo } from "./static-mesh/un-static-mesh";
+import type { USound } from "./un-sound";
+import type { USkeletalMesh, ISkinnedMeshObjectDecodeInfo } from "./skeletal-mesh/un-skeletal-mesh";
+import type { UModel } from "./model/un-model";
+import type { ULevelInfo } from "./un-level-info";
+import type { ATerrainInfo } from "./un-terrain-info";
+import type { ULevel } from "./un-level";
+import type { UAActor } from "./un-aactor";
+import type { UNSun } from "./un-nsun";
+import type { UNMoon } from "./un-nmoon";
+import type { FZoneInfo } from "./un-zone-info";
+import type { UL2FogInfo } from "./un-fog-info";
+import type { UEmitter } from "./un-emitter";
+import type { UPawn } from "./un-pawn";
+import type { UStaticMeshActor } from "./static-mesh/un-static-mesh-actor";
+import type { ULight } from "./un-light";
+import type { UMusicVolume } from "./un-music-volume";
+import type { UAmbientSoundObject } from "./un-ambient-sound";
+import type { Vector3Arr } from "./library-types";
 
-class DecodeLibraryBuilder {
+export type LoadSettings_T = {
+    loadTerrain?: boolean,
+    loadBaseModel?: boolean,
+    loadStaticModels?: boolean,
+    loadStaticModelList?: (number | string)[],
+    loadExtendedBoneInfluences?: boolean,
+    loadEmitters?: boolean,
+    loadEmitterList?: { name: string, emitters?: string[] }[],
+    loadAudio?: boolean,
+    textures: "auto" | "rgba" | "compressed",
+    helpersZoneBounds?: boolean,
+    isSkyLevel?: boolean,
+    decodeWorkerPoolSize?: number,
+    batching?: {
+        terrain?: boolean,
+        staticMeshes?: boolean
+    },
+    cache?: false | {
+        enabled?: boolean,
+        version?: number
+    },
+    [key: `_${string}`]: any // debug/testing overrides, see core.ts
+};
+
+export class DecodeLibraryBuilder {
     public readonly library: DecodeLibrary;
 
     protected readonly materialsLoading = new Set<string>();
-    protected readonly skeletalMeshes = new Map<string, GD.ISkinnedMeshObjectDecodeInfo>();
-    protected readonly settings: GD.LoadSettings_T;
+    protected readonly skeletalMeshes = new Map<string, ISkinnedMeshObjectDecodeInfo>();
+    protected readonly settings: LoadSettings_T;
 
-    public constructor(library: DecodeLibrary, settings: GD.LoadSettings_T) {
+    public constructor(library: DecodeLibrary, settings: LoadSettings_T) {
 
         this.library = library;
         this.settings = settings;
     }
 
-    public pullMaterial(material: GA.UMaterial): string {
+    public isLoadingExtendedBoneInfluences() { return this.settings.loadExtendedBoneInfluences !== false; }
+
+    public pullMaterial(material: UMaterial): string {
         if (!material) return null;
 
         material = material.loadSelf();
@@ -36,7 +87,7 @@ class DecodeLibraryBuilder {
         return material.uuid;
     }
 
-    public pullStaticLightmap(lightmap: GA.FStaticLightmapTexture): string {
+    public pullStaticLightmap(lightmap: FStaticLightmapTexture): string {
         if (lightmap.uuid in this.library.materials) return lightmap.uuid;
 
         this.library.materials[lightmap.uuid] = lightmap.getDecodeInfo(this);
@@ -44,7 +95,7 @@ class DecodeLibraryBuilder {
         return lightmap.uuid;
     }
 
-    public pullStaticMesh(mesh: GA.UStaticMesh, modifiers?: string[]): GD.IStaticMeshObjectDecodeInfo {
+    public pullStaticMesh(mesh: UStaticMesh, modifiers?: string[]): IStaticMeshObjectDecodeInfo {
         mesh = mesh.loadSelf();
 
         const result = mesh.getDecodeInfo(this, modifiers);
@@ -66,7 +117,7 @@ class DecodeLibraryBuilder {
         return result.object;
     }
 
-    public pullSound(sound: GA.USound): { uri: string, data: Uint8Array, mimeType: string } | null {
+    public pullSound(sound: USound): { uri: string, data: Uint8Array, mimeType: string } | null {
         if (!sound) return null;
 
         sound = sound.loadSelf();
@@ -82,22 +133,20 @@ class DecodeLibraryBuilder {
 
         const fileType = sound.getFileType()?.toLowerCase() ?? "wav";
         const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
-        const audioBuffer = new ArrayBuffer(audioData.byteLength);
-        new Uint8Array(audioBuffer).set(audioData);
-        const blob = new Blob([audioBuffer], { type: mimeType });
 
-        soundEntry = { uri: URL.createObjectURL(blob), data: audioData, mimeType };
+        // Blob URLs are minted by refreshSoundBlobUris on the thread that owns the library.
+        soundEntry = { uri: null, data: audioData, mimeType };
         this.library.soundBlobCache.set(soundKey, soundEntry);
 
         return soundEntry;
     }
 
-    public pullSkeletalMesh(mesh: GA.USkeletalMesh): GD.ISkinnedMeshObjectDecodeInfo {
+    public pullSkeletalMesh(mesh: USkeletalMesh, animations: boolean = true, materials: boolean = true, animationNotifies: boolean = animations): ISkinnedMeshObjectDecodeInfo {
         mesh = mesh.loadSelf();
 
         if (this.skeletalMeshes.has(mesh.uuid)) return this.skeletalMeshes.get(mesh.uuid);
 
-        const result = mesh.getDecodeInfo(this);
+        const result = mesh.getDecodeInfo(this, animations, materials, animationNotifies);
 
         this.library.geometries[mesh.uuid] = result.geometry;
         this.library.materials[mesh.uuid] = result.material;
@@ -106,7 +155,7 @@ class DecodeLibraryBuilder {
         return result.object;
     }
 
-    public pullModel(model: GA.UModel, levelInfo: GA.ULevelInfo, geometry: boolean): void {
+    public pullModel(model: UModel, levelInfo: ULevelInfo, geometry: boolean): void {
         if (!geometry) {
             const result = model.getZoneDecodeInfo(this.library, levelInfo);
 
@@ -141,7 +190,7 @@ class DecodeLibraryBuilder {
             this.library.materials[uuid] = materialInfo;
     }
 
-    public pullTerrainSector(sector: GA.UTerrainSector, info: GA.ATerrainInfo, heightmap: HeightMapInfo_T): GD.ITerrainSegmentDecodeInfo {
+    public pullTerrainSector(sector: UTerrainSector, info: ATerrainInfo, heightmap: HeightMapInfo_T): ITerrainSegmentDecodeInfo {
         sector = sector.loadSelf();
 
         const result = sector.getDecodeInfo(this, info, heightmap);
@@ -152,7 +201,7 @@ class DecodeLibraryBuilder {
         return result.object;
     }
 
-    public pullTerrainInfo(info: GA.ATerrainInfo): string {
+    public pullTerrainInfo(info: ATerrainInfo): string {
         info = info.loadSelf();
 
         const result = info.getDecodeInfo(this);
@@ -173,7 +222,7 @@ class DecodeLibraryBuilder {
             const { min, max } = bounds.box;
 
             [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-                ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
+                ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
                     for (let i = 0; i < 3; i++)
                         arr[i] = fn(arr[i], min[i], max[i]);
                 }
@@ -183,7 +232,7 @@ class DecodeLibraryBuilder {
         return info.uuid;
     }
 
-    public pullLevel(level: GA.ULevel, sectorName: string): void {
+    public pullLevel(level: ULevel, sectorName: string): void {
         level = level.loadSelf();
 
         const levelInfo = level.levelInfo.loadSelf();
@@ -193,6 +242,8 @@ class DecodeLibraryBuilder {
         const sectorMatch = /^(\d+)_(\d+)$/.exec(sectorName);
 
         this.library.brightness = levelInfo.brightness;
+        // Engine.dll MultiPointCheck 0x85f530..0x85f533: BSP hits return LevelInfo.
+        this.library.levelInfoCollisionRadius = levelInfo.collisionRadius;
         this.library.name = level.url.map;
         this.library.isSkyLevel = this.settings.isSkyLevel === true;
         this.library.helpersZoneBounds = this.settings.helpersZoneBounds === true;
@@ -206,41 +257,62 @@ class DecodeLibraryBuilder {
 
         this.pullModel(model, levelInfo, this.settings.loadBaseModel !== false);
         this.pullActors(level);
+        this.pullScriptDumps(level.getActors(), level.getAmbientActors());
     }
 
-    public pullActors(level: GA.ULevel): void {
-        const actors = new Set<GA.AActor>(level.getActors());
+    public pullScriptClasses(classes: Iterable<UClass>): void {
+        pullScriptClasses(this.library, classes);
+    }
+    public pullScriptClassFunctions(classes: Iterable<UClass>): void { pullScriptClassFunctions(this.library, classes); }
 
-        if (this.settings.loadAudio !== false)
+    public pullScriptDumps(...actorLists: Iterable<UObject>[]): void {
+        pullScriptDumps(this.library, ...actorLists);
+    }
+
+    public pullActors(level: ULevel): void {
+        const actors = new Set<UAActor>(level.getActors());
+
+        if (this.settings.loadAudio)
             for (const actor of level.getAmbientActors())
                 actors.add(actor);
 
         for (const actor of actors) {
             if (!actor) continue;
 
+            if ((actor as any).isPhysicsVolume) {
+                const volume = actor.loadSelf() as UPhysicsVolume;
+                const volumeInfo = volume.getDecodeInfo(this.library);
+
+                if (volumeInfo) {
+                    this.setScriptClass(volume, volumeInfo);
+                    this.library.waterVolumes.push(volumeInfo);
+                }
+                continue;
+            }
+
             switch (actor.constructor.friendlyName) {
                 case "TerrainInfo": {
                     if (this.settings.loadTerrain !== false)
-                        this.pullTerrainInfo(actor.loadSelf() as GA.ATerrainInfo);
+                        this.pullTerrainInfo(actor.loadSelf() as ATerrainInfo);
                     break;
                 }
                 case "NSun":
                 case "NMoon": {
                     if (this.settings.isSkyLevel === true) {
-                        const celestial = actor.loadSelf() as GA.UNSun | GA.UNMoon;
+                        const celestial = actor.loadSelf() as UNSun | UNMoon;
 
                         this.library.celestials.push(celestial.getDecodeInfo(this));
                     }
                     break;
                 }
                 case "SkyZoneInfo": {
-                    const skyZone = actor.loadSelf() as GA.FZoneInfo;
+                    const skyZone = actor.loadSelf() as FZoneInfo;
 
                     this.library.skyZoneInfos.push(skyZone.getDecodeInfo(this.library));
                     break;
                 }
                 case "L2FogInfo": {
-                    const fog = actor.loadSelf() as GA.UL2FogInfo;
+                    const fog = actor.loadSelf() as UL2FogInfo;
 
                     this.library.fogInfos.push(fog.getDecodeInfo(this));
                     break;
@@ -248,7 +320,7 @@ class DecodeLibraryBuilder {
                 case "Emitter": {
                     if (this.settings.loadEmitters === false) break;
 
-                    const emitter = actor.loadSelf() as GA.UEmitter;
+                    const emitter = actor.loadSelf() as UEmitter;
                     const emitterList = this.settings.loadEmitterList;
 
                     if (emitterList && emitterList.length) {
@@ -264,13 +336,16 @@ class DecodeLibraryBuilder {
                 }
                 case "Pawn": {
                     try {
-                        const pawn = actor.loadSelf() as GA.UPawn;
+                        const pawn = actor.loadSelf() as UPawn;
 
                         if (pawn.isDeleteMe) break;
 
                         const pawnInfo = pawn.getDecodeInfo(this);
 
-                        if (pawnInfo) this.library.pawnActors.push(pawnInfo);
+                        if (pawnInfo) {
+                            this.setScriptClass(pawn, pawnInfo);
+                            this.library.pawnActors.push(pawnInfo);
+                        }
                     } catch (e) {
                         console.warn(`Pawn '${actor.objectName}' failed to decode`, e);
                     }
@@ -286,14 +361,14 @@ class DecodeLibraryBuilder {
                     if (staticMeshList && staticMeshList.length && !staticMeshList.some(i => typeof i === "number" ? i === actor.exportIndex + 1 : i === actor.objectName))
                         break;
 
-                    const staticMeshActor = actor.loadSelf() as GA.UStaticMeshActor;
+                    const staticMeshActor = actor.loadSelf() as UStaticMeshActor;
 
                     if (!staticMeshActor.isDeleteMe) this.pullStaticMeshActor(staticMeshActor);
                     break;
                 }
                 case "Light":
                 case "NMovableSunLight": {
-                    const light = actor.loadSelf() as GA.ULight;
+                    const light = actor.loadSelf() as ULight;
 
                     if (!light.isDeleteMe) this.library.lightActors.push(light.getDecodeInfo(this.library));
                     break;
@@ -301,7 +376,7 @@ class DecodeLibraryBuilder {
                 case "MusicVolume": {
                     if (this.settings.loadAudio === false) break;
 
-                    const music = actor.loadSelf() as GA.UMusicVolume;
+                    const music = actor.loadSelf() as UMusicVolume;
                     const musicInfo = music.getDecodeInfo(this.library);
 
                     this.library.audioList.push(musicInfo);
@@ -311,7 +386,7 @@ class DecodeLibraryBuilder {
                 case "AmbientSoundObject": {
                     if (this.settings.loadAudio === false) break;
 
-                    const ambientSound = actor.loadSelf() as GA.UAmbientSoundObject;
+                    const ambientSound = actor.loadSelf() as UAmbientSoundObject;
                     const soundInfo = ambientSound.getDecodeInfo(this);
 
                     if (soundInfo) this.library.ambientSounds.push(soundInfo);
@@ -321,10 +396,12 @@ class DecodeLibraryBuilder {
         }
     }
 
-    public pullStaticMeshActor(actor: GA.UStaticMeshActor): void {
+    public pullStaticMeshActor(actor: UStaticMeshActor): void {
         const result = actor.getDecodeInfo(this);
 
         if (!result) return;
+
+        this.setScriptClass(actor, result.object);
 
         for (const leafIndex of result.leafIndices)
             if (this.library.leafActors[leafIndex])
@@ -340,7 +417,7 @@ class DecodeLibraryBuilder {
         zoneInfo.bounds.isValid = true;
 
         [[Math.min, zoneInfo.bounds.min], [Math.max, zoneInfo.bounds.max]].forEach(
-            ([fn, arr]: [(...values: number[]) => number, GD.Vector3Arr]) => {
+            ([fn, arr]: [(...values: number[]) => number, Vector3Arr]) => {
                 const values = fn === Math.min ? result.zoneBounds.min : result.zoneBounds.max;
 
                 for (let i = 0; i < 3; i++)
@@ -349,8 +426,10 @@ class DecodeLibraryBuilder {
         );
     }
 
-    public pullEmitter(actor: GA.UEmitter): void {
+    public pullEmitter(actor: UEmitter): void {
         const result = actor.getDecodeInfo(this);
+
+        this.setScriptClass(actor, result.object);
 
         for (const leafIndex of result.leafIndices)
             if (this.library.leafActors[leafIndex])
@@ -362,7 +441,15 @@ class DecodeLibraryBuilder {
 
         zoneInfo.children.push(result.object);
     }
+
+    protected setScriptClass(actor: UObject, info: IBaseObjectDecodeInfo): void {
+        const cls = (actor.constructor as any).hostClass as UClass;
+
+        if (!cls) return;
+
+        info.scriptClassId = cls.name;
+        info.scriptProperties = dumpObjectScriptProperties(actor);
+    }
 }
 
 export default DecodeLibraryBuilder;
-export { DecodeLibraryBuilder };

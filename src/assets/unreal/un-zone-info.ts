@@ -1,7 +1,39 @@
+import type { FObjectArray } from "@l2js/core";
 import AInfo from "./un-info";
-import FColor from "@client/assets/unreal/un-color";
+import FColor from "./un-color";
+import type { FVector } from "./un-vector";
+import type { ATerrainInfo } from "./un-terrain-info";
+import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo } from "./decode-library";
+import type { ColorArr, Vector2Arr, Vector3Arr } from "./library-types";
+import type { IBoxDecodeInfo } from "./un-box";
 
-abstract class FZoneInfo extends AInfo implements GD.IInfo {
+export type IInfo = { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; };
+export type IZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Zone" };
+export type ISkyZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Sky" };
+export type ISectorDecodeInfo = IBaseZoneDecodeInfo & { type: "Sector" };
+export type IZoneFogInfo = { start: number, end: number, color: ColorArr };
+
+export type IBaseZoneDecodeInfo = {
+    type: "Sector" | "Zone" | "Sky",
+    uuid: string,
+    name?: string,
+    bounds: IBoxDecodeInfo,
+    children: IBaseObjectOrInstanceDecodeInfo[],
+    fog?: IZoneFogInfo,
+    isFogZone?: boolean,
+    isSunAffected?: boolean,
+    position?: Vector3Arr,
+    affectRange?: Vector2Arr,
+    fogRange1?: Vector2Arr,
+    fogRange2?: Vector2Arr,
+    fogRange3?: Vector2Arr,
+    fogRange4?: Vector2Arr,
+    fogRange5?: Vector2Arr,
+    ambient?: number[],
+    colors?: any[]
+};
+
+export abstract class FZoneInfo extends AInfo implements IInfo {
     declare public readonly isFogZone: boolean;
     declare public readonly hasTerrain: boolean;
 
@@ -9,13 +41,13 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
 
     declare public readonly brightness: number;
     declare public readonly ambientBrightness: number;
-    declare public readonly ambientVector: GA.FVector;
+    declare public readonly ambientVector: FVector;
 
     declare public readonly killZ: number; // Any actor falling below this height falls out of the world. For Pawns this means they die, other actors usually get destroyed. The LevelInfo's KillZ shows as a red line in side-view orthogonal UnrealEd Viewports.
     declare public readonly killZType: number;
     declare public readonly isSoftKillZ: boolean;
 
-    declare public readonly terrains: C.FObjectArray<GA.ATerrainInfo>;
+    declare public readonly terrains: FObjectArray<ATerrainInfo>;
 
     declare public readonly ambientHue: number;
     declare public readonly ambientSaturation: number;
@@ -90,7 +122,7 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
 
     // }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.IBaseZoneDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo {
         return {
             uuid: this.uuid,
             type: "Zone",
@@ -104,11 +136,10 @@ abstract class FZoneInfo extends AInfo implements GD.IInfo {
             fog: !this.hasDistanceFog || !this.distanceFogColor ? null : {
                 start: this.distanceFogStart,
                 end: this.distanceFogEnd,
-                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as GD.ColorArr
+                color: (this.distanceFogColor.toArray() as number[]).map(v => v / 255) as ColorArr
             }
         };
     }
 }
 
 export default FZoneInfo;
-export { FZoneInfo };

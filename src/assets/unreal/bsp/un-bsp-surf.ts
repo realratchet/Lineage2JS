@@ -1,13 +1,14 @@
 import { FPlane } from "../un-plane";
-import { BufferValue } from "@l2js/core";
-import { flagBitsToDict } from "@l2js/core/src/utils/flags";
+import { BufferValue, type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { PolyFlags_T } from "../un-polys";
+import type { UShader } from "../un-material";
+import type { UBrush } from "../un-brush";
 
-class FBSPSurf implements C.IConstructable {
-    public material: GA.UShader;
+export class FBSPSurf implements Constructable_T {
+    public material: UShader;
 
     public flags: number;       // 4 bytes polygon flags.
-    public polyFlags: C.FlagDict<keyof typeof PolyFlags_T>;
+    public polyFlags: FlagDict_T<keyof typeof PolyFlags_T>;
     public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
     public vNormal: number;          // 4 bytes index to polygon normal.
     public vTextureU: number;        // 4 bytes texture U-vector index.
@@ -17,12 +18,12 @@ class FBSPSurf implements C.IConstructable {
 
     public plane: FPlane;
 
-    public actor: GA.UBrush;            // 4 bytes brush actor owning this Bsp surface.
+    public actor: UBrush;            // 4 bytes brush actor owning this Bsp surface.
     // protected nodes: FArray<BufferValue.; // TArray // 12 Nodes which make up this surface
 
     public unkInt32: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.plane = FPlane.make();
 
         const materialId = pkg.read("compat32");
@@ -49,8 +50,8 @@ class FBSPSurf implements C.IConstructable {
 
         const offset = pkg.tell();
 
-        this.material = pkg.fetchObject<GA.UShader>(materialId);
-        this.actor = pkg.fetchObject<GA.UBrush>(ownerId);
+        this.material = pkg.fetchObject<UShader>(materialId);
+        this.actor = pkg.fetchObject<UBrush>(ownerId);
 
         pkg.seek(offset, "set");
 
@@ -59,4 +60,3 @@ class FBSPSurf implements C.IConstructable {
 }
 
 export default FBSPSurf;
-export { FBSPSurf };

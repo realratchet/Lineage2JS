@@ -1,17 +1,14 @@
-import DecodeLibrary from "@client/assets/unreal/decode-library";
-import DecodeLibraryBuilder from "@client/assets/unreal/decode-library-builder";
+import type { APackage } from "@l2js/core";
+import DecodeLibrary from "@l2js/engine/decode-library";
+import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ULevel } from "@l2js/engine/un-level";
 
-/**
- * Builds a DecodeLibrary from a decoded level package (formerly
- * DecodeLibrary.fromPackage). Lives in the decode worker bundle so no ue2 asset code
- * ever reaches the renderer bundle.
- */
-
-function buildDecodeLibrary(pkg: C.APackage, sectorName: string, settings: GD.LoadSettings_T) {
+export function buildDecodeLibrary(pkg: APackage, sectorName: string, settings: LoadSettings_T) {
     const decodeLibrary = new DecodeLibrary();
     const builder = new DecodeLibraryBuilder(decodeLibrary, settings);
 
-    const uLevel = pkg.fetchObject<GA.ULevel>(pkg.exportGroups.Level[0].index + 1).loadSelf();
+    const uLevel = pkg.fetchObject<ULevel>(pkg.exportGroups.Level[0].index + 1).loadSelf();
 
     // const sun = pkg.fetchObject<GA.UNSun>(pkg.exportGroups["NSun"][0].index + 1).loadSelf();
     // decodeLibrary.sun = sun.getDecodeInfo(decodeLibrary);
@@ -27,4 +24,3 @@ function buildDecodeLibrary(pkg: C.APackage, sectorName: string, settings: GD.Lo
 }
 
 export default buildDecodeLibrary;
-export { buildDecodeLibrary };

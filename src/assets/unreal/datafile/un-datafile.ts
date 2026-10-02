@@ -1,15 +1,18 @@
+import type { IDatContainerType, ISchemaValue } from "./schema/dat-schema";
+import fetchAssetHandle from "../asset-handle";
+import { ASCFType } from "./schema/dat-container";
+import { UEncodedFile, BufferValue, type ValidTypes_T, type ValueTypeNames_T } from "@l2js/core";
 
-import fetchAssetHandle from "@client/assets/asset-handle";
-import { UEncodedFile, BufferValue } from "@l2js/core";
-
-class UDataFile extends UEncodedFile {
+export class UDataFile extends UEncodedFile {
     public datarows: Record<string, any>[];
     public readonly schema: readonly ISchemaValue[];
+    protected readonly recordCount: number | null;
 
-    public constructor(schema: ISchemaValue[], path: string) {
+    public constructor(schema: readonly ISchemaValue[], path: string, recordCount: number | null = null) {
         super(path);
 
         this.schema = schema;
+        this.recordCount = recordCount;
     }
 
     protected async readArrayBuffer() {
@@ -30,14 +33,14 @@ class UDataFile extends UEncodedFile {
         if (signature !== 0x69004c)
             throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
 
-        const rowCount = readable.read("uint32");
+        const rowCount = this.recordCount === null ? readable.read("uint32") : this.recordCount;
         const rows = [] as Record<string, any>[];
 
         for (let i = 0; i < rowCount; i++) {
             const values = {} as Record<string, any>;
 
             for (let { type, name } of this.schema) {
-                values[name] = loadSingleValue(readable, type);
+                values[name] = loadSingleValue(readable, type, values);
             }
 
             rows.push(values);
@@ -49,19 +52,20 @@ class UDataFile extends UEncodedFile {
     }
 }
 
-export default UDataFile;
-export { UDataFile };
-
-function loadSingleValue(readable: UDataFile, type: C.ValidTypes_T<any> | IDatContainerType | C.ValueTypeNames_T) {
+function loadSingleValue(readable: UDataFile, type: ValidTypes_T<any> | IDatContainerType | ValueTypeNames_T | "ASCF", values: Record<string, any>) {
     if (typeof type === "string") {
-        const schemaValue = readable.read(type as any);
+        if (type === "ASCF") return new ASCFType().read(readable);
+
+        const schemaValue = type === "utf16" ? readable.read(new BufferValue(BufferValue.utf16)).value : readable.read(type as any);
         const value = schemaValue;
 
         return value as any;
     } else if (!(type as IDatContainerType).isContainerType) {
-        const schemaValue = readable.read(new BufferValue(type as C.ValidTypes_T<C.ValueTypeNames_T>));
+        const schemaValue = readable.read(new BufferValue(type as ValidTypes_T<ValueTypeNames_T>));
         const value = schemaValue.value;
 
         return value as any;
-    } else return (type as IDatContainerType).read(readable);
+    } else return (type as IDatContainerType).read(readable, values);
 }
+
+export default UDataFile;

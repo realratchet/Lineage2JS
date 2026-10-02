@@ -18,7 +18,7 @@ import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
  * It uses an aggressive RGB cutoff for the bright pass (0.993 threshold)
  * as identified in the game's IDA traces and env.int configuration.
  */
-class UGlowPass extends Pass {
+export class UGlowPass extends Pass {
     private renderTargetBright: WebGLRenderTarget;
     private renderTargetBlurH: WebGLRenderTarget;
     private renderTargetBlurV: WebGLRenderTarget;
@@ -220,5 +220,3 @@ class UGlowPass extends Pass {
         this.materialBlurV.uniforms.resolution.value.set(resX, resY);
     }
 }
-
-export { UGlowPass };

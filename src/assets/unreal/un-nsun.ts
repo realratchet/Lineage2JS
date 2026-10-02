@@ -1,13 +1,14 @@
 import UNCelestial from "./un-ncelestial";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
-abstract class UNSun extends UNCelestial {
+export abstract class UNSun extends UNCelestial {
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "SunScale": "celestialScale",
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         const self = this.loadSelf();
         const sprites = self.skins?.map(skin => builder.pullMaterial(skin));
 
@@ -22,4 +23,3 @@ abstract class UNSun extends UNCelestial {
 }
 
 export default UNSun;
-export { UNSun };

@@ -1,19 +1,41 @@
-import UObject from "@l2js/core";
-import { BufferValue } from "@l2js/core";
+import { type APackage, type Constructable_T, type UExport, BufferValue, FArray, FPrimitiveArray } from "@l2js/core";
+import UObject from "../un-object";
 import FRawColorStream from "../un-raw-color-stream";
 import ULight from "../un-light";
-import FArray, { FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
+import type { UStaticMeshActor } from "./un-static-mesh-actor";
+import type { DecodeLibrary } from "../decode-library";
+import type { Matrix4Arr } from "../library-types";
+import type { IStaticMeshObjectDecodeInfo } from "./un-static-mesh";
+
+export type ILightInstanceDecodeInfo = {
+    matrix: Matrix4Arr,
+    flags: ArrayBuffer,
+    scene: [string, number, number][],
+    environment: [string, number, number][]
+};
+
+export type IStaticMeshInstanceDecodeInfo = {
+    uuid?: string,
+    name?: string,
+    type: "StaticMeshInstance",
+    mesh: IStaticMeshObjectDecodeInfo,
+    swayPhase?: number,
+    lights?: ILightInstanceDecodeInfo,
+    attributes?: {
+        colors?: Float32Array | Uint8Array
+    }
+};
 
 
 
-export class FStaticMeshLightInfo implements C.IConstructable {
+export class FStaticMeshLightInfo implements Constructable_T {
     public lightIndex: number; // seems to be light index
     public vertexFlags = new FPrimitiveArray(BufferValue.uint8);
     public applied: boolean;
 
     public light: ULight;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.lightIndex = pkg.read("compat32");
         this.vertexFlags.load(pkg);
 
@@ -28,7 +50,7 @@ export class FStaticMeshLightInfo implements C.IConstructable {
         return `FStaticMeshLightInfo(light=${this.light.toString()})`;
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): any {
+    public getDecodeInfo(library: DecodeLibrary): any {
         return {
             vertexFlags: this.vertexFlags,
             ...(this.light.loadSelf().getDecodeInfo(library))
@@ -36,21 +58,21 @@ export class FStaticMeshLightInfo implements C.IConstructable {
     }
 }
 
-abstract class UStaticMeshInstance extends UObject {
+export abstract class UStaticMeshInstance extends UObject {
     declare public colorStream: FRawColorStream;
     declare public sceneLights: FArray<FStaticMeshLightInfo>;
     declare public environmentLights: FArray<FStaticMeshLightInfo>;
 
     declare public unkArrIndex: number[];
 
-    declare protected actor: GA.UStaticMeshActor;
+    declare protected actor: UStaticMeshActor;
 
-    public setActor(actor: GA.UStaticMeshActor) { this.actor = actor; return this; }
+    public setActor(actor: UStaticMeshActor) { this.actor = actor; return this; }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: GD.ILightInstanceDecodeInfo } {
+    public getDecodeInfo(library: DecodeLibrary): { color: Float32Array | Uint8Array | null, lights: ILightInstanceDecodeInfo } {
         const len = this.colorStream.getElemCount();
         const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;
-    
+
         for (let i = 0; i < len; i++) {
             const [r, g, b] = this.colorStream.getColor(i);
             const offset = i * 3;
@@ -65,7 +87,7 @@ abstract class UStaticMeshInstance extends UObject {
         // let finishIndex: number;
         // // let startTime: number, finishTime: number;
 
-        // let lightingColor: GD.ColorArr;
+        // let lightingColor: ColorArr;
 
         // for (let i = 0, len = this.environmentLights.length; i < len; i++) {
         //     const timeForIndex = indexToTime(i, len);
@@ -128,7 +150,7 @@ abstract class UStaticMeshInstance extends UObject {
         };
     }
 
-    protected doLoad(pkg: C.APackage, exp: C.UExport): this {
+    protected doLoad(pkg: APackage, exp: UExport): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -158,4 +180,3 @@ abstract class UStaticMeshInstance extends UObject {
 }
 
 export default UStaticMeshInstance;
-export { UStaticMeshInstance };

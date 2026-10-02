@@ -7,18 +7,12 @@
         "module": "ESNext",
         // "allowJs": true,
         "paths": {
-            "@native": [
-                "./src/assets/unreal/scripts/un-native-registry.ts"
+            "@l2js/engine": [
+                "./src/assets/unreal/contracts/index.ts"
             ],
-            "@client/*": [
-                "./src/*"
-            ],
-            "@unreal/*": [
+            "@l2js/engine/*": [
                 "./src/assets/unreal/*"
-            ],
-            "@l2js/core/*": [
-                "./node_modules/@l2js/core/src/*"
-            ],
+            ]
         },
         "noImplicitAny": true,
         "noImplicitReturns": true,

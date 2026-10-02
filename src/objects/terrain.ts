@@ -1,25 +1,13 @@
-/**
- * Runtime Terrain Lighting System
- *
- * un-terrain-sector.ts only loads the raw shadow map bytes and inits vertex colors
- * to black at decode time - this file is where the actual relighting happens.
- *
- * Key differences from Static Mesh lighting:
- * - NO scaleGlow multiplier (uses raw intensity)
- * - NO environment lights (only scene lights)
- * - Uses shadow maps that change with time of day
- * - Ambient is added unconditionally, NOT shadow-modulated - modulating ambient+sun
- *   together crushed shadowed terrain to pitch black (see git history)
- *
- * Lighting formula: color = ambient + (sunColor * shadow/255) + Σ(lightColor * sampleIntensity(...))
- */
-import DynamicLight from "@client/objects/dynamic-light";
-import { SectorObject } from "@client/objects/zone-object";
-import type { L2Environment } from "@client/rendering/l2-env";
-import { Mesh, Vector3 } from "three";
-import type { ICollidable } from "./objects";
+import DynamicLight from "./dynamic-light";
+import { SectorObject } from "./zone-object";
+import type { L2Environment } from "../rendering/l2-env";
+import { Box3, Vector3 } from "three";
+import type { CollisionPrimitive_T, ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { ColorByte } from "@client/utils/color-byte";
+import { ColorByte } from "../utils/color-byte";
+import buildTriangleIndex from "../physics/triangle-index";
+import { GameMesh } from "../game/components";
+import { ColliderComponent } from "../physics/components/physics-component";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -28,7 +16,7 @@ const tmpNormal = new Vector3();
 const cbAmbient = new ColorByte();
 const cbLight = new ColorByte();
 
-class Terrain extends Mesh implements ICollidable {
+export class Terrain extends GameMesh implements ICollidable {
     public readonly isCollidable = true;
 
     protected rigidbodyDesc: RigidBodyDesc;
@@ -36,12 +24,16 @@ class Terrain extends Mesh implements ICollidable {
 
     protected collider: RAPIER.Collider;
     protected rigidbody: RAPIER.RigidBody;
+    protected analyticalIndices: Uint32Array;
+    protected readonly analyticalBounds = new Box3();
+    protected analyticalPrimitive: CollisionPrimitive_T<"terrain">;
+    protected collisionRadius: number;
 
     public bounds: THREE.Box3;
     protected boundsSize: THREE.Vector3;
     protected boundsPosition: THREE.Vector3;
 
-    protected lightingInfo?: TerrainLightingInfo;
+    protected lightingInfo?: TerrainLightingInfo_T;
     protected lastUpdatedTime: number = -1;
     protected lastShadowIndex: number = -1;
     protected lastShadowNextIndex: number = -1;
@@ -67,25 +59,35 @@ class Terrain extends Mesh implements ICollidable {
     public useShadowLerp: boolean = true;
     public lightingRevision: number = 0;
 
-    // Batch mode: when set, this sector writes to a shared geometry buffer at vertexOffset
     public batchGeometry: THREE.BufferGeometry | null = null;
     public batchVertexOffset: number = 0;
     public batchIndexOffset: number = 0;
     public batchSectorIndex: number = -1;
 
-    constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], fieldInfo?: TerrainFieldInfo_T, lightingInfo?: TerrainLightingInfo) {
+    public constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], fieldInfo?: TerrainFieldInfo_T, lightingInfo?: TerrainLightingInfo_T) {
         super(geometry, material);
 
         this.lightingInfo = lightingInfo;
 
         if (fieldInfo) this.setTerrainField(fieldInfo);
+
+        this.addComponent(new ColliderComponent());
     }
 
-    public setTerrainField({ segments: [vx, vz], heightfield, bounds, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {
+    public setTerrainField({ bounds, collisionRadius, mapX, mapY, offsetX, offsetY, heightmapX, heightmapY }: TerrainFieldInfo_T) {
+        if (!Number.isFinite(collisionRadius)) throw new Error(`Terrain collision has invalid TerrainInfo radius '${collisionRadius}'.`);
+        this.collisionRadius = collisionRadius;
         this.bounds = bounds;
         this.boundsSize = bounds.getSize(new Vector3());
         this.boundsPosition = bounds.getCenter(new Vector3());
-        this.colliderDesc = ColliderDesc.heightfield(vx, vz, heightfield, { x: this.boundsSize.x, y: 1, z: this.boundsSize.z });
+
+        const vertices = this.geometry.getAttribute("position").array as Float32Array;
+        const arrIndices = this.geometry.index.array;
+        const indices = arrIndices instanceof Uint32Array ? arrIndices : new Uint32Array(arrIndices);
+
+        this.analyticalIndices = indices;
+        this.analyticalPrimitive = { kind: "terrain", vertices, indices, index: buildTriangleIndex(vertices, indices), matrixWorld: this.matrixWorld, bounds: this.analyticalBounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
+        this.colliderDesc = ColliderDesc.trimesh(vertices, indices);
         this.rigidbodyDesc = RigidBodyDesc.fixed();
 
         if (mapX !== undefined) this.mapX = mapX;
@@ -96,26 +98,11 @@ class Terrain extends Mesh implements ICollidable {
         if (heightmapY !== undefined) this.heightmapY = heightmapY;
     }
 
-    /**
-     * Update terrain lighting for the current frame
-     * 
-     * This replaces the baked lighting from un-terrain-sector.ts:getDecodeInfo
-     * with a runtime system that supports dynamic lights and time-of-day changes.
-     *
-     * Static cache includes:
-     * - Ambient light (unconditional) + sun light (modulated by shadow map for current time)
-     * - Static scene lights (LT_Steady with bDynamicLight=false)
-     * 
-     * Dynamic pass includes:
-     * - Dynamic scene lights (bDynamicLight=true or moving lights)
-     * - Time-based lights (LT_Pulse, LT_Blink, etc.)
-     */
-    // true until the first lighting pass ran, vertex colors start out black
     public get needsInitialLighting(): boolean {
         return !!this.lightingInfo && !this.staticLightingCache;
     }
 
-    public lightingGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
+    public lightingGate: boolean = true;
 
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightingInfo) return;
@@ -135,7 +122,6 @@ class Terrain extends Mesh implements ICollidable {
         env.getAmbientPlaneTerrainLightHalved(cbAmbient);
         env.getTerrainLightColor(cbLight);
 
-        // When lerping, we need to update if alpha changes significantly, or if light colors change
         let staticCacheDirty = !this.staticLightingCache || shadowIndex !== this.lastShadowIndex;
 
         if (this.useShadowLerp && this.staticLightingCache) {
@@ -150,7 +136,6 @@ class Terrain extends Mesh implements ICollidable {
 
         let anyDynamicLightNeedsUpdate = false;
 
-        // dirty scan without allocating, this runs per sector per frame
         for (const l of this.lightingInfo.lights) {
             const light = sector.lights[l.light];
             if (!light) continue;
@@ -160,20 +145,16 @@ class Terrain extends Mesh implements ICollidable {
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
-        // Only recalculate if something changed (time or light)
         if (!staticCacheDirty && !anyDynamicLightNeedsUpdate) return;
 
-        // Collect and augment light info
         const lights = this.lightingInfo.lights.map(l => ({ ...l, instance: sector.lights[l.light] }));
 
-        // In batch mode, we use the shared geometry's color attribute
         const targetGeometry = this.batchGeometry || this.geometry;
         const attrColors = targetGeometry.getAttribute("color");
         const colorArray = attrColors.array as Uint8ClampedArray;
         const vertexCount = this.geometry.getAttribute("position").count;
         const colorOffset = this.batchVertexOffset * 3;
 
-        // Rebuild static cache if necessary (ambient + shadows + static lights)
         if (staticCacheDirty) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== vertexCount * 3) {
                 this.staticLightingCache = new Uint8ClampedArray(vertexCount * 3);
@@ -201,7 +182,6 @@ class Terrain extends Mesh implements ICollidable {
                 this.staticLightingCache[i + 2] = (cbAmbient.b + (sunB / 255)) | 0;
             }
 
-            // 2. Add Static Lights
             const staticLights = lights.filter(l => l.instance && !l.instance.isDynamic && (!l.instance.isTimeBased || l.instance.lightMethod === "Sunlight"));
             if (staticLights.length > 0) {
                 this.computeLighting(staticLights, this.staticLightingCache, true);
@@ -219,9 +199,8 @@ class Terrain extends Mesh implements ICollidable {
         }
 
         this.syncStitchedBoundaryColors(); // stitched boundary row has no shadow-map data of its own - borrow the neighbor's real edge color
-        colorArray.set(this.staticLightingCache!, colorOffset); // apply static cache to the vertex attribute
+        colorArray.set(this.staticLightingCache!, colorOffset);
 
-        // 3. Add Dynamic/Time-Based Lights
         const dynamicLights = lights.filter(l => l.instance && (l.instance.isDynamic || (l.instance.isTimeBased && l.instance.lightMethod !== "Sunlight")));
         if (dynamicLights.length > 0) {
             this.computeLighting(dynamicLights, colorArray, false);
@@ -266,28 +245,13 @@ class Terrain extends Mesh implements ICollidable {
         }
     }
 
-    /**
-     * Compute lighting for terrain vertices
-     * 
-     * Reference: un-terrain-sector.ts lines 174-255 (getDecodeInfo)
-     * Original game code:
-     * - Iterates through lightInfos (scene lights only, no environment lights)
-     * - Uses visibility bitmap to check which vertices are affected
-     * - Samples intensity: dynLight.sampleIntensity(samplingPoint, samplingNormal)
-     * - Applies color: colors[i] += color.x * intensity (NO scaleGlow multiplier)
-     * 
-     * Note: Terrain uses raw intensity without scaleGlow (unlike static meshes)
-     * Note: Terrain only uses scene lights, not environment lights
-     */
     protected computeLighting(lights: { flags: Uint8Array, instance?: DynamicLight }[], target: Uint8ClampedArray, isCache: boolean) {
         if (lights.length === 0) return;
 
-        // In batch mode, positions and normals are also in the shared geometry
         const sourceGeometry = this.batchGeometry || this.geometry;
         const attrPositions = sourceGeometry.getAttribute("position");
         const attrNormals = sourceGeometry.getAttribute("normal");
 
-        // Guard: skip if normals are missing
         if (!attrNormals) return;
 
         const vertexCount = this.geometry.getAttribute("position").count;
@@ -309,8 +273,6 @@ class Terrain extends Mesh implements ICollidable {
                     const sourceVi = vertexOffset + vi;
                     tmpVertex.fromBufferAttribute(attrPositions, sourceVi);
 
-                    // In batch mode, vertices are already shifted to world space in the shared buffer.
-                    // Otherwise, we must add the sector's own position.
                     if (!this.batchGeometry) {
                         tmpVertex.x += ox;
                         tmpVertex.y += oy;
@@ -362,55 +324,9 @@ class Terrain extends Mesh implements ICollidable {
         if (times.length === 0) return [0, 0, 0];
         if (times.length === 1) return [0, 0, 0];
 
-        // Find current time slot
-        let idxCurr = times.length - 1;
-        for (let i = 0; i < times.length; i++) {
-            if (timeOfDay <= times[i]) {
-                idxCurr = i;
-                break;
-            }
-        }
-
-        // Previous slot is the "current" state we are coming from
-        // If we found index at timeOfDay <= times[i], then times[i] is the END of the current interval
-        // So the interval is [times[i-1], times[i]]
-
-        // Wait, let's look at how un-terrain-sector uses timeToIndex. 
-        // timeToIndex returns the index where timeOfDay <= times[i]. 
-        // So this means index i is the active shadow map for that time.
-        // Shadow maps are discrete states. 
-
-        // If we want to lerp, we need to know the "center" time of each shadow map to lerp between them.
-        // But we don't have that info easily.
-
-        // Let's assume standard time distribution logic from un-l2env:
-        // times[i] represents the START of the interval for shadow map i? 
-        // "timeToIndex" implementation in un-l2env checks "timeOfDay <= times[i]". 
-        // If true, returns i. 
-        // This implies times[i] is the END of the interval for shadow map i.
-
-        // Example: times = [6, 18, 24] (Day, Night, Day transition?)
-        // time = 5 -> index 0 (Day)
-        // time = 12 -> index 1 (Night)
-        // time = 20 -> index 2 (Day transition)
-
-        // If we want to lerp, we treat the time points as keyframes.
-        // We need to find the interval [times[a], times[b]] that contains timeOfDay.
-
-        // Let's reuse pickArrayIndices logic concept but adapted for simple number array
-
-        // We need two indices: previous and next relative to timeOfDay
-
-        // Let's assume the times array is sorted.
-        // We need to find i such that times[i] <= timeOfDay < times[i+1]
-        // But the previous logic was timeOfDay <= times[i] -> index i.
-
-        // Let's try to interpret "times" as the precise moment that shadow map is fully active.
-
         let idxA = 0;
         let idxB = 0;
 
-        // Find split point
         let found = false;
         for (let i = 0; i < times.length; i++) {
             if (timeOfDay < times[i]) {
@@ -422,7 +338,6 @@ class Terrain extends Mesh implements ICollidable {
         }
 
         if (!found) {
-            // changes wrap around 24h
             idxA = times.length - 1;
             idxB = 0;
         }
@@ -430,7 +345,6 @@ class Terrain extends Mesh implements ICollidable {
         let timeA = times[idxA];
         let timeB = times[idxB];
 
-        // Handle wrapping
         if (timeB < timeA) {
             timeB += 24;
         }
@@ -448,26 +362,62 @@ class Terrain extends Mesh implements ICollidable {
         return [idxA, idxB, alpha];
     }
 
+    public releaseCollider() {
+        this.collider = null;
+        this.rigidbody = null;
+    }
+
     public getCollider() { return this.collider; }
+    public getCollisionRadius(): number { return this.collisionRadius; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
 
     public createCollider(physicsWorld: RAPIER.World) {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
 
-        this.rigidbody.setTranslation(this.position, false);
+        this.rigidbody.setTranslation(this.getWorldPosition(tmpVertex), false);
 
         return this.collider;
+    }
+
+    public getCollisionPrimitive(): CollisionPrimitive_T {
+        this.analyticalBounds.setFromArray(this.analyticalPrimitive.vertices).applyMatrix4(this.matrixWorld);
+
+        return this.analyticalPrimitive;
+    }
+
+    public refreshCollisionGeometry() {
+        const attrPositions = this.geometry.getAttribute("position");
+
+        if (this.batchGeometry) {
+            const arrPositions = attrPositions.array as Float32Array;
+            const arrBatchPositions = this.batchGeometry.getAttribute("position").array as Float32Array;
+            const offset = this.batchVertexOffset * 3;
+
+            for (let i = 0, len = arrPositions.length; i < len; i += 3) {
+                arrPositions[i] = arrBatchPositions[offset + i] - this.position.x;
+                arrPositions[i + 1] = arrBatchPositions[offset + i + 1] - this.position.y;
+                arrPositions[i + 2] = arrBatchPositions[offset + i + 2] - this.position.z;
+            }
+
+            attrPositions.needsUpdate = true;
+            this.geometry.computeVertexNormals();
+        }
+
+        const arrIndices = this.geometry.index.array;
+        const indices = arrIndices instanceof Uint32Array ? arrIndices : new Uint32Array(arrIndices);
+
+        this.analyticalIndices = indices;
+        this.analyticalPrimitive.vertices = attrPositions.array as Float32Array;
+        this.analyticalPrimitive.indices = this.analyticalIndices;
+        this.analyticalPrimitive.index = buildTriangleIndex(this.analyticalPrimitive.vertices, this.analyticalIndices);
+        this.colliderDesc = ColliderDesc.trimesh(attrPositions.array as Float32Array, indices);
     }
 
     protected stitchEastNeighbor: Terrain | null = null;
     protected stitchSouthNeighbor: Terrain | null = null;
     protected stitchCornerNeighbor: Terrain | null = null;
 
-    /**
-     * Stitches this terrain's Eastern (Right) edge to match a Western neighbor's Left edge.
-     * Only applied at inter-map boundaries (offsetX === 240).
-     */
     public stitchWestToEast(neighbor: Terrain) {
         const targetGeometry = this.batchGeometry || this.geometry;
         const attr = targetGeometry.getAttribute("position");
@@ -480,27 +430,30 @@ class Terrain extends Mesh implements ICollidable {
         const selfOffset = this.batchVertexOffset * 3;
         const neighborOffset = neighbor.batchVertexOffset * 3;
 
-        // If both are in batch mode, vertices are absolute and should match perfectly.
-        // Otherwise, use relative offsets.
         const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
         const hDiff = useAbsolute ? 0 : neighbor.position.z - this.position.z;
+        let changed = false;
 
         for (let y = 0; y < 17; y++) {
             const selfIdx = selfOffset + (y * 17 + 16) * 3 + 2; // Right Edge (x=16)
             const neighborIdx = neighborOffset + (y * 17 + 0) * 3 + 2; // Neighbor Left Edge (x=0)
-            pos[selfIdx] = nPos[neighborIdx] + hDiff;
+            const height = nPos[neighborIdx] + hDiff;
+
+            if (pos[selfIdx] === height) continue;
+
+            pos[selfIdx] = height;
+            changed = true;
         }
+
+        this.stitchEastNeighbor = neighbor;
+
+        if (!changed) return false;
 
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
-        this.stitchEastNeighbor = neighbor;
         return true;
     }
 
-    /**
-     * Stitches this terrain's Southern (Bottom) edge to match a Northern neighbor's Top edge.
-     * Only applied at inter-map boundaries (offsetY === 240).
-     */
     public stitchNorthToSouth(neighbor: Terrain) {
         const targetGeometry = this.batchGeometry || this.geometry;
         const attr = targetGeometry.getAttribute("position");
@@ -515,23 +468,28 @@ class Terrain extends Mesh implements ICollidable {
 
         const useAbsolute = !!(this.batchGeometry && neighbor.batchGeometry);
         const hDiff = useAbsolute ? 0 : neighbor.position.z - this.position.z;
+        let changed = false;
 
         for (let x = 0; x < 17; x++) {
             const selfIdx = selfOffset + (16 * 17 + x) * 3 + 2; // Bottom Edge (y=16)
             const neighborIdx = neighborOffset + (0 * 17 + x) * 3 + 2; // Neighbor Top Edge (y=0)
-            pos[selfIdx] = nPos[neighborIdx] + hDiff;
+            const height = nPos[neighborIdx] + hDiff;
+
+            if (pos[selfIdx] === height) continue;
+
+            pos[selfIdx] = height;
+            changed = true;
         }
+
+        this.stitchSouthNeighbor = neighbor;
+
+        if (!changed) return false;
 
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
-        this.stitchSouthNeighbor = neighbor;
         return true;
     }
 
-    /**
-     * Stitches this terrain's South-Eastern (Bottom-Right) corner to match neighbor's Top-Left corner.
-     * Only applied at inter-map boundaries (offsetX === 240 && offsetY === 240).
-     */
     public stitchCorner(neighbor: Terrain) {
         const targetGeometry = this.batchGeometry || this.geometry;
         const attr = targetGeometry.getAttribute("position");
@@ -549,20 +507,20 @@ class Terrain extends Mesh implements ICollidable {
 
         const selfIdx = selfOffset + (16 * 17 + 16) * 3 + 2; // Bottom-Right corner
         const neighborIdx = neighborOffset + (0 * 17 + 0) * 3 + 2; // Neighbor Top-Left corner
-        pos[selfIdx] = nPos[neighborIdx] + hDiff;
+        const height = nPos[neighborIdx] + hDiff;
 
+        this.stitchCornerNeighbor = neighbor;
+
+        if (pos[selfIdx] === height) return false;
+
+        pos[selfIdx] = height;
         attr.needsUpdate = true;
         if (!this.batchGeometry) this.geometry.computeVertexNormals();
-        this.stitchCornerNeighbor = neighbor;
         return true;
     }
 
-    /**
-     * Orchestrates stitching for a collection of terrain objects.
-     * Identifies neighbors and delegates to instance stitching methods.
-     */
     public static stitchAll(terrains: Terrain[]) {
-        if (terrains.length < 2) return { processed: terrains.length, stitches: 0 };
+        if (terrains.length < 2) return { processed: terrains.length, stitches: 0, modified: [] as Terrain[] };
 
         const terrainMap = new Map<string, Terrain>();
         for (const t of terrains) {
@@ -570,60 +528,60 @@ class Terrain extends Mesh implements ICollidable {
             terrainMap.set(key, t);
         }
 
+        const modified = new Set<Terrain>();
+
         const debugInfo = {
             processed: terrains.length,
-            stitches: 0
+            stitches: 0,
+            modified: [] as Terrain[]
         };
 
         for (const t of terrains) {
             const mapX = Number(t.mapX);
             const mapY = Number(t.mapY);
 
-            // Horizontal: The Western map (t.offsetX === 240) modifies its Right Edge 
-            // to match the Eastern map's (mapX + 1, offsetX === 0) Left Edge.
             if (t.offsetX === 240) {
                 const neighbor = terrainMap.get(`${mapX + 1}_${mapY}_0_${t.offsetY}`);
                 if (neighbor && t.stitchWestToEast(neighbor)) {
                     debugInfo.stitches++;
+                    modified.add(t);
                 }
             }
 
-            // Vertical: The Northern map (t.offsetY === 240) modifies its Bottom Edge 
-            // to match the Southern map's (mapY + 1, offsetY === 0) Top Edge.
             if (t.offsetY === 240) {
                 const neighbor = terrainMap.get(`${mapX}_${mapY + 1}_${t.offsetX}_0`);
                 if (neighbor && t.stitchNorthToSouth(neighbor)) {
                     debugInfo.stitches++;
+                    modified.add(t);
                 }
             }
 
-            // Diagonal: The North-Western map (240, 240) modifies its single Bottom-Right corner 
-            // to match the South-Eastern map's (mapX + 1, mapY + 1, 0, 0) Top-Left corner vertex.
             if (t.offsetX === 240 && t.offsetY === 240) {
                 const neighbor = terrainMap.get(`${mapX + 1}_${mapY + 1}_0_0`);
                 if (neighbor && t.stitchCorner(neighbor)) {
                     debugInfo.stitches++;
+                    modified.add(t);
                 }
             }
         }
+
+        debugInfo.modified = [...modified];
 
         return debugInfo;
     }
 }
 
 export default Terrain;
-export { Terrain };
 
-export type TerrainLightingInfo = {
+export type TerrainLightingInfo_T = {
     lights: { light: string, flags: Uint8Array }[];
     shadowMaps: Uint8Array[];
     shadowMapTimes: number[];
 }
 
 type TerrainFieldInfo_T = {
-    segments: [number, number],
-    heightfield: Float32Array,
     bounds: THREE.Box3,
+    collisionRadius: number,
     mapX?: number,
     mapY?: number,
     offsetX?: number,

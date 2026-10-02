@@ -1,12 +1,12 @@
-import FColor from "@client/assets/unreal/un-color";
-import UObject from "@l2js/core";
-import FArray from "@l2js/core/src/unreal/un-array";
+import FColor from "./un-color";
+import { type APackage, type UExport, FArray } from "@l2js/core";
+import UObject from "./un-object";
 
-abstract class UPlatte extends UObject {
-    public colors: FArray<GA.FColor>
+export abstract class UPlatte extends UObject {
+    public colors: FArray<FColor>
     // public readonly skipRemaining = true;
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         this.colors = new FArray(FColor.class()).load(pkg);
@@ -16,4 +16,3 @@ abstract class UPlatte extends UObject {
 }
 
 export default UPlatte;
-export { UPlatte };

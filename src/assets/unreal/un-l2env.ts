@@ -1,14 +1,53 @@
 import { EEnvCycle } from "./env-consts";
-import FPlane from "@client/assets/unreal/un-plane";
-import hsvToRgb from "@client/utils/hsv-to-rgb";
-import GMath from "@client/assets/unreal/un-gmath";
-import { APackage, UExport, UObject } from "@l2js/core";
-import FArray from "@l2js/core/src/unreal/un-array";
+import FPlane from "./un-plane";
+import hsvToRgb from "./utils/hsv-to-rgb";
+import { APackage, UExport, type ANativePackage, type EnginePackage_T, type FPrimitiveArray, type PropertyTag, type UStruct, FArray } from "@l2js/core";
+import UObject from "./un-object";
+import type { ColorArr } from "./library-types";
+import { findSection, consumeNextValue, consumeHSV, consumeRGB, consumeScale } from "./conf-files/conf-parser";
+
+export type INTimeColorDecodeInfo = [number, number, number, number];
+export type INTimeHSVDecodeInfo = [number, number, number, number];
+export type INTimeScaleDecodeInfo = [number, number];
+
+export type IL2NTimeLightDecodeInfo = {
+    terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] }
+};
+
+export type IL2NEnvLightDecodeInfo = {
+    type: EEnvCycle,
+    light: IL2NTimeLightDecodeInfo,
+    color: {
+        sky: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        indexHaze: { type: "TypedArray", array: Int32Array },
+        haze: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        indexCloud: { type: "TypedArray", array: Int32Array },
+        cloud1: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        cloud2: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        cloud3: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        star: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        sun: { type: "TimeColor", array: INTimeColorDecodeInfo[] },
+        moon: { type: "TimeColor", array: INTimeColorDecodeInfo[] }
+    },
+    ambient: {
+        terrain: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+        actor: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+        staticMesh: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+        bsp: { type: "TimeHSV", array: INTimeHSVDecodeInfo[] },
+    },
+    scale: {
+        sun: { type: "TimeScale", array: INTimeScaleDecodeInfo[] },
+        moon: { type: "TimeScale", array: INTimeScaleDecodeInfo[] }
+    }
+};
 
 
 interface IEnvTime { time: number; }
 
-abstract class FNTimeHSV extends UObject implements IEnvTime {
+export abstract class FNTimeHSV extends UObject implements IEnvTime {
     declare public readonly time: number;
     declare public readonly hue: number;
     declare public readonly sat: number;
@@ -27,15 +66,15 @@ abstract class FNTimeHSV extends UObject implements IEnvTime {
         return `NTimeHSV(T=${this.time}, Hue=${this.hue}, Sat=${this.sat}, Bri=${this.bri})`;
     }
 
-    public getColor(): GD.ColorArr { return [...hsvToRgb(this.hue, this.sat, 255), 1]; }
+    public getColor(): ColorArr { return [...hsvToRgb(this.hue, this.sat, 255), 1]; }
     public toColorPlane() { return FPlane.make(...this.getColor()); }
 
-    public getDecodeInfo(): GD.INTimeHSVDecodeInfo {
+    public getDecodeInfo(): INTimeHSVDecodeInfo {
         return [this.time, this.hue, this.sat, this.bri];
     }
 }
 
-abstract class FNTimeColor extends UObject implements IEnvTime {
+export abstract class FNTimeColor extends UObject implements IEnvTime {
     declare public readonly time: number;
     declare public readonly r: number;
     declare public readonly g: number;
@@ -61,7 +100,7 @@ abstract class FNTimeColor extends UObject implements IEnvTime {
     }
 }
 
-abstract class FNTimeScale extends UObject implements IEnvTime {
+export abstract class FNTimeScale extends UObject implements IEnvTime {
     declare public readonly time: number;
     declare public readonly s: number;
 
@@ -76,16 +115,16 @@ abstract class FNTimeScale extends UObject implements IEnvTime {
         return `NTimeScale(T=${this.time}, S=${this.s})`;
     }
 
-    public getDecodeInfo(): GD.INTimeScaleDecodeInfo {
+    public getDecodeInfo(): INTimeScaleDecodeInfo {
         return [this.time, this.s];
     }
 }
 
-abstract class UL2NTimeLight extends UObject {
-    declare public lightTerrain: C.FArray<FNTimeHSV>;
-    declare public lightActor: C.FArray<FNTimeHSV>;
-    declare public lightStaticMesh: C.FArray<FNTimeHSV>;
-    declare public lightBSP: C.FArray<FNTimeHSV>;
+export abstract class UL2NTimeLight extends UObject {
+    declare public lightTerrain: FArray<FNTimeHSV>;
+    declare public lightActor: FArray<FNTimeHSV>;
+    declare public lightStaticMesh: FArray<FNTimeHSV>;
+    declare public lightBSP: FArray<FNTimeHSV>;
 
     protected getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -96,14 +135,14 @@ abstract class UL2NTimeLight extends UObject {
         });
     }
 
-    public load(pkg: C.APackage): this;
-    public load(pkg: C.APackage, info: C.UExport<C.UObject>): this;
-    public load(pkg: C.APackage, info: C.PropertyTag): this;
-    public load(pkg: C.APackage): this;
-    public load(pkg: C.APackage, info: C.UExport<C.UObject>): this;
-    public load(pkg: C.APackage, info: C.PropertyTag): this;
-    public load(pkg: C.APackage, info?: any): this;
-    public load(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this;
+    public load(pkg: APackage): this;
+    public load(pkg: APackage, info: UExport<UObject>): this;
+    public load(pkg: APackage, info: PropertyTag): this;
+    public load(pkg: APackage): this;
+    public load(pkg: APackage, info: UExport<UObject>): this;
+    public load(pkg: APackage, info: PropertyTag): this;
+    public load(pkg: APackage, info?: any): this;
+    public load(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this;
 
     public load(fileContents: any, pkgNative?: any, pkgEngine?: any): this {
         if (typeof fileContents === "string")
@@ -111,7 +150,7 @@ abstract class UL2NTimeLight extends UObject {
         else return super.load(fileContents, pkgNative);
     }
 
-    protected loadFromText(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this {
+    protected loadFromText(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this {
         this.lightActor = loadHSV(fileContents, "HSVActorLight", pkgNative, pkgEngine);
         this.lightStaticMesh = loadHSV(fileContents, "HSVStaticMeshLight", pkgNative, pkgEngine);
         this.lightTerrain = loadHSV(fileContents, "HSVTerrainLight", pkgNative, pkgEngine);
@@ -120,38 +159,38 @@ abstract class UL2NTimeLight extends UObject {
         return this;
     }
 
-    public getDecodeInfo(): GD.IL2NTimeLightDecodeInfo | unknown {
+    public getDecodeInfo(): IL2NTimeLightDecodeInfo | unknown {
         return {
             terrain: { type: "TimeHSV", array: this.lightTerrain?.map(c => c.getDecodeInfo()) ?? [] },
             actor: { type: "TimeHSV", array: this.lightActor?.map(c => c.getDecodeInfo()) ?? [] },
             staticMesh: { type: "TimeHSV", array: this.lightStaticMesh?.map(c => c.getDecodeInfo()) ?? [] },
             bsp: { type: "TimeHSV", array: this.lightBSP?.map(c => c.getDecodeInfo()) ?? [] }
-        } as GD.IL2NTimeLightDecodeInfo;
+        } as IL2NTimeLightDecodeInfo;
     }
 }
 
-abstract class UL2NEnvLight extends UL2NTimeLight {
-    declare public colorSky: C.FArray<FNTimeColor>;
-    declare public colorIndexHaze: C.FPrimitiveArray<"int32">;
-    declare public colorHaze: C.FArray<FNTimeColor>;
-    declare public colorIndexCloud: C.FPrimitiveArray<"int32">;
-    declare public colorCloud1: C.FArray<FNTimeColor>;
-    declare public colorCloud2: C.FArray<FNTimeColor>;
-    declare public colorCloud3: C.FArray<FNTimeColor>;
-    declare public colorSun: C.FArray<FNTimeColor>;
-    declare public colorMoon: C.FArray<FNTimeColor>;
+export abstract class UL2NEnvLight extends UL2NTimeLight {
+    declare public colorSky: FArray<FNTimeColor>;
+    declare public colorIndexHaze: FPrimitiveArray<"int32">;
+    declare public colorHaze: FArray<FNTimeColor>;
+    declare public colorIndexCloud: FPrimitiveArray<"int32">;
+    declare public colorCloud1: FArray<FNTimeColor>;
+    declare public colorCloud2: FArray<FNTimeColor>;
+    declare public colorCloud3: FArray<FNTimeColor>;
+    declare public colorSun: FArray<FNTimeColor>;
+    declare public colorMoon: FArray<FNTimeColor>;
 
-    declare public ambientTerrain: C.FArray<FNTimeColor>;
-    declare public ambientActor: C.FArray<FNTimeColor>;
-    declare public ambientStaticMesh: C.FArray<FNTimeColor>;
-    declare public ambientBSP: C.FArray<FNTimeColor>;
+    declare public ambientTerrain: FArray<FNTimeColor>;
+    declare public ambientActor: FArray<FNTimeColor>;
+    declare public ambientStaticMesh: FArray<FNTimeColor>;
+    declare public ambientBSP: FArray<FNTimeColor>;
 
-    declare public scaleSun: C.FArray<FNTimeScale>;
-    declare public scaleMoon: C.FArray<FNTimeScale>;
+    declare public scaleSun: FArray<FNTimeScale>;
+    declare public scaleMoon: FArray<FNTimeScale>;
 
     declare public envType: EEnvCycle;
 
-    protected loadFromText(fileContents: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): this {
+    protected loadFromText(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): this {
         super.loadFromText(fileContents, pkgNative, pkgEngine);
 
         this.envType = getEnvType(fileContents);
@@ -190,10 +229,10 @@ abstract class UL2NEnvLight extends UL2NTimeLight {
         return `UL2NEnvLight(EnvType=${envName})`;
     }
 
-    public getDecodeInfo(): GD.IL2NEnvLightDecodeInfo {
+    public getDecodeInfo(): IL2NEnvLightDecodeInfo {
         return {
             type: this.envType,
-            light: super.getDecodeInfo() as GD.IL2NTimeLightDecodeInfo,
+            light: super.getDecodeInfo() as IL2NTimeLightDecodeInfo,
             color: {
                 sky: { type: "TimeColor", array: this.colorSky?.map(c => c.getDecodeInfo()) ?? [] },
                 /* .slice(): the decode info must not alias the package buffer (see collect-transferables.ts) */
@@ -241,17 +280,6 @@ function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
     return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
 }
 
-
-import {
-    findSection,
-    consumeNextValue,
-    consumeHSV,
-    consumeRGB,
-    consumeScale
-} from "./conf-files/conf-parser";
-
-export { UL2NEnvLight, UL2NTimeLight, EEnvCycle, FNTimeHSV, FNTimeColor, FNTimeScale };
-
 function getEnvType(fileContents: string): EEnvCycle {
     let readOffset = findSection(fileContents, "EnvType");
     let [nameMax, nameVal, _] = consumeNextValue(fileContents, readOffset);
@@ -261,7 +289,7 @@ function getEnvType(fileContents: string): EEnvCycle {
     return parseInt(nameVal) as EEnvCycle;
 }
 
-function loadHSV(fileContents: string, sectionName: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): FArray<FNTimeHSV> {
+function loadHSV(fileContents: string, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeHSV> {
     let readOffset = findSection(fileContents, sectionName);
     let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
 
@@ -271,7 +299,7 @@ function loadHSV(fileContents: string, sectionName: string, pkgNative: C.ANative
 
     const numLights = parseInt(nameVal);
 
-    const uStruct = pkgEngine.fetchObjectByType<C.UStruct<FNTimeHSV>>("Struct", "NTimeHSV").loadSelf();
+    const uStruct = pkgEngine.fetchObjectByType<UStruct<FNTimeHSV>>("Struct", "NTimeHSV").loadSelf();
     const FNTimeHSV = uStruct.buildClass(pkgNative);
 
     const array = new FArray(FNTimeHSV, numLights);
@@ -292,7 +320,7 @@ function loadHSV(fileContents: string, sectionName: string, pkgNative: C.ANative
     return array;
 }
 
-function loadScale(fileContents: string, sectionName: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): FArray<FNTimeScale> {
+function loadScale(fileContents: string, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeScale> {
     let readOffset = findSection(fileContents, sectionName);
     let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
 
@@ -302,7 +330,7 @@ function loadScale(fileContents: string, sectionName: string, pkgNative: C.ANati
 
     const numScales = parseInt(nameVal);
 
-    const uStruct = pkgEngine.fetchObjectByType<C.UStruct<FNTimeScale>>("Struct", "NTimeScale").loadSelf();
+    const uStruct = pkgEngine.fetchObjectByType<UStruct<FNTimeScale>>("Struct", "NTimeScale").loadSelf();
     const FNTimeScale = uStruct.buildClass(pkgNative);
 
     const array = new FArray(FNTimeScale, numScales);
@@ -323,7 +351,7 @@ function loadScale(fileContents: string, sectionName: string, pkgNative: C.ANati
     return array;
 }
 
-function loadRGB(fileContents: string, sectionName: string, pkgNative: C.ANativePackage, pkgEngine: C.AEnginePackage): FArray<FNTimeColor> {
+function loadRGB(fileContents: string, sectionName: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): FArray<FNTimeColor> {
     let readOffset = findSection(fileContents, sectionName);
     let [nameMax, nameVal, readContent] = consumeNextValue(fileContents, readOffset);
 
@@ -333,7 +361,7 @@ function loadRGB(fileContents: string, sectionName: string, pkgNative: C.ANative
 
     const numLights = parseInt(nameVal);
 
-    const uStruct = pkgEngine.fetchObjectByType<C.UStruct<FNTimeColor>>("Struct", "NTimeColor").loadSelf();
+    const uStruct = pkgEngine.fetchObjectByType<UStruct<FNTimeColor>>("Struct", "NTimeColor").loadSelf();
     const FNTimeColor = uStruct.buildClass(pkgNative);
 
     const array = new FArray(FNTimeColor, numLights);

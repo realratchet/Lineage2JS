@@ -1,4 +1,6 @@
-class FStaticMeshVertexStream implements C.IConstructable {
+import type { APackage, Constructable_T } from "@l2js/core";
+
+export class FStaticMeshVertexStream implements Constructable_T {
     declare private data: DataView;
     declare private elementCount: number;
     declare private revision: number;
@@ -18,7 +20,7 @@ class FStaticMeshVertexStream implements C.IConstructable {
         ];
     }
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const size = pkg.read("compat32");
 
         this.data = pkg.read(size * 24);
@@ -39,4 +41,3 @@ class FStaticMeshVertexStream implements C.IConstructable {
 }
 
 export default FStaticMeshVertexStream;
-export { FStaticMeshVertexStream };

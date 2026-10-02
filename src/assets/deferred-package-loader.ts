@@ -1,4 +1,4 @@
-class DeferredPackageLoader {
+export class DeferredPackageLoader {
     public readonly loader: AssetLoader;
     public readonly path: string;
     public readonly isDeferred = true;
@@ -10,4 +10,3 @@ class DeferredPackageLoader {
 }
 
 export default DeferredPackageLoader;
-export { DeferredPackageLoader };

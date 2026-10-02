@@ -1,96 +1,68 @@
-import { SectorObject } from "@client/objects/zone-object";
-import type { L2Environment } from "@client/rendering/l2-env";
+import { SectorObject } from "./zone-object";
+import type { L2Environment } from "../rendering/l2-env";
 import { Color, Object3D, Vector3 } from "three";
-import hsvToRgb from "@client/utils/hsv-to-rgb";
-import ColorByte from "@client/utils/color-byte";
+import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
+import ColorByte from "../utils/color-byte";
 
-// Preallocated vectors to avoid GC
 const tmpVec3_1 = new Vector3();
 const tmpColorByte_1 = new ColorByte();
 
 // ~0.1 degree of rotation on a unit direction vector, squared
 const DIRECTION_CHANGE_EPSILON_SQ = 3e-6;
 
-// Constants for sun/moon direction calculation (from IDA analysis)
 const DEG2RAD = 0.017453292519943295;
 const HALF_PI = Math.PI / 2;  // 1.5707963267948966
 const NEG_PI = -Math.PI;      // -3.1415927
 
-// UL2NEnvManager::GetSunModifierInfo, baseYawDegrees comes from envManager.field_0x170, returns [pitch, yaw, brightness] in radians
-function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
+// UL2NEnvManager::GetSunModifierInfo (0x7b74a0), baseYawDegrees comes from envManager.field_0x170, returns [polar, yaw, brightness] in radians
+export function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
     let pitch: number;
 
     if (timeOfDay >= 5.0 && timeOfDay < 24.0) {
-        // Daytime sun arc: ~10° per hour
         pitch = (timeOfDay - 6.0) * 0.17453292519943295 - HALF_PI;
     } else if (timeOfDay >= 1.0 && timeOfDay < 5.0) {
-        // Early morning (wraps around midnight)
         pitch = (timeOfDay + 24.0 - 6.0) * 0.17453292519943295 - HALF_PI;
     } else {
-        // Midnight - sun is straight down
         pitch = NEG_PI;
     }
 
     return [pitch, yaw, brightness];
 }
 
-// UL2NEnvManager::GetMoonModifierInfo, baseYawDegrees comes from envManager.field_0x170, returns [pitch, yaw, brightness] in radians
-function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
+// UL2NEnvManager::GetMoonModifierInfo (0x7b7570), baseYawDegrees comes from envManager.field_0x170, returns [polar, yaw, brightness] in radians
+export function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
     const brightness = 0;
     const yaw = baseYawDegrees * DEG2RAD;
-    let pitch: number;
+    let polar: number;
 
-    // Moon visible from ~19h to ~7h (nighttime)
-    // From IDA: if (time < 7 || time >= 19) then compute pitch, else hidden
-    if (timeOfDay >= 7.0 && timeOfDay < 19.0) {
-        // Daytime - moon is hidden
-        pitch = NEG_PI;
-    } else {
-        // Nighttime moon arc
-        // For evening (19-24), we need to continue the arc from where it left off
-        // At 19h: should be rising (negative pitch, below horizon)
-        // At midnight: pitch = 0 * 30deg - 90deg = -90deg (horizon)
-        // At 7h: pitch = 7 * 30deg - 90deg = 120deg (setting)
-        let moonTime = timeOfDay;
-        if (timeOfDay >= 19.0) {
-            // Continue arc: 19h -> -5, 24h -> 0 (so it connects with midnight)
-            moonTime = timeOfDay - 24;
-        }
-        pitch = moonTime * 0.5235987755982988 - HALF_PI;
-    }
+    if (timeOfDay >= 7.0 && timeOfDay < 23.0)
+        polar = NEG_PI;
+    else
+        polar = timeOfDay * 0.5235987755982988 - HALF_PI;
 
-    return [pitch, yaw, brightness];
+    return [polar, yaw, brightness];
 }
 
-// ANMovableSunLight::GetSunLightDirection
-function pitchYawToDirection(pitch: number, yaw: number, target: Vector3): Vector3 {
-    // Direction calculation based on spherical coordinates
-    // X = cos(pitch) * cos(yaw)
-    // Y = cos(pitch) * sin(yaw)  
-    // Z = sin(pitch)
-    const cosPitch = Math.cos(pitch);
-    const sinPitch = Math.sin(pitch);
-    const cosYaw = Math.cos(yaw);
-    const sinYaw = Math.sin(yaw);
+const SUN_TILT = 30 * DEG2RAD; // ANMovableSunLight::Tick 0x869af0 applies envManager+0x174 about X.
 
-    target.set(
-        cosPitch * cosYaw,   // X
-        cosPitch * sinYaw,   // Y
-        sinPitch             // Z
-    );
+export function sunModifierToDirection(polar: number, yaw: number, target: Vector3): Vector3 {
+    const sinPolar = Math.sin(polar);
+    const x = sinPolar * Math.cos(yaw);
+    const y = sinPolar * Math.sin(yaw);
+    const z = Math.cos(polar);
 
-    return target;
+    const cosTilt = Math.cos(SUN_TILT);
+    const sinTilt = Math.sin(SUN_TILT);
+
+    return target.set(-x, -(y * cosTilt - z * sinTilt), -(y * sinTilt + z * cosTilt));
 }
 
-// EnvNight == 3 means night in the game
 function isNightTime(timeOfDay: number): boolean {
-    // Night is roughly 7pm to 7am based on the moon modifier logic
     return timeOfDay < 7.0 || timeOfDay >= 23.0;
 }
 
-// Constants defining LightType
 const LT_STEADY = 1;
 const LT_PULSE = 2;
 const LT_BLINK = 3;
@@ -99,7 +71,6 @@ const LT_STROBE = 5;
 const LT_SUBTLE_PULSE = 7;
 const LT_TEXTURE_PALETTE_LOOP = 9;
 
-// Constants defining LightEffect
 const LE_STATIC_SPOT = 8;
 const LE_SPOTLIGHT = 12;
 const LE_NON_INCIDENCE = 13;
@@ -107,7 +78,7 @@ const LE_CYLINDER = 17;
 const LE_SUNLIGHT = 19;
 const LE_QUADRATIC_NON_INCIDENCE = 20;
 
-class ColorHSV {
+export class ColorHSV {
     public readonly hue: number;
     public readonly saturation: number;
     public readonly value: number;
@@ -124,7 +95,7 @@ class ColorHSV {
     }
 }
 
-interface IDynamicLightConstructor {
+type DynamicLightConstructor_T = {
     lightMethod: "Light" | "Sunlight";
     isDynamic: boolean;
     colorHSV: ColorHSV;
@@ -138,7 +109,7 @@ interface IDynamicLightConstructor {
     phase: number;
 };
 
-class DynamicLight extends Object3D {
+export class DynamicLight extends Object3D {
     public readonly lightMethod: "Light" | "Sunlight";
     public readonly isDynamic: boolean;
     public readonly colorHSV: ColorHSV;
@@ -150,20 +121,18 @@ class DynamicLight extends Object3D {
     public readonly isSunlightColor: boolean;
     public readonly period: number;
     public readonly phase: number;
+    public readonly isSunlight: boolean;
     public isTimeBased: boolean = false;
     public needsUpdate: boolean = true;
 
-    // Internal state for LT_STROBE
-    private strobeState: { lastUpdateTime: number, toggle: number } | null = null;
-    private flickerTime?: number;
-    private flickerIntensity = 0;
+    protected strobeState: { lastUpdateTime: number, toggle: number } | null = null;
+    protected flickerTime?: number;
+    protected flickerIntensity = 0;
 
-    // Track last computed color for change detection
-    private lastComputedColor: ColorByte | null = null;
-    private lastComputedDirection: Vector3 | null = null;
-    private lastEnvVersion: number = -1; // Track environment version for forced updates
+    protected lastComputedColor: ColorByte | null = null;
+    protected lastComputedDirection: Vector3 | null = null;
+    protected lastEnvVersion: number = -1;
 
-    // Render state properties (Mirrors FDynamicLight)
     public alpha: number = 1;
     public color: ColorByte = new ColorByte(255, 255, 255);
     public lightDirection: Vector3 = new Vector3(0, 0, 0);
@@ -172,7 +141,7 @@ class DynamicLight extends Object3D {
     public isDynamicLight: boolean = false;
 
 
-    public constructor(props: IDynamicLightConstructor) {
+    public constructor(props: DynamicLightConstructor_T) {
         super();
 
         this.lightMethod = props.lightMethod;
@@ -185,35 +154,22 @@ class DynamicLight extends Object3D {
         this.radius = props.radius;
         this.isSunlightColor = props.isSunlightColor;
         this.period = props.period;
-        this.phase = props.phase; // Retained props.phase as 'actor' is undefined in this scope
+        this.phase = props.phase;
+        this.isSunlight = props.lightEffect === LE_SUNLIGHT;
 
-        // Sunlight method actors have dynamic direction based on time of day
-        this.isTimeBased = props.isSunlightColor ||
-            props.lightMethod === "Sunlight" ||
-            this.lightType === LT_PULSE ||
-            this.lightType === LT_BLINK ||
-            this.lightType === LT_FLICKER ||
-            this.lightType === LT_STROBE ||
-            this.lightType === LT_SUBTLE_PULSE ||
-            this.lightType === LT_TEXTURE_PALETTE_LOOP;
+        this.isTimeBased = props.isSunlightColor || props.lightMethod === "Sunlight";
     }
 
     public update(envManager: L2Environment, levelBrightness: number) {
-        // Animation cycles (pulse/blink/strobe) run on Level->TimeSeconds in UE2
-        // (UnRenderLight.cpp) - real elapsed time, like breathing textures - NOT the
-        // day/night world clock, which freezes at timeScale=0 and runs ~36x real time
-        // at timeScale=1. Sun color/direction below still use world time of day.
         const timeSeconds = performance.now() / 1000;
 
         // if (this.name === "Light104")
         //     debugger;
 
-        // Use preallocated vector for baseColor calculation
         const baseColor = tmpColorByte_1;
         let brightness: number;
 
         if (this.isSunlightColor) {
-            // Updated L2Environment.getBaseColorPlaneStaticMeshSunLight to accept target
             envManager.getBaseColorPlaneStaticMeshSunLight(baseColor);
             brightness = envManager.getBrightnessStaticMeshSunLight() || 0;
         } else {
@@ -224,8 +180,6 @@ class DynamicLight extends Object3D {
         let intensity: number = 0.0;
         const timeVal = (timeSeconds * 35 * 65536) / Math.max(Math.floor(this.period), 1) + (this.phase << 8);
 
-        // Approximation of unreal GMath sin logic using standard Math.sin
-        // Mapping typical 0-65536 range to radians
         const angle = (Math.floor(timeVal) & 0xFFFF) / 65536.0 * Math.PI * 2;
 
         if (this.lightType === LT_STEADY)
@@ -239,8 +193,6 @@ class DynamicLight extends Object3D {
                 intensity = 1.0;
         }
         else if (this.lightType === LT_FLICKER) {
-            // re-roll at ~12hz - a fresh random every frame flags needsUpdate every
-            // frame, which relights every affected vertex-lit actor per frame
             const now = performance.now();
 
             if (this.flickerTime === undefined || now - this.flickerTime >= 83) {
@@ -271,7 +223,6 @@ class DynamicLight extends Object3D {
             this.isDynamicLight = true;
         }
 
-        // Copy base color first, then apply modifiers
         this.color.copy(baseColor);
 
         if (brightness !== 255) this.color.multiplyByte(brightness);
@@ -280,11 +231,8 @@ class DynamicLight extends Object3D {
 
 
         if (this.lightEffect === LE_SUNLIGHT) {
-            // Dynamic sun/moon direction based on time of day
             const timeOfDay = envManager.getTimeOfDay();
 
-            // Determine if we should use sun or moon modifier
-            // For Sunlight actors, use sun during day and moon during night
             let pitch: number, yaw: number;
             if (this.lightMethod === "Sunlight") {
                 if (isNightTime(timeOfDay)) {
@@ -292,9 +240,8 @@ class DynamicLight extends Object3D {
                 } else {
                     [pitch, yaw] = getSunModifierInfo(timeOfDay);
                 }
-                pitchYawToDirection(pitch, yaw, this.lightDirection);
+                sunModifierToDirection(pitch, yaw, this.lightDirection);
             } else {
-                // For regular lights with LE_Sunlight effect, use static quaternion
                 tmpVec3_1.set(1, 0, 0).applyQuaternion(this.quaternion);
                 this.lightDirection.copy(tmpVec3_1);
             }
@@ -315,7 +262,6 @@ class DynamicLight extends Object3D {
         this.alpha = 1.0;
         this.isDynamicLight = this.isDynamic;
 
-        // Change detection: only update lit actors when light actually changes
         const currentEnvVersion = envManager.getEnvVersion();
         const envChanged = this.lastEnvVersion !== currentEnvVersion;
 
@@ -332,7 +278,6 @@ class DynamicLight extends Object3D {
                     this.lastComputedColor = this.color.clone();
                     this.lastComputedDirection = this.lightDirection.clone();
                 } else {
-                    // sunlight direction rotates continuously so exact equality never holds, a small angular threshold avoids relighting every frame
                     const colorChanged = !this.color.equals(this.lastComputedColor);
                     const directionChanged = this.lightDirection.distanceToSquared(this.lastComputedDirection) > DIRECTION_CHANGE_EPSILON_SQ;
                     this.needsUpdate = colorChanged || directionChanged;
@@ -345,7 +290,6 @@ class DynamicLight extends Object3D {
                     }
                 }
             } else {
-                // LT_STEADY or other non-time-based: only update once
                 if (this.lastComputedColor === null) {
                     this.needsUpdate = true;
                     this.lastComputedColor = this.color.clone();
@@ -357,6 +301,23 @@ class DynamicLight extends Object3D {
     }
 
     public worldLightRadius() { return 25 * (this.radius + 1); }
+
+    // CalcSortKey, UnRenderVisibility.cpp line 397
+    public getSortKey(samplePosition: Vector3, sampleRadius: number): number {
+        if (this.lightEffect === LE_SUNLIGHT) return Number.MAX_SAFE_INTEGER;
+
+        const reach = this.lightRadius + sampleRadius;
+        const distanceSquared = this.lightPosition.distanceToSquared(samplePosition);
+
+        if (this.lightEffect === LE_SPOTLIGHT || this.lightEffect === LE_STATIC_SPOT) {
+            const spotDot = tmpVec3_1.subVectors(samplePosition, this.lightPosition).normalize().dot(this.lightDirection);
+            const cone = 1 - this.cone / 256;
+
+            if (spotDot <= 0 || spotDot <= cone * cone) return 0;
+        }
+
+        return Math.round((1 - distanceSquared / (reach * reach)) * this.colorHSV.value * 1024);
+    }
 
     public sampleIntensity(samplePosition: Vector3, sampleNormal: Vector3): number {
         const direction = this.lightDirection;
@@ -373,14 +334,12 @@ class DynamicLight extends Object3D {
         // const n = new Vector3(0, 1, 0);
 
         if (this.lightEffect === LE_SUNLIGHT) {
-            // LE_SUNLIGHT: Directional light using dot(Normal, LightDir)
-            // Verified from IDA: positive dot means facing towards light
-            const dot = direction.dot(sampleNormal);
+            // SampleIntensity 0x903da8 returns N·Direction * -2 below zero.
+            const dot = -direction.dot(sampleNormal);
             if (dot > 0)
-                return dot * 2;  // SUNLIGHT_ATTENUATION_CONSTANT = 2
+                return dot * 2;
             else return 0;
         } else if (this.lightEffect === LE_CYLINDER) {
-            // Reuse tmpVec3_1 for lightVector
             const lightVector = tmpVec3_1.subVectors(position, samplePosition);
             const distanceSquared = lightVector.lengthSq();
             const distance = Math.sqrt(distanceSquared);
@@ -449,4 +408,3 @@ function calculateAttenuation(distance: number, radius: number, dx: number, dy: 
 }
 
 export default DynamicLight;
-export { DynamicLight, ColorHSV, getSunModifierInfo, getMoonModifierInfo, pitchYawToDirection };

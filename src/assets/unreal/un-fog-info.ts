@@ -1,38 +1,50 @@
-import UObject from "@l2js/core";
+import { type FArray } from "@l2js/core";
+import UObject from "./un-object";
 import AInfo from "./un-info";
-import FVector from "@client/assets/unreal/un-vector";
+import FVector from "./un-vector";
+import type { FRange } from "./un-range";
+import type { UMaterial } from "./un-material";
+import type { FColor } from "./un-color";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-abstract class UL2FogInfo extends AInfo {
-    declare protected readonly affectRange: GA.FRange;
-    declare protected readonly fogRange1: GA.FRange;
-    declare protected readonly fogRange2: GA.FRange;
-    declare protected readonly fogRange3: GA.FRange;
-    declare protected readonly fogRange4: GA.FRange;
-    declare protected readonly fogRange5: GA.FRange;
-    declare protected readonly colors: C.FArray<UL2EnvironmentColorInfo>;
-    declare protected readonly cloudTexture: GA.UMaterial;
+export type IL2FogInfoDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "L2FogInfo",
+    affectRange: { A: number, B: number },
+    fogRange1: { A: number, B: number },
+    fogRange2: { A: number, B: number },
+    fogRange3: { A: number, B: number },
+    fogRange4: { A: number, B: number },
+    fogRange5: { A: number, B: number },
+    colors: any[],
+    cloudTexture: any,
+    zoneMask: bigint
+};
+
+export abstract class UL2FogInfo extends AInfo {
+    declare protected readonly affectRange: FRange;
+    declare protected readonly fogRange1: FRange;
+    declare protected readonly fogRange2: FRange;
+    declare protected readonly fogRange3: FRange;
+    declare protected readonly fogRange4: FRange;
+    declare protected readonly fogRange5: FRange;
+    declare protected readonly colors: FArray<UL2EnvironmentColorInfo>;
+    declare protected readonly cloudTexture: UMaterial;
     declare protected readonly textureDistance: number;
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         const library = builder.library;
         let zoneMask = 0n;
         const level = this.getLevel();
         const model = level?.getModel();
 
-        const radius = this.affectRange.max;
-        const origin = this.location;
-        const extent = FVector.make(radius, radius, radius);
-
-        // Find leaves touching this box
-        const leafIndices = model.boxLeavesRecursive(0, origin, extent);
+        const leafIndices = model.boxLeavesRecursive(0, this.location, FVector.make(0, 0, 0));
 
         for (const leafIndex of leafIndices) {
             const leaf = library.bspLeaves[leafIndex];
-            if (leaf && leaf.zone !== undefined && leaf.zone >= 0) {
+            if (leaf && leaf.zone !== undefined && leaf.zone >= 0)
                 zoneMask |= (1n << BigInt(leaf.zone));
-            }
         }
-
 
         return {
             type: "L2FogInfo",
@@ -65,12 +77,12 @@ abstract class UL2FogInfo extends AInfo {
     }
 }
 
-abstract class UL2EnvironmentColorInfo extends UObject {
+export abstract class UL2EnvironmentColorInfo extends UObject {
     declare protected time: number;
-    declare protected fogColor: GA.FColor;
-    declare protected skyColor: GA.FColor;
-    declare protected cloudColor: C.FArray<GA.FColor>;
-    declare protected hazeringColor: C.FArray<GA.FColor>;
+    declare protected fogColor: FColor;
+    declare protected skyColor: FColor;
+    declare protected cloudColor: FArray<FColor>;
+    declare protected hazeringColor: FArray<FColor>;
 
     public getDecodeInfo() {
         // if (this.cloudColor.length !== 1 || this.hazeringColor.length !== 1)
@@ -97,4 +109,3 @@ abstract class UL2EnvironmentColorInfo extends UObject {
 }
 
 export default UL2FogInfo;
-export { UL2FogInfo, UL2EnvironmentColorInfo };

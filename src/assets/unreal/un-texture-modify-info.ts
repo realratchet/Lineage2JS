@@ -1,11 +1,12 @@
-import UObject from "@l2js/core";
+import UObject from "./un-object";
+import type { FColor } from "./un-color";
 
-abstract class UTextureModifyInfo extends UObject {
+export abstract class UTextureModifyInfo extends UObject {
     declare public readonly useModify: boolean;
     declare public readonly doubleSide: boolean;
     declare public readonly alphaBlend: boolean;
     declare public readonly dummy: boolean;
-    declare public readonly color: GA.FColor;
+    declare public readonly color: FColor;
     declare public readonly alphaOp: number;
     declare public readonly colorOp: number;
 
@@ -23,4 +24,3 @@ abstract class UTextureModifyInfo extends UObject {
 }
 
 export default UTextureModifyInfo;
-export { UTextureModifyInfo };

@@ -1,31 +1,88 @@
-import { BufferValue } from "@l2js/core";
-import FArray, { FPrimitiveArray } from "@l2js/core/unreal/un-array";
-import UObject from "@l2js/core";
-import FQuaternion from "../un-quaternion";
-import FVector from "../un-vector";
-import { FIndexArray } from "@l2js/core/unreal/un-array";
+import { BufferValue, type APackage, type UObject as CoreUObject, type UExport, FArray, FIndexArray, FPrimitiveArray, type Constructable_T } from "@l2js/core";
+import UObject from "../un-object";
+import UAnimNotify, { type IAnimationNotifyObjectDecodeInfo } from "./un-anim-notify";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-class FNamedBone extends UObject {
-    public boneName: string;
-    public unkVar0: number;
-    public unkVar1: number;
+export type ISkinNotifyEntryDecodeInfo = { time: number; skinIndex: number; };
+export type IFixedSkinNotifyDecodeInfo = { mode: "fixed"; frameCount: number; timeline: ISkinNotifyEntryDecodeInfo[]; };
+export type IGroupedSkinNotifyDecodeInfo = {
+    mode: "grouped";
+    frameCount: number;
+    groups: { startFrame: number; timeline: ISkinNotifyEntryDecodeInfo[]; }[];
+};
 
-    public load(pkg: C.APackage): this {
-        this.boneName = pkg.nameTable[pkg.read("compat32")].name as string;
-        this.unkVar0 = pkg.read("uint32");
-        this.unkVar1 = pkg.read("uint32");
+export type IRandomSkinNotifyDecodeInfo = {
+    mode: "random";
+    frameCount: number;
+    intervalMin: number;
+    intervalMax: number;
+    timeline: ISkinNotifyEntryDecodeInfo[];
+};
+
+export type ISkinNotifyDecodeInfo = IFixedSkinNotifyDecodeInfo | IGroupedSkinNotifyDecodeInfo | IRandomSkinNotifyDecodeInfo;
+export type IAnimationNotifyDecodeInfo = { time: number; name: string; object: IAnimationNotifyObjectDecodeInfo | null; };
+
+function decodeNotifyObject(builder: DecodeLibraryBuilder, notify: CoreUObject): IAnimationNotifyObjectDecodeInfo {
+    if (!notify) return null;
+
+    const info = (notify as UAnimNotify).getDecodeInfo(builder);
+
+    if (info === undefined) throw new Error(`Animation notify '${notify.name}' returned undefined decode info.`);
+
+    return info;
+}
+
+class FAnimVector {
+    public x: number;
+    public y: number;
+    public z: number;
+
+    public load(pkg: APackage): this {
+        this.x = pkg.read("float");
+        this.y = pkg.read("float");
+        this.z = pkg.read("float");
 
         return this;
     }
 }
 
-class FAnalogTrack extends UObject {
+class FAnimQuaternion {
+    public x: number;
+    public y: number;
+    public z: number;
+    public w: number;
+
+    public load(pkg: APackage): this {
+        this.x = pkg.read("float");
+        this.y = pkg.read("float");
+        this.z = pkg.read("float");
+        this.w = pkg.read("float");
+
+        return this;
+    }
+}
+
+class FNamedBone {
+    public boneName: string;
     public flags: number;
-    public keyQuat = new FArray(FQuaternion);
-    public keyPos = new FArray(FVector);
+    public parentIndex: number;
+
+    public load(pkg: APackage): this {
+        this.boneName = pkg.nameTable[pkg.read("compat32")].name as string;
+        this.flags = pkg.read("uint32");
+        this.parentIndex = pkg.read("uint32");
+
+        return this;
+    }
+}
+
+class FAnalogTrack {
+    public flags: number;
+    public keyQuat = new FArray(FAnimQuaternion);
+    public keyPos = new FArray(FAnimVector);
     public keyTime = new FPrimitiveArray(BufferValue.float);
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.flags = pkg.read("uint32");
         this.keyQuat.load(pkg);
         this.keyPos.load(pkg);
@@ -35,8 +92,8 @@ class FAnalogTrack extends UObject {
     }
 }
 
-class FMotionChunk extends UObject {
-    public rootSpeed3d: FVector;
+class FMotionChunk {
+    public rootSpeed3d = new FAnimVector();
     public trackTime: number;
     public startBone: number;
     public flags: number;
@@ -44,8 +101,8 @@ class FMotionChunk extends UObject {
     public animTracks = new FArray(FAnalogTrack)
     public rootTrack = new FAnalogTrack()
 
-    public load(pkg: C.APackage): this {
-        this.rootSpeed3d = FVector.make().load(pkg);
+    public load(pkg: APackage): this {
+        this.rootSpeed3d.load(pkg);
         this.trackTime = pkg.read("float");
         this.startBone = pkg.read("uint32");
         this.flags = pkg.read("uint32");
@@ -57,12 +114,12 @@ class FMotionChunk extends UObject {
     }
 }
 
-class FMeshAnimNotify extends UObject {
+class FMeshAnimNotify {
     public time: number;
     public name: string;
     public notifyObjectId: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
 
         this.time = pkg.read("float");
@@ -80,58 +137,59 @@ class FMeshAnimNotify extends UObject {
     }
 }
 
-class FLineageUnk2 extends UObject {
-    public unkVar0: number;
-    public unkVar1: number;
+class FSkinNotifyEntry {
+    public time: number;
+    public skinIndex: number;
 
-    public load(pkg: C.APackage): this {
-        this.unkVar0 = pkg.read("uint32");
-        this.unkVar1 = pkg.read("uint32");
-
-        return this;
-    }
-}
-
-class FLineageUnk3 extends UObject {
-    public unkVar0: number;
-    public unkArr0 = new FArray(FLineageUnk2)
-
-    public load(pkg: C.APackage): this {
-        this.unkVar0 = pkg.read("uint32");
-        this.unkArr0.load(pkg);
+    public load(pkg: APackage): this {
+        this.time = pkg.read("float");
+        this.skinIndex = pkg.read("int32");
 
         return this;
     }
 }
 
-class FLineageUnk4 extends UObject {
-    public unkArr0 = new FArray(FLineageUnk2);
-    public unkVar0: number;
-    public unkArr1 = new FArray(FLineageUnk3);
-    public unkVar1: number;
-    public unkVar2: number;
-    public unkArr2 = new FArray(FLineageUnk2);
+class FSkinNotifyGroup {
+    public startFrame: number;
+    public timeline = new FArray(FSkinNotifyEntry);
 
-    public load(pkg: C.APackage): this {
-        const verArchive = pkg.header.getArchiveFileVersion();
+    public load(pkg: APackage): this {
+        this.startFrame = pkg.read("float");
+        this.timeline.load(pkg);
+
+        return this;
+    }
+}
+
+class FSkinNotify {
+    public fixedTimeline = new FArray(FSkinNotifyEntry);
+    public mode: SkinNotifyMode_T;
+    public groupedTimeline = new FArray(FSkinNotifyGroup);
+    public randomIntervalMin: number;
+    public randomIntervalMax: number;
+    public randomTimeline = new FArray(FSkinNotifyEntry);
+
+    public load(pkg: APackage): this {
+        // const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         if (verLicense === 0x1A) {
-            this.unkArr0.load(pkg);
+            this.fixedTimeline.load(pkg);
         } else if (verLicense >= 0x1B) {
-            this.unkVar0 = pkg.read("uint8");
-            this.unkArr0.load(pkg);
-            this.unkArr1.load(pkg);
-            this.unkVar1 = pkg.read("uint32");
-            this.unkVar2 = pkg.read("uint32");
-            this.unkArr2.load(pkg);
+            this.mode = pkg.read("uint8");
+            this.fixedTimeline.load(pkg);
+            this.groupedTimeline.load(pkg);
+            this.randomIntervalMin = pkg.read("float");
+            this.randomIntervalMax = pkg.read("float");
+            this.randomTimeline.load(pkg);
         }
 
         return this;
     }
 }
 
-class FAnimSequence extends UObject {
+export class FAnimSequence implements Constructable_T {
+    public bookmark: number;
     public unkVar0: number;
     public name: string;
     public groupNames: string[];
@@ -144,14 +202,14 @@ class FAnimSequence extends UObject {
     public unkVar2: number;
     public unkVar4: number;
     public unkVar5: number;
-    public unkVar6 = new FLineageUnk4();
+    public skinNotify = new FSkinNotify();
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
         if (verArchive >= 115)
-            this.unkVar0 = pkg.read("float");
+            this.bookmark = pkg.read("float");
         else {
             debugger;
         }
@@ -165,8 +223,9 @@ class FAnimSequence extends UObject {
         this.framerate = pkg.read("float");
 
         if (verLicense >= 1) {
-            this.unkVar0 = pkg.read("uint32");
-            this.unkVar1 = pkg.read("uint32");
+            // Engine.dll GetAttackEffFrame 0x8b7448 / GetAttackEndEffFrame 0x8b7488 read FMeshAnimSeq+0x2c/+0x30 as floats.
+            this.unkVar0 = pkg.read("float");
+            this.unkVar1 = pkg.read("float");
 
             if (verLicense >= 2) this.unkVar2 = pkg.read("uint32");
 
@@ -174,20 +233,65 @@ class FAnimSequence extends UObject {
 
             if (verLicense >= 0x14) this.unkVar4 = pkg.read("uint32");
             if (verLicense >= 0x19) this.unkVar5 = pkg.read("uint32");
-            if (verLicense >= 0x1A) this.unkVar6.load(pkg);
+            if (verLicense >= 0x1A) this.skinNotify.load(pkg);
         }
 
         return this;
     }
 }
 
-abstract class UMeshAnimation extends UObject {
+export abstract class UMeshAnimation extends UObject {
     public version: number;
     public refBones: FArray<FNamedBone>;
     public moves: FMotionChunk[];
     public sequences: FArray<FAnimSequence>;
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public getSequenceNotifies(builder: DecodeLibraryBuilder, sequence: FAnimSequence): IAnimationNotifyDecodeInfo[] {
+        const count = sequence.notifications.getElemCount();
+        const notifications = new Array<IAnimationNotifyDecodeInfo>(count);
+
+        for (let i = 0; i < count; i++) {
+            const notify = sequence.notifications.getElem(i);
+            const notifyObject = notify.notifyObjectId === 0 ? null : this.pkg.fetchObject(notify.notifyObjectId).loadSelf();
+
+            notifications[i] = { time: notify.time, name: notify.name, object: decodeNotifyObject(builder, notifyObject) };
+        }
+
+        return notifications;
+    }
+
+    public getSequenceSkinNotify(sequence: FAnimSequence): ISkinNotifyDecodeInfo {
+        const info = sequence.skinNotify;
+        const frameCount = sequence.frameCount;
+
+        switch (info.mode ?? SkinNotifyMode_T.Fixed) {
+            case SkinNotifyMode_T.Fixed: return {
+                mode: "fixed", frameCount,
+                timeline: info.fixedTimeline.map(entry => ({ time: entry.time, skinIndex: entry.skinIndex }))
+            };
+            case SkinNotifyMode_T.Grouped: return {
+                mode: "grouped", frameCount,
+                groups: info.groupedTimeline.map(group => ({
+                    startFrame: group.startFrame,
+                    timeline: group.timeline.map(entry => ({
+                        time: entry.time,
+                        skinIndex: entry.skinIndex
+                    }))
+                }))
+            };
+            case SkinNotifyMode_T.Random: return {
+                mode: "random", frameCount,
+                intervalMin: info.randomIntervalMin,
+                intervalMax: info.randomIntervalMax,
+                timeline: info.randomTimeline.map(entry => ({
+                    time: entry.time, skinIndex: entry.skinIndex
+                }))
+            };
+            default: throw new Error(`Unknown skin notify mode '${info.mode}' in animation '${sequence.name}'.`);
+        }
+    }
+
+    public doLoad(pkg: APackage, exp: UExport) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -231,5 +335,10 @@ abstract class UMeshAnimation extends UObject {
     }
 }
 
+export enum SkinNotifyMode_T {
+    Fixed,
+    Grouped,
+    Random
+}
+
 export default UMeshAnimation;
-export { UMeshAnimation };

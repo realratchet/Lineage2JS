@@ -1,6 +1,6 @@
 import UEncodedFile from "./constr-un-encoded-file";
 
-class UPackage extends UEncodedFile {
+export class UPackage extends UEncodedFile {
     public readonly loader: AssetLoader;
 
     public exports: readonly UExport[];
@@ -25,4 +25,3 @@ class UPackage extends UEncodedFile {
 }
 
 export default UPackage;
-export { UPackage };

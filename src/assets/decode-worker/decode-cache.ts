@@ -1,36 +1,20 @@
-import { serializeLibrary, deserializeLibrary, isSerializedLibrary } from "./library-serializer";
-
-/**
- * OPFS-backed cache of fully decoded (and sanitized) sector libraries, mirroring how
- * packages are cached. A warm hit skips deserialization, decode-info generation and
- * batch merging entirely.
- *
- * Invalidation: settings.cache.version (bump when decode logic changes) and the
- * load-settings hash are baked into the filename; entries older than CACHE_TTL_DAYS
- * are swept on init. settings.cache.enabled toggles the cache entirely.
- *
- * Libraries are cached before DXT->RGBA conversion (DDS is 4-8x smaller); the worker
- * re-runs the conversion after a hit. Blob URLs in the library are session-scoped, so
- * refreshSoundBlobUris() re-mints them from the raw bytes after a hit.
- */
+import { serializeLibrary, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
-
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-function isCacheEnabled(settings: GD.LoadSettings_T): boolean {
-    return settings.cache?.enabled !== false;
+function isCacheEnabled(settings: LoadSettings_T): boolean {
+    return !!globalThis.isSecureContext && !!navigator.storage?.getDirectory && (settings.cache === false ? false : settings.cache?.enabled ?? true);
 }
 
-function getCacheVersion(settings: GD.LoadSettings_T): number {
-    return settings.cache?.version ?? 0;
+function getCacheVersion(settings: LoadSettings_T): number {
+    return settings.cache === false ? 0 : settings.cache?.version ?? 0;
 }
 
-function hashSettings(settings: GD.LoadSettings_T): string {
-    /* the cache config and worker pool size must not affect the content hash; texture
-       mode neither - conversion happens after the cache, which always stores DDS */
-    const json = JSON.stringify({ ...settings, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
+function hashSettings(settings: LoadSettings_T): string {
+    const json = JSON.stringify({ ...settings, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)
@@ -39,7 +23,7 @@ function hashSettings(settings: GD.LoadSettings_T): string {
     return hash.toString(16).padStart(8, "0");
 }
 
-function cacheFileName(sectorName: string, settings: GD.LoadSettings_T): string {
+function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
     return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}.bin`;
 }
 
@@ -49,7 +33,7 @@ async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> 
     return root.getDirectoryHandle(CACHE_DIR, { create });
 }
 
-async function getCachedFile(sectorName: string, settings: GD.LoadSettings_T): Promise<File | null> {
+async function getCachedFile(sectorName: string, settings: LoadSettings_T): Promise<File | null> {
     if (!isCacheEnabled(settings)) return null;
 
     try {
@@ -76,34 +60,43 @@ async function getCachedFile(sectorName: string, settings: GD.LoadSettings_T): P
     }
 }
 
-async function hasCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<boolean> {
+export async function hasCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<boolean> {
     return (await getCachedFile(sectorName, settings)) !== null;
 }
 
-async function loadCachedLibrary(sectorName: string, settings: GD.LoadSettings_T): Promise<any | null> {
-    const file = await getCachedFile(sectorName, settings);
+export async function loadCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<any | null> {
+    const seekable = await openCachedLibrary(sectorName, settings);
 
-    if (!file) return null;
+    if (!seekable) return null;
 
     try {
-        return deserializeLibrary(await file.arrayBuffer());
+        return await hydrateLibraryFile(seekable);
     } catch (e) {
         console.warn(`[decode-cache] failed to read cached sector '${sectorName}', re-decoding:`, e);
         return null;
     }
 }
 
-async function loadCachedLibraryBuffer(sectorName: string, settings: GD.LoadSettings_T): Promise<ArrayBuffer | null> {
+export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
+    const file = await getCachedFile(sectorName, settings);
+
+    if (!file) return null;
+
+    try {
+        return await openLibraryFile(file);
+    } catch (e) {
+        console.warn(`[decode-cache] failed to open cached sector '${sectorName}', re-decoding:`, e);
+        return null;
+    }
+}
+
+export async function loadCachedLibraryBuffer(sectorName: string, settings: LoadSettings_T): Promise<ArrayBuffer | null> {
     const file = await getCachedFile(sectorName, settings);
 
     return file ? file.arrayBuffer() : null;
 }
 
-/**
- * Serializes synchronously (must happen before postMessage detaches the buffers), then
- * writes to OPFS in the background - a failed write only costs the next warm load.
- */
-function storeCachedLibrary(sectorName: string, settings: GD.LoadSettings_T, library: any): void {
+export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, library: any): void {
     if (!isCacheEnabled(settings)) return;
 
     let bytes: Uint8Array;
@@ -118,8 +111,8 @@ function storeCachedLibrary(sectorName: string, settings: GD.LoadSettings_T, lib
     void writeCacheFileSafe(cacheFileName(sectorName, settings), sectorName, bytes);
 }
 
-async function storeCachedLibraryDurable(sectorName: string, settings: GD.LoadSettings_T, library: any): Promise<number> {
-    if (!isCacheEnabled(settings)) throw new Error("Decode cache is disabled");
+export async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any): Promise<number> {
+    if (!isCacheEnabled(settings)) return 0;
 
     const bytes = serializeLibrary(library);
 
@@ -128,7 +121,7 @@ async function storeCachedLibraryDurable(sectorName: string, settings: GD.LoadSe
     return bytes.length;
 }
 
-async function storeCachedLibraryBufferDurable(sectorName: string, settings: GD.LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
+export async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
     if (!isCacheEnabled(settings)) return;
 
     await writeCacheFile(cacheFileName(sectorName, settings), sectorName, new Uint8Array(buffer));
@@ -153,7 +146,7 @@ async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: U
     }
 }
 
-async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
+export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> {
     let dir: FileSystemDirectoryHandle;
 
     try {
@@ -163,12 +156,13 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
     }
 
     const currentVersion = `.v${getCacheVersion(settings)}.`;
+    const enabled = isCacheEnabled(settings);
     const doomed: string[] = [];
 
     for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
         if (handle.kind !== "file") continue;
 
-        if (!name.includes(currentVersion)) {
+        if (!enabled || !name.includes(currentVersion)) {
             doomed.push(name);
             continue;
         }
@@ -185,14 +179,11 @@ async function sweepDecodeCache(settings: GD.LoadSettings_T): Promise<void> {
     }
 
     if (doomed.length > 0)
-        console.log(`[decode-cache] swept ${doomed.length} stale cache entries`);
+        console.log(`[decode-cache] ${enabled ? "swept" : "cleared"} ${doomed.length} cache entries`);
 }
 
-/**
- * Blob URLs are scoped to the session that created them - a cached library carries
- * stale ones. Re-mint them from the raw audio bytes kept in soundBlobCache.
- */
-function refreshSoundBlobUris(library: any): void {
+// Blob URLs are scoped to the thread owning the library.
+export function refreshSoundBlobUris(library: any): void {
     const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array, mimeType: string }>;
 
     if (!soundCache) return;
@@ -200,14 +191,8 @@ function refreshSoundBlobUris(library: any): void {
     for (const entry of soundCache.values()) {
         if (!entry?.data) continue;
 
+        if (entry.uri) URL.revokeObjectURL(entry.uri);
+
         entry.uri = URL.createObjectURL(new Blob([entry.data], { type: entry.mimeType }));
     }
-
-    for (const info of library.ambientSounds ?? []) {
-        const entry = soundCache.get(info.soundName);
-
-        if (entry?.uri) info.soundDataUri = entry.uri;
-    }
 }
-
-export { hasCachedLibrary, loadCachedLibrary, loadCachedLibraryBuffer, storeCachedLibrary, storeCachedLibraryDurable, storeCachedLibraryBufferDurable, sweepDecodeCache, refreshSoundBlobUris };

@@ -1,6 +1,9 @@
-import FPlane from "@client/assets/unreal/un-plane";
+import FPlane from "./un-plane";
+import type { Vector3Arr } from "./library-types";
 
-abstract class USphere extends FPlane {
+export type ISphereDecodeInfo = { center: Vector3Arr, radius: number };
+
+export abstract class USphere extends FPlane {
     // public center: FVector = new FVector();
     // public radius: number;
 
@@ -16,4 +19,3 @@ abstract class USphere extends FPlane {
 }
 
 export default USphere;
-export { USphere };

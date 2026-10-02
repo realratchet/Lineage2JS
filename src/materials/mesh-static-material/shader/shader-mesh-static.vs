@@ -16,6 +16,11 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+#if defined(USE_SKINNING) && defined(USE_EXTENDED_BONE_INFLUENCES)
+    attribute vec4 skinIndex2;
+    attribute vec4 skinWeight2;
+#endif
+
 #ifdef USE_TERRAIN_DECORATION_FADE
     uniform vec2 terrainDecorationFadeRange;
     varying float vTerrainDecorationFade;
@@ -29,8 +34,8 @@
     attribute vec4 sway;
 #endif
 
-#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK))
-    #if defined(USE_MAP_DIFFUSE_TRANSFORM) || defined(USE_MAP_OPACITY_TRANSFORM) || defined(USE_MAP_SPECULAR_TRANSFORM) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
+#if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_DETAIL))
+    #if defined(USE_MAP_DIFFUSE_TRANSFORM) || defined(USE_MAP_OPACITY_TRANSFORM) || defined(USE_MAP_SPECULAR_TRANSFORM) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM) || defined(USE_MAP_DETAIL_TRANSFORM)
         struct TextureData {
             sampler2D texture;
             vec2 size;
@@ -89,7 +94,7 @@
             #ifdef USE_MAP_DIFFUSE
                 TextureData map;
 
-                #ifdef USE_MAP_DIFFUSE_TRANSFORM
+                #if defined(USE_MAP_DIFFUSE_TRANSFORM) && USE_MAP_DIFFUSE_TRANSFORM != ENVMAP && USE_MAP_DIFFUSE_TRANSFORM != ENVMAPWORLD
                     TransformDiffuseData transform;
 
                     #ifdef USE_MAP_DIFFUSE_TRANSFORM_CHAIN
@@ -139,7 +144,7 @@
             #ifdef USE_MAP_OPACITY
                 TextureData map;
 
-                #ifdef USE_MAP_OPACITY_TRANSFORM
+                #if defined(USE_MAP_OPACITY_TRANSFORM) && USE_MAP_OPACITY_TRANSFORM != ENVMAP && USE_MAP_OPACITY_TRANSFORM != ENVMAPWORLD
                 TransformOpacityData transform;
 
                 #ifdef USE_MAP_OPACITY_TRANSFORM_CHAIN
@@ -203,7 +208,7 @@
                     FadeData fadeColors;
                 #endif
 
-                #ifdef USE_MAP_SPECULAR_TRANSFORM
+                #if defined(USE_MAP_SPECULAR_TRANSFORM) && USE_MAP_SPECULAR_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_TRANSFORM != ENVMAPWORLD
                     TransformSpecularData transform;
 
                     #ifdef USE_MAP_SPECULAR_TRANSFORM_CHAIN
@@ -253,7 +258,7 @@
             #ifdef USE_MAP_SPECULAR_MASK
                 TextureData map;
 
-                #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+                #if defined(USE_MAP_SPECULAR_MASK_TRANSFORM) && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAPWORLD
                 TransformSpecularMaskData transform;
 
                 #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN
@@ -268,6 +273,50 @@
         };
 
         uniform SpecularMaskData shSpecularMask;
+    #endif
+
+    #ifdef USE_MAP_DETAIL_TRANSFORM
+        varying vec2 vUvTransformedDetail;
+
+        struct TransformDetailData {
+            mat3 matrix;
+            #if USE_MAP_DETAIL_TRANSFORM == PAN
+                vec2 rate;
+            #elif USE_MAP_DETAIL_TRANSFORM == ROTATE
+                vec3 rotation;
+                float offsetU;
+                float offsetV;
+                int type;
+                vec3 oscillationRate;
+                vec3 oscillationAmplitude;
+                vec3 oscillationPhase;
+            #elif USE_MAP_DETAIL_TRANSFORM == OSCILLATE
+                float rateU;
+                float rateV;
+                float phaseU;
+                float phaseV;
+                float amplitudeU;
+                float amplitudeV;
+                int typeU;
+                int typeV;
+                float offsetU;
+                float offsetV;
+            #endif
+        };
+
+        struct DetailData {
+            TextureData map;
+            float scale;
+            #if USE_MAP_DETAIL_TRANSFORM != ENVMAP && USE_MAP_DETAIL_TRANSFORM != ENVMAPWORLD
+                TransformDetailData transform;
+                #ifdef USE_MAP_DETAIL_TRANSFORM_CHAIN
+                    TransformStage innerTransforms[MAX_TRANSFORM_STAGES];
+                    int numInnerTransforms;
+                #endif
+            #endif
+        };
+
+        uniform DetailData shDetail;
     #endif
 #endif
 
@@ -286,7 +335,106 @@
     attribute vec3 lighting;
     attribute float sunAffected;
     uniform vec3 staticMeshSunAmbient;
+#endif
+
+#ifdef USE_ACTOR_LIGHTS
+    const int LE_STATIC_SPOT = 8;
+    const int LE_SPOTLIGHT = 12;
+    const int LE_NON_INCIDENCE = 13;
+    const int LE_CYLINDER = 17;
+    const int LE_SUNLIGHT = 19;
+    const int LE_QUADRATIC_NON_INCIDENCE = 20;
+
+    struct ActorLight {
+        vec3 position;
+        vec3 direction;
+        vec3 color;
+        float radius;
+        float cone;
+        int effect;
+        bool isPawnLight;
+        vec2 attenuation;
+    };
+
+    uniform ActorLight actorLights[NUM_ACTOR_LIGHTS];
+    uniform int numActorLights;
+    uniform vec3 actorAmbient;
+    uniform float actorScaledGlow;
+
+    float actorLightAttenuation(float distance, float radius, vec3 delta, vec3 normal) {
+        float incidence = dot(delta, normal);
+
+        if (incidence <= 0.0 || distance > radius) return 0.0;
+
+        float a = distance / radius;
+        float b = 2.0 * a * a * a - 3.0 * a * a + 1.0;
+
+        return b / a * abs(incidence / radius) * 2.0;
+    }
+
+    // port of DynamicLight.sampleIntensity (dynamic-light.ts)
+    float actorLightIntensity(ActorLight light, vec3 position, vec3 normal) {
+        // 0x903da8 bails when N.Direction >= 0 and scales by flt_AAEF80 = -2.0 otherwise
+        if (light.effect == LE_SUNLIGHT) return max(-dot(light.direction, normal), 0.0) * 2.0;
+
+        vec3 delta = light.position - position;
+        float distanceSquared = dot(delta, delta);
+        float distance = sqrt(distanceSquared);
+        float radiusSquared = light.radius * light.radius;
+
+        if (light.isPawnLight) {
+            if (distance > light.radius || distance == 0.0) return 0.0;
+            // D3DDrv RVA 0x1c99b..0x1c9a5: Theta=0, Phi=PI/2, Falloff=0.
+            if (light.cone >= 0.0 && -dot(delta, light.direction) <= light.cone * distance) return 0.0;
+
+            return 2.0 * max(dot(delta / distance, normal), 0.0) / (light.attenuation.x + light.attenuation.y * distance);
+        }
+
+        if (light.effect == LE_CYLINDER) {
+            if (distance >= light.radius) return 0.0;
+
+            return max(0.0, 1.0 - (delta.x * delta.x + delta.y * delta.y) / radiusSquared) * 2.0;
+        }
+
+        if (light.effect == LE_NON_INCIDENCE) {
+            if (dot(delta, normal) <= 0.0 || distance >= light.radius) return 0.0;
+
+            return sqrt(1.02 - distance / light.radius) * 2.0;
+        }
+
+        if (light.effect == LE_QUADRATIC_NON_INCIDENCE) {
+            if (dot(delta, normal) <= 0.0 || distanceSquared >= radiusSquared) return 0.0;
+
+            return (1.02 - distanceSquared / radiusSquared) * 2.0;
+        }
+
+        float attenuation = actorLightAttenuation(distance, light.radius, delta, normal);
+
+        if (light.effect == LE_SPOTLIGHT || light.effect == LE_STATIC_SPOT) {
+            if (attenuation <= 0.0) return 0.0;
+
+            float sine = 1.0 - light.cone / 256.0;
+            float rSine = 1.0 / (1.0 - sine);
+            float vDotV = -dot(delta, light.direction);
+
+            if (vDotV <= 0.0 || vDotV * vDotV <= sine * sine * distanceSquared) return 0.0;
+
+            float cone = vDotV * rSine / distance - sine * rSine;
+
+            return cone * cone * attenuation;
+        }
+
+        return attenuation;
+    }
+#endif
+
+#if defined(USE_LIT_ATTRIBUTES) || defined(USE_ACTOR_LIGHTS)
     varying vec3 vLitColor;
+#endif
+
+#if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+    uniform mat4 shadowMatrix;
+    varying vec4 vShadowCoord;
 #endif
 
 // #ifdef USE_DIRECTIONAL_AMBIENT
@@ -356,7 +504,7 @@ float oscillateAxis(float val, float rate, float phase, float amplitude, float o
     return val;
 }
 
-#if defined(USE_MAP_DIFFUSE_TRANSFORM_CHAIN) || defined(USE_MAP_OPACITY_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN)
+#if defined(USE_MAP_DIFFUSE_TRANSFORM_CHAIN) || defined(USE_MAP_OPACITY_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_TRANSFORM_CHAIN) || defined(USE_MAP_SPECULAR_MASK_TRANSFORM_CHAIN) || defined(USE_MAP_DETAIL_TRANSFORM_CHAIN)
     vec2 applyTransformStage(vec2 uv, TransformStage stage, float timeSeconds, vec2 size) {
         if (stage.type == PAN) {
             mat3 m = stage.matrix;
@@ -468,6 +616,33 @@ void main() {
         #endif
     #endif
 
+    #if defined(USE_UV) && defined(USE_MAP_DETAIL) && defined(USE_MAP_DETAIL_TRANSFORM)
+        #ifdef USE_MAP_DETAIL_UV2
+            vUvTransformedDetail = vUv2;
+        #else
+            vUvTransformedDetail = uv;
+        #endif
+        vUvTransformedDetail *= shDetail.scale;
+        #if USE_MAP_DETAIL_TRANSFORM == PAN
+            mat3 transformDetailMatrix = shDetail.transform.matrix;
+            transformDetailMatrix[2].xy += (shDetail.transform.rate * globalTimeSeconds);
+            vUvTransformedDetail = (transformDetailMatrix * vec3(vUvTransformedDetail, 1)).xy;
+        #elif USE_MAP_DETAIL_TRANSFORM == ROTATE
+            vUvTransformedDetail = rotateUV(vUvTransformedDetail, shDetail.transform.rotation, shDetail.transform.oscillationRate, shDetail.transform.oscillationAmplitude, shDetail.transform.oscillationPhase, shDetail.transform.offsetU, shDetail.transform.offsetV, globalTimeSeconds, shDetail.transform.type, shDetail.map.size);
+            vUvTransformedDetail = (shDetail.transform.matrix * vec3(vUvTransformedDetail, 1)).xy;
+        #elif USE_MAP_DETAIL_TRANSFORM == OSCILLATE
+            vUvTransformedDetail.x = oscillateAxis(vUvTransformedDetail.x, shDetail.transform.rateU, shDetail.transform.phaseU, shDetail.transform.amplitudeU, shDetail.transform.offsetU, shDetail.transform.typeU, globalTimeSeconds, shDetail.map.size.x);
+            vUvTransformedDetail.y = oscillateAxis(vUvTransformedDetail.y, shDetail.transform.rateV, shDetail.transform.phaseV, shDetail.transform.amplitudeV, shDetail.transform.offsetV, shDetail.transform.typeV, globalTimeSeconds, shDetail.map.size.y);
+            vUvTransformedDetail = (shDetail.transform.matrix * vec3(vUvTransformedDetail, 1)).xy;
+        #endif
+        #ifdef USE_MAP_DETAIL_TRANSFORM_CHAIN
+            for (int i = MAX_TRANSFORM_STAGES - 1; i >= 0; i--) {
+                if (i >= shDetail.numInnerTransforms) continue;
+                vUvTransformedDetail = applyTransformStage(vUvTransformedDetail, shDetail.innerTransforms[i], globalTimeSeconds, shDetail.map.size);
+            }
+        #endif
+    #endif
+
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
         #ifdef USE_MAP_SPECULAR_MASK_UV2
             vUvTransformedSpecularMask = vUv2;
@@ -524,11 +699,35 @@ void main() {
     // #endif
 
     #include <color_vertex>
-    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( HAS_LIGHTS )
+    #if defined ( USE_ENVMAP ) || defined ( USE_SKINNING ) || defined( HAS_LIGHTS ) || defined( USE_ACTOR_LIGHTS )
         #include <beginnormal_vertex>
         #include <morphnormal_vertex>
         #include <skinbase_vertex>
-        #include <skinnormal_vertex>
+        #if defined(USE_SKINNING) && defined(USE_EXTENDED_BONE_INFLUENCES)
+            mat4 boneMat4 = getBoneMatrix(skinIndex2.x);
+            mat4 boneMat5 = getBoneMatrix(skinIndex2.y);
+            mat4 boneMat6 = getBoneMatrix(skinIndex2.z);
+            mat4 boneMat7 = getBoneMatrix(skinIndex2.w);
+
+            mat4 skinMatrix = mat4(0.0);
+            skinMatrix += skinWeight.x * boneMatX;
+            skinMatrix += skinWeight.y * boneMatY;
+            skinMatrix += skinWeight.z * boneMatZ;
+            skinMatrix += skinWeight.w * boneMatW;
+            skinMatrix += skinWeight2.x * boneMat4;
+            skinMatrix += skinWeight2.y * boneMat5;
+            skinMatrix += skinWeight2.z * boneMat6;
+            skinMatrix += skinWeight2.w * boneMat7;
+            skinMatrix = bindMatrixInverse * skinMatrix * bindMatrix;
+
+            objectNormal = vec4(skinMatrix * vec4(objectNormal, 0.0)).xyz;
+
+            #ifdef USE_TANGENT
+                objectTangent = vec4(skinMatrix * vec4(objectTangent, 0.0)).xyz;
+            #endif
+        #else
+            #include <skinnormal_vertex>
+        #endif
         #include <defaultnormal_vertex>
     #endif
     #include <begin_vertex>
@@ -545,7 +744,41 @@ void main() {
         }
     #endif
     #include <morphtarget_vertex>
-    #include <skinning_vertex>
+    #if defined(USE_SKINNING) && defined(USE_EXTENDED_BONE_INFLUENCES)
+        vec4 skinVertex = bindMatrix * vec4(transformed, 1.0);
+
+        vec4 skinned = vec4(0.0);
+        skinned += boneMatX * skinVertex * skinWeight.x;
+        skinned += boneMatY * skinVertex * skinWeight.y;
+        skinned += boneMatZ * skinVertex * skinWeight.z;
+        skinned += boneMatW * skinVertex * skinWeight.w;
+        skinned += boneMat4 * skinVertex * skinWeight2.x;
+        skinned += boneMat5 * skinVertex * skinWeight2.y;
+        skinned += boneMat6 * skinVertex * skinWeight2.z;
+        skinned += boneMat7 * skinVertex * skinWeight2.w;
+
+        transformed = (bindMatrixInverse * skinned).xyz;
+    #else
+        #include <skinning_vertex>
+    #endif
+    #ifdef USE_ACTOR_LIGHTS
+        vec3 actorPosition = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+        vec3 actorNormal = normalize( mat3( modelMatrix ) * objectNormal );
+        vec3 actorLighting = actorAmbient;
+
+        for ( int i = 0; i < NUM_ACTOR_LIGHTS; i++ ) {
+            if ( i >= numActorLights ) break;
+
+            // SampleIntensity carries UE's own x2; D3D hardware lighting has none, it is just
+            // Diffuse * atten * N.L - so halve to land on the term the baked static-mesh pass produces
+            actorLighting += actorLights[i].color * ( actorLightIntensity( actorLights[i], actorPosition, actorNormal ) * actorScaledGlow * 0.5 );
+        }
+
+        vLitColor = clamp( actorLighting, 0.0, 1.0 );
+    #endif
+    #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+        vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
+    #endif
     #include <project_vertex>
     #ifdef USE_TERRAIN_DECORATION_FADE
         float terrainDecorationFadeRangeSize = max(terrainDecorationFadeRange.y - terrainDecorationFadeRange.x, 1.0);
@@ -556,6 +789,52 @@ void main() {
     #include <clipping_planes_vertex>
     #include <worldpos_vertex>
     #include <envmap_vertex>
+
+    // TCS_CameraEnvMapCoords feeds D3D the camera-space reflection vector, TCS_WorldEnvMapCoords
+    // transposes WorldToCamera back out of it (D3DMaterialState.cpp line 452). Shine0 is a 64x64
+    // clamped sphere map, so the [-1,1] vector is biased to cover it once instead of clamping to its edge
+    #ifdef USE_MAP_DIFFUSE_TRANSFORM
+        #if USE_MAP_DIFFUSE_TRANSFORM == ENVMAP
+            vUvTransformedDiffuse = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_DIFFUSE_TRANSFORM == ENVMAPWORLD
+            vUvTransformedDiffuse = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_OPACITY_TRANSFORM
+        #if USE_MAP_OPACITY_TRANSFORM == ENVMAP
+            vUvTransformedOpacity = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_OPACITY_TRANSFORM == ENVMAPWORLD
+            vUvTransformedOpacity = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_SPECULAR_TRANSFORM
+        #if USE_MAP_SPECULAR_TRANSFORM == ENVMAP
+            vUvTransformedSpecular = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_SPECULAR_TRANSFORM == ENVMAPWORLD
+            vUvTransformedSpecular = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_SPECULAR_MASK_TRANSFORM
+        #if USE_MAP_SPECULAR_MASK_TRANSFORM == ENVMAP
+            vUvTransformedSpecularMask = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_SPECULAR_MASK_TRANSFORM == ENVMAPWORLD
+            vUvTransformedSpecularMask = vReflect.xy * 0.5 + 0.5;
+        #endif
+    #endif
+
+    #ifdef USE_MAP_DETAIL_TRANSFORM
+        #if USE_MAP_DETAIL_TRANSFORM == ENVMAP
+            vUvTransformedDetail = ( viewMatrix * vec4( vReflect, 0.0 ) ).xy * 0.5 + 0.5;
+        #elif USE_MAP_DETAIL_TRANSFORM == ENVMAPWORLD
+            vUvTransformedDetail = vReflect.xy * 0.5 + 0.5;
+        #endif
+        #if USE_MAP_DETAIL_TRANSFORM == ENVMAP || USE_MAP_DETAIL_TRANSFORM == ENVMAPWORLD
+            vUvTransformedDetail *= shDetail.scale;
+        #endif
+    #endif
 
     // #ifdef USE_DIRECTIONAL_AMBIENT
     ///     #include <lights_lambert_vertex>

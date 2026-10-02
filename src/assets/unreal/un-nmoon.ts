@@ -1,6 +1,7 @@
 import UNCelestial from "./un-ncelestial";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
-abstract class UNMoon extends UNCelestial {
+export abstract class UNMoon extends UNCelestial {
     public readonly careUnread: boolean = false;
 
     protected isMoonLight: boolean;
@@ -22,7 +23,7 @@ abstract class UNMoon extends UNCelestial {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         const self = this.loadSelf();
         const sprites = self.skins?.map(skin => builder.pullMaterial(skin));
 
@@ -36,4 +37,3 @@ abstract class UNMoon extends UNCelestial {
 }
 
 export default UNMoon;
-export { UNMoon };

@@ -1,9 +1,10 @@
-import ParticleMaterial from "@client/materials/particle-material/particle-material";
-import InstancedParticleMaterial from "@client/materials/particle-material/instanced-particle-material";
+import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
+import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 import { Mesh, PlaneGeometry, Vector3 } from "three";
 import * as THREE from "three";
 import BaseEmitter from "./base-emitter";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
+import type { SpriteDirections_T, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
 const geometry = new PlaneGeometry(2, 2);
 
@@ -18,14 +19,15 @@ const tmpNonParallel = new Vector3();
 const tmpProjTemp = new Vector3();
 const tmpRealProj = new Vector3();
 const tmpViewDir = new Vector3();
+const tmpViewLocation = new Vector3();
 const tmpOrigRight = new Vector3();
 const tmpOrigUp = new Vector3();
 const tmpSpinScaled = new Vector3();
 const tmpNormal = new Vector3();
 const tmpMatrix = new THREE.Matrix4();
 
-class SpriteEmitter extends BaseEmitter {
-    public spriteDirection: GD.SpriteDirections_T;
+export class SpriteEmitter extends BaseEmitter {
+    public spriteDirection: SpriteDirections_T;
     public projectionNormal: THREE.Vector3;
 
     public constructor(config: SpriteEmitterConfig_T) {
@@ -42,12 +44,17 @@ class SpriteEmitter extends BaseEmitter {
         // Both camera-facing sprites and PTDU_Normal use one basis for the whole
         // emitter, so neither needs a mesh/draw call per particle. Velocity-driven
         // modes still require a per-particle basis and stay on the legacy path.
-        this.isInstancedRendering = this.spriteDirection === "camera" || this.spriteDirection === "normal";
+        // Animated textures select a frame per particle age.
+        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal");
     }
 
     protected initParticleMesh() {
+        // USpriteEmitter::RenderParticles 0x97bf12: null Texture skips drawing, not simulation.
+        if (this.material === null) return null;
+
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
-        const mesh = new ParticleMesh(new ParticleMaterial({ ...this.material, usesSubdivision }));
+        const settings = { ...this.material, usesSubdivision, blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv };
+        const mesh = new ParticleMesh(this.material.type === "sprite" ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings));
         mesh.spriteDirection = this.spriteDirection;
         mesh.projectionNormal = this.projectionNormal;
         return mesh;
@@ -58,6 +65,7 @@ class SpriteEmitter extends BaseEmitter {
         return new InstancedSpriteMesh(new InstancedParticleMaterial({
             ...this.material,
             usesSubdivision,
+            blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv,
             spriteDirection: this.spriteDirection,
             projectionNormal: this.projectionNormal
         }), capacity);
@@ -65,13 +73,13 @@ class SpriteEmitter extends BaseEmitter {
 }
 
 export default SpriteEmitter;
-export { SpriteEmitter };
 
-class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
-    public spriteDirection: GD.SpriteDirections_T = "camera";
+class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
+    public spriteDirection: SpriteDirections_T = "camera";
     public projectionNormal: THREE.Vector3 = new Vector3(0, 0, 1);
+    public particleRef: SpriteParticle_T = null;
 
-    constructor(material: ParticleMaterial) {
+    public constructor(material: ParticleMaterial | AnimatedParticleMaterial) {
         super(geometry, material);
     }
 
@@ -94,17 +102,13 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
         // In Right-Handed ThreeJS: Right = Front x Up
         const projRight = tmpProjRight.crossVectors(projFront, projUp).normalize();
 
-        // Ensure projUp is exactly orthogonal
         projUp.crossVectors(projRight, projFront).normalize();
 
         const direction = tmpDirection;
         const up = tmpUp;
         const right = tmpRight;
 
-        // Get velocity direction if particle is attached
-        const particle = (this as any).particleRef;
-        const velocity = particle ? particle.velocity : null;
-        const hasVelocity = velocity && velocity.lengthSq() > 0.0001;
+        const particle = this.particleRef;
 
         if (this.spriteDirection === "normal") {
             direction.set(this.projectionNormal.x, this.projectionNormal.y, this.projectionNormal.z).normalize();
@@ -127,11 +131,12 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             // - UE +Up maps to Threejs +Y
             // Let's just follow UE math directly but reverse the cross product order due to handedness.
 
-        } else if (hasVelocity && (this.spriteDirection === "up" || this.spriteDirection === "upNormal" ||
+        } else if (particle && (this.spriteDirection === "up" || this.spriteDirection === "upNormal" ||
                    this.spriteDirection === "right" || this.spriteDirection === "rightNormal" ||
                    this.spriteDirection === "forward")) {
 
-            direction.copy(velocity).normalize();
+            // Engine.dll FillVertexBuffer 0x97a72d: Location - OldLocation.
+            direction.subVectors(particle.position, particle.oldLocation).normalize();
             const projTemp = tmpProjTemp;
 
             if (this.spriteDirection === "upNormal" || this.spriteDirection === "rightNormal") {
@@ -140,7 +145,9 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
                 projTemp.crossVectors(realProj, direction).normalize();
             } else {
                 // ProjTemp = Direction ^ (Particle->Location - ViewLocation);
-                const viewDir = tmpViewDir.subVectors(particle.position, camera.position);
+                camera.getWorldPosition(tmpViewLocation);
+                this.parent.parent.worldToLocal(tmpViewLocation);
+                const viewDir = tmpViewDir.subVectors(particle.position, tmpViewLocation);
                 projTemp.crossVectors(viewDir, direction).normalize();
             }
 
@@ -158,12 +165,12 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             }
 
         } else {
-            // PTDU_None and PTDU_Scale
-            up.copy(projUp);
-            right.copy(projRight);
+            // Engine.dll FillVertexBuffer 0x97a4ad..0x97a5a3 transforms camera axes into emitter space.
+            tmpMatrix.extractRotation(this.parent.matrixWorld).invert();
+            up.copy(projUp).transformDirection(tmpMatrix);
+            right.copy(projRight).transformDirection(tmpMatrix);
         }
 
-        // Apply Roll (Spin)
         if (particle && particle.spin !== 0) {
             const spin = particle.spin;
             const cos = Math.cos(spin);
@@ -178,21 +185,21 @@ class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial> {
             up.copy(origUp).multiplyScalar(cos).sub(tmpSpinScaled.copy(origRight).multiplyScalar(sin));
         }
 
-        // We negate the projection front to point *towards* the camera (Standard PlaneGeometry face)
         // ...
         right.negate();
         up.negate();
 
-        // Ensure we supply a pure 1-determinant rotation matrix by computing normal exactly matching right/up cross
         const normal = tmpNormal.crossVectors(right, up).normalize();
 
-        const matrix = tmpMatrix.makeBasis(right, up, normal);
-        this.quaternion.setFromRotationMatrix(matrix);
+        this.matrix.copy(tmpMatrix.makeBasis(right, up, normal)).scale(this.scale).setPosition(this.position);
+        this.matrixWorld.multiplyMatrices(this.parent.matrixWorld, this.matrix);
     };
 }
 
-type SpriteEmitterConfig_T = GD.EmitterConfig_T & {
-    material: ParticleMaterialInitSettings_T;
-    spriteDirection?: GD.SpriteDirections_T;
+type SpriteEmitterConfig_T = EmitterConfig_T & {
+    material: ParticleMaterialInitSettings_T | null;
+    spriteDirection?: SpriteDirections_T;
     projectionNormal?: [number, number, number];
 };
+
+type SpriteParticle_T = { position: Vector3, oldLocation: Readonly<Vector3>, spin: number };

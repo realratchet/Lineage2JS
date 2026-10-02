@@ -1,6 +1,9 @@
 import FURL from "./un-url";
-import { UObject, BufferValue } from "@l2js/core";
-import { FObjectArray } from "@l2js/core/unreal/un-array";
+import { BufferValue, type APackage, type UExport, FObjectArray } from "@l2js/core";
+import UObject from "./un-object";
+import type { UAActor } from "./un-aactor";
+import type { UModel } from "./model/un-model";
+import type { ULevelInfo } from "./un-level-info";
 
 const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
@@ -9,10 +12,10 @@ const NUM_LEVEL_TEXT_BLOCKS = 16;
 abstract class ULevelBase extends UObject {
     public readonly url: FURL = new FURL();
 
-    protected ambientActors: FObjectArray<GA.AActor>;
-    protected actors: FObjectArray<GA.AActor>;
+    protected ambientActors: FObjectArray<UAActor>;
+    protected actors: FObjectArray<UAActor>;
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         const verLicense = pkg.header.getLicenseeVersion();
@@ -43,16 +46,16 @@ abstract class ULevelBase extends UObject {
     }
 }
 
-abstract class ULevel extends ULevelBase {
+export abstract class ULevel extends ULevelBase {
     public baseModelId: number;
     public levelInfoId: number;
 
-    protected baseModel: GA.UModel;
-    public levelInfo: GA.ULevelInfo;
+    protected baseModel: UModel;
+    public levelInfo: ULevelInfo;
 
     public get timeSeconds() { return 0; };
 
-    protected info: GA.ULevelInfo;
+    protected info: ULevelInfo;
 
     protected approxTime: number;
     protected firstDeletedId: number;
@@ -60,13 +63,13 @@ abstract class ULevel extends ULevelBase {
     protected objectList: UObject[] = [];
 
     public getInfo() { return this.info; }
-    public setInfo(info: GA.ULevelInfo) { this.info = info; }
+    public setInfo(info: ULevelInfo) { this.info = info; }
 
     public getModel() { return this.baseModel; }
     public getActors() { return this.actors; }
     public getAmbientActors() { return this.ambientActors; }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {
+    public doLoad(pkg: APackage, exp: UExport) {
         super.doLoad(pkg, exp);
 
         const verArchive = pkg.header.getArchiveFileVersion();
@@ -94,11 +97,11 @@ abstract class ULevel extends ULevelBase {
             debugger;
         }
 
-        this.levelInfo = this.actors[0] as GA.ULevelInfo;
+        this.levelInfo = this.actors[0] as ULevelInfo;
         this.levelInfo.setLevel(this);
 
         if (LOAD_SUB_OBJECTS) {
-            this.baseModel = pkg.fetchObject<GA.UModel>(this.baseModelId);
+            this.baseModel = pkg.fetchObject<UModel>(this.baseModelId);
 
             if (LOAD_SOUNDS) {
                 this.objectList = this.objectList.concat(this.ambientActors);
@@ -147,4 +150,3 @@ abstract class ULevel extends ULevelBase {
 }
 
 export default ULevel;
-export { ULevel };

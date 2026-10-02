@@ -1,19 +1,41 @@
-import GMath from "@client/assets/unreal/un-gmath";
-import FMatrix from "@client/assets/unreal/un-matrix";
-import FRotator from "@client/assets/unreal/un-rotator";
-import FScale from "@client/assets/unreal/un-scale";
-import FVector from "@client/assets/unreal/un-vector";
-import { UObject } from "@l2js/core";
+import GMath from "./un-gmath";
+import FMatrix from "./un-matrix";
+import FRotator from "./un-rotator";
+import FScale from "./un-scale";
+import FVector from "./un-vector";
+import UObject from "./un-object";
+import { getRotatorQuaternionElements } from "./utils/rotator";
+import type { QuaternionArr, Vector3Arr } from "./library-types";
 
-abstract class FCoords extends UObject {
+const tmpOrthoRotation: QuaternionArr = [0, 0, 0, 1];
+const tmpOrthoAxisY: Vector3Arr = [0, 0, 0];
+const tmpOrthoAxisYInput: Vector3Arr = [0, 1, 0];
+
+export abstract class FCoords extends UObject {
     declare public ["constructor"]: typeof FCoords;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
-    declare public origin: GA.FVector;
-    declare public xAxis: GA.FVector;
-    declare public yAxis: GA.FVector;
-    declare public zAxis: GA.FVector;
+    public static getOrthoRotationQuaternionElements(xAxis: Vector3Arr, yAxis: Vector3Arr, zAxis: Vector3Arr, out: QuaternionArr): QuaternionArr {
+        const m11 = xAxis[0], m12 = yAxis[0], m13 = zAxis[0];
+        const m21 = xAxis[1], m22 = yAxis[1], m23 = zAxis[1];
+        const m31 = xAxis[2], m32 = yAxis[2], m33 = zAxis[2];
+        // Retail Core FCoords::OrthoRotation 0x1014f940: double[0x10195450]=32768/PI, truncation at 0x1017cfa0.
+        const pitch = Math.trunc(Math.atan2(m31, Math.hypot(m11, m21)) * 32768 / Math.PI);
+        const yaw = Math.trunc(Math.atan2(m21, m11) * 32768 / Math.PI);
+
+        getRotatorQuaternionElements(pitch, yaw, 0, tmpOrthoRotation);
+        FVector.applyQuaternionElements(tmpOrthoAxisYInput, tmpOrthoRotation, tmpOrthoAxisY);
+        // 0x1014f9f5..0x1014fa3f: atan2(ZAxis dot S.YAxis, YAxis dot S.YAxis).
+        const roll = Math.trunc(Math.atan2(m13 * tmpOrthoAxisY[0] + m23 * tmpOrthoAxisY[1] + m33 * tmpOrthoAxisY[2], m12 * tmpOrthoAxisY[0] + m22 * tmpOrthoAxisY[1] + m32 * tmpOrthoAxisY[2]) * 32768 / Math.PI);
+
+        return getRotatorQuaternionElements(pitch, yaw, roll, out);
+    }
+
+    declare public origin: FVector;
+    declare public xAxis: FVector;
+    declare public yAxis: FVector;
+    declare public zAxis: FVector;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -124,7 +146,7 @@ abstract class FCoords extends UObject {
         return _this;
     }
 
-    static fromRotator({ pitch, yaw, roll }: GA.FRotator) {
+    static fromRotator({ pitch, yaw, roll }: FRotator) {
         const tmpCoords = FCoords.make();
         let _this = FCoords.make();
 
@@ -185,9 +207,8 @@ abstract class FCoords extends UObject {
 }
 
 export default FCoords;
-export { FCoords };
 
-function multiplyAxis(coords: FCoords, inVector: GA.FVector) {
+function multiplyAxis(coords: FCoords, inVector: FVector) {
     const outVector = FVector.make();
 
     const fVar1 = inVector.x;
@@ -207,7 +228,7 @@ function multiplyAxis(coords: FCoords, inVector: GA.FVector) {
     return outVector;
 }
 
-function multiplyOrigin(coord: FCoords, inVector: GA.FVector) {
+function multiplyOrigin(coord: FCoords, inVector: FVector) {
     const outVector = FVector.make();
 
     const fVar7 = inVector.x - (coord.origin).x;

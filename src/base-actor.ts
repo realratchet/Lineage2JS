@@ -1,302 +1,227 @@
-import { World, Collider, RigidBody } from "@dimforge/rapier3d";
-import { Box3, Box3Helper, BoxHelper, Color, LoopPingPong, Object3D, Vector3 } from "three";
-import { ICollidable } from "./objects/objects";
-import RenderManager from "./rendering/render-manager";
+import { AnimationAction, AnimationClip, Mesh, Object3D, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
+import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
+import RenderManager from "./rendering/render-manager";
+import type { CheckResult_T } from "./physics/collision-world";
+import UnScriptVM, { ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
+import { GameObject } from "./game/components";
+import { ColliderComponent } from "./physics/components/physics-component";
+import PawnMovementComponent, { PawnMovementState_T } from "./physics/components/pawn-movement-component";
+import AnimationComponent from "./objects/components/animation-component";
+import TransformComponent from "./objects/components/transform-component";
+import ActorOwnershipComponent from "./objects/components/actor-ownership-component";
+import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
+import PawnAttackComponent, { type PawnAttackSelection_T, type PawnAttack_T } from "./objects/components/pawn-attack-component";
+import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
+import { COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
+import { ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
+import type { Vector3Arr } from "@l2js/engine";
+import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
-class BaseActor extends Object3D implements ICollidable {
+const tmpUp = new Vector3(0, 0, 1);
+export class BaseActor extends GameObject implements ICollidable {
     public readonly isActor = true;
-    public readonly isCollidable = true;
+    declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
+    public effectSpawnBoneIndex: number = null;
 
-    protected characterSpeed = 125;
-    protected stepHeight = 10;
-
-    protected colliderDesc: RAPIER.ColliderDesc;
-    protected rigidbodyDesc: RAPIER.RigidBodyDesc;
-
-    protected collider: RAPIER.Collider;
-    protected rigidbody: RAPIER.RigidBody;
-
-    protected canFly = false;
     protected renderManager: RenderManager;
-    protected lastUpdate: number;
-    protected meshes: THREE.Object3D[] = [];
-    protected currAnimations = new WeakMap<THREE.Object3D, THREE.AnimationAction>();
-    protected prevAnimations = new WeakMap<THREE.Object3D, THREE.AnimationAction>();
-    protected actorAnimations: Record<string, THREE.AnimationClip> = {};
+    protected readonly movementComponent: PawnMovementComponent;
+    protected scriptComponent: ScriptComponent<BaseActor> = null;
 
-    protected readonly collisionBounds = new Box3();
-    protected readonly collisionSize = new Vector3();
-    protected readonly actorState = new ActorState();
-    protected readonly basicActorAnimations: BasicActorAnimations = {
-        idle: null,
-        walking: null,
-        running: null,
-        dying: null,
-        falling: null
-    };
-
-    constructor(renderManager: RenderManager) {
+    public constructor(renderManager: RenderManager) {
         super();
 
+        (this as any).isCollidable = true;
+
         this.renderManager = renderManager;
+        this.up.copy(tmpUp);
+        this.addComponent(new ActorOwnershipComponent());
+        this.movementComponent = this.addComponent(new PawnMovementComponent(renderManager));
+        this.addComponent(new ColliderComponent());
     }
 
-    public getCollider(): RAPIER.Collider { return this.collider; }
-    public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
-    public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider {
-        this.colliderDesc = RAPIER.ColliderDesc.cuboid(this.collisionSize.x * 0.5, this.collisionSize.y * 0.5, this.collisionSize.z * 0.5);
-        this.rigidbodyDesc = RAPIER.RigidBodyDesc.dynamic();
-        this.rigidbodyDesc
-            // .setGravityScale(0)
-            // .lockTranslations()
-            // .enabledTranslations(false, true, false)
-            .lockRotations()
-            .setTranslation(this.position.x, this.position.y, this.position.z);
+    protected get animationComponent(): AnimationComponent { return this.getComponent("animation"); }
+    public get scriptClassId(): string { return this.scriptComponent ? this.scriptComponent.getClassId() : null; }
+    public get scriptProperties(): Map<string, ScriptValue_T> { return this.scriptComponent ? this.scriptComponent.getProperties() : null; }
 
-        this.rigidbodyDesc.mass = 70;
+    public setScriptRuntime(vm: UnScriptVM, classId: string, objectFactory: ScriptObjectFactory_T): void {
+        if (this.scriptComponent) this.removeComponent(this.scriptComponent);
 
-        this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
-        this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
+        const component = new ScriptComponent<BaseActor>(vm, objectFactory, classId);
 
-        // const helper = new Box3Helper(this.collisionBounds);
-
-        // this.add(helper);
-
-        return this.collider;
+        this.scriptComponent = component;
+        this.addComponent(component);
+        this.setCollisionSize(this.getStoredUnrealScriptProperty("CollisionRadius") as number, this.getStoredUnrealScriptProperty("CollisionHeight") as number);
     }
 
-    public getColliderSize() { return this.collisionSize; }
-    public getStepHeight() { return this.stepHeight; }
+    public beginPlay(): void { this.scriptComponent?.beginPlay(); }
 
-    public update(renderManager: RenderManager, currentTime: number, deltaTime: number) {
-        this.lastUpdate = currentTime;
+    public resolveUnrealObject(id: string): string { return id; }
 
-        const groundObjects = this.getGravityIntersections(this.stepHeight);
-        const state = this.actorState;
-        const desired = state.desired;
+    public getUnrealScriptProperty(id: string): ScriptValue_T {
+        const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
 
-        const charSpeed = this.characterSpeed * 2;
-        const charHeight = this.collisionSize.y, halfCharHeight = charHeight * 0.5;
-
-        if (groundObjects.length > 0) {
-            const groundIntersection = groundObjects[0];
-            const startVec = this.rigidbody.translation();
-            const desiredVec = new Vector3(0, halfCharHeight + 10, 0).add(groundIntersection.position);
-
-            const lerpedVector = new Vector3().lerpVectors(startVec as THREE.Vector3, desiredVec, 0.9);
-
-            this.rigidbody.setTranslation(lerpedVector, true);
-            this.rigidbody.setLinvel(new Vector3(), false); // reset velocity since we're on ground
-
-            desired.state = "idle";
-
-            if (state.locomotion) {
-                desired.state = "running";
-
-                const lookPosition = new Vector3()
-                    .copy(desired.position)
-                    .setY(this.position.y);
-
-                this.lookAt(lookPosition);
-
-                const dt = desired.position.distanceTo(this.rigidbody.translation() as THREE.Vector3) * 10;
-                const lookDirection = new Vector3().copy(lookPosition).sub(this.position).normalize();
-                const distanceVector = new Vector3().copy(lookDirection).multiplyScalar(Math.min(dt, charSpeed));
-
-                if (dt < charHeight) {
-                    this.rigidbody.setTranslation(desired.position, true);
-                    this.rigidbody.setLinvel(new Vector3(), true);
-                    state.locomotion = false;
-                    desired.state = "idle";
-                } else this.rigidbody.setLinvel(distanceVector, true);
-
-            }
-        } else desired.state = "falling";
-
-        this.checkAnimationState();
-    }
-
-    protected checkAnimationState() {
-        if (this.actorState.desired.state === this.actorState.state) return;
-
-        this.actorState.state = this.actorState.desired.state;
-
-        switch (this.actorState.state) {
-            case "falling": this.playAnimation(this.basicActorAnimations.falling); break;
-            case "idle": this.playAnimation(this.basicActorAnimations.idle); break;
-            case "dying": this.playAnimation(this.basicActorAnimations.dying); break;
-            case "walking": this.playAnimation(this.basicActorAnimations.walking); break;
-            case "running": this.playAnimation(this.basicActorAnimations.running); break;
-            default: new Error(`Unknown actor state: '${this.actorState.state}'`);
+        switch (name) {
+            case "location": return [this.position.x, this.position.y, this.position.z];
+            case "velocity": return this.movementComponent.getVelocity().toArray();
+            case "acceleration": return this.movementComponent.getAcceleration().toArray();
+            case "collisionradius": return this.movementComponent.getCollisionRadius();
+            case "collisionheight": return this.movementComponent.getCollisionHeight();
+            case "biswalking": return this.movementComponent.isWalkingMovement();
+            case "physics": return ["none", "walking", "falling", "swimming", "flying"].indexOf(this.movementComponent.getPhysicsMode());
         }
+
+        return this.getStoredUnrealScriptProperty(id);
     }
 
-    public getRayIntersections(position: THREE.Vector3, direction: THREE.Vector3, maxToi: number) {
-        const rm = this.renderManager;
-        const ray = new RAPIER.Ray(position, direction);
-        const collection: IntersectionResult[] = [];
+    protected getStoredUnrealScriptProperty(id: string): ScriptValue_T {
+        const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
+        const properties = this.scriptProperties;
 
-        rm.physicsWorld.intersectionsWithRay(ray, maxToi, false, i => {
-            const object = rm.colliderMap.get(i.collider);
+        if (!properties) return null;
+        if (properties.has(id)) return properties.get(id);
 
-            if (object !== this) {
-                const position = new Vector3()
-                    .copy(ray.dir as THREE.Vector3)
-                    .multiplyScalar(i.toi)
-                    .add(ray.origin as THREE.Vector3);
+        for (const [key, value] of properties)
+            if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === name) return value;
 
-                collection.push({
-                    ...i,
-                    position,
-                    object
-                });
+        return null;
+    }
+
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
+        const field = id.slice(id.lastIndexOf(".") + 1);
+
+        switch (field.toLowerCase()) {
+            case "location": this.position.fromArray(value as Vector3Arr); return;
+            case "velocity": this.movementComponent.setVelocity(value as Vector3Arr); return;
+            case "acceleration": this.movementComponent.setAcceleration(value as Vector3Arr); return;
+            case "collisionradius": this.movementComponent.setCollisionSize(Number(value), this.movementComponent.getCollisionHeight()); return;
+            case "collisionheight": this.movementComponent.setCollisionSize(this.movementComponent.getCollisionRadius(), Number(value)); return;
+            case "biswalking": this.movementComponent.setWalking(!!value); return;
+            case "physics": this.movementComponent.setPhysicsMode(Number(value)); return;
+        }
+
+        if (!this.scriptProperties) throw new Error(`${this.type} has no UnrealScript property storage.`);
+
+        for (const key of this.scriptProperties.keys())
+            if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === field.toLowerCase()) {
+                this.scriptProperties.set(key, value);
+                return;
             }
 
-            return true;
-        });
-
-        collection.sort((a, b) => a.toi - b.toi);
-
-        return collection
+        this.scriptProperties.set(field, value);
     }
 
-    public getGravityIntersections(maxToi = Infinity) {
-        return this.getRayIntersections(
-            new Vector3(0, -this.collisionSize.y * 0.5, 0).add(this.rigidbody.translation() as THREE.Vector3),
-            new Vector3(0, -1, 0),
-            maxToi
-        );
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        const componentResult = this.scriptComponent ? this.scriptComponent.dispatchNative(call) : COMPONENT_EVENT_NOT_HANDLED;
+
+        if (componentResult !== COMPONENT_EVENT_NOT_HANDLED) return componentResult;
+
+        throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${call.context.scriptClassId}'.`);
     }
 
-    public setMeshes(meshes: THREE.Mesh[]) {
-        this.stopAnimations();
+    public getAnimationAction(): AnimationAction { return this.animationComponent.getAction(); }
 
-        for (const mesh of this.meshes)
-            this.remove(mesh);
+    public getCollisionRadius(): number { return this.movementComponent.getCollisionRadius(); }
+    public getCollisionHeight(): number { return this.movementComponent.getCollisionHeight(); }
+    public getCollider(): RAPIER.Collider { return this.movementComponent.getCollider(); }
+    public getRigidbody(): RAPIER.RigidBody { return this.movementComponent.getRigidbody(); }
+    public getBaseActor(): ICollidable | null { return this.movementComponent.getBaseActor(); }
+    public getBasedActors(): ReadonlySet<ICollidable> { return this.movementComponent.getBasedActors(); }
+    public addBasedActor(actor: ICollidable): void { this.movementComponent.addBasedActor(actor); }
+    public removeBasedActor(actor: ICollidable): void { this.movementComponent.removeBasedActor(actor); }
+    public setBase(actor: ICollidable | null): void { this.movementComponent.setBase(actor); }
+    public getCollisionProfile(): ActorCollisionProfile_T { return this.movementComponent.getCollisionProfile(); }
+    public getCollisionPrimitive(): CollisionPrimitive_T { return this.movementComponent.getCollisionPrimitive(); }
+    public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider { return this.movementComponent.createCollider(physicsWorld); }
+    public releaseCollider(): void { this.movementComponent.releaseCollider(); }
+    public ignoreOverlappingActors(actors: Iterable<ICollidable>): void { this.movementComponent.ignoreOverlappingActors(actors); }
+    public moveSmooth(movement: Vector3, ignoredActor?: ICollidable): void { this.movementComponent.moveSmooth(movement, ignoredActor); }
+    public moveActor(position: Vector3, movement: Vector3): CheckResult_T | null { return this.movementComponent.moveActor(position, movement); }
+    public isInteractive(): boolean { return this.movementComponent.isInteractive(); }
 
-        this.meshes = meshes;
-
-        for (const mesh of meshes)
-            this.add(mesh);
-
-
-        this.collisionBounds.min.set(-5, +10, -5);
-        this.collisionBounds.max.set(+5, +45, +5);
-        // this.collisionSize.set(20, 40, 20);
-        this.collisionBounds.getSize(this.collisionSize);
+    public updatePresentation(currentTime: number, deltaTime: number) {
+        this.updateComponents(currentTime, deltaTime);
     }
 
-    public setAnimations(animations: Record<string, THREE.AnimationClip>) {
-        this.stopAnimations();
-        this.actorState.reset();
-        this.actorAnimations = animations;
+    public update(_renderManager: RenderManager, currentTime: number, deltaTime: number) {
+        this.updatePresentation(currentTime, deltaTime);
     }
 
-    public stopAnimations() {
-        for (const mesh of this.meshes) {
-            if (this.prevAnimations.has(mesh))
-                this.prevAnimations.get(mesh).stop();
+    public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 { return this.animationComponent.getBoneWorldPosition(name, target, offset); }
 
-            if (this.currAnimations.has(mesh))
-                this.currAnimations.get(mesh).stop();
-        }
+    public getEffectTargetLocation(target: Vector3): Vector3 {
+        // Retail Engine.u Pawn.GetEffTargetLocation directly uses EffectSpawnBoneIdx; no SpineBone fallback.
+        const index = this.scriptComponent ? this.getUnrealScriptProperty("EffectSpawnBoneIdx") as number : this.effectSpawnBoneIndex;
+
+        if (!Number.isInteger(index)) throw new Error(`${this.name} has no effect target bone index.`);
+
+        return this.getBoneWorldPosition(Math.max(0, index), target);
     }
 
-    protected setBasicActorAnimation(key: ValidStateNames_T, animationName: string) {
-        if (!(animationName in this.actorAnimations))
-            throw new Error(`'${animationName}' is not available.`);
+    public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number, absolute: boolean = false): boolean { return this.getComponent<TransformComponent>("transform").attachObjectToBone(object, boneNameOrIndex, absolute); }
+    public detachBoneObject(object: Object3D): boolean { return this.getComponent<TransformComponent>("transform").detachBoneObject(object); }
+    public gainScriptChild(object: Object3D): void { this.getComponent<ActorOwnershipComponent>("actorOwnership").gainScriptChild(object); }
+    public loseScriptChild(object: Object3D): void { this.getComponent<ActorOwnershipComponent>("actorOwnership").loseScriptChild(object); }
+    public getScriptChildren(): ReadonlySet<Object3D> { return this.getComponent<ActorOwnershipComponent>("actorOwnership").getScriptChildren(); }
 
-        if (!(key in this.basicActorAnimations))
-            throw new Error(`'${key}' is not a valid basic actor animation`);
+    public getRenderSphere(): Sphere { return this.getComponent<PawnRenderableComponent>("pawnRenderable").getRenderSphere(); }
 
-        (this.basicActorAnimations as any)[key] = animationName;
+    public setMeshes(meshes: Mesh[]): void { this.animationComponent.setMeshes(meshes); }
+
+    public setAnimations(animations: Record<string, AnimationClip>): void { this.animationComponent.setAnimations(animations); }
+    public getAnimationNames(): string[] { return this.animationComponent.getAnimationNames(); }
+    public stopAnimations(): void { this.animationComponent.stop(); }
+
+    // materials and textures stay - material-decoder hands those out of name-keyed shared caches
+    public release(): void {
+        this.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
+        this.detachComponents();
     }
 
-    public setIdleAnimation(animationName: string) { this.setBasicActorAnimation("idle", animationName); }
-    public setWalkingAnimation(animationName: string) { this.setBasicActorAnimation("walking", animationName); }
-    public setRunningAnimation(animationName: string) { this.setBasicActorAnimation("running", animationName); }
-    public setDeathAnimation(animationName: string) { this.setBasicActorAnimation("dying", animationName); }
-    public setFallingAnimation(animationName: string) { this.setBasicActorAnimation("falling", animationName); }
+    public setIdleAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("idle", animationName); }
+    public setWalkingAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("walking", animationName); }
+    public setRunningAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("running", animationName); }
+    public setDeathAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("dying", animationName); }
+    public setFallingAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("falling", animationName); }
+    public setSwimmingAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("swimming", animationName); }
+    public setSwimmingIdleAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("swimmingIdle", animationName); }
+    public playMovementAnimation(state: PawnMovementState_T): void { this.animationComponent.playMovement(state); }
+    public setDeathAnimationFromScript(): void { this.animationComponent.setDeathAnimationFromScript(); }
+    public initAnimations(): void { this.animationComponent.init(); }
 
-    protected isAnimationsInit = false;
-
-    public initAnimations() {
-        this.isAnimationsInit = true;
-        this.playAnimation(this.basicActorAnimations.idle);
+    public spawnEnterEvent(event: INpcEnterEvent): void {
+        this.getComponent<NpcLifecycleComponent>("npcLifecycle").spawnEnter(event);
     }
 
-    public playAnimation(animationName: string) {
-        if (!this.isAnimationsInit) return;
+    public onAnimationFinished(action: AnimationAction): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").onAnimationFinished(action); }
 
-        if (!(animationName in this.actorAnimations))
-            throw new Error(`'${animationName}' is not available.`);
+    public playDeathAnimation(onFinished: (actor: BaseActor) => void): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").playDeath(onFinished); }
 
-        const clip = this.actorAnimations[animationName];
-        const mixer = this.renderManager.mixer;
+    public getNpcAttacks(): readonly PawnAttack_T[] { return this.getComponent<PawnAttackComponent>("pawnAttack").getAttacks(); }
+    public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void { this.getComponent<PawnAttackComponent>("pawnAttack").attack(target, selection, locList, associatedActors, targetExcepted); }
+    public stopAttack(): void { this.getComponent<PawnAttackComponent>("pawnAttack").stop(); }
 
-        for (const mesh of this.meshes) {
-            const prevAct = this.prevAnimations.get(mesh) || null;
-            const currAct = this.currAnimations.get(mesh) || null;
-            const nextAct = mixer.clipAction(clip, mesh);
+    public isPlayingOneShotAnimation(animationName: string): boolean { return this.animationComponent.isPlayingOneShot(animationName); }
+    public playAnimation(animationName: string, tweenTime: number = 0.1, rate: number = 1, loop: boolean = true, restart: boolean = false): void { this.animationComponent.play(animationName, tweenTime, rate, loop, restart); }
 
-            this.currAnimations.set(mesh, nextAct);
-
-            if (prevAct) prevAct.stop();
-            if (currAct) {
-                this.prevAnimations.set(mesh, currAct);
-                currAct.crossFadeTo(nextAct, 0.25, false);
-            }
-
-            nextAct.play();
-        }
-    }
-
-    public goTo(position: Vector3) {
-        this.actorState.locomotion = true;
-        this.actorState.desired.position.copy(position);
-        this.actorState.desired.position.y += this.getStepHeight() + this.getColliderSize().y * 0.5;
-    }
+    public goTo(position: Vector3): void { this.movementComponent.goTo(position); }
+    public goToActor(actor: Object3D, offset: number = 0): void { this.movementComponent.goToActor(actor, offset); }
+    public moveInDirection(direction: Vector3, faceMovement: boolean = true): void { this.movementComponent.moveInDirection(direction, faceMovement); }
+    public faceActor(actor: Object3D | null): void { this.movementComponent.faceActor(actor); }
+    public stopMoving(): void { this.movementComponent.stopMoving(); }
+    public setWalking(isWalking: boolean): void { this.movementComponent.setWalking(isWalking); }
+    public isIdle(): boolean { return this.movementComponent.isIdle(); }
+    public isLocomoting(): boolean { return this.movementComponent.isLocomoting(); }
+    public isWalkingMovement(): boolean { return this.movementComponent.isWalkingMovement(); }
+    public isSwimmingMovement(): boolean { return this.movementComponent.isSwimmingMovement(); }
+    public getSpeed(): number { return this.movementComponent.getSpeed(); }
+    public isUnderwaterMovement(): boolean { return this.movementComponent.isUnderwaterMovement(); }
+    public setFlying(isFlying: boolean): void { this.movementComponent.setFlying(isFlying); }
+    public setAirSpeed(airSpeed: number): void { this.movementComponent.setAirSpeed(airSpeed); }
+    public setCollisionSize(collisionRadius: number, collisionHeight: number): void { this.movementComponent.setCollisionSize(collisionRadius, collisionHeight); }
+    public teleportTo(position: Vector3): void { this.movementComponent.teleportTo(position); }
 
 }
 
 export default BaseActor;
-export { BaseActor };
-
-class ActorState {
-    public state: ValidStateNames_T = "idle";
-    public locomotion: boolean = false;
-    public readonly velocity = new Vector3();
-    public readonly desired: DesiredState_T = {
-        state: "idle",
-        position: new Vector3(),
-        direction: new Vector3()
-    };
-
-    public reset() {
-        this.state = "idle";
-        this.desired.state = "idle";
-    }
-}
-
-type BasicActorAnimations = {
-    idle: string;
-    walking: string;
-    running: string;
-    dying: string;
-    falling: string;
-}
-
-type DesiredState_T = {
-    state: ValidStateNames_T;
-    position: THREE.Vector3;
-    direction: THREE.Vector3;
-}
-
-type ValidStateNames_T = "idle" | "walking" | "running" | "dying" | "falling";
-
-type IntersectionResult = {
-    position: THREE.Vector3,
-    object: ICollidable
-} & RAPIER.RayColliderIntersection;

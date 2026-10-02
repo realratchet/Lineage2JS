@@ -1,15 +1,31 @@
-import UParticleEmitter from "./un-particle-emitter"
+import UParticleEmitter, { type IEmitterDecodeInfo } from "./un-particle-emitter"
+import type { UStaticMesh } from "../static-mesh/un-static-mesh";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-abstract class UMeshEmitter extends UParticleEmitter {
-    declare protected mesh: GA.UStaticMesh;
+export type IMeshEmitterDecodeInfo = IEmitterDecodeInfo & {
+    type: "MeshEmitter",
+    mesh: { geometry: string, materials: string },
+    useMeshBlendMode: boolean,
+    renderTwoSided: boolean,
+    useParticleColor: boolean
+};
+
+export abstract class UMeshEmitter extends UParticleEmitter {
+    declare protected mesh: UStaticMesh;
+    declare protected useMeshBlendMode: boolean;
+    declare protected renderTwoSided: boolean;
+    declare protected useParticleColor: boolean;
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
-            "StaticMesh": "mesh"
+            "StaticMesh": "mesh",
+            "UseMeshBlendMode": "useMeshBlendMode",
+            "RenderTwoSided": "renderTwoSided",
+            "UseParticleColor": "useParticleColor"
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         if (!this.mesh) {
             console.warn(`MeshEmitter '${this.objectName}' has no static mesh, skipping`);
             return null;
@@ -17,10 +33,12 @@ abstract class UMeshEmitter extends UParticleEmitter {
 
         return Object.assign(super.getDecodeInfo(builder), {
             type: "MeshEmitter",
-            mesh: builder.pullStaticMesh(this.mesh)
+            mesh: builder.pullStaticMesh(this.mesh),
+            useMeshBlendMode: this.useMeshBlendMode,
+            renderTwoSided: this.renderTwoSided,
+            useParticleColor: this.useParticleColor
         });
     }
 }
 
 export default UMeshEmitter;
-export { UParticleEmitter };

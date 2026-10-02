@@ -1,7 +1,25 @@
 import UAActor from "./un-aactor";
+import type { USound } from "./un-sound";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { Vector3Arr } from "./library-types";
+import type { IAudioDecodeInfo } from "./decode-library";
 
-abstract class UAmbientSoundObject extends UAActor {
-    declare public readonly sound: GA.USound;
+export type AmbientSoundTypes_T = "always" | "day" | "night" | "water";
+export type IAmbientSoundObjectDecodeInfo = IAudioDecodeInfo & {
+    type: "AmbientSoundObject",
+    position: Vector3Arr,
+    refDistance: number,
+    maxDistance: number,
+    volume: number,
+    pitch: number,
+    soundName: string, // resolved against the sector's soundBlobCache, see SectorObject.getSoundUri
+    looping: boolean,
+    soundType: AmbientSoundTypes_T,
+    randomChance: number,
+};
+
+export abstract class UAmbientSoundObject extends UAActor {
+    declare public readonly sound: USound;
     declare public readonly radius: number;
     declare public readonly volume: number;
     declare public readonly pitch: number;
@@ -25,7 +43,7 @@ abstract class UAmbientSoundObject extends UAActor {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         if (!this.sound) return null;
 
         const snd = this.sound.loadSelf();
@@ -38,11 +56,8 @@ abstract class UAmbientSoundObject extends UAActor {
         console.assert(isFinite(this.randomAmbient));
 
         const soundKey = snd.objectName ?? snd.uuid;
-        const soundEntry = builder.pullSound(snd);
 
-        if (!soundEntry) return null;
-
-        const soundDataUri = soundEntry.uri;
+        if (!builder.pullSound(snd)) return null;
 
         const position = this.location.getElements();
         const refDistance = this.radius;
@@ -51,7 +66,7 @@ abstract class UAmbientSoundObject extends UAActor {
         const pitch = this.pitch / 64;
         const randomChance = this.randomAmbient;
 
-        const decodeInfo: GD.IAmbientSoundObjectDecodeInfo = {
+        const decodeInfo: IAmbientSoundObjectDecodeInfo = {
             uuid: this.uuid,
             name: this.objectName,
             type: "AmbientSoundObject",
@@ -60,7 +75,6 @@ abstract class UAmbientSoundObject extends UAActor {
             maxDistance,
             volume,
             pitch,
-            soundDataUri,
             soundName: soundKey,
             looping: randomChance <= 0 || randomChance >= 100,
             soundType: AS_TYPE_NAMES[(this.soundType?.valueOf() as ASType1_T) ?? ASType1_T.AST1_Always],
@@ -71,14 +85,14 @@ abstract class UAmbientSoundObject extends UAActor {
     }
 }
 
-enum ASType1_T {
+export enum ASType1_T {
     AST1_Always,
     AST1_Day,
     AST1_Night,
     AST1_Water
 }
 
-const AS_TYPE_NAMES: Record<ASType1_T, GD.AmbientSoundTypes_T> = {
+const AS_TYPE_NAMES: Record<ASType1_T, AmbientSoundTypes_T> = {
     [ASType1_T.AST1_Always]: "always",
     [ASType1_T.AST1_Day]: "day",
     [ASType1_T.AST1_Night]: "night",
@@ -86,4 +100,3 @@ const AS_TYPE_NAMES: Record<ASType1_T, GD.AmbientSoundTypes_T> = {
 };
 
 export default UAmbientSoundObject;
-export { UAmbientSoundObject, ASType1_T };

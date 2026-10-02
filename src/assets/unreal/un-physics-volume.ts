@@ -1,6 +1,36 @@
-import UVolume from "./un-volume";
+import UVolume, { type IVolumeBspDecodeInfo } from "./un-volume";
+import type { FVector } from "./un-vector";
+import type { FColor } from "./un-color";
+import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
+import type { Vector3Arr, ColorArr } from "./library-types";
 
-abstract class UPhysicsVolume extends UVolume {
+export type IWaterVolumeDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "WaterVolume",
+    priority: number,
+    fluidFriction: number,
+    gravity: Vector3Arr,
+    terminalVelocity: number,
+    zoneVelocity: Vector3Arr,
+    fog: { color: ColorArr, start: number, end: number } | null,
+    cellophane: ColorArr | null,
+    waitHitEffect: string | null,
+    runHitEffect: string | null,
+    bsp: IVolumeBspDecodeInfo
+};
+
+export abstract class UPhysicsVolume extends UVolume {
+    declare public readonly isPhysicsVolume: boolean;
+
+    declare protected zoneVelocity: FVector;
+    declare protected gravity: FVector;
+    declare protected terminalVelocity: number;
+    declare protected priority: number;
+    declare protected fluidFriction: number;
+    declare protected isWaterVolume: boolean;
+    declare protected isL2WaterVolume: boolean;
+    declare protected useDistanceFogColor: boolean;
+    declare protected useCellophane: boolean;
+    declare protected cellophaneColor: FColor;
     // protected locationPriority: number;
     // protected locationName: string;
 
@@ -37,59 +67,87 @@ abstract class UPhysicsVolume extends UVolume {
     // protected _bL2StepVolume: any;
     // protected _stepSoundID: any;
 
-    // protected entrySoundName: any;
-    // protected exitSoundName: any;
-    // protected entryActorName: any;
-    // protected waitHitEffect: any;
-    // protected runHitEffect: any;
+    declare protected waitHitEffect: string;
+    declare protected runHitEffect: string;
 
-    // protected getPropertyMap(): Record<string, string> {
-    //     return Object.assign({}, super.getPropertyMap(), {
-    //         "LocationPriority": "locationPriority",
-    //         "LocationName": "locationName",
-    //         "DecoList": "decoList",
+    public constructor() {
+        super();
 
-    //         "bPainCausing": "_bPainCausing",
-    //         "ZoneVelocity": "_zoneVelocity",
-    //         "Gravity": "_gravity",
-    //         "GroundFriction": "_groundFriction",
-    //         "TerminalVelocity": "_terminalVelocity",
-    //         "DamagePerSec": "_damagePerSec",
-    //         "DamageType": "_damageType",
-    //         "Priority": "_priority",
-    //         "EntrySound": "_entrySound",
-    //         "ExitSound": "_exitSound",
-    //         "EntryActor": "_entryActor",
-    //         "ExitActor": "_exitActor",
-    //         "FluidFriction": "_fluidFriction",
-    //         "ViewFlash": "_viewFlash",
-    //         "ViewFog": "_viewFog",
-    //         "bDestructive": "_bDestructive",
-    //         "bNoInventory": "_bNoInventory",
-    //         "bMoveProjectiles": "_bMoveProjectiles",
-    //         "bBounceVelocity": "_bBounceVelocity",
-    //         "bNeutralZone": "_bNeutralZone",
-    //         "bWaterVolume": "_bWaterVolume",
-    //         "PainTimer": "_painTimer",
-    //         "bUseDistanceFogColor": "_bUseDistanceFogColor",
-    //         "bUseCellophane": "_bUseCellophane",
-    //         "CellophaneColor": "_cellophaneColor",
-    //         "KExtraLinearDamping": "_kExtraLinearDamping",
-    //         "KExtraAngularDamping": "_kExtraAngularDamping",
-    //         "KBuoyancy": "_kBuoyancy",
-    //         "NextPhysicsVolume": "_nextPhysicsVolume",
-    //         "bL2WaterVolume": "_bL2WaterVolume",
-    //         "bL2StepVolume": "_bL2StepVolume",
-    //         "StepSoundID": "_stepSoundID",
+        (this as any).isPhysicsVolume = true;
+    }
 
-    //         "EntrySoundName": "entrySoundName",
-    //         "ExitSoundName": "exitSoundName",
-    //         "EntryActorName": "entryActorName",
-    //         "WaitHitEffect": "waitHitEffect",
-    //         "RunHitEffect": "runHitEffect",
-    //     });
-    // }
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), {
+            //         "LocationPriority": "locationPriority",
+            //         "LocationName": "locationName",
+            //         "DecoList": "decoList",
+
+            //         "bPainCausing": "_bPainCausing",
+            "ZoneVelocity": "zoneVelocity",
+            "Gravity": "gravity",
+            //         "GroundFriction": "_groundFriction",
+            "TerminalVelocity": "terminalVelocity",
+            //         "DamagePerSec": "_damagePerSec",
+            //         "DamageType": "_damageType",
+            "Priority": "priority",
+            //         "EntrySound": "_entrySound",
+            //         "ExitSound": "_exitSound",
+            //         "EntryActor": "_entryActor",
+            //         "ExitActor": "_exitActor",
+            "FluidFriction": "fluidFriction",
+            //         "ViewFlash": "_viewFlash",
+            //         "ViewFog": "_viewFog",
+            //         "bDestructive": "_bDestructive",
+            //         "bNoInventory": "_bNoInventory",
+            //         "bMoveProjectiles": "_bMoveProjectiles",
+            //         "bBounceVelocity": "_bBounceVelocity",
+            //         "bNeutralZone": "_bNeutralZone",
+            "bWaterVolume": "isWaterVolume",
+            //         "PainTimer": "_painTimer",
+            "bUseDistanceFogColor": "useDistanceFogColor",
+            "bUseCellophane": "useCellophane",
+            "CellophaneColor": "cellophaneColor",
+            //         "KExtraLinearDamping": "_kExtraLinearDamping",
+            //         "KExtraAngularDamping": "_kExtraAngularDamping",
+            //         "KBuoyancy": "_kBuoyancy",
+            //         "NextPhysicsVolume": "_nextPhysicsVolume",
+            "bL2WaterVolume": "isL2WaterVolume",
+            //         "bL2StepVolume": "_bL2StepVolume",
+            //         "StepSoundID": "_stepSoundID",
+
+            "WaitHitEffect": "waitHitEffect",
+            "RunHitEffect": "runHitEffect",
+        });
+    }
+
+    public getDecodeInfo(library: DecodeLibrary): IWaterVolumeDecodeInfo | null {
+        if (!this.isWaterVolume && !this.isL2WaterVolume && this.constructor.friendlyName !== "WaterVolume") return null;
+        if (!this.brush) return null;
+
+        const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as Vector3Arr;
+        const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as Vector3Arr;
+        // L2.water.trace 4621-4622: Env.int fog replaces DistanceFog unless bUseDistanceFogColor.
+        const fog = this.useDistanceFogColor && this.hasDistanceFog && this.distanceFogColor ? {
+            color: this.distanceFogColor.toArray() as ColorArr,
+            start: this.distanceFogStart,
+            end: this.distanceFogEnd
+        } : null;
+
+        return {
+            ...super.getDecodeInfo(library),
+            type: "WaterVolume",
+            priority: this.priority ?? this.locationPriority ?? 0,
+            fluidFriction: this.fluidFriction ?? 2.4,
+            gravity,
+            terminalVelocity: this.terminalVelocity ?? 2500,
+            zoneVelocity,
+            fog,
+            cellophane: this.useCellophane && this.cellophaneColor ? this.cellophaneColor.toArray() as ColorArr : null,
+            waitHitEffect: this.waitHitEffect ?? null,
+            runHitEffect: this.runHitEffect ?? null,
+            bsp: this.getWorldBspInfo()
+        };
+    }
 }
 
 export default UPhysicsVolume;
-export { UPhysicsVolume };

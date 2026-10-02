@@ -1,97 +1,242 @@
-import RenderManager from "@client/rendering/render-manager";
+import RenderManager from "../rendering/render-manager";
+import BaseActor from "../base-actor";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { IScriptFieldDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine/contracts/script";
+import { PropertyFlags_T } from "@l2js/core";
+
+const DEFAULT_CHAR_INDEX = 1;
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import { createSectorStaticMeshDecodeJob, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "@client/assets/decoders/object3d-decoder";
-import decodeEnv from "@client/assets/decoders/env-decoder";
-import DecodeWorkerClient from "@client/assets/decode-worker/decode-worker-client";
-import { getUserConfig } from "@unreal/conf-files/un-conf-system";
-import { Vector3 } from "three";
-import type { SectorObject } from "@client/objects/zone-object";
+import { createSectorStaticMeshDecodeJob, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "./decoders/object3d-decoder";
+import decodeEnv from "./decoders/env-decoder";
+import DecodeWorkerClient from "./decode-worker/decode-worker-client";
+import type { PlayerSkillInfo_T } from "./decode-worker/decode-protocol";
+import { AnimationClip, Matrix4, Vector3 } from "three";
+import type { SectorObject } from "../objects/zone-object";
+import UnScriptVM from "../ue-script/vm";
+import LineagePlayerController from "../objects/lineage-player-controller";
+import { IEngineComponent } from "../game/components";
+import type { GameManager } from "../game/game-manager"
+import SoundComponent from "../audio/components/sound-component";
+import EffectsComponent from "../rendering/components/effects-component";
+import AnimationComponent from "../objects/components/animation-component";
+import TransformComponent from "../objects/components/transform-component";
+import HairSimulationComponent from "../objects/components/hair-simulation-component";
+import SkinNotifyComponent from "../objects/components/skin-notify-component";
+import NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
+import PawnAttackComponent from "../objects/components/pawn-attack-component";
+import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
+import { WeaponType } from "./unreal/un-pawn";
+import PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import ActorMeshComponent from "../rendering/components/actor-mesh-component";
+import { ScriptComponent } from "../game/script-component";
 
 const tmpCameraPosition = new Vector3();
+const tmpAttachMatrix = new Matrix4();
+const tmpNpcFloorStart = new Vector3();
+const npcFloorDirection = new Vector3(0, 0, -1);
+const npcSpawnOffset = new Vector3(-600, -600, 0);
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
+const MAX_RETIRED_SECTORS = 3; // Caps grace-period libraries during rapid boundary crossings.
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
 const STATIC_MESH_BUILD_FRAME_MS = 2;
+const BIND_POSE_EPSILON = 1e-3;
+const NPC_SPAWN_FLOOR_DISTANCE = 2000;
+const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
+const UNDERWATER_EFFECTS = ["LineageEffect.e_u061_cam", "LineageEffect.e_u061_beam"];
+const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
 
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
-type PendingStaticMeshBuild_T = { sector: SectorObject, library: GD.DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
+type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
+export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
-/**
- * Streams the world in and out around the camera. All ue2 asset decoding happens in
- * the decode worker (its own webpack bundle) - this side only ever sees plain decoded
- * data and instantiates three.js objects from it.
- */
-class AssetManager {
+function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo | null {
+    const lowerName = name.toLowerCase();
+    let cls = library.scriptClasses[classId];
+
+    while (cls) {
+        const field = cls.fields.find(field => field.name.toLowerCase() === lowerName);
+
+        if (field) return field;
+        cls = cls.superClassId ? library.scriptClasses[cls.superClassId] : null;
+    }
+
+    return null;
+}
+
+function findScriptDefault(library: DecodeLibrary, classId: string, name: string): ScriptPropertyValue_T {
+    const lowerName = name.toLowerCase();
+    let cls = library.scriptClasses[classId];
+
+    while (cls) {
+        const key = Object.keys(cls.defaults).find(key => key.toLowerCase() === lowerName);
+
+        if (key) return cls.defaults[key];
+        cls = cls.superClassId ? library.scriptClasses[cls.superClassId] : null;
+    }
+
+    throw new Error(`UnrealScript class '${classId}' has no default for '${name}'.`);
+}
+
+function parseLocalizedValue(field: IScriptFieldDecodeInfo, value: string): ScriptPropertyValue_T {
+    switch (field.type.toLowerCase()) {
+        case "name":
+        case "str":
+        case "string": return value.length >= 2 && value[0] === '"' && value[value.length - 1] === '"' ? value.slice(1, -1) : value;
+        case "byte":
+        case "int":
+        case "float": {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) throw new Error(`Localized UnrealScript property '${field.id}' has invalid number '${value}'.`);
+
+            return number;
+        }
+        case "bool":
+            if (/^(true|1)$/i.test(value)) return true;
+            if (/^(false|0)$/i.test(value)) return false;
+            throw new Error(`Localized UnrealScript property '${field.id}' has invalid bool '${value}'.`);
+        default: throw new Error(`Localized UnrealScript property '${field.id}' has unsupported type '${field.type}'.`);
+    }
+}
+
+function applyScriptLocalization(library: DecodeLibrary, classId: string, properties: LocalizationProperty_T[]): void {
+    const cls = library.scriptClasses[classId];
+
+    if (!cls) throw new Error(`UnrealScript class '${classId}' is not in '${library.name}'.`);
+
+    for (const property of properties) {
+        const field = findScriptField(library, classId, property.name);
+
+        // Core.dll LoadLocalized 0x10163cab / 0x1015c19d reads only declared CPF_Localized properties.
+        if (!field || !(field.flags & PropertyFlags_T.CPF_Localized)) continue;
+
+        if (property.index < 0) {
+            cls.defaults[field.name] = parseLocalizedValue(field, property.value);
+            continue;
+        }
+
+        const inherited = findScriptDefault(library, classId, field.name);
+
+        if (!Array.isArray(inherited)) throw new Error(`Localized UnrealScript property '${field.id}' is not an array.`);
+        if (property.index >= field.arrayDimensions) continue;
+
+        const values = Array.isArray(cls.defaults[field.name]) ? (cls.defaults[field.name] as ScriptPropertyValue_T[]).slice() : inherited.slice();
+
+        values[property.index] = parseLocalizedValue(field, property.value);
+        cls.defaults[field.name] = values;
+    }
+}
+
+function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary, actor: BaseActor): void {
+    const sound = actor.findComponent<SoundComponent>("sound") || actor.addComponent(new SoundComponent(renderManager.audioManager));
+
+    sound.setLibrary(library);
+    const effects = actor.findComponent<EffectsComponent>("effects") || actor.addComponent(new EffectsComponent(renderManager));
+
+    effects.setLibrary(library);
+    if (!actor.findComponent("animation")) actor.addComponent(new AnimationComponent(renderManager));
+    if (!actor.findComponent("hairSimulation")) actor.addComponent(new HairSimulationComponent(renderManager));
+    if (!actor.findComponent("skinNotify")) actor.addComponent(new SkinNotifyComponent(renderManager));
+    if (!actor.findComponent("transform")) actor.addComponent(new TransformComponent(renderManager));
+    if (!actor.findComponent("npcLifecycle")) actor.addComponent(new NpcLifecycleComponent());
+    if (!actor.findComponent("pawnRenderable")) actor.addComponent(new PawnRenderableComponent(renderManager));
+}
+
+function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+        for (const [id, value] of Object.entries(source[key]))
+            if (!(id in target[key])) (target[key] as any)[id] = value;
+
+    for (const [name, sound] of source.soundBlobCache) {
+        if (!target.soundBlobCache.has(name)) target.soundBlobCache.set(name, sound);
+        else if (sound.uri) URL.revokeObjectURL(sound.uri);
+    }
+}
+
+export class AssetManager implements IEngineComponent<GameManager> {
     protected isTicking: boolean = false;
-    protected loadSettings: GD.LoadSettings_T;
-    protected glCapabilities: WebGLCapabilities
+    protected loadSettings: LoadSettings_T;
+    protected glCapabilities: WebGLCapabilities;
+    protected hasS3TC: boolean;
     protected decodeWorker: DecodeWorkerClient = null;
     protected isWorkerReady = false;
-    protected failedSectors = new Map<string, number>(); // sector id -> retry-after timestamp
-    protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>(); // hidden, awaiting disposal
-    protected inFlightSectors = new Set<string>(); // sector ids currently decoding, so a boundary crossing can't re-request them
+    protected failedSectors = new Map<string, number>();
+    protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>();
+    protected inFlightSectors = new Set<string>();
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
-    protected readonly levelSectors = new Set<string>(); // sector ids that have a level package
-    protected preferCompressedTextures = false; // resolved from loadSettings.textures + gpu caps
-    public userConfig: GA.IUserConfig = null;
+    protected readonly levelSectors = new Set<string>();
+    protected preferCompressedTextures = false;
+    public userConfig: UserConfig_T = null;
+    protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
+    protected charGroups: ICharacterGroup[] = null;
+    protected effectLibrary: DecodeLibrary = null;
+    protected playerLibrary: DecodeLibrary = null;
+    protected playerSkillRequest = 0;
     protected readonly decodeWorkerPoolSize: number;
-    protected readonly maxConcurrentDecodes: number; // 0 = main thread, still processes one decode at a time
+    protected readonly maxConcurrentDecodes: number;
     protected readonly lastCameraPosition = new Vector3();
     protected lastCameraSampleTime = 0;
 
-    /**
-     * Sectors whose bounds intersect this radius around the camera or its projected
-     * position get loaded. Unloading only kicks in past the larger radius so boundary
-     * crossings don't thrash.
-     */
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
     protected readonly unloadDistance = SECTOR_WORLD_SIZE;
 
-    public constructor(loadSettings: GD.LoadSettings_T, assetList: Record<string, string>) {
+    protected gameManager: GameManager;
+    public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
+    public getParent(): GameManager { return this.gameManager; }
+
+    public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
         this.decodeWorkerPoolSize = loadSettings.decodeWorkerPoolSize ?? 3;
         this.maxConcurrentDecodes = Math.max(this.decodeWorkerPoolSize, 1);
 
-        /* level packages are <x>_<y>.unr - keep the sector ids for map-edge validity checks */
-        for (const path of Object.keys(assetList)) {
+        for (const path of Object.keys(assetList.supported)) {
             if (!path.endsWith(".unr")) continue;
 
             this.levelSectors.add(path.slice(path.lastIndexOf("/") + 1, -".unr".length));
         }
+
     }
 
     public hasSector(sectorIdx: string): boolean {
         return this.levelSectors.has(sectorIdx.toLowerCase());
     }
 
-    public async initialize(renderManager: RenderManager): Promise<void> {
-        this.glCapabilities = renderManager.renderer.capabilities;
-
-        // with s3tc the dxt data uploads as-is (full mip chain, 4-8x less vram),
-        // otherwise the worker converts to rgba like before
+    public async onInit(): Promise<this> {
+        const manRender = this.getParent().getComponent("render");
         const textureMode = (this.loadSettings as any).textures ?? "auto";
-        const hasS3TC = !!renderManager.renderer.extensions.get("WEBGL_compressed_texture_s3tc");
 
-        this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && hasS3TC);
+        this.glCapabilities = manRender.renderer.capabilities;
+        this.hasS3TC = manRender.renderer.extensions.get("WEBGL_compressed_texture_s3tc")
+        this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && this.hasS3TC);
+
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
-        console.info(`[textures] mode=${textureMode}, s3tc=${hasS3TC} -> uploading ${this.preferCompressedTextures ? "compressed DDS" : "converted RGBA"}`);
-
-        this.userConfig = await getUserConfig();
-
-        /* everything below comes out of the decode worker - the app cannot run without it */
         this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
+        const [clientConfig, charGroups] = await Promise.all([this.decodeWorker.getClientConfig(), this.decodeWorker.getCharGroups()]);
+
+        this.userConfig = clientConfig.userConfig;
+        this.warriorAnimations = clientConfig.warriorAnimations;
+        this.charGroups = charGroups;
+
         const envInfo = await this.decodeWorker.decodeEnv();
         const musicInfo = await this.decodeWorker.getMusicInfo();
+        const characterLibrary = await this.decodeWorker.decodeCharacter(this.loadSettings);
+        const playerControllerLibrary = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [PLAYER_CONTROLLER_CLASS]);
+        const playerController = new LineagePlayerController(playerControllerLibrary);
+        const underwaterLoopSound = playerController.underWaterLoopSound;
+        const effectLibrary = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS], [underwaterLoopSound]);
         const skyLibrary = await this.decodeWorker.decodeSector("skylevel", {
             ...this.loadSettings, isSkyLevel: true,
             loadTerrain: true,
@@ -105,10 +250,295 @@ class AssetManager {
 
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+        effectLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (effectLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-        renderManager.setEnv(decodeEnv(envInfo));
-        renderManager.setSky(decodePackage(skyLibrary));
-        renderManager.audioManager.setMusicInfo(musicInfo);
+        this.effectLibrary = effectLibrary;
+
+        await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
+
+        manRender.waterEffects.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
+
+        const underwaterSoundName = effectLibrary.sounds[underwaterLoopSound];
+        const underwaterSound = effectLibrary.soundBlobCache.get(underwaterSoundName);
+
+        if (!underwaterSound?.uri) throw new Error(`Underwater loop sound '${underwaterLoopSound}' failed to decode.`);
+
+        manRender.audioManager.setUnderwaterLoopSound(underwaterSound.uri);
+
+        manRender.setEnv(decodeEnv(envInfo));
+        manRender.setSky(decodePackage(skyLibrary));
+        manRender.audioManager.setMusicInfo(musicInfo);
+
+        return this;
+    }
+
+    public getMemoryStats() { return this.decodeWorker.getMemoryStats(); }
+
+    public createLandmarkEffect(classPath: string): THREE.Object3D {
+        return this.createEffect(classPath);
+    }
+
+    public createEffect(classPath: string): THREE.Object3D {
+        if (!this.effectLibrary) throw new Error("Effect templates have not loaded.");
+
+        const info = this.effectLibrary.effectTemplates[classPath] || this.effectLibrary.effectTemplates[classPath.toLowerCase()];
+
+        if (!info) throw new Error(`Effect template '${classPath}' is missing.`);
+
+        return decodeObject3D(this.effectLibrary, info);
+    }
+
+    protected async applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX) {
+        const classPath = `LineageWarrior.${this.getClassName(charIndex)}`;
+        const [scriptLibrary, localization] = await Promise.all([this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [classPath]), this.getScriptLocalization(classPath)]);
+        const classId = Object.keys(scriptLibrary.scriptClasses).find(id => id.toLowerCase() === classPath.toLowerCase());
+
+        if (!classId) throw new Error(`Character class '${classPath}' was not decoded.`);
+
+        mergePawnLibrary(characterLibrary, scriptLibrary);
+        applyScriptLocalization(characterLibrary, classId, localization);
+        characterLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (characterLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+
+        const bodyparts = characterLibrary.pawnActors.map(info => decodeObject3D(characterLibrary, info) as THREE.SkinnedMesh);
+        const animations = (bodyparts[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
+        const player = actor || renderManager.player;
+
+        if (player === renderManager.player) this.stopPlayerSkill(renderManager);
+        const previousAttack = player.findComponent<PawnAttackComponent>("pawnAttack");
+
+        if (previousAttack) player.removeComponent(previousAttack);
+
+        if (!animations) throw new Error(`'${characterLibrary.name}' animations failed to decode.`);
+
+        shareSkeletons(bodyparts);
+        attachLooseBoneChains(bodyparts);
+
+        const className = this.getClassName(charIndex).toLowerCase();
+        const declared = this.warriorAnimations[className];
+
+        if (!declared) throw new Error(`'assets/system/lineagewarrior.int' has no '${className}' class.`);
+
+        setPawnComponents(renderManager, characterLibrary, player);
+        player.setAnimations(animations);
+        player.setIdleAnimation(findAnimation(animations, declared.wait));
+        player.setWalkingAnimation(findAnimation(animations, declared.walk));
+        player.setRunningAnimation(findAnimation(animations, declared.run));
+        player.setDeathAnimation(findAnimation(animations, declared.death));
+        player.setFallingAnimation(findAnimation(animations, declared.falling));
+        player.setSwimmingAnimation(findAnimation(animations, declared.swim));
+        player.setSwimmingIdleAnimation(findAnimation(animations, declared.swimWait));
+        player.setMeshes(bodyparts);
+        const vm = new UnScriptVM(characterLibrary);
+
+        player.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, characterLibrary, effectClassId, vm));
+        player.setUnrealScriptProperty("bActorShadows", false);
+        player.effectSpawnBoneIndex = characterLibrary.effectSpawnBoneIndex;
+        player.initAnimations();
+        player.addComponent(new PawnAttackComponent(renderManager, player.getAnimationNames(), []));
+
+        if (player === renderManager.player) this.playerLibrary = characterLibrary;
+    }
+
+    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, actor?: BaseActor) {
+        await this.applyCharacter(renderManager, await this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor), actor, charIndex);
+        renderManager.needsUpdate = true;
+    }
+
+    public async castPlayerSkill(renderManager: RenderManager, id: number, level: number, target: BaseActor, previewRange?: number): Promise<void> {
+        if (!target) throw new Error(`Player skill '${id}:${level}' has no target.`);
+        if (!this.playerLibrary) throw new Error(`Player character has not loaded.`);
+
+        this.stopPlayerSkill(renderManager);
+        const request = this.playerSkillRequest;
+        const playerLibrary = this.playerLibrary;
+        const library = await this.decodeWorker.decodeSkill(this.loadSettings, id, level);
+
+        const canceled = request !== this.playerSkillRequest || playerLibrary !== this.playerLibrary;
+
+        if (canceled || !target.parent) {
+            for (const sound of library.soundBlobCache.values())
+                if (sound.uri) URL.revokeObjectURL(sound.uri);
+            if (!canceled) throw new Error(`Player skill '${id}:${level}' target was removed while loading.`);
+            return;
+        }
+
+        const skill = library.npcSkillAttacks[0];
+
+        if (previewRange !== undefined) skill.castRange = previewRange;
+
+        mergePawnLibrary(playerLibrary, library);
+        renderManager.player.getComponent<ScriptComponent>("script").getVM().loadFunctions();
+        const attack = renderManager.player.getComponent<PawnAttackComponent>("pawnAttack");
+
+        // Server supplies AssociatedActor; the offline player preview supplies the selected pawn.
+        attack.attack(target, attack.addSkill(skill), [], [target]);
+    }
+
+    public stopPlayerSkill(renderManager: RenderManager): void {
+        this.playerSkillRequest++;
+        renderManager.player.findComponent<PawnAttackComponent>("pawnAttack")?.stop();
+    }
+
+    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: L2JS.Engine.INpcEquipment | null = null) {
+        const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
+        const [library, localization] = await Promise.all([this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment), localizationPromise]);
+
+        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (library as any).preferCompressedTextures = this.preferCompressedTextures;
+
+        const meshes = library.pawnActors.map(info => decodeObject3D(library, info) as THREE.SkinnedMesh);
+        const animations = (meshes[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
+
+        if (!animations) throw new Error(`'${library.name}' animations failed to decode.`);
+
+        if (Object.keys(animations).length === 0) {
+            animations[idleAnimation] = new AnimationClip(idleAnimation, 0, []);
+
+            if (enterAnimation && enterAnimation.toLowerCase() !== "none") animations[enterAnimation] = new AnimationClip(enterAnimation, 0, []);
+        }
+
+        const idle = findNpcIdleAnimation(animations, idleAnimation);
+
+        setPawnComponents(renderManager, library, actor);
+        actor.setAnimations(animations);
+        actor.setIdleAnimation(idle);
+        actor.setWalkingAnimation(findNpcMovementAnimation(animations, "walk", idle));
+        actor.setRunningAnimation(findNpcMovementAnimation(animations, "run", idle));
+        actor.setDeathAnimation(idle);
+        actor.setFallingAnimation(idle);
+        actor.setSwimmingAnimation(idle);
+        actor.setSwimmingIdleAnimation(idle);
+        actor.setMeshes(meshes);
+
+        if (scriptClassPath) {
+            const classId = library.pawnActors[0].scriptClassId;
+
+            if (!classId) throw new Error(`'${library.name}' has no transferred script class.`);
+
+            applyScriptLocalization(library, classId, localization);
+
+            const vm = new UnScriptVM(library);
+
+            actor.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, library, effectClassId, vm));
+            actor.setUnrealScriptProperty("bActorShadows", false); // RenderManager owns the shared pawn projector pass.
+
+            if (npcId !== null) actor.setDeathAnimationFromScript();
+        }
+
+        actor.initAnimations();
+
+        if (library.npcBow) {
+            actor.setUnrealScriptProperty("CurWeaponType", WeaponType.WT_BOW);
+            actor.addComponent(new PawnEquipmentComponent(library, renderManager));
+        }
+
+        renderManager.needsUpdate = true;
+
+        return library;
+    }
+
+    protected async getScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
+        return this.decodeWorker.getScriptLocalization(scriptClassPath);
+    }
+
+    public createScriptObject(renderManager: RenderManager, library: DecodeLibrary, classId: string, vm: UnScriptVM = new UnScriptVM(library)): any {
+        const info = library.effectTemplates[classId] || library.effectTemplates[classId.toLowerCase()];
+
+        if (!info) {
+            const actorInfo = library.actorTemplates[classId] || library.actorTemplates[classId.toLowerCase()];
+
+            if (!actorInfo) throw new Error(`Script object template '${classId}' is not in '${library.name}'.`);
+
+            const object = decodeObject3D(library, actorInfo) as any;
+
+            object.scriptClassId = actorInfo.scriptClassId;
+            return object;
+        }
+
+        const effect = decodeObject3D(library, info) as any;
+
+        if ((info as any).drawType === "mesh") {
+            effect.addComponent(new ScriptComponent(vm, classId => this.createScriptObject(renderManager, library, classId, vm), info.scriptClassId));
+            effect.addComponent(new ActorMeshComponent(library, renderManager));
+        }
+
+        effect.children.forEach((emitter: any) => {
+            emitter.isActorAttachedEmitter = true;
+        });
+
+        return effect;
+    }
+
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<BaseActor> {
+        const npc = await this.decodeWorker.resolveNpc(selector);
+        const index = npc.mesh.indexOf(".");
+
+        if (index < 0) throw new Error(`NPC '${npc.id}' has invalid mesh path '${npc.mesh}'.`);
+
+        const actor = new BaseActor(renderManager);
+
+        actor.name = npc.name;
+        actor.position.copy(position || renderManager.player.position);
+
+        if (!position) actor.position.add(npcSpawnOffset);
+
+        let library;
+
+        try {
+            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null, equipment);
+        } catch (e) {
+            throw new Error(`NPC '${npc.id}' (${npc.name}) failed to load mesh '${npc.mesh}' as '${npc.className}': ${(e as Error).message}`);
+        }
+
+        actor.addComponent(new PawnAttackComponent(renderManager, actor.getAnimationNames(), library.npcSkillAttacks, library.npcBow));
+
+        if (!position) {
+            tmpNpcFloorStart.copy(actor.position);
+            tmpNpcFloorStart.z += NPC_SPAWN_FLOOR_DISTANCE * 0.5;
+
+            const floor = this.gameManager.getComponent("physics").rayCheck(tmpNpcFloorStart, npcFloorDirection, NPC_SPAWN_FLOOR_DISTANCE, undefined, undefined, false);
+
+            if (!floor) throw new Error(`NPC '${npc.id}' has no floor below its spawn position.`);
+
+            actor.position.copy(floor.location);
+        }
+
+        try {
+            renderManager.addPawn(actor);
+
+            if (npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
+        } catch (e) {
+            renderManager.removePawn(actor);
+            throw e;
+        }
+
+        return actor;
+    }
+
+    public listNpcs(): Promise<INpcDefinition[]> {
+        return this.decodeWorker.listNpcs();
+    }
+
+    public listPlayerSkills(): Promise<PlayerSkillInfo_T[]> { return this.decodeWorker.listPlayerSkills(); }
+
+    protected getClassName(charIndex: number): string {
+        const group = this.charGroups.find(group => group.index === charIndex);
+
+        if (!group) throw new Error(`No character group for index ${charIndex}.`);
+
+        return group.name;
+    }
+
+    public precacheCharacters(): Promise<void> {
+        if (this.loadSettings.cache === false || this.loadSettings.cache?.enabled === false) return Promise.resolve();
+
+        return this.decodeWorker.precacheCharacters(this.loadSettings);
+    }
+
+    public getCharGroups(): Promise<ICharacterGroup[]> {
+        return this.decodeWorker.getCharGroups();
     }
 
     public async setAlwaysLoaded(renderManager: RenderManager, sectorName: string) {
@@ -123,18 +553,10 @@ class AssetManager {
         renderManager.addSector(sector);
     }
 
-    /**
-     * Dispatches a sector decode to the worker pool without waiting for it to finish, so
-     * a boundary crossing can request the newly-important sector on a free worker instead
-     * of queueing behind whatever a previous tick already asked for. Returns true when a
-     * load was attempted (dispatched, or reused from the retired grace period), false when
-     * the sector was skipped (already in flight, failure cooldown, pool full, worker dead).
-     */
     protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes): boolean {
         const retired = this.retiredSectors.get(sectorIdx);
 
         if (retired) {
-            /* still in its disposal grace period - reuse it as is, no re-decode */
             this.retiredSectors.delete(sectorIdx);
             renderManager.addSector(retired.sector);
             return true;
@@ -147,7 +569,7 @@ class AssetManager {
         if (retryAt !== undefined && performance.now() < retryAt) return false;
 
         if (!this.isWorkerReady || this.decodeWorker.isDead) return false;
-        if (this.inFlightSectors.size >= maxInFlight) return false; // pool full, retry next tick
+        if (this.inFlightSectors.size >= maxInFlight) return false;
 
         this.inFlightSectors.add(sectorIdx);
 
@@ -156,9 +578,9 @@ class AssetManager {
                 decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
                 (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-                const sector = decodeSectorCore(decodeLibrary); // static meshes built later by processPendingBuilds
+                const sector = decodeSectorCore(decodeLibrary);
                 renderManager.addSector(sector);
-                renderManager.gateParticleWarmup(sector, false); // ungated again once materials finish, see attachStaticMeshGroup
+                this.gameManager.getComponent("physics").setEmitterWarmupGate(sector, false);
 
                 this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, decodeJob: null });
                 this.failedSectors.delete(sectorIdx);
@@ -174,11 +596,6 @@ class AssetManager {
         return true;
     }
 
-    /**
-     * Hides the sector immediately but keeps it (and its package refcounts) intact for
-     * RETIRED_SECTOR_DISPOSE_MS - returning within that window re-adds the retained
-     * object with no re-decode. destroyExpiredSectors does the real cleanup afterwards.
-     */
     protected retireSector(renderManager: RenderManager, sector: SectorObject) {
         const sectorIdx = `${sector.index.x}_${sector.index.y}`;
 
@@ -188,23 +605,27 @@ class AssetManager {
         this.retiredSectors.set(sectorIdx, { sector, retiredAt: performance.now() });
     }
 
-    /**
-     * Disposes retired sectors past their grace period and releases the package
-     * refcounts they took in the decode worker.
-     */
     protected destroyExpiredSectors(renderManager: RenderManager) {
         const now = performance.now();
 
         for (const [sectorIdx, { sector, retiredAt }] of this.retiredSectors) {
-            if (now - retiredAt < RETIRED_SECTOR_DISPOSE_MS) continue;
+            // Map insertion order makes capped entries the oldest.
+            if (now - retiredAt < RETIRED_SECTOR_DISPOSE_MS && this.retiredSectors.size <= MAX_RETIRED_SECTORS) continue;
 
             console.log(`Disposing sector '${sectorIdx}'.`);
 
             this.retiredSectors.delete(sectorIdx);
+            this.dropPendingBuild(sector);
             renderManager.disposeSector(sector);
 
             this.decodeWorker?.freeSector(sectorIdx);
         }
+    }
+
+    protected dropPendingBuild(sector: SectorObject) {
+        const jobIndex = this.pendingStaticMeshBuilds.findIndex(job => job.sector === sector);
+
+        if (jobIndex >= 0) this.pendingStaticMeshBuilds.splice(jobIndex, 1);
     }
 
     protected processPendingBuilds(renderManager: RenderManager, cameraPosition: THREE.Vector3) {
@@ -213,6 +634,9 @@ class AssetManager {
 
         for (let i = 0; i < this.pendingStaticMeshBuilds.length; i++) {
             const sector = this.pendingStaticMeshBuilds[i].sector;
+
+            if (!sector.parent) continue;
+
             const distance = sectorDistance(cameraPosition, sector.index.x, sector.index.y);
 
             if (distance >= jobDistance) continue;
@@ -274,11 +698,6 @@ class AssetManager {
             this.lastCameraPosition.copy(cameraPosition);
             this.lastCameraSampleTime = now;
 
-            /*
-             * Retire sectors past the unload radius; the gap between renderDistance and
-             * unloadDistance keeps boundary crossings from thrashing. Retired sectors
-             * stay reusable for a grace period before actually being disposed.
-             */
             for (const sector of sectorsLoaded) {
                 if (sector.neverUnload || !sector.index) continue;
                 if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= this.unloadDistance) continue;
@@ -289,16 +708,12 @@ class AssetManager {
             this.destroyExpiredSectors(renderManager);
             this.processPendingBuilds(renderManager, cameraPosition);
 
-            /*
-             * Sectors wanted this tick, most-important first: the sector the camera is
-             * in, then any sector near the projected camera position, nearest-first.
-             * Recomputing the list every tick makes a direction or boundary change
-             * reprioritize the next available worker.
-             */
             const sectorsToLoad: string[] = [];
 
-            if (isValidOrigin && !sectorsLoadedIds.includes(originIdx))
-                sectorsToLoad.push(originIdx);
+            if (isValidOrigin && !sectorsLoadedIds.includes(originIdx)) {
+                this.requestSector(renderManager, originIdx);
+                return;
+            }
 
             const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
             const [psx, psy] = renderManager.getSectorId(tmpPrefetchPosition);
@@ -329,9 +744,7 @@ class AssetManager {
                 : this.maxConcurrentDecodes;
 
             for (let i = 0; i < sectorsToLoad.length; i++) {
-                const isOrigin = i === 0 && sectorsToLoad[i] === originIdx;
-
-                this.requestSector(renderManager, sectorsToLoad[i], isOrigin ? this.maxConcurrentDecodes : backgroundLimit);
+                this.requestSector(renderManager, sectorsToLoad[i], backgroundLimit);
             }
         } finally {
             this.isTicking = false;
@@ -339,13 +752,102 @@ class AssetManager {
     }
 }
 
-export default AssetManager;
-export { AssetManager };
+function isHeadBone(name: string) {
+    return /^bip01[ _]head$/i.test(name);
+}
 
-/**
- * Distance from the camera to a sector's bounds (0 inside it), using the same
- * sector -> world mapping as RenderManager.getSectorId.
- */
+// system/lineagewarrior.int clip names are case-insensitive against package names.
+function findAnimation(animations: Record<string, THREE.AnimationClip>, declared: string): string {
+    const match = declared.toLowerCase();
+    const name = Object.keys(animations).find(name => name.toLowerCase() === match);
+
+    if (!name) throw new Error(`Character has no '${declared}' animation.`);
+
+    return name;
+}
+
+function findNpcIdleAnimation(animations: Record<string, THREE.AnimationClip>, declared: string): string {
+    const names = Object.keys(animations);
+    const match = declared.toLowerCase();
+    const name = names.find(name => name.toLowerCase() === match)
+        || names.find(name => /^wait(?:_|$)/i.test(name))
+        || names.find(name => /^spwait/i.test(name))
+        || names[0];
+
+    if (!name) throw new Error(`NPC has no '${declared}' animation.`);
+
+    return name;
+}
+
+function findNpcMovementAnimation(animations: Record<string, THREE.AnimationClip>, movement: string, idle: string): string {
+    const names = Object.keys(animations);
+    const index = idle.indexOf("_");
+    const suffix = index < 0 ? "" : idle.slice(index);
+    const match = `${movement}${suffix}`.toLowerCase();
+
+    return names.find(name => name.toLowerCase() === match) || names.find(name => new RegExp(`^${movement}(?:_|$)`, "i").test(name)) || idle;
+}
+
+function shareSkeletons(bodyparts: THREE.SkinnedMesh[]) {
+    const host = bodyparts.find(part => part.skeleton.bones.some(bone => isHeadBone(bone.name)));
+
+    if (!host) throw new Error(`Character has no bodypart carrying a head bone to share its skeleton from.`);
+
+    for (const part of bodyparts) {
+        if (part === host || !isSameBindPose(host, part)) continue;
+
+        part.remove(part.skeleton.bones[0]);
+        part.bind(host.skeleton, part.bindMatrix);
+
+        (part as any).sharesSkeleton = true;
+    }
+}
+
+function isSameBindPose(host: THREE.SkinnedMesh, part: THREE.SkinnedMesh): boolean {
+    const hostSkeleton = host.skeleton, partSkeleton = part.skeleton;
+
+    if (hostSkeleton.bones.length !== partSkeleton.bones.length) return false;
+    if (host.position.distanceTo(part.position) > BIND_POSE_EPSILON) return false;
+    if (host.scale.distanceTo(part.scale) > BIND_POSE_EPSILON) return false;
+    if (Math.abs(host.quaternion.dot(part.quaternion)) < 1 - BIND_POSE_EPSILON) return false;
+
+    for (let i = 0, len = hostSkeleton.bones.length; i < len; i++) {
+        if (hostSkeleton.bones[i].name !== partSkeleton.bones[i].name) return false;
+
+        const hostInverse = hostSkeleton.boneInverses[i].elements, partInverse = partSkeleton.boneInverses[i].elements;
+
+        for (let j = 0; j < 16; j++)
+            if (Math.abs(hostInverse[j] - partInverse[j]) > BIND_POSE_EPSILON) return false;
+    }
+
+    return true;
+}
+
+function attachLooseBoneChains(bodyparts: THREE.SkinnedMesh[]) {
+    const host = bodyparts.find(part => part.skeleton.bones.some(bone => isHeadBone(bone.name)));
+
+    if (!host) throw new Error(`Character has no bodypart carrying a head bone to attach its hair to.`);
+
+    const headBone = host.skeleton.bones.find(bone => isHeadBone(bone.name));
+
+    host.updateMatrixWorld(true);
+
+    for (const part of bodyparts) {
+        if (part === host || !/(?:^|_)(?:ah|bh)$/i.test(part.name) || part.skeleton.bones.some(bone => isHeadBone(bone.name))) continue;
+
+        const root = part.skeleton.bones[0];
+
+        part.updateMatrixWorld(true);
+
+        tmpAttachMatrix.copy(headBone.matrixWorld).invert().multiply(root.matrixWorld);
+        tmpAttachMatrix.decompose(root.position, root.quaternion, root.scale);
+
+        headBone.add(root);
+
+        (part as any).isBoneAttachment = true;
+    }
+}
+
 function sectorDistance(cameraPosition: THREE.Vector3, x: number, y: number): number {
     const minX = (x - 20) * SECTOR_WORLD_SIZE, maxX = minX + SECTOR_WORLD_SIZE;
     const minY = (y - 18) * SECTOR_WORLD_SIZE, maxY = minY + SECTOR_WORLD_SIZE;
@@ -355,3 +857,5 @@ function sectorDistance(cameraPosition: THREE.Vector3, x: number, y: number): nu
 
     return Math.sqrt(dx * dx + dy * dy);
 }
+
+export default AssetManager;

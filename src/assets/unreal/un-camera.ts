@@ -1,6 +1,6 @@
 import UAActor from "./un-aactor";
 
-abstract class UCamera extends UAActor {
+export abstract class UCamera extends UAActor {
     // public readonly careUnread = false;
 
     // protected _pawn: any;
@@ -473,4 +473,3 @@ abstract class UCamera extends UAActor {
 }
 
 export default UCamera;
-export { UCamera };

@@ -1,8 +1,9 @@
-import UObject from "@l2js/core";
+import { type FPrimitiveArray } from "@l2js/core";
+import UObject from "./un-object";
 
-abstract class FTIntMap extends UObject {
+export abstract class FTIntMap extends UObject {
     declare public readonly time: number;
-    declare public readonly intensity: C.FPrimitiveArray<"uint8">;
+    declare public readonly intensity: FPrimitiveArray<"uint8">;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -13,4 +14,3 @@ abstract class FTIntMap extends UObject {
 }
 
 export default FTIntMap;
-export { FTIntMap };

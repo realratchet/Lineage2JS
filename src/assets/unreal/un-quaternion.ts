@@ -1,8 +1,47 @@
 import FVector from "./un-vector";
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
+import type { QuaternionArr } from "./library-types";
 
-abstract class FQuaternion extends UObject {
+export abstract class FQuaternion extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
+
+    public static multiplyElements(a: QuaternionArr, b: QuaternionArr, out: QuaternionArr): QuaternionArr {
+        const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+        const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+
+        out[0] = ax * bw + aw * bx + ay * bz - az * by;
+        out[1] = ay * bw + aw * by + az * bx - ax * bz;
+        out[2] = az * bw + aw * bz + ax * by - ay * bx;
+        out[3] = aw * bw - ax * bx - ay * by - az * bz;
+        return out;
+    }
+
+    public static removeEulerY(rotation: QuaternionArr, out: QuaternionArr): QuaternionArr {
+        const x = rotation[0], y = rotation[1], z = rotation[2], w = rotation[3];
+        const m11 = 1 - 2 * (y * y + z * z);
+        const m21 = 2 * (x * y + z * w);
+        const m31 = 2 * (x * z - y * w);
+        const m32 = 2 * (y * z + x * w);
+        const m33 = 1 - 2 * (x * x + y * y);
+        let eulerX: number, eulerZ: number;
+
+        if (Math.abs(m31) < 0.9999999) {
+            eulerX = Math.atan2(m32, m33);
+            eulerZ = Math.atan2(m21, m11);
+        } else {
+            eulerX = 0;
+            eulerZ = Math.atan2(-2 * (x * y - z * w), 1 - 2 * (x * x + z * z));
+        }
+
+        const sx = Math.sin(eulerX / 2), cx = Math.cos(eulerX / 2);
+        const sz = Math.sin(eulerZ / 2), cz = Math.cos(eulerZ / 2);
+
+        out[0] = sx * cz;
+        out[1] = sx * sz;
+        out[2] = cx * sz;
+        out[3] = cx * cz;
+        return out;
+    }
 
     declare public x: number;
     declare public y: number;
@@ -28,7 +67,7 @@ abstract class FQuaternion extends UObject {
     }
 
 
-    public toQuatElements(): GD.QuaternionArr { return [this.x, this.y, this.z, this.w]; }
+    public toQuatElements(): QuaternionArr { return [this.x, this.y, this.z, this.w]; }
 
     public conjugate() { return FQuaternion.make(-this.x, -this.y, -this.z, this.w); }
 
@@ -69,7 +108,7 @@ abstract class FQuaternion extends UObject {
     }
 }
 
-class FAxis {
+export class FAxis {
     public x = FVector.make();
     public y = FVector.make();
     public z = FVector.make();
@@ -105,4 +144,3 @@ class FAxis {
 }
 
 export default FQuaternion;
-export { FQuaternion, FAxis };

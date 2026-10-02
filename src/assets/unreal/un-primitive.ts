@@ -1,20 +1,29 @@
-import FBox from "@client/assets/unreal/un-box";
-import FPlane from "@client/assets/unreal/un-plane";
-import FVector from "@client/assets/unreal/un-vector";
-import UObject from "@l2js/core";
+import FBox from "./un-box";
+import FPlane from "./un-plane";
+import FVector from "./un-vector";
+import { type APackage, type UExport } from "@l2js/core";
+import UObject from "./un-object";
+import type { UAActor } from "./un-aactor";
+import type { Vector3Arr } from "./library-types";
+import type { ISphereDecodeInfo } from "./un-sphere";
 
-abstract class UPrimitive extends UObject {
-    declare protected boundingBox: GA.FBox;
-    declare protected boundingSphere: GA.FPlane;
+export type IBoundsDecodeInfo = {
+    sphere?: ISphereDecodeInfo,
+    box: { min: Vector3Arr, max: Vector3Arr } | null
+};
 
-    protected preLoad(pkg: C.APackage, exp: C.UExport): void {
+export abstract class UPrimitive extends UObject {
+    declare protected boundingBox: FBox;
+    declare protected boundingSphere: FPlane;
+
+    protected preLoad(pkg: APackage, exp: UExport): void {
         super.preLoad(pkg, exp);
 
         this.boundingBox = FBox.make();
         this.boundingSphere = FPlane.make();
     }
 
-    protected doLoad(pkg: C.APackage, exp: C.UExport) {
+    protected doLoad(pkg: APackage, exp: UExport) {
         // (UObject.prototype as any).doLoad.call(this, pkg, exp);
         super.doLoad(pkg, exp);
 
@@ -27,7 +36,7 @@ abstract class UPrimitive extends UObject {
         this.readHead = pkg.tell();
     }
 
-    public decodeBoundsInfo(): GD.IBoundsDecodeInfo {
+    public decodeBoundsInfo(): IBoundsDecodeInfo {
         return {
             sphere: {
                 center: [this.boundingSphere.x, this.boundingSphere.y, this.boundingSphere.z],
@@ -40,7 +49,7 @@ abstract class UPrimitive extends UObject {
         };
     }
 
-    public getRenderBoundingBox(owner?: GA.AActor): FBox {
+    public getRenderBoundingBox(owner?: UAActor): FBox {
         if (owner) {
             const extents = FVector.make(owner.collisionRadius + 1, owner.collisionRadius + 1, owner.collisionHeight + 1);
             const box = FBox.make(extents.negate(), extents, 1);
@@ -53,4 +62,3 @@ abstract class UPrimitive extends UObject {
 }
 
 export default UPrimitive;
-export { UPrimitive };

@@ -1,5 +1,6 @@
-import Terrain from "@client/objects/terrain";
+import Terrain from "./terrain";
 import { Box3, BufferGeometry, Camera, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Material, Scene, StaticDrawUsage, Vector3, WebGLRenderer } from "three";
+import type { ITerrainDecorationDecodeInfo } from "@l2js/engine/contracts/terrain";
 
 const tmpVec = new Vector3();
 
@@ -15,7 +16,7 @@ function makeGeometry(source: BufferGeometry) {
     return geometry;
 }
 
-class TerrainDecoration extends InstancedMesh {
+export class TerrainDecoration extends InstancedMesh {
     public readonly isTerrainDecoration = true;
     public readonly terrainSegment: string;
     public readonly fadeoutRadius: [number, number];
@@ -28,7 +29,7 @@ class TerrainDecoration extends InstancedMesh {
     protected terrain?: Terrain;
     protected lightingRevision = -1;
 
-    public constructor(geometry: BufferGeometry, material: Material | Material[], info: GD.ITerrainDecorationDecodeInfo) {
+    public constructor(geometry: BufferGeometry, material: Material | Material[], info: ITerrainDecorationDecodeInfo) {
         if (!geometry.boundingSphere) geometry.computeBoundingSphere();
 
         const instanceGeometry = makeGeometry(geometry);
@@ -114,4 +115,3 @@ class TerrainDecoration extends InstancedMesh {
 }
 
 export default TerrainDecoration;
-export { TerrainDecoration };

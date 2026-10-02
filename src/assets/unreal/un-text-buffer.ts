@@ -1,13 +1,12 @@
-import UObject from "@l2js/core";
-import { BufferValue } from "@l2js/core";
-import FString from "@l2js/core/unreal/un-string";
+import { type APackage, type UExport, FString } from "@l2js/core";
+import UObject from "./un-object";
 
-abstract class UTextBuffer extends UObject {
+export abstract class UTextBuffer extends UObject {
     declare public pos: number;
     declare public top: number;
     declare public string: FString;
 
-    public doLoad(pkg: C.APackage, exp: C.UExport): this {
+    public doLoad(pkg: APackage, exp: UExport): this {
         super.doLoad(pkg, exp);
 
         this.pos = pkg.read("uint32");
@@ -24,4 +23,3 @@ abstract class UTextBuffer extends UObject {
 }
 
 export default UTextBuffer;
-export { UTextBuffer };

@@ -1,7 +1,17 @@
 import FVector from "../un-vector";
-import UParticleEmitter from "./un-particle-emitter"
+import UParticleEmitter, { type IEmitterDecodeInfo } from "./un-particle-emitter"
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
-abstract class USpriteEmitter extends UParticleEmitter {
+export type ISpriteEmitterDecodeInfo = IEmitterDecodeInfo & {
+    type: "SpriteEmitter",
+    texture: string,
+    spriteDirection?: SpriteDirections_T,
+    projectionNormal?: [number, number, number]
+};
+
+export type SpriteDirections_T = "camera" | "up" | "right" | "forward" | "normal" | "upNormal" | "rightNormal" | "scale";
+
+export abstract class USpriteEmitter extends UParticleEmitter {
     declare protected projectionNormal: FVector; // Normal vector of the projection plane used when UseDirectionAs is set to PTDU_Normal, PTDU_UpAndNormal or PTDU_RightAndNormal.
     declare protected realProjectionNormal: FVector;
     declare protected spriteDirection: EParticleDirectionUsage_T; // Here you can specify how the 2D image should be displayed. See EParticleDirectionUsage enum below for details.
@@ -19,7 +29,7 @@ abstract class USpriteEmitter extends UParticleEmitter {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         // debugger;
 
         return Object.assign(super.getDecodeInfo(builder), {
@@ -32,9 +42,8 @@ abstract class USpriteEmitter extends UParticleEmitter {
 }
 
 export default USpriteEmitter;
-export { USpriteEmitter };
 
-enum EParticleDirectionUsage_T {
+export enum EParticleDirectionUsage_T {
     PTDU_None, // Always rotates the sprite towards the viewer. The sprites will always look the same, no matter what direction they are viewed from. Size -> UniformSize will be forced to True, so only the X component of Size -> SizeScale can be used to scale the sprites.
     PTDU_Up, // Also rotates the projection plane towards the viewer, but in a special way, so the particle's movement direction will always be in the projection plane.
     PTDU_Right, // Like PTDU_Up, but the particle texture is rotated 90°.
@@ -54,4 +63,4 @@ const directionNames = {
     [EParticleDirectionUsage_T.PTDU_UpAndNormal]: "upNormal",
     [EParticleDirectionUsage_T.PTDU_RightAndNormal]: "rightNormal",
     [EParticleDirectionUsage_T.PTDU_Scale]: "scale",
-} as Record<EParticleDirectionUsage_T, GD.SpriteDirections_T>;
+} as Record<EParticleDirectionUsage_T, SpriteDirections_T>;

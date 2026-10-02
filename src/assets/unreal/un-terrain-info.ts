@@ -1,27 +1,38 @@
-import { APackage, BufferValue, } from "@l2js/core";
+import { APackage, BufferValue, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray, PropertyTag } from "@l2js/core";
+import type { UObject } from "./un-object";
 import AInfo from "./un-info";
-import FArray, { FObjectArray, FPrimitiveArray } from "@l2js/core/src/unreal/un-array";
 
-import FBox from "@client/assets/unreal/un-box";
-import FCoords from "@client/assets/unreal/un-coords";
-import FColor from "@client/assets/unreal/un-color";
-import UTexture from "@client/assets/unreal/un-texture";
-import ETextureFormat from "@client/assets/unreal/un-tex-format";
-import GMath from "@client/assets/unreal/un-gmath";
-import FRotator from "@client/assets/unreal/un-rotator";
-import FVector from "@client/assets/unreal/un-vector";
-import { TextureMapAxis_T } from "@client/assets/unreal/un-terrain-layer";
-import PropertyTag from "@l2js/core/src/unreal/un-property/un-property-tag";
-import FPlane from "@client/assets/unreal/un-plane";
-import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@client/assets/decoders/dxt-decode";
+import FBox from "./un-box";
+import FCoords from "./un-coords";
+import FColor from "./un-color";
+import UTexture, { type ITextureDecodeInfo } from "./un-texture";
+import ETextureFormat from "./un-tex-format";
+import GMath from "./un-gmath";
+import FRotator from "./un-rotator";
+import FVector from "./un-vector";
+import { TextureMapAxis_T, UTerrainLayer } from "./un-terrain-layer";
+import FPlane from "./un-plane";
+import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dds/dxt-decode";
+import type { UDecoLayer } from "./un-deco-layer";
+import type { FTIntMap } from "./un-tint-map";
+import type { UTerrainSector } from "./un-terrain-sector";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
+import type { Vector3Arr } from "./library-types";
+import type { IBaseMaterialDecodeInfo } from "./un-material";
 
-type TerrainInfoDecodeResult_T = { object: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] }, material: GD.IMaterialTerrainDecodeInfo, zoneUuid: string };
+export type IMaterialTerrainDecodeInfo = IBaseMaterialDecodeInfo & {
+    materialType: "terrain";
+    layers: { map: string, alphaMap: string }[]
+};
+
+type TerrainInfoDecodeResult_T = { object: IBaseObjectDecodeInfo & { children: IBaseObjectDecodeInfo[] }, material: IMaterialTerrainDecodeInfo, zoneUuid: string };
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
-const cacheTextureRgba = new WeakMap<GA.UTexture, Uint8Array>();
+const cacheTextureRgba = new WeakMap<UTexture, Uint8Array>();
 
-function getTextureRgba(texture: GA.UTexture): Uint8Array {
+function getTextureRgba(texture: UTexture): Uint8Array {
     if (cacheTextureRgba.has(texture)) return cacheTextureRgba.get(texture);
 
     const data = texture.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array;
@@ -39,13 +50,13 @@ function getTextureRgba(texture: GA.UTexture): Uint8Array {
     return rgba;
 }
 
-enum ETerrainRenderMethod_T {
+export enum ETerrainRenderMethod_T {
     RM_WeightMap = 0,
     RM_CombinedWeightMap = 1,
     RM_AlphaMap = 2
-}
+};
 
-class FTerrainNormalPair implements C.IConstructable {
+class FTerrainNormalPair implements Constructable_T {
     public normal1 = FVector.make();
     public normal2 = FVector.make();
 
@@ -68,26 +79,26 @@ class FTerrainRenderCombination {
     }
 }
 
-abstract class ATerrainInfo extends AInfo {
-    declare public readonly terrainMap: GA.UTexture;
-    declare public readonly terrainScale: GA.FVector;
-    declare public readonly layers: GA.UTerrainLayer[];
+export abstract class ATerrainInfo extends AInfo {
+    declare public readonly terrainMap: UTexture;
+    declare public readonly terrainScale: FVector;
+    declare public readonly layers: UTerrainLayer[];
 
-    declare protected readonly decoLayers: C.FArray<GA.UDecoLayer>
+    declare protected readonly decoLayers: FArray<UDecoLayer>
     declare protected readonly decoLayerOffset: number;
     declare protected readonly showOnTerrain: number;
-    declare public readonly quadVisibilityBitmap: C.FPrimitiveArray<"int32">;
-    declare public readonly edgeTurnBitmap: C.FPrimitiveArray<"int32">;
+    declare public readonly quadVisibilityBitmap: FPrimitiveArray<"int32">;
+    declare public readonly edgeTurnBitmap: FPrimitiveArray<"int32">;
     declare public readonly mapX: number;
     declare public readonly mapY: number;
-    declare public readonly quadVisibilityBitmapOrig: C.FPrimitiveArray<"int32">;
-    declare public readonly edgeTurnBitmapOrig: C.FPrimitiveArray<"int32">;
+    declare public readonly quadVisibilityBitmapOrig: FPrimitiveArray<"int32">;
+    declare public readonly edgeTurnBitmapOrig: FPrimitiveArray<"int32">;
     declare protected readonly generatedSectorCounter: number;
     declare protected readonly numIntMap: number;
     declare protected readonly autoTimeGeneration: boolean;
-    declare protected readonly tIntMap: C.FArray<GA.FTIntMap>;
+    declare protected readonly tIntMap: FArray<FTIntMap>;
     declare protected readonly tickTime: number;
-    declare protected sectors: C.FObjectArray<GA.UTerrainSector>;
+    declare protected sectors: FObjectArray<UTerrainSector>;
     declare protected readonly showOnInvisibleTerrain: boolean;
     declare protected readonly litDirectional: boolean;
     declare protected readonly disregardTerrainLighting: boolean;
@@ -99,12 +110,12 @@ abstract class ATerrainInfo extends AInfo {
 
     declare protected sectorsX: number;
     declare protected sectorsY: number;
-    declare public toWorld: GA.FCoords;
-    declare protected toHeightMap: GA.FCoords;
+    declare public toWorld: FCoords;
+    declare protected toHeightMap: FCoords;
     declare public heightmapX: number;
     declare public heightmapY: number;
 
-    declare public boundingBox: GA.FBox;
+    declare public boundingBox: FBox;
     // public heightmapMin: number;
     // public heightmapMax: number;
 
@@ -114,7 +125,7 @@ abstract class ATerrainInfo extends AInfo {
 
     declare public vertices: Array<FVector>;
     declare public faceNormals: Array<FTerrainNormalPair>;
-    declare public vertexColors: C.FArray<GA.FColor>;
+    declare public vertexColors: FArray<FColor>;
 
     // protected _terrainSectorSize: any;
     // protected _decoLayerOffset: any;
@@ -254,7 +265,7 @@ abstract class ATerrainInfo extends AInfo {
     public isInvertedTerrain() { return !!this.inverted; }
 
 
-    public getLayerAlpha(x: number, y: number, layer: number, alphaMap: GA.UTexture) {
+    public getLayerAlpha(x: number, y: number, layer: number, alphaMap: UTexture) {
         const texture = alphaMap
             ? alphaMap
             : (layer === -1 ? this.terrainMap : this.layers[layer].alphaMap);
@@ -300,7 +311,7 @@ abstract class ATerrainInfo extends AInfo {
         }
     }
 
-    public getTextureColor(x: number, y: number, texture: GA.UTexture): GD.Vector3Arr {
+    public getTextureColor(x: number, y: number, texture: UTexture): Vector3Arr {
         texture = texture.loadSelf();
         x = Math.floor(x * texture.width / this.heightmapX);
         y = Math.floor(y * texture.height / this.heightmapY);
@@ -345,7 +356,7 @@ abstract class ATerrainInfo extends AInfo {
         return this.renderCombinations.length - 1;
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport<ATerrainInfo>) {
+    public doLoad(pkg: APackage, exp: UExport<ATerrainInfo>) {
         const verArchive = pkg.header.getArchiveFileVersion();
         const verLicense = pkg.header.getLicenseeVersion();
 
@@ -364,7 +375,7 @@ abstract class ATerrainInfo extends AInfo {
         this.vertexColors = new FArray(FColor.class());
 
         {
-            this.sectors = new FObjectArray<GA.UTerrainSector>().load(pkg).loadSelf();
+            this.sectors = new FObjectArray<UTerrainSector>().load(pkg).loadSelf();
 
             this.readHead = pkg.tell();
 
@@ -666,7 +677,7 @@ abstract class ATerrainInfo extends AInfo {
 
     protected combineLayerWeights() { throw new Error("not yet implemented"); }
 
-    public postLoad(pkg: C.APackage, exp: C.UExport<C.UObject>) {
+    public postLoad(pkg: APackage, exp: UExport<UObject>) {
         super.postLoad(pkg, exp);
 
         let startX = 0, startY = 0;
@@ -688,7 +699,7 @@ abstract class ATerrainInfo extends AInfo {
         // debugger;
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): TerrainInfoDecodeResult_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): TerrainInfoDecodeResult_T {
         const library = builder.library;
         const terrainLayers = this.layers.filter(x => x);
         const layerCount = terrainLayers.length;
@@ -697,7 +708,7 @@ abstract class ATerrainInfo extends AInfo {
         this.calcLayerTexCoords();
 
         const terrainUuid = builder.pullMaterial(this.terrainMap);
-        const iTerrainMap = library.materials[terrainUuid] as GD.ITextureDecodeInfo;
+        const iTerrainMap = library.materials[terrainUuid] as ITextureDecodeInfo;
         const terrainData = new Uint16Array(iTerrainMap.buffer);
         const edgeTurnBitmap = this.edgeTurnBitmap.getTypedArray();
         const heightmapData = { info: iTerrainMap, data: terrainData, edgeTurns: edgeTurnBitmap };
@@ -739,10 +750,10 @@ abstract class ATerrainInfo extends AInfo {
             name: this.uuid,
             materialType: "terrain",
             layers
-        } as GD.IMaterialTerrainDecodeInfo;
+        } as IMaterialTerrainDecodeInfo;
 
         const sectors = this.sectors.map(sector => sector.loadSelf());
-        const children: GD.IBaseObjectDecodeInfo[] = sectors.map(sector => builder.pullTerrainSector(sector, this, heightmapData));
+        const children: IBaseObjectDecodeInfo[] = sectors.map(sector => builder.pullTerrainSector(sector, this, heightmapData));
 
         this.decoLayers?.forEach(layer => {
             if (!layer) return;
@@ -751,7 +762,7 @@ abstract class ATerrainInfo extends AInfo {
             children.push(...decorations);
         });
 
-        const decodeInfo: GD.IBaseObjectDecodeInfo & { children: GD.IBaseObjectDecodeInfo[] } = {
+        const decodeInfo: IBaseObjectDecodeInfo & { children: IBaseObjectDecodeInfo[] } = {
             uuid: this.uuid,
             type: "TerrainInfo",
             name: this.objectName,
@@ -766,4 +777,3 @@ abstract class ATerrainInfo extends AInfo {
 }
 
 export default ATerrainInfo;
-export { ATerrainInfo, ETerrainRenderMethod_T };

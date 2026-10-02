@@ -1,13 +1,15 @@
 import VERTEX_SHADER from "./shader/mesh-emitter.vs";
 import FRAGMENT_SHADER from "./shader/mesh-emitter.fs";
-import { ShaderMaterial, Uniform, Color, NormalBlending, CustomBlending, SrcAlphaFactor, OneFactor, OneMinusSrcColorFactor, DstColorFactor, SrcColorFactor, ZeroFactor, DoubleSide } from "three";
+import { ShaderMaterial, Uniform, Color, DoubleSide } from "three";
 import { appendGlobalUniforms } from "../global-uniforms";
+import { getPartcileBlendingSettings } from "../particle-material/particle-material";
+import type { ParticleBlendModes_T } from "@l2js/engine/contracts/emitter";
 
 export type MeshEmitterMaterialParameters = {
     map: THREE.Texture,
     diffuse?: THREE.Color,
     opacity?: number,
-    blendingMode?: "normal" | "brighten" | "translucent" | "modulate" | "modulated" | "darken" | "alpha",
+    blendingMode?: ParticleBlendModes_T,
     side?: THREE.Side,
     transparent?: boolean,
     depthWrite?: boolean,
@@ -49,40 +51,12 @@ export default class MeshEmitterMaterial extends ShaderMaterial {
         this.applyBlending(info.blendingMode || "normal");
     }
 
-    protected applyBlending(mode: string) {
+    protected applyBlending(mode: ParticleBlendModes_T) {
+        const { isAdditive, ...settings } = getPartcileBlendingSettings(mode);
+
+        Object.assign(this, settings);
         delete this.defines.USE_ADDITIVE_FOG;
-        switch (mode) {
-            case "normal":
-            case "alpha":
-                this.blending = NormalBlending;
-                break;
-            case "brighten":
-                this.blending = CustomBlending;
-                this.blendSrc = SrcAlphaFactor;
-                this.blendDst = OneFactor;
-                this.defines.USE_ADDITIVE_FOG = "";
-                break;
-            case "translucent":
-                this.blending = CustomBlending;
-                this.blendSrc = OneFactor;
-                this.blendDst = OneMinusSrcColorFactor;
-                this.defines.USE_ADDITIVE_FOG = "";
-                break;
-            case "modulate":
-            case "modulated":
-                this.blending = CustomBlending;
-                this.blendSrc = DstColorFactor;
-                this.blendDst = SrcColorFactor;
-                break;
-            case "darken":
-                this.blending = CustomBlending;
-                this.blendSrc = ZeroFactor;
-                this.blendDst = OneMinusSrcColorFactor;
-                break;
-            default:
-                this.blending = NormalBlending;
-                break;
-        }
+        if (isAdditive) this.defines.USE_ADDITIVE_FOG = "";
         this.needsUpdate = true;
     }
 

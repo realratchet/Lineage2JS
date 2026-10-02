@@ -1,8 +1,11 @@
-import DecodeLibrary from "@client/assets/unreal/decode-library";
-import type { WorkerToMainMessage, PrecacheResult_T } from "./decode-protocol";
+import DecodeLibrary from "@l2js/engine/decode-library";
+import type { PlayerSkillInfo_T, WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";
+import getNpcBundleName from "./npc-bundle";
 
 type PendingRequest_T = {
     resolve(value: any): void;
@@ -24,27 +27,16 @@ async function waitForWorkers(promises: Promise<void>[]): Promise<void> {
     await Promise.all(promises);
 }
 
-/**
- * Main-thread handle to a pool of decode workers: init handshake per worker, one
- * promise per decode request (routed to the least-busy live worker), dead-worker
- * detection per slot (isDead only once every worker in the pool has died - AssetManager
- * falls back to a retry cooldown in that case).
- *
- * A pool exists so a slow/stale in-flight decode for a sector the camera has already
- * moved past can't block a newly-urgent sector behind it - each sector still routes to
- * whichever single worker decoded it (freeSector needs that worker specifically, since
- * package refcounts are per-worker, not shared).
- *
- * poolSize 0 skips the Worker pool entirely and runs a single DecodeEngine in-process
- * instead, loaded via dynamic import - a dev-only knob for stepping through a decode in
- * the normal main-thread devtools instead of a worker context.
- */
-class DecodeWorkerClient {
+export class DecodeWorkerClient {
     protected slots: WorkerSlot_T[] = [];
     protected pending = new Map<number, PendingRequest_T>();
     protected nextRequestId = 1;
-    protected sectorWorker = new Map<string, number>(); // sector -> worker that decoded it
+    protected sectorWorker = new Map<string, number>();
+    protected characterWorker = new Map<number, number>();
+    protected npcWorker = new Map<string, number>();
     protected mainThreadEngine: DecodeEngine = null;
+    protected characterAnimationSets = new Set<number>();
+    protected npcAnimationSets = new Set<string>();
     protected readonly binaryDecodeQueue: BinaryDecodeRequest_T[] = [];
     protected isDecodingBinary = false;
 
@@ -66,11 +58,10 @@ class DecodeWorkerClient {
                 slot.readyReject = reject;
             }));
 
-            /* built as its own webpack compilation - the renderer bundle carries no ue2 code */
             const worker = new Worker("decode-worker.bundle.js", { name: `sector-decode-${i}` });
 
             slot.worker = worker;
-            worker.onmessage = (event: MessageEvent<WorkerToMainMessage>) => this.onMessage(i, event.data);
+            worker.onmessage = (event: MessageEvent<WorkerToMainMessage_T>) => this.onMessage(i, event.data);
             worker.onerror = event => this.onWorkerDead(i, new Error(`decode worker crashed: ${event.message ?? "unknown error"}`));
             worker.onmessageerror = () => this.onWorkerDead(i, new Error("decode worker message failed to deserialize"));
 
@@ -115,7 +106,24 @@ class DecodeWorkerClient {
         return best;
     }
 
-    public async decodeSector(sectorName: string, settings: GD.LoadSettings_T): Promise<DecodeLibrary> {
+    protected pickCharacterWorker(stickyIndex?: number): number {
+        if (stickyIndex !== undefined) {
+            const slot = this.slots[stickyIndex];
+
+            if (slot && !slot.isDead) return stickyIndex;
+        }
+
+        let best = -1, bestLoad = Infinity;
+
+        for (let i = this.slots.length - 1; i >= 0; i--) {
+            if (this.slots[i].isDead) continue;
+            if (this.slots[i].inFlight < bestLoad) { best = i; bestLoad = this.slots[i].inFlight; }
+        }
+
+        return best;
+    }
+
+    public async decodeSector(sectorName: string, settings: LoadSettings_T): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) {
             const { library } = await this.mainThreadEngine.decodeSector(sectorName, settings);
 
@@ -131,7 +139,7 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decode", sectorName, settings });
     }
 
-    public precacheSector(sectorName: string, settings: GD.LoadSettings_T): Promise<PrecacheResult_T> {
+    public precacheSector(sectorName: string, settings: LoadSettings_T): Promise<PrecacheResult_T> {
         if (this.mainThreadEngine)
             return this.mainThreadEngine.precacheSector(sectorName, settings);
 
@@ -142,14 +150,6 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "precache", sectorName, settings });
     }
 
-    /**
-     * Releases the worker-side package refcounts a decoded sector took (fire-and-forget).
-     * Routed to whichever worker actually decoded it - refcounts aren't shared across the
-     * pool. The sectorWorker entry is intentionally kept (not deleted): a later re-decode
-     * of this sector still prefers that worker in pickWorker, since shared dependency
-     * packages it didn't just free may still be warm there. Bounded by the sector count
-     * (~142), not worth pruning.
-     */
     public freeSector(sectorName: string) {
         if (this.mainThreadEngine) {
             this.mainThreadEngine.freeSector(sectorName);
@@ -177,6 +177,146 @@ class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeEnv" });
     }
 
+    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }): Promise<DecodeLibrary> {
+        const includeAnimations = !this.characterAnimationSets.has(charIndex);
+
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations);
+
+            this.characterAnimationSets.add(charIndex);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = this.pickCharacterWorker(this.characterWorker.get(charIndex));
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        this.characterWorker.set(charIndex, workerIndex);
+
+        const library = await this.dispatch(workerIndex, { type: "decodeCharacter", settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations });
+
+        this.characterAnimationSets.add(charIndex);
+
+        return library;
+    }
+
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
+        const bundleName = npcId === null ? null : getNpcBundleName(packageName);
+        const animationSet = `${packageName}.${meshName}`.toLowerCase();
+        const includeAnimations = npcId === null || !this.npcAnimationSets.has(animationSet);
+
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment);
+
+            if (npcId !== null) this.npcAnimationSets.add(animationSet);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = bundleName === null ? this.pickWorker() : this.pickCharacterWorker(this.npcWorker.get(bundleName));
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        if (bundleName !== null) this.npcWorker.set(bundleName, workerIndex);
+
+        const library = await this.dispatch(workerIndex, { type: "decodeSkeletalMesh", settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, includeAnimations });
+
+        if (npcId !== null) this.npcAnimationSets.add(animationSet);
+
+        return library;
+    }
+
+    public async decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "decodeEffectTemplates", settings, classPaths, soundPaths, scriptClassPaths });
+    }
+
+    public async decodeSkill(settings: LoadSettings_T, id: number, level: number): Promise<DecodeLibrary> {
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeSkill(settings, id, level);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "decodeSkill", settings, id, level });
+    }
+
+    public listPlayerSkills(): Promise<PlayerSkillInfo_T[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.listPlayerSkills();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "listPlayerSkills" });
+    }
+
+    public resolveNpc(selector: string | number): Promise<INpcDefinition> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.resolveNpc(selector);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "resolveNpc", selector });
+    }
+
+    public listNpcs(): Promise<INpcDefinition[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.listNpcs();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "listNpcs" });
+    }
+
+    public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings);
+
+        const characterWorkers = new Set(this.characterWorker.values());
+        let workerIndex = -1;
+
+        for (let i = this.slots.length - 1; i >= 0; i--) {
+            const slot = this.slots[i];
+
+            if (!characterWorkers.has(i) && !slot.isDead && slot.inFlight === 0) {
+                workerIndex = i;
+                break;
+            }
+        }
+
+        if (workerIndex < 0) workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "precacheCharacters", settings });
+    }
+
+    public async getCharGroups(): Promise<ICharacterGroup[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "charGroups" });
+    }
+
     public getMusicInfo(): Promise<Record<number, string[]>> {
         if (this.mainThreadEngine) return this.mainThreadEngine.decodeMusicInfo();
 
@@ -185,6 +325,32 @@ class DecodeWorkerClient {
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
 
         return this.dispatch(workerIndex, { type: "musicInfo" });
+    }
+
+    public getMemoryStats(): Promise<(WorkerMemoryStats_T | null)[]> {
+        if (this.mainThreadEngine) return Promise.resolve([this.mainThreadEngine.getMemoryStats()]);
+
+        return Promise.all(this.slots.map((slot, i) => slot.isDead ? null : this.dispatch(i, { type: "memoryStats" })));
+    }
+
+    public getClientConfig(): Promise<ClientConfig_T> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeClientConfig();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "clientConfig" });
+    }
+
+    public getScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeScriptLocalization(scriptClassPath);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "scriptLocalization", scriptClassPath });
     }
 
     protected dispatch(workerIndex: number, message: any): Promise<any> {
@@ -209,7 +375,7 @@ class DecodeWorkerClient {
         return request;
     }
 
-    protected onMessage(workerIndex: number, msg: WorkerToMainMessage) {
+    protected onMessage(workerIndex: number, msg: WorkerToMainMessage_T) {
         switch (msg.type) {
             case "ready": {
                 this.slots[workerIndex].readyResolve();
@@ -260,6 +426,62 @@ class DecodeWorkerClient {
                 request.resolve(msg.music);
                 break;
             }
+            case "memoryStatsDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.stats);
+                break;
+            }
+            case "charactersPrecached": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(undefined);
+                break;
+            }
+            case "clientConfigDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.config);
+                break;
+            }
+            case "scriptLocalizationDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.properties);
+                break;
+            }
+            case "charGroupsDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.groups);
+                break;
+            }
+            case "npcResolved": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.npc);
+                break;
+            }
+            case "npcsListed": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.npcs);
+                break;
+            }
+            case "playerSkillsListed": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.skills);
+                break;
+            }
         }
     }
 
@@ -306,4 +528,3 @@ class DecodeWorkerClient {
 }
 
 export default DecodeWorkerClient;
-export { DecodeWorkerClient };

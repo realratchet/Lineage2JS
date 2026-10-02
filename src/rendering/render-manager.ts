@@ -1,77 +1,113 @@
 import "./ue2-conventions";
 import "../materials/shader-chunks/register-chunks";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Raycaster, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
-import { ZUpOrbitControls as OrbitControls } from "./camera/controllers/zup-orbit-controls";
-import { ZUpPointerLockControls } from "./camera/controllers/zup-pointer-lock-controls";
-import GLOBAL_UNIFORMS from "@client/materials/global-uniforms";
-import Player from "@client/player";
-import RAPIER from "@dimforge/rapier3d";
-import type { ICollidable } from "@client/objects/objects";
-import Stats from "./stats";
-import Visualizer, { VisualizerMode, EmitterDebugInfo } from "./visualizer";
-import EnvColor from "@client/rendering/env-color";
-import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "@client/rendering/l2-env";
+import GLOBAL_UNIFORMS from "../materials/global-uniforms";
+import Player from "../player";
+import type BaseActor from "../base-actor";
+import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo } from "./visualizer";
+import EnvColor from "./env-color";
+import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
 import SkyRenderer from "./sky-renderer";
 import Terrain from "../objects/terrain";
-import { ColorByte } from "@client/utils/color-byte";
-import EnvInfo from "@client/rendering/env-info";
-import AudioManager from "@client/rendering/audio-manager";
-import * as dat from "dat.gui";
-import type AssetManager from "@client/assets/asset-manager";
-import InstancedSpriteBatcher from "@client/objects/emitters/instanced-sprite-batcher";
-import MovableObject from "@client/objects/movable-object";
-import RotatingObject from "@client/objects/rotating-object";
-import DisplayGammaPass, { GAMMA_STEPS } from "./display-gamma";
+import { ColorByte } from "../utils/color-byte";
+import EnvInfo from "./env-info";
+import AudioManager from "../audio/audio-manager";
+import type AssetManager from "../assets/asset-manager";
+import InstancedSpriteBatcher from "../objects/emitters/instanced-sprite-batcher";
+import type MovableObject from "../objects/movable-object";
+import DisplayGammaPass from "./display-gamma";
+import ColliderOverlay from "./collider-overlay";
+import type PhysicsManager from "../physics/physics-manager";
+import LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import ShadowProjector from "../objects/shadow-projector";
+import type DynamicLight from "../objects/dynamic-light";
+import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
+import type { ZoneObject, SectorObject } from "../objects/zone-object";
+import { IEngineComponent, IObject } from "../game/components";
+import type GameManager from "../game/game-manager";
+import type UIManager from "../game/ui-manager";
+import type InputManager from "../game/input-manager";
+import type WaterEffectsComponent from "../physics/components/water-effects-component";
+import EffectLifetimeComponent from "./components/effect-lifetime-component";
+import PawnRenderableComponent from "./components/pawn-renderable-component";
+import type ActorMeshComponent from "./components/actor-mesh-component";
+import type { ScriptComponent } from "../game/script-component";
+import type { ScriptHost_T } from "../ue-script/vm";
+import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
+import NPawnLightComponent from "./components/pawn-light-component";
+import AmbientSoundComponent from "../audio/components/ambient-sound-component";
+import type HairSimulationComponent from "../objects/components/hair-simulation-component";
+import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
-const gui = new dat.GUI({ autoPlace: false, width: 300 });
-Object.assign(gui.domElement.style, {
-    position: "fixed",
-    top: "0px",
-    right: "0px",
-    zIndex: "10000"
-});
-document.body.appendChild(gui.domElement);
-const guiFolders = {
-    world: gui.addFolder("World"),
-    quality: gui.addFolder("Quality")
-};
-guiFolders.world.open();
-
-const stats = new (Stats as any)(0);
-
-stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
-document.body.appendChild(stats.dom);
+export type HTMLViewportElement_T = HTMLDivElement;
 
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
 const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
+const tmpPawnSunAmbient = new ColorByte();
+const arrPawnLights: DynamicLight[] = [];
+const arrLightingObjects: THREE.Object3D[] = [];
+const arrPawnEffects: Object3D[] = [];
+const tmpShadowDirection = new Vector3(0, 0, -1);
+const arrShadowCasters: THREE.Object3D[] = [];
+const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, sized to the pawn collision cylinder
+const tmpViewShakePosition = new Vector3();
+const tmpViewShakeQuaternion = new Quaternion();
+const tmpViewShakeDirection = new Vector3();
+const tmpL2EventPosition = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
-const OFFSCREEN_EMITTER_HZ = 2;
-const OFFSCREEN_EMITTER_INTERVAL_MS = 1000 / OFFSCREEN_EMITTER_HZ;
-const MIN_DESIRED_FRAME_RATE = 35; // Lineage II configures UE2's MinDesiredFrameRate to 35. UE2 raises bDropDetail below that rate, then bAggressiveLOD another 5 FPS lower.
-const AGGRESSIVE_LOD_FRAME_RATE = MIN_DESIRED_FRAME_RATE - 5;
-const CLIPPING_RANGE_SCALE = 2048; // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
-const DROP_DETAIL_FRAME_TIME_MS = 1000 / MIN_DESIRED_FRAME_RATE;
-const AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / AGGRESSIVE_LOD_FRAME_RATE;
-const MAX_OFFSCREEN_EMITTER_UPDATES = 32;
-const DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES = 8;
-const dirForward = new Vector3(), dirRight = new Vector3(), cameraVelocity = new Vector3();
+const arrBSPGroups: Object3D[] = [];
+const arrBSPIntersections: THREE.Intersection[] = [];
+// AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
+const CLIPPING_RANGE_SCALE = 2048;
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
-const tmpColorByte_3 = new ColorByte(); // For sky color blending
-const tmpColorByte_4 = new ColorByte(); // For haze color blending
-const tmpColorByte_5 = new ColorByte(); // For cloud color blending
+const tmpColorByte_3 = new ColorByte();
+const tmpColorByte_4 = new ColorByte();
+const tmpColorByte_5 = new ColorByte();
 
 const DEFAULT_FAR = 100_000_000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 
-type ZoneObject = import("../objects/zone-object").ZoneObject;
-type SectorObject = import("../objects/zone-object").SectorObject;
+type ViewShakeState_T = {
+    type: IAnimationViewShakeNotifyDecodeInfo["shakeType"];
+    direction: Vector3;
+    remainingTime: number;
+    target: number;
+    savedTarget: number;
+    phase: number;
+    rate: number;
+    repeats: number;
+    countLimit: number;
+    requiresRotationFrequency: boolean;
+    requiresPositionFrequency: boolean;
+    requiresRotationScale: boolean;
+};
+const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
+
+type PawnLightingState_T = {
+    position: Vector3,
+    lightingPosition: Vector3,
+    sector: SectorObject | null,
+    lightingSector: SectorObject | null,
+    leafIndex: number | null,
+    lightingLeafIndex: number | null,
+    zoneIndex: number | null,
+    lightingZoneIndex: number | null,
+    envVersion: number,
+    pawnLightVersion: number,
+    ambientR: number,
+    ambientG: number,
+    ambientB: number,
+    lights: DynamicLight[]
+};
+type Disposable_T = { dispose(): void };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[] };
 type SectorWarmup_T = {
     sector: SectorObject,
@@ -84,7 +120,6 @@ type SectorWarmup_T = {
 
 const frozenUpdateMatrixWorld = function () { };
 
-// undoes addSector's early freeze once live content attaches, or its matrixWorld never updates again
 function unfreezeAncestors(node: THREE.Object3D): void {
     for (let n = node.parent; n; n = n.parent)
         if (n.updateMatrixWorld === frozenUpdateMatrixWorld)
@@ -110,7 +145,6 @@ function findVisibleMaterialBinding(bindings: SectorMaterialBinding_T[], cacheVi
     return -1;
 }
 
-// overrides updateMatrixWorld to a no-op, but only once every child under a node is static too
 function freezeStaticSubtree(node: THREE.Object3D): boolean {
     if ((node as any).isMovableObject) {
         (node as MovableObject).freezeMover();
@@ -133,81 +167,75 @@ function freezeStaticSubtree(node: THREE.Object3D): boolean {
     return allChildrenFrozen;
 }
 
-// never touch the emitter's own .visible here - scene.traverseVisible skips it before the callback, permanently stranding it out of future traversal even once back in range
-function freezeEmitterParticles(emitter: any) {
-    for (const p of emitter.particlePool) {
-        p.visible = false;
-        p.updateMatrixWorld = frozenUpdateMatrixWorld;
+function checkViewShake(state: ViewShakeState_T): void {
+    const crossed = state.target > 0 ? state.phase >= state.target : state.phase <= state.target;
+
+    if (!crossed) return;
+
+    state.phase = state.target;
+
+    if (state.repeats <= 1) {
+        state.target = 0;
+        state.phase = 0;
+        state.rate = 0;
+        return;
     }
 
-    // instanced sprite emitters render from one shared mesh - particlePool.visible above doesn't touch it
-    if (emitter.instancedMesh) {
-        emitter.instancedMesh.visible = false;
+    if (state.target <= 0) state.target *= -1;
+    else switch (state.type) {
+        case "damage": state.target *= 1 / (state.countLimit - state.repeats) - 1; break;
+        case "down": state.target *= 1 / state.repeats - 1; break;
+        case "up":
+        case "upDown": state.target *= -1.1; break;
     }
+
+    state.repeats -= 1;
+    state.rate *= -1;
 }
 
-function getEmitterPhase(emitter: any) {
-    if (emitter.detailPhase !== undefined) return emitter.detailPhase;
+function updateViewShake(state: ViewShakeState_T, deltaTime: number): boolean {
+    if (deltaTime === 0 || state.remainingTime === 0) return false;
 
-    let hash = 2166136261;
-    for (let i = 0; i < emitter.uuid.length; i++) {
-        hash ^= emitter.uuid.charCodeAt(i);
-        hash = Math.imul(hash, 16777619);
+    state.remainingTime -= deltaTime;
+
+    if (state.remainingTime <= 0.0001) return false;
+
+    // FNViewShake::Update (0x7bf7e9..0x7bf893) rejects zero vector channels with zero scalar rates.
+    if ((state.requiresRotationFrequency && state.rate === 0) || (state.requiresPositionFrequency && state.repeats === 0) || (state.requiresRotationScale && state.target === 0)) return false;
+
+    if (state.rate !== 0) {
+        state.phase = (Math.trunc(state.phase) + Math.trunc(deltaTime * state.rate)) & 0xffff;
+        // FNViewShake::Update 0x7bf8d4..0x7bf8ed retains exactly 32768; only greater values wrap.
+        if (state.phase > 0x8000) state.phase -= 0x10000;
+
+        if (state.type === "upDown" && state.target > state.savedTarget) {
+            // FNViewShake::Update 0x7bf922..0x7bf956: VST_UPDOWN becomes VST_DOWN at the saved threshold.
+            state.type = "down";
+            state.target = state.savedTarget;
+            state.countLimit = Math.trunc(state.repeats + 2);
+        }
+
+        if (state.type === "damage" || state.type === "up" || state.type === "down" || state.type === "upDown") checkViewShake(state);
     }
-
-    return emitter.detailPhase = hash >>> 0;
-}
-
-function shouldUpdateOffscreenEmitter(emitter: any, currentTime: number) {
-    if (!emitter.isOffscreenThrottled) {
-        emitter.isOffscreenThrottled = true;
-        emitter.offscreenSince = currentTime;
-        emitter.nextOffscreenUpdate = currentTime + OFFSCREEN_EMITTER_INTERVAL_MS + getEmitterPhase(emitter) % OFFSCREEN_EMITTER_INTERVAL_MS;
-        return true;
-    }
-
-    // Native UE2 stops ticking a ParticleEmitter after SecondsBeforeInactive.
-    // Stock UE2 defaults it to one second, while Lineage II defaults it to zero
-    // (disabled), in which case the low maintenance cadence continues.
-    const inactiveTimeout = emitter.secondsBeforeInactive ?? 0;
-    if (inactiveTimeout > 0 && currentTime - emitter.offscreenSince > inactiveTimeout * 1000)
-        return false;
-
-    if (currentTime < emitter.nextOffscreenUpdate) return false;
-
-    const missedIntervals = Math.floor((currentTime - emitter.nextOffscreenUpdate) / OFFSCREEN_EMITTER_INTERVAL_MS) + 1;
-    emitter.nextOffscreenUpdate += missedIntervals * OFFSCREEN_EMITTER_INTERVAL_MS;
 
     return true;
 }
 
-function shouldUpdateVisibleEmitter(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean, simDue: boolean) {
-    if (!simDue && emitter.instancedMesh?.visible && !emitter.isOffscreenThrottled) return false;
-
-    if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
-
-    const phase = getEmitterPhase(emitter) + detailFrame;
-
-    return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
-}
-
-class RenderManager {
+export class RenderManager implements IEngineComponent<GameManager> {
     public readonly renderer: THREE.WebGLRenderer;
-    public readonly viewport: HTMLViewportElement;
+    public readonly viewport: HTMLViewportElement_T;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
+    public readonly cameraTarget = new Vector3(-87086.51708877791, 239936.94718888338, -3685.930229617832);
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
-    public readonly controls: { orbit: OrbitControls, fps: ZUpPointerLockControls } = { orbit: null, fps: null };
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
-    public readonly raycaster = new Raycaster();
-    public speedCameraFPS = 5;
+    public keepMinFrameRate: boolean = false; // GL2KeepMinFrameRate; preview uses full detail without adaptive throttling.
     public readonly mixer = new AnimationMixer(this.scene);
     public readonly skyRenderer = new SkyRenderer();
 
-    protected assetManager: AssetManager;
     protected uGlowPass: UGlowPass;
     protected mainRenderTarget: WebGLRenderTarget;
     protected displayGammaPass: DisplayGammaPass;
@@ -218,27 +246,25 @@ class RenderManager {
     public bspHelperActive: boolean = false;
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
-    private readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
+    protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
-    protected emitterDetailFrame = 0;
-    protected emitterSimDue = true;
-    protected dropDetail = false;
-    protected aggressiveLod = false;
-    protected readonly movableObjects = new Set<MovableObject>();
-    protected readonly activeMovableObjects = new Set<MovableObject>();
-    protected readonly waitingMovableObjects = new Map<MovableObject, number>();
-    protected readonly rotatingObjects = new Set<RotatingObject>();
-    protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
+    protected readonly deferredMixerOperations: (() => void)[] = [];
+    protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
+    protected readonly actorMeshes = new Set<ActorMeshComponent>();
+    protected readonly transientGeometries = new WeakMap<Object3D, Set<THREE.BufferGeometry>>();
+    protected readonly hairSimulations = new Set<HairSimulationComponent>();
+    protected isUpdatingMixer = false;
+    protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
     protected lastRenderOrderSector: SectorObject | null = null;
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
 
-    protected shiftTimeDown: number = 0;
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
+    protected readonly arrLoadedSectors: SectorObject[] = [];
 
     protected readonly pendingSectorWarmups: SectorWarmup_T[] = [];
     protected static readonly TEXTURE_WARMUP_FRAME_MS = 2;
@@ -248,38 +274,54 @@ class RenderManager {
     protected readonly pendingShaderChecks: any[] = [];
     protected readonly seenPrograms = new WeakSet<object>();
     protected parallelShaderCompileExt: any = undefined; // resolved lazily, null if unsupported
-    protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
-    protected isOrbitControls = true;
-    protected lastRender: number = 0;
+    protected isRendering = false;
+    protected isRenderingFrame = false;
     protected readonly _lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
     protected readonly _lastListenerQuat = new Quaternion(0, 0, 0, 0);
     protected pixelRatio: number = global.devicePixelRatio;
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
+    protected readonly viewShakeStates: ViewShakeState_T[] = [];
+    protected readonly arrL2EventActors: { actor: Object3D & ScriptHost_T, sector: SectorObject }[] = [];
+    protected viewShakeDelta = 1 / 60;
+    protected readonly screenFadeElement = document.createElement("div");
+    protected screenFadeStartedAt = -1;
+    protected screenFadeOutDuration = 0;
+    protected screenBlackOutDuration = 0;
+    protected screenFadeInDuration = 0;
+    protected screenFadeColorAlpha = 1;
+    protected manPhysics: PhysicsManager = null;
+    protected manUI: UIManager = null;
+    protected manInput: InputManager = null;
 
     public readonly player = new Player(this);
+    public readonly waterEffects = this.player.getComponent<WaterEffectsComponent>("waterEffects");
+    protected readonly shadowProjector = new ShadowProjector();
+    protected readonly colliderOverlay = new ColliderOverlay();
+    protected showColliders = false;
 
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
 
-    public readonly physicsWorld: RAPIER.World;
-
-    protected activeSector = 0;
+    protected get physicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
+    protected get inputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
     public readonly audioManager: AudioManager = new AudioManager();
     protected activeMusicId: number = -1;
 
-    public envConfig = {
-        showLevel: true,
-        fogPreset: "4",
-        moverPosition: 0
-    };
+    protected manGame: GameManager;
+    public setParent(parent: GameManager): this {
+        this.manGame = parent;
+        this.manUI = parent.getComponent("ui");
 
-    public constructor(viewport: HTMLViewportElement, assetManager: AssetManager) {
+        return this;
+    }
+    public getParent(): GameManager { return this.manGame; }
+
+    public constructor(viewport: HTMLViewportElement_T) {
         this.viewport = viewport;
-        this.assetManager = assetManager;
         this.renderer = new WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true,
@@ -290,7 +332,6 @@ class RenderManager {
 
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
-        // Initialize Native Bloom System
         this.mainRenderTarget = new WebGLRenderTarget(256, 256, {
             minFilter: LinearFilter,
             magFilter: LinearFilter,
@@ -304,280 +345,229 @@ class RenderManager {
 
         this.displayGammaPass = new DisplayGammaPass(256, 256, this.renderer.capabilities.isWebGL2 ? 4 : 0);
 
-        guiFolders.quality.add(this.envConfig, "fogPreset", {
-            "1 (2k-8k)": "1",
-            "2 (3k-10k)": "2",
-            "3 (4k-12k)": "3",
-            "4 (5k-14k)": "4",
-            "5 (8k-20k)": "5"
-        }).name("Fog Range");
-
-        guiFolders.world.add(this.envConfig, "showLevel")
-            .name("Show Level")
-            .onChange(v => {
-                this.objectGroup.visible = v;
-            });
-
-        guiFolders.world.add(this.envConfig, "moverPosition", 0, 1, 0.01)
-            .name("Door Position")
-            .onChange(v => {
-                this.activeMovableObjects.clear();
-                this.waitingMovableObjects.clear();
-                this.movableObjects.forEach(mover => mover.setPosition(v));
-                this.needsUpdate = true;
-            });
-
-        const skyFolder = gui.addFolder("Sky Layers");
-        skyFolder.add(this.skyRenderer.config, "celestials").name("Celestials");
-        skyFolder.add(this.skyRenderer.config, "haze1").name("Haze");
-        skyFolder.add(this.skyRenderer.config, "starsClouds").name("Stars/Clouds");
-        // skyFolder.add(this.skyRenderer.config, "haze2").name("Haze 2 (Dome)");
-
-        const audioFolder = gui.addFolder("Audio");
-        audioFolder.add(this.audioManager, "musicVolume", 0, 1, 0.01).name("Music Volume");
-        audioFolder.add(this.audioManager, "ambientVolume", 0, 1, 0.01).name("Ambient Volume");
-        audioFolder.open();
-
         this.renderer.autoClear = false;
 
         this.renderer.setClearColor(DEFAULT_CLEAR_COLOR);
         this.camera.up.set(0, 0, 1);
-        this.controls.orbit = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.fps = new ZUpPointerLockControls(this.camera, this.renderer.domElement);
         this.camera.position.set(0, 15, 5);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxGeometry()));
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
+        this.scene.add(this.colliderOverlay);
+        this.scene.add(this.waterEffects.underWaterEffect);
         this.objectGroup.add(this.particleBatcher.root);
+        this.mixer.addEventListener("finished", (event: any) => {
+            let object = event.action.getRoot() as Object3D;
 
-        // Create visualizer system (will be recreated when sector changes)
+            while (object && !(object as any).isActor) object = object.parent;
+            if (object) (object as BaseActor).onAnimationFinished(event.action);
+        });
+
         this.visualizer = new Visualizer(this.scene);
         this.wireEmitterVisibilityHandlers();
 
-        this.physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
-
-
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
-        // this.controls.target.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
+        // this.cameraTarget.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
 
 
         // // tower planes
         // this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
-        // this.controls.orbit.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
+        // this.cameraTarget.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
 
         // blinking roof
         // this.camera.position.set(20532.18926265955, -11863.06999059111, 117553.43156512016);
-        // this.controls.target.set(20532.191127608294, -9998.087698878093, 117553.4315763069);
+        // this.cameraTarget.set(20532.191127608294, -9998.087698878093, 117553.4315763069);
 
         // rotating crystal
         // this.camera.position.set(12503.665976183796, -1081.0665384462375, 116917.6052756099);
-        // this.controls.target.set(11939.418010659865, -1153.9097602263002, 116384.32683375604);
+        // this.cameraTarget.set(11939.418010659865, -1153.9097602263002, 116384.32683375604);
 
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
-        // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
+        // this.cameraTarget.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
 
         // // elven ruins colon
         // this.camera.position.set(-113512.77219040602, 235526.6777673793, -3451.3266495528937);
-        // this.controls.orbit.target.set(-113585.56931966537, 235592.2972700526, -3471.192671814631);
+        // this.cameraTarget.set(-113585.56931966537, 235592.2972700526, -3471.192671814631);
 
         // // elven ruins light fixture with two lights
         // this.camera.position.set(-114663.6589876172, -3794.0658040717663, 235906.27471226442);
-        // this.controls.orbit.target.set(-114748.37491935505, -3810.9831230352693, 235855.90592005264);
+        // this.cameraTarget.set(-114748.37491935505, -3810.9831230352693, 235855.90592005264);
 
         // // tower ceiling fixture (too red)
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
-        // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
+        // this.cameraTarget.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
         // tower outside
         this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
-        this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
+        this.cameraTarget.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
 
         // // cruma doors
         // this.camera.position.set(17635.92785265722, 110567.1123199521, -6404.763840433224);
-        // this.controls.orbit.target.set(17642.91796377946, 110666.86770886739, -6404.736843065529);
+        // this.cameraTarget.set(17642.91796377946, 110666.86770886739, -6404.736843065529);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
-        // this.controls.orbit.target.set(39689.71781138217, -2528.306592105407, 145400.2027798047);
+        // this.cameraTarget.set(39689.71781138217, -2528.306592105407, 145400.2027798047);
 
         // // cruma top
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
-        // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
+        // this.cameraTarget.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
         // // talking island
         // this.camera.position.set(-94565.5599208028, 241247.1267543205, -2757.6753131407077);
-        // this.controls.orbit.target.set(-94641.92540931691, 241183.01219001279, -2765.2670723330143);
+        // this.cameraTarget.set(-94641.92540931691, 241183.01219001279, -2765.2670723330143);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
-        // this.controls.orbit.target.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
+        // this.cameraTarget.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
 
         // // ti - should have terrain light
         // this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
-        // this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
+        // this.cameraTarget.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
 
         // // world origin
         // this.camera.position.set(20, 20, 20);
-        // this.controls.orbit.target.set(0, 0, 0);
+        // this.cameraTarget.set(0, 0, 0);
 
         // // look player
         // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
-        // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
+        // this.cameraTarget.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
         // // ti church
         // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
-        // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
+        // this.cameraTarget.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
         // // ti emitter
         // this.camera.position.set(-85696.00014079512, -3058.804150841089, 242023.70085962766);
-        // this.controls.orbit.target.set(-85624.11634173596, -3062.40244455436, 241954.27628389848);
+        // this.cameraTarget.set(-85624.11634173596, -3062.40244455436, 241954.27628389848);
 
         // // should see moon
         // this.camera.position.set(18345, -3583, 115670);
-        // this.controls.orbit.target.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
+        // this.cameraTarget.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
 
         // // seam
         // this.camera.position.set(-93965.70166078406, -933.6590151180576, 245523.81285369548);
-        // this.controls.orbit.target.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
+        // this.cameraTarget.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
 
         // // horrible performance
         // this.camera.position.set(13773.791753219824, -3153.232327352311, 122575.56746151186);
-        // this.controls.orbit.target.set(13761.929509381232, -3152.8878889174143, 122674.86080737793);
+        // this.cameraTarget.set(13761.929509381232, -3152.8878889174143, 122674.86080737793);
 
         // // gludin can shouldn't see TI
         // this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
-        // this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
+        // this.cameraTarget.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
 
         // // dion castle entrance
         // this.camera.position.set(22052.797714747463, 159177.43425453003, -2671.964680416157);
-        // this.controls.orbit.target.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
+        // this.cameraTarget.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
 
         // // ruins floaties
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
-        // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
+        // this.cameraTarget.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
         // // heine fountain
         // this.camera.position.set(112055.37149242389, 220146.2276990017, -3588.410935323853);
-        // this.controls.orbit.target.set(111955.37806611139, 220146.29848444465, -3587.266521191006);
+        // this.cameraTarget.set(111955.37806611139, 220146.29848444465, -3587.266521191006);
 
         // // heine gondolas (L2MovementTag movables)
         // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
-        // this.controls.orbit.target.set(112555.89831315387, 217948.10425167627, -3607.378062564142);
+        // this.cameraTarget.set(112555.89831315387, 217948.10425167627, -3607.378062564142);
 
         // // catacombs hanging fire bowls (L2MovementTag movables)
         // this.camera.position.set(-50336.06572467676, 81322.44437284899, -4586.177393335977);
-        // this.controls.orbit.target.set(-50419.82278206141, 81376.9776969517, -4589.47464985799);
+        // this.cameraTarget.set(-50419.82278206141, 81376.9776969517, -4589.47464985799);
 
         // // d.elf village emitters
         // this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
-        // this.controls.orbit.target.set(12138.27794879715, 20656.34094915463, -4153.152659241246);
+        // this.cameraTarget.set(12138.27794879715, 20656.34094915463, -4153.152659241246);
 
         // // mother tree, sprites out of place
         // this.camera.position.set(49328.8568559967, 42729.35547846491, -2762.193021570927);
-        // this.controls.orbit.target.set(49252.46811535074, 42664.84372426251, -2760.462740595816);
+        // this.cameraTarget.set(49252.46811535074, 42664.84372426251, -2760.462740595816);
 
         // // negropolis near delf forest
         // this.camera.position.set(-48757.64540781602, 81179.19605056658, -4673.552599009336);
-        // this.controls.orbit.target.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
+        // this.cameraTarget.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
 
         // // tower of incolsence missing floor piece
         // this.camera.position.set(113246.97446580934, 15207.952910975075, 11869.48379043878);
-        // this.controls.orbit.target.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
+        // this.cameraTarget.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
 
         // // tree leaf alpha sorting
         // this.camera.position.set(73459.19761207198, 92466.6152928568, -2799.239596681226);
-        // this.controls.orbit.target.set(73507.4944756768, 92379.14544429531, -2803.294045912458);
+        // this.cameraTarget.set(73507.4944756768, 92379.14544429531, -2803.294045912458);
 
         // this.camera.position.set(-160498.80097106379, 147444.77329136943, -2160.401920637207);
-        // this.controls.orbit.target.set(-160411.158574305, 147397.90024984805, -2171.4349741089036);
+        // this.cameraTarget.set(-160411.158574305, 147397.90024984805, -2171.4349741089036);
 
         // // neighbor sector's water plane floating in front of trees
         // this.camera.position.set(-75102.0413513907, 254532.21528121945, -2647.6340093257513);
-        // this.controls.orbit.target.set(-75022.26420482268, 254592.21245772878, -2653.629482315672);
+        // this.cameraTarget.set(-75022.26420482268, 254592.21245772878, -2653.629482315672);
 
         // // same bug, different sector
         // this.camera.position.set(-94267.46807869655, 90614.94062961312, -2563.8085497287193);
-        // this.controls.orbit.target.set(-94325.95049631658, 90695.2733064729, -2575.054342624675);
+        // this.cameraTarget.set(-94325.95049631658, 90695.2733064729, -2575.054342624675);
 
         // cruma bad light (stale Region -> zoneNumber 0 ambient bug, fixed in un-static-mesh-actor.ts)
         // this.camera.position.set(19547.91987263343, 116964.69226804674, -11334.275986974659);
-        // this.controls.orbit.target.set(19646.060323410617, 116958.96763240216, -11352.59757173109);
+        // this.cameraTarget.set(19646.060323410617, 116958.96763240216, -11352.59757173109);
 
         // // heine stitching issue
         // this.camera.position.set(124282.49579416064, 229057.06415321256, -2057.6773374747354);
-        // this.controls.orbit.target.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
+        // this.cameraTarget.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
 
-        this.camera.lookAt(this.controls.orbit.target);
-        this.controls.orbit.update();
+        // // player
+        // this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
+
+        // // audio regression
+        // this.camera.position.set(19254.357244041046, 145494.0525086215, -3056.262971968217);
+        // this.cameraTarget.set(19259.976684368154, 145593.79108779877, -3051.7200968751245);
+
+        // // bad colon lights in EG catacombs
+        // this.camera.position.set(43373.971750954406, 144251.6743031877, -5272.650685379844);
+        // this.cameraTarget.set(43402.97624528142, 144358.5101364896, -5277.364565211859);
+
+        this.camera.lookAt(this.cameraTarget);
 
         viewport.appendChild(this.renderer.domElement);
 
-        viewport.addEventListener("mouseup", this.onHandleMouseUp.bind(this));
-        window.addEventListener("keydown", this.onHandleKeyDown.bind(this));
-        window.addEventListener("keyup", this.onHandleKeyUp.bind(this));
-        this.controls.fps.addEventListener("lock", this.onPointerControlsLocked.bind(this));
-        this.controls.fps.addEventListener("unlock", this.onPointerControlsUnlocked.bind(this));
-
-        if (!this.isOrbitControls) {
-            this.controls.orbit.enabled = false;
-            this.controls.fps.lock();
-        }
+        Object.assign(this.screenFadeElement.style, {
+            position: "fixed",
+            inset: "0px",
+            pointerEvents: "none",
+            opacity: "0",
+            zIndex: "9999"
+        });
+        viewport.appendChild(this.screenFadeElement);
 
         this.scene.add(this.player);
         this.player.name = "Player";
         // this.player.visible = false;
         // this.player.position.set(-87063.33997244012, -3257.2213744465607, 239964.66910649382);   // outside village
         // this.player.position.set(-87063.33997244012, -3637.2213744465607, 239964.66910649382);   // outside village
-        this.player.position.set(-84272.02537263982, -3730.723876953125, 245391.89904573155);    // near church
+        this.player.position.set(-87063.33997244012, 239964.66910649382, -3637.2213744465607);   // outside village
         // this.player.position.set(-85824.17160558623, -2420.568413807578+100, 247100.09013224754); // on the hill
 
         addResizeListeners(this);
     }
 
     public setEnv(env: EnvInfo): this {
-        const environment = this.environment = new L2Environment(env);
-        const self = this;
-
-        const timeState = {
-            get time() { return environment.getTimeOfDay(); },
-            set time(v) {
-                environment.setTimeOfDay(v);
-                self.needsUpdate = true;
-            },
-            get timeScale() { return environment.getTimeScale(); },
-            set timeScale(v) {
-                environment.setTimeScale(v);
-                self.needsUpdate = true;
-            }
-        };
-
-        guiFolders.world.add(timeState, "time", 0, 24, 0.01)
-            .name("Time")
-            .listen();
-        guiFolders.world.add(timeState, "timeScale", 0, 100, 0.01)
-            .name("Time Scale");
-
-        const envSignsSkyState = {
-            get signsSky() { return environment.getActiveEnv(); },
-            set signsSky(v) {
-                environment.setActiveEnv(Number(v) as 0 | 1 | 2);
-                self.needsUpdate = true;
-            }
-        };
-
-        guiFolders.world.add(envSignsSkyState, "signsSky", { "Normal": 0, "Dusk": 1, "Dawn": 2 })
-            .name("Signs Sky");
+        this.environment = new L2Environment(env);
 
         return this;
     }
 
-    public debugPrintCamera() {
+    public getEnvironment(): L2Environment { return this.environment; }
+
+    public debugPrintCamera(): void {
+        const camera = this.camera, controls = this.inputManager.controls;
+
         console.log([
-            `this.camera.position.set(${this.camera.position.x}, ${this.camera.position.y}, ${this.camera.position.z});`,
-            `this.controls.orbit.target.set(${this.controls.orbit.target.x}, ${this.controls.orbit.target.y}, ${this.controls.orbit.target.z});`
+            `this.camera.position.set(${camera.position.toArray().join(",")});`,
+            `this.cameraTarget.set(${controls.orbit.target.toArray().join(",")});`
         ].join("\n"));
     }
 
@@ -589,292 +579,107 @@ class RenderManager {
         }, "image/jpeg", 0.98);
     }
 
-    public onPointerControlsLocked() {
-        this.isOrbitControls = false;
-        this.controls.orbit.enabled = false;
-
-        Object.keys(this.dirKeys).forEach((k: "up" | "left" | "right" | "down" | "shift") => this.dirKeys[k] = false);
-
+    public toggleFrustumCulling(): void {
+        this.frustumCullingEnabled = !this.frustumCullingEnabled;
+        console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
     }
 
-    public onPointerControlsUnlocked() {
-        this.isOrbitControls = true;
-        this.controls.orbit.enabled = true;
-        this.controls.fps.getDirection(this.controls.orbit.target).multiplyScalar(100).add(this.camera.position);
-        this.controls.orbit.update();
-        Object.keys(this.dirKeys).forEach((k: "up" | "left" | "right" | "down" | "shift") => this.dirKeys[k] = false);
+    public toggleVisualizer(): void {
+        this.visualizer.toggle();
+        this.refreshVisualizer();
     }
 
-    public toScreenSpaceCoords(point: Vector2) {
-        const { width, height } = this.renderer.getSize(new Vector2());
-
-        return new Vector2(
-            point.x / width * 2 - 1,
-            1 - point.y / height * 2
-        );
-    }
-
-    public onHandleKeyDown(event: KeyboardEvent) {
-        if (document.activeElement?.tagName === "INPUT")
-            return;
-
-        // Handle F1 separately to prevent browser help (must be before switch)
-        if (event.key === "F1" || event.code === "F1") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.toggleBSPHelperCamera();
+    public setVisualizerMode(mode: VisualizerMode): void {
+        this.visualizer.setMode(mode);
+        if (mode === VisualizerMode.None) {
+            if (this.visualizer.isEnabled()) this.visualizer.toggle();
             return;
         }
+        if (!this.visualizer.isEnabled()) this.visualizer.toggle();
+        this.refreshVisualizer();
+    }
 
-        // Handle F2 to toggle frustum culling
-        if (event.key === "F2" || event.code === "F2") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.frustumCullingEnabled = !this.frustumCullingEnabled;
-            console.log(`Frustum culling is now: ${this.frustumCullingEnabled}`);
-            return;
+    public setVisualizerLeafDetail(detail: LeafVisualizerDetail): void {
+        this.visualizer.setLeafDetail(detail);
+        this.refreshVisualizer(true);
+    }
+
+    protected refreshVisualizer(leavesOnly: boolean = false): void {
+        const currentSector = this.getSector(this.camera.position);
+
+        if (!currentSector || !this.visualizer.isEnabled()) return;
+        if (leavesOnly && this.visualizer.getMode() !== VisualizerMode.Leaves) return;
+
+        const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
+        const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
+            ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+            : this.frustum;
+        const currentSectorMap = new Map<number, Map<number, SectorObject>>();
+
+        if (currentSector.index) {
+            const sectorXMap = new Map<number, SectorObject>();
+
+            sectorXMap.set(currentSector.index.y, currentSector);
+            currentSectorMap.set(currentSector.index.x, sectorXMap);
         }
 
-        // Handle F3 to toggle visualizer
-        if (event.key === "F3" || event.code === "F3") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.visualizer.toggle();
-            const currentSector = this.getSector(this.camera.position);
-            if (currentSector && this.visualizer.isEnabled()) {
-                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
-                    : this.frustum;
-
-                // Create a map with only the current sector
-                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
-                if (currentSector.index) {
-                    const sectorXMap = new Map<number, SectorObject>();
-                    sectorXMap.set(currentSector.index.y, currentSector);
-                    currentSectorMap.set(currentSector.index.x, sectorXMap);
-                }
-
-                if (this.visualizer.getMode() === VisualizerMode.Portals) {
-                    this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
-                    this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
-                    this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
-
-                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
+        if (leavesOnly) this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
+        else {
+            switch (this.visualizer.getMode()) {
+                case VisualizerMode.Portals: this.visualizer.updatePortals(currentSectorMap, cameraPos); break;
+                case VisualizerMode.Zones: this.visualizer.updateZones(currentSectorMap, cameraPos); break;
+                case VisualizerMode.Leaves: this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled); break;
+                case VisualizerMode.Fogs: this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined); break;
             }
-            return;
+
+            if (this.visualizer.getMode() !== VisualizerMode.Fogs) this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
         }
 
-        // Handle F4 to cycle visualizer modes
-        if (event.key === "F4" || event.code === "F4") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.visualizer.nextMode();
-            const currentSector = this.getSector(this.camera.position);
-            if (currentSector && this.visualizer.isEnabled()) {
-                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
-                    : this.frustum;
-
-                // Create a map with only the current sector
-                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
-                if (currentSector.index) {
-                    const sectorXMap = new Map<number, SectorObject>();
-                    sectorXMap.set(currentSector.index.y, currentSector);
-                    currentSectorMap.set(currentSector.index.x, sectorXMap);
-                }
-
-                if (this.visualizer.getMode() === VisualizerMode.Portals) {
-                    this.visualizer.updatePortals(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Zones) {
-                    this.visualizer.updateZones(currentSectorMap, cameraPos);
-                } else if (this.visualizer.getMode() === VisualizerMode.Leaves) {
-                    this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-                } else if (this.visualizer.getMode() === VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
-
-                if (this.visualizer.getMode() !== VisualizerMode.Fogs) {
-                    this.visualizer.updateFogs(currentSectorMap, this.activeFogId || undefined);
-                }
-            }
-            return;
-        }
-
-        // Handle F5 to cycle leaf visualizer detail (Auto / PerLeaf / PerZone)
-        if (event.key === "F5" || event.code === "F5") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.visualizer.nextLeafDetail();
-
-            // If we're currently in Leaves mode and visualizer is enabled, refresh the visualization immediately.
-            const currentSector = this.getSector(this.camera.position);
-            if (currentSector && this.visualizer.getMode() === VisualizerMode.Leaves && this.visualizer.isEnabled()) {
-                const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
-                const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
-                    : this.frustum;
-
-                // Create a map with only the current sector
-                const currentSectorMap = new Map<number, Map<number, SectorObject>>();
-                if (currentSector.index) {
-                    const sectorXMap = new Map<number, SectorObject>();
-                    sectorXMap.set(currentSector.index.y, currentSector);
-                    currentSectorMap.set(currentSector.index.x, sectorXMap);
-                }
-
-                this.visualizer.updateLeaves(currentSectorMap, cameraPos, cameraFrustum, this.frustumCullingEnabled);
-            }
-            return;
-        }
-
-        switch (event.key.toLowerCase()) {
-            case "1":
-                this.cancelMusic();
-                this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
-                this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
-                this.controls.orbit.update();
-                break;
-            case "2":
-                this.cancelMusic();
-                this.camera.position.set(17046.05501814811, 117471.20102308583, -12013.89353241769);
-                this.controls.orbit.target.set(17083.7099694609, 117384.69022352276, -11980.75765759009);
-                this.controls.orbit.update();
-                break;
-            case "3":
-                this.cancelMusic();
-                this.camera.position.set(15242.674545699758, 110436.41811293362, -12078.741557239728);
-                this.controls.orbit.target.set(15174.047463755987, 110487.88810239462, -12027.349302874225);
-                this.controls.orbit.update();
-                break;
-            case "4":
-                this.cancelMusic();
-                this.camera.position.set(12918.803737500606, 109998.28664096774, -11769.26992456535);
-                this.controls.orbit.target.set(12961.940094338941, 110631.6332572824, -11789.664021556502);
-                this.controls.orbit.update();
-                break;
-            case "5":
-                this.cancelMusic();
-                this.camera.position.set(23756.20212599347, 116491.99214326135, -8869.681711370744);
-                this.controls.orbit.target.set(23753.308437823456, 116591.94542046914, -8868.697361740096);
-                this.controls.orbit.update();
-                break;
-            case "6":
-                this.cancelMusic();
-                this.camera.position.set(17436.46445202629, 109469.23150265992, -6351.127037466889);
-                this.controls.orbit.target.set(18965.828211115713, 106770.89206042158, -6064.126549127763);
-                this.controls.orbit.update();
-                break;
-            case "+": this.nextSector(); break;
-            case "-": this.prevSector(); break;
-            case "w": if (!this.isOrbitControls) this.dirKeys.up = true; break;
-            case "a": if (!this.isOrbitControls) this.dirKeys.left = true; break;
-            case "d": if (!this.isOrbitControls) this.dirKeys.right = true; break;
-            case "s": if (!this.isOrbitControls) this.dirKeys.down = true; break;
-            case "shift": if (!this.isOrbitControls) {
-                this.shiftTimeDown = Date.now();
-                this.dirKeys.shift = true;
-            } break;
-        }
+        this.needsUpdate = true;
     }
 
-    protected cancelMusic() {
+    public cancelMusic(): void {
         this.activeMusicId = null;
         this.audioManager.cancelMusic();
     }
 
-    protected setSector(index: number) {
-        const sector = this.sectorBounds[index];
+    public getSectorBounds(): readonly Box3[] { return this.sectorBounds; }
 
-        this.cancelMusic();
-        this.camera.position.copy(sector.max);
-        this.controls.orbit.target.copy(sector.min).sub(sector.max).setLength(100).add(sector.max);
-        this.controls.orbit.update();
-
-        this.activeSector = index;
+    public updateCameraMatrices(): void {
+        this.camera.updateMatrixWorld();
+        this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
     }
 
-    protected nextSector() {
-        if (this.sectorBounds.length <= 0) return;
 
-        this.setSector((this.activeSector + 1) % this.sectorBounds.length);
-    }
+    public pickBSPNode(raycaster: THREE.Raycaster, maxDistance: number) {
+        arrBSPGroups.length = 0;
+        arrBSPIntersections.length = 0;
 
-    protected prevSector() {
-        if (this.sectorBounds.length <= 0) return;
+        for (const column of this.sectors.values())
+            for (const sector of column.values())
+                if (sector.bspGroup) arrBSPGroups.push(sector.bspGroup);
 
-        this.setSector(this.activeSector === 0 ? (this.sectorBounds.length - 1) : (this.activeSector - 1))
-    }
+        if (arrBSPGroups.length === 0) return;
 
-    public onHandleKeyUp(event: KeyboardEvent) {
-        switch (event.key.toLowerCase()) {
-            case "c":
-                if (this.isOrbitControls) this.controls.fps.lock();
-                else this.controls.fps.unlock();
-                break;
-            case "w": if (!this.isOrbitControls) this.dirKeys.up = false; break;
-            case "a": if (!this.isOrbitControls) this.dirKeys.left = false; break;
-            case "d": if (!this.isOrbitControls) this.dirKeys.right = false; break;
-            case "s": if (!this.isOrbitControls) this.dirKeys.down = false; break;
-            case "shift": if (!this.isOrbitControls) this.dirKeys.shift = false; break;
-        }
-    }
+        const prevFar = raycaster.far;
 
-    public onHandleMouseUp(event: MouseEvent) {
-        if (event.button !== 0 || !this.isOrbitControls) return;
+        raycaster.far = maxDistance;
+        raycaster.intersectObjects(arrBSPGroups, true, arrBSPIntersections);
+        raycaster.far = prevFar;
 
-        try {
-            const position = new Vector2(event.pageX, event.pageY);
-            const ssPosition = this.toScreenSpaceCoords(position);
-            const intersections: THREE.Intersection[] = [];
+        if (arrBSPIntersections.length === 0) return;
 
-            this.raycaster.setFromCamera(ssPosition, this.camera);
-            this.raycaster.intersectObject(this.scene, true, intersections);
+        const intersection = arrBSPIntersections[0];
+        const geometry = (intersection.object as THREE.Mesh).geometry;
+        const nodeIndexAttr = geometry.attributes.nodeIndex;
 
-            if (intersections.length === 0) return;
+        if (!nodeIndexAttr) return;
 
-            const intersection = intersections[0];
+        const indexAttr = geometry.index;
+        const vertexIndex = indexAttr ? indexAttr.getX(intersection.faceIndex * 3) : intersection.faceIndex * 3;
 
-            const collidable = intersections.find(i => (i.object as any).isCollidable);
-
-            if (collidable)
-                // this.player.getRigidbody().setTranslation(
-                //     new Vector3().addVectors(intersection.point, new Vector3(0, 100 * 1, 0)),
-                //     true
-                // );
-                this.player.goTo(collidable.point);
-
-            console.log(intersection);
-
-            if ((intersection.object as any).isMesh) {
-                const mesh = intersection.object as THREE.Mesh;
-                const geometry = mesh.geometry;
-                if (geometry.attributes.nodeIndex) {
-                    const nodeIndexAttr = geometry.attributes.nodeIndex;
-                    const indexAttr = geometry.index;
-                    let vertexIndex;
-
-                    if (indexAttr) {
-                        vertexIndex = indexAttr.getX(intersection.faceIndex! * 3);
-                    } else {
-                        vertexIndex = intersection.faceIndex! * 3;
-                    }
-
-                    const nodeIndex = nodeIndexAttr.getX(vertexIndex);
-                    console.log(`Node ID: ${nodeIndex}`);
-                }
-            }
-        } catch (e) {
-            console.error(e);
-        }
+        // console.log(intersection, `Node ID: ${nodeIndexAttr.getX(vertexIndex)}`);
     }
 
     public setSize(width: number, height: number, updateStyle?: boolean) {
@@ -894,8 +699,6 @@ class RenderManager {
         const aspect = width / height;
         this.camera.aspect = aspect;
 
-        // Convert horizontal FOV to vertical FOV for Three.js PerspectiveCamera
-        // Formula: vFOV = 2 * atan(tan(hFOV / 2) / aspect)
         const hFOV = MathUtils.degToRad(DEFAULT_HORIZONTAL_FOV);
         const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / aspect);
         this.camera.fov = MathUtils.radToDeg(vFOV);
@@ -910,11 +713,6 @@ class RenderManager {
         this.setSize(width, height);
 
         const pixelRatio = this.pixelRatio;
-        // Use client dims * pixelRatio for render targets
-        const targetWidth = Math.floor(width); // setSize handles ratio internally usually, but here width is bounding rect width. 
-        // Wait, setSize at 547 uses renderer.setSize(width, height).
-        // renderer.setSize updates the canvas. 
-        // RenderTargets need exact pixel size.
         const rtWidth = width * pixelRatio;
         const rtHeight = height * pixelRatio;
 
@@ -925,25 +723,193 @@ class RenderManager {
         this.needsUpdate = true;
     }
 
-    protected onHandleRender(currentTime: number): void {
-        const deltaTime = currentTime - this.lastRender;
-        const isFrameDirty = this.isPersistentRendering || this.needsUpdate;
+    public enableZoneCulling = true;
 
-        if (isFrameDirty) {
-            stats.begin();
-            this._preRender(currentTime, deltaTime);
-            this._doRender(currentTime, deltaTime);
-            this._postRender(currentTime, deltaTime);
-            stats.end();
-            this.needsUpdate = false;
-        }
+    public screenFadeBlink(info: IAnimationScreenFadeNotifyDecodeInfo): void {
+        // UGameEngine::ScreenFadeBlink (L2.exe 0x825650) rejects a blink while either fade state is active.
+        if (this.screenFadeStartedAt >= 0) return;
 
-        this.lastRender = currentTime;
+        const color = info.fadeOutColor;
 
-        requestAnimationFrame(this.onHandleRender.bind(this));
+        this.screenFadeOutDuration = Math.max(0, info.fadeOutDuration);
+        this.screenBlackOutDuration = Math.max(0, info.blackOutDuration);
+        this.screenFadeInDuration = Math.max(0, info.fadeInDuration);
+        this.screenFadeColorAlpha = color[3] / 255;
+        this.screenFadeElement.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        this.screenFadeStartedAt = performance.now();
+        this.needsUpdate = true;
     }
 
-    public enableZoneCulling = true;
+    public addViewShake(actor: BaseActor, info: IAnimationViewShakeNotifyDecodeInfo): void {
+        const direction = new Vector3().fromArray(info.shakeVector);
+
+        if (direction.lengthSq() === 0) direction.set(Math.random(), Math.random(), 0);
+        direction.normalize();
+        direction.z = 0;
+        direction.normalize();
+
+        const sourcePosition = actor.getWorldPosition(new Vector3());
+        const distance = this.player.position.distanceTo(sourcePosition);
+        const intensity = sourcePosition.lengthSq() !== 0 && info.shakeRange !== 0 ? info.shakeIntensity / Math.cosh(distance / info.shakeRange) : info.shakeIntensity;
+        const frameRate = 1 / this.viewShakeDelta;
+        const frameScale = frameRate < 30 ? frameRate / 30 : 1;
+        const repeats = info.shakeCount * frameScale;
+        const target = info.shakeType === "upDown" ? 1 : intensity;
+
+        this.viewShakeStates.push({
+            type: info.shakeType,
+            direction,
+            remainingTime: 5 + info.shakeCount * this.viewShakeDelta,
+            target,
+            savedTarget: intensity,
+            phase: 0,
+            rate: info.shakeIntensity * 50,
+            repeats,
+            countLimit: Math.trunc(Math.max(direction.x * frameScale, direction.y * frameScale, direction.z * frameScale, repeats) + 2),
+            requiresRotationFrequency: false,
+            requiresPositionFrequency: false,
+            requiresRotationScale: false
+        });
+        this.needsUpdate = true;
+    }
+
+    // ALineagePlayerController::AddViewShakeState (0x809d10), VST_DAMAGE/VST_UPDOWN.
+    public addViewShakeState(duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, rotationAmplitude: Vector3, rotationVelocity: Vector3, positionAmplitude: Vector3, position: Vector3, strength: number, range: number, type: "damage" | "upDown" = "damage"): void {
+        // PlayerCalcView (0x80cedb..0x80ceee) stores the prior camera location at controller+0x1bc.
+        const intensity = position.lengthSq() !== 0 && range !== 0 ? strength / Math.cosh(this.camera.position.distanceTo(position) / range) : strength;
+        const frameRate = 1 / this.viewShakeDelta;
+        const frameScale = frameRate < 30 ? frameRate / 30 : 1;
+        const repeats = positionFrequency * frameScale;
+
+        // FVector::SafeNormal (Core.dll 0x1014fc40) zeros squared lengths below 1e-8.
+        this.viewShakeStates.unshift({
+            type,
+            direction: rotationAmplitude.lengthSq() < 1e-8 ? new Vector3() : rotationAmplitude.clone().normalize(),
+            remainingTime: duration,
+            // Engine.dll 0x809f4d..0x809f5c: VST_UPDOWN saves the attenuated threshold and starts at 1.
+            target: type === "upDown" ? 1 : rotationScale * intensity,
+            savedTarget: rotationScale * intensity,
+            phase: 0,
+            rate: rotationFrequency,
+            repeats,
+            countLimit: Math.trunc(Math.max(positionAmplitude.x * frameScale, positionAmplitude.y * frameScale, positionAmplitude.z * frameScale, repeats) + 2),
+            requiresRotationFrequency: rotationVelocity.x === 0 && rotationVelocity.y === 0 && rotationVelocity.z === 0,
+            requiresPositionFrequency: positionAmplitude.x * frameScale === 0 && positionAmplitude.y * frameScale === 0 && positionAmplitude.z * frameScale === 0,
+            requiresRotationScale: rotationAmplitude.x * intensity === 0 && rotationAmplitude.y * intensity === 0 && rotationAmplitude.z * intensity === 0
+        });
+        this.needsUpdate = true;
+    }
+
+    public triggerL2Event(name: string, position: Vector3, radius: number): void {
+        name = name.toLowerCase();
+
+        // Engine.dll 0x7a9ed1..0x7a9f3f: the first Shot only fills Level.L2EventActors.
+        if (this.arrL2EventActors.length === 0) {
+            for (const sector of this.arrLoadedSectors) {
+                sector.traverse(object => {
+                    const actor = object as Object3D & ScriptHost_T;
+                    const tag = actor.scriptProperties instanceof Map ? actor.scriptProperties.get("Tag") : null;
+
+                    if (typeof tag !== "string" || tag.toLowerCase() !== name) return;
+
+                    sector.scriptVM.initializeHost(actor);
+                    this.arrL2EventActors.push({ actor, sector });
+                });
+            }
+            return;
+        }
+
+        // ULevel::ExecL2EventActors (0x8727a0..0x87296d).
+        for (const { actor, sector } of this.arrL2EventActors) {
+            if ((actor.scriptProperties as Map<string, string>).get("Tag").toLowerCase() !== name) continue;
+
+            if (name === "antarascave_smoke" && radius !== 0) {
+                if (position.lengthSq() === 0) continue;
+
+                const distance = actor.getWorldPosition(tmpL2EventPosition).distanceTo(position);
+
+                if (Math.random() >= 1 / Math.cosh(distance / radius)) continue;
+                if (!(actor as any).isEmitterActor) continue;
+
+                // 0x8728f3 clears AEmitter.FirstSpawnParticle (+0x450, bit0).
+                (actor.scriptProperties as Map<string, any>).set("FirstSpawnParticle", false);
+            }
+
+            sector.scriptVM.call(actor, "Trigger", [null, null]);
+        }
+    }
+
+    protected updateScreenFade(currentTime: number): void {
+        if (this.screenFadeStartedAt < 0) return;
+
+        let time = currentTime - this.screenFadeStartedAt;
+        let opacity: number;
+
+        if (time < this.screenFadeOutDuration) {
+            opacity = this.screenFadeOutDuration > 0 ? time / this.screenFadeOutDuration : 1;
+        } else {
+            time -= this.screenFadeOutDuration;
+
+            if (time < this.screenBlackOutDuration) {
+                opacity = 1;
+            } else {
+                time -= this.screenBlackOutDuration;
+
+                if (time < this.screenFadeInDuration) opacity = this.screenFadeInDuration > 0 ? 1 - time / this.screenFadeInDuration : 0;
+                else {
+                    opacity = 0;
+                    this.screenFadeStartedAt = -1;
+                }
+            }
+        }
+
+        this.screenFadeElement.style.opacity = `${opacity * this.screenFadeColorAlpha}`;
+    }
+
+    protected applyViewShake(_currentTime: number): boolean {
+        if (this.viewShakeStates.length === 0) return false;
+
+        tmpViewShakePosition.copy(this.camera.position);
+        tmpViewShakeQuaternion.copy(this.camera.quaternion);
+
+        let pitch = 0, yaw = 0;
+
+        for (let i = this.viewShakeStates.length - 1; i >= 0; i--) {
+            const state = this.viewShakeStates[i];
+
+            if (!updateViewShake(state, this.viewShakeDelta)) {
+                this.viewShakeStates.splice(i, 1);
+                continue;
+            }
+
+            // FNViewShake::Update 0x7bf8a4 bypasses rotation output when its frequency is zero.
+            if (state.rate === 0) continue;
+
+            pitch += Math.trunc(Math.abs(state.direction.y) * state.phase);
+            yaw += Math.trunc(Math.abs(state.direction.x) * state.phase);
+        }
+
+        tmpViewShakeDirection.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+
+        const currentYaw = Math.atan2(tmpViewShakeDirection.y, tmpViewShakeDirection.x);
+        const currentPitch = Math.atan2(tmpViewShakeDirection.z, Math.hypot(tmpViewShakeDirection.x, tmpViewShakeDirection.y));
+        const nextYaw = currentYaw + yaw / 32768 * Math.PI;
+        const nextPitch = currentPitch + pitch / 32768 * Math.PI;
+        const cosPitch = Math.cos(nextPitch);
+
+        tmpViewShakeDirection.set(Math.cos(nextYaw) * cosPitch, Math.sin(nextYaw) * cosPitch, Math.sin(nextPitch)).add(this.camera.position);
+        this.camera.lookAt(tmpViewShakeDirection);
+
+        this.camera.updateMatrixWorld();
+
+        return true;
+    }
+
+    protected restoreViewShake(): void {
+        this.camera.position.copy(tmpViewShakePosition);
+        this.camera.quaternion.copy(tmpViewShakeQuaternion);
+        this.camera.updateMatrixWorld();
+    }
 
     public getSectorId(position: THREE.Vector3): [number, number] {
         const sectorSize = 256 * 128;
@@ -955,6 +921,12 @@ class RenderManager {
 
     public getSector(position: THREE.Vector3): SectorObject | null {
         return this.getSectorByCoords(...this.getSectorId(position));
+    }
+
+    public isSectorCollisionReady(position: THREE.Vector3): boolean {
+        const sector = this.getSector(position);
+
+        return !!sector && !!sector.staticMeshGroup;
     }
 
     public getSectorByCoords(sectorX: number, sectorY: number): SectorObject | null {
@@ -969,8 +941,7 @@ class RenderManager {
         return xsect.get(sectorY);
     }
 
-    // F4 Emitters HUD feed, nearest first - capped since each entry redraws a canvas-texture label
-    private static readonly EMITTER_DEBUG_MAX = 80;
+    protected static readonly EMITTER_DEBUG_MAX = 80;
 
     public collectEmitterDebugInfo(): EmitterDebugInfo[] {
         const cameraPosition = this.camera.position;
@@ -981,7 +952,6 @@ class RenderManager {
             const emitter = obj as any;
             if (!emitter.particlePool) return;
 
-            // only the sector the camera is actually in, not streamed-in neighbors
             let sectorParent = emitter.parent;
             while (sectorParent && !sectorParent.isSectorObject) sectorParent = sectorParent.parent;
             if (sectorParent !== currentSector) return;
@@ -1011,7 +981,6 @@ class RenderManager {
         return results.slice(0, RenderManager.EMITTER_DEBUG_MAX);
     }
 
-    // The BSP offscreen freeze only ever touches instancedMesh.visible/particle.visible, never the emitter's own .visible, so this sticks.
     public setEmitterVisible(uuid: string, visible: boolean): void {
         if (visible) this.manuallyHiddenEmitterUuids.delete(uuid);
         else this.manuallyHiddenEmitterUuids.add(uuid);
@@ -1031,72 +1000,163 @@ class RenderManager {
         this.needsUpdate = true;
     }
 
-    public addClippingRangeControls(): void {
-        const clippingRange = this.assetManager.userConfig.clippingRange;
+    public setLevelVisible(visible: boolean): void { this.objectGroup.visible = visible; }
 
-        guiFolders.quality.add(clippingRange, "actor", 1, 12, 0.5)
-            .name("Emitter Range")
-            .onChange(() => {
-                this.sectors.forEach(column => column.forEach(sector => (sector as any).visibilityCacheInitialized = false));
-                this.needsUpdate = true;
-            });
+    public onFollowPlayerChanged(follow: boolean): void {
+        if (!follow) this.viewShakeStates.length = 0;
+        this.needsUpdate = true;
     }
 
-    public addDisplayGammaControls(): void {
-        const display = this.assetManager.userConfig.display;
-        display.gamma = 0;
+    public invalidateSectorVisibility(): void {
+        for (const column of this.sectors.values())
+            for (const sector of column.values())
+                (sector as any).visibilityCacheInitialized = false;
 
-        const steps = GAMMA_STEPS.reduce((acc, g) => (acc[g.toFixed(1)] = g, acc), { "off": 0 } as Record<string, number>);
-
-        guiFolders.quality.add(display, "gamma", steps)
-            .name("Gamma")
-            .onChange(v => {
-                display.gamma = parseFloat(v as any);
-                this.displayGammaEnabled = display.gamma !== 0;
-
-                if (this.displayGammaEnabled) this.displayGammaPass.setRamp(display);
-
-                this.needsUpdate = true;
-            });
+        this.needsUpdate = true;
     }
 
-    private wireEmitterVisibilityHandlers(): void {
+    public setDisplayGamma(display: any, value: unknown): void {
+        display.gamma = parseFloat(value as any);
+        this.displayGammaEnabled = display.gamma !== 0;
+
+        if (this.displayGammaEnabled) this.displayGammaPass.setRamp(display);
+
+        this.needsUpdate = true;
+    }
+
+    protected wireEmitterVisibilityHandlers(): void {
         this.visualizer.setEmitterVisibilityHandlers(
             (uuid, visible) => this.setEmitterVisible(uuid, visible),
             (visible) => this.setAllEmittersVisible(visible)
         );
     }
 
-    protected scheduleMovableObject(mover: MovableObject, nextUpdate: number): void {
-        this.activeMovableObjects.delete(mover);
-        this.waitingMovableObjects.delete(mover);
-
-        if (nextUpdate === 0) this.activeMovableObjects.add(mover);
-        else if (nextUpdate > 0) this.waitingMovableObjects.set(mover, nextUpdate);
+    public addPawn(pawn: BaseActor): void {
+        this.scene.add(pawn);
+        pawn.updateMatrixWorld(true);
+        this.physicsManager.addPawn(pawn);
+        pawn.beginPlay();
+        this.needsUpdate = true;
     }
 
-    protected updateMovableObjects(currentTime: number): void {
-        if (!this.lastMoverTriggerPosition.equals(this.camera.position)) {
-            this.lastMoverTriggerPosition.copy(this.camera.position);
+    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null): void {
+        if (!(effect as any).isGameObject) throw new Error(`Transient effect '${effect.name}' is not a game object.`);
 
-            this.movableObjects.forEach(mover => {
-                const nextUpdate = mover.tryTrigger(currentTime, this.camera.position);
+        const object = effect as Object3D & IObject;
 
-                if (nextUpdate !== null) this.scheduleMovableObject(mover, nextUpdate);
-            });
-        }
+        const lifetime = object.findComponent<EffectLifetimeComponent>("effectLifetime") || object.addComponent(new EffectLifetimeComponent(this));
 
-        for (const [mover, wakeTime] of Array.from(this.waitingMovableObjects)) {
-            if (currentTime >= wakeTime)
-                this.scheduleMovableObject(mover, mover.updateMover(currentTime));
-        }
+        this.retainTransientGeometries(effect);
+        this.scene.add(effect);
+        this.physicsManager.registerPhysicsComponent(lifetime);
+        this.physicsManager.registerSimulationObjects(effect);
 
-        for (const mover of Array.from(this.activeMovableObjects))
-            this.scheduleMovableObject(mover, mover.updateMover(currentTime));
+        if (owner) (owner.findComponent<ActorOwnershipComponent>("actorOwnership") || owner.addComponent(new ActorOwnershipComponent())).gainScriptChild(effect);
+        const script = object.findComponent<ScriptComponent>("script");
+
+        if (script) script.beginPlay();
+        this.needsUpdate = true;
     }
 
-    protected updateRotatingObjects(deltaTime: number): void {
-        this.rotatingObjects.forEach(object => object.updateRotation(deltaTime));
+    public removeTransientEffect(effect: Object3D): void {
+        this.retainTransientGeometries(effect);
+
+        const base = (effect as any).scriptBase as BaseActor;
+        const owner = (effect as any).scriptOwner as Object3D & IObject;
+
+        if (base) base.detachBoneObject(effect);
+        if (owner) owner.getComponent<ActorOwnershipComponent>("actorOwnership").loseScriptChild(effect);
+
+        const ownership = (effect as Object3D & IObject).findComponent<ActorOwnershipComponent>("actorOwnership");
+
+        // Engine.dll ULevel::DestroyActor 0x859709..0x859734: SetOwner(NULL) on surviving children.
+        if (ownership)
+            for (const child of ownership.getScriptChildren()) ownership.loseScriptChild(child);
+
+        this.physicsManager.unregisterSimulationObjects(effect);
+        effect.removeFromParent();
+
+        effect.traverse(child => {
+            const mesh = child as any;
+
+            if (!mesh.isMesh) return;
+
+            const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
+
+            for (const material of materials) material.dispose();
+            if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
+        });
+
+        (effect as Object3D & IObject).detachComponents();
+
+        for (const geometry of this.transientGeometries.get(effect)) this.releaseGeometry(geometry);
+        this.transientGeometries.delete(effect);
+
+        this.needsUpdate = true;
+    }
+
+    public retainGeometry(geometry: THREE.BufferGeometry): void { retainResource(geometry); }
+    public releaseGeometry(geometry: THREE.BufferGeometry): void { releaseResource(geometry); }
+
+    protected retainTransientGeometries(effect: Object3D): void {
+        let geometries = this.transientGeometries.get(effect);
+
+        if (!geometries) this.transientGeometries.set(effect, geometries = new Set());
+
+        effect.traverse((object: any) => {
+            // ActorMeshComponent owns skinned meshes; sprite instance buffers are private to each emitter.
+            if (!object.geometry || object.isSkinnedMesh || object.isInstancedSpriteMesh || geometries.has(object.geometry)) return;
+
+            geometries.add(object.geometry);
+            this.retainGeometry(object.geometry);
+        });
+    }
+
+    public removePawn(pawn: BaseActor): void {
+        if (!this.physicsManager.removePawn(pawn)) return;
+
+        arrPawnEffects.length = 0;
+        for (const effect of pawn.getScriptChildren()) arrPawnEffects.push(effect);
+        this.scene.traverse(object => {
+            if ((object as any).scriptBase === pawn && !arrPawnEffects.includes(object)) arrPawnEffects.push(object);
+        });
+        for (const effect of arrPawnEffects) this.removeTransientEffect(effect);
+
+        pawn.removeFromParent();
+
+        if (this.isUpdatingMixer) this.deferredMixerOperations.push(() => pawn.release());
+        else pawn.release();
+
+        this.needsUpdate = true;
+    }
+
+    protected runDeferredMixerOperations(): void {
+        for (const operation of this.deferredMixerOperations) operation();
+
+        this.deferredMixerOperations.length = 0;
+    }
+
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<BaseActor> {
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment);
+    }
+
+    public listNpcs(): Promise<INpcDefinition[]> {
+        return this.manGame.getComponent("asset").listNpcs();
+    }
+
+    public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
+    public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
+    public registerActorMesh(component: ActorMeshComponent): void {
+        this.actorMeshes.add(component);
+        this.invalidatePawnLighting(component.getParent());
+    }
+    public unregisterActorMesh(component: ActorMeshComponent): void { this.actorMeshes.delete(component); }
+    public registerHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.add(component); }
+    public unregisterHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.delete(component); }
+
+    protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
+        for (const component of this.pawnRenderables)
+            component.getParent().updatePresentation(currentTime, deltaTime / 1000);
     }
 
     protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
@@ -1104,9 +1164,6 @@ class RenderManager {
 
         this.lastRenderOrderSector = activeSector;
 
-        // batch meshes (and BSP section meshes - their geometry is baked in world space, so matrixWorld
-        // is the identity origin and three's per-object z-sort is meaningless) project the sector origin
-        // for depth, so cross-sector transparent order rides on groupOrder - camera sector draws last
         this.sectors.forEach(row => row.forEach(sector => {
             const order = sector === activeSector ? 0 : -1;
             if (sector.staticMeshGroup) sector.staticMeshGroup.renderOrder = order;
@@ -1115,37 +1172,185 @@ class RenderManager {
     }
 
     protected updatePawnVisibility(): void {
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent();
+
+            pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(component.getRenderSphere());
+        }
+
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
-                pawn.getWorldPosition(tmpPawnWorldPos);
+                const state = this.resolvePawnLocation(pawn);
 
-                const containingSector = this.getSector(tmpPawnWorldPos);
-
-                if (!containingSector) {
+                if (!state.sector) {
                     pawn.visible = false;
                     continue;
                 }
 
-                const leafIndex = containingSector.findPositionLeaf(tmpPawnWorldPos);
-
-                pawn.visible = leafIndex !== null && containingSector.visibleLeaves.has(leafIndex);
+                pawn.visible = state.leafIndex !== null && state.sector.visibleLeaves.has(state.leafIndex);
             }
         }));
     }
 
-    protected _updateObjects(currentTime: number, deltaTime: number) {
+    // USkeletalMeshInstance::Render, UnSkeletalMesh.cpp line 4908: zone ambient plus hardware lights.
+    protected updatePawnLighting(): void {
+        const sunAmbient = this.environment.getAmbientPlaneActorLightHalved(tmpPawnSunAmbient);
+
+        for (const row of this.sectors.values())
+            for (const sector of row.values())
+                for (const pawn of sector.pawns.children)
+                    if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
+
+        this.updatePawnShadow();
+
+        for (const component of this.pawnRenderables)
+            this.updateActorLighting(component.getParent(), sunAmbient);
+
+        for (const component of this.actorMeshes)
+            this.updateActorLighting(component.getParent(), sunAmbient);
+    }
+
+    // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
+    protected updatePawnShadow(): void {
+        const timeOfDay = this.environment.getTimeOfDay();
+
+        this.player.getWorldPosition(tmpPawnWorldPos);
+
+        const sector = this.getSector(tmpPawnWorldPos);
+        let sun: DynamicLight = null;
+
+        if (sector && timeOfDay >= 7 && timeOfDay < 23)
+            for (const light of sector.lightList)
+                if (light.isSunlight) {
+                    sun = light;
+                    break;
+                }
+
+        if (sun) tmpShadowDirection.copy(sun.lightDirection).normalize();
+        else tmpShadowDirection.set(0, 0, -1);
+
+        const minVertical = Math.abs(tmpShadowDirection.x) * 0.5;
+
+        if (minVertical >= Math.abs(tmpShadowDirection.z))
+            tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
+
+        arrShadowCasters.length = 0;
+        for (const component of this.pawnRenderables) arrShadowCasters.push(component.getParent());
+
+        if (sector) for (const pawn of sector.pawns.children) arrShadowCasters.push(pawn);
+
+        this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
+    }
+
+    public invalidatePawnLighting(actor: THREE.Object3D): void {
+        this.pawnLightingStates.delete(actor);
+    }
+
+    protected getPawnLightingState(actor: THREE.Object3D): PawnLightingState_T {
+        let state = this.pawnLightingStates.get(actor);
+
+        if (state) return state;
+
+        state = {
+            position: new Vector3(NaN, NaN, NaN),
+            lightingPosition: new Vector3(NaN, NaN, NaN),
+            sector: null,
+            lightingSector: null,
+            leafIndex: null,
+            lightingLeafIndex: null,
+            zoneIndex: null,
+            lightingZoneIndex: null,
+            envVersion: -1,
+            pawnLightVersion: -1,
+            ambientR: -1,
+            ambientG: -1,
+            ambientB: -1,
+            lights: []
+        };
+
+        this.pawnLightingStates.set(actor, state);
+
+        return state;
+    }
+
+    protected resolvePawnLocation(actor: THREE.Object3D): PawnLightingState_T {
+        const state = this.getPawnLightingState(actor);
+
+        actor.getWorldPosition(tmpPawnWorldPos);
+
+        if (state.position.equals(tmpPawnWorldPos) && state.sector) return state;
+
+        state.position.copy(tmpPawnWorldPos);
+        state.sector = this.getSector(tmpPawnWorldPos);
+        state.leafIndex = state.sector ? state.sector.findPositionLeaf(tmpPawnWorldPos) : null;
+        state.zoneIndex = state.sector ? state.sector.findPositionZone(tmpPawnWorldPos) : null;
+
+        return state;
+    }
+
+    protected updateActorLighting(actor: THREE.Object3D, sunAmbient: ColorByte): void {
+        const state = this.resolvePawnLocation(actor);
+        const sector = state.sector;
+
+        if (!sector) return;
+
+        const zoneInfo = state.zoneIndex === null ? null : sector.bspZones[state.zoneIndex]?.zoneInfo;
+        const moved = state.lightingPosition.distanceToSquared(state.position) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
+        const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
+        const envVersion = this.environment.getEnvVersion();
+        const ambientChanged = state.envVersion !== envVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
+        const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
+        const pawnLightVersion = pawnLights ? pawnLights.version : -1;
+        let relevantLightsChanged = false;
+        let relevantLightUpdated = false;
+
+        for (const light of state.lights)
+            relevantLightUpdated = relevantLightUpdated || light.needsUpdate;
+
+        if (moved || locationChanged) {
+            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected);
+            relevantLightsChanged = state.lights.length !== arrPawnLights.length;
+
+            for (let i = 0, len = arrPawnLights.length; i < len; i++) {
+                relevantLightsChanged = relevantLightsChanged || state.lights[i] !== arrPawnLights[i];
+                relevantLightUpdated = relevantLightUpdated || arrPawnLights[i].needsUpdate;
+            }
+
+            state.lights.length = 0;
+            state.lights.push(...arrPawnLights);
+
+            state.lightingPosition.copy(state.position);
+            state.lightingSector = sector;
+            state.lightingLeafIndex = state.leafIndex;
+            state.lightingZoneIndex = state.zoneIndex;
+        }
+
+        if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
+
+        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getRenderSphere());
+
+        arrLightingObjects.length = 0;
+        arrLightingObjects.push(actor);
+
+        while (arrLightingObjects.length > 0) {
+            const object = arrLightingObjects.pop()!;
+
+            for (const child of object.children) arrLightingObjects.push(child);
+
+            if ((object as LitSkinnedMesh).isLitSkinnedMesh)
+                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined);
+        }
+
+        state.envVersion = envVersion;
+        state.pawnLightVersion = pawnLightVersion;
+        state.ambientR = sunAmbient.r;
+        state.ambientG = sunAmbient.g;
+        state.ambientB = sunAmbient.b;
+    }
+
+    protected _updateObjects(currentTime: number) {
         this.visibleWorldBatchEmitters.length = 0;
         this.neighborVisibilitySectors.length = 0;
-        this.dropDetail = deltaTime > DROP_DETAIL_FRAME_TIME_MS;
-        this.aggressiveLod = deltaTime > AGGRESSIVE_LOD_FRAME_TIME_MS;
-        this.emitterDetailFrame = (this.emitterDetailFrame + 1) % 6;
-
-        const offscreenEmitterUpdateLimit = this.aggressiveLod
-            ? 0
-            : this.dropDetail
-                ? DROP_DETAIL_OFFSCREEN_EMITTER_UPDATES
-                : MAX_OFFSCREEN_EMITTER_UPDATES;
-        let offscreenEmitterUpdates = 0;
 
         GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
 
@@ -1157,7 +1362,6 @@ class RenderManager {
             (ambientSun.b + sunColor.b) / 255
         );
 
-        // camera-facing billboard basis, computed once and shared as a uniform (was per-particle in sprite-emitter.ts's onBeforeRender)
         {
             const camera = this.camera;
             const projUp = tmpBillboardUp.copy(camera.up).normalize();
@@ -1168,10 +1372,8 @@ class RenderManager {
             (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
         }
 
-        // Update helper camera: copy from main camera if inactive, otherwise keep frozen
         if (this.bspHelperCamera) {
             if (!this.bspHelperActive) {
-                // Helper is inactive: copy main camera properties for culling
                 this.bspHelperCamera.position.copy(this.camera.position);
                 this.bspHelperCamera.rotation.copy(this.camera.rotation);
                 this.bspHelperCamera.updateMatrixWorld(true);
@@ -1179,55 +1381,43 @@ class RenderManager {
                     this.bspHelperCameraHelper.visible = false;
                 }
             } else {
-                // Helper is active: keep frozen, make helper visible
                 if (this.bspHelperCameraHelper) {
                     this.bspHelperCameraHelper.visible = true;
                 }
             }
-            // Update helper visual indicator
             if (this.bspHelperCameraHelper) {
                 this.bspHelperCameraHelper.update();
             }
         }
 
 
-        // NEW: Update BSP section visibility based on camera position (UE2-style culling)
-        // Use helper camera position only when active (frozen), otherwise use main camera
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const bspCullingPosition = bspCullingCamera.position;
 
-        this.updateMovableObjects(currentTime);
-        this.updateRotatingObjects(deltaTime);
-
-        // Pass 1: Visibility updates
-        // UE2: DistanceFogEnd IS the far clip plane — no padding needed
         const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
         const fogSphere = new Sphere(bspCullingPosition, fogFar);
 
-        // Build culling frustum from camera (Z-buffer far stays at DEFAULT_FAR for depth precision)
         this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
 
         // UE2: BoundingPlanes[4] = FPlane(ViewOrigin + Z * FarClip, Z)
-        // Override the frustum's far plane at fogFar for visibility culling only
-        // This is separate from camera.far (depth buffer) — no Z-fighting artifacts
-        // THREE.js frustum plane indices: 0=right, 1=left, 2=bottom, 3=top, 4=far, 5=near
         {
             tmpCamDir.set(0, 0, -1).applyQuaternion(bspCullingCamera.quaternion);
             tmpFarPoint.copy(bspCullingPosition).addScaledVector(tmpCamDir, fogFar);
             this.frustum.planes[4].setFromNormalAndCoplanarPoint(tmpCamDir.negate(), tmpFarPoint);
         }
 
-        // static meshes clip at the same distance as fog/terrain, no padding (isRangeIgnored is the real per-actor exemption)
         // TODO: Clip static meshes against [ClippingRange] StaticMesh instead of fog.
         const STATIC_MESH_CLIPPING_RANGE = 1;
         const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
         const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
-
-        const emitterCullDist = this.assetManager.userConfig.clippingRange.actor * CLIPPING_RANGE_SCALE;
+        const assetMan = this.manGame.getComponent("asset");
+        const emitterCullDist = assetMan.userConfig.clippingRange.actor * CLIPPING_RANGE_SCALE;
         const emitterCullDistSq = emitterCullDist * emitterCullDist;
 
         const activeSector = this.getSector(bspCullingPosition);
 
+        this.physicsManager.setActiveSector(activeSector);
+        this.physicsManager.setTriggerPosition(this.camera.position);
         this.updateSectorRenderOrder(activeSector);
 
         this.scene.traverse((object: THREE.Object3D) => {
@@ -1236,7 +1426,6 @@ class RenderManager {
                 const isCameraInSector = activeSector === sector;
                 const wasVisible = sector.visible;
 
-                // fog-range z-culling, never the active sector
                 if (!isCameraInSector) {
                     if (!fogSphere.intersectsBox(sector.worldBounds)) {
                         sector.visible = false;
@@ -1270,11 +1459,10 @@ class RenderManager {
         }
 
         this.updatePawnVisibility();
+        this.updatePawnLighting();
 
-        // Pass 2: Object & Material updates (active sector only — skip distant sectors)
         this.scene.traverseVisible(child => {
             if ((child as any).isUpdatable) {
-                // Find the nearest sector for objects that need lighting updates
                 let sector: SectorObject | null = null;
                 let parent = child.parent;
                 while (parent) {
@@ -1285,73 +1473,14 @@ class RenderManager {
                     parent = parent.parent;
                 }
 
-                // Skip lighting updates for objects in non-active (distant) sectors, except objects that were never lit at all (freshly streamed sectors)
-                if (sector && sector !== activeSector && !(child as any).needsInitialLighting) {
-                    // emitters outside the camera's sector still simulate, just throttled to OFFSCREEN_EMITTER_HZ
-                    if ((child as any).particlePool) {
-                        const wasOffscreen = !!(child as any).isOffscreenThrottled;
-                        const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
-                        if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
-                            offscreenEmitterUpdates++;
-                            (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-                            (child as any).update(currentTime);
-                            freezeEmitterParticles(child);
-                        } else if (!wasOffscreen) {
-                            freezeEmitterParticles(child); // A budgeted-out first maintenance tick must still stop the emitter's previous visible state from being submitted.
-                        }
-
-                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld;
-                    }
-                    return;
-                }
-
-                // within the active sector, reuse zone-object.ts's BSP visibility (Pass 1 fills visibleEmitterUuids) instead of a standalone frustum test
                 if ((child as any).particlePool) {
+                    if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
+
                     const emitterUuid = (child as any).emitterActorUuid;
-                    const isVisible = !!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid);
+                    const isVisible = (child as any).isActorAttachedEmitter || (!!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid));
 
-                    if (!isVisible) {
-                        // throttle instead of freezing outright so particle state doesn't go stale and pop back in once visible
-                        const wasOffscreen = !!(child as any).isOffscreenThrottled;
-                        const isMaintenanceDue = shouldUpdateOffscreenEmitter(child, currentTime);
-                        if (offscreenEmitterUpdates < offscreenEmitterUpdateLimit && isMaintenanceDue) {
-                            offscreenEmitterUpdates++;
-                            (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-                            (child as any).update(currentTime);
-                            freezeEmitterParticles(child);
-                        } else if (!wasOffscreen) {
-                            freezeEmitterParticles(child);
-                        }
+                    if (!isVisible) return;
 
-                        (child as any).updateMatrixWorld = frozenUpdateMatrixWorld; // between ticks, already hidden by the last tick's freeze
-                        return;
-                    }
-
-                    const shouldUpdate = shouldUpdateVisibleEmitter(
-                        child,
-                        this.emitterDetailFrame,
-                        this.dropDetail,
-                        this.aggressiveLod,
-                        this.emitterSimDue
-                    );
-                    (child as any).isOffscreenThrottled = false;
-                    (child as any).updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-
-                    if (!shouldUpdate) {
-                        const mesh = (child as any).instancedMesh;
-                        if (mesh?.visible && mesh.isWorldBatchCandidate)
-                            this.visibleWorldBatchEmitters.push(child);
-                        return;
-                    }
-                }
-
-                if (sector && 'computeLighting' in child) {
-                    (child as any).update(sector, this.environment);
-                } else {
-                    (child as any).update(currentTime);
-                }
-
-                if ((child as any).particlePool) {
                     const mesh = (child as any).instancedMesh;
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
@@ -1359,10 +1488,12 @@ class RenderManager {
                     const pendingSounds = (child as any).pendingSounds;
                     if (pendingSounds.length) {
                         for (const snd of pendingSounds)
-                            this.audioManager.playOneShotSound(snd.soundDataUri, snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
+                            if (snd.dataUri || sector) this.audioManager.playOneShotSound(snd.dataUri || sector.getSoundUri(snd.soundName), snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
                         pendingSounds.length = 0;
                     }
-                }
+                } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
+                else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment);
+                else (child as any).update(currentTime);
             }
 
             if ((child as THREE.Mesh).isMesh) {
@@ -1396,12 +1527,9 @@ class RenderManager {
         const env = this.environment;
         if (!env) return;
 
-        // base sky color from timeenv, blended with L2FogInfo later
         const targetSkyColor = env.getSkyColor(tmpColorByte);
 
-        // fog defaults from Env.int [FOG] StartRange1=1.0 (2000u), EndRange1=4.0 (8000u)
-        // range scale factor 2048, derived from trace: 2.5 * 2048 = 5120
-        const presetIndex = parseInt(String(this.envConfig.fogPreset).split(" ")[0]);
+        const presetIndex = parseInt(String(this.manUI.fogPreset).split(" ")[0]);
         const range = env.getEnv().fog.ranges[presetIndex - 1]; // 0-based array
 
         let targetFogStart = 2000;
@@ -1418,18 +1546,15 @@ class RenderManager {
             }
         }
 
-        let targetFogColor = env.getHazeColor(tmpColorByte_2); // Default to Haze
+        let targetFogColor = env.getHazeColor(tmpColorByte_2);
 
         // targetFogStart = 1;
         // targetFogEnd = 10
 
-        // zone overrides
         const sector = this.getSector(this.camera.position);
-        // base haze gradient from EnvLight (via indexHaze), L2FogInfo blending modifies it in range
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let skyVisibility = 1.0;
 
-        // Initialize with default baseline colors from Env.int
         const targetCloudColors: ColorByte[] = [
             env.getCloudColor(0, new ColorByte()),
             env.getCloudColor(1, new ColorByte()),
@@ -1438,9 +1563,10 @@ class RenderManager {
 
         if (sector) {
             const zoneIndex = sector.findPositionZone(this.camera.position);
+            const cameraZoneMask = 1n << BigInt(zoneIndex);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
-           if (zone && zone.fog) {
+            if (zone && zone.fog) {
                 if (zone.isSunAffected) {
                     const zR = zone.fog.color.r * 255;
                     const zG = zone.fog.color.g * 255;
@@ -1456,24 +1582,19 @@ class RenderManager {
                 }
             }
 
-            // Sky color accumulators
             let accSkyR = 0, accSkyG = 0, accSkyB = 0, totalSkyWeight = 0;
-            // Haze/Cloud accumulators
             let accHazeR = 0, accHazeG = 0, accHazeB = 0, totalHazeWeight = 0;
             let accCloudR = [0, 0, 0], accCloudG = [0, 0, 0], accCloudB = [0, 0, 0], totalCloudWeight = [0, 0, 0];
 
-            // Fog accumulators (Standard spatial weight)
             let accStart = 0, accEnd = 0, accR = 0, accG = 0, accB = 0, totalFogWeight = 0;
 
-            // Haze Array accumulators (for vertical gradient)
             let accHArrR: number[] = [], accHArrG: number[] = [], accHArrB: number[] = [];
 
             let totalHArrWeight = 0;
 
-            const presetIndex = this.envConfig.fogPreset;
+            const presetIndex = this.manUI.fogPreset;
             const timeOfDay = env.getTimeOfDay();
 
-            // Collect fogInfos from current sector and 8 neighbor sectors to handle cross-sector ranges
             const fogInfosAll: any[] = [];
             const sectorSize = 256 * 128;
             const currentX = Math.floor(this.camera.position.x / sectorSize) + 20;
@@ -1501,10 +1622,8 @@ class RenderManager {
             let maxHArrLen = 0;
             const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
 
-            // closest active fog wins
             fogInfos.forEach(fogInfo => {
-                const visibleMask = sector.lastZoneMask;
-                if (fogInfo.zoneMask && visibleMask && !(fogInfo.zoneMask & visibleMask)) {
+                if (fogInfo.zoneMask && !(fogInfo.zoneMask & cameraZoneMask)) {
                     return;
                 }
 
@@ -1553,7 +1672,6 @@ class RenderManager {
                     interpolateFogInfoCloudColor(timeOfDay, fogInfo.colors, new ColorByte(), 2)
                 ];
 
-                // EnvInfo ranges are kilounits (x2048), FogInfo zone ranges are already units
                 accStart += range.A * weight;
                 accEnd += range.B * weight;
                 accR += fogColor.r * weight;
@@ -1561,7 +1679,6 @@ class RenderManager {
                 accB += fogColor.b * weight;
                 totalFogWeight += weight;
 
-                // alpha 0 in assets means fallback to 255 (fully opaque)
                 const skyAlpha = skyColor.a === 0 ? 255 : skyColor.a;
                 const skyWeight = weight * (skyAlpha / 255);
                 accSkyR += skyColor.r * skyWeight;
@@ -1597,8 +1714,6 @@ class RenderManager {
                 }
             });
 
-            // Calculate Sky Visibility (Suppressed by bClearToFogColor)
-            // If zones with bClearToFogColor are active, sky visibility should drop
             skyVisibility = 1.0;
             activeInfos.forEach(({ fogInfo, weight }) => {
                 if ((fogInfo as any).useFogColorClear) {
@@ -1607,7 +1722,6 @@ class RenderManager {
             });
 
             if (this.activeFogId) {
-                // If a zone fog is active, it completely overrides the global fog palette
                 targetFogStart = accStart / totalFogWeight;
                 targetFogEnd = accEnd / totalFogWeight;
                 targetFogColor.set(
@@ -1616,8 +1730,6 @@ class RenderManager {
                     accB / totalFogWeight,
                     255
                 );
-            } else {
-                // No active zone fog - already has default values from Env.int
             }
 
             if (totalSkyWeight > 0 && this.activeFogId) {
@@ -1629,13 +1741,10 @@ class RenderManager {
                 );
             }
 
-            // Calculate final Cloud Colors (Blended result of Baseline + Regional Overrides)
             targetCloudColors.forEach((tc, idx) => {
                 const baseCloud = env.getCloudColor(idx, new ColorByte());
                 tc.copy(baseCloud);
                 if (this.activeFogId && totalCloudWeight[idx] > 0) {
-                    // Engine logic: Whichever wins provides the complete palette for that component
-                    // If the active fog has an override for this index, it completely overrides baseline
                     const r = accCloudR[idx] / totalCloudWeight[idx];
                     const g = accCloudG[idx] / totalCloudWeight[idx];
                     const b = accCloudB[idx] / totalCloudWeight[idx];
@@ -1644,7 +1753,6 @@ class RenderManager {
             });
 
             if (totalHArrWeight > 0) {
-                // high weight prioritizes regional color, reduces global bleed
                 const haW = totalHArrWeight >= 0.95 ? 1.0 : Math.min(totalHArrWeight, 1.0);
                 for (let i = 0; i < blendedHazeColors.length; i++) {
                     const baseColor = blendedHazeColors[i];
@@ -1659,7 +1767,6 @@ class RenderManager {
                 }
             }
 
-            // Restore Haze Color Blending (for modulatedHazeBase/tmpColorByte_4)
             if (totalHazeWeight > 0) {
                 const hW = totalHazeWeight >= 0.95 ? 1.0 : Math.min(totalHazeWeight, 1.0);
                 tmpColorByte_4.set(
@@ -1668,29 +1775,40 @@ class RenderManager {
                     MathUtils.lerp(255, accHazeB / totalHazeWeight, hW),
                     255
                 );
-            } else {
-                // Default to White (Identity) so base haze colors are visible
-                tmpColorByte_4.set(255, 255, 255, 255);
-            }
+            } else tmpColorByte_4.set(255, 255, 255, 255);
         }
 
+        const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
 
-        // Initialize with default Sky Color as fallback
+        this.waterEffects.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
+        this.audioManager.setUnderwater(!!waterVolume);
+
+        if (waterVolume) {
+            if (waterVolume.fog) {
+                targetFogColor.set(waterVolume.fog.color[0], waterVolume.fog.color[1], waterVolume.fog.color[2], 255);
+                targetFogStart = waterVolume.fog.start;
+                targetFogEnd = waterVolume.fog.end;
+            } else {
+                const waterEnv = env.getEnv().waterVolume;
+
+                targetFogColor.copy(waterEnv.fogColor);
+                targetFogStart = waterEnv.fogStart;
+                targetFogEnd = waterEnv.fogEnd;
+            }
+
+            skyVisibility = 0;
+        }
+
         const targetClearColor = targetSkyColor.clone();
 
-        // If useFogColorClear is active for the current weighted zone state, we should clear to the fog color instead.
-        // We use the skyVisibility (which is derived from bClearToFogColor weights) to blend between Sky Color and Fog Color for a smooth transition.
-        if (skyVisibility < 1.0) {
-            // Linear blend: 1.0 Visibility = Pure Sky, 0.0 Visibility = Pure Fog
+        if (skyVisibility < 1.0)
             targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
-        }
 
         this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
 
         const clearColorThree = new Color().setRGB(targetClearColor.r / 255, targetClearColor.g / 255, targetClearColor.b / 255);
         this.renderer.setClearColor(clearColorThree);
 
-        // Update Scene Fog (Always use targetFogColor for 3D fogging)
         const fogColorThree = new Color().setRGB(targetFogColor.r / 255, targetFogColor.g / 255, targetFogColor.b / 255);
         if (!this.scene.fog || !(this.scene.fog as any).isFog) {
             this.scene.fog = new Fog(fogColorThree, targetFogStart, targetFogEnd);
@@ -1706,14 +1824,30 @@ class RenderManager {
         if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
     }
 
+    public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
+        this.isRenderingFrame = this.isRendering && (this.isPersistentRendering || this.needsUpdate);
 
-    protected nextPhysicsTick: number;
+        if (!this.isRenderingFrame) return;
 
-    protected _preRender(currentTime: number, deltaTime: number) {
-        this.assetManager.tick(this);
+        this.manUI.beginFrame();
+        this.updateScreenFade(currentTime);
+
+        this.manGame.getComponent("asset").tick(this);
         this.processSectorWarmups();
         this.processShaderDiagnostics();
-        this.mixer.update(deltaTime / 1000);
+        this.viewShakeDelta = deltaTime / 1000;
+
+        for (const simulation of this.hairSimulations) simulation.restorePose();
+
+        this.isUpdatingMixer = true;
+        try {
+            this.mixer.update(deltaTime / 1000);
+        } finally {
+            this.isUpdatingMixer = false;
+            this.runDeferredMixerOperations();
+        }
+
+        for (const simulation of this.hairSimulations) simulation.update(deltaTime / 1000);
 
         const timeScale = this.environment.getTimeScale();
 
@@ -1730,31 +1864,13 @@ class RenderManager {
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
         this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
 
-        if (!this.isOrbitControls) {
-            let forwardVelocity = 0, sidewaysVelocity = 0;
-            const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? (
-                Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2))
-            ) : 1);
+        const timeOfDay = this.environment.getTimeOfDay();
 
-            // if (this.dirKeys.shift)
-            //     console.log("Camspeed:", camSpeed, Date.now() - this.shiftTimeDown)
+        // UL2NEnvManager::IsDay (L2.exe 0x7b7320): 6.0 <= time <= 24.0.
+        this.waterEffects.setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
+        this.waterEffects.underWaterEffect.updatePresentation(this.camera);
 
-            if (this.dirKeys.left) sidewaysVelocity -= 1;
-            if (this.dirKeys.right) sidewaysVelocity += 1;
-
-            if (this.dirKeys.up) forwardVelocity += 1;
-            if (this.dirKeys.down) forwardVelocity -= 1;
-
-            dirForward.set(0, 0, -1).applyQuaternion(this.camera.quaternion).multiplyScalar(forwardVelocity);
-            // Negated: the final image is mirrored horizontally (see ue2-conventions.ts),
-            // so strafing along the camera's true local +X would otherwise visibly
-            // move the view in the opposite screen direction.
-            dirRight.set(1, 0, 0).applyQuaternion(this.camera.quaternion).multiplyScalar(-sidewaysVelocity);
-
-            cameraVelocity.addVectors(dirForward, dirRight).setLength(camSpeed);
-
-            this.camera.position.add(cameraVelocity);
-        }
+        this.inputManager.updateCamera();
 
         // const sector = this.scene.children[1].children[0].children[0] as any;
 
@@ -1774,24 +1890,13 @@ class RenderManager {
         //     sector.zones.children[i].visible = isZoneVisible;
         // }
 
-        this.emitterSimDue = this.nextPhysicsTick <= currentTime;
+        this.updatePawnPresentation(currentTime, deltaTime);
 
-        if (this.emitterSimDue) {
-            // this.physicsWorld.step();
-            // this.player.update(this, currentTime, deltaTime);
-
-            // console.log(this.player.position);
-
-            this.nextPhysicsTick = currentTime + 1000 / 30;
-        }
+        this.inputManager.updateFollowPlayer();
 
         this.audioManager.update(currentTime);
 
-        const desiredPosition = new Vector3().copy(this.player.getRigidbody().translation() as THREE.Vector3).add(new Vector3(0, -this.player.getColliderSize().y * 0.5 - this.player.getStepHeight(), 0));
-
-        this.player.position.lerp(desiredPosition, 0.1);
-
-        this._updateObjects(currentTime, deltaTime);
+        this._updateObjects(currentTime);
 
         const activeSector = this.getSector(this.camera.position);
         const musicInfo = activeSector ? activeSector.getMusicIdAt(this.camera.position) : { musicId: -1, isLooped: false, isForced: false };
@@ -1809,72 +1914,14 @@ class RenderManager {
             }
         }
 
-        // Ambient sound spatial update, after UALAudioSubsystem::Update in the retail alaudio.dll
         {
             const camPos = this.camera.position;
-            const timeOfDay = this.environment.getTimeOfDay(); // 0-24 hours
+            const timeOfDay = this.environment.getTimeOfDay();
             const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
-            const activeIds = this.audioManager.activeAmbientSoundIds;
-            const audibleSounds = new Map<string, number>();
-            const candidates: { uuid: string, snd: GD.IAmbientSoundObjectDecodeInfo, priority: number }[] = [];
+            const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
 
-            for (const [, sectorYMap] of this.sectors) {
-                for (const [, sector] of sectorYMap) {
-                    if (!sector.ambientSounds) continue;
-                    for (const snd of sector.ambientSounds) {
-                        if (snd.soundType === "day" && !isDaytime) continue;
-                        if (snd.soundType === "night" && isDaytime) continue;
-                        if (snd.soundType === "water") continue; // TODO: plays only while the listener is in a water volume
+            this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isDaytime, isSubmerged);
 
-                        const dx = snd.position[0] - camPos.x;
-                        const dy = snd.position[1] - camPos.y;
-                        const dz = snd.position[2] - camPos.z;
-                        const distSq = dx * dx + dy * dy + dz * dz;
-                        const maxDistSq = snd.maxDistance * snd.maxDistance;
-
-                        if (distSq > maxDistSq) continue;
-
-                        // SoundPriority: Volume * Clamp(1 - distSq / Square(GAudioMaxRadiusMultiplier*Radius), 0.01, 1)
-                        const priority = snd.volume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
-
-                        audibleSounds.set(snd.uuid, priority);
-
-                        if (activeIds.has(snd.uuid)) continue;
-                        if (!snd.looping && !this.audioManager.rollAmbientTrigger(snd.uuid, snd.soundDataUri, snd.randomChance, currentTime)) continue;
-
-                        candidates.push({ uuid: snd.uuid, snd, priority });
-                    }
-                }
-            }
-
-            // A playing ambient is never dropped for merely ranking below the newcomers
-            for (const id of activeIds) {
-                const priority = audibleSounds.get(id);
-
-                if (priority === undefined) this.audioManager.stopAmbientSound(id);
-                else this.audioManager.setAmbientPriority(id, priority);
-            }
-
-            candidates.sort((a, b) => b.priority - a.priority);
-
-            for (const { uuid, snd, priority } of candidates) {
-                const placed = this.audioManager.playAmbientSound(
-                    uuid,
-                    snd.soundName,
-                    snd.soundDataUri,
-                    snd.position,
-                    snd.volume,
-                    snd.pitch,
-                    snd.refDistance,
-                    snd.maxDistance,
-                    snd.looping,
-                    priority
-                );
-
-                if (!placed) break;
-            }
-
-            // Update listener position from camera - AudioParam writes cross to the audio thread, skip them while the camera is still
             if (!this._lastListenerPos.equals(camPos) || !this._lastListenerQuat.equals(this.camera.quaternion)) {
                 this._lastListenerPos.copy(camPos);
                 this._lastListenerQuat.copy(this.camera.quaternion);
@@ -1892,7 +1939,11 @@ class RenderManager {
         this.renderer.clear();
     }
 
-    protected _doRender(_currentTime: number, _deltaTime: number) {
+    public onEngineTick(currentTime: number, _deltaTime: number): void {
+        if (!this.isRenderingFrame) return;
+
+        const viewShakeActive = this.applyViewShake(currentTime);
+
         // // Redirect to Main Target for Bloom
         // i think bloom pass is only enabled when shader rendering used which is off by default
         // this.renderer.setRenderTarget(this.mainRenderTarget);
@@ -1901,30 +1952,33 @@ class RenderManager {
 
         // Render Sky (Background)
         this.renderer.clear();
+
+        // bProjectActor=False - the sky pass shares the global projector uniforms, mute it for the pass
+        const shadowActive = GLOBAL_UNIFORMS.shadowActive.value;
+
+        GLOBAL_UNIFORMS.shadowActive.value = 0;
         this.skyRenderer.render(this.renderer);
+        GLOBAL_UNIFORMS.shadowActive.value = shadowActive;
+
         this.renderer.clearDepth();
 
-        // Check for sector change and recreate visualizer if needed
         const currentSector = this.getSector(this.camera.position);
         if (currentSector) {
             const sectorIndex = currentSector.index;
             if (this.currentSectorIndex === null ||
                 !sectorIndex.equals(this.currentSectorIndex)) {
-                // Sector changed - recreate visualizer
                 const wasEnabled = this.visualizer.isEnabled();
                 const currentMode = this.visualizer.getMode();
 
-                // Remove old visualizer
                 this.visualizer.destroy();
                 this.scene.remove(this.visualizer.getGroup());
                 this.scene.remove(this.visualizer.getFogGroup());
                 this.scene.remove(this.visualizer.getEmitterLabelGroup());
 
-                // Create new visualizer
                 (this as any).visualizer = new Visualizer(this.scene);
                 this.wireEmitterVisibilityHandlers();
+                this.getParent().getComponent("ui").attachVisualizerDebugElements(this.visualizer);
 
-                // Restore state
                 this.visualizer.setMode(currentMode);
                 if (wasEnabled && !this.visualizer.isEnabled()) {
                     this.visualizer.toggle();
@@ -1934,19 +1988,11 @@ class RenderManager {
 
                 this.currentSectorIndex = sectorIndex.clone();
             }
-        } else {
-            // No sector - clear tracking
-            if (this.currentSectorIndex !== null) {
-                this.currentSectorIndex = null;
-            }
-        }
+        } else if (this.currentSectorIndex !== null) this.currentSectorIndex = null;
 
-        // Update visualizer based on camera position (use bspHelperCamera if active)
-        // Only visualize the current sector
         if (currentSector) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
 
-            // Create a map with only the current sector
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
             if (currentSector.index) {
                 const sectorXMap = new Map<number, SectorObject>();
@@ -2023,7 +2069,7 @@ class RenderManager {
             } else if (this.visualizer.getMode() === VisualizerMode.Audio) {
                 const musicState = this.audioManager.getMusicState();
                 const ambientSounds = this.audioManager.getAmbientSounds();
-                this.visualizer.updateAudioHUD(musicState, ambientSounds, _currentTime, this.camera.position);
+                this.visualizer.updateAudioHUD(musicState, ambientSounds, currentTime, this.camera.position);
             } else if (this.visualizer.getMode() === VisualizerMode.Emitters) {
                 this.visualizer.updateEmitters(this.collectEmitterDebugInfo());
             }
@@ -2034,95 +2080,88 @@ class RenderManager {
         // Render World
         this.renderer.render(this.scene, this.camera);
 
+        this.waterEffects.underWaterEffect.renderCellophane(this.renderer);
+
         // // Apply Native Bloom (Sun/Glow) -> Screen
         // this.uGlowPass.render(this.renderer, null, this.mainRenderTarget);
 
         // this.renderer.setRenderTarget(null);
 
         if (this.displayGammaEnabled) this.displayGammaPass.render(this.renderer);
+
+        if (viewShakeActive) this.restoreViewShake();
     }
 
-    protected _postRender(_currentTime: number, _deltaTime: number) { }
+    public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
+        if (!this.isRenderingFrame) return;
 
-    public startRendering() {
-        this.physicsWorld.step();
-        this.nextPhysicsTick = 3000;
+        this.manUI.endFrame();
+        this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
+        this.isRenderingFrame = false;
+    }
+
+    public startTicking(_currentTime: number): void {
         this.scene.updateMatrixWorld(true);
-
-        this.collectColliders();
+        this.physicsManager.registerSimulationObjects(this.scene);
+        this.updateColliderOverlay();
         this.stitchTerrains();
-
-        this.onHandleRender(0);
+        this.isRendering = true;
+        this.needsUpdate = true;
     }
 
-    protected readonly collidables: ICollidable[] = [];
-    public readonly colliderMap = new WeakMap<RAPIER.Collider, ICollidable>()
+    public setCollidersVisible(visible: boolean): void {
+        this.showColliders = visible;
+        this.colliderOverlay.visible = visible;
 
-    protected collectColliders() {
-        this.scene.traverse((obj: ICollidable) => {
-            if (!obj.isCollidable) return;
+        this.updateColliderOverlay();
 
-            // if (this.collidables.length > 1) return;
+        this.needsUpdate = true;
+    }
 
-            this.collidables.push(obj);
-            this.colliderMap.set(obj.createCollider(this.physicsWorld), obj);
-        });
-
-        // debugger;
-
-        // this.collidables.push(this.player.createCollider(this.physicsWorld));
+    protected updateColliderOverlay(): void {
+        if (this.showColliders) this.colliderOverlay.rebuild(this.physicsManager.getColliders());
     }
 
     public setSky(sector: SectorObject) {
         this.skyRenderer.initSkyLevel(this.environment.getEnv(), sector);
     }
 
-    public getLoadedSectors() {
-        const activeSectors: SectorObject[] = [];
-
-        for (const secs of this.sectors.values()) {
-            for (const sec of secs.values()) {
-                activeSectors.push(sec);
-            }
-        }
-
-        return activeSectors;
-    }
+    public getLoadedSectors(): readonly SectorObject[] { return this.arrLoadedSectors; }
 
     public addSector(sector: SectorObject) {
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
                 this.sectors.set(sector.index.x, new Map());
 
-            this.sectors.get(sector.index.x).set(sector.index.y, sector);
+            const column = this.sectors.get(sector.index.x);
+
+            if (column.has(sector.index.y) || this.arrLoadedSectors.includes(sector))
+                throw new Error(`Sector '${sector.index.x}_${sector.index.y}' is already loaded.`);
+
+            column.set(sector.index.y, sector);
+            this.arrLoadedSectors.push(sector);
         }
 
-        sector.traverse(child => {
-            if ((child as any).isRotatingObject) {
-                this.rotatingObjects.add(child as RotatingObject);
-                return;
-            }
+        if (sector.ambientSounds && sector.getComponents("ambientSound").length === 0)
+            for (const info of sector.ambientSounds)
+                sector.addComponent(new AmbientSoundComponent(this.audioManager, info, sector.getSoundUri(info.soundName)));
 
-            if (!(child as any).isMovableObject) return;
-
-            const mover = child as MovableObject;
-
-            this.movableObjects.add(mover);
-            mover.setPosition(this.envConfig.moverPosition);
-        });
-        this.lastMoverTriggerPosition.set(Infinity, Infinity, Infinity);
+        retainSectorResources(sector, sector);
+        this.pawnLightingStates = new WeakMap();
         this.lastRenderOrderSector = null;
 
         sector.worldBounds.setFromObject(sector);
         this.sectorBounds.push(sector.worldBounds);
 
         this.objectGroup.add(sector);
+        this.physicsManager.registerSimulationObjects(sector);
+        this.updateColliderOverlay();
         this.stitchTerrains();
 
         setLightingGate(sector, false);
 
         if (sector.staticMeshGroup) {
-            setEmitterWarmupGate(sector, false);
+            this.physicsManager.setEmitterWarmupGate(sector, false);
         }
 
         this.queueSectorWarmup(sector, sector, !!sector.staticMeshGroup);
@@ -2130,7 +2169,6 @@ class RenderManager {
         sector.updateMatrixWorld(true);
         freezeStaticSubtree(sector);
 
-        // Update visualizer if enabled (only show current sector)
         const currentSector = this.getSector(this.camera.position);
         if (currentSector && this.visualizer.isEnabled()) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
@@ -2138,7 +2176,6 @@ class RenderManager {
                 ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
                 : this.frustum;
 
-            // Create a map with only the current sector
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
             if (currentSector.index) {
                 const sectorXMap = new Map<number, SectorObject>();
@@ -2227,7 +2264,7 @@ class RenderManager {
         job.fallbackMaterials.forEach(material => material.dispose());
 
         if (job.releaseEmitters)
-            setEmitterWarmupGate(job.sector, true);
+            this.physicsManager.setEmitterWarmupGate(job.sector, true);
 
         (job.sector as any).visibilityCacheInitialized = false;
     }
@@ -2241,11 +2278,13 @@ class RenderManager {
         }
 
         setLightingGate(root, true);
-        if (releaseEmitters) setEmitterWarmupGate(sector, true);
+        if (releaseEmitters) this.physicsManager.setEmitterWarmupGate(sector, true);
     }
 
     // polls COMPLETION_STATUS_KHR instead of gl.getProgramInfoLog directly - see checkShaderErrors above
     protected processShaderDiagnostics() {
+        const gl = this.renderer.getContext() as WebGL2RenderingContext;
+
         if (this.parallelShaderCompileExt === undefined)
             this.parallelShaderCompileExt = this.renderer.extensions.get("KHR_parallel_shader_compile") ?? null;
 
@@ -2254,14 +2293,25 @@ class RenderManager {
 
             this.seenPrograms.add(program);
             this.pendingShaderChecks.push(program);
+
+            const destroy = program.destroy;
+
+            program.destroy = () => {
+                const index = this.pendingShaderChecks.indexOf(program);
+
+                // Three's WebGLProgram.destroy deletes the handle needed by deferred diagnostics.
+                if (index >= 0) {
+                    this.pendingShaderChecks.splice(index, 1);
+                    reportShaderErrors(gl, program);
+                }
+                destroy.call(program);
+            };
         }
 
         if (this.pendingShaderChecks.length === 0) return;
 
         const ext = this.parallelShaderCompileExt;
         if (!ext) return; // no non-blocking way to know when it's safe to check - leave queued
-
-        const gl = this.renderer.getContext() as WebGL2RenderingContext;
 
         for (let i = this.pendingShaderChecks.length - 1; i >= 0; i--) {
             const program = this.pendingShaderChecks[i];
@@ -2273,63 +2323,41 @@ class RenderManager {
         }
     }
 
-    // called before staticMeshGroup exists, so addSector's own gating can't cover this
-    public gateParticleWarmup(sector: SectorObject, allowed: boolean) {
-        setEmitterWarmupGate(sector, allowed);
-    }
-
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
-        sector.staticMeshGroup.traverse(child => {
-            if ((child as any).isRotatingObject) {
-                this.rotatingObjects.add(child as RotatingObject);
-                return;
-            }
-
-            if (!(child as any).isMovableObject) return;
-
-            const mover = child as MovableObject;
-
-            this.movableObjects.add(mover);
-            mover.setPosition(this.envConfig.moverPosition);
-        });
+        retainSectorResources(sector, sector.staticMeshGroup);
 
         sector.worldBounds.setFromObject(sector);
 
         sector.staticMeshGroup.updateMatrixWorld(true);
+        this.physicsManager.registerSimulationObjects(sector.staticMeshGroup);
+        this.updateColliderOverlay();
         if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
 
         setLightingGate(sector.staticMeshGroup, false);
         this.queueSectorWarmup(sector, sector.staticMeshGroup, true);
     }
 
-    /**
-     * Inverse of addSector: unregisters the sector, removes it from the scene and
-     * re-stitches the remaining terrains. GPU resources are NOT freed - the sector can
-     * be re-added as is; call disposeSector once it is certain not to return.
-     */
     public removeSector(sector: SectorObject) {
+        this.pawnLightingStates = new WeakMap();
+
+        for (let i = this.arrL2EventActors.length - 1; i >= 0; i--)
+            if (this.arrL2EventActors[i].sector === sector) this.arrL2EventActors.splice(i, 1);
+
         if (sector.index)
             this.sectors.get(sector.index.x)?.delete(sector.index.y);
+
+        const sectorIndex = this.arrLoadedSectors.indexOf(sector);
+
+        if (sectorIndex >= 0) this.arrLoadedSectors.splice(sectorIndex, 1);
 
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
 
-        sector.traverse(child => {
-            if ((child as any).isRotatingObject) {
-                this.rotatingObjects.delete(child as RotatingObject);
-                return;
-            }
+        for (const component of sector.getComponents<AmbientSoundComponent>("ambientSound")) sector.removeComponent(component);
 
-            if (!(child as any).isMovableObject) return;
-
-            const mover = child as MovableObject;
-
-            this.movableObjects.delete(mover);
-            this.activeMovableObjects.delete(mover);
-            this.waitingMovableObjects.delete(mover);
-        });
-
+        this.physicsManager.unregisterSimulationObjects(sector);
+        this.updateColliderOverlay();
         this.objectGroup.remove(sector);
         this.stitchTerrains();
 
@@ -2343,36 +2371,37 @@ class RenderManager {
     }
 
     public disposeSector(sector: SectorObject) {
-        disposeSectorResources(sector);
+        const soundCache = (sector as any).decodeLibrary?.soundBlobCache as Map<string, { uri: string }>;
+
+        if (soundCache) {
+            for (const entry of soundCache.values()) {
+                if (!entry.uri) continue;
+
+                this.audioManager.releaseSound(entry.uri);
+                entry.uri = null;
+            }
+        }
+
+        releaseSectorResources(sector);
     }
 
-    /**
-     * Toggle BSP helper camera for debugging visibility culling.
-     * Press F1 to toggle between active/inactive states:
-     * - Inactive (default): Helper camera follows main camera, helper invisible
-     * - Active: Helper camera frozen at last position, helper visible for debugging
-     */
     public toggleBSPHelperCamera() {
         if (!this.bspHelperCamera) {
-            // Create helper camera if it doesn't exist
             this.bspHelperCamera = new PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.1, DEFAULT_FAR);
             this.bspHelperCamera.position.copy(this.camera.position);
             this.bspHelperCamera.rotation.copy(this.camera.rotation);
             this.bspHelperCamera.updateMatrixWorld(true);
 
-            // Create visual helper to see where the camera is
             this.bspHelperCameraHelper = new CameraHelper(this.bspHelperCamera);
             this.bspHelperCameraHelper.name = "BSPHelperCameraHelper";
-            this.bspHelperCameraHelper.visible = false; // Hidden by default (inactive state)
+            this.bspHelperCameraHelper.visible = false;
             this.scene.add(this.bspHelperCameraHelper);
 
             this.bspHelperActive = false;
         } else {
-            // Toggle active/inactive state
             this.bspHelperActive = !this.bspHelperActive;
 
             if (this.bspHelperActive) {
-                // Freeze at current position and show helper
                 if (this.bspHelperCameraHelper) {
                     this.bspHelperCameraHelper.visible = true;
                 }
@@ -2410,71 +2439,104 @@ class RenderManager {
 
         if (terrains.length < 2) return;
 
-        (window as any).terrainDebug = Terrain.stitchAll(terrains);
+        const result = Terrain.stitchAll(terrains);
+
+        (window as any).terrainDebug = result;
+
+        // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
+        for (const terrain of result.modified) this.physicsManager.refreshCollider(terrain);
+
+        this.updateColliderOverlay();
     }
 }
-
-export default RenderManager;
-export { RenderManager }
 
 function addResizeListeners(manager: RenderManager) {
     global.addEventListener("resize", (manager as any).onHandleResize.bind(manager));
     (manager as any).onHandleResize();
 }
 
-/**
- * Frees GPU resources owned by a sector: geometries, materials and their textures
- * (both direct texture slots and shader uniforms). Textures and geometries are never
- * shared across sectors - every sector decodes from its own library - so disposing
- * everything under it is safe. dispose() is idempotent, shared-within-sector
- * resources getting disposed twice is fine.
- */
-function disposeSectorResources(sector: SectorObject) {
-    sector.traverse(child => {
+// Name-keyed material caches share resources across neighbouring sectors.
+const resourceRefs = new Map<Disposable_T, number>();
+
+function retainResource(resource: Disposable_T): void {
+    resourceRefs.set(resource, (resourceRefs.get(resource) ?? 0) + 1);
+}
+
+function releaseResource(resource: Disposable_T): void {
+    const refs = resourceRefs.get(resource);
+
+    if (!refs) throw new Error(`Cannot release an unretained render resource.`);
+    if (refs > 1) {
+        resourceRefs.set(resource, refs - 1);
+        return;
+    }
+
+    resourceRefs.delete(resource);
+    resource.dispose();
+}
+
+function collectMaterialResources(material: THREE.Material, target: Set<Disposable_T>) {
+    // Uniform textures may be nested under transform chains and sprite-sheet slots.
+    const textures = new Set<THREE.Texture>();
+
+    collectMaterialTextures(material, textures, new WeakSet());
+    for (const texture of textures) target.add(texture);
+
+    target.add(material);
+}
+
+function collectSectorResources(root: THREE.Object3D, target: Set<Disposable_T>) {
+    root.traverse(child => {
         const mesh = child as THREE.Mesh;
 
         if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
 
-        mesh.geometry?.dispose();
+        if (mesh.geometry) target.add(mesh.geometry);
 
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
 
         for (const material of materials) {
             if (!material) continue;
 
-            for (const value of Object.values(material)) {
-                if ((value as THREE.Texture)?.isTexture) (value as THREE.Texture).dispose();
-            }
-
-            const uniforms = (material as any).uniforms;
-
-            if (uniforms) {
-                for (const uniform of Object.values(uniforms) as any[]) {
-                    if (uniform?.value?.isTexture) uniform.value.dispose();
-                }
-            }
-
-            material.dispose();
+            collectMaterialResources(material, target);
         }
     });
+}
 
+function collectCelestialResources(sector: SectorObject, target: Set<Disposable_T>) {
     for (const celestial of sector.celestials) {
-        if (celestial.sprite?.isTexture) celestial.sprite.dispose();
+        if (celestial.sprite?.isTexture) target.add(celestial.sprite);
 
         const materials = Array.isArray(celestial.material) ? celestial.material : [celestial.material];
+
         for (const material of materials) {
             if (!material) continue;
 
-            // MeshStaticMaterial textures nest several levels deep (uniforms.shDiffuse.value.map.texture)
-            if ((material as any).uniforms) {
-                const textures = new Set<THREE.Texture>();
-                collectTexturesDeep((material as any).uniforms, textures, new WeakSet());
-                for (const texture of textures) texture.dispose();
-            }
-
-            material.dispose();
+            collectMaterialResources(material, target);
         }
     }
+}
+
+// Retain twice safely because progressive static meshes arrive after the sector root.
+function retainSectorResources(sector: SectorObject, root: THREE.Object3D) {
+    const resources = new Set<Disposable_T>();
+
+    collectSectorResources(root, resources);
+
+    if (root === sector) collectCelestialResources(sector, resources);
+
+    for (const resource of resources) {
+        if (sector.retainedResources.has(resource)) continue;
+
+        sector.retainedResources.add(resource);
+        retainResource(resource);
+    }
+}
+
+function releaseSectorResources(sector: SectorObject) {
+    for (const resource of sector.retainedResources) releaseResource(resource);
+
+    sector.retainedResources.clear();
 }
 
 // procedural maps nest several levels deep (uniforms.shDiffuse.value.map.texture), needs a real walk
@@ -2575,13 +2637,6 @@ function restoreSectorMaterials(job: SectorWarmup_T): void {
     job.fallbackMaterials.forEach(material => material.dispose());
 }
 
-// emitters live under sector.zones, not staticMeshGroup - always walk the whole sector
-function setEmitterWarmupGate(sector: SectorObject, allowed: boolean) {
-    sector.traverse(child => {
-        if ((child as any).particlePool) (child as any).warmupGate = allowed;
-    });
-}
-
 // merged Terrain sectors aren't in the scene graph anymore, so isTerrainBatch's .sectors needs gating directly
 function setLightingGate(root: THREE.Object3D, allowed: boolean) {
     root.traverse(child => {
@@ -2605,3 +2660,5 @@ function reportShaderErrors(gl: WebGL2RenderingContext, program: any) {
         `Fragment Shader Log: ${gl.getShaderInfoLog(program.fragmentShader)}`
     );
 }
+
+export default RenderManager;

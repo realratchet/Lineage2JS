@@ -1,15 +1,15 @@
 import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
-import DecodeLibrary from "../unreal/decode-library";
-import WetWaterTexture from "@client/materials/wet-water-texture";
-import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dxt-decode";
-import { ETexClampMode } from "../unreal/un-texture";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { TextureClampMode_T, DataTextureFormats_T, IDataTextureDecodeInfo, ITextureDecodeInfo, MapData_T } from "@l2js/engine/contracts/texture";
+import WetWaterTexture from "../../materials/wet-water-texture";
+import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
 
-function getClamping(mode: ETexClampMode): THREE.Wrapping {
-    return mode === ETexClampMode.TC_Clamp ? ClampToEdgeWrapping : RepeatWrapping;
+function getClamping(mode: TextureClampMode_T): THREE.Wrapping {
+    return mode === "clamp" ? ClampToEdgeWrapping : RepeatWrapping;
 }
 
-function getFormat(type: GD.DataTextureFormats_T) {
+function getFormat(type: DataTextureFormats_T) {
     if (typeof type !== "string")
         return RGBAFormat;
 
@@ -96,7 +96,7 @@ function decodeDDS(buffer: ArrayBuffer, preferCompressed: boolean = false): THRE
     return texture;
 }
 
-function decodeRGBA(info: GD.IDataTextureDecodeInfo): DataTexture {
+function decodeRGBA(info: IDataTextureDecodeInfo): DataTexture {
     const byteLength = info.width * info.height * 4;
 
     if (info.buffer.byteLength < byteLength) {
@@ -123,7 +123,7 @@ function decodeRGBA(info: GD.IDataTextureDecodeInfo): DataTexture {
     return texture;
 }
 
-function decodeG16(info: GD.IDataTextureDecodeInfo): DataTexture {
+function decodeG16(info: IDataTextureDecodeInfo): DataTexture {
     const buff = new Uint16Array(info.buffer);
     const image = new Uint8Array(info.width * info.height * 4);
     const texture = new DataTexture(image, info.width, info.height, getFormat(info.format));
@@ -140,7 +140,7 @@ function decodeG16(info: GD.IDataTextureDecodeInfo): DataTexture {
     return texture;
 }
 
-function decodeFloat(info: GD.IDataTextureDecodeInfo): DataTexture {
+function decodeFloat(info: IDataTextureDecodeInfo): DataTexture {
     const texture = new DataTexture(
         info.buffer,
         info.width, info.height,
@@ -159,7 +159,7 @@ function decodeFloat(info: GD.IDataTextureDecodeInfo): DataTexture {
     return texture;
 }
 
-function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.MapData_T {
+export function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData_T {
     let texture: THREE.Texture;
 
     switch (info.textureType) {
@@ -184,10 +184,9 @@ function decodeTexture(library: DecodeLibrary, info: GD.ITextureDecodeInfo): GD.
 }
 
 
-function decodeTextureAsB64(info: GD.ITextureDecodeInfo): string | null {
+export function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
     let rgbaData: Uint8Array | null = null;
-    let width = 1;
-    let height = 1;
+    let width = 1, height = 1;
 
     try {
         if (info.textureType === "dds") {
@@ -211,7 +210,7 @@ function decodeTextureAsB64(info: GD.ITextureDecodeInfo): string | null {
             }
 
         } else if (info.textureType === "rgba") {
-            const dataInfo = info as GD.IDataTextureDecodeInfo;
+            const dataInfo = info as IDataTextureDecodeInfo;
             if (dataInfo.format === 'rgba' || !dataInfo.format) {
                 width = dataInfo.width;
                 height = dataInfo.height;
@@ -242,4 +241,3 @@ function decodeTextureAsB64(info: GD.ITextureDecodeInfo): string | null {
 }
 
 export default decodeTexture;
-export { decodeTexture, decodeTextureAsB64 };

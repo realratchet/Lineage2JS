@@ -1,4 +1,4 @@
-import { UObject } from "@l2js/core";
+import UObject from "./un-object";
 import { generateUUID } from "three/src/math/MathUtils";
 
 Object.assign(UObject, {
@@ -33,7 +33,6 @@ Object.defineProperty(UObject.prototype, "uuid", {
 });
 
 Object.assign(UObject.prototype, {
-    _uuid: undefined,
     getDecodeInfo() { debugger; throw new Error(`'${this.constructor.name}' must implemented 'getDecodeInfo' method!`) },
     onSuperConstructed() { },
     dumpLayout() {
@@ -54,8 +53,6 @@ Object.assign(UObject.prototype, {
             } else layoutStrings.push(`        * no properties *`);
         }
 
-        const layoutString = layoutStrings.join("\n");
-
-        return layoutString;
+        return layoutStrings.join("\n");
     }
 });

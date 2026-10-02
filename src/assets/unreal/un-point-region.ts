@@ -1,11 +1,13 @@
-import UObject from "@l2js/core";
+import UObject from "./un-object";
+import type { FZoneInfo } from "./un-zone-info";
 
-abstract class UPointRegion extends UObject {
-    declare protected readonly zone: GA.FZoneInfo;
+export abstract class UPointRegion extends UObject {
+    declare protected readonly zone: FZoneInfo;
     declare protected readonly indexLeaf: number;
     declare protected readonly zoneNumber: number;
 
     public getZone() { return this.zone; }
+    public getLeaf() { return this.indexLeaf; }
     public getZoneNumber() { return this.zoneNumber; }
 
     protected getPropertyMap() {
@@ -23,4 +25,3 @@ abstract class UPointRegion extends UObject {
 }
 
 export default UPointRegion;
-export { UPointRegion };

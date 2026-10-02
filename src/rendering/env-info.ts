@@ -1,6 +1,7 @@
-import EnvColor from "@client/rendering/env-color"
-import ColorByte from "@client/utils/color-byte";
+import EnvColor from "./env-color"
+import ColorByte from "../utils/color-byte";
 import { Vector2 } from "three";
+import type { EEnvCycle } from "@l2js/engine/env-consts";
 
 type EnvSetup = {
     isClock: boolean;
@@ -10,7 +11,7 @@ type EnvSetup = {
     staticLightingAdjust: number;
     slopeSunAngle: number;
     subLightNum: number;
-    timeEnv: { [key in GA.EEnvCycle]: EnvColor };
+    timeEnv: { [key in EEnvCycle]: EnvColor };
     skybox: string;
     hazering: string;
     clouds: string[];
@@ -28,7 +29,7 @@ type EnvWaterVolume = Readonly<{
     cellophaneColor: ColorByte;
 }>;
 
-class EnvInfo {
+export class EnvInfo {
     public readonly setup: EnvSetup;
     public readonly fog: EnvFog;
     public readonly waterVolume: EnvWaterVolume;
@@ -41,4 +42,3 @@ class EnvInfo {
 }
 
 export default EnvInfo;
-export { EnvInfo };

@@ -1,23 +1,23 @@
-import {
-    BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D,
-    Material, MeshBasicMaterial, NormalBlending
-} from "three";
+import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
-import Terrain from "@client/objects/terrain";
-import CollidingMesh from "@client/objects/colliding-mesh";
+import Terrain from "../../objects/terrain";
+import CollidingMesh from "../../objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
-import { MeshLight } from "@client/objects/lit-actor";
+import { MeshLight_T } from "../../objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
-import type { StaticMeshBatchManifest_T, BatchElement_T } from "./batch-data";
+import type { DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
+import type { StaticMeshBatchManifest_T, BatchElement_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
 type StaticMeshIndexCopy_T = { source: StaticMeshIndexArray_T, target: StaticMeshIndexArray_T, offset: number };
-type StaticMeshBatchJob_T = {
-    library: GD.DecodeLibrary,
+
+export type StaticMeshBatchJob_T = {
+    library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry,
-    decodeObject3D: (library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo) => Object3D,
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry,
+    decodeObject3D: (library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo) => Object3D,
     manifest: StaticMeshBatchManifest_T,
     batchIndex: number,
     actorIndex: number,
@@ -26,7 +26,7 @@ type StaticMeshBatchJob_T = {
 
 const INDEX_COPY_CHUNK_BYTES = 256 * 1024;
 
-export function makeSwayAttribute(vertexCount: number, info: GD.IStaticMeshSwayDecodeInfo, phase: number = 0): Float32Array {
+export function makeSwayAttribute(vertexCount: number, info: IStaticMeshSwayDecodeInfo, phase: number = 0): Float32Array {
     const sway = new Float32Array(vertexCount * 4);
 
     for (let i = 0; i < vertexCount; i++) {
@@ -43,9 +43,10 @@ function createBatchObject(
     name: string,
     mergedGeometry: BufferGeometry,
     materials: Material | Material[],
-    mergedLightInfo: MeshLight | null,
+    mergedLightInfo: MeshLight_T | null,
     mergedColliderIndices: Uint32Array | null,
-    actors: GD.IStaticMeshActorDecodeInfo[],
+    collisionIndex: CollisionTriangleIndex_T | null,
+    actors: IStaticMeshActorDecodeInfo[],
     perActorAmbient: any[],
     batchElements: BatchElement_T[]
 ): CollidingMesh {
@@ -54,6 +55,8 @@ function createBatchObject(
         materials,
         lightInfo: mergedLightInfo,
         colliderIndices: mergedColliderIndices,
+        collisionIndex,
+        collision: actors[0].collision,
         scaledGlow: actors[0].scaledGlow,
         isSunAffected: actors.some(a => a.isSunAffected ?? true),
         ambient: actors[0].ambient
@@ -93,7 +96,7 @@ function createBatchObject(
     return mergedObject;
 }
 
-export function decodeStaticMeshActorLight(_library: GD.DecodeLibrary, info?: GD.ILightInstanceDecodeInfo): MeshLight | null {
+export function decodeStaticMeshActorLight(_library: DecodeLibrary, info?: ILightInstanceDecodeInfo): MeshLight_T | null {
     if (!info) return null;
 
     const matrix = new Matrix4().fromArray(info.matrix);
@@ -110,9 +113,9 @@ export function decodeStaticMeshActorLight(_library: GD.DecodeLibrary, info?: GD
 }
 
 export function decodeStaticMeshInstance(
-    library: GD.DecodeLibrary,
-    info: GD.IStaticMeshInstanceDecodeInfo,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry
+    library: DecodeLibrary,
+    info: IStaticMeshInstanceDecodeInfo,
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry
 ) {
     const geometryUuid = info.mesh.geometry;
     const geometryInfo = library.geometries[geometryUuid];
@@ -136,22 +139,22 @@ export function decodeStaticMeshInstance(
     const collider = infoGeo.colliderIndices || null;
     const lights = decodeStaticMeshActorLight(library, info.lights);
 
-    return { geometry, materials, collider, lights };
+    return { geometry, materials, collider, lights, staticMeshCollision: infoGeo.staticMeshCollision, collisionIndex: (infoGeo as any).collisionIndex as CollisionTriangleIndex_T };
 }
 
-function createStaticMeshBatchJob(
-    library: GD.DecodeLibrary,
+export function createStaticMeshBatchJob(
+    library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry,
-    decodeObject3D: (library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo) => Object3D
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry,
+    decodeObject3D: (library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo) => Object3D
 ): StaticMeshBatchJob_T {
     const manifest: StaticMeshBatchManifest_T = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
 
     return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, indexCopy: null };
 }
 
-function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
+export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
     const { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest } = job;
 
     if (job.indexCopy) {
@@ -175,7 +178,7 @@ function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
             const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance, !!geometryInfo.attributes.sway)
                 || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
             // The merged light matrix has always been identity (see mergeBatchGeometriesData)
-            const lightInfo: MeshLight | null = batch.lights
+            const lightInfo: MeshLight_T | null = batch.lights
                 ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment }
                 : null;
 
@@ -185,6 +188,7 @@ function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
                 materials,
                 lightInfo,
                 batch.colliderIndices,
+                (geometryInfo as any).collisionIndex,
                 batch.actors,
                 batch.perActorAmbient,
                 batch.batchElements
@@ -202,7 +206,6 @@ function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
             (sector as any).staticMeshMap.set(batch.uuid, batchObject);
 
         } catch (e) {
-            /* leafActors already reference the batch entry - the actors cannot be recovered individually */
             console.warn(`[Batch] Failed to instantiate batch '${batch.name}':`, e);
         }
 
@@ -254,18 +257,16 @@ function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
 }
 
 export function batchStaticMeshActors(
-    library: GD.DecodeLibrary,
+    library: DecodeLibrary,
     sector: SectorObject,
     staticMeshGroup: Group,
-    fetchGeometry: (info: GD.IGeometryDecodeInfo) => BufferGeometry,
-    decodeObject3D: (library: GD.DecodeLibrary, info: GD.IBaseObjectOrInstanceDecodeInfo) => Object3D
+    fetchGeometry: (info: IGeometryDecodeInfo) => BufferGeometry,
+    decodeObject3D: (library: DecodeLibrary, info: IBaseObjectOrInstanceDecodeInfo) => Object3D
 ) {
     const job = createStaticMeshBatchJob(library, sector, staticMeshGroup, fetchGeometry, decodeObject3D);
 
     while (!stepStaticMeshBatchJob(job)) { }
 }
-
-export { createStaticMeshBatchJob, stepStaticMeshBatchJob, StaticMeshBatchJob_T };
 
 function mergeTerrainGeometries(sectors: Terrain[]) {
     let totalVertices = 0;
@@ -374,7 +375,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
 }
 
 export function batchTerrainSectors(
-    library: GD.DecodeLibrary,
+    library: DecodeLibrary,
     group: Object3D,
     sectors: Terrain[]
 ) {
@@ -399,7 +400,6 @@ export function batchTerrainSectors(
             mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
         }
 
-        // Use a standard Mesh instead of Terrain for the batch to avoid recursive updates
         const batchedTerrain = new Mesh(mergedGeometry, materials as any);
         batchedTerrain.name = `${group.name}_Batch`;
 

@@ -1,4 +1,4 @@
-function saveFile(content: Blob, name: string) {
+export function saveFile(content: Blob, name: string) {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(content);
     link.download = name;
@@ -7,4 +7,3 @@ function saveFile(content: Blob, name: string) {
 }
 
 export default saveFile;
-export { saveFile };

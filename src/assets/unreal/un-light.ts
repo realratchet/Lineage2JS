@@ -1,10 +1,25 @@
-import hsvToRgb, { saturationToBrightness } from "@client/utils/hsv-to-rgb";
+import hsvToRgb, { saturationToBrightness } from "./utils/hsv-to-rgb";
 import { generateUUID, RAD2DEG } from "three/src/math/MathUtils";
-import UAActor from "./un-aactor";
+import UAActor, { type IEdgesObjectDecodeInfo } from "./un-aactor";
 import FVector from "./un-vector";
+import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
+
+export type ILightDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "Light",
+    dynamic: boolean,
+    hsv: [number, number, number],
+    radius: number,
+    directional: boolean,
+    lightType: LightType_T,
+    lightEffect: LightEffect_T,
+    cone: number,
+    isSunlightColor: boolean,
+    period: number,
+    phase: number
+};
 
 
-abstract class ULight extends UAActor {
+export abstract class ULight extends UAActor {
     declare public readonly effect: LightEffect_T;
     declare public readonly brightness: number;
     declare public readonly radius: number;
@@ -80,7 +95,7 @@ abstract class ULight extends UAActor {
             geometry: lineGeometryUuid,
             color,
             ignoreDepth
-        } as GD.IEdgesObjectDecodeInfo;
+        } as IEdgesObjectDecodeInfo;
 
         const geometryInfo = {
             indices: new Uint8Array([0, 1]),
@@ -131,7 +146,7 @@ abstract class ULight extends UAActor {
         return [x * brightness, y * brightness, z * brightness];
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): GD.ILightDecodeInfo {
+    public getDecodeInfo(library: DecodeLibrary): ILightDecodeInfo {
         // debugger;
 
         return {
@@ -156,7 +171,7 @@ abstract class ULight extends UAActor {
     }
 }
 
-enum LightEffect_T {
+export enum LightEffect_T {
     LE_None = 0x00,
     LE_TorchWaver = 0x01,
     LE_FireWaver = 0x02,
@@ -180,7 +195,7 @@ enum LightEffect_T {
     LE_QuadraticNonIncidence = 0x14
 }
 
-enum LightType_T {
+export enum LightType_T {
     LT_None = 0x0,
     LT_Steady = 0x1,
     LT_Pulse = 0x2,
@@ -196,7 +211,6 @@ enum LightType_T {
 };
 
 export default ULight;
-export { ULight, LightEffect_T, LightType_T };
 
 function LODWORD(x: number) { return x & 0xFFFFFFFF };
 

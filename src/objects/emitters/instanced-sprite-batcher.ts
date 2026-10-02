@@ -2,14 +2,16 @@ import { Camera, CustomBlending, DynamicDrawUsage, Group, InstancedBufferAttribu
 
 const baseGeometry = new PlaneGeometry(2, 2);
 const DEPTH_BUCKET_SIZE = 2048;
+const BATCH_IDLE_MS = 5000;
 
-type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; emitters: any[] };
+type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; emitters: any[]; lastUsed: number };
 
 const tmpAnchor = new Vector3();
 const tmpViewPosition = new Vector3();
+const tmpSubdivBlend = new Vector3();
 const cacheMaterialKey = new WeakMap<ShaderMaterial, { textureUuid: string; key: string }>();
 
-function isOrderIndependentAdditive(material: any): material is ShaderMaterial {
+export function isOrderIndependentAdditive(material: any): material is ShaderMaterial {
     return material?.isInstancedParticleMaterial === true
         && material.blending === CustomBlending
         && material.blendSrc === OneFactor
@@ -60,6 +62,7 @@ class SpriteParticleBatch {
     protected spinAttr: InstancedBufferAttribute;
     protected colorAttr: InstancedBufferAttribute;
     protected uvAttr: InstancedBufferAttribute;
+    protected uvBlendAttr: InstancedBufferAttribute;
     protected readonly anchor = new Vector3();
     protected readonly baseRight = new Vector3();
     protected readonly baseUp = new Vector3();
@@ -110,6 +113,17 @@ class SpriteParticleBatch {
         this.mesh.geometry.instanceCount = 0;
     }
 
+    public dispose() {
+        const geometry = this.mesh.geometry;
+
+        // Drop shared attributes before dispose so other batches keep their buffers.
+        geometry.deleteAttribute("position");
+        geometry.deleteAttribute("uv");
+        geometry.setIndex(null);
+        geometry.dispose();
+        this.mesh.material.dispose();
+    }
+
     public update(emitters: any[]) {
         let required = 0;
         for (const emitter of emitters)
@@ -124,6 +138,7 @@ class SpriteParticleBatch {
         const spins = this.fixedNormal ? null : this.spinAttr.array as Float32Array;
         const colors = this.colorAttr.array as Float32Array;
         const uvs = this.uvAttr.array as Float32Array;
+        const uvBlends = this.uvBlendAttr ? this.uvBlendAttr.array as Float32Array : null;
 
         const anchor = this.anchor;
         const baseRight = this.baseRight;
@@ -154,13 +169,12 @@ class SpriteParticleBatch {
             }
 
             const particleLimit = Math.min(emitter.maxActiveParticles, emitter.activeParticles);
-            const scaleFactor = emitter.scale.x;
             for (let i = 0; i < particleLimit; i++) {
                 const settings = emitter.particles[i];
                 if (!(settings.flags & 1)) continue;
 
-                const scaleX = settings.scale.x * scaleFactor;
-                const scaleY = settings.scale.y * scaleFactor;
+                const scaleX = settings.scale.x;
+                const scaleY = settings.scale.y;
                 if (scaleX === 0 && scaleY === 0) continue;
 
                 anchor.copy(settings.position).applyMatrix4(mesh.matrixWorld);
@@ -175,7 +189,8 @@ class SpriteParticleBatch {
                     up.copy(baseUp).multiplyScalar(cos).sub(spinTemp.copy(baseRight).multiplyScalar(sin)).multiplyScalar(scaleY);
                 }
 
-                const subdivUV = emitter.computeSubdivUV(emitter.resolveSubdivision(settings), emitter.worldBatchSubdivUV);
+                const subdivision = emitter.resolveSubdivision(settings);
+                const subdivUV = emitter.computeSubdivUV(subdivision, emitter.worldBatchSubdivUV);
 
                 const p3 = count * 3;
                 const p4 = count * 4;
@@ -203,6 +218,12 @@ class SpriteParticleBatch {
                 uvs[p4 + 1] = subdivUV[1];
                 uvs[p4 + 2] = subdivUV[2];
                 uvs[p4 + 3] = subdivUV[3];
+                if (uvBlends) {
+                    emitter.computeSubdivBlend(settings, subdivision, tmpSubdivBlend);
+                    uvBlends[p3] = tmpSubdivBlend.x;
+                    uvBlends[p3 + 1] = tmpSubdivBlend.y;
+                    uvBlends[p3 + 2] = tmpSubdivBlend.z;
+                }
                 sortCenter.add(anchor);
                 count++;
             }
@@ -228,6 +249,7 @@ class SpriteParticleBatch {
             }
             this.markUpdated(this.colorAttr, count * 4);
             this.markUpdated(this.uvAttr, count * 4);
+            if (this.uvBlendAttr) this.markUpdated(this.uvBlendAttr, count * 3);
         }
     }
 
@@ -254,6 +276,7 @@ class SpriteParticleBatch {
         }
         this.colorAttr = make(4);
         this.uvAttr = make(4);
+        if (this.mesh.material.defines.USE_SUBDIVISION_BLEND !== undefined) this.uvBlendAttr = make(3);
 
         if (geometry) {
             // WebGLBindingStates only computes _maxInstanceCount while it is undefined - a stale one clamps every later draw to the original capacity
@@ -269,11 +292,12 @@ class SpriteParticleBatch {
             }
             geometry.setAttribute("instanceColor", this.colorAttr);
             geometry.setAttribute("instanceUV", this.uvAttr);
+            if (this.uvBlendAttr) geometry.setAttribute("instanceUVBlend", this.uvBlendAttr);
         }
     }
 }
 
-class InstancedSpriteBatcher {
+export class InstancedSpriteBatcher {
     public readonly root = new Group();
     protected readonly batches = new Map<string, SpriteParticleBatch>();
     protected readonly groups = new Map<string, BatchGroup_T>();
@@ -283,6 +307,8 @@ class InstancedSpriteBatcher {
     }
 
     public update(emitters: any[], camera: Camera) {
+        const currentTime = performance.now();
+
         for (const group of this.groups.values()) group.emitters.length = 0;
 
         camera.updateMatrixWorld();
@@ -305,7 +331,7 @@ class InstancedSpriteBatcher {
             const key = `${materialKey(material)}|order:${mesh.renderOrder}|depth:${depthBucket}`;
             let group = this.groups.get(key);
             if (!group) {
-                group = { material, renderOrder: mesh.renderOrder, emitters: [] };
+                group = { material, renderOrder: mesh.renderOrder, emitters: [], lastUsed: currentTime };
                 this.groups.set(key, group);
             }
             group.material = material;
@@ -315,7 +341,23 @@ class InstancedSpriteBatcher {
         for (const batch of this.batches.values()) batch.reset();
 
         for (const [key, group] of this.groups) {
-            if (group.emitters.length === 0) continue;
+            if (group.emitters.length === 0) {
+                // Texture/depth keys churn, so retire idle batches instead of retaining every material.
+                if (currentTime - group.lastUsed < BATCH_IDLE_MS) continue;
+
+                const idle = this.batches.get(key);
+
+                if (idle) {
+                    this.root.remove(idle.mesh);
+                    idle.dispose();
+                    this.batches.delete(key);
+                }
+
+                this.groups.delete(key);
+                continue;
+            }
+
+            group.lastUsed = currentTime;
 
             let batch = this.batches.get(key);
             if (!batch) {
@@ -329,4 +371,3 @@ class InstancedSpriteBatcher {
 }
 
 export default InstancedSpriteBatcher;
-export { InstancedSpriteBatcher, isOrderIndependentAdditive };

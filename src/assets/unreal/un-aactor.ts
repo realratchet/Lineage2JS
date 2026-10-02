@@ -1,30 +1,68 @@
 // import FVector from "./un-vector";
 // import FRotator from "./un-rotator";
-import GMath from "@client/assets/unreal/un-gmath";
-import FMatrix from "@client/assets/unreal/un-matrix";
-import UObject, { APackage, UExport } from "@l2js/core";
+import GMath from "./un-gmath";
+import FMatrix from "./un-matrix";
+import { APackage, UExport, type FObjectArray } from "@l2js/core";
+import UObject from "./un-object";
 import { generateUUID } from "three/src/math/MathUtils";
+import type { UTextureModifyInfo } from "./un-texture-modify-info";
+import type { ULevelInfo } from "./un-level-info";
+import type { UPointRegion } from "./un-point-region";
+import type { UPhysicsVolume } from "./un-physics-volume";
+import type { FVector } from "./un-vector";
+import type { FRotator } from "./un-rotator";
+import type { FColor } from "./un-color";
+import type { FScale } from "./un-scale";
+import type { UTexture } from "./un-texture";
+import type { UModel } from "./model/un-model";
+import type { Matrix4Arr, Vector3Arr } from "./library-types";
+import type { IBaseObjectDecodeInfo } from "./decode-library";
 
-abstract class UAActor extends UObject {
-    declare public readonly texModifyInfo: GA.UTextureModifyInfo;
+export type IActorCollisionDecodeInfo = {
+    collideActors: boolean,
+    collideWorld: boolean,
+    blockActors: boolean,
+    blockPlayers: boolean,
+    blockZeroExtent: boolean,
+    blockNonZeroExtent: boolean,
+    worldGeometry: boolean,
+    useCylinderCollision: boolean,
+    collisionRadius: number,
+    collisionHeight: number
+};
+
+export type IRotatingDecodeInfo = {
+    rotator: Vector3Arr,
+    rate: Vector3Arr
+};
+
+export type IEdgesObjectDecodeInfo = IBaseObjectDecodeInfo & {
+    type: "Edges",
+    geometry: string,
+    color?: [number, number, number],
+    ignoreDepth?: boolean
+};
+
+export abstract class UAActor extends UObject {
+    declare public readonly texModifyInfo: UTextureModifyInfo;
     declare public readonly isDynamicActorFilterState: boolean;
-    declare public readonly levelInfo: GA.ULevelInfo;
-    declare public readonly region: GA.UPointRegion;
+    declare public readonly levelInfo: ULevelInfo;
+    declare public readonly region: UPointRegion;
     declare public readonly drawScale: number;
     declare public readonly tag: string;
     declare public readonly l2MoveEvent: string;
     declare public readonly group: string;
     declare public readonly isSunAffected: boolean;
-    declare public readonly physicsVolume: GA.UPhysicsVolume;
-    declare public readonly location: GA.FVector;
-    declare public readonly rotation: GA.FRotator;
-    declare public readonly scale: GA.FVector;
-    declare public readonly swayRotationOrig: GA.FRotator;
+    declare public readonly physicsVolume: UPhysicsVolume;
+    declare public readonly location: FVector;
+    declare public readonly rotation: FRotator;
+    declare public readonly scale: FVector;
+    declare public readonly swayRotationOrig: FRotator;
 
     declare public readonly hasDistanceFog: boolean;
     declare public readonly distanceFogEnd: number;
     declare public readonly distanceFogStart: number;
-    declare public readonly distanceFogColor: GA.FColor;
+    declare public readonly distanceFogColor: FColor;
 
     declare public readonly isHiddenInEditor: boolean;
     declare public readonly isLightChanged: boolean;
@@ -32,26 +70,32 @@ abstract class UAActor extends UObject {
     declare public readonly isPendingDelete: boolean;
     declare public readonly isSelected: boolean;
 
-    declare public readonly mainScale: GA.FScale;
+    declare public readonly mainScale: FScale;
     // protected dummy: boolean;
 
     // protected _mesh: any;
     declare public readonly forcedRegionTag: string;
     declare public readonly forcedVisibilityZoneTag: string;
 
-    declare public readonly skins: C.FObjectArray<GA.UTexture>;
+    declare public readonly skins: FObjectArray<UTexture>;
     declare public readonly style: ERenderStyle_T;
     declare public readonly isIgnoredRange: boolean;
     declare public readonly isDirectional: boolean;
 
-    declare public readonly postScale: GA.FScale;
+    declare public readonly postScale: FScale;
     declare public readonly polyFlags: number;
-    declare public readonly brush: GA.UModel;
-    declare public readonly prePivot: GA.FVector;
-    declare public readonly postPivot: GA.FVector;
+    declare public readonly brush: UModel;
+    declare public readonly prePivot: FVector;
+    declare public readonly postPivot: FVector;
     declare public readonly isRangeIgnored: boolean;
     declare public readonly isBlockingActors: boolean;
     declare public readonly isBlockingPlayers: boolean;
+    declare public readonly isCollidingActors: boolean;
+    declare public readonly isCollidingWorld: boolean;
+    declare public readonly isBlockingZeroExtentTraces: boolean;
+    declare public readonly isBlockingNonZeroExtentTraces: boolean;
+    declare public readonly isWorldGeometry: boolean;
+    declare public readonly isUsingCylinderCollision: boolean;
     declare public readonly isBlockingKarma: boolean;
     declare public readonly isDynamicLight: boolean;
     declare public readonly isStaticLighting: boolean;
@@ -62,7 +106,7 @@ abstract class UAActor extends UObject {
     declare public ambientGlow: number;
 
     declare public readonly physics: EPhysics_T;
-    declare public readonly rotationRate: GA.FRotator;
+    declare public readonly rotationRate: FRotator;
     declare public readonly isFixedRotationDir: boolean;
     declare public readonly drawType: EDrawType_T;
     declare public readonly filterState: EFilterState_T;
@@ -125,7 +169,7 @@ abstract class UAActor extends UObject {
         return result;
     }
 
-    public getWorldMatrixElements(): GD.Matrix4Arr {
+    public getWorldMatrixElements(): Matrix4Arr {
         const gm = GMath();
         const SR = gm.sin(this.rotation.roll),
             SP = gm.sin(this.rotation.pitch),
@@ -145,7 +189,6 @@ abstract class UAActor extends UObject {
             DY = this.scale.y * this.drawScale,
             DZ = this.scale.z * this.drawScale;
 
-        // Calculate UE2 matrix components (same as localToWorld)
         const ue2_XX = CP * CY * DX;
         const ue2_XY = CP * DX * SY;
         const ue2_XZ = DX * SP;
@@ -182,7 +225,7 @@ abstract class UAActor extends UObject {
             geometry: lineGeometryUuid,
             color,
             ignoreDepth
-        } as GD.IEdgesObjectDecodeInfo;
+        } as IEdgesObjectDecodeInfo;
 
         const geometryInfo = {
             indices: new Uint8Array([0, 1]),
@@ -259,6 +302,12 @@ abstract class UAActor extends UObject {
             "bIgnoredRange": "isRangeIgnored",
             "bBlockActors": "isBlockingActors",
             "bBlockPlayers": "isBlockingPlayers",
+            "bCollideActors": "isCollidingActors",
+            "bCollideWorld": "isCollidingWorld",
+            "bBlockZeroExtentTraces": "isBlockingZeroExtentTraces",
+            "bBlockNonZeroExtentTraces": "isBlockingNonZeroExtentTraces",
+            "bWorldGeometry": "isWorldGeometry",
+            "bUseCylinderCollision": "isUsingCylinderCollision",
             "bBlockKarma": "isBlockingKarma",
             "bDynamicLight": "isDynamicLight",
             "bStaticLighting": "isStaticLighting",
@@ -272,7 +321,6 @@ abstract class UAActor extends UObject {
 }
 
 export default UAActor;
-export { UAActor };
 
 export enum ERenderStyle_T {
     STY_None,

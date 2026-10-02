@@ -1,14 +1,17 @@
-import FVector from "@client/assets/unreal/un-vector";
-import { UObject } from "@l2js/core";
+import FVector from "./un-vector";
+import UObject from "./un-object";
+import type { FMatrix } from "./un-matrix";
+import type { Vector3Arr } from "./library-types";
 
+export type IBoxDecodeInfo = { isValid: boolean, min: Vector3Arr, max: Vector3Arr };
 
-abstract class FBox extends UObject {
+export abstract class FBox extends UObject {
     declare ["constructor"]: typeof FBox;
 
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
-    declare public readonly min: GA.FVector;
-    declare public readonly max: GA.FVector;
+    declare public readonly min: FVector;
+    declare public readonly max: FVector;
 
     declare public isValid: 0 | 1;
 
@@ -16,7 +19,7 @@ abstract class FBox extends UObject {
     public getCenter() { return !this.isValid ? FVector.make() : this.max.add(this.min).multiplyScalar(0.5); }
     public getExtents() { return !this.isValid ? FVector.make() : this.max.sub(this.min).multiplyScalar(0.5); }
 
-    public constructor(min?: GA.FVector, max?: GA.FVector, isValid?: 0 | 1) {
+    public constructor(min?: FVector, max?: FVector, isValid?: 0 | 1) {
         super();
 
         this.min = min ?? this.min ?? FVector.make();
@@ -24,7 +27,7 @@ abstract class FBox extends UObject {
         this.isValid = isValid ?? this.isValid ?? 0;
     }
 
-    public expandByPoint(point: GA.FVector) {
+    public expandByPoint(point: FVector) {
         if (!this.isValid) {
             this.min.set(Infinity, Infinity, Infinity);
             this.max.set(-Infinity, -Infinity, -Infinity);
@@ -48,7 +51,7 @@ abstract class FBox extends UObject {
         return `Box=(min=${this.min}, max=${this.max}, valid=${this.isValid ? "true" : "false"}, size=${this.getSize()})`;
     }
 
-    public translate(offset: GA.FVector): FBox {
+    public translate(offset: FVector): FBox {
         if (!this.isValid) return this;
         return FBox.make(this.min.add(offset), this.max.add(offset), 1);
     }
@@ -72,7 +75,7 @@ abstract class FBox extends UObject {
         return FBox.make(other, other, 1);
     }
 
-    public transformBy(matrix: GA.FMatrix): FBox {
+    public transformBy(matrix: FMatrix): FBox {
         let bbox = FBox.make();
 
         for (let x: 0 | 1 = 0; x < 2; x++) {
@@ -94,7 +97,7 @@ abstract class FBox extends UObject {
         return bbox;
     }
 
-    public getDecodeInfo(): GD.IBoxDecodeInfo {
+    public getDecodeInfo(): IBoxDecodeInfo {
         return {
             isValid: !!this.isValid,
             min: this.min.getElements(),
@@ -112,4 +115,3 @@ abstract class FBox extends UObject {
 }
 
 export default FBox;
-export { FBox };

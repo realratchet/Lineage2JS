@@ -1,1 +1,0 @@
-type HTMLViewportElement = HTMLDivElement;

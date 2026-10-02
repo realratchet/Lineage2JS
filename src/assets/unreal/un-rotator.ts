@@ -1,5 +1,7 @@
-import GMath from "@client/assets/unreal/un-gmath";
-import { UObject } from "@l2js/core";
+import GMath from "./un-gmath";
+import UObject from "./un-object";
+import { getRotatorQuaternionElements } from "./utils/rotator";
+import type { EulerArr, QuaternionArr } from "./library-types";
 
 
 const RAD2DEG = 180 / Math.PI;
@@ -9,13 +11,13 @@ const _TWO_TO_FIFTEEN = 2 ** 15;
 const _INV_TWO_TO_FIFTEEN = 1 / _TWO_TO_FIFTEEN;
 const _INV_TWO_TO_FIFTEEN_TIMES_PI = _INV_TWO_TO_FIFTEEN * _PI;
 
-enum RotName {
+export enum RotName {
     PITCH,                          // looking up and down (0=Straight Ahead, +Up, -Down).
     YAW,                            // rotating around (running in circles), 0=East, +North, -South.
     ROLL                            // rotation about axis of screen, 0=Straight, +Clockwise, -CCW.
 }
 
-abstract class FRotator extends UObject {
+export abstract class FRotator extends UObject {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public readonly pitch: number;
@@ -41,7 +43,7 @@ abstract class FRotator extends UObject {
     public toVector() { return GMath().unitCoords.div(this).xAxis; }
     public toArray() { return [this.pitch, this.yaw, this.roll]; }
 
-    public getEulerElements(): GD.EulerArr {
+    public getEulerElements(): EulerArr {
         const yAxis = (-this.yaw * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const xAxis = (this.roll * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
         const zAxis = (_TWO_PI + this.pitch * _INV_TWO_TO_FIFTEEN_TIMES_PI) % _TWO_PI;
@@ -106,67 +108,9 @@ abstract class FRotator extends UObject {
         // M[3][3] = 1;
     }
 
-    public getQuaternionElements(): GD.QuaternionArr {
-        const SR = GMath().sin(this.roll),
-            SP = GMath().sin(this.pitch),
-            SY = GMath().sin(this.yaw),
-            CR = GMath().cos(this.roll),
-            CP = GMath().cos(this.pitch),
-            CY = GMath().cos(this.yaw);
-
-        const LX = CP * CY;
-        const LY = CP * SY;
-        const LZ = SP;
-
-        const PX = SR * SP * CY - CR * SY;
-        const PY = SR * SP * SY + CR * CY;
-        const PZ = - SR * CP;
-
-        const YX = -(CR * SP * CY + SR * SY);
-        const YY = CY * SR - CR * SP * SY;
-        const YZ = CR * CP;
-
-        // Native UE2 rotation matrix (column-vector convention: columns are the
-        // world-space images of the local X/Y/Z axes), no axis swap:
-        // m00 = LX, m01 = PX, m02 = YX
-        // m10 = LY, m11 = PY, m12 = YY
-        // m20 = LZ, m21 = PZ, m22 = YZ
-        const m00 = LX, m01 = PX, m02 = YX;
-        const m10 = LY, m11 = PY, m12 = YY;
-        const m20 = LZ, m21 = PZ, m22 = YZ;
-
-        const trace = m00 + m11 + m22;
-        let x, y, z, w;
-
-        if (trace > 0) {
-            const s = Math.sqrt(trace + 1.0) * 2; // s = 4 * qw
-            w = 0.25 * s;
-            x = (m21 - m12) / s;
-            y = (m02 - m20) / s;
-            z = (m10 - m01) / s;
-        } else if ((m00 > m11) && (m00 > m22)) {
-            const s = Math.sqrt(1.0 + m00 - m11 - m22) * 2; // s = 4 * qx
-            w = (m21 - m12) / s;
-            x = 0.25 * s;
-            y = (m01 + m10) / s;
-            z = (m02 + m20) / s;
-        } else if (m11 > m22) {
-            const s = Math.sqrt(1.0 + m11 - m00 - m22) * 2; // s = 4 * qy
-            w = (m02 - m20) / s;
-            x = (m01 + m10) / s;
-            y = 0.25 * s;
-            z = (m12 + m21) / s;
-        } else {
-            const s = Math.sqrt(1.0 + m22 - m00 - m11) * 2; // s = 4 * qz
-            w = (m10 - m01) / s;
-            x = (m02 + m20) / s;
-            y = (m12 + m21) / s;
-            z = 0.25 * s;
-        }
-
-        return [x, y, z, w];
+    public getQuaternionElements(): QuaternionArr {
+        return getRotatorQuaternionElements(this.pitch, this.yaw, this.roll);
     }
 }
 
 export default FRotator;
-export { FRotator };

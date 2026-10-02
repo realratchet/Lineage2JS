@@ -1,4 +1,6 @@
-class FRawColorStream implements C.IConstructable {
+import type { APackage, Constructable_T } from "@l2js/core";
+
+export class FRawColorStream implements Constructable_T {
     declare private elementCount: number;
     declare private data: DataView;
     declare private revision: number;
@@ -17,7 +19,7 @@ class FRawColorStream implements C.IConstructable {
     public getElemCount() { return this.elementCount };
     public toTypedArray() { return new Uint8Array(this.data.buffer, this.data.byteOffset, this.data.byteLength) };
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.elementCount = pkg.read("compat32");
         this.data = pkg.read(this.elementCount * 4);
 
@@ -29,4 +31,3 @@ class FRawColorStream implements C.IConstructable {
 }
 
 export default FRawColorStream;
-export { FRawColorStream };

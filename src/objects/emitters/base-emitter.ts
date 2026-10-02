@@ -1,7 +1,11 @@
-import { Box3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
+import { Box3, Matrix3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
-import type InstancedSpriteMesh from "./instanced-sprite-mesh";
+import InstancedSpriteMesh from "./instanced-sprite-mesh";
 import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
+import Rotator from "../../utils/rotator";
+import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
+import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 
 const frozenUpdateMatrixWorld = function () { };
 
@@ -10,27 +14,31 @@ const AXIS_Y = new Vector3(0, 1, 0);
 const AXIS_Z = new Vector3(0, 0, 1);
 const ZERO_VECTOR3 = new Vector3();
 const ONE_VECTOR3 = new Vector3(1, 1, 1);
-const ONE_VECTOR4 = new Vector4(1, 1, 1, 1);
+const WHITE_COLOR = new Vector4(255, 255, 255, 255);
 const tmpPhysicsVector = new Vector3();
 const tmpPhysicsVector2 = new Vector3();
 const tmpCurrentAcceleration = new Vector3();
 const tmpOwnerOffset = new Vector3();
 const tmpWorldToLocal = new Matrix4();
 const tmpWorldRotation = new Matrix4();
+const tmpSprayTransform = new Matrix4();
+const tmpSprayVelocityTransform = new Matrix3();
 const tmpFadeColor = new Vector4();
 const tmpParticleQuaternion = new Quaternion();
+const tmpParticleRotator = new Rotator();
 const tmpBoxExpand = new Vector3();
 const tmpSoundWorldPos = new Vector3();
 const tmpVelocityLossRange: Range3_T = { min: new Vector3(), max: new Vector3() };
 
-// [offsetX, offsetY, scaleX, scaleY] scratch, reused every particle every frame
 const tmpSubdivUV: [number, number, number, number] = [0, 0, 1, 1];
+const tmpSubdivBlend = new Vector3();
 
 
 class Particle_T {
     public readonly position = new Vector3();
     public readonly oldLocation = new Vector3();
     public readonly velocity = new Vector3();
+    public readonly acceleration = new Vector3();
     public readonly startSize = new Vector3();
     public readonly spinsPerSecond = new Vector3();
     public readonly startSpin = new Vector3();
@@ -65,7 +73,6 @@ enum EParticleSpawnFlags_T {
     PSF_NoOwnerLocation = 2
 }
 
-// mirrors un-particle-emitter.ts's ENUM_SETTING_NAMES - type-only, no runtime object
 type CoordinateSystem_T = "independent" | "relative" | "absolute" | "relativeRotation" | "spray";
 type EffectAxis_T = "negativeX" | "positiveZ";
 type MeshSpawning_T = "none" | "linear" | "random";
@@ -76,10 +83,11 @@ type VelocityDirection_T = "none" | "startPositionAndOwner" | "ownerAndStartPosi
 type StartLocationShape_T = "box" | "sphere" | "polar" | "all";
 type DrawStyle_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 
-abstract class BaseEmitter extends Object3D {
+export abstract class BaseEmitter extends Object3D {
     protected readonly isUpdatable = true;
+    public scriptClassId: string;
 
-    public warmupGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
+    public warmupGate: boolean = true; // set false by PhysicsManager while a sector's higher-priority tiers are still loading
     public readonly pendingSounds: PendingEmitterSound_T[] = []; // spawning-sound requests queued by spawnParticle(), drained by RenderManager each frame
 
     protected fadingSettings: FadeSettings_T;
@@ -94,10 +102,11 @@ abstract class BaseEmitter extends Object3D {
     protected lastSpawned: number;
     protected isSpinning: boolean;
     protected isSpriteEmitter: boolean = false;
+    protected isMeshEmitter: boolean = false;
+    protected ignoreParticleColor: boolean = false;
     protected spinParticles: boolean;
     protected secondsBeforeInactive: number;
 
-    // set by a subclass's initSettings() - swaps to a single instanced draw call for the whole pool
     protected isInstancedRendering: boolean = false;
     protected instancedMesh: InstancedSpriteMesh | null = null;
     protected material: ParticleMaterialInitSettings_T;
@@ -125,6 +134,9 @@ abstract class BaseEmitter extends Object3D {
     protected useSkeletalLocationAs: SkeletalLocationUse_T;
 
     protected oldOwnerLocation: THREE.Vector3;
+    protected oldSprayMatrix = new Matrix4();
+    protected hasOldSprayMatrix: boolean = false;
+    protected particleSpace: Object3D = this;
     protected lastDeltaTime: number = 0.016;
     protected activeParticles: number = 0;
     protected activeCount: number = 0;
@@ -137,6 +149,13 @@ abstract class BaseEmitter extends Object3D {
 
     protected currentSpawnOnTrigger: number = 0;
     protected spawnOnTriggerPPS: number;
+    protected spawnOnTriggerRange: Range_T;
+    protected autoResetTimeRange: Range_T;
+    protected timeTillReset: number;
+    protected isAutoDestroyed: boolean;
+    protected isAutoReset: boolean;
+    protected isTriggerDisabled: boolean;
+    protected isResetOnTrigger: boolean;
 
     protected killPending: boolean = false;
 
@@ -146,10 +165,15 @@ abstract class BaseEmitter extends Object3D {
     protected particleIndex: number;
 
     protected coordinateSystem: CoordinateSystem_T;
+    protected isIndependentSprayAccel: boolean;
     protected particles: Particle_T[];
     protected isRespawningDeadParticles: boolean;
+    protected forcedLifeTime: boolean = false;
+    protected forcedFade: boolean = false;
     protected forcedMaxParticles: boolean = false;
     protected initialTimeRange: { min: number, max: number };
+    protected initialDelayRange: { min: number, max: number };
+    protected initialDelay: number = null;
 
     protected acceleration: THREE.Vector3;
     protected skeletalScale: THREE.Vector3;
@@ -181,13 +205,14 @@ abstract class BaseEmitter extends Object3D {
     protected colorMultiplierRange: Range3_T;
     protected startSizeRange: Range3_T;
     protected isUniformScale: boolean;
-    protected startVelocityRadialRange: Range3_T;
+    protected startVelocityRadialRange: Range_T;
     protected addVelocityFromOwner: boolean;
     protected scaleSizeByVelocityMax: number;
     protected startSpinRange: Range3_T;
     protected spinsPerSecondRange: Range3_T;
     protected clockwiseSpinChance: THREE.Vector3;
     protected isUsingRandomSubdiv: boolean;
+    protected isBlendBetweenSubdivisions: boolean;
     protected subdivStart: number;
     protected subdivEnd: number;
     protected texSubdivU: number;
@@ -203,7 +228,7 @@ abstract class BaseEmitter extends Object3D {
     protected currentCollisionSoundIndex: number;
     protected collisionSoundIndex: Range_T;
     protected spawnAmount: number;
-    protected sounds: GD.IParticleSoundDecodeInfo[];
+    protected sounds: IParticleSoundDecodeInfo[];
     protected collisionSoundProbability: Range_T;
     protected isUsingSpawnedVelocityScale: boolean;
     protected spawnedVelocityScaleRange: Range3_T;
@@ -258,8 +283,119 @@ abstract class BaseEmitter extends Object3D {
     protected currentSpawningSoundIndex: number = 0;
 
     public getCurrentTime() { return this.currentTime; }
+    public isFinished() { return this.isDisabled || this.allParticlesDead; }
+    public kill() { this.killPending = true; }
+    public handlesUnrealNative(_index: number, name: string): boolean { return name.toLowerCase() === "trigger"; }
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        if (call.context === this && call.name.toLowerCase() === "trigger") { this.trigger(); return undefined; }
+        if (call.self !== this && call.self.callUnrealNative) return call.self.callUnrealNative(call);
 
-    constructor(config: GD.EmitterConfig_T) {
+        throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${call.context.scriptClassId}'.`);
+    }
+    public trigger(): void {
+        // Engine.dll UParticleEmitter::execTrigger 0x89dcae..0x89dcf5.
+        if (!this.isDisabled) return;
+        if (this.isTriggerDisabled) this.isDisabled = false;
+        if (this.isResetOnTrigger) this.reset();
+        if (!this.spawnOnTriggerRange || !Number.isFinite(this.spawnOnTriggerRange.min) || !Number.isFinite(this.spawnOnTriggerRange.max)) throw new Error(`Emitter '${this.name}' has invalid SpawnOnTriggerRange.`);
+
+        this.currentSpawnOnTrigger = Math.trunc(this.currentSpawnOnTrigger + randRange(this.spawnOnTriggerRange.min, this.spawnOnTriggerRange.max));
+        if (this.currentSpawnOnTrigger) this.allParticlesDead = false;
+    }
+    protected reset(): void {
+        if (this.isMeshEmitter) throw new Error(`Emitter '${this.name}' has an unimplemented MeshEmitter Reset override.`);
+        if (!this.autoResetTimeRange || !Number.isFinite(this.autoResetTimeRange.min) || !Number.isFinite(this.autoResetTimeRange.max)) throw new Error(`Emitter '${this.name}' has invalid AutoResetTimeRange.`);
+
+        // UParticleEmitter::Reset 0x89dfd0..0x89e060; visual flags mirror native ActiveParticles=0.
+        this.activeParticles = 0;
+        this.particleIndex = 0;
+        this.otherIndex = 0;
+        this.activeCount = 0;
+        this.allParticlesDead = false;
+        this.warmedUp = false;
+        this.initialDelay = randRange(this.initialDelayRange.min, this.initialDelayRange.max);
+        this.timeTillReset = randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max);
+        if (this.parent) this.oldOwnerLocation.copy(this.parent.position);
+        for (const particle of this.particles) particle.flags = 0;
+        for (const particle of this.particlePool) particle.visible = false;
+        if (this.instancedMesh) this.instancedMesh.clearInstances();
+    }
+    public setRenderOrder(renderOrder: number): void {
+        this.traverse(object => object.renderOrder = renderOrder);
+    }
+    public setDelayed(delay: number): void {
+        this.initialDelayRange.min += delay;
+        this.initialDelayRange.max += delay;
+    }
+    public getForcedLifeTime(): number { return this.forcedLifeTime ? this.lifetimeRange.max : 0; }
+
+    public adjustParticleLife(lifetime: number, delta: number): void {
+        // Engine.dll SetParticleLifeTimeRange 0x8a2e3c: ForcedFade is nested under ForcedLifeTime.
+        if (this.forcedLifeTime) {
+            this.lifetimeRange.min += delta;
+            this.lifetimeRange.max += delta;
+            if (this.forcedFade) this.fadeOutStartTime += delta;
+        }
+
+        if (!this.forcedMaxParticles) return;
+
+        // Engine.dll SetParticleMaxParticles 0x8a2f6c: truncate the initial rate before multiplying.
+        const count = Math.trunc(Math.trunc(this.initialParticlesPerSecond) * (lifetime - (this.lifetimeRange.min + this.lifetimeRange.max) / 2));
+
+        if (!Number.isFinite(count)) throw new Error(`Invalid adjusted particle count '${count}' for '${this.name}'.`);
+
+        // Engine.dll 0x8a2f8c stores signed counts; Core.dll FArray::Add 0x10109f7f..82 does not reject negatives.
+        this.maxParticles = count;
+        if (this.currentTime !== undefined) return;
+
+        this.maxActiveParticles = count;
+        if (count <= this.particlePool.length) return;
+
+        if (this.instancedMesh) {
+            const previous = this.instancedMesh;
+            this.instancedMesh = new InstancedSpriteMesh(previous.material, count);
+            this.instancedMesh.renderOrder = previous.renderOrder;
+            previous.removeFromParent();
+            previous.geometry.dispose();
+            this.particleSpace.add(this.instancedMesh);
+        }
+
+        for (let i = this.particlePool.length; i < count; i++) {
+            this.particles[i] = new Particle_T();
+            const particle = this.particlePool[i] = Particle.init(this, this.instancedMesh ? null : this.initParticleMesh());
+
+            if (!this.instancedMesh) {
+                particle.name = this.name + "_" + i;
+                if (particle.children[0]) {
+                    particle.children[0].name = this.name + "_" + i + "_vis";
+                    particle.children[0].renderOrder = this.renderOrder;
+                }
+                this.particleSpace.add(particle);
+            }
+        }
+    }
+
+    public setSizeScale(scale: number): void {
+        if (!Number.isFinite(scale) || scale < 0) throw new Error(`Invalid emitter size scale '${scale}'.`);
+
+        this.acceleration.multiplyScalar(scale);
+        this.initialSettings.position.min.multiplyScalar(scale);
+        this.initialSettings.position.max.multiplyScalar(scale);
+        this.sphereRadiusRange.min *= scale;
+        this.sphereRadiusRange.max *= scale;
+        this.startLocationPolarRange.min.multiplyScalar(scale);
+        this.startLocationPolarRange.max.multiplyScalar(scale);
+        this.initialSettings.scale.min.multiplyScalar(scale);
+        this.initialSettings.scale.max.multiplyScalar(scale);
+        this.initialSettings.velocity.min.multiplyScalar(scale);
+        this.initialSettings.velocity.max.multiplyScalar(scale);
+    }
+    public setStartLocationRangeXZ(x: number, z: number): void {
+        this.initialSettings.position.min.x = this.initialSettings.position.max.x = x;
+        this.initialSettings.position.min.z = this.initialSettings.position.max.z = z;
+    }
+
+    public constructor(config: EmitterConfig_T) {
         super();
 
         this.fadingSettings = {
@@ -280,13 +416,15 @@ abstract class BaseEmitter extends Object3D {
             scale: buildChangeRanges(config.changesOverLifetime.scale)
         };
 
-        // rebuild the raw ue curve arrays the simulation iterates over
         this.sizeScale = (config.changesOverLifetime.scale?.values ?? [])
             .map(([relTime, relSize]) => ({ relTime, relSize }));
         this.velocityScale = ((config.changesOverLifetime as any).velocity?.values ?? [])
             .map(([relTime, v]: [number, [number, number, number]]) => ({ relativeTime: relTime, relativeVelocity: new Vector3().fromArray(v) }));
+        this.revolutionScale = (config.changesOverLifetime.revolution?.values ?? [])
+            .map(([relTime, v]) => ({ relativeTime: relTime, relativeRevolution: new Vector3().fromArray(v) }));
+        this.revolutionScaleRepeats = config.changesOverLifetime.revolution?.repeats ?? 0;
         this.colorScale = ((config.changesOverLifetime as any).color?.values ?? [])
-            .map(([relTime, c]: [number, number[]]) => ({ relativeTime: relTime, color: new Vector4().fromArray(c.map(v => v / 255)) }));
+            .map(([relTime, c]: [number, number[]]) => ({ relativeTime: relTime, color: new Vector4().fromArray(c) }));
 
         this.initialSettings = {
             particlesPerSecond: config.initial.particlesPerSecond || 0,
@@ -315,11 +453,11 @@ abstract class BaseEmitter extends Object3D {
         Object.assign(this, config.settings);
         this.rotationOffset.fromArray(config.rotationOffset || [0, 0, 0, 1]);
 
-        // enum properties are absent from the data when left at class defaults
         this.startLocationShape = this.startLocationShape ?? "box";
         this.meshSpawning = this.meshSpawning ?? "none";
         this.rotationSource = this.rotationSource ?? "none";
         this.coordinateSystem = this.coordinateSystem ?? "independent";
+        this.isIndependentSprayAccel = this.isIndependentSprayAccel ?? false;
         this.effectAxis = this.effectAxis ?? "negativeX";
         this.getVelocityDirectionFrom = this.getVelocityDirectionFrom ?? "none";
         this.useSkeletalLocationAs = this.useSkeletalLocationAs ?? "none";
@@ -328,7 +466,6 @@ abstract class BaseEmitter extends Object3D {
         this.scaleSizeByVelocityMax = this.scaleSizeByVelocityMax ?? Infinity; // no cap unless the data provides one
         this.secondsBeforeInactive = this.secondsBeforeInactive ?? 0; // Lineage II overrides stock UE2's one-second default
 
-        // struct settings arrive as canonical decode encodings ([x,y,z] tuples, [min,max] ranges), rehydrate for the ue-ported simulation
         const vec3 = (v: any) => Array.isArray(v) ? new Vector3().fromArray(v) : v;
         const vec4 = (v: any) => Array.isArray(v) ? new Vector4().fromArray(v) : v;
         const range = (v: any) => Array.isArray(v) ? { min: v[0], max: v[1] } : v;
@@ -344,7 +481,10 @@ abstract class BaseEmitter extends Object3D {
         this.spawningSoundProbability = range(this.spawningSoundProbability) ?? { min: 1, max: 1 };
         this.meshScaleRange = rangeVec3(this.meshScaleRange);
         this.startSpinRange = rangeVec3(this.startSpinRange);
-        // Vector4.copy on the raw array reads undefined x/y/z (NaN rgb) but defaults w
+        this.initialDelayRange = range(this.initialDelayRange) ?? { min: 0, max: 0 };
+        this.spawnOnTriggerRange = range(this.spawnOnTriggerRange);
+        this.autoResetTimeRange = range(this.autoResetTimeRange);
+        this.startVelocityRadialRange = range(this.startVelocityRadialRange) ?? { min: 0, max: 0 };
         this.fadeInFactor = vec4(this.fadeInFactor);
         this.fadeOutFactor = vec4(this.fadeOutFactor);
 
@@ -372,6 +512,8 @@ abstract class BaseEmitter extends Object3D {
             max: new Vector3().fromArray(config.revolutionsPerSecondRange.max)
         } : { min: new Vector3(), max: new Vector3() };
 
+        this.forcedLifeTime = !!config.forcedLifeTime;
+        this.forcedFade = !!config.forcedFade;
         this.forcedMaxParticles = !!config.forcedMaxParticles;
         this.warmupTime = config.warmupTime ?? 0;
         this.warmupTicksPerSecond = config.warmupTicksPerSecond ?? 1;
@@ -404,11 +546,8 @@ abstract class BaseEmitter extends Object3D {
         this.allParticlesDead = false;
         this.warmedUp = false;
 
-        // MaxParticles is not always serialized - fall back to the config default
         this.maxParticles = this.maxParticles ?? this.generalSettings.maxParticles;
 
-        // poolSize is just render-buffer slack; maxActiveParticles must stay the true cap
-        // (UnParticleEmitter.cpp has no such buffer) or e.g. maxParticles=1 can double-spawn
         const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
 
         this.particles = new Array(poolSize).fill(1).map(() => new Particle_T())
@@ -419,11 +558,14 @@ abstract class BaseEmitter extends Object3D {
         // debugger;
     }
 
-    // called by each concrete subclass's own constructor, after super() returns - initSettings()
-    // runs here instead of from this constructor so subclass field initializers (which run right
-    // after super()) land before their values are set, not after
-    protected finishConstruction(config: GD.EmitterConfig_T): void {
+    protected finishConstruction(config: EmitterConfig_T): void {
         this.initSettings(config);
+
+        if (this.coordinateSystem === "spray") {
+            // Engine.dll 0x8a18f4: Spray draws stored world positions, not the attachment's latest pose.
+            this.particleSpace = new ParticleSpace(this.oldSprayMatrix);
+            this.add(this.particleSpace);
+        }
 
         const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
 
@@ -434,9 +576,8 @@ abstract class BaseEmitter extends Object3D {
         }
 
         if (this.instancedMesh) {
-            this.add(this.instancedMesh);
+            this.particleSpace.add(this.instancedMesh);
 
-            // lightweight handles only - the instancedMesh above is what actually renders
             for (let i = 0; i < poolSize; i++) {
                 this.particlePool[i] = Particle.init(this, null);
             }
@@ -445,15 +586,38 @@ abstract class BaseEmitter extends Object3D {
                 const particle = this.particlePool[i] = Particle.init(this, this.initParticleMesh());
 
                 particle.name = this.name + "_" + i;
-                particle.children[0].name = this.name + "_" + i + "_vis";
+                if (particle.children[0]) particle.children[0].name = this.name + "_" + i + "_vis";
 
-                this.add(particle);
+                this.particleSpace.add(particle);
             }
         }
 
-        // world matrix already includes DrawScale, local 1/DrawScale keeps simulation units 1:1 with world units
         if (this.drawScale > 0) {
             this.scale.setScalar(1 / this.drawScale);
+        }
+    }
+
+    protected applyVelocityDirection(particle: Particle_T): void {
+        if (this.getVelocityDirectionFrom === "none") return;
+
+        const direction = tmpPhysicsVector.copy(particle.position).normalize();
+
+        // Engine.dll 0x89f1b7: relative/spray point outwards; other modes point to the owner (our particles are emitter-local).
+        if (this.coordinateSystem !== "relative" && this.coordinateSystem !== "spray") direction.negate();
+
+        switch (this.getVelocityDirectionFrom) {
+            case "startPositionAndOwner":
+                particle.velocity.negate().multiply(direction);
+                break;
+            case "ownerAndStartPosition":
+                particle.velocity.multiply(direction);
+                break;
+            case "addRadial":
+                // Engine.dll SpawnParticle 0x89f23d: scalar FRange sample times radial direction.
+                particle.velocity.addScaledVector(direction, randRange(this.startVelocityRadialRange.min, this.startVelocityRadialRange.max));
+                // randVector(this.tmpVec, this.startVelocityRadialRange.min, this.startVelocityRadialRange.max), particle.velocity.add(this.tmpVec.clone().multiply(Direction));
+                break;
+            default: throw new Error(`Unknown particle velocity direction '${this.getVelocityDirectionFrom}'.`);
         }
     }
 
@@ -474,7 +638,6 @@ abstract class BaseEmitter extends Object3D {
     }
 
     protected updateParticle(deltaTime: number, index: number) {
-        // only trail emitters use this apparently
     }
 
     protected spawnParticle(index: number, spawnTime: number, flags: number = 0, spawnFlags: number = 0, localLocationOffset = ZERO_VECTOR3) {
@@ -484,23 +647,36 @@ abstract class BaseEmitter extends Object3D {
         if (!this.maxParticles || this.killPending || (this.lifetimeRange.max <= 0))
             return;
 
+        // Engine.dll AEmitter::Tick 0x8a538a / 0x8a53f9: SpawnSound follows the first particle, not actor registration.
+        const spawnSound = (owner as any).spawnSound;
+
+        if (spawnSound && !(owner as any).scriptProperties.get("FirstSpawnParticle")) {
+            (owner as any).scriptProperties.set("FirstSpawnParticle", true);
+            owner.getWorldPosition(tmpSoundWorldPos);
+            this.pendingSounds.push({ soundName: spawnSound.soundName, dataUri: spawnSound.dataUri, position: [tmpSoundWorldPos.x, tmpSoundWorldPos.y, tmpSoundWorldPos.z], volume: spawnSound.volume / 255, pitch: 1, refDistance: spawnSound.radius, maxDistance: spawnSound.radius * 100 });
+        }
+
         const ownerLocation = () => owner.position;
 
         const particle = this.particles[index];
 
-        // UE2 doesn't apply owner scale to particle spawn ranges, only translation - cancel
-        // the wrapper actor's DrawScale here so a scaled-down wrapper doesn't shrink spread too
-        const spawnRangeScale = this.parent?.scale.x ? 1 / this.parent.scale.x : 1;
-
         particle.position.copy(this.initialSettings.offset);
         randVector(particle.velocity, this.initialSettings.velocity.min, this.initialSettings.velocity.max);
-        particle.velocity.multiplyScalar(spawnRangeScale);
+        if (this.coordinateSystem === "spray") {
+            // Engine.dll 0x89f442..0x89f4ac stores spawn-frame acceleration; 0x8a03d5 reads it per particle.
+            particle.acceleration.copy(this.acceleration);
 
-        // Handle Shape.
+            if (this.isIndependentSprayAccel) {
+                this.updateWorldMatrix(true, false);
+                tmpWorldToLocal.copy(this.matrixWorld).invert();
+                particle.acceleration.applyMatrix3(tmpSprayVelocityTransform.setFromMatrix4(tmpWorldToLocal));
+            }
+        }
+
         const applyAll = this.startLocationShape === "all";
         if (applyAll || this.startLocationShape === "box")
             randVector(this.tmpVec, this.initialSettings.position.min, this.initialSettings.position.max),
-            particle.position.add(this.tmpVec.multiplyScalar(spawnRangeScale));
+            particle.position.add(this.tmpVec);
         if (applyAll || this.startLocationShape === "sphere")
             particle.position.add(this.tmpVec.randomDirection().multiplyScalar(randRange(this.sphereRadiusRange.min, this.sphereRadiusRange.max)));
         if (applyAll || this.startLocationShape === "polar") {
@@ -516,7 +692,6 @@ abstract class BaseEmitter extends Object3D {
             particle.position.add(this.tmpVec.set(x, y, z));
         }
 
-        // Handle spawning from mesh.
         particle.colorMultiplier.set(1, 1, 1);
         if ((this.meshSpawning !== "none") && this.meshSpawningStaticMesh) {
             __break__();
@@ -565,29 +740,17 @@ abstract class BaseEmitter extends Object3D {
 
         // debugger;
 
-        // Handle Skeletal mesh spawning.
-        // Replicate C++ logic from UnParticleEmitter.cpp:226-232
-        // C++: INT NumBones = MeshVertsAndNormals.Num();
-        // MeshVertsAndNormals contains [bone0_vertex, bone0_normal, bone1_vertex, bone1_normal, ...]
-        // So array length = actual_bone_count * 2, but C++ uses total array length as NumBones
-        // Only execute if skeletal mesh actor is set and meshVertsAndNormals is populated
         if (this.useSkeletalLocationAs && this.useSkeletalLocationAs !== "none" &&
             this.meshVertsAndNormals && this.meshVertsAndNormals.length > 0 &&
             this.relativeBoneIndexRange && this.skeletalScale) {
             const numBones = this.meshVertsAndNormals.length;
-            // C++: particle.boneIndex = Clamp<INT>(relativeBoneIndexRange.GetRand() * NumBones, 0.f, NumBones - 1);
-            // relativeBoneIndexRange.GetRand() returns value in range [min, max]
-            // For TypeScript, if relativeBoneIndexRange is [min, max] tuple, use: min + (max - min) * Math.random()
             const rangeMin = Array.isArray(this.relativeBoneIndexRange) ? this.relativeBoneIndexRange[0] : 0;
             const rangeMax = Array.isArray(this.relativeBoneIndexRange) ? this.relativeBoneIndexRange[1] : 1;
             const randValue = rangeMin + (rangeMax - rangeMin) * Math.random();
             const boneIndexFloat = randValue * numBones;
             particle.boneIndex = clamp(Math.trunc(boneIndexFloat), 0, numBones - 1);
             
-            // C++: particle.oldMeshLocation = MeshVertsAndNormals( particle.boneIndex ) * SkeletalScale;
-            // C++ accesses array directly by BoneIndex - but we need to ensure we get vertex (even index)
-            // Since vertices are at even indices (0, 2, 4, ...) and normals at odd (1, 3, 5, ...)
-            const vertexIndex = particle.boneIndex & ~1; // Round down to nearest even number
+            const vertexIndex = particle.boneIndex & ~1;
             if (vertexIndex < this.meshVertsAndNormals.length) {
                 const scaleVec = Array.isArray(this.skeletalScale) 
                     ? new Vector3().fromArray(this.skeletalScale) 
@@ -600,13 +763,16 @@ abstract class BaseEmitter extends Object3D {
 
         this.otherIndex++;
         if (this.addLocationFromOtherEmitter >= 0) {
-            __break__(); // needs a handle to the sibling emitters, which decode info doesn't carry
+            const otherEmitter = owner.children[this.addLocationFromOtherEmitter] as BaseEmitter;
+
+            // Engine.dll 0x89eb62: sibling positions are already emitter-local here.
+            if (otherEmitter.activeParticles > 0)
+                particle.position.add(otherEmitter.particles[this.otherIndex % otherEmitter.activeParticles].position);
             // let OtherEmitter = owner.Emitters[this.addLocationFromOtherEmitter] as BaseEmitter;
             // if (OtherEmitter.activeParticles > 0)
             //     particle.position.add(OtherEmitter.particles[this.otherIndex % OtherEmitter.activeParticles].position.clone().sub(ownerLocation()));
         }
 
-        // Handle Rotation.
         switch (this.rotationSource) {
             case "actor":
                 // Particle.Location = Particle.Location.TransformVectorBy(GMath.UnitCoords*RotationOffset*owner->Rotation);
@@ -655,18 +821,17 @@ abstract class BaseEmitter extends Object3D {
             particle.startSize.z = particle.startSize.x;
         }
         particle.scale.copy(particle.startSize);
-        const currentAccel = tmpCurrentAcceleration.copy(this.acceleration);
+        const currentAccel = tmpCurrentAcceleration.copy(this.coordinateSystem === "spray" ? particle.acceleration : this.acceleration);
         if (this.coordinateSystem === "independent") {
             this.parent.updateMatrixWorld();
             tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAccel.applyMatrix4(tmpWorldRotation);
         }
-        particle.velocity.add(currentAccel.multiplyScalar(spawnRangeScale * spawnTime));
+        particle.velocity.add(currentAccel.multiplyScalar(spawnTime));
         particle.velocityMultiplier.set(1, 1, 1);
         particle.revolutionsMultiplier.set(1, 1, 1);
 
-        // Adjust velocity.
         switch (this.rotationSource) {
             case "actor":
                 // particle.velocity = particle.velocity.TransformVectorBy(GMath.UnitCoords*RotationOffset*owner->Rotation);
@@ -683,49 +848,39 @@ abstract class BaseEmitter extends Object3D {
                 break;
         }
 
-        if (this.getVelocityDirectionFrom !== "none") {
-            let direction;
+        // Engine.dll SpawnParticle 0x89f3ce / UpdateParticles 0x8a18f4: PTCS_Spray particles stay in world space after birth.
+        if (this.coordinateSystem === "spray") {
+            const emitterRotation = (owner as any).emitterRotation as Quaternion;
 
-            if (this.coordinateSystem === "relative")
-                direction = tmpPhysicsVector.copy(particle.position).normalize();
-            else
-                direction = tmpPhysicsVector.copy(ownerLocation()).sub(particle.position).normalize();
-
-            switch (this.getVelocityDirectionFrom) {
-                case "startPositionAndOwner":
-                    particle.velocity.negate().multiply(direction);
-                    break;
-                case "ownerAndStartPosition":
-                    particle.velocity.multiply(direction);
-                    break;
-                case "addRadial":
-                    __break__(); // startVelocityRadialRange is not carried by the decode info yet
-                    // randVector(this.tmpVec, this.startVelocityRadialRange.min, this.startVelocityRadialRange.max), particle.velocity.add(this.tmpVec.clone().multiply(Direction));
-                    break;
-                default:
-                    break;
+            if (emitterRotation) {
+                particle.position.applyQuaternion(emitterRotation);
+                particle.velocity.applyQuaternion(emitterRotation);
             }
         }
+
+        this.applyVelocityDirection(particle);
 
 
         if (this.addVelocityFromOwner && this.coordinateSystem !== "relative")
             __break__() && particle.velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).clone().multiply(owner.AbsoluteVelocity));
 
         if (this.addVelocityFromOtherEmitter >= 0) {
-            __break__(); // needs a handle to the sibling emitters, which decode info doesn't carry
+            const otherEmitter = owner.children[this.addVelocityFromOtherEmitter] as BaseEmitter;
+
+            // Engine.dll 0x89f2e8: use the same OtherIndex as sibling location.
+            if (otherEmitter.activeParticles > 0)
+                particle.velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).multiply(otherEmitter.particles[this.otherIndex % otherEmitter.activeParticles].velocity));
             // let OtherEmitter = owner.Emitters[this.addVelocityFromOtherEmitter];
             // if (OtherEmitter.ActiveParticles > 0)
             //     particle.velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).clone().multiply(OtherEmitter.Particles[this.otherIndex % OtherEmitter.ActiveParticles].Velocity));
         }
 
-        // Location.
         if (this.coordinateSystem === "independent" && spawnTime > 0) {
             const ownerVelocity = tmpPhysicsVector.copy(ownerLocation()).sub(this.oldOwnerLocation).divideScalar(clamp(this.lastDeltaTime, 0.001, 1.0));
             particle.position.sub(ownerVelocity.multiplyScalar(spawnTime));
         }
         particle.position.add(tmpPhysicsVector.copy(particle.velocity).multiplyScalar(spawnTime));
 
-        // Scale size by velocity.
         if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
             let VelocitySize = Math.min(particle.velocity.length(), this.scaleSizeByVelocityMax);
             if (this.scaleSizeXByVelocity)
@@ -736,14 +891,12 @@ abstract class BaseEmitter extends Object3D {
                 particle.scale.z *= VelocitySize * this.scaleSizeByVelocityMultiplier.z;
         }
 
-        // Mass is stored as one over mass internally.
         if (particle.mass)
             particle.mass = 1 / particle.mass;
 
         randVector(particle.startSpin, this.startSpinRange.min, this.startSpinRange.max);
         randVector(particle.spinsPerSecond, this.spinsPerSecondRange.min, this.spinsPerSecondRange.max);
 
-        // Determine spin.
         if (this.clockwiseSpinChance.x > Math.random())
             particle.spinsPerSecond.x *= -1;
         if (this.clockwiseSpinChance.y > Math.random())
@@ -767,7 +920,6 @@ abstract class BaseEmitter extends Object3D {
         if ((particle.time > particle.maxLifetime) && particle.maxLifetime)
             this.spawnParticle(index, (particle.time % particle.maxLifetime));
 
-        // Play sound on spawning.
         if ((this.spawningSound !== "none") && this.sounds.length) {
             let soundIndex = 0;
             switch (this.spawningSound) {
@@ -793,7 +945,7 @@ abstract class BaseEmitter extends Object3D {
                 const refDistance = randRange(sound.radius[0], sound.radius[1]);
 
                 this.pendingSounds.push({
-                    soundDataUri: sound.soundDataUri,
+                    soundName: sound.soundName,
                     position: [tmpSoundWorldPos.x, tmpSoundWorldPos.y, tmpSoundWorldPos.z],
                     volume: randRange(sound.volume[0], sound.volume[1]), // UE2 also factors in owner.TransientSoundVolume, not tracked here
                     pitch: randRange(sound.pitch[0], sound.pitch[1]),
@@ -803,7 +955,6 @@ abstract class BaseEmitter extends Object3D {
             }
         }
 
-        // Make sure we get ticked.
         this.allParticlesDead = false;
     }
 
@@ -825,7 +976,6 @@ abstract class BaseEmitter extends Object3D {
 
         spawnCount = clamp(spawnCount, 0, this.maxActiveParticles);
         if (this.currentSpawnOnTrigger) {
-            __break__();
             spawnCount = clamp(spawnCount, 0, this.currentSpawnOnTrigger);
             this.currentSpawnOnTrigger -= spawnCount;
         }
@@ -863,16 +1013,40 @@ abstract class BaseEmitter extends Object3D {
         // Verify range of critical variables.
         if (owner) {
             if (this.addLocationFromOtherEmitter >= 0)
-                this.addLocationFromOtherEmitter = __break__() && clamp(this.addLocationFromOtherEmitter, 0, owner.Emitters.Num() - 1);
+                this.addLocationFromOtherEmitter = Math.min(this.addLocationFromOtherEmitter, owner.children.length - 1);
             if (this.addVelocityFromOtherEmitter >= 0)
-                this.addVelocityFromOtherEmitter = __break__() && clamp(this.addVelocityFromOtherEmitter, 0, owner.Emitters.Num() - 1);
+                this.addVelocityFromOtherEmitter = Math.min(this.addVelocityFromOtherEmitter, owner.children.length - 1);
             if (this.spawnFromOtherEmitter >= 0)
-                this.spawnFromOtherEmitter = __break__() && clamp(this.spawnFromOtherEmitter, 0, owner.Emitters.Num() - 1);
+                this.spawnFromOtherEmitter = Math.min(this.spawnFromOtherEmitter, owner.children.length - 1);
         }
         else
             return 0;
 
-        // Update velocity loss range.
+        if (this.coordinateSystem === "spray") {
+            this.updateWorldMatrix(true, false);
+
+            if (this.hasOldSprayMatrix && !this.oldSprayMatrix.equals(this.matrixWorld)) {
+                tmpSprayTransform.copy(this.matrixWorld).invert().multiply(this.oldSprayMatrix);
+                tmpSprayVelocityTransform.setFromMatrix4(tmpSprayTransform);
+
+                for (let i = 0; i < this.activeParticles; i++) {
+                    const particle = this.particles[i];
+
+                    if (!(particle.flags & EParticleFlags_T.PTF_Active)) continue;
+
+                    particle.position.applyMatrix4(tmpSprayTransform);
+                    particle.oldLocation.applyMatrix4(tmpSprayTransform);
+                    particle.startLocation.applyMatrix4(tmpSprayTransform);
+                    particle.revolutionCenter.applyMatrix4(tmpSprayTransform);
+                    particle.velocity.applyMatrix3(tmpSprayVelocityTransform);
+                    particle.acceleration.applyMatrix3(tmpSprayVelocityTransform);
+                }
+            }
+
+            this.oldSprayMatrix.copy(this.matrixWorld);
+            this.hasOldSprayMatrix = true;
+        }
+
         if (!this.rotateVelocityLossRange) {
             this.realVelocityLossRange = this.velocityLossRange;
         } else {
@@ -899,7 +1073,6 @@ abstract class BaseEmitter extends Object3D {
             this.realVelocityLossRange.max.copy(tmpVelocityLossRange.max);
         }
 
-        // Skeletal mesh stuff.
         let numBones = 0;
         if (this.skeletalMeshActor && __break__() && this.useSkeletalLocationAs !== "none") {
             if (!this.skeletalMeshActor.bDeleteMe && this.skeletalMeshActor.Mesh && this.skeletalMeshActor.Mesh.IsA("USkeletalMesh")) {
@@ -909,7 +1082,6 @@ abstract class BaseEmitter extends Object3D {
             }
         }
 
-        // Spawning.
         let rate;
         // UE2 logic: Use initial/automatic rate while filling up to the TARGET count, then switch to PPS.
         // maxParticles is the target count, maxActiveParticles may be larger (soft limit buffer)
@@ -920,18 +1092,15 @@ abstract class BaseEmitter extends Object3D {
                 rate = this.initialParticlesPerSecond;
             }
         } else {
-            rate = this.particlesPerSecond;
+            rate = this.generalSettings.particlesPerSecond;
         }
 
-        // Spawning on trigger.
         if (this.currentSpawnOnTrigger)
             rate += this.spawnOnTriggerPPS;
 
-        // Actually spawn them.
         if (rate > 0 && !this.killPending)
             this.ppsFraction = this.spawnParticles(this.ppsFraction, rate, deltaTime);
 
-        // Deferred spawning.
         if (!this.killPending) {
 
             let Amount = clamp(this.deferredParticles, 0, this.maxActiveParticles);
@@ -951,8 +1120,10 @@ abstract class BaseEmitter extends Object3D {
         for (let index = 0; index < Math.min(this.maxActiveParticles, this.activeParticles); index++) {
             let particle = this.particles[index];
 
-            if (!(particle.flags & EParticleFlags_T.PTF_Active))
+            if (!(particle.flags & EParticleFlags_T.PTF_Active)) {
+                deadParticles++;
                 continue;
+            }
 
             // Don't tick particle if it just got spawned via initial spawning.
             if (!(particle.flags & EParticleFlags_T.PTF_InitialSpawn))
@@ -975,6 +1146,8 @@ abstract class BaseEmitter extends Object3D {
                 }
 
                 this.spawnParticle(index, newTime);
+                // Engine.dll 0x8a03c5..0x8a03c8: respawn skips this frame's physics after advancing by NewTime.
+                particle.flags |= EParticleFlags_T.PTF_InitialSpawn;
             }
         }
 
@@ -983,7 +1156,6 @@ abstract class BaseEmitter extends Object3D {
         const coordinateSystem = this.coordinateSystem;
         const currentAcceleration = tmpCurrentAcceleration.copy(this.acceleration);
         const ownerOffset = tmpOwnerOffset.copy(owner.position).sub(this.oldOwnerLocation);
-        const accelerationScale = this.parent?.scale.x ? 1 / this.parent.scale.x : 1;
 
         if (coordinateSystem === "independent") {
             // Independent acceleration is emitter-wide, not per-particle.
@@ -992,9 +1164,9 @@ abstract class BaseEmitter extends Object3D {
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAcceleration.applyMatrix4(tmpWorldRotation);
         }
-        currentAcceleration.multiplyScalar(accelerationScale * deltaTime);
+        // Engine.dll SpawnParticle 0x89ee60 / UpdateParticles 0x8a03d5: acceleration is not divided by DrawScale.
+        currentAcceleration.multiplyScalar(deltaTime);
 
-        // Update particles.
         for (let index = 0; index < Math.min(this.maxActiveParticles, this.activeParticles); index++) {
             let particle = this.particles[index];
 
@@ -1011,7 +1183,7 @@ abstract class BaseEmitter extends Object3D {
             }
 
             if (tickParticle) {
-                particle.velocity.add(currentAcceleration);
+                particle.velocity.add(coordinateSystem === "spray" ? tmpPhysicsVector.copy(particle.acceleration).multiplyScalar(deltaTime) : currentAcceleration);
 
                 // Support Independent Coordinate System:
                 if (coordinateSystem === "independent") {
@@ -1028,20 +1200,19 @@ abstract class BaseEmitter extends Object3D {
                 }
 
                 if (this.isUsingRevolution) {
-                    // one axis-angle rotation per axis in sequence, not a combined Euler rotation (matches UnParticleEmitter.cpp)
+                    // Engine.dll 0x8a05cd..0x8a0693; Core RotateAngleAxis 0x10110e3e quantizes the angle table index.
                     const revCenter = particle.revolutionCenter;
                     const loc = this.tmpVec.copy(particle.position).sub(revCenter);
-                    const angleScale = deltaTime * 0xFFFF * (Math.PI * 2 / 65536);
+                    const angleScale = deltaTime * 0xFFFF;
 
-                    loc.applyAxisAngle(AXIS_X, particle.revolutionsPerSecond.x * particle.revolutionsMultiplier.x * angleScale);
-                    loc.applyAxisAngle(AXIS_Y, particle.revolutionsPerSecond.y * particle.revolutionsMultiplier.y * angleScale);
-                    loc.applyAxisAngle(AXIS_Z, particle.revolutionsPerSecond.z * particle.revolutionsMultiplier.z * angleScale);
+                    loc.applyAxisAngle(AXIS_X, ((particle.revolutionsPerSecond.x * particle.revolutionsMultiplier.x * angleScale >> 2) & 0x3FFF) * Math.PI / 8192);
+                    loc.applyAxisAngle(AXIS_Y, ((particle.revolutionsPerSecond.y * particle.revolutionsMultiplier.y * angleScale >> 2) & 0x3FFF) * Math.PI / 8192);
+                    loc.applyAxisAngle(AXIS_Z, ((particle.revolutionsPerSecond.z * particle.revolutionsMultiplier.z * angleScale >> 2) & 0x3FFF) * Math.PI / 8192);
 
                     particle.position.copy(loc.add(revCenter));
                 }
             }
 
-            // Handle collision.
             let collided = false;
 
             if (tickParticle && (coordinateSystem !== "relative")) {
@@ -1050,12 +1221,10 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            // Handle collided particle.
             if (collided) {
                 __break__();
             }
 
-            // Scaling over time.
             let relativeTime;
             let timeFactor = 1.0;
             let time = particle.time;
@@ -1066,7 +1235,6 @@ abstract class BaseEmitter extends Object3D {
             else
                 relativeTime = 0;
 
-            // Size scale.
             if (this.isUsingSizeScale) {
                 if (this.isScaleSizeRegular)
                     timeFactor = timeFactor / (1 + particle.time);
@@ -1098,9 +1266,8 @@ abstract class BaseEmitter extends Object3D {
                     }
                 }
             }
-            particle.scale.copy(particle.startSize).multiplyScalar(timeFactor * this.drawScale);
+            particle.scale.copy(particle.startSize).multiplyScalar(timeFactor);
 
-            // Velocity scale.
             if (this.isUsingVelocityScale) {
                 if (particle.maxLifetime) {
                     let velocityRelativeTime = (relativeTime * (this.velocityScaleRepeats + 1)) % 1;
@@ -1132,7 +1299,6 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            // Scale size by velocity.
             if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
                 let velocitySize = this.determineVelocityByLocationDifference
                     ? tmpPhysicsVector.copy(particle.position).sub(particle.oldLocation).length() * oneOverDeltaTime
@@ -1146,10 +1312,9 @@ abstract class BaseEmitter extends Object3D {
                     particle.scale.z *= velocitySize * this.scaleSizeByVelocityMultiplier.z;
             }
 
-            // Revolution scale.
             if (this.isUsingRevolutionScale) {
-                __break__();
-                if (particle.maxLifetime) {
+                // Engine.dll UParticleEmitter::UpdateParticles 0x8a1058..0x8a1200.
+                if (particle.maxLifetime > 0) {
                     let revolutionRelativeTime = (relativeTime * (this.revolutionScaleRepeats + 1)) % 1;
                     for (let n = 0; n < this.revolutionScale.length; n++) {
                         if (this.revolutionScale[n].relativeTime >= revolutionRelativeTime) {
@@ -1179,7 +1344,6 @@ abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            // Color scale.
             if (this.isUsingColorScale && particle.maxLifetime) {
                 let colorRelativeTime = (relativeTime * (this.colorScaleRepeats + 1)) % 1;
                 for (let n = 0; n < this.colorScale.length; n++) {
@@ -1193,7 +1357,7 @@ abstract class BaseEmitter extends Object3D {
                             r1 = this.colorScale[n - 1].relativeTime;
                         }
                         else {
-                            c1 = ONE_VECTOR4;
+                            c1 = WHITE_COLOR;
                             r1 = 0;
                         }
                         let a;
@@ -1202,8 +1366,14 @@ abstract class BaseEmitter extends Object3D {
                         else
                             a = 1;
 
-                        // Interpolate between two colors.
+                        // Engine.dll UpdateParticles 0x8a14ab..0x8a153d truncates byte channels; only PTDS_AlphaBlend interpolates alpha.
                         color.lerpVectors(c1, c2, a);
+                        color.set(
+                            Math.trunc(color.x) / 255,
+                            Math.trunc(color.y) / 255,
+                            Math.trunc(color.z) / 255,
+                            this.drawStyle === "alpha" ? Math.trunc(color.w) / 255 : 1
+                        );
                         break;
                     }
                 }
@@ -1211,7 +1381,7 @@ abstract class BaseEmitter extends Object3D {
 
 
             if (!this.isRespawningDeadParticles) {
-                if (this.particlesPerSecond === 0 && this.initialParticlesPerSecond === 0) {
+                if (this.generalSettings.particlesPerSecond === 0 && this.initialParticlesPerSecond === 0) {
                     color.x *= this.opacity;
                     color.y *= this.opacity;
                     color.z *= this.opacity;
@@ -1222,7 +1392,6 @@ abstract class BaseEmitter extends Object3D {
             color.y *= particle.colorMultiplier.y;
             color.z *= particle.colorMultiplier.z;
 
-            // Fade In/ Out.
             if ((this.isFadingOut && (time > this.fadeOutStartTime) && (particle.maxLifetime != this.fadeOutStartTime))
                 || (this.isFadingIn && (time < this.fadeInEndTime) && this.fadeInEndTime)
             ) {
@@ -1276,7 +1445,6 @@ abstract class BaseEmitter extends Object3D {
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(-particleExtent));
             if (particleExtent > maxParticleExtent) maxParticleExtent = particleExtent;
 
-            // Clamping velocity.
             if (this.maxAbsVelocity.x)
                 particle.velocity.x = clamp(particle.velocity.x, -this.maxAbsVelocity.x, this.maxAbsVelocity.x);
             if (this.maxAbsVelocity.y)
@@ -1284,25 +1452,20 @@ abstract class BaseEmitter extends Object3D {
             if (this.maxAbsVelocity.z)
                 particle.velocity.z = clamp(particle.velocity.z, -this.maxAbsVelocity.z, this.maxAbsVelocity.z);
 
-            // Friction.
             particle.velocity.sub(tmpPhysicsVector.copy(particle.velocity).multiply(randVector(this.tmpVec, this.realVelocityLossRange.min, this.realVelocityLossRange.max)).multiplyScalar(deltaTime));
 
-            // Don't tick if particle is no longer moving.
             if (collided && particle.velocity.lengthSq() < this.minSquaredVelocity)
                 particle.flags |= EParticleFlags_T.PTF_NoTick;
 
-            // Used by trail emitter e.g.
             this.updateParticle(deltaTime, index);
         }
 
-        // Account for SizeScale when expanding bounding box.
         let maxScale = 1;
         if (this.isUsingSizeScale && !this.isScaleSizeRegular) {
             for (let i = 0; i < this.sizeScale.length; i++)
                 maxScale = Math.max(this.sizeScale[i].relSize, maxScale);
         }
 
-        // Take ScaleSizeByVelocityMultiplier into account.
         let maxScaleSizeByVelocityMultiplier = 1;
         if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
             maxScaleSizeByVelocityMultiplier = 0;
@@ -1314,14 +1477,11 @@ abstract class BaseEmitter extends Object3D {
                 maxScaleSizeByVelocityMultiplier = Math.max(maxScaleSizeByVelocityMultiplier, this.scaleSizeByVelocityMultiplier.z);
         }
 
-        // Subclasses use this to expand bounding box accordingly.
         this.maxSizeScale = maxScale * maxVelocityScale * maxScaleSizeByVelocityMultiplier;
 
-        // boundingBox picks up the parent chain's drawScale through matrixWorld, the billboard quad never does - carry the drawn half-size so cullers can undo it
-        if (this.instancedMesh) this.worldParticleExtent = maxParticleExtent * this.maxSizeScale * this.scale.x;
+        if (this.instancedMesh) this.worldParticleExtent = maxParticleExtent * this.maxSizeScale;
 
-        // Finalize state.
-        if ((deadParticles >= this.maxActiveParticles || (this.activeParticles - deadParticles) <= 0) && this.particlesPerSecond === 0 && !this.isRespawningDeadParticles)
+        if ((deadParticles >= this.maxActiveParticles || (this.activeParticles - deadParticles) <= 0) && (this.killPending || rate === 0 && !this.isRespawningDeadParticles))
             this.allParticlesDead = true;
         else
             this.allParticlesDead = false;
@@ -1335,40 +1495,55 @@ abstract class BaseEmitter extends Object3D {
     public update(currentTime: number) {
         if (currentTime === 0) return;
 
+        const owner = this.parent as any;
+        if (owner && owner.updateEmitterRotation) owner.updateEmitterRotation(currentTime);
+
+        // Engine.dll 0x8a3630 / 0x97a438..0x97a491: Relative particles draw with the emitter's current rotation.
+        if (this.coordinateSystem === "relative" && owner?.emitterRotation) this.quaternion.copy(owner.emitterRotation);
+
         // if (this.name !== "SpriteEmitter3" || this.parent.name !== "Emitter7") return;
 
         if (this.isDisabled)
             return;
 
+        if (this.currentTime === undefined) {
+            this.currentTime = currentTime;
+            this.initialDelay = randRange(this.initialDelayRange.min, this.initialDelayRange.max);
+
+            return;
+        }
+
+        // Engine.dll AEmitter::Tick 0x8a4f88 scales emitter delta after the ordinary actor tick.
+        const dt = clamp((currentTime - this.currentTime) / 1000, 0, 0.15) * (owner && owner.getSpeedRate ? owner.getSpeedRate() : 1);
+
+        if (this.initialDelay > 0) {
+            this.initialDelay -= dt;
+            this.currentTime = currentTime;
+
+            if (this.initialDelay > 0) return;
+
+            this.initialDelay = 0;
+        }
+
 
         if (!this.warmedUp && this.parent && this.warmupGate) {
             this.oldOwnerLocation.copy(this.parent.position);
             
-            if (this.warmupTime > 0) {
-                this.warmUp(this.warmupTime, this.warmupTicksPerSecond);
-            } else if (this.forcedMaxParticles || this.isAutomaticInitialSpawning) {
-                // Jump-start the population by pre-filling the pool with particles at random ages
-                if (this.maxParticles > 0) {
-                    const numToSpawn = (this.forcedMaxParticles || this.isAutomaticInitialSpawning)
-                        ? this.maxParticles
-                        : Math.min(this.maxParticles, Math.floor(Math.max((this.lifetimeRange.min + this.lifetimeRange.max) / 2, 0) * this.initialSettings.particlesPerSecond));
-                    
-                    for (let i = 0; i < numToSpawn; i++) {
-                        const randomAge = lerp(this.initialTimeRange.min, this.initialTimeRange.max, Math.random());
-                        this.spawnParticle(i, -randomAge, EParticleFlags_T.PTF_InitialSpawn);
-                    }
-                }
-            }
+            // Engine.dll AEmitter::Tick 0x8a5297..0x8a5322: only explicit warmup precedes normal emission.
+            if (this.warmupTime > 0) this.warmUp(this.warmupTime, this.warmupTicksPerSecond);
             this.warmedUp = true;
         }
 
-        if (this.currentTime === undefined) {
-            this.currentTime = currentTime;
-            return;
-        } else {
-            const dt = clamp((currentTime - this.currentTime) / 1000, 0, 0.15);
-            this.lastDeltaTime = dt;
-            this.updateParticles(dt);
+        this.lastDeltaTime = dt;
+        this.updateParticles(dt);
+
+        // AEmitter::Tick 0x8a547c..0x8a5530: child AutoReset takes precedence; child AutoDestroy then disables only if parent AutoDestroy is clear.
+        if (this.allParticlesDead && this.isAutoDestroyed) {
+            const parentProperties = (owner as any)?.scriptProperties as Map<string, boolean>;
+            const parentAutoReset = parentProperties?.get("AutoReset") === true;
+            const parentAutoDestroy = parentProperties?.get("AutoDestroy") === true;
+
+            if (!parentAutoDestroy && !(this.isAutoReset && !parentAutoReset)) this.isDisabled = true;
         }
 
         // freezeEmitterParticles only touches p.visible, not instancedMesh - every update() call implies "visible now"
@@ -1405,56 +1580,66 @@ abstract class BaseEmitter extends Object3D {
             }
 
             p.position.copy(settings.position);
-            p.scale.copy(settings.scale);
+            p.oldLocation.copy(settings.oldLocation);
+            if (this.isSpriteEmitter) p.scale.set(1, 1, 1);
+            else p.scale.copy(settings.scale);
+            p.setVelocity(settings.velocity);
 
             let spin = 0;
 
             if (this.isSpinning || this.spinParticles) {
-                // Mapping from un-particle-emitter.ts: X=Pitch, Y=Yaw, Z=Roll
-                const rotPitch = (settings.startSpin.x + settings.time * settings.spinsPerSecond.x) * (Math.PI * 2 / 65536);
-                const rotYaw = (settings.startSpin.y + settings.time * settings.spinsPerSecond.y) * (Math.PI * 2 / 65536);
-                const rotRoll = (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (Math.PI * 2 / 65536);
+                const yaw = settings.startSpin.x + settings.time * settings.spinsPerSecond.x;
+                const pitch = settings.startSpin.y + settings.time * settings.spinsPerSecond.y;
+                const roll = settings.startSpin.z + settings.time * settings.spinsPerSecond.z;
 
                 if (this.isSpriteEmitter) {
-                    spin = rotRoll;
-                    (p as any).spin = rotRoll;
+                    spin = roll * (Math.PI * 2 / 65536);
+                    (p as any).spin = spin;
+                } else if (this.isMeshEmitter) {
+                    // Engine.dll 0x880c37 / 0x9da422: particle X/Y/Z -> FRotator Yaw/Pitch/Roll.
+                    tmpParticleRotator.set(Math.trunc(pitch), Math.trunc(yaw), Math.trunc(roll)).toQuaternion(p.quaternion);
                 } else {
-                    // Native-axis mapping for Mesh Emitters (Z up, no axis swap):
-                    // X = Roll, Y = Yaw, Z = Pitch
-                    p.rotation.set(rotRoll, rotYaw, rotPitch, "XYZ");
+                    p.rotation.set(roll * (Math.PI * 2 / 65536), pitch * (Math.PI * 2 / 65536), yaw * (Math.PI * 2 / 65536), "XYZ");
                 }
             }
 
-            this.computeSubdivUV(this.resolveSubdivision(settings), tmpSubdivUV);
+            const subdivision = this.resolveSubdivision(settings);
+            this.computeSubdivUV(subdivision, tmpSubdivUV);
+            if (this.isSpriteEmitter && this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv)
+                this.computeSubdivBlend(settings, subdivision, tmpSubdivBlend);
 
             if (this.instancedMesh) {
-                // undo the 1/drawScale bake-in (updateParticles) - the instanced billboard bypasses the scene-graph parent chain that normally cancels it
-                const scaleFactor = this.scale.x;
-                this.instancedMesh.setInstance(i, settings.position, settings.scale.x * scaleFactor, settings.scale.y * scaleFactor, spin, settings.color, tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3]);
+                this.instancedMesh.setInstance(i, settings.position, settings.scale.x, settings.scale.y, spin, settings.color, tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3], tmpSubdivBlend);
                 return;
             }
 
             const visualizer = p.children[0] as THREE.Mesh;
+            if (!visualizer) return;
+
+            if (this.isSpriteEmitter) visualizer.scale.copy(settings.scale);
             const mats = visualizer.material instanceof Array ? visualizer.material : [visualizer.material];
             for (const mat of mats) {
                 if ((mat as any).isMeshEmitterMaterial) {
                     const emat = mat as any;
-                    if (emat.isUpdatable) emat.update(settings.time);
+                    if (emat.isUpdatable) emat.update(settings.time * 1000);
                     emat.uniforms.diffuse.value.setRGB(settings.color.x, settings.color.y, settings.color.z);
                     emat.uniforms.opacity.value = settings.color.w;
                 } else if ((mat as any).isStaticMeshMaterial) {
                     const smat = mat as any;
-                    if (smat.isUpdatable) smat.update(settings.time);
+                    if (smat.isUpdatable) smat.update(settings.time * 1000);
 
-                    smat.uniforms.diffuse.value.setRGB(settings.color.x, settings.color.y, settings.color.z);
-                    smat.uniforms.opacity.value = settings.color.w;
+                    if (!this.ignoreParticleColor) {
+                        smat.uniforms.diffuse.value.setRGB(settings.color.x, settings.color.y, settings.color.z);
+                        smat.uniforms.opacity.value = settings.color.w;
+                    }
                 } else if ((mat as any).isParticleMaterial) {
                     const pmat = mat as any;
-                    if (pmat.isUpdatable) pmat.update(settings.time);
+                    if (pmat.isUpdatable) pmat.update(settings.time * 1000);
 
                     pmat.uniforms.diffuse.value.setRGB(settings.color.x, settings.color.y, settings.color.z);
                     pmat.uniforms.opacity.value = settings.color.w;
                     if (pmat.uniforms.uvOffsetScale) pmat.uniforms.uvOffsetScale.value.set(tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3]);
+                    if (pmat.uniforms.subdivisionBlend) pmat.uniforms.subdivisionBlend.value.copy(tmpSubdivBlend);
                 } else {
                     (mat as any).color.setRGB(settings.color.x, settings.color.y, settings.color.z);
                     mat.opacity = settings.color.w;
@@ -1561,8 +1746,19 @@ abstract class BaseEmitter extends Object3D {
         return clamp(section, 0, this.texSubdivU * this.texSubdivV - 1);
     }
 
-    protected abstract initSettings(info: GD.EmitterConfig_T): void;
-    protected abstract initParticleMesh(): THREE.Mesh<THREE.BufferGeometry, ParticleMaterial>;
+    protected computeSubdivBlend(settings: Particle_T, section: number, out: Vector3): Vector3 {
+        if (section < 0) return out.set(0, 0, settings.color.w);
+
+        // Engine.dll FillVertexBuffer 0x97b0d6..0x97b1e0: final cell holds, blend alpha truncates to a byte.
+        const subDivs = this.subdivEnd ? Math.max(1, this.subdivEnd - this.subdivStart) : this.texSubdivU * this.texSubdivV;
+        const next = section + 1 === subDivs ? section : section + 1;
+        const time = clamp(settings.time / settings.maxLifetime, 0, 1) * subDivs;
+
+        return out.set(Math.floor(next / this.texSubdivV) / this.texSubdivU, (next % this.texSubdivV + 1) / this.texSubdivV, Math.trunc(255 * (time - Math.floor(time))) / 255);
+    }
+
+    protected abstract initSettings(info: EmitterConfig_T): void;
+    protected abstract initParticleMesh(): THREE.Mesh<THREE.BufferGeometry, ParticleMaterial> | null;
 
     // Default: no instanced path. Subclasses that set isInstancedRendering=true
     // (from initSettings) must override this to build their own instanced mesh.
@@ -1570,7 +1766,27 @@ abstract class BaseEmitter extends Object3D {
 }
 
 export default BaseEmitter;
-export { BaseEmitter };
+
+class ParticleSpace extends Object3D {
+    public constructor(matrixWorld: Matrix4) {
+        super();
+
+        this.matrixWorld = matrixWorld;
+        this.matrixAutoUpdate = false;
+        this.matrixWorldAutoUpdate = false;
+    }
+
+    public updateMatrixWorld(force?: boolean): void {
+        for (const child of this.children)
+            if (child.matrixWorldAutoUpdate || force) child.updateMatrixWorld(force);
+    }
+
+    public updateWorldMatrix(_updateParents: boolean, updateChildren: boolean): void {
+        if (updateChildren)
+            for (const child of this.children)
+                if (child.matrixWorldAutoUpdate) child.updateWorldMatrix(false, true);
+    }
+}
 
 class Particle extends Object3D {
     protected readonly particleSystem: BaseEmitter;
@@ -1592,6 +1808,7 @@ class Particle extends Object3D {
 
     protected _velocity = new Vector3();
     public get velocity(): Readonly<THREE.Vector3> { return this._velocity; }
+    public setVelocity(velocity: THREE.Vector3) { this._velocity.copy(velocity); }
 
     protected _oldLocation = new Vector3();
     public get oldLocation(): Readonly<THREE.Vector3> { return this._oldLocation; }
@@ -1791,12 +2008,10 @@ type Fade_T = { time: number; color: THREE.Vector4; };
 type FadeSettings_T = { fadeIn: Fade_T; fadeOut: Fade_T; };
 type Range3_T = { min: THREE.Vector3, max: THREE.Vector3 };
 type ChangesOverTime_T = { scale?: { times: number[], values: number[] }; };
-type PendingEmitterSound_T = { soundDataUri: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number };
+type PendingEmitterSound_T = { soundName: string, dataUri?: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number };
 
-// unimplemented particle feature marker, warns once per call site instead of
-// throwing so an exotic emitter can't kill the render loop
 const __warnedBreaks = new Set<string>();
-const __break__ = (): boolean => {
+function __break__(): boolean {
     const site = new Error().stack?.split("\n")[2]?.trim() ?? "unknown";
 
     if (!__warnedBreaks.has(site)) {
@@ -1805,4 +2020,4 @@ const __break__ = (): boolean => {
     }
 
     return false;
-};
+}

@@ -1,4 +1,6 @@
-class UEncodedFile {
+import type { BufferValue, ValueTypeNames_T, Seek_T } from "@l2js/core";
+
+export class UEncodedFile {
     public readonly path: string;
 
     protected buffer: ArrayBuffer = null;
@@ -17,4 +19,3 @@ class UEncodedFile {
 }
 
 export default UEncodedFile;
-export { UEncodedFile };

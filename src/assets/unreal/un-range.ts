@@ -1,7 +1,9 @@
-import FVector from "@client/assets/unreal/un-vector";
-import UObject from "@l2js/core";
+import FVector from "./un-vector";
+import UObject, { type IDecodableStruct } from "./un-object";
+import type { DecodeLibrary } from "./decode-library";
+import type { Vector3Arr } from "./library-types";
 
-abstract class FRange extends UObject implements GD.IDecodableStruct<Range_T> {
+export abstract class FRange extends UObject implements IDecodableStruct<Range_T> {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare public min: number;
@@ -19,7 +21,7 @@ abstract class FRange extends UObject implements GD.IDecodableStruct<Range_T> {
         this.max = max;
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): Range_T { return [this.min, this.max]; }
+    public getDecodeInfo(_library: DecodeLibrary): Range_T { return [this.min, this.max]; }
 
 
     public toString() { return `Range=(min=${this.min.toFixed(2)},max=${this.max.toFixed(2)})`; }
@@ -28,7 +30,7 @@ abstract class FRange extends UObject implements GD.IDecodableStruct<Range_T> {
     public rand() { return this.max + (this.min - this.max) * Math.random(); }
 }
 
-abstract class FRangeVector extends UObject implements GD.IDecodableStruct<RangeVector_T> {
+export abstract class FRangeVector extends UObject implements IDecodableStruct<RangeVector_T> {
     public static readonly plainStructFields = true; // values live in fields, not propertyDict (see UObject.loadNative)
 
     declare protected x: FRange;
@@ -43,7 +45,7 @@ abstract class FRangeVector extends UObject implements GD.IDecodableStruct<Range
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): RangeVector_T {
+    public getDecodeInfo(library: DecodeLibrary): RangeVector_T {
         const [minx, maxx] = this.x.getDecodeInfo(library)
         const [miny, maxy] = this.y.getDecodeInfo(library)
         const [minz, maxz] = this.z.getDecodeInfo(library)
@@ -66,7 +68,6 @@ abstract class FRangeVector extends UObject implements GD.IDecodableStruct<Range
 }
 
 export default FRange;
-export { FRange, FRangeVector };
 
 type Range_T = [number, number];
-type RangeVector_T = { min: GD.Vector3Arr, max: GD.Vector3Arr };
+type RangeVector_T = { min: Vector3Arr, max: Vector3Arr };

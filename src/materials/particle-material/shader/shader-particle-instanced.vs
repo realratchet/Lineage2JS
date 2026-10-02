@@ -7,6 +7,10 @@ attribute vec4 instanceColor;
 // texture-atlas subdivision cell for this instance (xy = offset, zw = scale) - see
 // shader-particle.vs's uvOffsetScale for the legacy-path equivalent
 attribute vec4 instanceUV;
+#ifdef USE_SUBDIVISION_BLEND
+attribute vec3 instanceUVBlend;
+varying vec3 vSubdivisionBlend;
+#endif
 #ifdef USE_WORLD_PARTICLE_BATCH
 #ifdef USE_FIXED_NORMAL
 attribute vec3 instanceRight;
@@ -28,6 +32,9 @@ uniform vec3 particleProjectionNormal;
 
 void main() {
     vUv = uv * instanceUV.zw + instanceUV.xy;
+    #ifdef USE_SUBDIVISION_BLEND
+    vSubdivisionBlend = vec3(uv * instanceUV.zw + instanceUVBlend.xy, instanceUVBlend.z);
+    #endif
     vColor = instanceColor;
 
     #ifdef USE_WORLD_PARTICLE_BATCH

@@ -8,7 +8,7 @@ class Color16 {
     constructor(u: number) { this.u = u; }
 }
 
-class BlockDXT1 {
+export class BlockDXT1 {
     protected col0: Color16;
     protected col1: Color16;
     protected indices: number[];
@@ -99,7 +99,7 @@ class AlphaBlockDXT3 {
     }
 }
 
-class BlockDXT3 {
+export class BlockDXT3 {
     protected color: BlockDXT1 = new BlockDXT1();
     protected alpha: AlphaBlockDXT3 = new AlphaBlockDXT3();
 
@@ -112,5 +112,3 @@ class BlockDXT3 {
         debugger;
     }
 }
-
-export { BlockDXT1, BlockDXT3 };

@@ -2,15 +2,21 @@ import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide } from "three";
+import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
+import type { MapData_T } from "@l2js/engine/contracts/texture";
 
-const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask"]);
+const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask", "shDetail"]);
 
-type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shMaterial2";
+// Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
+export const NUM_ACTOR_LIGHTS = 4;
+const MAX_HARDWARE_LIGHTS = 8; // D3DDrv SetPawnLight RVA 0x1c7b2.
+
+type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shDetail" | "shMaterial2";
 type ApplyParams_T = {
     name: SupportedShaderParams_T,
     sprites: Record<string, SpriteParam_T>,
-    parameters: GD.IDecodedParameter,
+    parameters: IDecodedParameter,
     uniforms: Record<string, Uniform>,
     defines: Record<string, any>
 }
@@ -29,6 +35,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         case "shOpacity": defName = "OPACITY"; break;
         case "shSpecular": defName = "SPECULAR"; break;
         case "shSpecularMask": defName = "SPECULAR_MASK"; break;
+        case "shDetail": defName = "DETAIL"; break;
         case "shMaterial2": defName = "MATERIAL2"; break;
     }
 
@@ -43,11 +50,19 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
     Object.assign(defines, parameters.defines);
 
     if (parameters.isUsingMap) {
-        if ((parameters as GD.IDecodedSpriteParameter).isSprite) {
+        if ((parameters as IDecodedSpriteParameter).isSprite) {
             sprites[name] = {
-                framerate: (parameters as GD.IDecodedSpriteParameter).framerate,
-                sprites: (parameters as GD.IDecodedSpriteParameter).sprites,
+                framerate: (parameters as IDecodedSpriteParameter).framerate,
+                sprites: (parameters as IDecodedSpriteParameter).sprites,
             } as SpriteParam_T;
+        }
+
+        if (parameters.isCubeMap) {
+            if (name !== "shSpecular") throw new Error(`Cubemap is unsupported in ${name}.`);
+
+            defines[`USE_CUBE_MAP_${defName}`] = "";
+            uniforms[`${name}Cube`].value = parameters.uniforms.map.texture;
+            return;
         }
 
         defines["USE_UV"] = "";
@@ -63,6 +78,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
             defines["ROTATE"] = 1;
             defines["OSCILLATE"] = 2;
             defines["ENVMAP"] = 3;
+            defines["ENVMAPWORLD"] = 4;
             defines[`USE_MAP_${defName}_TRANSFORM`] = parameters.transformType.toUpperCase();
 
             // nested UV transforms for NMoon1
@@ -78,13 +94,13 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
-    private spriteEntries: [string, SpriteParam_T][] = [];
-    private proceduralMaps: any[] = [];
+    protected spriteEntries: [string, SpriteParam_T][] = [];
+    protected proceduralMaps: any[] = [];
 
     public isUpdatable = false;
 
     // @ts-ignore
-    public constructor(info: MeshStaticMaterialParameters = {}) {
+    public constructor(info: MeshStaticMaterialParameters_T = { diffuse: null, opacity: null, specular: null, specularMask: null, side: FrontSide, blendingMode: "normal", transparent: false, depthWrite: true, depthTest: true, visible: true }) {
         // const hasMapDiffuse = "mapDiffuse" in parameters && parameters.mapDiffuse !== null && parameters.mapDiffuse !== undefined;
         // const hasMapSpecularMask = "mapSpecularMask" in parameters && parameters.mapSpecularMask !== null && parameters.mapSpecularMask !== undefined;
         // const hasMapOpacity = "mapOpacity" in parameters && parameters.mapOpacity !== null && parameters.mapOpacity !== undefined;
@@ -101,6 +117,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         const sprites = {};
 
         const defines: Record<string, any> = { USE_FOG: "" };
+
+        if (info.modulateStaticLighting2X !== false) defines["USE_STATIC_LIGHTING_2X"] = "";
+        if (info.modulateSpecular2X === true) defines["USE_MODULATE_SPECULAR_2X"] = "";
         // UniformsLib.lights dropped - NUM_DIR_LIGHTS/NUM_SPOT_LIGHTS/NUM_HEMI_LIGHTS are always
         // 0 here (DynamicLight isn't a THREE.Light), so those ~19 uniforms never compiled in
         const uniforms: Record<string, Uniform> = appendGlobalUniforms(UniformsUtils.merge([
@@ -115,12 +134,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 transformSpecular: new Uniform(null),
 
                 lightMap: new Uniform(null),
-                lightMapIntensity: new Uniform(info.modulateStaticLighting2X === true ? 2 : 1),
+                lightMapIntensity: new Uniform(info.modulateStaticLighting2X !== false ? 2 : 1),
 
                 shDiffuse: new Uniform(null),
                 shOpacity: new Uniform(null),
                 shSpecular: new Uniform(null),
+                shSpecularCube: new Uniform(null),
                 shSpecularMask: new Uniform(null),
+                shDetail: new Uniform(null),
                 shMaterial2: new Uniform(null),
 
                 ambient: new Uniform({
@@ -136,8 +157,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             }
         ]));
 
-        function apply(name: SupportedShaderParams_T, parameters: GD.IDecodedParameter) {
-            if (!parameters) return;
+        function apply(name: SupportedShaderParams_T, parameters: IDecodedParameter) {
+            if (!parameters || (name === "shDetail" && !parameters.isUsingMap)) return;
 
             applyParameters({
                 name,
@@ -152,6 +173,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         apply("shOpacity", info.opacity);
         apply("shSpecular", info.specular);
         apply("shSpecularMask", info.specularMask);
+        apply("shDetail", info.detail);
 
         if (info.selfIllumination) defines["USE_SELF_ILLUMINATION"] = "";
 
@@ -263,14 +285,10 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             case "normal":
                 this.blending = NormalBlending;
                 // UE2 OB_Normal: when opacity is present, forces ZWrite=0 and enables alpha blending
-                // (D3DMaterialState.cpp line 1506-1512)
-                if (info.opacity) {
-                    this.depthWrite = false;
-                }
+                if (info.opacity) this.depthWrite = false;
                 break;
             case "masked":
-                // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending
-                // AlphaRef=127 (~0.498), ZWrite=1
+                // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending - AlphaRef=127 (~0.498), ZWrite=1
                 this.blending = NormalBlending;
                 this.transparent = false;
                 uniforms.alphaTest.value = 127 / 255;
@@ -323,9 +341,15 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 break;
             default: console.warn("Unknown blending mode:", info.blendingMode); break;
         }
+
+        // ApplyFinalBlend runs for ZWrite per D3DMaterialState
+        if (info.modifyFramebufferBlending) this.depthWrite = info.depthWrite;
+
+        // Projector leaves bProjectOnAlpha False, so alpha-blended surfaces - ocean, glass - take no decal
+        if (this.transparent) this.defines["NO_SHADOW_RECEIVE"] = "";
     }
 
-    public setLightmap(lightmap: GD.MapData_T) {
+    public setLightmap(lightmap: MapData_T) {
         this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
@@ -344,7 +368,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableAmbient({ vector, brightness }: IAmbientLighting) {
+    public enableAmbient({ vector, brightness }: AmbientLighting_T) {
         const u = this.uniforms.ambient.value;
 
         u.color.copy(vector);
@@ -357,7 +381,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public enableDirectionalAmbient({ vector, direction, brightness }: IDirectionalAmbientLighting) {
+    public enableDirectionalAmbient({ vector, direction, brightness }: DirectionalAmbientLighting_T) {
         const u = this.uniforms.directionalAmbient.value;
 
         u.color.copy(vector);
@@ -407,10 +431,54 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
+    public setExtendedBoneInfluences() {
+        this.defines["USE_EXTENDED_BONE_INFLUENCES"] = "";
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
+    // per-vertex hardware lighting instead of a baked stream: EnableLighting(1,0,1) (UnSkeletalMesh.cpp line 4908)
+    public setActorLit() {
+        this.uniforms.actorAmbient = new Uniform(new Color(0, 0, 0));
+        this.uniforms.actorScaledGlow = new Uniform(1);
+        this.uniforms.numActorLights = new Uniform(0);
+        this.uniforms.actorLights = new Uniform(Array.from({ length: MAX_HARDWARE_LIGHTS }, () => ({
+            position: new Vector3(),
+            direction: new Vector3(),
+            color: new Color(0, 0, 0),
+            radius: 0,
+            cone: 0,
+            effect: 0,
+            isPawnLight: false,
+            attenuation: new Vector2()
+        })));
+
+        this.defines["USE_ACTOR_LIGHTS"] = "";
+        this.defines["NUM_ACTOR_LIGHTS"] = MAX_HARDWARE_LIGHTS;
+
+        this.needsUpdate = true;
+
+        return this;
+    }
+
     public setUnlit() {
         delete this.defines["USE_AMBIENT"];
         delete this.defines["USE_LIGHTMAP"];
         this.needsUpdate = true;
+        return this;
+    }
+
+    public copy(source: this): this {
+        super.copy(source);
+        // ShaderMaterial.copy clones the shared shadow render target into an unbacked Texture.
+        appendGlobalUniforms(this.uniforms);
+        this.sprites = source.sprites;
+        this.spriteEntries = source.spriteEntries;
+        this.proceduralMaps = source.proceduralMaps;
+        this.isUpdatable = source.isUpdatable;
+
         return this;
     }
 
@@ -435,32 +503,35 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     }
 }
 
-type IBaseLighting = {
+type BaseLighting_T = {
     vector: THREE.Color,
     brightness: number
 };
 
-type IAmbientLighting = IBaseLighting;
-type IDirectionalAmbientLighting = IBaseLighting & { direction: THREE.Vector3 };
+type AmbientLighting_T = BaseLighting_T;
+type DirectionalAmbientLighting_T = BaseLighting_T & { direction: THREE.Vector3 };
 
-type MeshStaticMaterialParameters = {
-    diffuse: GD.IDecodedParameter,
-    opacity: GD.IDecodedParameter,
-    specular: GD.IDecodedParameter,
-    specularMask: GD.IDecodedParameter,
+type MeshStaticMaterialParameters_T = {
+    diffuse: IDecodedParameter,
+    opacity: IDecodedParameter,
+    specular: IDecodedParameter,
+    specularMask: IDecodedParameter,
+    detail?: IDecodedParameter,
     side: THREE.Side,
-    blendingMode: GA.SupportedBlendingTypes_T,
+    blendingMode: SupportedBlendingTypes_T,
     transparent: boolean,
     alphaTest?: number,
     depthWrite: boolean,
     depthTest: boolean,
+    modifyFramebufferBlending?: boolean,
     visible: boolean,
     modulateStaticLighting2X?: boolean,
+    modulateSpecular2X?: boolean,
     selfIllumination?: boolean,
     combiner?: {
         combineMode: number,
-        material1: GD.IDecodedParameter,
-        material2: GD.IDecodedParameter,
+        material1: IDecodedParameter,
+        material2: IDecodedParameter,
         invertMask: boolean,
         alphaFrom1: boolean,
         alphaFrom2: boolean

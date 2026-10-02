@@ -66,4 +66,138 @@ body {
             cursor: default;
         }
     }
+
+    .debug-view {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 10000;
+        width: min(420px, calc(100vw - 20px));
+        max-height: calc(100vh - 20px);
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        overflow: hidden;
+        padding: 10px;
+        background: rgba(0, 0, 0, .7);
+        color: #fff;
+        font: 13px monospace;
+        border-radius: 5px;
+        border-left: 1px solid #444;
+        border: 1px solid #444;
+        box-shadow: 0 0 10px rgba(0, 0, 0, .5);
+
+        &[hidden] { display: none; }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            color: #fff;
+
+        }
+
+        .debug-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 4px;
+
+            button { flex: 1 0 auto; }
+        }
+
+        button, select, input[type="text"] {
+            box-sizing: border-box;
+            min-height: 26px;
+            border: 1px solid #555;
+            border-radius: 2px;
+            background: #222;
+            color: #ddd;
+            font: inherit;
+        }
+
+        button {
+            padding: 4px 8px;
+            cursor: pointer;
+
+            &:hover, &.active { background: #38506b; }
+        }
+
+        select, input[type="text"] { width: 170px; padding: 3px 5px; }
+        input[type="range"] { width: 170px; }
+        input[type="checkbox"] { margin: 0; }
+
+        .debug-content, .debug-tab-panel { min-height: 0; }
+        .debug-content { overflow: auto; }
+        .debug-tab-panel > p { color: #aaa; }
+        .debug-info {
+            margin: 12px 0 0;
+            color: #aaa;
+            white-space: pre;
+        }
+
+        .debug-graph {
+            display: block;
+            width: 100%;
+            height: auto;
+            margin: 4px 0 8px;
+            border: 1px solid #333;
+            background: #111;
+        }
+
+        &.debug-visualizer {
+            width: max-content;
+            max-width: calc(100vw - 20px);
+            overflow: hidden;
+
+            .debug-tabs {
+                width: max-content;
+                max-width: calc(100vw - 20px);
+            }
+
+            .debug-content, .debug-tab-panel,
+            #env-color-hud-container, #audio-hud-container, #emitters-hud-container,
+            #audio-hud-container > div, #emitters-hud-container > div { width: max-content; }
+
+            .debug-content { max-width: calc(100vw - 20px); }
+            .debug-tab-panel { max-width: none; }
+        }
+
+        .debug-section {
+            margin: 0 0 6px;
+            border: 1px solid #333;
+            background: rgba(0, 0, 0, .2);
+
+            summary {
+                padding: 7px 8px;
+                color: #fff;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            > .debug-row, > button, > .debug-actions { margin: 5px 8px; }
+        }
+
+        .debug-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 170px;
+            align-items: center;
+            gap: 8px;
+            min-height: 28px;
+
+            > span { overflow: hidden; text-overflow: ellipsis; }
+            > input[type="checkbox"] { justify-self: end; }
+        }
+
+        .debug-subsection { margin: 5px 8px; }
+        .debug-subsection .debug-row { margin: 5px 0; }
+
+        .debug-actions {
+            display: flex;
+            gap: 6px;
+        }
+    }
 }

@@ -1,6 +1,7 @@
 import UAActor from "./un-aactor";
+import type { FVector } from "./un-vector";
 
-abstract class UNCelestial extends UAActor {
+export abstract class UNCelestial extends UAActor {
     declare protected radius: number;
     declare protected limitMaxRadius: number;
     declare protected lat: number;
@@ -9,7 +10,7 @@ abstract class UNCelestial extends UAActor {
     declare protected isMakingLightmap: boolean;
 
     declare protected celestialScale: number;
-    declare protected celestialPosition: GA.FVector;
+    declare protected celestialPosition: FVector;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
@@ -51,4 +52,3 @@ abstract class UNCelestial extends UAActor {
 }
 
 export default UNCelestial;
-export { UNCelestial };

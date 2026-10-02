@@ -1,11 +1,33 @@
 import { FMipmap } from "./un-mipmap";
-import decompressDDS from "../dds/dds-decode";
+import decompressDDS from "./dds/dds-decode";
 import ETextureFormat, { ETexturePixelFormat } from "./un-tex-format";
 import FColor from "./un-color";
-import { BufferValue } from "@l2js/core";
-import getTypedArrayConstructor from "@client/utils/typed-arrray-constructor";
-import UMaterial from "./un-material";
-import FArray from "@l2js/core/src/unreal/un-array";
+import { type APackage, type UExport, FArray } from "@l2js/core";
+import getTypedArrayConstructor from "./utils/typed-arrray-constructor";
+import UMaterial, { type IBaseMaterialDecodeInfo } from "./un-material";
+import type { UPlatte } from "./un-palette";
+import type { DecodeLibrary } from "./decode-library";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
+import type { Texture, Vector2 } from "three";
+
+export type MapData_T = { texture: Texture, size: Vector2 };
+export type DecodableTexture_T = "rgba" | "dds" | "g16" | "float" | "wet";
+export type DataTextureFormats_T = "r" | "rg" | "rgb" | "rgba";
+export type IAnimatedSpriteDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "sprite", sprites: ITextureDecodeInfo[], framerate: number };
+export type IDataTextureDecodeInfo = ITextureDecodeInfo & { format?: DataTextureFormats_T };
+export type TextureClampMode_T = "wrap" | "clamp";
+export type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
+    materialType: "texture",
+    textureType: DecodableTexture_T,
+    buffer: ArrayBuffer,
+    wrapS?: TextureClampMode_T, wrapT?: TextureClampMode_T,
+    width: number, height: number,
+    detail?: string,
+    detailScale: number,
+    twoSided?: boolean,
+    isMasked?: boolean,
+    isAlphaTexture?: boolean
+};
 
 /*
 
@@ -15,14 +37,13 @@ import FArray from "@l2js/core/src/unreal/un-array";
     0001000000 ( 64)
     0000100000 ( 32)
 */
-
-enum ETexClampMode {
+export enum ETexClampMode {
     TC_Wrap = 0x00,
     TC_Clamp = 0x01,
-}
+};
 
-abstract class UTexture extends UMaterial {
-    declare public readonly palette: GA.UPlatte;
+export abstract class UTexture extends UMaterial {
+    declare public readonly palette: UPlatte;
     declare public readonly internalTime: number[];
     declare public readonly format: ETextureFormat/* = ETextureFormat.TEXF_RGBA8*/;
 
@@ -47,6 +68,8 @@ abstract class UTexture extends UMaterial {
     declare public readonly isTwoSided: boolean;
     declare public readonly isAlphaTexture: boolean;
     declare public readonly isMasked: boolean;
+    declare protected detail: UMaterial;
+    declare protected detailScale: number;
 
     declare protected lodSet: number;
 
@@ -72,6 +95,9 @@ abstract class UTexture extends UMaterial {
 
             "MaxColor": "maxColor",
 
+            "Detail": "detail",
+            "DetailScale": "detailScale",
+
             "MipZero": "mipZero",
 
             "MinFrameRate": "minFrameRate",
@@ -93,7 +119,7 @@ abstract class UTexture extends UMaterial {
         return { width: this.width, height: this.height };
     }
 
-    public doLoad(pkg: C.APackage, exp: C.UExport) {    // 2785
+    public doLoad(pkg: APackage, exp: UExport) {    // 2785
         super.doLoad(pkg, exp);
 
         this.readHead = pkg.tell();
@@ -145,7 +171,8 @@ abstract class UTexture extends UMaterial {
         }
     }
 
-    protected decodeTexture(library: GD.DecodeLibrary) {
+    protected decodeTexture(builder: DecodeLibraryBuilder) {
+        const library = builder.library;
         const totalMipCount = this.mipmaps.length;
 
         if (totalMipCount === 0) return { materialType: "empty" };
@@ -237,7 +264,7 @@ abstract class UTexture extends UMaterial {
 
         const width = firstMipmap.sizeW, height = firstMipmap.sizeH;
         let decodedBuffer: ArrayBuffer;
-        let textureType: GD.DecodableTexture_T;
+        let textureType: DecodableTexture_T;
 
         switch (format) {
             case ETexturePixelFormat.TPF_DXT1:
@@ -303,23 +330,25 @@ abstract class UTexture extends UMaterial {
             buffer: decodedBuffer,
             width,
             height,
-            wrapS: this.wrapS,
-            wrapT: this.wrapT,
+            detail: builder.pullMaterial(this.detail),
+            detailScale: this.detailScale ?? 8,
+            wrapS: this.wrapS === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
+            wrapT: this.wrapT === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
             useMipmaps: mipCount > 0,
             twoSided: this.isTwoSided,
             isMasked: this.isMasked,
             isAlphaTexture: this.isAlphaTexture
-        } as GD.ITextureDecodeInfo;
+        } as ITextureDecodeInfo;
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IBaseMaterialDecodeInfo | string {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo | string {
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
-            const sprites: GD.ITextureDecodeInfo[] = [];
+            const sprites: ITextureDecodeInfo[] = [];
 
             let tex: UTexture = this;
 
             for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
-                sprites.push(tex.loadSelf().decodeTexture(builder.library));
+                sprites.push(tex.loadSelf().decodeTexture(builder));
                 tex = tex.animNext;
             }
 
@@ -328,15 +357,14 @@ abstract class UTexture extends UMaterial {
                 materialType: "sprite",
                 sprites,
                 framerate: 1000 / this.maxFrameRate
-            } as GD.IAnimatedSpriteDecodeInfo;
+            } as IAnimatedSpriteDecodeInfo;
         }
 
-        return this.decodeTexture(builder.library);
+        return this.decodeTexture(builder);
     }
 }
 
 export default UTexture;
-export { UTexture, ETexClampMode };
 
 function createPlane(width: number, height: number, widthSegments: number, heightSegments: number) {
     const width_half = width / 2;

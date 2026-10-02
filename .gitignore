@@ -16,4 +16,4 @@ py_scripts/*
 scripts/*
 !scripts/*.py
 traces/*
-/*-report.jsonl
+/*-report.jsonl*

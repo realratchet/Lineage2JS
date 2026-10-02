@@ -1,20 +1,21 @@
 import RotatingObject from "./rotating-object";
-import { MeshLight } from "./lit-actor";
+import { MeshLight_T } from "./lit-actor";
+import type { ISwayingDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 type AttachedActor_T = { object: THREE.Object3D, relativeLocation: THREE.Vector3, relativeRotation: THREE.Quaternion };
 
 // PHYS_L2Movement sway per cpp/l2_editor_leak/Engine/Classes/MovableStaticMeshActor.uc; the native
 // physL2Movement body is not in the leaks - omega = (rate/max) * accelRatio is unverified vs retail (needs IDA)
-class SwayingObject extends RotatingObject {
+export class SwayingObject extends RotatingObject {
     public readonly isSwayingObject: boolean = true;
 
-    protected readonly swaying: GD.ISwayingDecodeInfo;
+    protected readonly swaying: ISwayingDecodeInfo;
     protected readonly omega: [number, number, number];
     protected readonly currentMax: [number, number, number];
     protected readonly phase: [number, number, number];
     protected readonly attached: AttachedActor_T[] = [];
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, swaying: GD.ISwayingDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, swaying: ISwayingDecodeInfo }) {
         super({ ...props, rotating: { rotator: props.swaying.orgRotator, rate: [0, 0, 0] } });
 
         this.swaying = props.swaying;
@@ -61,11 +62,11 @@ class SwayingObject extends RotatingObject {
             }
         }
 
-        this.setQuaternionFromRotator(
+        this.rotator.set(
             orgRotator[0] + this.currentMax[0] * Math.sin(this.phase[0]),
             orgRotator[1] + this.currentMax[1] * Math.sin(this.phase[1]),
             orgRotator[2] + this.currentMax[2] * Math.sin(this.phase[2])
-        );
+        ).toQuaternion(this.quaternion);
 
         for (const attachment of this.attached) {
             attachment.object.position.copy(attachment.relativeLocation).applyQuaternion(this.quaternion).add(this.position);
@@ -78,4 +79,3 @@ class SwayingObject extends RotatingObject {
 }
 
 export default SwayingObject;
-export { SwayingObject };

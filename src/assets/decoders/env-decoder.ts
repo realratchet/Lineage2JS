@@ -1,9 +1,10 @@
-import decodeEnvColor from "@client/assets/decoders/env-colors-decoder";
-import EnvInfo from "@client/rendering/env-info";
-import ColorByte from "@client/utils/color-byte";
+import decodeEnvColor from "./env-colors-decoder";
+import EnvInfo from "../../rendering/env-info";
+import ColorByte from "../../utils/color-byte";
 import { Vector2 } from "three";
+import type { IL2NEnvDecodeInfo } from "@l2js/engine/contracts/config";
 
-function decodeEnv(props: GD.IL2NEnvDecodeInfo): EnvInfo {
+export function decodeEnv(props: IL2NEnvDecodeInfo): EnvInfo {
     const setup = {
         ...props.envSetup,
         timeEnv: Object.fromEntries(Object.entries(props.envSetup.timeEnv).map(([k, v]) => [k, decodeEnvColor(v)])) as any,
@@ -24,4 +25,3 @@ function decodeEnv(props: GD.IL2NEnvDecodeInfo): EnvInfo {
 }
 
 export default decodeEnv;
-export { decodeEnv };

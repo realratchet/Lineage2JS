@@ -3,12 +3,13 @@ import VERTEX_SHADER from "./shader/shader-particle-instanced.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle-instanced.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
 import { fixParticleTextureSampling, getPartcileBlendingSettings } from "./particle-material";
+import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine/contracts/emitter";
 
-class InstancedParticleMaterial extends ShaderMaterial {
+export class InstancedParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
-
-    constructor({ map, blendingMode, name, usesSubdivision, spriteDirection, projectionNormal }: InstancedParticleMaterialInitSettings_T) {
-
+    
+    constructor({ map, blendingMode, name, usesSubdivision, blendBetweenSubdivisions, spriteDirection, projectionNormal }: InstancedParticleMaterialInitSettings_T) {
+        
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.fog
         ]));
@@ -19,6 +20,8 @@ class InstancedParticleMaterial extends ShaderMaterial {
         uniforms.particleProjectionNormal = { value: projectionNormal?.clone() ?? new Vector3(0, 0, 1) };
 
         const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
+
+        if (blendBetweenSubdivisions) defines.USE_SUBDIVISION_BLEND = "";
 
         if (uniforms.map.value) {
             defines.USE_MAP = "";
@@ -58,13 +61,13 @@ class InstancedParticleMaterial extends ShaderMaterial {
 }
 
 export default InstancedParticleMaterial;
-export { InstancedParticleMaterial };
 
 type InstancedParticleMaterialInitSettings_T = {
     map?: any,
-    blendingMode: GD.ParticleBlendModes_T,
+    blendingMode: ParticleBlendModes_T,
     name: string,
     usesSubdivision?: boolean,
-    spriteDirection?: GD.SpriteDirections_T,
+    blendBetweenSubdivisions?: boolean,
+    spriteDirection?: SpriteDirections_T,
     projectionNormal?: Vector3
 };

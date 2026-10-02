@@ -1,11 +1,21 @@
-class FLeaf implements C.IConstructable {
+import type { APackage, Constructable_T } from "@l2js/core";
+
+export type IBSPLeafDecodeInfo_T = {
+    zone: number,
+    permiating: number,
+    volumetric: number,
+    visibleZones: bigint,
+    musicId?: number
+};
+
+export class FLeaf implements Constructable_T {
     public iZone: number;
     public iPermeating: number;
     public iVolumetric: number;
     public visibleZones: bigint;
     public musicId?: number;
 
-    public load(pkg: C.APackage): this {
+    public load(pkg: APackage): this {
         this.iZone = pkg.read("compat32");
         this.iPermeating = pkg.read("compat32");
         this.iVolumetric = pkg.read("compat32");
@@ -14,7 +24,7 @@ class FLeaf implements C.IConstructable {
         return this;
     }
 
-    public getDecodeInfo(): GD.IBSPLeafDecodeInfo_T {
+    public getDecodeInfo(): IBSPLeafDecodeInfo_T {
         return {
             zone: this.iZone,
             permiating: this.iPermeating,
@@ -26,4 +36,3 @@ class FLeaf implements C.IConstructable {
 }
 
 export default FLeaf;
-export { FLeaf };

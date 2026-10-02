@@ -1,14 +1,134 @@
-import { BufferValue } from "@l2js/core";
-import UObject from "@l2js/core";
+
+import { FArray, FPrimitiveArray } from "@l2js/core";
+import UObject from "../un-object";
 import UPlane from "../un-plane";
 import FRange, { FRangeVector } from "../un-range";
 import FRotator from "../un-rotator";
 import FVector from "../un-vector";
 import FColor from "../un-color";
-import FArray, { FPrimitiveArray } from "@l2js/core/unreal/un-array";
+import type { UEmitter } from "../un-emitter";
+import type { UStaticMesh } from "../static-mesh/un-static-mesh";
+import type { UAActor } from "../un-aactor";
+import type { UTexture } from "../un-texture";
+import type { USound } from "../un-sound";
+import type { DecodeLibraryBuilder } from "../decode-library-builder";
+import type { DecodeLibrary, IBaseObjectDecodeInfo } from "../decode-library";
+import type { Vector4Arr, Vector3Arr, QuaternionArr, ColorArr } from "../library-types";
 
-abstract class UParticleEmitter extends UObject {
-    declare protected actor: GA.UEmitter;
+export type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
+    acceleration: Vector3Arr,
+    lifetime: [number, number],
+    maxParticles: number,
+    initial: {
+        particlesPerSecond: number,
+        scale: { min: Vector3Arr, max: Vector3Arr },
+        velocity: { min: Vector3Arr, max: Vector3Arr },
+        position: { min: Vector3Arr, max: Vector3Arr },
+        offset?: Vector3Arr,
+        angularVelocity: { min: Vector3Arr, max: Vector3Arr }
+    },
+    particlesPerSecond: number,
+    blendingMode: ParticleBlendModes_T,
+    opacity: number,
+    drawScale?: number,
+    changesOverLifetime: {
+        scale: { values: [number, number][], repeats: number }
+    },
+    fadeIn: Fade_T,
+    fadeOut: Fade_T,
+    colorMultiplierRange: { min: Vector3Arr, max: Vector3Arr },
+    angularVelocity?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionCenterOffsetRange?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionsPerSecondRange?: { min: Vector3Arr, max: Vector3Arr },
+    initialTimeRange: [number, number],
+    startMassRange: [number, number],
+    sphereRadiusRange?: [number, number],
+    startLocationPolarRange?: { min: Vector3Arr, max: Vector3Arr },
+    addVelocityMultiplierRange?: { min: Vector3Arr, max: Vector3Arr },
+    velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
+    warmupTime?: number,
+    warmupTicksPerSecond?: number,
+    forcedLifeTime?: boolean,
+    forcedFade?: boolean,
+    forcedMaxParticles?: boolean,
+    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
+};
+
+export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
+
+export type EmitterConfig_T = {
+    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter" | "VertMeshEmitter",
+    name?: string,
+    scriptClassId?: string,
+    blendingMode: ParticleBlendModes_T,
+    uniformScale?: boolean,
+    maxParticles: number,
+    drawScale?: number,
+    rotationOffset?: QuaternionArr,
+    opacity: number,
+    lifetime: [number, number],
+    acceleration: Vector3Arr,
+    maxAbsVelocity?: Vector3Arr,
+    particlesPerSecond: number,
+    fadeIn: Fade_T
+    fadeOut: Fade_T,
+    warmupTime?: number,
+    warmupTicksPerSecond?: number,
+    colorMultiplierRange: { min: Vector3Arr, max: Vector3Arr },
+    angularVelocity?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionCenterOffsetRange?: { min: Vector3Arr, max: Vector3Arr },
+    revolutionsPerSecondRange?: { min: Vector3Arr, max: Vector3Arr },
+    initialTimeRange: [number, number],
+    startMassRange: [number, number],
+    sphereRadiusRange?: [number, number],
+    startLocationPolarRange?: { min: Vector3Arr, max: Vector3Arr },
+    addVelocityMultiplierRange?: { min: Vector3Arr, max: Vector3Arr },
+    velocityLossRange?: { min: Vector3Arr, max: Vector3Arr },
+    forcedLifeTime?: boolean,
+    forcedFade?: boolean,
+    forcedMaxParticles?: boolean,
+    sounds?: IParticleSoundDecodeInfo[],
+    initial: {
+        particlesPerSecond: number,
+        angularVelocity: { min: Vector3Arr, max: Vector3Arr },
+        velocity: { min: Vector3Arr, max: Vector3Arr },
+        position: { min: Vector3Arr, max: Vector3Arr },
+        offset?: Vector3Arr,
+        scale: { min: Vector3Arr, max: Vector3Arr },
+    },
+    changesOverLifetime: {
+        scale: {
+            values: [number, number][],
+            repeats: number
+        },
+        color?: {
+            values: [number, Vector4Arr][],
+            repeats: number
+        },
+        velocity?: {
+            values: [number, Vector3Arr][],
+            repeats: number
+        },
+        revolution?: {
+            values: [number, Vector3Arr][],
+            repeats: number
+        }
+    },
+    settings: any // whitelisted plain emitter properties (see UParticleEmitter.getSettingsSnapshot)
+};
+
+export type Fade_T = { time: number, color: ColorArr };
+export type IParticleSoundDecodeInfo = {
+    soundName: string, // resolved against the sector's soundBlobCache, see SectorObject.getSoundUri
+    radius: [number, number],
+    pitch: [number, number],
+    volume: [number, number],
+    probability: [number, number],
+    weight: number
+};
+
+export abstract class UParticleEmitter extends UObject {
+    declare protected actor: UEmitter;
 
     // Acceleration
     declare protected acceleration: FVector; // Vector which determines the acceleration of the particles in any of the three planes
@@ -53,7 +173,7 @@ abstract class UParticleEmitter extends UObject {
     // Local
     declare protected isAutoDestroyed: boolean; // Determines if this emitter will destroy itself once all particles are gone.
     declare protected isAutoReset: boolean; // Determines if this emitter will reset itself after a specified amount of time.
-    declare protected autoResetTimeRange: number; // The time delay for auto-resets.
+    declare protected autoResetTimeRange: FRange; // The time delay for auto-resets.
     declare protected isDisabled: boolean; // If true, this emitter wont emit anything. Typically used along with TriggerDisabled=true to create a trigger-toggled emitter that starts inactive and only begins emitting once the trigger Event occurs. Also used during testing to disable certain emitters within an emitter system.
     declare protected isFoggingDisabled: boolean; // Determines if particles are affected by distance fog.
     declare protected isRespawningDeadParticles: boolean; // Determines if dead particles (i.e. particles that have exceeded their lifespan or maximum collisions) should be respawned.
@@ -74,7 +194,7 @@ abstract class UParticleEmitter extends UObject {
     declare protected meshNormalThresholdRange: FRange;
     declare protected meshScaleRange: FRangeVector; // This determines the size scale of an emitted mesh, similar to DrawScale3D for actors. It takes each axis independantly, so setting a good range can result in a lot of different shapes on the same mesh.
     declare protected meshSpawning: EParticleMeshSpawning_T;
-    declare protected meshSpawningStaticMesh: GA.UStaticMesh; // A StaticMesh, whose vertices should be used as possible start location offsets. The ParticleMeshes static mesh package provides some useful StaticMeshes for this.
+    declare protected meshSpawningStaticMesh: UStaticMesh; // A StaticMesh, whose vertices should be used as possible start location offsets. The ParticleMeshes static mesh package provides some useful StaticMeshes for this.
     declare protected isSpawningTowardsNormal: boolean;
     declare protected isUniformMeshScale: boolean; // If this is true, the settings in meshscalerange are no longer used for each axis independantly. Instead, the mesh will be scaled along all axis using the x values.
     declare protected isUniformVelocityScale: boolean;
@@ -119,7 +239,7 @@ abstract class UParticleEmitter extends UObject {
 
     // Skeletal mesh
     declare protected relativeBoneIndexRange: FRange;
-    declare protected skeletalMeshActor: GA.AActor;
+    declare protected skeletalMeshActor: UAActor;
     declare protected skeletalScale: FVector;
     declare protected useSkeletalLocationAs: ESkelLocationUpdate_T;
 
@@ -143,7 +263,7 @@ abstract class UParticleEmitter extends UObject {
     declare protected subdivEnd: number;
     declare protected subdivisionScale: FPrimitiveArray<"float">;
     declare protected subdivStart: number;
-    declare protected texture: GA.UTexture;
+    declare protected texture: UTexture;
     declare protected texSubdivU: number;
     declare protected texSubdivV: number;
     declare protected isUsingRandomSubdiv: boolean;
@@ -184,11 +304,11 @@ abstract class UParticleEmitter extends UObject {
 
     declare protected opacity: number;
 
-    declare protected _independentSprayAccel: any;
+    declare protected isIndependentSprayAccel: boolean;
 
-    declare protected _forcedLifeTime: any;
-    declare protected _forcedFade: any;
-    declare protected _forcedMaxParticles: any;
+    declare protected forcedLifeTime: boolean;
+    declare protected forcedFade: boolean;
+    declare protected forcedMaxParticles: boolean;
 
     declare protected _owner: any;
     declare protected _initialized: any;
@@ -232,7 +352,7 @@ abstract class UParticleEmitter extends UObject {
     declare protected determineVelocityByLocationDifference: boolean;
     declare protected useAbsoluteTimeForSizeScale: boolean;
 
-    public setActor(actor: GA.UEmitter) { this.actor = actor; return this; }
+    public setActor(actor: UEmitter) { this.actor = actor; return this; }
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
@@ -362,10 +482,10 @@ abstract class UParticleEmitter extends UObject {
             "RotateVelocityLossRange": "rotateVelocityLossRange",
 
 
-            "IndependentSprayAccel": "_independentSprayAccel",
-            "ForcedLifeTime": "_forcedLifeTime",
-            "ForcedFade": "_forcedFade",
-            "ForcedMaxParticles": "_forcedMaxParticles",
+            "IndependentSprayAccel": "isIndependentSprayAccel",
+            "ForcedLifeTime": "forcedLifeTime",
+            "ForcedFade": "forcedFade",
+            "ForcedMaxParticles": "forcedMaxParticles",
 
             "Owner": "_owner",
             "Initialized": "_initialized",
@@ -417,7 +537,7 @@ abstract class UParticleEmitter extends UObject {
     //     return super.setProperty(tag, value);
     // }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.EmitterConfig_T {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): EmitterConfig_T {
         const library = builder.library;
 
         if (this._particles && this._particles.length > 0)
@@ -429,8 +549,7 @@ abstract class UParticleEmitter extends UObject {
         // debugger;
         // console.log(this);
 
-        if (this.sizeScale?.length === 1)
-            debugger;
+        // if (this.sizeScale?.length === 1) debugger;
 
         return {
             name: this.uuid,
@@ -439,8 +558,8 @@ abstract class UParticleEmitter extends UObject {
             rotationOffset: this.rotationOffset?.getQuaternionElements() || [0, 0, 0, 1],
             opacity: this.opacity,
             lifetime: this.lifetimeRange.loadSelf().getDecodeInfo(library),
-            fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
-            fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as GD.Vector4Arr } : null,
+            fadeIn: this.isFadingIn ? { time: this.fadeInEndTime, color: this.fadeInFactor?.loadSelf().getElements() as Vector4Arr } : null,
+            fadeOut: this.isFadingOut ? { time: this.fadeOutStartTime, color: this.fadeOutFactor?.loadSelf().getElements() as Vector4Arr } : null,
             uniformScale: this.isUniformScale,
             acceleration: this.acceleration?.getElements(),
             warmupTime: this.relativeWarmupTime,
@@ -462,12 +581,15 @@ abstract class UParticleEmitter extends UObject {
             startLocationPolarRange: this.startLocationPolarRange?.loadSelf().getDecodeInfo(library),
             addVelocityMultiplierRange: this.addVelocityMultiplierRange?.loadSelf().getDecodeInfo(library),
             velocityLossRange: this.velocityLossRange?.loadSelf().getDecodeInfo(library),
-            forcedMaxParticles: this._forcedMaxParticles,
+            forcedLifeTime: this.forcedLifeTime,
+            forcedFade: this.forcedFade,
+            forcedMaxParticles: this.forcedMaxParticles,
             particlesPerSecond: this.particlesPerSecond,
             angularVelocity: this.spinsPerSecondRange?.loadSelf().getDecodeInfo(library),
             blendingMode: blendingNames[(this.drawStyle.valueOf() as EParticleDrawStyle_T)],
             changesOverLifetime: {
-                scale: this.isUsingSizeScale && (this.sizeScale?.length ?? 0) > 1 ? {
+                // Engine.dll UpdateParticles 0x8a0f80..0x8a0f90 accepts a single SizeScale key.
+                scale: this.isUsingSizeScale && (this.sizeScale?.length ?? 0) > 0 ? {
                     values: this.sizeScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.sizeScaleRepeats
                 } : null,
@@ -479,12 +601,12 @@ abstract class UParticleEmitter extends UObject {
                     values: this.velocityScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.velocityScaleRepeats
                 } : null,
-                revolution: this.isUsingRevolutionScale && (this.revolutionScale?.length ?? 0) > 1 ? {
+                revolution: this.isUsingRevolutionScale && (this.revolutionScale?.length ?? 0) > 0 ? {
                     values: this.revolutionScale.map(s => s.getDecodeInfo(library)),
                     repeats: this.revolutionScaleRepeats
                 } : null
             },
-            sounds: (this.sounds?.map(s => s.getDecodeInfo(builder)).filter(s => s) as GD.IParticleSoundDecodeInfo[]) ?? [],
+            sounds: (this.sounds?.map(s => s.getDecodeInfo(builder)).filter(s => s) as IParticleSoundDecodeInfo[]) ?? [],
             settings: this.getSettingsSnapshot(library)
         };
     }
@@ -492,7 +614,7 @@ abstract class UParticleEmitter extends UObject {
     // BaseEmitter Object.assign's these onto itself. Structs serialize through their
     // regular getDecodeInfo and BaseEmitter rehydrates the array forms, so no live
     // UObject ever crosses the decode-worker boundary.
-    protected getSettingsSnapshot(library: GD.DecodeLibrary): Record<string, any> {
+    protected getSettingsSnapshot(library: DecodeLibrary): Record<string, any> {
         const snapshot: Record<string, any> = {};
 
         for (const varName of REQUIRED_SETTINGS) {
@@ -510,17 +632,18 @@ abstract class UParticleEmitter extends UObject {
 // settings the emitters read off themselves after the assign and which aren't already
 // covered by explicit EmitterConfig_T fields, scale curves travel via changesOverLifetime
 const REQUIRED_SETTINGS = [
-    "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter",
+    "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter", "autoResetTimeRange", "isAutoDestroyed", "isAutoReset",
     "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
     "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
-    "isDisabled", "isFadingIn", "isFadingOut", "isRespawningDeadParticles",
+    "initialDelayRange", "startVelocityRadialRange", "isIndependentSprayAccel",
+    "isDisabled", "isFadingIn", "isFadingOut", "isResetOnTrigger", "isRespawningDeadParticles", "isTriggerDisabled", "isBlendBetweenSubdivisions", "isDepthTesting", "isDepthWriting",
     "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
     "isUsingCollision", "isUsingColorFromMesh", "isUsingColorScale", "isUsingRandomSubdiv",
     "isUsingRevolution", "isUsingRevolutionScale", "isUsingSizeScale", "isUsingVelocityScale",
     "isVelocityFromMesh", "maxAbsVelocity", "meshNormal", "meshScaleRange", "meshSpawning",
     "rotateVelocityLossRange", "rotationNormal", "rotationSource", "sizeScaleRepeats",
-    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawningSound",
+    "secondsBeforeInactive", "skeletalScale", "spawnFromOtherEmitter", "spawnOnTriggerPPS", "spawnOnTriggerRange", "spawningSound",
     "spawningSoundIndex", "spawningSoundProbability",
     "startLocationShape", "startSpinRange", "subdivEnd", "subdivStart", "texSubdivU",
     "texSubdivV", "useSkeletalLocationAs", "velocityScaleRepeats"
@@ -528,7 +651,7 @@ const REQUIRED_SETTINGS = [
 
 const CLONE_UNSAFE = Symbol("clone-unsafe");
 
-function toCloneSafeSetting(value: any, library: GD.DecodeLibrary): any {
+function toCloneSafeSetting(value: any, library: DecodeLibrary): any {
     if (value === null || value === undefined) return value;
 
     const t = typeof value;
@@ -556,7 +679,7 @@ function toCloneSafeSetting(value: any, library: GD.DecodeLibrary): any {
     return CLONE_UNSAFE;
 }
 
-abstract class UParticleRevolutionScale extends UObject {
+export abstract class UParticleRevolutionScale extends UObject {
     declare public relTime: number;
     declare public relRevolution: FVector;
 
@@ -567,12 +690,12 @@ abstract class UParticleRevolutionScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
+    public getDecodeInfo(_library: DecodeLibrary): [number, Vector3Arr] {
         return [this.relTime, this.relRevolution?.getElements() || [0, 0, 0]];
     }
 }
 
-abstract class UParticleTimeScale extends UObject {
+export abstract class UParticleTimeScale extends UObject {
     declare public relSize: number;
     declare public relTime: number;
 
@@ -583,12 +706,12 @@ abstract class UParticleTimeScale extends UObject {
         });
     }
 
-    public getDecodeInfo(library: GD.DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
+    public getDecodeInfo(library: DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
 
     public toString() { return `ParticleTimeScale=(time=${this.relTime.toFixed(2)}, size=${this.relSize})`; }
 };
 
-abstract class UParticleVelocityScale extends UObject {
+export abstract class UParticleVelocityScale extends UObject {
     declare public relTime: number;
     declare public relVelocity: FVector;
 
@@ -599,13 +722,13 @@ abstract class UParticleVelocityScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector3Arr] {
+    public getDecodeInfo(_library: DecodeLibrary): [number, Vector3Arr] {
         return [this.relTime, this.relVelocity?.getElements() || [0, 0, 0]];
     }
 }
 
-abstract class UParticleSound extends UObject {
-    declare public sound: GA.USound;
+export abstract class UParticleSound extends UObject {
+    declare public sound: USound;
     declare public radius: FRange;
     declare public pitch: FRange;
     declare public weight: number;
@@ -623,7 +746,7 @@ abstract class UParticleSound extends UObject {
         });
     }
 
-    public getDecodeInfo(builder: GD.DecodeLibraryBuilder): GD.IParticleSoundDecodeInfo | null {
+    public getDecodeInfo(builder: DecodeLibraryBuilder): IParticleSoundDecodeInfo | null {
         if (!this.sound) return null;
 
         const library = builder.library;
@@ -631,12 +754,10 @@ abstract class UParticleSound extends UObject {
         if (!snd) return null;
 
         const soundKey = snd.objectName ?? snd.uuid;
-        const soundEntry = builder.pullSound(snd);
 
-        if (!soundEntry) return null;
+        if (!builder.pullSound(snd)) return null;
 
         return {
-            soundDataUri: soundEntry.uri,
             soundName: soundKey,
             radius: this.radius?.loadSelf().getDecodeInfo(library) ?? [0, 0],
             pitch: this.pitch?.loadSelf().getDecodeInfo(library) ?? [1, 1],
@@ -648,20 +769,21 @@ abstract class UParticleSound extends UObject {
 };
 
 // BeamEmitter.uc structs
-abstract class UParticleBeamEndPoint extends UObject {
+export abstract class UParticleBeamEndPoint extends UObject {
     declare public offset: FRangeVector;
     declare public weight: number;
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
             "ActorTag": "_actorTag",
-            "Offset": "offset",
+            // Retail LineageEffect.u serializes this field as lowercase "offset".
+            "offset": "offset",
             "Weight": "weight"
         });
     }
 }
 
-abstract class UParticleBeamScale extends UObject {
+export abstract class UParticleBeamScale extends UObject {
     declare public frequencyScale: FVector;
     declare public relativeLength: number;
 
@@ -673,11 +795,9 @@ abstract class UParticleBeamScale extends UObject {
     }
 }
 
-abstract class UParticle extends UObject {
+export abstract class UParticle extends UObject { };
 
-};
-
-abstract class UParticleColorScale extends UObject {
+export abstract class UParticleColorScale extends UObject {
     declare public relTime: number;
     declare public color: FColor;
 
@@ -688,15 +808,14 @@ abstract class UParticleColorScale extends UObject {
         });
     }
 
-    public getDecodeInfo(_library: GD.DecodeLibrary): [number, GD.Vector4Arr] {
-        return [this.relTime, this.color?.toArray() as GD.Vector4Arr || [255, 255, 255, 255]];
+    public getDecodeInfo(_library: DecodeLibrary): [number, Vector4Arr] {
+        return [this.relTime, this.color?.toArray() as Vector4Arr || [255, 255, 255, 255]];
     }
 }
 
 export default UParticleEmitter;
-export { UParticleEmitter, UParticleRevolutionScale, UParticleTimeScale, UParticleSound, UParticleVelocityScale, UParticle, UParticleColorScale, UParticleBeamEndPoint, UParticleBeamScale };
 
-enum EParticleCoordinateSystem_T {
+export enum EParticleCoordinateSystem_T {
     PTCS_Independent, //Initial values (Start Location, Starting Velocity, etc.) are relative to the Emitter actor. Values that change over time, such as acceleration, are relative to the world. (aka absolute)
     PTCS_Relative, //All coordinates are relative to the Emitter actor's position.
     PTCS_Absolute, //All coordinates are absolute world coordinates.
@@ -704,52 +823,52 @@ enum EParticleCoordinateSystem_T {
     PTCS_Spray
 };
 
-enum EParticleEffectAxis_T {
+export enum EParticleEffectAxis_T {
     PTEA_NegativeX,
     PTEA_PositiveZ
 };
 
-enum EParticleMeshSpawning_T {
+export enum EParticleMeshSpawning_T {
     PTMS_None,
     PTMS_Linear,
     PTMS_Random
 };
 
-enum EParticleRotationSource_T {
+export enum EParticleRotationSource_T {
     PTRS_None,
     PTRS_Actor,
     PTRS_Offset,
     PTRS_Normal
 };
 
-enum ESkelLocationUpdate_T {
+export enum ESkelLocationUpdate_T {
     PTSU_None,
     PTSU_SpawnOffset,
     PTSU_Location
 };
 
-enum EParticleCollisionSound_T {
+export enum EParticleCollisionSound_T {
     PTSC_None,
     PTSC_LinearGlobal,
     PTSC_LinearLocal,
     PTSC_Random
 };
 
-enum EParticleVelocityDirection_T {
+export enum EParticleVelocityDirection_T {
     PTVD_None, // This is the default.
     PTVD_StartPositionAndOwner, // Particles move in the direction from the Emitter actor towards their starting location.
     PTVD_OwnerAndStartPosition, // Like PTVD_StartPositionAndOwner, but particles move towards the Emitter actor.
     PTVD_AddRadial // The particle will move outward from the Emitter actor at a rate set by the StartVelocityRadialRange. If the particle starts at 0,0,0 relative to the Emitter, this will have no effect.
 };
 
-enum EParticleStartLocationShape_T {
+export enum EParticleStartLocationShape_T {
     PTLS_Box,
     PTLS_Sphere, // SphereRadiusRange will be used to specify a sphere.
     PTLS_Polar, // StartLocationPolarRange will be used to describe the spawning area with a range of polar coordinates.
     PTLS_All // Combines all of the above. The StartLocationRange will determine the initial location, then the SphereRadiusRange will be added to that, then the StartLocationPolarRange will be added to the result to get the final starting location.
 };
 
-enum EParticleDrawStyle_T {
+export enum EParticleDrawStyle_T {
     PTDS_Regular,   // Just draws the particle textures without any color blending and transparency like the STY_Normal color blending mode for Actors.
     PTDS_AlphaBlend, // Uses the texture's alpha channel to make parts of it transparent like the STY_Alpha color blending mode for Actors.
     PTDS_Modulated, // Like the STY_Modulated color blending mode for Actors.
@@ -767,7 +886,7 @@ const blendingNames = {
     [EParticleDrawStyle_T.PTDS_AlphaModulate_MightNotFogCorrectly]: "alphaModulate",
     [EParticleDrawStyle_T.PTDS_Darken]: "darken",
     [EParticleDrawStyle_T.PTDS_Brighten]: "brighten",
-} as Record<EParticleDrawStyle_T, GD.ParticleBlendModes_T>;
+} as Record<EParticleDrawStyle_T, ParticleBlendModes_T>;
 
 // enum-backed REQUIRED_SETTINGS, resolved to the member's own camelCase name
 const ENUM_SETTING_NAMES: Record<string, Record<number, string>> = {
