@@ -226,6 +226,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly viewport: HTMLViewportElement_T;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
+    public readonly cameraTarget = new Vector3(-87086.51708877791, 239936.94718888338, -3685.930229617832);
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
@@ -369,167 +370,167 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         // lightmapped water
         // this.camera.position.set(2187.089541437192, -1232.1649850535432, 110751.03244741965);
-        // this.controls.target.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
+        // this.cameraTarget.set(2183.2765321590364, -3123.9848865795666, 111582.45872830588);
 
 
         // // tower planes
         // this.camera.position.set(16317.62354947573, -11492.261077168214, 114151.68197851974);
-        // this.controls.orbit.target.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
+        // this.cameraTarget.set(17908.226612501945, -11639.21923814191, 114223.45684942426);
 
         // blinking roof
         // this.camera.position.set(20532.18926265955, -11863.06999059111, 117553.43156512016);
-        // this.controls.target.set(20532.191127608294, -9998.087698878093, 117553.4315763069);
+        // this.cameraTarget.set(20532.191127608294, -9998.087698878093, 117553.4315763069);
 
         // rotating crystal
         // this.camera.position.set(12503.665976183796, -1081.0665384462375, 116917.6052756099);
-        // this.controls.target.set(11939.418010659865, -1153.9097602263002, 116384.32683375604);
+        // this.cameraTarget.set(11939.418010659865, -1153.9097602263002, 116384.32683375604);
 
         // this.camera.position.set(10484.144790506707, -597.9622026194365, 114224.52489243896);
-        // this.controls.target.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
+        // this.cameraTarget.set(17301.599545134217, -3594.4818114739037, 114022.41226029034);
 
         // // elven ruins colon
         // this.camera.position.set(-113512.77219040602, 235526.6777673793, -3451.3266495528937);
-        // this.controls.orbit.target.set(-113585.56931966537, 235592.2972700526, -3471.192671814631);
+        // this.cameraTarget.set(-113585.56931966537, 235592.2972700526, -3471.192671814631);
 
         // // elven ruins light fixture with two lights
         // this.camera.position.set(-114663.6589876172, -3794.0658040717663, 235906.27471226442);
-        // this.controls.orbit.target.set(-114748.37491935505, -3810.9831230352693, 235855.90592005264);
+        // this.cameraTarget.set(-114748.37491935505, -3810.9831230352693, 235855.90592005264);
 
         // // tower ceiling fixture (too red)
         // this.camera.position.set(17589.39507123414, -5841.085927319365, 116621.38351101281);
-        // this.controls.orbit.target.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
+        // this.cameraTarget.set(17611.91280729978, -5819.704399240179, 116526.32678153258);
 
         // tower outside
-        // this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
-        // this.controls.orbit.target.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
+        this.camera.position.set(13202.948810614555, 114479.97315173852, -3573.003864493672);
+        this.cameraTarget.set(13298.353862721668, 114463.56670278899, -3547.92988464792);
 
         // // cruma doors
         // this.camera.position.set(17635.92785265722, 110567.1123199521, -6404.763840433224);
-        // this.controls.orbit.target.set(17642.91796377946, 110666.86770886739, -6404.736843065529);
+        // this.cameraTarget.set(17642.91796377946, 110666.86770886739, -6404.736843065529);
 
         // // execution grounds necropolis
         // this.camera.position.set(39685.67263674792, -2453.9874334636006, 145466.98825143554);
-        // this.controls.orbit.target.set(39689.71781138217, -2528.306592105407, 145400.2027798047);
+        // this.cameraTarget.set(39689.71781138217, -2528.306592105407, 145400.2027798047);
 
         // // cruma top
         // this.camera.position.set(17493.974642555284, 20660.858986037056, 112602.20721151105);
-        // this.controls.orbit.target.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
+        // this.cameraTarget.set(17494.774633985846, 20560.86218601999, 112602.20697106984);
 
         // // talking island
         // this.camera.position.set(-94565.5599208028, 241247.1267543205, -2757.6753131407077);
-        // this.controls.orbit.target.set(-94641.92540931691, 241183.01219001279, -2765.2670723330143);
+        // this.cameraTarget.set(-94641.92540931691, 241183.01219001279, -2765.2670723330143);
 
         // // cruma colons
         // this.camera.position.set(15177.670008783623, -1250.655953785669, 110435.92329177055);
-        // this.controls.orbit.target.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
+        // this.cameraTarget.set(15196.267093016691, -1310.1615119775258, 110520.73820444682);
 
         // // ti - should have terrain light
         // this.camera.position.set(-82762.45963652806, -3191.734390136169, 243599.79809435847);
-        // this.controls.orbit.target.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
+        // this.cameraTarget.set(-82695.39500085678, -3262.698174694781, 243530.66588287643);
 
         // // world origin
         // this.camera.position.set(20, 20, 20);
-        // this.controls.orbit.target.set(0, 0, 0);
+        // this.cameraTarget.set(0, 0, 0);
 
         // // look player
         // this.camera.position.set(-87021.22448304677, -3660.4757138727023, 240008.2840185369);
-        // this.controls.orbit.target.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
+        // this.cameraTarget.set(-87086.51708877791, -3685.930229617832, 239936.94718888338);
 
         // // ti church
         // this.camera.position.set(-85586.61119566132, -2490.4046838818504, 243228.59559104982);
-        // this.controls.orbit.target.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
+        // this.cameraTarget.set(-85561.73216987512, -2537.9950047641682, 243312.95313626213);
 
         // // ti emitter
         // this.camera.position.set(-85696.00014079512, -3058.804150841089, 242023.70085962766);
-        // this.controls.orbit.target.set(-85624.11634173596, -3062.40244455436, 241954.27628389848);
+        // this.cameraTarget.set(-85624.11634173596, -3062.40244455436, 241954.27628389848);
 
         // // should see moon
         // this.camera.position.set(18345, -3583, 115670);
-        // this.controls.orbit.target.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
+        // this.cameraTarget.set(18443.62146027629, -3569.731060885415, 115660.11350275649);
 
         // // seam
         // this.camera.position.set(-93965.70166078406, -933.6590151180576, 245523.81285369548);
-        // this.controls.orbit.target.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
+        // this.cameraTarget.set(-94050.79558721324, -982.1451458289137, 245503.61090295907);
 
         // // horrible performance
         // this.camera.position.set(13773.791753219824, -3153.232327352311, 122575.56746151186);
-        // this.controls.orbit.target.set(13761.929509381232, -3152.8878889174143, 122674.86080737793);
+        // this.cameraTarget.set(13761.929509381232, -3152.8878889174143, 122674.86080737793);
 
         // // gludin can shouldn't see TI
         // this.camera.position.set(-90330.83499953813, -1207.7678030803706, 146939.94639475344);
-        // this.controls.orbit.target.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
+        // this.cameraTarget.set(-90359.97311195015, -1202.9687177995381, 147035.4866437877);
 
         // // dion castle entrance
         // this.camera.position.set(22052.797714747463, 159177.43425453003, -2671.964680416157);
-        // this.controls.orbit.target.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
+        // this.cameraTarget.set(22051.027404387085, 159277.34078819313, -2668.0212640478444);
 
         // // ruins floaties
         // this.camera.position.set(-12399.707502148249, 140833.20344635643, -3689.855733687225);
-        // this.controls.orbit.target.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
+        // this.cameraTarget.set(-12493.044965894152, 140869.09225839243, -3690.188948525243);
 
         // // heine fountain
         // this.camera.position.set(112055.37149242389, 220146.2276990017, -3588.410935323853);
-        // this.controls.orbit.target.set(111955.37806611139, 220146.29848444465, -3587.266521191006);
+        // this.cameraTarget.set(111955.37806611139, 220146.29848444465, -3587.266521191006);
 
         // // heine gondolas (L2MovementTag movables)
         // this.camera.position.set(112647.60327885527, 217944.6616276716, -3567.649639418127);
-        // this.controls.orbit.target.set(112555.89831315387, 217948.10425167627, -3607.378062564142);
+        // this.cameraTarget.set(112555.89831315387, 217948.10425167627, -3607.378062564142);
 
         // // catacombs hanging fire bowls (L2MovementTag movables)
         // this.camera.position.set(-50336.06572467676, 81322.44437284899, -4586.177393335977);
-        // this.controls.orbit.target.set(-50419.82278206141, 81376.9776969517, -4589.47464985799);
+        // this.cameraTarget.set(-50419.82278206141, 81376.9776969517, -4589.47464985799);
 
         // // d.elf village emitters
         // this.camera.position.set(12158.026449046782, 20754.01777389806, -4161.473395142065);
-        // this.controls.orbit.target.set(12138.27794879715, 20656.34094915463, -4153.152659241246);
+        // this.cameraTarget.set(12138.27794879715, 20656.34094915463, -4153.152659241246);
 
         // // mother tree, sprites out of place
         // this.camera.position.set(49328.8568559967, 42729.35547846491, -2762.193021570927);
-        // this.controls.orbit.target.set(49252.46811535074, 42664.84372426251, -2760.462740595816);
+        // this.cameraTarget.set(49252.46811535074, 42664.84372426251, -2760.462740595816);
 
         // // negropolis near delf forest
         // this.camera.position.set(-48757.64540781602, 81179.19605056658, -4673.552599009336);
-        // this.controls.orbit.target.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
+        // this.cameraTarget.set(-48856.90593897058, 81180.50046917332, -4685.620964557865);
 
         // // tower of incolsence missing floor piece
         // this.camera.position.set(113246.97446580934, 15207.952910975075, 11869.48379043878);
-        // this.controls.orbit.target.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
+        // this.cameraTarget.set(113312.05364404147, 15251.799469956664, 11807.498470998573);
 
         // // tree leaf alpha sorting
         // this.camera.position.set(73459.19761207198, 92466.6152928568, -2799.239596681226);
-        // this.controls.orbit.target.set(73507.4944756768, 92379.14544429531, -2803.294045912458);
+        // this.cameraTarget.set(73507.4944756768, 92379.14544429531, -2803.294045912458);
 
         // this.camera.position.set(-160498.80097106379, 147444.77329136943, -2160.401920637207);
-        // this.controls.orbit.target.set(-160411.158574305, 147397.90024984805, -2171.4349741089036);
+        // this.cameraTarget.set(-160411.158574305, 147397.90024984805, -2171.4349741089036);
 
         // // neighbor sector's water plane floating in front of trees
         // this.camera.position.set(-75102.0413513907, 254532.21528121945, -2647.6340093257513);
-        // this.controls.orbit.target.set(-75022.26420482268, 254592.21245772878, -2653.629482315672);
+        // this.cameraTarget.set(-75022.26420482268, 254592.21245772878, -2653.629482315672);
 
         // // same bug, different sector
         // this.camera.position.set(-94267.46807869655, 90614.94062961312, -2563.8085497287193);
-        // this.controls.orbit.target.set(-94325.95049631658, 90695.2733064729, -2575.054342624675);
+        // this.cameraTarget.set(-94325.95049631658, 90695.2733064729, -2575.054342624675);
 
         // cruma bad light (stale Region -> zoneNumber 0 ambient bug, fixed in un-static-mesh-actor.ts)
         // this.camera.position.set(19547.91987263343, 116964.69226804674, -11334.275986974659);
-        // this.controls.orbit.target.set(19646.060323410617, 116958.96763240216, -11352.59757173109);
+        // this.cameraTarget.set(19646.060323410617, 116958.96763240216, -11352.59757173109);
 
         // // heine stitching issue
         // this.camera.position.set(124282.49579416064, 229057.06415321256, -2057.6773374747354);
-        // this.controls.orbit.target.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
+        // this.cameraTarget.set(124220.88761327372, 229098.19906750278, -2124.851371700324);
 
-        // player
-        this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
+        // // player
+        // this.camera.position.set(-87021.22448304677, 240008.2840185369, -3660.4757138727023);
 
         // // audio regression
         // this.camera.position.set(19254.357244041046, 145494.0525086215, -3056.262971968217);
-        // this.controls.orbit.target.set(19259.976684368154, 145593.79108779877, -3051.7200968751245);
+        // this.cameraTarget.set(19259.976684368154, 145593.79108779877, -3051.7200968751245);
 
         // // bad colon lights in EG catacombs
         // this.camera.position.set(43373.971750954406, 144251.6743031877, -5272.650685379844);
-        // this.controls.orbit.target.set(43402.97624528142, 144358.5101364896, -5277.364565211859);
+        // this.cameraTarget.set(43402.97624528142, 144358.5101364896, -5277.364565211859);
 
-        this.camera.lookAt(-87086.51708877791, 239936.94718888338, -3685.930229617832);
+        this.camera.lookAt(this.cameraTarget);
 
         viewport.appendChild(this.renderer.domElement);
 
@@ -566,7 +567,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         console.log([
             `this.camera.position.set(${camera.position.toArray().join(",")});`,
-            `this.controls.orbit.target.set(${controls.orbit.target.toArray().join(",")});`
+            `this.cameraTarget.set(${controls.orbit.target.toArray().join(",")});`
         ].join("\n"));
     }
 

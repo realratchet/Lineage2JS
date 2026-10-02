@@ -86,7 +86,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.physicsManager = this.manGame.getComponent("physics");
         this.controls.orbit = new ZUpOrbitControls(renderManager.camera, renderManager.renderer.domElement);
         this.controls.fps = new ZUpPointerLockControls(renderManager.camera, renderManager.renderer.domElement);
-        this.controls.orbit.target.set(-87086.51708877791, 239936.94718888338, -3685.930229617832);
+        this.controls.orbit.target.copy(renderManager.cameraTarget);
         this.controls.orbit.update();
         this.controls.orbit.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("change", () => renderManager.needsUpdate = true);
