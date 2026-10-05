@@ -337,6 +337,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             alpha: true,
         });
 
+        this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
         this.mainRenderTarget = new WebGLRenderTarget(256, 256, {
@@ -934,6 +935,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         return this.getSectorByCoords(...this.getSectorId(position));
     }
 
+    public isSectorWarm(sector: SectorObject): boolean { return !this.pendingSectorWarmups.some(job => job.sector === sector); }
+
     public isSectorCollisionReady(position: THREE.Vector3): boolean {
         const sector = this.getSector(position);
 
@@ -1108,6 +1111,27 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public retainGeometry(geometry: THREE.BufferGeometry): void { retainResource(geometry); }
     public releaseGeometry(geometry: THREE.BufferGeometry): void { releaseResource(geometry); }
+
+    public retainMeshTextures(meshes: THREE.Mesh[], target: Set<THREE.Texture>): void {
+        const textures = new Set<THREE.Texture>();
+
+        for (const mesh of meshes)
+            for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+                if (material) collectMaterialTextures(material, textures, new WeakSet());
+
+        for (const texture of textures) {
+            if (target.has(texture)) continue;
+
+            target.add(texture);
+            retainResource(texture);
+        }
+    }
+
+    public releaseTextures(textures: Set<THREE.Texture>): void {
+        for (const texture of textures) releaseResource(texture);
+
+        textures.clear();
+    }
 
     public addPickup(pickup: L2Pickup): void {
         this.pickups.add(pickup);
@@ -1953,6 +1977,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public onEngineTick(currentTime: number, _deltaTime: number): void {
         if (!this.isRenderingFrame) return;
+
+        this.renderer.info.reset();
 
         const viewShakeActive = this.applyViewShake(currentTime);
 

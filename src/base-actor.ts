@@ -174,7 +174,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public getAnimationNames(): string[] { return this.animationComponent.getAnimationNames(); }
     public stopAnimations(): void { this.animationComponent.stop(); }
 
-    // materials and textures stay - material-decoder hands those out of name-keyed shared caches
+    // materials stay - material-decoder hands those out of name-keyed shared caches
     public release(): void {
         this.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
         this.detachComponents();

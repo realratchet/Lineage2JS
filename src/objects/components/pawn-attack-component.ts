@@ -83,7 +83,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected bowPreShotFrame = 0;
     protected bowShotFrame = 0;
 
-    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[], protected readonly bow: L2JS.Engine.INpcBowDecodeInfo = null) {
+    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[], protected bow: L2JS.Engine.INpcBowDecodeInfo = null) {
         super();
 
         this.renderManager = renderManager;
@@ -124,6 +124,14 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         }
 
         this.attacks.unshift(...attacks);
+    }
+
+    public setWeapon(bow: L2JS.Engine.INpcBowDecodeInfo): void {
+        for (let i = this.attacks.length - 1; i >= 0; i--)
+            if (!this.attacks[i].skill) this.attacks.splice(i, 1);
+
+        this.bow = bow;
+        this.onAttach();
     }
 
     public isAttacking(): boolean { return this.currentAttack !== null; }

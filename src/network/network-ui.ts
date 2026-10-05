@@ -231,19 +231,22 @@ export class NetworkUI {
         if (this.skillPointerDrag?.pointerId === event.pointerId) this.skillPointerDrag = null;
     }
 
-    protected registerSkillDrop(type: "skill" | "action", id: number, x: number, y: number) {
-        if (this.screen !== "world") return;
+    protected registerSkillDrop(type: "skill" | "action" | "item", id: number, x: number, y: number) {
+        if (this.screen !== "world") return false;
 
         let target = this.nwindow.findWindow(x, y);
         while (target && target !== this.shortCutWnd) target = target.parent;
-        if (target !== this.shortCutWnd) return;
+        if (target !== this.shortCutWnd) return false;
 
         const slot = this.shortCutWnd.getSlotAt(x - this.shortCutWnd.getScreenX(), y - this.shortCutWnd.getScreenY());
 
-        if (slot < 0) return;
+        if (slot < 0) return false;
 
         if (type === "skill") this.manNetwork.registerSkillShortCut(id, this.shortCutWnd.getPage(), slot);
-        else this.manNetwork.registerActionShortCut(id, this.shortCutWnd.getPage(), slot);
+        else if (type === "action") this.manNetwork.registerActionShortCut(id, this.shortCutWnd.getPage(), slot);
+        else this.manNetwork.registerItemShortCut(id, this.shortCutWnd.getPage(), slot); // 0x1007a1e0(1, page * 12 + slot, objectId, 1)
+
+        return true;
     }
 
     public async createScreens() {
@@ -289,6 +292,7 @@ export class NetworkUI {
         this.inventoryWnd = new NCInventoryWnd(this.layer);
         this.inventoryWnd.onUse = objectId => network.useItem(objectId);
         this.inventoryWnd.onChoose = objectId => network.chooseInventoryItem(objectId);
+        this.inventoryWnd.onDropItem = (objectId, clientX, clientY) => this.registerSkillDrop("item", objectId, this.nwindow.canvas.toUI(clientX), this.nwindow.canvas.toUI(clientY));
         this.menuWnd = new NCMenuWnd(this.layer);
         this.menuWnd.onSelect = (button: MenuButton_T) => {
             switch (button) {
@@ -648,7 +652,7 @@ export class NetworkUI {
 
         const paperdoll = this.statusInfo ? this.statusInfo.paperdollObjects : [];
 
-        void this.inventoryWnd.setItems(items.map(item => ({ objectId: item.objectId, itemId: item.itemId, name: `${item.enchantLevel ? `+${item.enchantLevel} ` : ""}${this.strings.itemNames[item.itemId]}`, icon: this.strings.itemIcons[item.itemId], count: item.count, slot: item.isEquipped ? arrEquipmentSlots.findIndex(slot => paperdoll[slot] === item.objectId) : -1, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY })));
+        void this.inventoryWnd.setItems(items.map(item => ({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: item.isEquipped ? arrEquipmentSlots.findIndex(slot => paperdoll[slot] === item.objectId) : -1, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY })));
 
         if (showWindow) this.inventoryWnd.setVisible(true);
     }

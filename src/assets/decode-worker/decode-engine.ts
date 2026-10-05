@@ -10,7 +10,7 @@ import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, deserializeLibrary, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { GameStrings_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { GameStrings_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
@@ -1272,7 +1272,7 @@ export class DecodeEngine {
     }
 
     public async decodeGameStrings(): Promise<GameStrings_T> {
-        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems] = await Promise.all([
+        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_SYSTEMMSG_E_DAT, "assets/system/systemmsg-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SYSSTRING_E_DAT, "assets/system/sysstring-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SERVERNAME_E_DAT, "assets/system/servername-e.dat").asReadable()).decode(),
@@ -1283,8 +1283,17 @@ export class DecodeEngine {
             this.decodeItemNames(),
             this.decodeWeaponGrp(),
             this.decodeArmorGrp(),
-            this.decodeEtcItemGrp()
+            this.decodeEtcItemGrp(),
+            (new UDataFile(SchemasC4.SCHEMA_SYMBOLNAME_E_DAT, "assets/system/symbolname-e.dat").asReadable()).decode()
         ]);
+        const itemInfos: Record<number, ItemInfo_T> = {};
+
+        for (const row of items) itemInfos[row.id] = { addName: row.add_name, description: row.description.replace(/\\n/g, "\n"), equipSound: "", weight: 0, crystalType: 0, consumeType: 0, weaponType: 0, pAtk: 0, mAtk: 0, speed: 0, soulshots: 0, spiritshots: 0, mpConsume: 0, shieldPDef: 0, shieldRate: 0, avoidModify: 0, armorType: 0, pDef: 0, mDef: 0, mpBonus: 0 }; // NWindow 0x1006b130 turns the literal "\n" into line breaks.
+
+        for (const row of weapons) Object.assign(itemInfos[row.id], { equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, weaponType: row.weapon_type, pAtk: row.patt, mAtk: row.matt, speed: row.speed, soulshots: row.SS_count, spiritshots: row.SPS_count, mpConsume: row.mp_consume, shieldPDef: row.shield_pdef, shieldRate: row.shield_rate, avoidModify: row.avoid_mod });
+        for (const row of armor) Object.assign(itemInfos[row.id], { equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, armorType: row.armor_type, pDef: row.physical_defence, mDef: row.magical_defence, mpBonus: row.mp_bonus });
+        for (const row of etcItems) Object.assign(itemInfos[row.id], { equipSound: row.equip_sound, weight: row.weight, crystalType: row.grade, consumeType: row.stackable });
+
         const skillNames: Record<number, string> = {};
         const skillIcons: Record<number, string> = {};
 
@@ -1307,7 +1316,9 @@ export class DecodeEngine {
             classNames: Object.fromEntries(classes.datarows.map((row: any) => [row.id, row.name])),
             skillNames,
             itemNames: Object.fromEntries(items.map(row => [row.id, row.name])),
-            itemIcons: Object.fromEntries([...weapons, ...etcItems].map(row => [row.id, row.icon[0]]).concat(armor.map(row => [row.id, row.icon])))
+            itemIcons: Object.fromEntries([...weapons, ...etcItems].map(row => [row.id, row.icon[0]]).concat(armor.map(row => [row.id, row.icon]))),
+            itemInfos,
+            symbols: Object.fromEntries(symbols.datarows.map((row: any) => [row.filename, row.alias])) // FL2GameData::GetSymbolTexture matches the backtick token against the first column.
         };
     }
 
@@ -1763,6 +1774,24 @@ export class DecodeEngine {
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(splitObjectPath(faceTexture)[0], "Texture"));
 
         return pkg.exports.map(entry => entry.objectName as string);
+    }
+
+    public async decodeCharacterEquipment(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment): Promise<DecodeLibrary> {
+        await this.sweepCache(settings);
+
+        const row = getCharacterRow(await this.decodeCharGrp(), charIndex);
+        const library = new DecodeLibrary();
+
+        await this.pullCharacterEquipment(library, new DecodeLibraryBuilder(library, settings), row, equipment, hairVariant);
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+
+        return library;
+    }
+
+    public async decodeCharacterEquipmentBinary(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment): Promise<ArrayBuffer> {
+        return serializeLibrary(await this.decodeCharacterEquipment(settings, charIndex, hairVariant, equipment)).buffer as ArrayBuffer;
     }
 
     public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean, equipment: L2JS.Engine.ICharacterEquipment): Promise<ArrayBuffer> {

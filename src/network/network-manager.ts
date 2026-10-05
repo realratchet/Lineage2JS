@@ -107,6 +107,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected readonly shortcuts = new Map<number, ShortCut_T>();
     protected readonly autoSoulShots = new Set<number>();
     protected readonly inventory = new Map<number, InventoryItem_T>();
+    protected readonly appearanceLoads = new WeakMap<BaseActor, Promise<void>>();
+    protected readonly bodyKeys = new WeakMap<BaseActor, string>();
+    protected readonly appearanceRequests = new WeakMap<BaseActor, number>();
     protected storageMaxCount: StorageMaxCount_T = null;
     protected readonly skills = new Map<number, SkillEntry_T>();
     protected readonly questStates = new Map<number, QuestState_T>();
@@ -157,6 +160,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected skillListLoad: Promise<void> = null;
     protected resolveSkillList: () => void = null;
     protected userAppearanceLoad: Promise<void> = null;
+    protected nextTick: Promise<void> = null;
+    protected resolveNextTick: () => void = null;
     protected skillPreload: Promise<void> = null;
     protected allyInvite: AllyInvite_T = null;
     protected pledgePower = 0;
@@ -594,6 +599,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.KeyPacket: this.game.authLogin(this.account, this.sessionKey); break;
             case GameServerPacket_T.AuthLoginFail: this.ui.showMessage(`Game server refused the session (reason ${packet.d()}).`); break;
             case GameServerPacket_T.CharSelectInfo:
+                this.login.close();
                 this.characters = readCharSelectInfo(packet);
                 void this.showLobby();
                 break;
@@ -893,9 +899,24 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[Paperdoll_T.PAPERDOLL_CHEST], paperdoll[Paperdoll_T.PAPERDOLL_LEGS], paperdoll[Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[Paperdoll_T.PAPERDOLL_FEET], paperdoll[Paperdoll_T.PAPERDOLL_RHAND], paperdoll[Paperdoll_T.PAPERDOLL_LHAND], paperdoll[Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[Paperdoll_T.PAPERDOLL_HEAD], paperdoll[Paperdoll_T.PAPERDOLL_HAIR]].join(":");
     }
 
-    protected async loadAppearance(appearance: Appearance_T, actor: BaseActor) {
-        const asset = this.manGame.getComponent("asset");
+    protected loadAppearance(appearance: Appearance_T, actor: BaseActor): Promise<void> {
+        const load = this.applyAppearance(appearance, actor);
 
+        this.appearanceLoads.set(actor, load);
+
+        return load;
+    }
+
+    protected async applyAppearance(appearance: Appearance_T, actor: BaseActor) {
+        const asset = this.manGame.getComponent("asset");
+        const paperdoll = appearance.paperdoll;
+        const bodyKey = [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, paperdoll[Paperdoll_T.PAPERDOLL_CHEST], paperdoll[Paperdoll_T.PAPERDOLL_LEGS], paperdoll[Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[Paperdoll_T.PAPERDOLL_FEET], paperdoll[Paperdoll_T.PAPERDOLL_HEAD], paperdoll[Paperdoll_T.PAPERDOLL_HAIR]].join(":");
+        const isEquipmentOnly = this.bodyKeys.get(actor) === bodyKey;
+        const request = (this.appearanceRequests.get(actor) || 0) + 1;
+
+        this.appearanceRequests.set(actor, request);
+
+        if (!isEquipmentOnly) this.bodyKeys.delete(actor);
         if (!this.charGroups) this.charGroups = await asset.getCharGroups();
 
         const index = this.getCharacterIndex(appearance);
@@ -907,7 +928,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const equipment = { enchantLevel: appearance.enchantLevel, rightHand: appearance.paperdoll[Paperdoll_T.PAPERDOLL_RHAND] || appearance.paperdoll[Paperdoll_T.PAPERDOLL_LRHAND], leftHand: appearance.paperdoll[Paperdoll_T.PAPERDOLL_LHAND], head: appearance.paperdoll[Paperdoll_T.PAPERDOLL_HEAD], hair: appearance.paperdoll[Paperdoll_T.PAPERDOLL_HAIR] };
 
-        await asset.loadCharacter(this.manGame.getComponent("render"), index, Math.min(appearance.face, group.faceVariants - 1), hairStyle, colours.includes(appearance.hairColor) ? appearance.hairColor : colours[0], this.getArmor(appearance.paperdoll), actor, equipment);
+        if (isEquipmentOnly) await asset.loadCharacterEquipment(this.manGame.getComponent("render"), actor, index, hairStyle, equipment);
+        else {
+            await asset.loadCharacter(this.manGame.getComponent("render"), index, Math.min(appearance.face, group.faceVariants - 1), hairStyle, colours.includes(appearance.hairColor) ? appearance.hairColor : colours[0], this.getArmor(appearance.paperdoll), actor, equipment);
+
+            if (this.appearanceRequests.get(actor) === request) this.bodyKeys.set(actor, bodyKey);
+        }
 
         const object = this.findObjectByActor(actor);
 
@@ -917,7 +943,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.applyPartyMember(object);
         }
 
-        if (this.inWorld && actor === this.manGame.getComponent("render").player) this.skillPreload = this.preloadSkills();
+        if (!isEquipmentOnly && this.inWorld && actor === this.manGame.getComponent("render").player) this.skillPreload = this.preloadSkills();
     }
 
     protected onCharSelected(packet: PacketReader) {
@@ -981,6 +1007,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         for (let i = 0, count = packet.h(); i < count; i++) {
             const change = packet.h();
             const item = readInventoryItem(packet);
+
+            const previous = this.inventory.get(item.objectId);
+            const sound = item.isEquipped && !(previous && previous.isEquipped) ? this.ui.getStrings().itemInfos[item.itemId].equipSound : "";
+
+            if (sound && sound.toLowerCase() !== "none") void this.manGame.getComponent("audio").playInterfaceSound(sound); // UGameEngine::OnEquipItemPlaySound 0x74ee20: grp equip_sound, no 3D.
 
             switch (change) {
                 case 1:
@@ -1800,12 +1831,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected async finishLoading() {
         const render = this.manGame.getComponent("render");
+        const asset = this.manGame.getComponent("asset");
 
         await this.userAppearanceLoad;
         await this.skillListLoad;
         await this.skillPreload;
 
-        while (this.inWorld && !render.isSectorCollisionReady(render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
+        while (this.inWorld && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
 
         if (this.inWorld) this.ui.showWorld();
     }
@@ -2394,6 +2426,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected async castSkill(caster: NetObject_T, target: NetObject_T, cast: NetSkill_T, isTransient: boolean) {
         const actor = caster.actor;
+
+        await this.waitNextTick(); // UGameEngine::OnEquipItem 0x7456d0 queues ChangeItemAction ahead of pending pawn actions.
+        await this.appearanceLoads.get(actor);
+
         const skill = await this.manGame.getComponent("asset").loadPawnSkill(actor, cast.id, cast.level, isTransient);
 
         if (!skill || !isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved || caster.actor !== actor) return;
@@ -2893,6 +2929,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
 
         this.game.requestShortCutReg(ShortCutType_T.TYPE_SKILL, page * 12 + slot, id);
+    }
+
+    public registerItemShortCut(objectId: number, page: number, slot: number) {
+        if (!this.inWorld || !this.inventory.has(objectId)) return;
+        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
+
+        this.game.requestShortCutReg(ShortCutType_T.TYPE_ITEM, page * 12 + slot, objectId);
     }
 
     public registerActionShortCut(id: number, page: number, slot: number) {
@@ -3641,7 +3684,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.game.requestExAcceptJoinMPCC(isAccepted);
     }
 
+    protected waitNextTick(): Promise<void> {
+        if (!this.nextTick) this.nextTick = new Promise(resolve => this.resolveNextTick = resolve);
+
+        return this.nextTick;
+    }
+
     public onEngineTick(currentTime: number, deltaTime: number): void {
+        if (this.resolveNextTick) {
+            const resolve = this.resolveNextTick;
+
+            this.nextTick = this.resolveNextTick = null;
+            resolve();
+        }
+
         if (this.lobby) this.lobby.tick(deltaTime);
         if (this.lobby && this.ui.isLobbyVisible()) this.ui.setPawnLabels(this.lobby.getPawnLabels(this.characters, this.ui.getScreenCanvas().width, this.ui.getScreenCanvas().height));
         if (!this.inWorld) return;

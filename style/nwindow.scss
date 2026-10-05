@@ -45,6 +45,10 @@
 
 .ndom-button { cursor: default; }
 
+.ndom-layer > .ndom-tooltip { pointer-events: none; }
+
+.ndom-item-drag * { cursor: inherit !important; }
+
 .ndom-inactive .ndom-tile { opacity: 0.502; } // NWindow 0x10012dbd: the +0x70 flag swaps texture alpha 0xff for 0x80; text keeps its alpha.
 
 .ndom-inventory-item {

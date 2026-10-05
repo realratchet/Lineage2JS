@@ -18,8 +18,11 @@ export type DecodeItemMessage_T = { type: "decodeItem"; requestId: number; setti
 export type MatineeAction_T = { action: string; duration: number; pathStyle: number; location: [number, number, number]; rotation: [number, number, number]; };
 export type MatineeScene_T = { tag: string; actions: MatineeAction_T[]; };
 export type UITexture_T = { path: string; width: number; height: number; frames: ArrayBuffer[]; frameTime: number; };
-export type GameStrings_T = { systemMessages: Record<number, string>; systemMessageColors: Record<number, number>; systemMessageSounds: Record<number, string>; sysStrings: Record<number, string>; serverNames: Record<number, string>; skillIcons: Record<number, string>; skillCastStyles: Record<string, number>; actions: Record<number, { name: string, icon: string, type: number, category: number, command: string }>; logonSpots: [number, number, number, number][]; classNames: Record<number, string>; skillNames: Record<number, string>; itemNames: Record<number, string>; itemIcons: Record<number, string>; };
+export type ItemInfo_T = { addName: string; description: string; equipSound: string; weight: number; crystalType: number; consumeType: number; weaponType: number; pAtk: number; mAtk: number; speed: number; soulshots: number; spiritshots: number; mpConsume: number; shieldPDef: number; shieldRate: number; avoidModify: number; armorType: number; pDef: number; mDef: number; mpBonus: number; };
+export type GameStrings_T = { systemMessages: Record<number, string>; systemMessageColors: Record<number, number>; systemMessageSounds: Record<number, string>; sysStrings: Record<number, string>; serverNames: Record<number, string>; skillIcons: Record<number, string>; skillCastStyles: Record<string, number>; actions: Record<number, { name: string, icon: string, type: number, category: number, command: string }>; logonSpots: [number, number, number, number][]; classNames: Record<number, string>; skillNames: Record<number, string>; itemNames: Record<number, string>; itemIcons: Record<number, string>; itemInfos: Record<number, ItemInfo_T>; symbols: Record<string, string>; };
 export type PlayerSkillInfo_T = { id: number; level: number; name: string; animationCategory: string; hitTime: number; castRange: number; previewTarget?: "self"; };
+
+export type DecodeCharacterEquipmentMessage_T = { type: "decodeCharacterEquipment"; requestId: number; settings: LoadSettings_T; charIndex: number; hairVariant: number; equipment: L2JS.Engine.ICharacterEquipment; };
 
 export type DecodeCharacterMessage_T = {
     type: "decodeCharacter";
@@ -88,6 +91,7 @@ export type MainToWorkerMessage_T =
     | DecodeSkillMessage_T
     | DecodeItemMessage_T
     | DecodeCharacterMessage_T
+    | DecodeCharacterEquipmentMessage_T
     | DecodeSkeletalMeshMessage_T
     | DecodeEffectTemplatesMessage_T
     | CharGroupsMessage_T

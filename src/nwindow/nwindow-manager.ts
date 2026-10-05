@@ -22,7 +22,7 @@ export class NWindowManager {
     protected isReady = false;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
-    public strings: GameStrings_T = { systemMessages: {}, systemMessageColors: {}, systemMessageSounds: {}, sysStrings: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {} };
+    public strings: GameStrings_T = { systemMessages: {}, systemMessageColors: {}, systemMessageSounds: {}, sysStrings: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
     public constructor(protected readonly asset: AssetManager) {
         this.canvas = new NWindowCanvas(asset);
@@ -132,6 +132,8 @@ export class NWindowManager {
     public playButtonSound(isEnabled: boolean): void {
         void this.asset.getParent().getComponent("audio").playInterfaceSound(isEnabled ? "InterfaceSound.click_01" : "ItemSound.click_failed"); // NWindow.dll 0x10001230, sound table 0x10242368.
     }
+
+    public playPickupSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("ItemSound.pickup"); } // 0x10074e60(3), sound table 0x10242368.
 
     public beginDrag(wnd: NWnd, x: number, y: number) {
         this.dragged = wnd;

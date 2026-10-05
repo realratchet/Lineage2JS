@@ -217,6 +217,23 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return this.levelSectors.has(sectorIdx.toLowerCase());
     }
 
+    public isAreaLoaded(renderManager: RenderManager, position: THREE.Vector3): boolean {
+        const [sx, sy] = renderManager.getSectorId(position);
+        const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
+
+        for (let x = sx - ring; x <= sx + ring; x++) {
+            for (let y = sy - ring; y <= sy + ring; y++) {
+                if (!this.hasSector(`${x}_${y}`) || sectorDistance(position, x, y) > this.renderDistance) continue;
+
+                const sector = renderManager.getSectorByCoords(x, y);
+
+                if (!sector || !sector.staticMeshGroup || !renderManager.isSectorWarm(sector)) return false;
+            }
+        }
+
+        return true;
+    }
+
     public async onInit(): Promise<this> {
         const manRender = this.getParent().getComponent("render");
         const textureMode = (this.loadSettings as any).textures ?? "auto";
@@ -416,20 +433,35 @@ export class AssetManager implements IEngineComponent<GameManager> {
             (part.skeleton as LocalSpaceSkeleton).rootBoneSource = host.bones[index];
         }
 
-        if (characterLibrary.pawnEquipment) {
-            const weapon = characterLibrary.pawnEquipment.weaponType;
-
-            player.setUnrealScriptProperty("CurWeaponType", weapon);
-            player.setIdleAnimation(findAnimation(animations, (player.getUnrealScriptProperty("WaitAnimName") as string[])[weapon]));
-            player.setWalkingAnimation(findAnimation(animations, (player.getUnrealScriptProperty("WalkAnimName") as string[])[weapon]));
-            player.setRunningAnimation(findAnimation(animations, (player.getUnrealScriptProperty("RunAnimName") as string[])[weapon]));
-            player.addComponent(new PawnEquipmentComponent(characterLibrary, renderManager));
-        }
+        if (characterLibrary.pawnEquipment) applyCharacterEquipment(renderManager, characterLibrary, player, animations);
         player.effectSpawnBoneIndex = characterLibrary.effectSpawnBoneIndex;
         player.initAnimations();
         player.addComponent(new PawnAttackComponent(renderManager, player.getAnimationNames(), [], characterLibrary.npcBow));
 
         this.pawnLibraries.set(player, characterLibrary);
+    }
+
+    public async loadCharacterEquipment(renderManager: RenderManager, actor: BaseActor, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment) { // UGameEngine::OnEquipItem 0x7456d0 queues a ChangeItemAction on a loaded pawn instead of User::SetPawnResource.
+        const request = (this.characterLoads.get(actor) || 0) + 1;
+
+        this.characterLoads.set(actor, request);
+
+        const library = await this.decodeWorker.decodeCharacterEquipment(this.loadSettings, charIndex, hairVariant, equipment);
+        const pawnLibrary = this.pawnLibraries.get(actor);
+
+        if (this.characterLoads.get(actor) !== request) {
+            for (const sound of library.soundBlobCache.values())
+                if (sound.uri) URL.revokeObjectURL(sound.uri);
+            return;
+        }
+
+        mergePawnLibrary(pawnLibrary, library);
+        pawnLibrary.pawnEquipment = library.pawnEquipment;
+        pawnLibrary.npcBow = library.npcBow;
+        actor.removeComponent(actor.getComponent<PawnEquipmentComponent>("pawnEquipment"));
+        applyCharacterEquipment(renderManager, pawnLibrary, actor, Object.fromEntries(actor.getAnimationNames().map(name => [name, null as THREE.AnimationClip])));
+        actor.getComponent<PawnAttackComponent>("pawnAttack").setWeapon(pawnLibrary.npcBow);
+        renderManager.needsUpdate = true;
     }
 
     public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, actor: BaseActor = renderManager.player, equipment: L2JS.Engine.ICharacterEquipment = null) {
@@ -942,6 +974,16 @@ function isHeadBone(name: string) {
 }
 
 // system/lineagewarrior.int clip names are case-insensitive against package names.
+function applyCharacterEquipment(renderManager: RenderManager, library: DecodeLibrary, actor: BaseActor, animations: Record<string, THREE.AnimationClip>): void {
+    const weapon = library.pawnEquipment.weaponType;
+
+    actor.setUnrealScriptProperty("CurWeaponType", weapon);
+    actor.setIdleAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("WaitAnimName") as string[])[weapon]));
+    actor.setWalkingAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("WalkAnimName") as string[])[weapon]));
+    actor.setRunningAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("RunAnimName") as string[])[weapon]));
+    actor.addComponent(new PawnEquipmentComponent(library, renderManager));
+}
+
 function findAnimation(animations: Record<string, THREE.AnimationClip>, declared: string): string {
     const match = declared.toLowerCase();
     const name = Object.keys(animations).find(name => name.toLowerCase() === match);

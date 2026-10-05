@@ -94,6 +94,17 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "decodeCharacterEquipment": {
+            try {
+                const buffer = await engine.decodeCharacterEquipmentBinary(msg.settings, msg.charIndex, msg.hairVariant, msg.equipment);
+
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+            } catch (e) {
+                console.error("[decode-worker] failed to decode character equipment:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "resolveNpc": {
             try {
                 post({ type: "npcResolved", requestId: msg.requestId, npc: await engine.resolveNpc(msg.selector) });

@@ -97,6 +97,13 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         }
     }
 
+    public onDetach(): void {
+        for (const actor of this.basedActors) (actor as BaseActor).getComponent<TransformComponent>("transform").base = null;
+
+        this.basedActors.clear();
+        this.setBase(null);
+    }
+
     public getBase(): ICollidable | null { return this.base; }
     public getBasedActors(): ReadonlySet<ICollidable> { return this.basedActors; }
     public addBasedActor(actor: ICollidable): void { this.basedActors.add(actor); }

@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, LoopOnce, LoopRepeat, Matrix4, Mesh, Vector3 } from "three";
+import { AnimationAction, AnimationClip, LoopOnce, LoopRepeat, Matrix4, Mesh, Skeleton, Texture, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
@@ -60,6 +60,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "animation";
     protected readonly renderManager: RenderManager;
     protected meshes: Mesh[] = [];
+    protected meshTextures = new Set<Texture>();
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
     protected prevAnimations = new WeakMap<Mesh, AnimationAction>();
     protected actorAnimations: Record<string, AnimationClip> = {};
@@ -188,14 +189,20 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         this.stop();
 
+        const textures = new Set<Texture>();
+
         for (const mesh of meshes) this.renderManager.retainGeometry(mesh.geometry);
+        this.renderManager.retainMeshTextures(meshes, textures);
         for (const mesh of this.meshes) {
             parent.remove(mesh);
             this.renderManager.mixer.uncacheRoot(mesh);
             this.renderManager.releaseGeometry(mesh.geometry);
         }
+        this.disposeSkeletons();
+        this.renderManager.releaseTextures(this.meshTextures);
 
         this.meshes = meshes;
+        this.meshTextures = textures;
 
         for (const mesh of meshes) {
             (mesh as any).hasStartedAnimation = true;
@@ -206,6 +213,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.placeMeshes();
         this.dispatchEvent(MESHES_CHANGED_EVENT, meshes);
         this.renderManager.invalidatePawnLighting(parent);
+    }
+
+    protected disposeSkeletons(): void {
+        const skeletons = new Set<Skeleton>();
+
+        for (const mesh of this.meshes) if ((mesh as any).skeleton) skeletons.add((mesh as any).skeleton);
+        for (const skeleton of skeletons) skeleton.dispose();
     }
 
     protected placeMeshes(): void {
@@ -459,6 +473,8 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             this.renderManager.mixer.uncacheRoot(mesh);
             this.renderManager.releaseGeometry(mesh.geometry);
         }
+        this.disposeSkeletons();
+        this.renderManager.releaseTextures(this.meshTextures);
 
         this.meshes = [];
     }

@@ -163,7 +163,7 @@ export class NDomLayer {
 
     public hasTexture(path: string) { return this.atlas.has(path.toLowerCase()); }
 
-    protected getWrapUrl(path: string): string {
+    public getWrapUrl(path: string): string {
         const key = path.toLowerCase();
 
         if (!this.cacheWrapUrls.has(key)) {
@@ -349,11 +349,11 @@ export class NDomLayer {
             const timer = window.setInterval(() => element.setScroll(scroll + direction * step), REPEAT_PERIOD);
             const stop = () => {
                 window.clearInterval(timer);
-                window.removeEventListener("mouseup", stop);
+                window.removeEventListener("mouseup", stop, true);
                 button.removeEventListener("mouseleave", stop);
             };
 
-            window.addEventListener("mouseup", stop);
+            window.addEventListener("mouseup", stop, true);
             button.addEventListener("mouseleave", stop);
         });
 

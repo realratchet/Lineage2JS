@@ -186,8 +186,6 @@ export class LoginClient {
         const playOk1 = packet.d();
         const playOk2 = packet.d();
 
-        this.socket.close();
-
         return { loginOk1: this.loginOk1, loginOk2: this.loginOk2, playOk1, playOk2 };
     }
 
