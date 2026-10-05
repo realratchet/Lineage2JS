@@ -1,7 +1,7 @@
 import NWnd from "./nwnd";
 import NCButton from "./nc-button";
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NCTooltip from "./nc-tooltip";
+import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
 import type NCCoolTimeIcon from "./nc-cool-time-icon";
 import type { NMouseEvent_T } from "./nwnd";
 import type NWindowCanvas from "./nwindow-canvas";
@@ -36,7 +36,7 @@ const RECT_PREV = [[1, 13, 14, 14], [13, 31, 14, 14]];
 const RECT_ROTATE = [[16, 489, 15, 15], [489, 16, 15, 15]];
 const RECT_GRIP = [[0, 0, 46, 12], [0, 0, 12, 46]];
 
-export type ShortcutEntry_T = { icon: string, label: string, tooltip: string, skillKey?: string, isAutoSoulShot?: boolean };
+export type ShortcutEntry_T = { icon: string, label: string, tooltip: string | TooltipInfo_T, skillKey?: string, isAutoSoulShot?: boolean };
 
 function setRect(wnd: NWnd, [x, y, w, h]: number[]) {
     wnd.x = x;

@@ -145,6 +145,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected etcStatus: { charges: number, weightPenalty: number, messageRefusal: number, dangerArea: number, expertisePenalty: number } = null;
     protected signsSky = 0;
     protected petStatusType = -1;
+    protected petInfo: { objectId: number; isMountable: boolean } = null;
+    protected isMounted = false;
     protected readonly petInventory = new Map<number, InventoryItem_T>();
     protected petRemainTime: PetRemainTime_T = null;
     protected readonly abnormalStatuses = new Map<string, AbnormalStatus_T>();
@@ -162,7 +164,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected userAppearanceLoad: Promise<void> = null;
     protected nextTick: Promise<void> = null;
     protected resolveNextTick: () => void = null;
-    protected skillPreload: Promise<void> = null;
     protected allyInvite: AllyInvite_T = null;
     protected pledgePower = 0;
     protected pledgeWarStart: PledgeWar_T = null;
@@ -500,6 +501,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.etcStatus = null;
         this.signsSky = 0;
         this.petStatusType = -1;
+        this.petInfo = null;
+        this.isMounted = false;
+        this.ui.setMountable(false);
         this.petInventory.clear();
         this.petRemainTime = null;
         this.abnormalStatuses.clear();
@@ -943,7 +947,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.applyPartyMember(object);
         }
 
-        if (!isEquipmentOnly && this.inWorld && actor === this.manGame.getComponent("render").player) this.skillPreload = this.preloadSkills();
+        if (!isEquipmentOnly && this.inWorld && actor === this.manGame.getComponent("render").player) void this.preloadSkills();
     }
 
     protected onCharSelected(packet: PacketReader) {
@@ -1254,7 +1258,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.skills.set(id, { id, level, isPassive });
         }
         this.ui.setSkills([...this.skills.values()]);
-        this.skillPreload = this.preloadSkills();
+        void this.preloadSkills();
 
         if (this.resolveSkillList) this.resolveSkillList();
         this.resolveSkillList = null;
@@ -1816,6 +1820,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         this.updateCubics(object);
+        this.isMounted = info.mountType !== 0;
+        this.updateMountable();
         this.ui.setStatus(info);
         this.ui.setClan(this.clanInfo);
 
@@ -1835,7 +1841,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         await this.userAppearanceLoad;
         await this.skillListLoad;
-        await this.skillPreload;
 
         while (this.inWorld && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -1923,6 +1928,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected onPetInfo(packet: PacketReader) {
         const info = readPetInfo(packet);
+
+        this.petInfo = info;
+        this.updateMountable();
         const object = this.setNpc(info);
 
         object.curHp = info.curHp;
@@ -1931,6 +1939,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.maxMp = info.maxMp;
         if (object.objectId === this.targetId) this.updateTarget();
     }
+
+    protected updateMountable() { this.ui.setMountable(this.isMounted || !!this.petInfo && this.petInfo.isMountable); }
 
     protected readPetInventoryItem(packet: PacketReader, allowZeroCount: boolean = false): InventoryItem_T {
         const item = { type1: packet.h(), objectId: packet.d(), itemId: packet.d(), count: packet.d(), type2: packet.h(), customType1: packet.h(), isEquipped: packet.h() !== 0, bodyPart: packet.d(), enchantLevel: packet.h(), customType2: packet.h() };
@@ -2155,6 +2165,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected removeObject(objectId: number) {
         const wasTarget = objectId === this.targetId;
+
+        if (this.petInfo && this.petInfo.objectId === objectId) {
+            this.petInfo = null;
+            this.updateMountable();
+        }
 
         for (const object of this.objects.values()) {
             if (object.selectedId === objectId) object.selectedId = 0;
@@ -3292,6 +3307,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected onRide(packet: PacketReader) {
         const ride = readRide(packet);
 
+        if (ride.objectId === this.userId) {
+            this.isMounted = ride.isMounted;
+            this.updateMountable();
+        }
+
         if (ride.isMounted) this.mounts.set(ride.objectId, ride);
         else this.mounts.delete(ride.objectId);
 
@@ -3737,6 +3757,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             if (!actor || !actor.parent || !object.name) continue;
 
+            let parent = actor;
+
+            while (parent && parent.visible) parent = parent.parent as BaseActor;
+            if (parent) continue;
+
             const isTarget = object.objectId === this.targetId;
 
             if (!isTarget && Math.trunc(actor.position.distanceTo(player.position)) >= NAMEPLATE_DISTANCE) continue; // FDynamicActor::Render branch C: retail l2.ini [CharacterDisplay] Name=true, Dist=1000.
@@ -3745,6 +3770,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         return plates;
+    }
+
+    public onBeforeEngineTick(_currentTime: number, _deltaTime: number): void {
+        if (this.ui) this.ui.updateNameplates();
     }
 
     public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {

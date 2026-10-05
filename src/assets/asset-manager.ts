@@ -218,20 +218,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public isAreaLoaded(renderManager: RenderManager, position: THREE.Vector3): boolean {
-        const [sx, sy] = renderManager.getSectorId(position);
-        const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
+        const sector = renderManager.getSector(position);
 
-        for (let x = sx - ring; x <= sx + ring; x++) {
-            for (let y = sy - ring; y <= sy + ring; y++) {
-                if (!this.hasSector(`${x}_${y}`) || sectorDistance(position, x, y) > this.renderDistance) continue;
-
-                const sector = renderManager.getSectorByCoords(x, y);
-
-                if (!sector || !sector.staticMeshGroup || !renderManager.isSectorWarm(sector)) return false;
-            }
-        }
-
-        return true;
+        return !!sector && !!sector.staticMeshGroup && renderManager.isSectorWarm(sector);
     }
 
     public async onInit(): Promise<this> {

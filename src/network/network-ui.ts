@@ -1,10 +1,10 @@
 import { Say2_T, ShortCutType_T, StatusUpdate_T, GaugeColor_T, Paperdoll_T, ItemType2_T } from "./game-packets";
 import { Vector3 } from "three";
 import NWindowManager from "../nwindow/nwindow-manager";
-import { FontType_T } from "../nwindow/nwindow-canvas";
 import type NWindowCanvas from "../nwindow/nwindow-canvas";
 import type BaseActor from "../base-actor";
 import type RenderManager from "../rendering/render-manager";
+import Nameplate from "../rendering/nameplate";
 import NDomLayer, { NDOM_EDIT_TEXTURES } from "../nwindow/ndom";
 import NCPlayerStatusWnd from "../nwindow/nc-player-status-wnd";
 import NCAbnormalStatusWnd from "../nwindow/nc-abnormal-status-wnd";
@@ -35,6 +35,7 @@ import type { LobbyPawnLabel_T } from "../nwindow/nc-lobby-wnd";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { GameServerInfo_T } from "./login-client";
 import type { CharSelectEntry_T, CharTemplate_T, ShortCut_T, UserInfo_T, InventoryItem_T, SkillEntry_T, AbnormalStatus_T, ClanInfo_T } from "./game-packets";
+import NCTooltip from "../nwindow/nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
 export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, isTarget: boolean };
@@ -106,6 +107,7 @@ export class NetworkUI {
     protected screen: Screen_T = null;
     protected skillPointerDrag: SkillPointerDrag_T = null;
     protected readonly gauges = new Map<GaugeColor_T, { remaining: number, maximum: number, startedAt: number }>();
+    protected readonly nameplates = new Map<BaseActor, Nameplate>();
 
     protected readonly manRender: RenderManager;
     protected readonly isTransparencyMode: boolean;
@@ -418,7 +420,7 @@ export class NetworkUI {
 
         this.areHudWindowsAdded = true;
         void this.nwindow.canvas.loadTextures([TEX_TARGET_BRACKET, ...arrGaugeTextures, ...arrGaugeBack]);
-        this.nwindow.overlayPaint = canvas => this.paintNameplates(canvas);
+        this.nwindow.overlayPaint = canvas => { if (this.screen === "world") this.paintGauges(canvas); };
         void this.nwindow.addWindow(this.playerStatusWnd);
         void this.nwindow.addWindow(this.abnormalStatusWnd);
         void this.nwindow.addWindow(this.targetStatusWnd);
@@ -445,38 +447,44 @@ export class NetworkUI {
     public showHtml(html: string) { void this.npcHtmlViewer.show(html); }
     public hideHtml() { this.npcHtmlViewer.hide(); }
 
-    protected paintNameplates(canvas: NWindowCanvas) { // FDynamicActor::Render anchor (cylinder top) and DrawTargetName 0x1051d780 layout, LargeFont, no crests or icons.
+    public updateNameplates() { // FDynamicActor::Render anchor (cylinder top) and DrawTargetName 0x1051d780 layout, LargeFont, no crests or icons.
+        for (const [actor, nameplate] of this.nameplates) {
+            nameplate.visible = false;
+            if (actor.parent && this.screen === "world") continue;
+
+            nameplate.dispose();
+            this.nameplates.delete(actor);
+        }
         if (this.screen !== "world") return;
 
-        const camera = this.manRender.camera;
+        const camera = this.manRender.camera, canvas = this.nwindow.canvas;
         const width = canvas.width, height = canvas.height;
-
-        canvas.setOrigin(0, 0);
+        const scale = 2 / (height * camera.projectionMatrix.elements[5]);
 
         for (const plate of this.manNetwork.getNameplates()) {
             const collisionHeight = plate.actor.getCollisionHeight();
 
-            tmpNameplateAnchor.copy(plate.actor.position);
+            plate.actor.getWorldPosition(tmpNameplateAnchor);
             tmpNameplateAnchor.z += collisionHeight * 2 - (plate.isDead ? 2 * collisionHeight * 0.65 : 0);
             tmpNameplateAnchor.project(camera);
 
-            if (tmpNameplateAnchor.z >= 1 || Math.abs(tmpNameplateAnchor.x) > 1 || Math.abs(tmpNameplateAnchor.y) > 1) continue;
+            if (tmpNameplateAnchor.z < -1 || tmpNameplateAnchor.z >= 1 || Math.abs(tmpNameplateAnchor.x) > 1 || Math.abs(tmpNameplateAnchor.y) > 1) continue;
 
             const sx = Math.trunc((tmpNameplateAnchor.x + 1) * 0.5 * width), sy = Math.trunc((1 - tmpNameplateAnchor.y) * 0.5 * height);
-            const nameW = canvas.measureText(plate.name, FontType_T.LARGE), nameH = canvas.getLineHeight(FontType_T.LARGE);
-            const nameX = sx - Math.trunc(nameW / 2);
+            let nameplate = this.nameplates.get(plate.actor);
 
-            if (plate.isTarget && canvas.hasTexture(TEX_TARGET_BRACKET)) {
-                canvas.drawTile(nameX - 19, sy - 16, 19, 16, 0, 0, 19, 16, TEX_TARGET_BRACKET);
-                canvas.drawTile(nameX + nameW, sy - 16, 19, 16, 0, 0, 19, 16, TEX_TARGET_BRACKET);
+            if (!nameplate) {
+                nameplate = new Nameplate();
+                this.nameplates.set(plate.actor, nameplate);
+                this.manRender.scene.add(nameplate);
             }
-
-            canvas.drawText(nameX, sy - 15, getNameColor(plate), plate.name, FontType_T.LARGE);
-
-            if (plate.title) canvas.drawText(sx - Math.trunc(canvas.measureText(plate.title, FontType_T.LARGE) / 2), sy - nameH - canvas.getLineHeight(FontType_T.LARGE), getTitleColor(plate), plate.title, FontType_T.LARGE);
+            nameplate.update(canvas, plate.name, plate.title, getNameColor(plate), getTitleColor(plate), plate.isTarget && canvas.hasTexture(TEX_TARGET_BRACKET), TEX_TARGET_BRACKET);
+            tmpNameplateAnchor.x = sx / width * 2 - 1;
+            tmpNameplateAnchor.y = 1 - sy / height * 2;
+            nameplate.position.copy(tmpNameplateAnchor.unproject(camera));
+            nameplate.scale.set(nameplate.width * scale, nameplate.height * scale, 1);
+            nameplate.visible = true;
         }
-
-        this.paintGauges(canvas);
     }
 
     public setupGauge(color: GaugeColor_T, remaining: number, maximum: number) {
@@ -592,6 +600,7 @@ export class NetworkUI {
 
     public setStatus(info: UserInfo_T) {
         this.statusInfo = info;
+        this.mainWnd.actionWnd.setClass(info.classId);
         this.playerStatusWnd.setStatus(info);
         this.mainWnd.detailStatusWnd.setStatus(info);
         this.inventoryWnd.setWeight(info.curLoad, info.maxLoad);
@@ -697,6 +706,8 @@ export class NetworkUI {
 
     public setInventoryLimit(limit: number) { this.inventoryWnd.setLimit(limit); }
 
+    public setMountable(canMount: boolean) { if (this.mainWnd) this.mainWnd.actionWnd.setMountable(canMount); }
+
     public setTarget(target: TargetStatus_T) { this.targetStatusWnd.setTarget(target); }
 
     public addChat(name: string, text: string, type: Say2_T) { this.chatWnd.addCreatureSay(name, text, type); }
@@ -714,15 +725,15 @@ export class NetworkUI {
                 if (item) entry = { icon: strings.itemIcons[item.itemId], label: strings.itemNames[item.itemId], tooltip: `${strings.itemNames[item.itemId]} (${item.count.toLocaleString("en-US")})`, isAutoSoulShot };
                 break;
             case ShortCutType_T.TYPE_SKILL: {
-                const name = strings.skillNames[shortcut.id] || "";
+                const info = NCTooltip.shortcutSkill(strings, shortcut.id, shortcut.level);
 
-                entry = { icon: strings.skillIcons[shortcut.id], label: name, tooltip: name, skillKey: `${shortcut.id}:${shortcut.level}` };
+                entry = { icon: strings.skillInfos[`${shortcut.id}:${shortcut.level}`]?.icon || strings.skillIcons[shortcut.id], label: info.title, tooltip: info, skillKey: `${shortcut.id}:${shortcut.level}` };
                 break;
             }
             case ShortCutType_T.TYPE_ACTION: {
                 const action = strings.actions[shortcut.id];
 
-                entry = { icon: action.icon, label: action.name, tooltip: action.name };
+                entry = { icon: action.icon, label: action.command, tooltip: action.command };
                 break;
             }
             default: break; // TODO: macro and recipe icons need their list packets.

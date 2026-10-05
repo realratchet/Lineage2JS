@@ -46,7 +46,7 @@ function getWeaponTable(weaponType: number, bodyPart: number) { // 0x100741b0 ju
 }
 
 export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 0x10099a60, OnPaint 0x10095870.
-    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, TEX_SELECTED, ...arrWeightBars, ...arrTooltipSlices, "L2UI.NWindow.Number", ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, TEX_SELECTED, ...arrWeightBars, ...arrTooltipSlices, "L2UI.NWindow.Number", ...NDOM_SCROLL_TEXTURES]; }
 
     public readonly element: HTMLDivElement;
     public onUse: (objectId: number) => void = null;
@@ -123,18 +123,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
                 this.paintItems();
             };
             const label = layer.getManager().getSysString(id);
-            const tab = layer.button(this.element, 12 + index * 94, 159, 94, 23, TEX_TAB, TEX_TAB_SELECTED, null, label, select);
+            const tab = layer.tab(this.element, 12 + index * 94, 159, 94, 23, TEX_TAB, TEX_TAB_SELECTED, label, null, select);
 
-            tab.tabIndex = 0;
-            tab.setAttribute("role", "button");
-            tab.setAttribute("aria-label", label);
-            tab.addEventListener("keydown", event => {
-                if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
-
-                event.preventDefault();
-                this.layer.getManager().playButtonSound(true);
-                select();
-            });
             this.tabs.push(tab);
         });
         layer.tile(this.element, 98, 355, 16, 12, 0, 0, 16, 12, TEX_ADENA);

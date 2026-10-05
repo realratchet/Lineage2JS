@@ -1,3 +1,4 @@
+import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
 
@@ -39,6 +40,7 @@ export type NDomScrollPane_T = HTMLDivElement & { content: HTMLDivElement, setCo
 export type NDomEdit_T = HTMLDivElement & { input: HTMLInputElement, getValue(): string, setValue(value: string): void, setEnabled(isEnabled: boolean): void, focus(): void };
 
 export class NDomLayer {
+    protected readonly tooltips = new NCTooltip();
     public readonly root = document.createElement("div");
     protected readonly manager: NWindowManager;
     protected readonly atlas = new Map<string, AtlasEntry_T>();
@@ -319,6 +321,28 @@ export class NDomLayer {
         parent.appendChild(element);
 
         return element;
+    }
+
+    public tooltip(parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T) { this.tooltips.bind(this, parent, button, info); }
+
+    public tab(parent: HTMLElement, x: number, y: number, w: number, h: number, normal: string, selected: string, label: string, tooltip: string, onSelect: () => void): NDomButton_T { // NCTabButton 0x10001b90, 0x10001a50: selected stays state 1; unselected hover uses state 2.
+        const tab = this.button(parent, x, y, w, h, normal, label ? normal : selected, label ? normal === selected ? normal : `${normal}_over` : selected, label, onSelect);
+        const setTextures = tab.setTextures;
+
+        tab.setTextures = (normal, down) => setTextures(normal, label ? normal : down, label ? normal === selected ? normal : `${normal}_over` : down);
+        tab.tabIndex = 0;
+        tab.setAttribute("role", "tab");
+        tab.setAttribute("aria-label", tooltip || label);
+        if (tooltip) this.tooltip(parent, tab, tooltip);
+        tab.addEventListener("keydown", event => {
+            if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
+
+            event.preventDefault();
+            this.manager.playButtonSound(true);
+            onSelect();
+        });
+
+        return tab;
     }
 
     public scrollPane(parent: HTMLElement, x: number, y: number, w: number, h: number, step: number): NDomScrollPane_T { // NCScrollWnd OnCreate 0x1002bd60: buttons at (W-15, 0) and (W-15, H-15) always shown, slider hidden when content fits (0x1002c104).

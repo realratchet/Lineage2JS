@@ -1,3 +1,4 @@
+import NCTooltip from "./nc-tooltip";
 import type NDomLayer from "./ndom";
 import { NDOM_SCROLL_TEXTURES } from "./ndom";
 import type { NDomButton_T, NDomScrollPane_T } from "./ndom";
@@ -11,7 +12,7 @@ const TEX_OUTLINE = "L2UI.NWindow.Icon_Back";
 const TEX_PRESSED = "L2UI.NWindow.Icon_Click";
 
 export class NCSkillWnd {
-    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_OUTLINE, TEX_PRESSED, ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_PRESSED, ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
     public onUse: (id: number) => void = null;
     protected readonly layer: NDomLayer;
@@ -29,6 +30,7 @@ export class NCSkillWnd {
         layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, TEX_BACK);
         this.list = layer.scrollPane(this.element, 9, 40, 239, 280, 35); // NCSkillWnd item grid on NCScrollWnd.
         this.list.setAttribute("role", "tabpanel");
+        for (const type of ["wheel", "mousedown"]) this.list.addEventListener(type, () => this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove()));
 
         [120, 121].forEach((id, index) => {
             const label = layer.getManager().getSysString(id);
@@ -37,18 +39,8 @@ export class NCSkillWnd {
                 this.list.setScroll(0);
                 this.paintSkills();
             };
-            const tab = layer.button(this.element, 12 + index * 94, 8, 94, 23, TEX_TAB, TEX_TAB_SELECTED, null, label, select);
+            const tab = layer.tab(this.element, 12 + index * 94, 8, 94, 23, TEX_TAB, TEX_TAB_SELECTED, label, null, select);
 
-            tab.tabIndex = 0;
-            tab.setAttribute("role", "tab");
-            tab.setAttribute("aria-label", label);
-            tab.addEventListener("keydown", event => {
-                if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
-
-                event.preventDefault();
-                layer.getManager().playButtonSound(true);
-                select();
-            });
             this.skillTabs.push(tab);
         });
         this.paintSkills();
@@ -61,7 +53,7 @@ export class NCSkillWnd {
 
         const strings = this.layer.getManager().strings;
 
-        await this.layer.loadTextures([...new Set(skills.map(skill => strings.skillIcons[skill.id]))]);
+        await this.layer.loadTextures([...new Set(skills.map(skill => strings.skillInfos[`${skill.id}:${skill.level}`]?.icon || strings.skillIcons[skill.id]))]);
         if (this.pendingSkills !== skills) return;
 
         this.skills = skills;
@@ -91,6 +83,8 @@ export class NCSkillWnd {
     protected paintSkills() {
         const layer = this.layer, strings = layer.getManager().strings;
 
+        this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
+
         this.skillTabs.forEach((tab, index) => {
             const selected = this.isPassive === (index === 1);
 
@@ -110,12 +104,14 @@ export class NCSkillWnd {
             button.draggable = false;
             button.className = "ndom-inventory-item";
             button.dataset.skillId = String(skill.id);
-            button.title = `${strings.skillNames[skill.id]} Lv ${skill.level}`;
-            button.setAttribute("aria-label", button.title);
+            const info = NCTooltip.skill(strings, skill.id, skill.level);
+
+            button.setAttribute("aria-label", info.title);
+            layer.tooltip(this.element, button, info);
             button.setAttribute("aria-disabled", String(skill.isPassive));
             layer.place(button, index % 6 * 37, Math.trunc(index / 6) * 35, 34, 34);
-            layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, strings.skillIcons[skill.id]);
-            const outline = layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE);
+            layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, strings.skillInfos[`${skill.id}:${skill.level}`]?.icon || strings.skillIcons[skill.id]);
+            const outline = skill.isPassive ? null : layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE);
             const coolTimeIcon = document.createElement("canvas");
 
             coolTimeIcon.className = "ndom-tile";
@@ -131,7 +127,7 @@ export class NCSkillWnd {
                 layer.getManager().playButtonSound(!skill.isPassive);
                 if (!skill.isPassive) layer.setTile(outline, 34, 34, 0, 0, 34, 34, TEX_PRESSED);
             });
-            for (const type of ["mouseup", "mouseleave"]) button.addEventListener(type, () => layer.setTile(outline, 34, 34, 0, 0, 34, 34, TEX_OUTLINE));
+            for (const type of ["mouseup", "mouseleave"]) button.addEventListener(type, () => { if (outline) layer.setTile(outline, 34, 34, 0, 0, 34, 34, TEX_OUTLINE); });
             button.addEventListener("click", use);
             button.addEventListener("keydown", event => {
                 if (event.repeat || event.key !== "Enter" && event.key !== " ") return;

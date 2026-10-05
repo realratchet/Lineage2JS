@@ -41,19 +41,8 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
 
         arrTabs.forEach((entry, index) => {
             const select = () => this.selectTab(entry.type);
-            const tab = layer.button(this.element, 12 + index * 44, 25, 44, 41, entry.texture, `${entry.texture}On`, null, null, select);
+            const tab = layer.tab(this.element, 12 + index * 44, 25, 44, 41, entry.texture, `${entry.texture}On`, null, layer.getManager().getSysString(entry.tooltip), select);
 
-            tab.title = layer.getManager().getSysString(entry.tooltip);
-            tab.tabIndex = 0;
-            tab.setAttribute("role", "tab");
-            tab.setAttribute("aria-label", layer.getManager().getSysString(entry.title));
-            tab.addEventListener("keydown", event => {
-                if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
-
-                event.preventDefault();
-                layer.getManager().playButtonSound(true);
-                select();
-            });
             this.tabs.push(tab);
         });
         this.selectTab("status");
@@ -61,10 +50,11 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 266, Math.max(0, height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; }
+    public setVisible(visible: boolean) { this.element.hidden = !visible; this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove()); }
     public getSelectedTab() { return this.selectedTab; }
 
     public selectTab(type: MainTab_T) {
+        this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
         this.selectedTab = type;
         arrTabs.forEach((entry, index) => {
             const selected = entry.type === type;

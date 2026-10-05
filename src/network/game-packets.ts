@@ -600,7 +600,7 @@ export type CharSelected_T = Location_T & { name: string, charId: number, title:
 
 export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number };
 
-export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, isGM: boolean, paperdollObjects: number[], cubics: number[] };
+export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, mountType: number, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, isGM: boolean, paperdollObjects: number[], cubics: number[] };
 
 export type CharInfo_T = CreatureInfo_T & Appearance_T & { isSitting: boolean, mountType: number, cubics: number[] };
 
@@ -741,7 +741,9 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.title = packet.S();
 
     info.clanId = packet.d();
-    packet.skip(4 * 4 + 3);
+    packet.skip(4 * 4);
+    info.mountType = packet.c();
+    packet.skip(2);
     info.pkKills = packet.d();
     info.pvpKills = packet.d();
     info.cubics = readCubics(packet);
@@ -866,9 +868,13 @@ export function readPetInfo(packet: PacketReader) {
 
     const curHp = packet.d(), maxHp = packet.d(), curMp = packet.d(), maxMp = packet.d();
 
-    packet.skip(18 * 4 + 2 + 1 + 2 + 1 + 2 * 4);
+    packet.skip(18 * 4);
 
-    return { ...info, curHp, maxHp, curMp, maxMp };
+    const isMountable = packet.h() !== 0;
+
+    packet.skip(1 + 2 + 1 + 2 * 4);
+
+    return { ...info, curHp, maxHp, curMp, maxMp, isMountable };
 }
 
 export function readCharTemplates(packet: PacketReader): CharTemplate_T[] {

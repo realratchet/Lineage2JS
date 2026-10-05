@@ -22,7 +22,7 @@ export class NWindowManager {
     protected isReady = false;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
-    public strings: GameStrings_T = { systemMessages: {}, systemMessageColors: {}, systemMessageSounds: {}, sysStrings: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
+    public strings: GameStrings_T = { systemMessages: {}, systemMessageColors: {}, systemMessageSounds: {}, sysStrings: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
     public constructor(protected readonly asset: AssetManager) {
         this.canvas = new NWindowCanvas(asset);

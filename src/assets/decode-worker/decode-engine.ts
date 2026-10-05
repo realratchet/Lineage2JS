@@ -10,7 +10,7 @@ import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, deserializeLibrary, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { GameStrings_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
@@ -1296,6 +1296,14 @@ export class DecodeEngine {
 
         const skillNames: Record<number, string> = {};
         const skillIcons: Record<number, string> = {};
+        const skillInfos: Record<string, SkillInfo_T> = {};
+        const skillTexts = new Map(tables.names.map(row => [`${row.id}:${row.level}`, row]));
+
+        for (const row of tables.skills) {
+            const text = skillTexts.get(`${row.skill_id}:${row.skill_level}`);
+
+            if (text) skillInfos[`${row.skill_id}:${row.skill_level}`] = { name: text.name, description: text.description.replace(/\\n/g, "\n"), icon: row.icon_name, type: row.is_magic ? 313 : row.oper_type === 2 ? 312 : 311, hpConsume: row.hp_consume, mpConsume: row.mp_consume, range: row.cast_range };
+        }
 
         for (const row of tables.names)
             if (!(row.id in skillNames)) skillNames[row.id] = row.name;
@@ -1310,8 +1318,9 @@ export class DecodeEngine {
             sysStrings: Object.fromEntries(sysStrings.datarows.map((row: any) => [row.id, row.name])),
             serverNames: Object.fromEntries(servers.datarows.map((row: any) => [row.server_id + 1, row.server_name])), // servername-e.dat ids are 0-based; login server ids start at 1 (server 1 = Bartz in the L2.4_20 capture).
             skillIcons,
+            skillInfos,
             skillCastStyles: Object.fromEntries(tables.skills.map(row => [`${row.skill_id}:${row.skill_level}`, row.cast_style])),
-            actions: Object.fromEntries(actions.datarows.map((row: any) => [row.id, { name: row.name, icon: row.icon, type: row.type, category: row.category, command: row.cmd }])),
+            actions: Object.fromEntries(actions.datarows.filter((row: any) => row.tag).map((row: any) => [row.id, { name: row.name.replace(/\\n/g, "\n"), icon: row.icon, type: row.type, category: row.category, command: row.cmd, requiresMount: row.c[0] === -1 }])),
             logonSpots: logon.datarows.map((row: any) => [row.x, row.y, row.z, row.yaw]),
             classNames: Object.fromEntries(classes.datarows.map((row: any) => [row.id, row.name])),
             skillNames,
