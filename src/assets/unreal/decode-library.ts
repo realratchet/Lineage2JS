@@ -147,6 +147,8 @@ export class DecodeLibrary {
     public readonly scriptMaterials: Record<string, string> = {};
     public readonly npcSkillAttacks: NpcSkillAttack_T[] = [];
     public npcBow: L2JS.Engine.INpcBowDecodeInfo = null;
+    public pawnEquipment: L2JS.Engine.IPawnEquipmentDecodeInfo = null;
+    public pickup: L2JS.Engine.IPickupDecodeInfo = null;
     public effectSpawnBoneIndex: number = null;
     public damageEffect: string = null;
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors

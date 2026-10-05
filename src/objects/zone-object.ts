@@ -132,6 +132,7 @@ export class ZoneObject extends Object3D {
     public isFogZone: boolean = false;
     public isSunAffected: boolean = false;
     public isSkyZoneInfo: boolean = false;
+    public readonly skyOrigin = new Vector3();
 
     public readonly boundsRender = new Box3();
     public readonly boundsRenderSphere = new Sphere();

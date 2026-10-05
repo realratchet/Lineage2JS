@@ -14,6 +14,11 @@ export type PrecacheMessage_T = { type: "precache"; requestId: number; sectorNam
 export type FreeMessage_T = { type: "free"; sectorName: string; };
 export type DecodeEnvMessage_T = { type: "decodeEnv"; requestId: number; };
 export type DecodeSkillMessage_T = { type: "decodeSkill"; requestId: number; settings: LoadSettings_T; id: number; level: number; };
+export type DecodeItemMessage_T = { type: "decodeItem"; requestId: number; settings: LoadSettings_T; id: number; };
+export type MatineeAction_T = { action: string; duration: number; pathStyle: number; location: [number, number, number]; rotation: [number, number, number]; };
+export type MatineeScene_T = { tag: string; actions: MatineeAction_T[]; };
+export type UITexture_T = { path: string; width: number; height: number; frames: ArrayBuffer[]; frameTime: number; };
+export type GameStrings_T = { systemMessages: Record<number, string>; systemMessageColors: Record<number, number>; systemMessageSounds: Record<number, string>; sysStrings: Record<number, string>; serverNames: Record<number, string>; skillIcons: Record<number, string>; skillCastStyles: Record<string, number>; actions: Record<number, { name: string, icon: string, type: number, category: number, command: string }>; logonSpots: [number, number, number, number][]; classNames: Record<number, string>; skillNames: Record<number, string>; itemNames: Record<number, string>; itemIcons: Record<number, string>; };
 export type PlayerSkillInfo_T = { id: number; level: number; name: string; animationCategory: string; hitTime: number; castRange: number; previewTarget?: "self"; };
 
 export type DecodeCharacterMessage_T = {
@@ -25,6 +30,7 @@ export type DecodeCharacterMessage_T = {
     hairVariant: number;
     hairColour: number;
     armor: ICharacterArmorSelection;
+    equipment: L2JS.Engine.ICharacterEquipment | null;
     includeAnimations: boolean;
 };
 
@@ -54,15 +60,22 @@ export type CharGroupsMessage_T = { type: "charGroups"; requestId: number; };
 export type ResolveNpcMessage_T = { type: "resolveNpc"; requestId: number; selector: string | number; };
 export type ListNpcsMessage_T = { type: "listNpcs"; requestId: number; };
 export type ListPlayerSkillsMessage_T = { type: "listPlayerSkills"; requestId: number; };
+export type GameStringsMessage_T = { type: "gameStrings"; requestId: number; };
+export type MatineeScenesMessage_T = { type: "matineeScenes"; requestId: number; levelName: string; };
+export type DecodeUITexturesMessage_T = { type: "decodeUITextures"; requestId: number; settings: LoadSettings_T; paths: string[]; };
 export type PrecacheCharactersMessage_T = { type: "precacheCharacters"; requestId: number; settings: LoadSettings_T; };
 export type CharactersPrecachedMessage_T = { type: "charactersPrecached"; requestId: number; };
 export type CharGroupsDecodedMessage_T = { type: "charGroupsDecoded"; requestId: number; groups: ICharacterGroup[]; };
 export type NpcResolvedMessage_T = { type: "npcResolved"; requestId: number; npc: INpcDefinition; };
 export type NpcsListedMessage_T = { type: "npcsListed"; requestId: number; npcs: INpcDefinition[]; };
 export type PlayerSkillsListedMessage_T = { type: "playerSkillsListed"; requestId: number; skills: PlayerSkillInfo_T[]; };
+export type GameStringsDecodedMessage_T = { type: "gameStringsDecoded"; requestId: number; strings: GameStrings_T; };
+export type MatineeScenesDecodedMessage_T = { type: "matineeScenesDecoded"; requestId: number; scenes: MatineeScene_T[]; };
+export type UITexturesDecodedMessage_T = { type: "uiTexturesDecoded"; requestId: number; textures: UITexture_T[]; };
 export type MusicInfoMessage_T = { type: "musicInfo"; requestId: number; }
 export type ClientConfigMessage_T = { type: "clientConfig"; requestId: number; }
 export type ScriptLocalizationMessage_T = { type: "scriptLocalization"; requestId: number; scriptClassPath: string; }
+export type L2TextMessage_T = { type: "l2Text"; requestId: number; name: string; }
 export type MemoryStatsMessage_T = { type: "memoryStats"; requestId: number; }
 export type WorkerMemoryStats_T = { buffers: number; packages: number; };
 
@@ -73,6 +86,7 @@ export type MainToWorkerMessage_T =
     | FreeMessage_T
     | DecodeEnvMessage_T
     | DecodeSkillMessage_T
+    | DecodeItemMessage_T
     | DecodeCharacterMessage_T
     | DecodeSkeletalMeshMessage_T
     | DecodeEffectTemplatesMessage_T
@@ -80,10 +94,14 @@ export type MainToWorkerMessage_T =
     | ResolveNpcMessage_T
     | ListNpcsMessage_T
     | ListPlayerSkillsMessage_T
+    | GameStringsMessage_T
+    | MatineeScenesMessage_T
+    | DecodeUITexturesMessage_T
     | PrecacheCharactersMessage_T
     | MusicInfoMessage_T
     | ClientConfigMessage_T
     | ScriptLocalizationMessage_T
+    | L2TextMessage_T
     | MemoryStatsMessage_T;
 
 export type ReadyMessage_T = { type: "ready"; }
@@ -114,6 +132,7 @@ export type MusicInfoDecodedMessage_T = {
 export type ClientConfig_T = { userConfig: UserConfig_T; warriorAnimations: Record<string, WarriorAnimations_T>; };
 export type ClientConfigDecodedMessage_T = { type: "clientConfigDecoded"; requestId: number; config: ClientConfig_T; };
 export type ScriptLocalizationDecodedMessage_T = { type: "scriptLocalizationDecoded"; requestId: number; properties: LocalizationProperty_T[]; };
+export type L2TextDecodedMessage_T = { type: "l2TextDecoded"; requestId: number; text: string; };
 export type MemoryStatsDecodedMessage_T = { type: "memoryStatsDecoded"; requestId: number; stats: WorkerMemoryStats_T; };
 
 export type WorkerToMainMessage_T =
@@ -127,8 +146,12 @@ export type WorkerToMainMessage_T =
     | NpcResolvedMessage_T
     | NpcsListedMessage_T
     | PlayerSkillsListedMessage_T
+    | GameStringsDecodedMessage_T
+    | MatineeScenesDecodedMessage_T
+    | UITexturesDecodedMessage_T
     | CharactersPrecachedMessage_T
     | MusicInfoDecodedMessage_T
     | ClientConfigDecodedMessage_T
     | ScriptLocalizationDecodedMessage_T
+    | L2TextDecodedMessage_T
     | MemoryStatsDecodedMessage_T;

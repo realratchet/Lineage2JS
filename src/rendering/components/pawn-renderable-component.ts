@@ -1,6 +1,7 @@
 import { Mesh, Sphere } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { MESHES_CHANGED_EVENT } from "../../objects/components/animation-component";
+import { PAWN_COLLISION_SIZE_CHANGED_EVENT } from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
 
@@ -12,6 +13,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     protected readonly renderManager: RenderManager;
     protected readonly localSphere = new Sphere();
     protected readonly worldSphere = new Sphere();
+    protected meshes: Mesh[] = [];
 
     public constructor(renderManager: RenderManager) {
         super();
@@ -23,21 +25,30 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public onDetach(): void { this.renderManager.unregisterPawnRenderable(this); }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<unknown> {
-        if (type !== MESHES_CHANGED_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
-
-        this.setMeshes(data as Mesh[]);
+        if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT) this.updateLocalSphere();
+        else if (type === MESHES_CHANGED_EVENT) this.setMeshes(data as Mesh[]);
+        else return COMPONENT_EVENT_NOT_HANDLED;
 
         return;
     }
 
     protected setMeshes(meshes: Mesh[]): void {
-        this.localSphere.makeEmpty();
+        this.meshes = meshes;
 
         for (const mesh of meshes) {
             // FDynamicActor::Render 0x8eef4e sets Pawn.bRendered before mesh submission.
             mesh.onBeforeRender = (_renderer, scene) => {
                 if (scene === this.renderManager.scene) this.isRendered = true;
             };
+        }
+
+        this.updateLocalSphere();
+    }
+
+    protected updateLocalSphere(): void {
+        this.localSphere.makeEmpty();
+
+        for (const mesh of this.meshes) {
             mesh.updateMatrix();
 
             if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();

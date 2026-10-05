@@ -9,6 +9,8 @@ declare namespace L2JS.Engine {
         defense: IPawnSoundSetDecodeInfo;
         damage: IPawnSoundSetDecodeInfo & { random: number };
         item: IPawnSoundSetDecodeInfo | null;
+        shield?: IPawnSoundSetDecodeInfo | null;
         critical?: { sound: string | null; volume: number; radius: number };
+        soulshot?: { sound: string | null; volume: number; radius: number };
     }
 }

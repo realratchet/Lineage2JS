@@ -85,7 +85,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decodeCharacter": {
             try {
-                const buffer = await engine.decodeCharacterBinary(msg.settings, msg.charIndex, msg.faceVariant, msg.hairVariant, msg.hairColour, msg.armor, msg.includeAnimations);
+                const buffer = await engine.decodeCharacterBinary(msg.settings, msg.charIndex, msg.faceVariant, msg.hairVariant, msg.hairColour, msg.armor, msg.includeAnimations, msg.equipment);
 
                 post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
             } catch (e) {
@@ -108,6 +108,35 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
                 post({ type: "npcsListed", requestId: msg.requestId, npcs: await engine.listNpcs() });
             } catch (e) {
                 console.error("[decode-worker] failed to list NPCs:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "decodeUITextures": {
+            try {
+                const textures = await engine.decodeUITextures(msg.settings, msg.paths);
+
+                post({ type: "uiTexturesDecoded", requestId: msg.requestId, textures }, textures.flatMap(texture => texture.frames));
+            } catch (e) {
+                console.error("[decode-worker] failed to decode UI textures:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "matineeScenes": {
+            try {
+                post({ type: "matineeScenesDecoded", requestId: msg.requestId, scenes: await engine.decodeMatineeScenes(msg.levelName) });
+            } catch (e) {
+                console.error(`[decode-worker] failed to decode matinee scenes of '${msg.levelName}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "gameStrings": {
+            try {
+                post({ type: "gameStringsDecoded", requestId: msg.requestId, strings: await engine.decodeGameStrings() });
+            } catch (e) {
+                console.error("[decode-worker] failed to decode game strings:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
             }
             break;
@@ -140,6 +169,17 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             } catch (e) {
                 console.error("[decode-worker] failed to decode effect templates:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "decodeItem": {
+            try {
+                const buffer = await engine.decodeItemBinary(msg.settings, msg.id);
+
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+            } catch (e) {
+                console.error(`[decode-worker] failed to decode item '${msg.id}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error).message, stack: (e as Error).stack });
             }
             break;
         }
@@ -181,6 +221,15 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
                 post({ type: "scriptLocalizationDecoded", requestId: msg.requestId, properties: await engine.decodeScriptLocalization(msg.scriptClassPath) });
             } catch (e) {
                 console.error(`[decode-worker] failed to decode script localization '${msg.scriptClassPath}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
+            }
+            break;
+        }
+        case "l2Text": {
+            try {
+                post({ type: "l2TextDecoded", requestId: msg.requestId, text: await engine.decodeL2Text(msg.name) });
+            } catch (e) {
+                console.error(`[decode-worker] failed to decode l2text '${msg.name}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
             }
             break;

@@ -395,6 +395,10 @@ export abstract class BaseEmitter extends Object3D {
         this.initialSettings.position.min.z = this.initialSettings.position.max.z = z;
     }
 
+    public setStartVelocityRangeX(velocity: number): void {
+        this.initialSettings.velocity.min.x = this.initialSettings.velocity.max.x = velocity;
+    }
+
     public constructor(config: EmitterConfig_T) {
         super();
 

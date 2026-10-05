@@ -25,7 +25,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
 
     public setLibrary(library: DecodeLibrary): this { this.library = library; return this; }
 
-    public playAttackSounds(critical: boolean = false): void {
+    public playAttackSounds(critical: boolean = false, shield: boolean = false, soulshot: boolean = false): void {
         const profile = this.library.pawnSounds;
 
         if (!profile) return;
@@ -35,14 +35,14 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         actor.getWorldPosition(tmpPosition);
         tmpPosition.z += actor.getCollisionHeight();
 
-        // Engine.dll Action_Attack 0x8bdb5e selects CriticalSound instead of defense, then still requests DamageSound.
-        if (critical) {
-            const sound = profile.critical;
+        // Engine.dll Action_Attack 0x8bdb40..0x8bdd15: shield, critical, soulshot, defense.
+        if (!shield && (critical || soulshot)) {
+            const sound = critical ? profile.critical : profile.soulshot;
 
-            if (sound.sound) this.play(sound.sound, sound.volume / 255, 1, sound.radius, sound.radius * 100, true, `Pawn '${actor.name}' critical`, tmpPosition);
+            if (sound.sound) this.play(sound.sound, sound.volume / 255, 1, sound.radius, sound.radius * 100, true, `Pawn '${actor.name}' impact`, tmpPosition);
         } else {
             // Engine.dll GetDefenseItemSound 0x8b689b..0x8b6a60: unresolved equipment sound falls back to the pawn profile.
-            const item = profile.item;
+            const item = shield ? profile.shield : profile.item;
             const itemSound = item && item.sounds.length ? item.sounds[Math.floor(Math.random() * item.sounds.length)] : null;
             const defense = itemSound ? item : profile.defense;
             const defenseSound = itemSound || (defense.sounds.length ? defense.sounds[Math.floor(Math.random() * defense.sounds.length)] : null);
@@ -62,6 +62,8 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
     }
 
     public playSkillSound(info: NpcSkillSound_T, actor: BaseActor = this.getParent()): void {
+        if (info.charClassId !== undefined && info.charClassId !== this.getParent().charClassId) return;
+
         const soundName = this.library.sounds[info.sound];
 
         if (!soundName) throw new Error(`Skill sound '${info.sound}' failed to decode.`);

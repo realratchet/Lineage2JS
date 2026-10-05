@@ -293,6 +293,8 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
         vertexCount: number;
         startIndex: number;
         indexCount: number;
+        groupOffset?: number;
+        groupCount?: number;
         sector: THREE.Mesh;
     }[] = [];
 
@@ -390,6 +392,7 @@ export function batchTerrainSectors(
             const info = batchSectorInfo[i];
             const sector = info.sector;
             const matIndex = materials.length;
+            const sectorGroups = (sector as any).hasTerrainPasses ? sector.geometry.groups : [];
 
             if (Array.isArray(sector.material)) {
                 sector.material.forEach((m: Material) => materials.push(m));
@@ -397,7 +400,11 @@ export function batchTerrainSectors(
                 materials.push(sector.material);
             }
 
-            mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
+            info.groupOffset = mergedGeometry.groups.length;
+            info.groupCount = Math.max(1, sectorGroups.length);
+
+            if (sectorGroups.length === 0) mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
+            else for (const group of sectorGroups) mergedGeometry.addGroup(info.startIndex + group.start, group.count, matIndex + group.materialIndex);
         }
 
         const batchedTerrain = new Mesh(mergedGeometry, materials as any);
@@ -421,8 +428,8 @@ export function batchTerrainSectors(
             (sector as any).batchSectorIndex = i;
 
             // Properties used by zone-object.ts for culling and updates:
-            (sector as any).batchGroupOffset = i;
-            (sector as any).batchGroupCount = 1;
+            (sector as any).batchGroupOffset = info.groupOffset;
+            (sector as any).batchGroupCount = info.groupCount;
 
             // Shift bounds to world space for frustum culling in zone-object.ts
             (sector as any).bounds.min.add(sector.position);

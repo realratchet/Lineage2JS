@@ -41,6 +41,20 @@ const nativeSkillRecipes = new Map<string, NativeSkillBinding_T>([
     ["burstShot", { effects: ["LineageEffect.s_u003_a", "LineageEffect.s_u003_d", "LineageEffect.s_u003_b", "LineageEffect.m_u006_e", "LineageEffect.m_u006_d"], effectGroup: "flameStrike", soundPhases: ["casting", "shot", "explosion"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a43c0 / 0x7afa26 / 0x7916c7.
     ["fatalCounter", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u003_d", "LineageEffect.s_u003_b", "LineageEffect.p_u004_a"], effectGroup: "bow", soundPhases: ["casting", "shot", "explosion"] }],
+    // ANCubics::NCubicSkillProcess 0x78b50f spawns m_u000_c for Cubic Drain.
+    ["cubicDrain", { effects: ["LineageEffect.m_u000_c"], soundPhases: ["shot"] }],
+    // ANCubics::NCubicSkillProcess 0x78b61c spawns m_u003_c for Vampiric Cubic.
+    ["cubicVampiric", { effects: ["LineageEffect.m_u003_c"], soundPhases: ["shot"] }],
+    // ANCubics::NCubicSkillProcess 0x78bd48 spawns m_u001_b for Life Cubic.
+    ["cubicHeal", { effects: ["LineageEffect.m_u001_b"], soundPhases: ["shot"] }],
+    // ANCubics::NCubicSkillProcess 0x78be60 spawns m_u007_b for Viper and Binding Cubics.
+    ["cubicPoison", { effects: ["LineageEffect.m_u007_b"], soundPhases: ["shot"] }],
+    ["cubicPoltergeist", { effects: ["LineageEffect.m_u018_b"], soundPhases: ["shot"] }],
+    ["cubicBinding", { effects: ["LineageEffect.m_u007_b"], soundPhases: ["shot"] }],
+    // ANCubics::NCubicSkillProcess 0x78bb19 uses m_u037_d for Aqua Cubic.
+    ["cubicAqua", { effects: ["LineageEffect.m_u037_d"], soundPhases: ["shot"] }],
+    // ANCubics::NCubicSkillProcess 0x78bc7b spawns s_u011_a for Spark Cubic.
+    ["cubicSpark", { effects: ["LineageEffect.s_u011_a"], soundPhases: ["shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79c770 / 0x7a3de7 / 0x7a7b08 / 0x791ade.
     ["chantOfShielding", { effects: ["LineageEffect.m_u034_a", "LineageEffect.m_u034_b", "LineageEffect.m_u034_c"], soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79e58b / 0x7a3de7 / 0x7a8fa4 / 0x791ade.

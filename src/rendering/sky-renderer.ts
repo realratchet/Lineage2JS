@@ -1,7 +1,7 @@
 import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor, PlaneGeometry, Group, BufferAttribute, Fog, Color, OneMinusSrcAlphaFactor } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "../utils/color-byte";
-import { SectorObject } from "../objects/zone-object";
+import { SectorObject, ZoneObject } from "../objects/zone-object";
 import EnvInfo from "./env-info";
 import { EEnvCycle } from "@l2js/engine/env-consts";
 
@@ -55,6 +55,8 @@ export default class SkyRenderer {
     protected celestialScene = new Scene();
     public sun: Celestial = new Celestial();
     protected camera: PerspectiveCamera | null = null;
+    protected skyZone: ZoneObject = null;
+    protected readonly skyCamera = new PerspectiveCamera();
 
     protected sunData: any = null;
     public config = {
@@ -414,6 +416,18 @@ export default class SkyRenderer {
     public render(renderer: WebGLRenderer) {
         if (!this.camera) return;
 
+        if (this.skyZone) {
+            this.skyCamera.copy(this.camera, false);
+            this.skyCamera.layers.set(1);
+            // FSkySceneNode::FSkySceneNode (Engine.dll 0x8ea050): recenter the view at SkyZoneInfo.
+            this.skyCamera.position.copy(this.skyZone.skyOrigin);
+            this.skyCamera.updateMatrixWorld(true);
+            renderer.render(this.skyZone, this.skyCamera);
+            return;
+        }
+
         renderer.render(this.celestialScene, this.camera);
     }
+
+    public setSkyZone(zone: ZoneObject) { this.skyZone = zone; }
 }

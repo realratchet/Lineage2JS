@@ -5,6 +5,7 @@ import PhysicsManager from "../physics/physics-manager";
 import RenderManager, { type HTMLViewportElement_T } from "../rendering/render-manager";
 import UIManager from "./ui-manager";
 import InputManager from "./input-manager";
+import NetworkManager from "../network/network-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 export class GameManager implements IEngineComponent<GameManager> {
@@ -14,6 +15,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     protected manPhysics: PhysicsManager;
     protected manUI: UIManager;
     protected manInput: InputManager;
+    protected manNetwork: NetworkManager;
 
     protected components: IEngineComponent<any>[] = [];
 
@@ -33,6 +35,7 @@ export class GameManager implements IEngineComponent<GameManager> {
         game.manPhysics = new PhysicsManager();
         game.manUI = new UIManager();
         game.manInput = new InputManager();
+        game.manNetwork = new NetworkManager();
 
         game.attach(game.manPhysics);
         game.attach(game.manRender);
@@ -40,6 +43,7 @@ export class GameManager implements IEngineComponent<GameManager> {
         game.attach(game.manAudio);
         game.attach(game.manAsset);
         game.attach(game.manUI);
+        game.attach(game.manNetwork);
 
         return await game.onInit();
     }
@@ -72,6 +76,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     public getComponent(component: "physics"): PhysicsManager;
     public getComponent(component: "ui"): UIManager;
     public getComponent(component: "input"): InputManager;
+    public getComponent(component: "network"): NetworkManager;
     public getComponent(component: unknown): unknown {
         switch (component) {
             case "asset": return this.manAsset;
@@ -80,6 +85,7 @@ export class GameManager implements IEngineComponent<GameManager> {
             case "physics": return this.manPhysics;
             case "ui": return this.manUI;
             case "input": return this.manInput;
+            case "network": return this.manNetwork;
             default: throw new Error(`Unknown component: ${component}`);
         }
     }

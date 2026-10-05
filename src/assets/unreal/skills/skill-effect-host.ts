@@ -52,6 +52,8 @@ export type SkillEffectHost_T = {
     getHitNormal(actor: SkillActor_T, out: Vector3Arr): Vector3Arr;
     adjustParticleLife(actor: SkillActor_T, time: number): void;
     setParticleScale(actor: SkillActor_T, scale: number, all?: boolean): void;
+    getWeaponLength(actor: SkillActor_T, left: boolean): number | null;
+    setSoulShotVelocity(actor: SkillActor_T, velocity: number): void;
     setParticleDelay(actor: SkillActor_T, time: number): void;
     createDamageEffect(actor: SkillActor_T): SkillActor_T | null;
     isRendered(actor: SkillActor_T): boolean;

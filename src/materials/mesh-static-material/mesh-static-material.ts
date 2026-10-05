@@ -48,6 +48,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 
     Object.assign(uniforms[name].value = {}, restUniforms);
     Object.assign(defines, parameters.defines);
+    if (parameters.uniforms.fadeColors) defines[name === "shSpecular" ? "USE_FADE" : `USE_FADE_${defName}`] = "";
 
     if (parameters.isUsingMap) {
         if ((parameters as IDecodedSpriteParameter).isSprite) {
@@ -58,10 +59,11 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         }
 
         if (parameters.isCubeMap) {
-            if (name !== "shSpecular") throw new Error(`Cubemap is unsupported in ${name}.`);
+            if (name !== "shSpecular" && name !== "shMaterial2") throw new Error(`Cubemap is unsupported in ${name}.`);
 
             defines[`USE_CUBE_MAP_${defName}`] = "";
-            uniforms[`${name}Cube`].value = parameters.uniforms.map.texture;
+            uniforms[`${name}Cube`] = new Uniform(parameters.uniforms.map.texture);
+            uniforms[`${name}CubeTransform`] = new Uniform(parameters.uniforms.cubeTransform || new Matrix3());
             return;
         }
 

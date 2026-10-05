@@ -1,4 +1,5 @@
 import "./ue2-conventions";
+import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
 import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
@@ -20,6 +21,7 @@ import DisplayGammaPass from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
 import type PhysicsManager from "../physics/physics-manager";
 import LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import type L2Pickup from "../objects/l2-pickup";
 import ShadowProjector from "../objects/shadow-projector";
 import type DynamicLight from "../objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
@@ -40,11 +42,13 @@ import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
 import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import Radar from "./radar";
 
 export type HTMLViewportElement_T = HTMLDivElement;
 
 const tmpBox = new Box3();
 const tmpCamDir = new Vector3();
+const tmpSize = new Vector2();
 const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
 const tmpPawnSunAmbient = new ColorByte();
@@ -226,6 +230,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly viewport: HTMLViewportElement_T;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
+    protected horizontalFov = DEFAULT_HORIZONTAL_FOV;
     public readonly cameraTarget = new Vector3(-87086.51708877791, 239936.94718888338, -3685.930229617832);
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
@@ -246,6 +251,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public bspHelperActive: boolean = false;
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
+    public readonly radar = new Radar();
     protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
@@ -254,6 +260,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
+    protected readonly pickups = new Set<L2Pickup>();
     protected readonly transientGeometries = new WeakMap<Object3D, Set<THREE.BufferGeometry>>();
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
@@ -344,6 +351,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.uGlowPass.renderToScreen = true;
 
         this.displayGammaPass = new DisplayGammaPass(256, 256, this.renderer.capabilities.isWebGL2 ? 4 : 0);
+        setTerrainTextureUnits(this.renderer.capabilities.maxTextures);
 
         this.renderer.autoClear = false;
 
@@ -691,25 +699,28 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.lastSize.set(width, height);
     }
 
-    protected onHandleResize(): void {
-        const oldStyle = this.getDomElement().style.display;
-        this.getDomElement().style.display = "none";
-        const { width, height } = this.viewport.getBoundingClientRect();
-
-        const aspect = width / height;
-        this.camera.aspect = aspect;
-
-        const hFOV = MathUtils.degToRad(DEFAULT_HORIZONTAL_FOV);
-        const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / aspect);
+    public setHorizontalFov(fov = DEFAULT_HORIZONTAL_FOV) {
+        this.horizontalFov = fov;
+        const hFOV = MathUtils.degToRad(fov);
+        const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / this.camera.aspect);
         this.camera.fov = MathUtils.radToDeg(vFOV);
 
         if (this.bspHelperCamera) {
-            this.bspHelperCamera.aspect = aspect;
+            this.bspHelperCamera.aspect = this.camera.aspect;
             this.bspHelperCamera.fov = this.camera.fov;
             this.bspHelperCamera.updateProjectionMatrix();
         }
 
         this.camera.updateProjectionMatrix();
+    }
+
+    protected onHandleResize(): void {
+        const oldStyle = this.getDomElement().style.display;
+        this.getDomElement().style.display = "none";
+        const { width, height } = this.viewport.getBoundingClientRect();
+
+        this.camera.aspect = width / height;
+        this.setHorizontalFov(this.horizontalFov);
         this.setSize(width, height);
 
         const pixelRatio = this.pixelRatio;
@@ -1098,6 +1109,16 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public retainGeometry(geometry: THREE.BufferGeometry): void { retainResource(geometry); }
     public releaseGeometry(geometry: THREE.BufferGeometry): void { releaseResource(geometry); }
 
+    public addPickup(pickup: L2Pickup): void {
+        this.pickups.add(pickup);
+        this.scene.add(pickup);
+    }
+
+    public removePickup(pickup: L2Pickup): void {
+        this.pickups.delete(pickup);
+        pickup.release();
+    }
+
     protected retainTransientGeometries(effect: Object3D): void {
         let geometries = this.transientGeometries.get(effect);
 
@@ -1208,6 +1229,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         for (const component of this.actorMeshes)
             this.updateActorLighting(component.getParent(), sunAmbient);
+
+        for (const pickup of this.pickups) {
+            pickup.placeOnGround();
+            if (pickup.visible) this.updateActorLighting(pickup, sunAmbient);
+        }
     }
 
     // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
@@ -1354,13 +1380,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
 
-        const ambientSun = this.environment.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
-        const sunColor = this.environment.getBaseColorPlaneStaticMeshSunLightScaled(tmpColorByte_2);
-        (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(
-            (ambientSun.r + sunColor.r) / 255,
-            (ambientSun.g + sunColor.g) / 255,
-            (ambientSun.b + sunColor.b) / 255
-        );
+        const ambientSun = this.environment.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte); // SetAmbientLight(amb >> 1) at 0x90d482; the HSV*32 add (0x90d3a3) only runs for far-LOD mode 2, which we never draw
+        (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(ambientSun.r / 255, ambientSun.g / 255, ambientSun.b / 255);
 
         {
             const camera = this.camera;
@@ -2081,6 +2102,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.render(this.scene, this.camera);
 
         this.waterEffects.underWaterEffect.renderCellophane(this.renderer);
+        this.renderer.getSize(tmpSize);
+        this.radar.render(this.renderer, this.camera, this.player.position, tmpSize.x, tmpSize.y);
 
         // // Apply Native Bloom (Sun/Glow) -> Screen
         // this.uGlowPass.render(this.renderer, null, this.mainRenderTarget);
@@ -2127,6 +2150,23 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getLoadedSectors(): readonly SectorObject[] { return this.arrLoadedSectors; }
+
+    public findMovableByRealId(realId: number): MovableObject | null {
+        for (const sector of this.arrLoadedSectors) {
+            let result: MovableObject = null;
+
+            sector.traverse(object => {
+                if (result || !(object as any).isMovableObject) return;
+
+                const properties = (object as MovableObject & { scriptProperties?: Map<string, unknown> }).scriptProperties;
+                if (properties instanceof Map && properties.get("L2ServerObjectRealID") === realId) result = object as MovableObject;
+            });
+
+            if (result) return result;
+        }
+
+        return null;
+    }
 
     public addSector(sector: SectorObject) {
         if (sector.index) {

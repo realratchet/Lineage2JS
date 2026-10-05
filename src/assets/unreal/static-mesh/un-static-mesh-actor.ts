@@ -257,7 +257,7 @@ export abstract class UStaticMeshActor extends UAActor {
             name: this.objectName,
             position: _position,
             scaledGlow: this.scaleGlow,
-            isSunAffected: this.isSunAffected,
+            isSunAffected: this.isUnlit ? false : this.isSunAffected,
             ambient,
             rotating,
             dontBatch: !!this.dontBatch || !!rotating,

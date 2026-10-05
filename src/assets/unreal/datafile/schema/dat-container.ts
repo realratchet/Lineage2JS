@@ -88,10 +88,10 @@ export class NumberContainerType implements IDatContainerType {
 export class SizedContainerType implements IDatContainerType {
     public isContainerType = true;
 
-    protected dtype: ValueTypeNames_T;
+    protected dtype: ValueTypeNames_T | IDatContainerType;
     protected size: number | string;
 
-    public constructor(dtype: ValueTypeNames_T, size: number | string) {
+    public constructor(dtype: ValueTypeNames_T | IDatContainerType, size: number | string) {
         this.dtype = dtype;
         this.size = size;
     }
@@ -101,7 +101,7 @@ export class SizedContainerType implements IDatContainerType {
         const elements = new Array<any>(count);
 
         for (let i = 0; i < count; i++)
-            elements[i] = this.dtype === "utf16" ? readUTF16(pkg) : pkg.read(this.dtype as any);
+            elements[i] = typeof this.dtype !== "string" ? this.dtype.read(pkg, values) : this.dtype === "utf16" ? readUTF16(pkg) : pkg.read(this.dtype as any);
 
         return elements;
     }

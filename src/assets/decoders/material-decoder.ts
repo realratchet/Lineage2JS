@@ -191,13 +191,13 @@ function decodeCubemap(library: DecodeLibrary, info: ICubemapDecodeInfo): MapDat
     return { texture, size: faces[0].size.clone() };
 }
 
-function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | null): { map: MapData_T | null, innerTransforms: any[] } {
+function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | null, decoded: IDecodedParameter = null): { map: MapData_T | null, innerTransforms: any[] } {
     if (materialIndex === null) return { map: null, innerTransforms: [] };
 
     const info = library.materials[materialIndex] as IBaseMaterialDecodeInfo;
     if (!info || info.materialType === "empty") return { map: fetchMapTexture(library, info), innerTransforms: [] };
 
-    const decoded = decodeParameter(library, info);
+    decoded = decoded || decodeParameter(library, info);
     if (!decoded) return { map: null, innerTransforms: [] };
 
     const nestedTransforms = decoded.uniforms.innerTransforms ?? [];
@@ -230,7 +230,6 @@ function decodeFadeColorModifier(library: DecodeLibrary, info: IFadeColorDecodeI
             }
         },
         defines: {
-            USE_FADE: "",
             USE_GLOBAL_TIME_SECONDS: ""
         },
         transformType: "none",
@@ -271,8 +270,15 @@ function decodeTexPannerModifer(library: DecodeLibrary, info: ITexPannerDecodeIn
 function decodeTexRotatorModifer(library: DecodeLibrary, info: ITexRotatorDecodeInfo, overrideMaterial?: string): IDecodedParameter {
     const materialIndex = overrideMaterial !== undefined ? overrideMaterial : info.transform.map;
     const isUsingMap = materialIndex !== null;
+    const source = isUsingMap ? decodeParameter(library, library.materials[materialIndex]) : null;
 
-    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex) : { map: null, innerTransforms: [] };
+    if (source?.isCubeMap) {
+        if (info.transform.type !== "fixed") throw new Error(`Cubemap rotator '${info.name}' has unsupported rotation '${info.transform.type}'.`);
+
+        return { ...source, uniforms: { ...source.uniforms, cubeTransform: new Matrix3().fromArray(info.transform.matrix) } };
+    }
+
+    const resolved = isUsingMap ? fetchTransformedMap(library, materialIndex, source) : { map: null, innerTransforms: [] };
 
     return {
         isUsingMap,
@@ -506,11 +512,13 @@ function decodeShader(library: DecodeLibrary, info: IShaderDecodeInfo): MeshStat
     // D3DTSS_COLOROP = D3DTOP_BLENDCURRENTALPHA (L2.dusk_and_dawn.trace call 9416187, TextureStageState2)
     const useSelfIllumination = !info.specular && !!info.selfIllumination && !!info.selfIlluminationMask;
     const detail = info.detail ? decodeParameter(library, library.materials[info.detail]) : null;
+    const diffuse = decodeParameter(library, library.materials[info.diffuse]);
+    const combiner = library.materials[info.diffuse] as ICombinerDecodeInfo;
 
     if (detail) detail.uniforms.detailScale = info.detailScale;
 
     return new MeshStaticMaterial({
-        diffuse: decodeParameter(library, library.materials[info.diffuse]),
+        diffuse,
         detail,
         opacity: decodeParameter(library, library.materials[info.opacity]),
         specular: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIllumination : info.specular]),
@@ -524,7 +532,8 @@ function decodeShader(library: DecodeLibrary, info: IShaderDecodeInfo): MeshStat
         visible: info.visible,
         modulateStaticLighting2X: info.modulateStaticLighting2X,
         modulateSpecular2X: info.modulateSpecular2X,
-        selfIllumination: useSelfIllumination
+        selfIllumination: useSelfIllumination,
+        combiner: combiner?.materialType === "combiner" && !combiner.mask ? { combineMode: combiner.combineMode, material1: diffuse, material2: decodeParameter(library, library.materials[combiner.material2]), invertMask: combiner.invertMask, alphaFrom1: combiner.alphaFrom1, alphaFrom2: combiner.alphaFrom2 } : null
     });
 }
 
@@ -563,6 +572,7 @@ function decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecod
     const baseMaterial = library.materials[materialIndex] as IBaseMaterialDecodeInfo;
     const isShader = baseMaterial?.materialType === "shader";
     const shader = baseMaterial as IShaderDecodeInfo;
+    const texture = baseMaterial?.materialType === "texture" ? baseMaterial as ITextureDecodeInfo : null;
 
     const isColorMod = info.modifierType === "colorModifier";
     const colorMod = info as IColorModifierDecodeInfo;
@@ -581,8 +591,8 @@ function decodeModifier(library: DecodeLibrary, info: IBaseMaterialModifierDecod
         specular: isShader ? _decodeModifier(library, info, useSelfIllumination ? shader.selfIllumination : shader.specular) : null,
         specularMask: isShader ? _decodeModifier(library, info, useSelfIllumination ? shader.selfIlluminationMask : shader.specularMask) : null,
         side: (isColorMod && colorMod.doubleSide) ? DoubleSide : (isFinalBlend ? (finalBlend.doubleSide ? DoubleSide : FrontSide) : ((info as IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide)),
-        blendingMode: isFinalBlend ? finalBlend.blendingMode : (isShader ? shader.blendingMode ?? "normal" : "normal"),
-        transparent: isFinalBlend ? finalBlend.transparent : (isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : false)),
+        blendingMode: isFinalBlend ? finalBlend.blendingMode : (isShader ? shader.blendingMode ?? "normal" : (texture?.isMasked ? "masked" : "normal")),
+        transparent: isFinalBlend ? finalBlend.transparent : (isColorMod ? colorMod.alphaBlend : (isShader ? shader.transparent : !!(texture?.isMasked || texture?.isAlphaTexture))),
         depthWrite: isFinalBlend ? finalBlend.depthWrite : (isShader ? shader.depthWrite : true),
         depthTest: isFinalBlend ? finalBlend.depthTest : (isShader ? shader.depthTest ?? true : true),
         modifyFramebufferBlending: isFinalBlend,
@@ -602,7 +612,7 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IMaterialTerrainSegm
     const terrainMaterial = library.materials[info.terrainMaterial] as IMaterialTerrainDecodeInfo;
     const uvs = fetchTexture(library, info.uvs);
 
-    return new MeshTerrainMaterial({
+    return MeshTerrainMaterial.create({
         uvs,
         layers: terrainMaterial.layers.map(({ map, alphaMap }) => {
             return {

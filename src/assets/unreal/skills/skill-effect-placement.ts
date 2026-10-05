@@ -103,6 +103,33 @@ export class SkillEffectPlacement {
         this.trailers.push({ effect, host, sameRotation, relative, offset: [...offset] });
     }
 
+    public spawnSoulShot(skill: NpcSkillAttack_T, caster: SkillActor_T): void {
+        const shot = skill.visual.soulshot;
+        const weapon = caster.getUnrealScriptProperty("CurWeaponType") as number;
+        const hands = shot.hands[weapon];
+
+        if (!hands) throw new Error(`Pawn '${caster.name}' has invalid weapon type '${weapon}'.`);
+
+        for (let i = 0; i < hands.length; i++) {
+            if (hands[i] === -1) continue;
+            const length = this.host.getWeaponLength(caster, i === 0);
+
+            if (length === null) continue;
+            if (!Number.isFinite(length)) throw new Error(`Pawn '${caster.name}' has invalid weapon length '${length}'.`);
+
+            const sticks = hands[i] === 1 && length > 12;
+            const boneProperty = i === 0 ? "LeftHandBone" : "RightHandBone";
+            const hasBone = (caster.getUnrealScriptProperty(boneProperty) as string).toLowerCase() !== "none";
+            let actor: SkillActor_T;
+
+            this.spawn({ phase: "casting", effectClass: sticks ? shot.sticks : shot.books, host: "caster", location: [0, 0, 0], rotation: "zero", boneProperty: hasBone ? boneProperty : undefined, relativeRotation: hasBone && !sticks && i === 0 ? [0, 16384, 0] : undefined }, skill, caster, caster, 0, effect => {
+                actor = effect;
+                this.host.addEffect(effect, caster);
+            });
+            if (hasBone && sticks) this.host.setSoulShotVelocity(actor, length);
+        }
+    }
+
     public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: SkillActor_T, target: SkillActor_T, shotTime: number, addEffect: (effect: SkillActor_T) => void, source: SkillActor_T = caster, locList: readonly Vector3Arr[] = [], hitActor: boolean = !!target, impactActor: SkillActor_T = hitActor ? target : null): boolean {
         // Engine.dll 0x7aa351..0x7aa35b: reject NULL, then distinguish TargetPawn == caster.
         if (info.targetIsCaster !== undefined && (!target || info.targetIsCaster !== (target === caster))) return true;
@@ -446,22 +473,7 @@ export class SkillEffectPlacement {
         if (effectHost.isActor && !this.host.isLowDetail() && this.host.isRendered(effectHost)) {
             const damage = this.host.createDamageEffect(effectHost);
             if (damage) {
-                const effectRotation = tmpRotation2;
-                getTargetRotation(this.host, caster, effectHost, effectRotation, false);
-                this.host.getPosition(effectHost, tmpPosition, true);
-                tmpPosition[2] += this.host.getCollisionHeight(effectHost);
-                this.host.getPosition(caster, tmpCasterPosition, true);
-                tmpCasterPosition[2] += this.host.getCollisionHeight(caster);
-                FVector.subElements(tmpPosition, tmpCasterPosition, tmpPosition2);
-                const distance = Math.sqrt(FVector.lengthSqElements(tmpPosition2));
-                // 0x8bf41a..0x8bf4a1: floats[0xa68640/0xad6508/0xacbc2c] = 1/2, 150, 0.85; distance-radius stays signed.
-                const offset = this.host.getCollisionHeight(effectHost) + this.host.getCollisionRadius(effectHost) > 150 ? Math.min(distance * 0.85, distance - this.host.getCollisionRadius(caster)) : this.host.getCollisionRadius(effectHost) / 2;
-                FVector.applyQuaternionElements([1, 0, 0], effectRotation, tmpPosition2);
-                tmpPosition[0] -= tmpPosition2[0] * offset;
-                tmpPosition[1] -= tmpPosition2[1] * offset;
-                tmpPosition[2] -= tmpPosition2[2] * offset;
-                this.host.setPosition(damage, tmpPosition);
-                this.host.setRotation(damage, effectRotation);
+                this.setAttackImpactTransform(caster, effectHost, damage);
                 addEffect(damage);
             }
         }
@@ -570,6 +582,43 @@ export class SkillEffectPlacement {
     public addAttackLight(caster: SkillActor_T, target: SkillActor_T): void {
         // Engine.dll Action_Attack 0x8bde58..0x8bdf44 (-2*radius); AddPawnLight 0x8b518f..0x8b51e8 (white, 30, 0.2).
         this.addPawnLight({ color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true, position: "center", rotation: "targetDisplacement", radiusOffset: -2 }, caster, target, caster, 0);
+    }
+
+    public addAttackImpact(caster: SkillActor_T, target: SkillActor_T, critical: boolean, shield: boolean, spirit: boolean, grade: number): void {
+        if (!target?.isActor || !this.host.isRendered(target)) return;
+
+        const add = (effect: SkillActor_T): void => {
+            this.setAttackImpactTransform(caster, target, effect);
+            this.host.addEffect(effect, target);
+        };
+        const damage = this.host.isLowDetail() ? null : this.host.createDamageEffect(target);
+
+        if (damage) add(damage);
+
+        if (spirit) {
+            if (grade > 5) return;
+
+            const suffix = critical ? (caster as any).isPlayer ? "d" : "e" : "c";
+            add(this.host.createEffect(caster, `LineageEffect.e_u${505 + grade}_${suffix}`));
+        } else if (critical && !shield) add(this.host.createEffect(caster, "LineageEffect.p_u004_a"));
+    }
+
+    protected setAttackImpactTransform(caster: SkillActor_T, target: SkillActor_T, effect: SkillActor_T): void {
+        getTargetRotation(this.host, caster, target, tmpRotation, false);
+        this.host.getPosition(target, tmpPosition, true);
+        tmpPosition[2] += this.host.getCollisionHeight(target);
+        this.host.getPosition(caster, tmpCasterPosition, true);
+        tmpCasterPosition[2] += this.host.getCollisionHeight(caster);
+        FVector.subElements(tmpPosition, tmpCasterPosition, tmpPosition2);
+        const distance = Math.sqrt(FVector.lengthSqElements(tmpPosition2));
+        const offset = this.host.getCollisionHeight(target) + this.host.getCollisionRadius(target) > 150 ? Math.min(distance * 0.85, distance - this.host.getCollisionRadius(caster)) : this.host.getCollisionRadius(target) / 2;
+
+        FVector.applyQuaternionElements([1, 0, 0], tmpRotation, tmpPosition2);
+        tmpPosition[0] -= tmpPosition2[0] * offset;
+        tmpPosition[1] -= tmpPosition2[1] * offset;
+        tmpPosition[2] -= tmpPosition2[2] * offset;
+        this.host.setPosition(effect, tmpPosition);
+        this.host.setRotation(effect, tmpRotation);
     }
 
     protected addPawnLight(light: NativeSkillEffect_T["pawnLight"], caster: SkillActor_T, host: SkillActor_T, source: SkillActor_T, shotTime: number, effect: SkillActor_T = null): void {

@@ -2,7 +2,10 @@ import type { ISchemaValue } from "./dat-schema";
 import { UTF16ContainerType } from "./dat-container";
 
 export const CHARACTER_ARMOR_GROUPS: Record<string, string> = { mfighter: "m_human_fighter", ffighter: "f_human_fighter", mdarkelf: "m_dark_elf", fdarkelf: "f_dark_elf", mdwarf: "m_dwarf", fdwarf: "f_dwarf", melf: "m_elf", felf: "f_elf", mmagic: "m_human_mystic", fmagic: "f_human_mystic", morc: "m_orc_fighter", forc: "f_orc_fighter", mshaman: "m_orc_mystic", fshaman: "f_orc_mystic" };
-export const CHARACTER_ARMOR_SLOTS = { chest: 10, legs: 11, gloves: 9, boots: 12 };
+export const CHARACTER_FULL_ARMOR_SLOT = 15;
+export const CHARACTER_ALLDRESS_SLOT = 17;
+export const CHARACTER_HEAD_ARMOR_SLOTS = [6, 16];
+export const CHARACTER_ARMOR_SLOTS = { chest: [10, CHARACTER_FULL_ARMOR_SLOT, CHARACTER_ALLDRESS_SLOT], legs: [11], gloves: [9], boots: [12] };
 
 export const SCHEMA_ARMORGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },

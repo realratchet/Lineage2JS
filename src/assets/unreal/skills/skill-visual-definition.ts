@@ -10,6 +10,7 @@ export type SkillVisualDefinition_T = {
     soundPhases: NpcSkillEffectPhase_T[];
     finalShotOnly: boolean;
     transientRejected: boolean;
+    soulshot?: { sticks: string, books: string, hands: number[][] };
     associatedActors: boolean;
     programs: Record<NpcSkillEffectPhase_T, IScriptFunctionDecodeInfo>;
 };

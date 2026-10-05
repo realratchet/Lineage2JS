@@ -1,4 +1,4 @@
-import { Matrix4, Object3D, Skeleton, SkinnedMesh, Vector3 } from "three";
+import { Bone, Matrix4, Object3D, Skeleton, SkinnedMesh, Vector3 } from "three";
 
 const tmpMeshInverse = new Matrix4();
 const tmpBoneMatrix = new Matrix4();
@@ -16,6 +16,7 @@ type BoneAttachment_T = { object: Object3D, bone: number, usesBindMatrix: boolea
 export class LocalSpaceSkeleton extends Skeleton {
     public mesh: SkinnedMesh = null;
     public posePaused: boolean = false;
+    public rootBoneSource: Bone = null;
 
     protected parents: Int32Array = null;
     protected locals: Matrix4[] = null;
@@ -38,19 +39,23 @@ export class LocalSpaceSkeleton extends Skeleton {
             return target.copy(this.bones[index].matrixWorld);
         }
 
-        target.identity();
-
-        for (let i = index; i >= 0; i = this.parents[i]) {
-            const bone = this.bones[i];
-
-            tmpBoneLocal.compose(bone.position, bone.quaternion, bone.scale);
-            target.premultiply(tmpBoneLocal);
-        }
+        this.getBonePose(index, target);
 
         this.mesh.updateWorldMatrix(true, false);
         target.premultiply(this.mesh.bindMatrixInverse).premultiply(this.mesh.matrixWorld);
 
         return target;
+    }
+
+    protected getBonePose(index: number, target: Matrix4): void {
+        target.identity();
+
+        for (let bone = this.bones[index]; bone.isBone; bone = bone.parent as Bone) {
+            if (bone === this.bones[0] && this.rootBoneSource) bone = this.rootBoneSource;
+
+            tmpBoneLocal.compose(bone.position, bone.quaternion, bone.scale);
+            target.premultiply(tmpBoneLocal);
+        }
     }
 
     public matchRefBone(name: string): number {
@@ -160,7 +165,9 @@ export class LocalSpaceSkeleton extends Skeleton {
             const local = locals[i];
             const parent = parents[i];
 
-            local.compose(bone.position, bone.quaternion, bone.scale);
+            // UExtraSkeletalMeshInstance::GetFrame 0x96feba replaces the root pose with LowbodyBone.
+            if (i === 0 && this.rootBoneSource) this.getBonePose(0, local);
+            else local.compose(bone.position, bone.quaternion, bone.scale);
 
             if (parent >= 0) local.premultiply(locals[parent]);
 

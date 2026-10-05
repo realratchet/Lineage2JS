@@ -1,5 +1,5 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
-import type { PlayerSkillInfo_T, WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { GameStrings_T, MatineeScene_T, UITexture_T, PlayerSkillInfo_T, WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T } from "./decode-protocol";
 import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
@@ -11,6 +11,7 @@ type PendingRequest_T = {
     resolve(value: any): void;
     reject(error: Error): void;
     workerIndex: number;
+    isRaw?: boolean;
 };
 
 type WorkerSlot_T = {
@@ -30,9 +31,9 @@ async function waitForWorkers(promises: Promise<void>[]): Promise<void> {
 export class DecodeWorkerClient {
     protected slots: WorkerSlot_T[] = [];
     protected pending = new Map<number, PendingRequest_T>();
+    protected readonly cacheScriptBuffers = new Map<string, Promise<ArrayBuffer>>();
     protected nextRequestId = 1;
     protected sectorWorker = new Map<string, number>();
-    protected characterWorker = new Map<number, number>();
     protected npcWorker = new Map<string, number>();
     protected mainThreadEngine: DecodeEngine = null;
     protected characterAnimationSets = new Set<number>();
@@ -106,6 +107,13 @@ export class DecodeWorkerClient {
         return best;
     }
 
+    protected pickScriptWorker(): number { // LineageWarrior/LineageEffect script classes drag in a ~1.4GB import closure per worker, keep it to one.
+        for (let i = this.slots.length - 1; i >= 0; i--)
+            if (!this.slots[i].isDead) return i;
+
+        return -1;
+    }
+
     protected pickCharacterWorker(stickyIndex?: number): number {
         if (stickyIndex !== undefined) {
             const slot = this.slots[stickyIndex];
@@ -177,24 +185,23 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeEnv" });
     }
 
-    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }): Promise<DecodeLibrary> {
+    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: L2JS.Engine.ICharacterEquipment = null): Promise<DecodeLibrary> {
         const includeAnimations = !this.characterAnimationSets.has(charIndex);
 
         if (this.mainThreadEngine) {
-            const library = await this.mainThreadEngine.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations);
+            const library = await this.mainThreadEngine.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment);
 
             this.characterAnimationSets.add(charIndex);
 
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
-        const workerIndex = this.pickCharacterWorker(this.characterWorker.get(charIndex));
+        const workerIndex = this.pickScriptWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
-        this.characterWorker.set(charIndex, workerIndex);
 
-        const library = await this.dispatch(workerIndex, { type: "decodeCharacter", settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations });
+        const library = await this.dispatch(workerIndex, { type: "decodeCharacter", settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment });
 
         this.characterAnimationSets.add(charIndex);
 
@@ -234,11 +241,49 @@ export class DecodeWorkerClient {
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
-        const workerIndex = this.pickWorker();
+        const workerIndex = this.pickScriptWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
         return this.dispatch(workerIndex, { type: "decodeEffectTemplates", settings, classPaths, soundPaths, scriptClassPaths });
+    }
+
+    public async decodeScriptClass(settings: LoadSettings_T, classPath: string): Promise<DecodeLibrary> { // Pawns merge and own their script library, so each gets a fresh copy of the one worker result.
+        if (this.mainThreadEngine) return this.decodeEffectTemplates(settings, [], [], [classPath]);
+
+        const library = await deserializeLibraryAsync((await this.getScriptBuffer(settings, classPath)).slice(0));
+
+        refreshSoundBlobUris(library);
+
+        return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+    }
+
+    public async prefetchScriptClass(settings: LoadSettings_T, classPath: string): Promise<void> {
+        if (this.mainThreadEngine) return;
+
+        await this.getScriptBuffer(settings, classPath);
+    }
+
+    protected getScriptBuffer(settings: LoadSettings_T, classPath: string): Promise<ArrayBuffer> {
+        if (!this.cacheScriptBuffers.has(classPath)) {
+            const workerIndex = this.pickScriptWorker();
+
+            if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+            this.cacheScriptBuffers.set(classPath, this.dispatch(workerIndex, { type: "decodeEffectTemplates", settings, classPaths: [], soundPaths: [], scriptClassPaths: [classPath] }, true));
+        }
+
+        return this.cacheScriptBuffers.get(classPath);
+    }
+
+    public async decodeItem(settings: LoadSettings_T, id: number): Promise<DecodeLibrary> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeItem(settings, id);
+
+        const workerIndex = this.pickScriptWorker();
+
+        if (workerIndex < 0) throw new Error(`Decode worker is dead`);
+
+        return this.dispatch(workerIndex, { type: "decodeItem", settings, id });
     }
 
     public async decodeSkill(settings: LoadSettings_T, id: number, level: number): Promise<DecodeLibrary> {
@@ -248,7 +293,7 @@ export class DecodeWorkerClient {
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
-        const workerIndex = this.pickWorker();
+        const workerIndex = this.pickScriptWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
@@ -263,6 +308,36 @@ export class DecodeWorkerClient {
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
 
         return this.dispatch(workerIndex, { type: "listPlayerSkills" });
+    }
+
+    public decodeUITextures(settings: LoadSettings_T, paths: string[]): Promise<UITexture_T[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeUITextures(settings, paths);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "decodeUITextures", settings, paths });
+    }
+
+    public decodeMatineeScenes(levelName: string): Promise<MatineeScene_T[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeMatineeScenes(levelName);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "matineeScenes", levelName });
+    }
+
+    public getGameStrings(): Promise<GameStrings_T> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeGameStrings();
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "gameStrings" });
     }
 
     public resolveNpc(selector: string | number): Promise<INpcDefinition> {
@@ -288,19 +363,7 @@ export class DecodeWorkerClient {
     public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
         if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings);
 
-        const characterWorkers = new Set(this.characterWorker.values());
-        let workerIndex = -1;
-
-        for (let i = this.slots.length - 1; i >= 0; i--) {
-            const slot = this.slots[i];
-
-            if (!characterWorkers.has(i) && !slot.isDead && slot.inFlight === 0) {
-                workerIndex = i;
-                break;
-            }
-        }
-
-        if (workerIndex < 0) workerIndex = this.pickWorker();
+        const workerIndex = this.pickScriptWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
@@ -310,7 +373,7 @@ export class DecodeWorkerClient {
     public async getCharGroups(): Promise<ICharacterGroup[]> {
         if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups();
 
-        const workerIndex = this.pickWorker();
+        const workerIndex = this.pickScriptWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
@@ -353,13 +416,23 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "scriptLocalization", scriptClassPath });
     }
 
-    protected dispatch(workerIndex: number, message: any): Promise<any> {
+    public getL2Text(name: string): Promise<string> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeL2Text(name);
+
+        const workerIndex = this.pickWorker();
+
+        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
+
+        return this.dispatch(workerIndex, { type: "l2Text", name });
+    }
+
+    protected dispatch(workerIndex: number, message: any, isRaw: boolean = false): Promise<any> {
         const requestId = this.nextRequestId++;
 
         this.slots[workerIndex].inFlight++;
 
         return new Promise((resolve, reject) => {
-            this.pending.set(requestId, { resolve, reject, workerIndex });
+            this.pending.set(requestId, { resolve, reject, workerIndex, isRaw });
             this.slots[workerIndex].worker.postMessage({ ...message, requestId });
         });
     }
@@ -389,6 +462,11 @@ export class DecodeWorkerClient {
             case "decoded": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
+
+                if (request.isRaw) {
+                    request.resolve(msg.buffer);
+                    break;
+                }
 
                 this.binaryDecodeQueue.push({ buffer: msg.buffer, request });
                 void this.processBinaryDecodeQueue();
@@ -454,6 +532,13 @@ export class DecodeWorkerClient {
                 request.resolve(msg.properties);
                 break;
             }
+            case "l2TextDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.text);
+                break;
+            }
             case "charGroupsDecoded": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
@@ -473,6 +558,27 @@ export class DecodeWorkerClient {
                 if (!request) break;
 
                 request.resolve(msg.npcs);
+                break;
+            }
+            case "uiTexturesDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.textures);
+                break;
+            }
+            case "matineeScenesDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.scenes);
+                break;
+            }
+            case "gameStringsDecoded": {
+                const request = this.settlePending(msg.requestId);
+                if (!request) break;
+
+                request.resolve(msg.strings);
                 break;
             }
             case "playerSkillsListed": {

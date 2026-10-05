@@ -4,13 +4,13 @@ import UConfigEnv from "@l2js/engine/conf-files/un-conf-env";
 import UDataFile from "@l2js/engine/datafile/un-datafile";
 import * as SchemasC4 from "@l2js/engine/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "../decoders/batch-data";
-import { convertDDSMaterialsToRGBA } from "@l2js/engine/dds/dxt-decode";
+import { convertDDSMaterialsToRGBA, dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, deserializeLibrary, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { GameStrings_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
@@ -21,13 +21,18 @@ import { WeaponType } from "@l2js/engine/un-pawn";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+import UL2Text from "@l2js/engine/conf-files/un-l2text";
+import { consumeTuple } from "@l2js/engine/conf-files/conf-parser";
 import { getUserConfig, UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
+import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
 import type { ICharacterArmorSelection, INpcDefinition, NpcSkillAttack_T, NpcSkillEffectPhase_T, ICharacterGroup, ICharacterArmorOptions } from "@l2js/engine/contracts/pawn";
 import type { IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { UEmitter } from "@l2js/engine/un-emitter";
+import type UTexture from "@l2js/engine/un-texture";
+import type { IAnimatedSpriteDecodeInfo, IDataTextureDecodeInfo, ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
 import type { UMaterial } from "@l2js/engine/un-material";
 import type { USound } from "@l2js/engine/un-sound";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
@@ -51,6 +56,7 @@ type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T };
 type SkillTables_T = { skills: Record<string, any>[], names: Record<string, any>[], sounds: Record<string, any>[] };
 
 const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
+const SKILL_VOICE_GROUPS = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman"];
 
 function characterBundleCacheName(charIndex: number, name: string): string {
     return `character_${charIndex}_${name}`.replace(/[^\w.-]/g, "_");
@@ -271,30 +277,36 @@ function getCharacterArmorLabel(armor: Record<string, any>, itemNames: Map<numbe
     return addName ? `${name} ${addName}` : name;
 }
 
-function resolveCharacterPartPaths(row: Record<string, any>, hairPieces: CharacterHairPieces_T, armorRows: Record<string, any>[], faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection): [string[], string[]] {
+function resolveCharacterPartPaths(row: Record<string, any>, headParts: CharacterPartPaths_T[], armorRows: Record<string, any>[], faceVariant: number, armor: ICharacterArmorSelection): [string[], string[]] {
     const faceMesh = row.face_mesh[0] as string;
     const faceTexture = row.face_tex[faceVariant % row.face_tex.length] as string;
-    const style = hairPieces.has(hairVariant) ? hairVariant : [...hairPieces.keys()].sort((a, b) => a - b)[0];
-    const colours = hairPieces.get(style);
-    const pieces = colours.get(colours.has(hairColour) ? hairColour : [...colours.keys()].sort((a, b) => a - b)[0]);
     const bodyParts = (row.body_mesh as string[]).map((mesh, i) => [[mesh, row.body_tex[i]]] as CharacterPartPaths_T[]);
     const bodyIndices: Record<string, number> = { u: 0, l: 1, g: 2, b: 3 };
+    const chest = armorRows.find(row => row.id === armor.chest);
+    const isAllDress = chest?.body_part === SchemasC4.CHARACTER_ALLDRESS_SLOT;
+    const isFullArmor = isAllDress || chest?.body_part === SchemasC4.CHARACTER_FULL_ARMOR_SLOT;
+
+    if (isFullArmor) bodyParts[bodyIndices.l] = []; // User::GetPcMeshName 0x738293: full armor supplies the lower mesh, including an empty entry.
+    if (isAllDress) {
+        bodyParts[bodyIndices.g] = [];
+        bodyParts[bodyIndices.b] = [];
+    }
 
     for (const slot of Object.keys(SchemasC4.CHARACTER_ARMOR_SLOTS)) {
         const id = armor[slot as keyof ICharacterArmorSelection];
 
-        if (!id) continue;
+        if (!id || slot === "legs" && isFullArmor || slot !== "chest" && isAllDress) continue;
 
         const armorRow = armorRows.find(row => row.id === id);
 
         if (!armorRow) throw new Error(`Armor '${id}' does not exist.`);
-        if (armorRow.body_part !== SchemasC4.CHARACTER_ARMOR_SLOTS[slot as keyof typeof SchemasC4.CHARACTER_ARMOR_SLOTS])
+        if (!SchemasC4.CHARACTER_ARMOR_SLOTS[slot as keyof typeof SchemasC4.CHARACTER_ARMOR_SLOTS].includes(armorRow.body_part))
             throw new Error(`Armor '${id}' does not fit '${slot}'.`);
 
         const cleared = new Set<number>();
 
         for (const part of getCharacterArmorPaths(row, armorRow)) {
-            const match = /_([ulgb])$/i.exec(splitObjectPath(part[0])[1]);
+            const match = /_([ulgb])(?:_ad\d+)?$/i.exec(splitObjectPath(part[0])[1]);
             const index = match ? bodyIndices[match[1].toLowerCase()] : Object.keys(SchemasC4.CHARACTER_ARMOR_SLOTS).indexOf(slot);
 
             if (!cleared.has(index)) {
@@ -309,9 +321,32 @@ function resolveCharacterPartPaths(row: Record<string, any>, hairPieces: Charact
     const body = bodyParts.flat();
 
     return [
-        [faceMesh, ...pieces.map(piece => piece[0]), ...body.map(piece => piece[0])] as string[],
-        [faceTexture, ...pieces.map(piece => piece[1]), ...body.map(piece => piece[1])] as string[]
+        [faceMesh, ...headParts.map(piece => piece[0]), ...body.map(piece => piece[0])] as string[],
+        [faceTexture, ...headParts.map(piece => piece[1]), ...body.map(piece => piece[1])] as string[]
     ];
+}
+
+function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: number, buffer: ArrayBuffer } {
+    if (info.textureType === "rgba") {
+        const data = info as IDataTextureDecodeInfo;
+
+        if (data.format && data.format !== "rgba") throw new Error(`UI texture '${info.name}' has unsupported data format '${data.format}'.`);
+
+        return { width: data.width, height: data.height, buffer: info.buffer.slice(0) };
+    }
+
+    if (info.textureType !== "dds") throw new Error(`UI texture '${info.name}' has unsupported type '${info.textureType}'.`);
+
+    const header = new Int32Array(info.buffer, 0, 31);
+    const height = header[3], width = header[4], fourCC = header[21];
+    const input = new Uint8Array(info.buffer, 128);
+
+    switch (fourCC) {
+        case 0x31545844: return { width, height, buffer: dxt1ToRgba(width, height, input).buffer as ArrayBuffer };
+        case 0x33545844: return { width, height, buffer: dxt3ToRgba(width, height, input).buffer as ArrayBuffer };
+        case 0x35545844: return { width, height, buffer: dxt5ToRgba(width, height, input).buffer as ArrayBuffer };
+        default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
+    }
 }
 
 export class DecodeEngine {
@@ -326,10 +361,12 @@ export class DecodeEngine {
     protected cacheSkillTables: Promise<SkillTables_T> = null;
     protected cacheCharacterBundles = new Map<number, CachedBundle_T>();
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
+    protected cacheCharacterHairTables = new Map<string, Record<string, any>[]>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
     protected readonly cacheDecodePackages = new Map<APackage, number>();
     protected cacheAudioConfig: UConfigAudio = null;
     protected cacheHairConfig: UConfigHair = null;
+    protected cacheEnchantConfig: Record<string, string> = null;
     protected readonly localizationFiles = new Map<string, string>();
     protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
 
@@ -367,6 +404,12 @@ export class DecodeEngine {
             warriorAnimations[className] = warriorConfig.getAnimations(className);
 
         return { userConfig, warriorAnimations };
+    }
+
+    public async decodeL2Text(name: string): Promise<string> {
+        if (!/^[\w-]+\.htm$/i.test(name)) throw new Error(`Invalid l2text name '${name}'.`);
+
+        return (await new UL2Text(`assets/l2text/${name}`).decode()).getText();
     }
 
     public async decodeScriptLocalization(scriptClassPath: string): Promise<LocalizationProperty_T[]> {
@@ -586,7 +629,7 @@ export class DecodeEngine {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Texture"));
         const lowerName = objectName.toLowerCase();
-        const entry = pkg.exports.find(entry => (entry.objectName as string).toLowerCase() === lowerName);
+        const entry = pkg.exports.find(entry => objectName.includes(".") ? pkg.getObjectPath(entry).toLowerCase() === path.toLowerCase() : (entry.objectName as string).toLowerCase() === lowerName);
 
         if (!entry) throw new Error(`Material '${objectName}' not found in '${packageName}'.`);
 
@@ -628,13 +671,14 @@ export class DecodeEngine {
     protected async getSwimSoundConfig(): Promise<SwimSoundConfig_T> { return (await this.getAudioConfig()).getSwimSound(); }
 
     protected async pullPawnSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, profile: L2JS.Engine.IPawnSoundsDecodeInfo): Promise<void> {
-        // Engine.dll Action_Attack reads EtcSound CriticalSound for critical hits.
-        const critical = (await this.getAudioConfig()).getCriticalSound();
-        const criticalSound = critical.sound && critical.sound.toLowerCase() !== "none" ? await this.pullSoundPath(builder, critical.sound, false) : null;
+        const config = await this.getAudioConfig();
 
-        library.pawnSounds = { ...profile, critical: { ...critical, sound: criticalSound } };
+        library.pawnSounds = { ...profile };
 
-        for (const key of ["defense", "damage", "item"] as const) {
+        for (const [key, sound] of [["critical", config.getCriticalSound()], ["soulshot", config.getSoulshotSound()]] as const)
+            library.pawnSounds[key] = { ...sound, sound: sound.sound && sound.sound.toLowerCase() !== "none" ? await this.pullSoundPath(builder, sound.sound, false) : null };
+
+        for (const key of ["defense", "damage", "item", "shield"] as const) {
             const set = profile[key];
 
             if (!set) continue;
@@ -645,11 +689,12 @@ export class DecodeEngine {
         }
     }
 
-    protected async pullCharacterSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, chestId: number = 0): Promise<void> {
+    protected async pullCharacterSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, chestId: number = 0, leftHandId: number = 0): Promise<void> {
         const audio = await this.getAudioConfig();
         const config = audio.getPawnSound("CharSound");
         const itemConfig = audio.getPawnSound("ItemSound");
         const armor = chestId ? (await this.decodeArmorGrp()).find(item => item.id === chestId) : null;
+        const shield = leftHandId ? (await this.decodeWeaponGrp()).find(item => item.id === leftHandId) : null;
 
         if (chestId && !armor) throw new Error(`Defense item '${chestId}' was not found in armorgrp.`);
 
@@ -658,7 +703,8 @@ export class DecodeEngine {
             defense: { sounds: row.snd_def.slice(0, 5), volume: config.volume, radius: config.radius },
             damage: { sounds: row.snd_dmg.slice(0, 3), volume: config.volume, radius: config.radius, random: config.random },
             // Engine.dll OnUserInfo 0x74b965..0x74b974; SetPawnResource 0x73bf72..0x73bfcc: DefenseItemClassID is chest slot2.
-            item: armor && armor.tag === 1 ? { sounds: armor.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null
+            item: armor && armor.tag === 1 ? { sounds: armor.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null,
+            shield: shield && shield.tag === 0 ? { sounds: shield.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null
         });
     }
 
@@ -1084,13 +1130,55 @@ export class DecodeEngine {
         return library;
     }
 
+    public async decodeItem(settings: LoadSettings_T, id: number): Promise<DecodeLibrary> {
+        const tables = await Promise.all([this.decodeEtcItemGrp(), this.decodeWeaponGrp(), this.decodeArmorGrp()]);
+        const row = tables.flat().find(row => row.id === id);
+
+        if (!row) throw new Error(`Missing item '${id}'.`);
+
+        const library = new DecodeLibrary();
+        const builder = new DecodeLibraryBuilder(library, settings);
+        const meshes = [row.drop_mesh1 ?? row.drop_mesh_1, row.drop_mesh2 ?? row.drop_mesh_2, row.drop_mesh3 ?? row.drop_mesh_3];
+        const skins = [row.drop_tex1 ?? row.drop_texture_1, row.drop_tex2 ?? row.drop_texture_2, row.drop_tex3 ?? row.drop_texture_3];
+
+        library.name = `Item_${id}`;
+        library.pickup = { items: [], dropSound: row.drop_sound ?? row.item_sound };
+
+        // UGameEngine::OnSpawnItem 0x74c895..0x74c8c6: skins following the last mesh belong to that mesh.
+        for (let i = 0; i < meshes.length; i++) {
+            const path = meshes[i];
+
+            if (!path || path.toLowerCase() === "none") continue;
+
+            const mesh = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), false);
+            const itemSkins = skins.filter((skin, j) => skin && skin.toLowerCase() !== "none" && (i === j || !meshes[i + 1] || meshes[i + 1].toLowerCase() === "none"));
+
+            library.scriptMeshes[path.toLowerCase()] = mesh;
+            library.pickup.items.push({ mesh: path, skins: itemSkins });
+
+            for (const skin of itemSkins) library.scriptMaterials[skin.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(skin));
+        }
+
+        if (!library.pickup.items.length) throw new Error(`Item '${id}' has no drop mesh.`);
+
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+
+        return library;
+    }
+
+    public async decodeItemBinary(settings: LoadSettings_T, id: number): Promise<ArrayBuffer> {
+        return serializeLibrary(await this.decodeItem(settings, id)).buffer as ArrayBuffer;
+    }
+
     public async decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, settings);
 
         library.name = "EffectTemplates";
 
-        for (const path of classPaths) await this.pullEffectTemplate(library, builder, path);
+        for (const path of classPaths) await this.pullEffectTemplate(library, builder, path, scriptClassPaths.includes(path));
         for (const path of soundPaths) library.sounds[path] = await this.pullSoundPath(builder, path);
         for (const path of scriptClassPaths) {
             const [, cls] = await this.fetchScriptClass(path);
@@ -1109,6 +1197,118 @@ export class DecodeEngine {
         if (!this.cacheSkillTables) this.cacheSkillTables = this.loadSkillTables();
 
         return this.cacheSkillTables;
+    }
+
+    public async decodeMatineeScenes(levelName: string): Promise<MatineeScene_T[]> {
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(levelName, "Level"));
+        const scenes: MatineeScene_T[] = [];
+
+        for (const { index } of pkg.exportGroups.SceneManager || []) {
+            const manager = pkg.fetchObject<UObject>(index + 1).loadSelf();
+            const actions: MatineeAction_T[] = [];
+
+            for (const ref of [...(manager.propertyDict.get("Actions") || [])] as UObject[]) {
+                if (!ref) continue;
+
+                const action = ref.loadSelf(), point = (action.propertyDict.get("IntPoint") as UObject).loadSelf();
+                const location = point.propertyDict.get("Location") as any, rotation = point.propertyDict.get("Rotation") as any;
+
+                actions.push({
+                    action: action.constructor.friendlyName,
+                    duration: action.propertyDict.get("Duration") as number,
+                    pathStyle: action.propertyDict.get("PathStyle") as number,
+                    location: [location.x, location.y, location.z],
+                    rotation: [rotation.pitch, rotation.yaw, rotation.roll]
+                });
+            }
+
+            scenes.push({ tag: manager.propertyDict.get("Tag") as string, actions });
+        }
+
+        return scenes;
+    }
+
+    public async decodeUITextures(settings: LoadSettings_T, paths: string[]): Promise<UITexture_T[]> {
+        const library = new DecodeLibrary();
+        const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as LoadSettings_T);
+        const textures: UITexture_T[] = [];
+
+        library.loadMipmaps = false;
+
+        const packages = new Set(paths.map(request => request.replace(/^\?/, "").split(".")[0].toLowerCase()));
+
+        await Promise.all([...packages].map(name => this.usingDecodePackage(this.assetLoader.getPackage(name, "Texture"))));
+
+        for (const request of paths) { // NCButton's implicit '%s_over' is optional.
+            const isOptional = request.startsWith("?");
+            const path = isOptional ? request.slice(1) : request;
+            const parts = path.split(".");
+
+            if (parts.length < 2 || parts.length > 3) throw new Error(`UI texture path '${path}' is not Package[.Group].Name.`);
+
+            const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(parts[0], "Texture"));
+            const ref = pkg.findObjectRef("Texture", parts[parts.length - 1], parts.length === 3 ? parts[1] : "None");
+
+            if (ref === 0) {
+                if (isOptional) continue;
+
+                throw new Error(`UI texture '${path}' does not exist.`);
+            }
+
+            const info = (pkg.fetchObject(ref) as UTexture).loadSelf().getDecodeInfo(builder) as ITextureDecodeInfo | IAnimatedSpriteDecodeInfo;
+
+            if (info.materialType === "sprite") {
+                const frames = (info as IAnimatedSpriteDecodeInfo).sprites.map(sprite => decodeTextureRGBA(sprite as ITextureDecodeInfo));
+
+                textures.push({ path, width: frames[0].width, height: frames[0].height, frames: frames.map(frame => frame.buffer), frameTime: (info as IAnimatedSpriteDecodeInfo).framerate });
+            } else if (info.materialType === "texture") {
+                const frame = decodeTextureRGBA(info as ITextureDecodeInfo);
+
+                textures.push({ path, width: frame.width, height: frame.height, frames: [frame.buffer], frameTime: 0 });
+            } else throw new Error(`UI texture '${path}' decoded to unsupported material '${info.materialType}'.`);
+        }
+
+        return textures;
+    }
+
+    public async decodeGameStrings(): Promise<GameStrings_T> {
+        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems] = await Promise.all([
+            (new UDataFile(SchemasC4.SCHEMA_SYSTEMMSG_E_DAT, "assets/system/systemmsg-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_SYSSTRING_E_DAT, "assets/system/sysstring-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_SERVERNAME_E_DAT, "assets/system/servername-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_ACTIONNAME_E_DAT, "assets/system/actionname-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_LOGONGRP_DAT, "assets/system/logongrp.dat", SchemasC4.LOGONGRP_RECORD_COUNT).asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_CLASSINFO_E_DAT, "assets/system/classinfo-e.dat").asReadable()).decode(),
+            this.decodeSkillTables(),
+            this.decodeItemNames(),
+            this.decodeWeaponGrp(),
+            this.decodeArmorGrp(),
+            this.decodeEtcItemGrp()
+        ]);
+        const skillNames: Record<number, string> = {};
+        const skillIcons: Record<number, string> = {};
+
+        for (const row of tables.names)
+            if (!(row.id in skillNames)) skillNames[row.id] = row.name;
+
+        for (const row of tables.skills)
+            if (!(row.skill_id in skillIcons)) skillIcons[row.skill_id] = row.icon_name;
+
+        return {
+            systemMessages: Object.fromEntries(messages.datarows.map((row: any) => [row.id, row.message])),
+            systemMessageColors: Object.fromEntries(messages.datarows.map((row: any) => [row.id, ((row.UNK_1 & 0xff) << 24 | row.rgb[2] << 16 | row.rgb[1] << 8 | row.rgb[0]) >>> 0])), // NWindow 0x1005c274 uses the record's rgb + alpha bytes verbatim as an 0xAARRGGBB dword.
+            systemMessageSounds: Object.fromEntries(messages.datarows.filter((row: any) => row.item_sound && row.item_sound.toLowerCase() !== "none").map((row: any) => [row.id, row.item_sound])),
+            sysStrings: Object.fromEntries(sysStrings.datarows.map((row: any) => [row.id, row.name])),
+            serverNames: Object.fromEntries(servers.datarows.map((row: any) => [row.server_id + 1, row.server_name])), // servername-e.dat ids are 0-based; login server ids start at 1 (server 1 = Bartz in the L2.4_20 capture).
+            skillIcons,
+            skillCastStyles: Object.fromEntries(tables.skills.map(row => [`${row.skill_id}:${row.skill_level}`, row.cast_style])),
+            actions: Object.fromEntries(actions.datarows.map((row: any) => [row.id, { name: row.name, icon: row.icon, type: row.type, category: row.category, command: row.cmd }])),
+            logonSpots: logon.datarows.map((row: any) => [row.x, row.y, row.z, row.yaw]),
+            classNames: Object.fromEntries(classes.datarows.map((row: any) => [row.id, row.name])),
+            skillNames,
+            itemNames: Object.fromEntries(items.map(row => [row.id, row.name])),
+            itemIcons: Object.fromEntries([...weapons, ...etcItems].map(row => [row.id, row.icon[0]]).concat(armor.map(row => [row.id, row.icon])))
+        };
     }
 
     public async listPlayerSkills(): Promise<PlayerSkillInfo_T[]> {
@@ -1168,12 +1368,20 @@ export class DecodeEngine {
         if (sounds) {
             const phases: [string, NpcSkillEffectPhase_T][] = [["spelleffect", "casting"], ["shoteffect", "shot"], ["expeffect", "explosion"]];
 
-            for (const [prefix, phase] of phases)
+            for (const [prefix, phase] of phases) {
                 for (let i = 1; i <= 3; i++) {
                     const sound = sounds[`${prefix}_sound_${i}`] as string;
 
                     if (sound && sound.toLowerCase() !== "none") attack.sounds.push({ phase, sound, volume: sounds[`${prefix}_sound_vol_${i}`] as number, radius: sounds[`${prefix}_sound_rad_${i}`] as number });
                 }
+
+                if (phase === "casting" || phase === "shot") // Engine.dll PlaySkillSound 0x797f3c: after the phase sounds, the _sub (casting) or _throw (shot) voice of the pawn's CharClassID.
+                    SKILL_VOICE_GROUPS.forEach((group, charClassId) => {
+                        const sound = sounds[`${group}_${phase === "casting" ? "sub" : "throw"}`] as string;
+
+                        if (sound && sound.toLowerCase() !== "none") attack.sounds.push({ phase, sound, volume: sounds.sound_vol as number, radius: sounds.sound_rad as number, charClassId });
+                    });
+            }
         }
 
         const library = new DecodeLibrary();
@@ -1189,7 +1397,7 @@ export class DecodeEngine {
         return library;
     }
 
-    protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number): Promise<DecodeLibrary> {
+    protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number, equipment: L2JS.Engine.ICharacterEquipment, hairVariant: number): Promise<DecodeLibrary> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const library = new DecodeLibrary();
@@ -1200,7 +1408,8 @@ export class DecodeEngine {
         for (let i = 0, len = meshPaths.length; i < len; i++) {
             const mesh = await this.fetchSkeletalMesh(meshPaths[i]);
             const texture = await this.fetchCharacterMaterial(texturePaths[i]);
-            const meshInfo = builder.pullSkeletalMesh(mesh, i === 0 && includeAnimations, false, i === 0);
+            const decodeAnimations = i === 0 && includeAnimations || /_l_ad\d+$/i.test(meshPaths[i]);
+            const meshInfo = builder.pullSkeletalMesh(mesh, decodeAnimations, false, i === 0);
             const textureUuid = builder.pullMaterial(texture);
             const material = library.materials[meshInfo.materials] as IMaterialGroupDecodeInfo;
 
@@ -1208,9 +1417,9 @@ export class DecodeEngine {
                 throw new Error(`Skeletal mesh '${meshPaths[i]}' has no material group.`);
 
             material.materials = [textureUuid];
-            meshInfo.animations = i === 0 && includeAnimations ? meshInfo.animations : {};
-            meshInfo.animationSequences = i === 0 && includeAnimations ? meshInfo.animationSequences : {};
-            meshInfo.animationNotifies = i === 0 && includeAnimations ? meshInfo.animationNotifies : {};
+            meshInfo.animations = decodeAnimations ? meshInfo.animations : {};
+            meshInfo.animationSequences = decodeAnimations ? meshInfo.animationSequences : {};
+            meshInfo.animationNotifies = i === 0 ? meshInfo.animationNotifies : {};
 
             if (i === 0)
                 meshInfo.skinMaterials = await this.pullCharacterSkinMaterials(builder, meshInfo.skinNotifies, texturePaths[i], textureUuid);
@@ -1223,7 +1432,8 @@ export class DecodeEngine {
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
         await this.pullPawnEffects(library, builder, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
-        await this.pullCharacterSounds(library, builder, row, chestId);
+        await this.pullCharacterSounds(library, builder, row, chestId, equipment?.leftHand || 0);
+        await this.pullCharacterEquipment(library, builder, row, equipment, hairVariant);
 
         if (library.pawnActors.length > 0) {
             await this.pullAnimationNotifyAssets(builder, library.pawnActors[0].animationNotifies);
@@ -1237,17 +1447,14 @@ export class DecodeEngine {
         return library;
     }
 
-    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true): Promise<DecodeLibrary> {
+    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true, equipment: L2JS.Engine.ICharacterEquipment = null): Promise<DecodeLibrary> {
         await this.sweepCache(settings);
 
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
-        const [meshPaths, texturePaths] = await this.characterPartPaths(charIndex, faceVariant, hairVariant, hairColour, armor);
+        const [meshPaths, texturePaths] = await this.characterPartPaths(charIndex, faceVariant, hairVariant, hairColour, armor, equipment);
         const cacheName = characterBundleCacheName(charIndex, splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, ""));
         let cached = this.cacheCharacterBundles.get(charIndex);
-
-        if (Object.values(armor).some(id => id !== 0))
-            return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations, armor.chest);
 
         if (!cached) {
             const seekable = await DecodeCache.openCachedLibrary(cacheName, settings);
@@ -1258,11 +1465,15 @@ export class DecodeEngine {
             }
         }
 
-        if (!cached) return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations, armor.chest);
+        if (!cached) return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations, armor.chest, equipment, hairVariant);
 
         const bundle = cached.library;
 
         const manifest = (bundle as any).characterBundle as CharacterBundle_T;
+
+        if (!meshPaths.every(path => manifest.meshes[path]) || !texturePaths.every(path => manifest.materials[path])) // Helmets and hair accessories come from helmetgrp/hairaccessarygrp, outside the bundle.
+            return this.decodeCharacterFromSource(settings, charIndex, meshPaths, texturePaths, includeAnimations, armor.chest, equipment, hairVariant);
+
         const library = new DecodeLibrary();
         const actors = new Map(bundle.pawnActors.map(info => [info.uuid, info]));
 
@@ -1287,9 +1498,11 @@ export class DecodeEngine {
             library.materials[info.materials] = Object.assign({}, material, { materials: [textureUuid] });
             copyCharacterMaterial(library, bundle, textureUuid);
 
-            info.animations = i === 0 && includeAnimations ? manifest.animations : {};
-            info.animationSequences = i === 0 && includeAnimations ? manifest.animationSequences : {};
-            info.animationNotifies = i === 0 && includeAnimations ? manifest.animationNotifies : {};
+            const isAttached = /_l_ad\d+$/i.test(meshPaths[i]);
+
+            info.animations = i === 0 && includeAnimations ? manifest.animations : isAttached ? actor.animations : {};
+            info.animationSequences = i === 0 && includeAnimations ? manifest.animationSequences : isAttached ? actor.animationSequences : {};
+            info.animationNotifies = i === 0 ? manifest.animationNotifies : {};
 
             if (i === 0) {
                 info.animationSet = manifest.animationSet;
@@ -1312,7 +1525,8 @@ export class DecodeEngine {
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
         await this.pullPawnEffects(library, new DecodeLibraryBuilder(library, settings), `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
-        await this.pullCharacterSounds(library, new DecodeLibraryBuilder(library, settings), row);
+        await this.pullCharacterSounds(library, new DecodeLibraryBuilder(library, settings), row, armor.chest, equipment?.leftHand || 0);
+        await this.pullCharacterEquipment(library, new DecodeLibraryBuilder(library, settings), row, equipment, hairVariant);
         await this.pullAnimationNotifyEffects(new DecodeLibraryBuilder(library, settings), library.pawnActors[0].animationNotifies);
 
         if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
@@ -1336,6 +1550,10 @@ export class DecodeEngine {
         library.effectSpawnBoneIndex = index;
         library.damageEffect = damageEffect ? damageEffect.name : null;
         if (damageEffect) await this.pullEffectTemplate(library, builder, damageEffect.name, true);
+
+        await this.pullEffectTemplate(library, builder, "LineageEffect.p_u004_a", true);
+        for (let grade = 505; grade <= 510; grade++)
+            for (const suffix of ["c", "d", "e"]) await this.pullEffectTemplate(library, builder, `LineageEffect.e_u${grade}_${suffix}`, true);
     }
 
     protected async applyCharacterHairConfig(infos: ISkinnedMeshObjectDecodeInfo[], meshPaths: string[]): Promise<void> {
@@ -1372,11 +1590,21 @@ export class DecodeEngine {
         const meshPaths = new Set<string>();
         const texturePaths = new Set<string>();
         const hairPieces = await this.characterHairPieces(charIndex);
+        const armorSlots = Object.values(SchemasC4.CHARACTER_ARMOR_SLOTS).flat();
+
+        for (const armorRow of await this.decodeArmorGrp()) {
+            if (!armorSlots.includes(armorRow.body_part)) continue;
+
+            for (const [mesh, texture] of getCharacterArmorPaths(row, armorRow)) {
+                meshPaths.add(mesh);
+                texturePaths.add(texture);
+            }
+        }
 
         for (let face = 0, len = row.face_tex.length; face < len; face++) {
-            for (const [hair, colours] of hairPieces) {
+            for (const colours of hairPieces.values()) {
                 for (const colour of colours.keys()) {
-                    const [meshes, textures] = resolveCharacterPartPaths(row, hairPieces, [], face, hair, colour, { chest: 0, legs: 0, gloves: 0, boots: 0 });
+                    const [meshes, textures] = resolveCharacterPartPaths(row, colours.get(colour), [], face, { chest: 0, legs: 0, gloves: 0, boots: 0 });
 
                     for (const path of meshes) meshPaths.add(path);
                     for (const path of textures) texturePaths.add(path);
@@ -1393,7 +1621,8 @@ export class DecodeEngine {
 
         for (const path of meshPaths) {
             const mesh = await this.fetchSkeletalMesh(path);
-            const info = builder.pullSkeletalMesh(mesh, path === faceMesh, false);
+            const isAttached = /_l_ad\d+$/i.test(path);
+            const info = builder.pullSkeletalMesh(mesh, path === faceMesh || isAttached, false);
 
             if (path === faceMesh) {
                 manifest.animations = info.animations;
@@ -1402,8 +1631,11 @@ export class DecodeEngine {
                 manifest.skinNotifies = info.skinNotifies;
             }
 
-            info.animations = {};
-            info.animationSequences = {};
+            if (!isAttached) {
+                info.animations = {};
+                info.animationSequences = {};
+            }
+
             info.animationNotifies = {};
             info.skinNotifies = {};
             manifest.meshes[path] = info.uuid;
@@ -1426,13 +1658,60 @@ export class DecodeEngine {
         return library;
     }
 
-    protected async characterPartPaths(charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection): Promise<[string[], string[]]> {
+    protected async characterPartPaths(charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, equipment: L2JS.Engine.ICharacterEquipment): Promise<[string[], string[]]> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const hairPieces = await this.characterHairPieces(charIndex);
         const armorRows = await this.decodeArmorGrp();
+        const style = hairPieces.has(hairVariant) ? hairVariant : [...hairPieces.keys()].sort((a, b) => a - b)[0];
+        const colours = hairPieces.get(style);
+        const colour = colours.has(hairColour) ? hairColour : [...colours.keys()].sort((a, b) => a - b)[0];
+        let headParts = colours.get(colour);
+        const headId = equipment?.hair || equipment?.head;
 
-        return resolveCharacterPartPaths(row, hairPieces, armorRows, faceVariant, hairVariant, hairColour, armor);
+        if (headId) {
+            const head = armorRows.find(row => row.id === headId);
+
+            if (!head || !SchemasC4.CHARACTER_HEAD_ARMOR_SLOTS.includes(head.body_part)) throw new Error(`Armor '${headId}' does not fit the head.`);
+
+            const parts = getCharacterArmorPaths(row, head);
+            const match = parts.length > 0 ? /_m00(\d)/.exec(parts[0][0]) : null;
+            const meshType = match ? Number(match[1]) : 0; // User::GetHelmMeshType 0x73a950.
+
+            if (equipment.hair || meshType > 0) {
+                const fileName = equipment.hair ? "hairaccessarygrp" : "helmetgrp";
+                let tables = this.cacheCharacterHairTables.get(fileName);
+
+                if (!tables) {
+                    const schema = equipment.hair ? SchemasC4.SCHEMA_HAIRACCESSARYGRP_DAT : SchemasC4.SCHEMA_HELMETGRP_DAT;
+                    const file = await new UDataFile(schema, `assets/system/${fileName}.dat`).asReadable().decode();
+
+                    tables = file.datarows;
+                    this.cacheCharacterHairTables.set(fileName, tables);
+                }
+
+                const table = tables.find(row => row.id === meshType);
+
+                if (!table) throw new Error(`'${fileName}' has no hair mapping for mesh type '${meshType}'.`);
+
+                headParts = [];
+
+                for (let i = 0; i < 2; i++) {
+                    const variant = table.hair[(charIndex * 15 + style) * 2 + i];
+
+                    if (variant === -1) continue;
+
+                    const suffix = i === 0 ? "_ah" : "_bh";
+                    const part = hairPieces.get(variant)?.get(colour)?.find(part => part[0].toLowerCase().endsWith(suffix));
+
+                    if (!part) throw new Error(`Character '${charIndex}' has no '${suffix}' hair '${variant}' colour '${colour}'.`);
+
+                    headParts.push(part);
+                }
+            }
+        }
+
+        return resolveCharacterPartPaths(row, headParts, armorRows, faceVariant, armor);
     }
 
     // hair carries its own style and colour axes - the face texture only ever names the head
@@ -1486,8 +1765,8 @@ export class DecodeEngine {
         return pkg.exports.map(entry => entry.objectName as string);
     }
 
-    public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations)).buffer as ArrayBuffer;
+    public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean, equipment: L2JS.Engine.ICharacterEquipment): Promise<ArrayBuffer> {
+        return serializeLibrary(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment)).buffer as ArrayBuffer;
     }
 
     public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<ArrayBuffer> {
@@ -1512,7 +1791,12 @@ export class DecodeEngine {
         for (const group of groups) {
             const name = characterBundleCacheName(group.index, group.name);
 
-            if (await DecodeCache.hasCachedLibrary(name, settings)) continue;
+            if (await DecodeCache.hasCachedLibrary(name, settings)) {
+                const seekable = this.cacheCharacterBundles.has(group.index) ? null : await DecodeCache.openCachedLibrary(name, settings);
+
+                if (seekable) this.cacheCharacterBundles.set(group.index, { library: seekable.library as DecodeLibrary, seekable });
+                continue;
+            }
 
             const bundle = await this.buildCharacterBundle(settings, group.index);
 
@@ -1540,7 +1824,7 @@ export class DecodeEngine {
 
             for (const slot of Object.keys(SchemasC4.CHARACTER_ARMOR_SLOTS) as (keyof typeof SchemasC4.CHARACTER_ARMOR_SLOTS)[]) {
                 const items = armorRows
-                    .filter(item => item.body_part === SchemasC4.CHARACTER_ARMOR_SLOTS[slot] && getCharacterArmorPaths(row, item).length > 0)
+                    .filter(item => SchemasC4.CHARACTER_ARMOR_SLOTS[slot].includes(item.body_part) && getCharacterArmorPaths(row, item).length > 0)
                     .map(item => ({ id: item.id, label: getCharacterArmorLabel(item, itemNames), grade: item.crystal_type }))
                     .sort((a, b) => a.grade - b.grade || a.label.localeCompare(b.label) || a.id - b.id);
                 const labelCounts = new Map<string, number>();
@@ -1604,22 +1888,179 @@ export class DecodeEngine {
         return this.cacheWeaponGrpRows;
     }
 
+    protected async decodeEtcItemGrp(): Promise<Record<string, any>[]> {
+        if (this.cacheEtcItemGrpRows) return this.cacheEtcItemGrpRows;
+
+        const file = await (new UDataFile(SchemasC4.SCHEMA_ETCITEMGRP_DAT, "assets/system/etcitemgrp.dat").asReadable()).decode();
+
+        this.cacheEtcItemGrpRows = file.datarows;
+
+        return this.cacheEtcItemGrpRows;
+    }
+
+    protected async pullCharacterEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, equipment: L2JS.Engine.ICharacterEquipment, hairVariant: number): Promise<void> {
+        if (!equipment) return;
+
+        const rows = await this.decodeWeaponGrp();
+        const right = rows.find(row => row.id === equipment.rightHand);
+        const left = rows.find(row => row.id === equipment.leftHand);
+        const info: L2JS.Engine.IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
+
+        if (equipment.rightHand && !right) throw new Error(`Missing weapon '${equipment.rightHand}'.`);
+
+        if (right) {
+            const dual = right.handness === WeaponType.WT_DUAL || right.handness === WeaponType.WT_DUALFIST;
+            const bones = dual ? ["RightHandBone", "LeftHandBone"] : [right.handness === WeaponType.WT_BOW ? "LeftHandBone" : right.handness === WeaponType.WT_HAND ? "RightArmBone" : "RightHandBone"];
+
+            if (right.wpn_mesh.length !== bones.length) throw new Error(`Weapon '${right.id}' has ${right.wpn_mesh.length} meshes for ${bones.length} attachments.`);
+
+            // User::GetPcMeshName 0x738171..0x738282: dual weapons split mesh and texture indices.
+            for (let i = 0; i < bones.length; i++) {
+                const item: L2JS.Engine.IPawnEquipmentDecodeInfo["items"][number] = { mesh: right.wpn_mesh[i], skins: dual ? [right.wpn_tex[i]] : right.wpn_tex.slice(), bone: bones[i] };
+
+                await this.pullWeaponEnchant(library, builder, right, equipment.enchantLevel || 0, i, item);
+                info.items.push(item);
+            }
+            info.weaponType = right.handness === WeaponType.WT_HAND ? WeaponType.WT_1HS : right.handness;
+            await this.pullNpcEquipment(library, builder, { rightHand: right.id, attackRange: 2000 });
+        }
+
+        if (left && left.id !== equipment.rightHand) {
+            if (left.wpn_mesh.length !== 1) throw new Error(`Left-hand item '${left.id}' has ${left.wpn_mesh.length} meshes.`);
+
+            info.items.push({ mesh: left.wpn_mesh[0], skins: left.wpn_tex.slice(), bone: left.handness === WeaponType.WT_HAND ? "LeftArmBone" : "LeftHandBone" });
+            if (!right) info.weaponType = WeaponType.WT_1HS;
+        } else if (equipment.leftHand && !left) {
+            if (!(await this.decodeEtcItemGrp()).some(row => row.id === equipment.leftHand)) throw new Error(`Missing left-hand equipment '${equipment.leftHand}'.`);
+        }
+
+        const headId = equipment.hair || equipment.head;
+
+        if (headId) {
+            const head = (await this.decodeArmorGrp()).find(row => row.id === headId);
+
+            for (const [mesh, texture] of getCharacterArmorPaths(row, head)) info.items.push({ mesh, skins: [texture], bone: "HeadBone" });
+        }
+
+        for (const item of info.items) await this.pullScriptMeshAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins });
+
+        if (equipment.hair) {
+            let locations = this.cacheCharacterHairTables.get("hairaccessorylocgrp");
+
+            if (!locations) {
+                const file = await new UDataFile(SchemasC4.SCHEMA_HAIRACCESSORYLOCGRP_DAT, "assets/system/hairaccessorylocgrp.dat").asReadable().decode();
+
+                locations = file.datarows;
+                this.cacheCharacterHairTables.set("hairaccessorylocgrp", locations);
+            }
+
+            for (const item of info.items) {
+                if (item.bone !== "HeadBone") continue;
+
+                const path = item.mesh.toLowerCase();
+                const location = locations.find(row => row.name.toLowerCase() === path);
+
+                if (!location) continue;
+
+                // User::SetPawnResource 0x73c17e..0x73c1be indexes accessory offsets by hairstyle.
+                const suffix = (hairVariant + 1).toString(16);
+                const origin = location[`floats_${suffix}`];
+                const rotation = location[`ints_${suffix}`];
+
+                if (!origin || !rotation) throw new Error(`Accessory '${item.mesh}' has no offsets for hairstyle '${hairVariant}'.`);
+                if (!origin.some(value => value !== 0) && !rotation.some(value => value !== 0)) continue;
+
+                library.scriptMeshes[path] = { ...library.scriptMeshes[path], meshOrigin: origin, meshRotOrigin: rotation, meshRotOriginQuaternion: getRotatorQuaternionElements(rotation[0], rotation[1], rotation[2]) } as ISkinnedMeshObjectDecodeInfo;
+            }
+        }
+
+        library.pawnEquipment = info;
+    }
+
+    protected async pullWeaponEnchant(library: DecodeLibrary, builder: DecodeLibraryBuilder, weapon: Record<string, any>, level: number, index: number, item: L2JS.Engine.IPawnEquipmentDecodeInfo["items"][number]): Promise<void> {
+        if (!this.cacheEnchantConfig) {
+            const file = await new UConfigLocalization("assets/system/env.int").decode();
+
+            await file.load();
+            this.cacheEnchantConfig = Object.fromEntries(file.getProperties("EnchantEffect").map(entry => [entry.name.toLowerCase(), entry.value]));
+        }
+
+        const config = this.cacheEnchantConfig;
+        const values = consumeTuple(config[`enchant${level}`] || config.enchant || "()");
+        const meshShow = Number(config.enchantmeshshow ?? -1), effectShow = Number(config.enchanteffectshow ?? -1);
+        const mesh = weapon.enchantedMesh[index], effect = weapon.enchantedEffect[index];
+
+        // APawn::GetEnchantedWeaponMesh 0x8c2ed0 / UpdateAbnormalState 0x7663c4.
+        if (meshShow >= 0 && level >= meshShow && mesh && mesh.toLowerCase() !== "none") {
+            const skin = config.cubetexname;
+
+            if (!skin) throw new Error(`EnchantEffect has no CubeTexName.`);
+
+            await this.pullScriptMeshAssets(library, builder, null, { Mesh: mesh, Skins: [skin] });
+            item.enchantMesh = { mesh, skin, scale: weapon.enchantedMeshScale[index], offset: weapon.enchantedMeshOffset[index], colors: [1, 2].map(n => ["r", "g", "b"].map(c => Number(values[`${c}${n}`] ?? 100) / 255)) };
+        }
+
+        if (effectShow >= 0 && level >= effectShow && effect && effect.toLowerCase() !== "none") {
+            if (!library.effectTemplates[effect]) await this.pullEffectTemplate(library, builder, effect, true);
+
+            item.enchantEffect = { path: effect, offset: weapon.enchantedEffectOffset[index], scale: weapon.enchantedEffectScale[index], velocityScale: weapon.enchantedEffectVelocityScale[index], opacity: Number(values.opacity ?? 1), num: Number(values.num ?? 1) };
+        }
+    }
+
     protected async pullNpcEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, equipment: L2JS.Engine.INpcEquipment | null): Promise<void> {
-        if (!equipment || !equipment.rightHand) return;
+        if (!equipment) return;
 
-        const weapon = (await this.decodeWeaponGrp()).find(row => row.id === equipment.rightHand);
+        const rows = await this.decodeWeaponGrp();
+        const right = equipment.rightHand ? rows.find(row => row.id === equipment.rightHand) : null;
+        const left = equipment.leftHand ? rows.find(row => row.id === equipment.leftHand) : null;
+        const armor = equipment.chest ? (await this.decodeArmorGrp()).find(row => row.id === equipment.chest) : null;
 
-        if (!weapon) throw new Error(`NPC equipment references missing weapon '${equipment.rightHand}'.`);
-        if (weapon.handness !== WeaponType.WT_BOW) return;
+        if (equipment.rightHand && !right) throw new Error(`NPC equipment references missing weapon '${equipment.rightHand}'.`);
+        if (equipment.leftHand && !left) throw new Error(`NPC equipment references missing weapon '${equipment.leftHand}'.`);
+        if (equipment.chest && !armor) throw new Error(`NPC equipment references missing armor '${equipment.chest}'.`);
+
+        const info: L2JS.Engine.IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
+        const bow = right && right.handness === WeaponType.WT_BOW;
+
+        if (right) {
+            const dual = right.handness === WeaponType.WT_DUAL || right.handness === WeaponType.WT_DUALFIST;
+            const bones = dual ? ["RightHandBone", "LeftHandBone"] : [right.handness === WeaponType.WT_BOW ? "LeftHandBone" : right.handness === WeaponType.WT_HAND ? "RightArmBone" : "RightHandBone"];
+
+            if (right.wpn_mesh.length !== bones.length) throw new Error(`Weapon '${right.id}' has ${right.wpn_mesh.length} meshes for ${bones.length} attachments.`);
+
+            for (let i = 0; i < bones.length; i++)
+                info.items.push({ mesh: right.wpn_mesh[i], skins: dual ? [right.wpn_tex[i]] : right.wpn_tex.slice(), bone: bones[i] });
+
+            info.weaponType = right.handness === WeaponType.WT_HAND ? WeaponType.WT_1HS : right.handness;
+        }
+
+        if (left && left.id !== equipment.rightHand) {
+            if (left.wpn_mesh.length !== 1) throw new Error(`Left-hand item '${left.id}' has ${left.wpn_mesh.length} meshes.`);
+
+            info.items.push({ mesh: left.wpn_mesh[0], skins: left.wpn_tex.slice(), bone: left.handness === WeaponType.WT_HAND ? "LeftArmBone" : "LeftHandBone" });
+            if (!right) info.weaponType = WeaponType.WT_1HS;
+        }
+
+        if (armor) {
+            for (const mesh of armor.npc_mesh) {
+                if (!mesh || mesh.toLowerCase() === "none") continue;
+
+                info.items.push({ mesh, skins: armor.npc_texture.slice(), bone: 2 });
+            }
+        }
+
+        for (const item of info.items) await this.pullScriptMeshAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins });
+        if (info.items.length) library.pawnEquipment = info;
+        if (!bow) return;
+
+        const weapon = right;
         if (weapon.wpn_mesh.length !== 1) throw new Error(`Bow '${weapon.id}' has ${weapon.wpn_mesh.length} meshes.`);
 
         // Engine.dll User::GetArrowItemID 0x73684b..0x736880, grade jump table 0x7368a4.
         const ammo = [17, 1341, 1342, 1343, 1344, 1345][weapon.crystal_type];
 
         if (!ammo) throw new Error(`Bow '${weapon.id}' has unsupported grade '${weapon.crystal_type}'.`);
-        if (!this.cacheEtcItemGrpRows) this.cacheEtcItemGrpRows = (await (new UDataFile(SchemasC4.SCHEMA_ETCITEMGRP_DAT, "assets/system/etcitemgrp.dat").asReadable()).decode()).datarows;
-
-        const arrow = this.cacheEtcItemGrpRows.find(row => row.id === ammo);
+        const arrow = (await this.decodeEtcItemGrp()).find(row => row.id === ammo);
 
         if (!arrow || arrow.mesh_tex_pair[0].length !== 1) throw new Error(`Arrow '${ammo}' has no single mesh.`);
 

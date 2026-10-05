@@ -1,4 +1,4 @@
-import { Object3D } from "three";
+import { Matrix4, Object3D } from "three";
 import { ObjectComponent } from "../../game/components";
 import { decodeSkinnedMesh } from "../../assets/decoders/object3d-decoder";
 import type { IObject } from "../../game/components";
@@ -8,6 +8,8 @@ import type LitSkinnedMesh from "../../objects/lit-skinned-mesh";
 import type RenderManager from "../render-manager";
 
 type MeshActor_T = Object3D & IObject & { scriptProperties: Map<string, any> };
+
+const tmpIdentity = new Matrix4();
 
 export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
     public readonly componentName = "actorMesh";
@@ -52,6 +54,9 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         if (!info) throw new Error(`Actor mesh '${meshPath}' has not been decoded.`);
 
         this.mesh = decodeSkinnedMesh(this.library, info, skins);
+        // LocalSpaceSkeleton poses exclude the mesh transform; retain its origin and rotation outside skinning.
+        for (const inverse of this.mesh.skeleton.boneInverses) inverse.multiply(this.mesh.bindMatrix);
+        this.mesh.bind(this.mesh.skeleton, tmpIdentity);
         this.renderManager.retainGeometry(this.mesh.geometry);
 
         this.mesh.isUnlit = !!properties.get("bUnlit");

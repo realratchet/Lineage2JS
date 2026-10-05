@@ -357,7 +357,7 @@ for (const name of ["s_npc_sonic_storm9", "s_npc_range_hit_down9", "s_npc_hex_sh
     nativeSkillBindings.set(name, { effects: [], soundPhases: [], pending: "native phases have no particles or sound; hit/status reactions and full retail animation/timing unverified" });
 
 // Engine.dll SpawnNTransientEffect 0x79a59f -> 0x79a7e1 skips success and sound; NActionStop 0x750773.
-for (const name of ["balakas tail stomp", "s_quest_boss_big_body1", "s_quest_boss_dispel_big_body1"])
+for (const name of ["balakas tail stomp", "s_quest_boss_big_body1", "s_quest_boss_dispel_big_body1", "super haste"])
     nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
 
 // Engine.dll Init 0x79eac7 ->0x79c74b; PreShot selector0x7a45dc=1; Shot0x7b14f5=31; Explosion0x791dcf=9 (sound actor remains null).

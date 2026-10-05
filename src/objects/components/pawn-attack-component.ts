@@ -25,10 +25,22 @@ const tmpAttackDirection = new Vector3();
 export type PawnAttack_T = {
     label: string;
     animation: string;
+    rate: number;
     skill: NpcSkillAttack_T | null;
 };
 
 export type PawnAttackSelection_T = number | "random";
+
+export type NAttackActionParam_T = {
+    targetObjectId: number;
+    actionTarget: BaseActor;
+    damage: number;
+    isMiss: boolean;
+    isCritical: boolean;
+    isShieldDefense: boolean;
+    isSpirit: boolean;
+    soulshotGrade: number;
+};
 
 export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnAttack";
@@ -36,6 +48,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected readonly attacks: PawnAttack_T[] = [];
     protected readonly attackEffects: Object3D[] = [];
     protected readonly skillEffects: SkillVisualEffect;
+    protected readonly transientSkillEffects: SkillVisualEffect;
+    protected readonly transientEffects: Object3D[] = [];
     protected target: BaseActor = null;
     protected requestedTarget: BaseActor = null;
     protected nextAttack: PawnAttack_T = null;
@@ -48,6 +62,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected attackStartedAt = 0;
     protected shotTriggered = false;
     protected lastShotName: string = null;
+    protected maxAtkShotNum = 0;
+    protected attackParams: readonly NAttackActionParam_T[] = [];
     protected stageShot = 0;
     protected stagePreShot = 0;
     protected pendingPreShot = false;
@@ -60,6 +76,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected skillTweenTime = 0;
     protected skillShotTime = 0;
     protected isActive = false;
+    protected isServerAction = false;
+    protected serverHitTime = 0;
     protected lastTime = 0;
     protected bowProjectile: ProjectileActor_T = null;
     protected bowPreShotFrame = 0;
@@ -75,12 +93,12 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
             if (index >= 0) this.attackEffects.splice(index, 1);
         }));
-
-        for (const physical of arrPhysicalAnimations) {
-            const animation = animationNames.find(name => name.toLowerCase() === physical);
-
-            if (animation) this.attacks.push({ label: `Physical: ${animation}`, animation, skill: null });
-        }
+        this.transientSkillEffects = new SkillVisualEffect(new SkillEffectHost(renderManager, (effect, owner) => {
+            for (let i = this.transientEffects.length - 1; i >= 0; i--)
+                if (!this.transientEffects[i].parent) this.transientEffects.splice(i, 1);
+            this.transientEffects.push(effect as any);
+            renderManager.addTransientEffect(effect as any, owner as any);
+        }, effect => renderManager.removeTransientEffect(effect as any)));
 
         for (const skill of skills) {
             if (skill.passive) continue;
@@ -90,10 +108,30 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         }
     }
 
+    public onAttach(): void {
+        const parent = this.getParent();
+        const weapon = parent.scriptClassId ? parent.getUnrealScriptProperty("CurWeaponType") as number : 0;
+        const attacks: PawnAttack_T[] = [];
+
+        for (const physical of arrPhysicalAnimations) {
+            if (this.bow && physical !== "atk01") continue;
+            const name = physical[0].toUpperCase() + physical.slice(1);
+            const selected = parent.scriptClassId ? (parent.getUnrealScriptProperty(`${name}AnimName`) as string[])[weapon] : physical;
+            const animation = this.animationNames.find(name => name.toLowerCase() === selected.toLowerCase());
+            const rate = parent.scriptClassId ? (parent.getUnrealScriptProperty(`${name}AnimRate`) as number[])[weapon] : 1;
+
+            if (animation) attacks.push({ label: `Physical: ${animation}`, animation, rate: rate === 0 ? 1 : rate, skill: null }); // APawn::GetAtk01AnimRate 0x60cdb0.
+        }
+
+        this.attacks.unshift(...attacks);
+    }
+
+    public isAttacking(): boolean { return this.currentAttack !== null; }
+
     public addSkill(skill: NpcSkillAttack_T): number {
         const animation = skill.animation || null;
 
-        const attack = { label: `Skill ${skill.id}: ${skill.name}`, animation, skill };
+        const attack = { label: `Skill ${skill.id}: ${skill.name}`, animation, rate: 1, skill };
         const index = this.attacks.findIndex(entry => entry.skill?.id === skill.id && entry.skill.level === skill.level && entry.animation === animation);
 
         if (index < 0) return this.attacks.push(attack) - 1;
@@ -102,6 +140,10 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public onDetach(): void {
+        for (const effect of this.transientEffects)
+            if (effect.parent) this.renderManager.removeTransientEffect(effect);
+        this.transientEffects.length = 0;
+        this.transientSkillEffects.clear();
         for (const effect of this.attackEffects)
             if (effect.parent) this.renderManager.removeTransientEffect(effect);
 
@@ -116,6 +158,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.requestedAssociatedActors = null;
         this.targetExcepted = false;
         this.currentAttack = null;
+        this.attackParams = [];
         this.shotTriggered = false;
         this.lastShotName = null;
         this.stageShot = 0;
@@ -142,25 +185,21 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         }
         if (name !== "animnotify_attackshot") return COMPONENT_EVENT_NOT_HANDLED;
 
-        // Engine.dll AnimNotify_AttackShot::Notify 0x94c34d / 0x94c368.
-        const finalShot = !this.currentAttack.skill || notify.object.objectName === this.lastShotName;
-
-        if (finalShot || this.currentAttack.skill.isMultiShot) {
-            if (this.currentAttack.skill) this.pendingShot = finalShot ? "finalShot" : "shot";
-            else {
-                // Engine.dll AnimNotify_AttackShot 0x94c414..0x94c44b: first physical hit, not the animation-end fallback.
-                if (!this.shotTriggered && this.target) {
-                    this.target.getComponent<SoundComponent>("sound").playAttackSounds();
-                    this.skillEffects.addAttackLight(this.getParent(), this.target);
-                }
-                this.triggerShot(this.lastTime, finalShot);
-            }
+        if (!this.currentAttack.skill) {
+            this.triggerAttackShot();
+            return;
         }
+
+        // Engine.dll AnimNotify_AttackShot::Notify 0x94c34d / 0x94c368.
+        const finalShot = notify.object.objectName === this.lastShotName;
+
+        if (finalShot || this.currentAttack.skill.isMultiShot) this.pendingShot = finalShot ? "finalShot" : "shot";
     }
 
     public onUpdate(currentTime: number, _deltaTime: number): void {
         this.lastTime = currentTime;
         this.skillEffects.update(currentTime);
+        this.transientSkillEffects.update(currentTime);
 
         if (!this.isActive) return;
 
@@ -202,9 +241,10 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
         const target = this.requestedTarget;
         const index = this.selection === "random" ? this.attacks.indexOf(this.nextAttack) : this.selection;
-        const attack = this.attacks[index];
+        let attack = this.attacks[index];
 
         if (!attack) throw new Error(`NPC attack '${this.selection}' does not exist.`);
+        if (this.isServerAction && attack.skill) attack = { ...attack, skill: { ...attack.skill, hitTime: this.serverHitTime, previewTarget: undefined } };
 
         const rangeTarget = attack.skill?.previewTarget === "self" ? parent : target;
 
@@ -216,7 +256,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         const dx = tmpTargetPosition.x - tmpNpcPosition.x;
         const dy = tmpTargetPosition.y - tmpNpcPosition.y;
 
-        if (dx * dx + dy * dy - attackRange * attackRange > 1e-5) {
+        if (!this.isServerAction && dx * dx + dy * dy - attackRange * attackRange > 1e-5) {
             if (!parent.isLocomoting()) parent.goToActor(rangeTarget, attackRange);
             return;
         }
@@ -253,8 +293,13 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
                 this.updateSkillAnimation(currentTime);
             }
         } else {
-            parent.playAnimation(attack.animation, 0.1, 1, false, true);
-            this.lastShotName = this.getAttackShotNotify(parent);
+            const rate = attack.rate * (parent.scriptClassId ? parent.getUnrealScriptProperty("AttackSpeedRate") as number : 1);
+
+            if (!Number.isFinite(rate) || rate <= 0) throw new Error(`Pawn '${parent.name}' has invalid attack rate '${rate}'.`);
+
+            if (this.bow) parent.playAnimation(attack.animation, 0.2 / rate, rate, false, true); // BowAttackProcess 0x8c6b9f..0x8c6bcd.
+            else parent.playAnimation(attack.animation, 0.1 / rate, rate * 1.1, false, true); // SwordAttackProcess 0x8c75f6..0x8c762b.
+            this.initAttackShots(parent);
             if (this.bow) this.initBowAttack();
         }
     }
@@ -368,6 +413,36 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
     public getAttacks(): readonly PawnAttack_T[] { return this.attacks; }
 
+    public attackFromServer(hits: readonly NAttackActionParam_T[]): void {
+        const attacks = this.attacks.filter(attack => !attack.skill);
+
+        if (attacks.length === 0) throw new Error(`Pawn '${this.getParent().name}' has no physical attack animations.`);
+
+        this.attack(hits[0].actionTarget, this.attacks.indexOf(attacks[Math.floor(Math.random() * attacks.length)]));
+        this.attackParams = hits;
+        this.isServerAction = true;
+    }
+
+    public castFromServer(target: BaseActor, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly BaseActor[], targetExcepted: boolean): void {
+        if (!Number.isFinite(hitTime) || hitTime < 0) throw new Error(`Invalid server cast time '${hitTime}'.`);
+
+        this.attack(target, this.addSkill(skill), [], associatedActors, targetExcepted);
+        if (skill.castStyle === 0) return;
+        this.serverHitTime = hitTime;
+        this.isServerAction = true;
+    }
+
+    public setSkillTargets(skillId: number, actors: readonly BaseActor[]): void {
+        const attack = this.currentAttack || (this.selection !== "random" ? this.attacks[this.selection] : null);
+
+        if (!this.isActive || !attack || !attack.skill || attack.skill.id !== skillId) return;
+
+        this.requestedAssociatedActors = actors;
+        this.associatedActors.length = 0;
+        this.associatedActors.push(...actors);
+        this.targetExcepted = actors.length > 0; // AddAssociatedActorNotify 0x79821a..0x798239.
+    }
+
     public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void {
         if (!target) throw new Error("NPC attack has no target.");
         if (this.attacks.length === 0) throw new Error(`${this.getParent().name || "NPC"} has no attacks.`);
@@ -378,7 +453,17 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
         const parent = this.getParent();
 
+        const skill = selection === "random" ? null : this.attacks[selection].skill;
+
+        if (skill && skill.castStyle === 0) {
+            const cast: SkillCast_T = { skill, caster: parent, target, associatedActors: associatedActors || [], locList, targetExcepted, stageShot: 0, stagePreShot: 0, finalShot: false, shotTime: 0, firstShotTime: 0 };
+
+            if (!this.transientSkillEffects.start(cast, this.lastTime)) this.finish();
+            return;
+        }
+
         this.stop();
+        this.isServerAction = false;
         this.requestedTarget = target;
         this.requestedAssociatedActors = associatedActors && associatedActors.slice();
         // Server supplies bTargetExcepted; Engine.dll AddAssociatedActorNotify 0x798239 sets Pawn+0x500.
@@ -425,6 +510,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.nextAttack = null;
         this.currentAttack = null;
         this.bowProjectile = null;
+        this.attackParams = [];
         this.shotTriggered = false;
         this.lastShotName = null;
         this.stageShot = 0;
@@ -483,6 +569,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
         if (!this.bowProjectile && (force || frame >= this.bowPreShotFrame)) {
             const target = this.target;
+            const param = this.attackParams[0];
             const arrow = parent.getComponent<ScriptComponent>("script").createObject("LineageEffect.NArrow") as unknown as ProjectileActor_T;
             const properties = arrow.scriptProperties;
 
@@ -495,10 +582,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             arrow.scale.x *= scale;
             const projectile = arrow.addComponent(new NProjectileComponent(this.renderManager, parent, target, (_arrow, hitActor, impactActor) => {
                 // Engine.dll ANProjectile::processHitWall 0x78d5b0: physical impact sounds/light are deferred until arrival.
-                if (hitActor && impactActor === target) {
-                    target.getComponent<SoundComponent>("sound").playAttackSounds();
-                    this.skillEffects.addAttackLight(parent, target);
-                }
+                if (hitActor && impactActor === target) this.actionAttack(target, param);
             }));
 
             this.addAttackEffect(arrow);
@@ -534,20 +618,56 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         if (finalShot && !projectileExplosion) this.triggerPhase("explosion", currentTime + (this.currentAttack.skill?.flyingTime || 0) * 1000);
     }
 
-    protected getAttackShotNotify(parent: BaseActor): string {
+    protected initAttackShots(parent: BaseActor): void {
         const action = parent.getAnimationAction();
         const notifications = action ? (action.getClip() as any).animationNotifies as IAnimationNotifyDecodeInfo[] : null;
 
-        if (!notifications) return null;
+        this.lastShotName = null;
+        this.maxAtkShotNum = 0;
 
-        // Engine.dll AnimGetAttackShotNotifyTimeRev 0x949da7 / 0x949df7.
-        for (let i = notifications.length - 1; i >= 0; i--) {
-            const object = notifications[i].object;
+        if (!notifications) return;
 
-            if (object?.type === "native" && object.className.toLowerCase() === "animnotify_attackshot") return object.objectName;
+        // Engine.dll GetAtkShotNum 0x8c0a70; SwordAttackProcess 0x8c7611.
+        for (const notify of notifications) {
+            const object = notify.object;
+
+            if (object?.type !== "native" || object.className.toLowerCase() !== "animnotify_attackshot") continue;
+            this.lastShotName = object.objectName;
+            this.maxAtkShotNum++;
+        }
+    }
+
+    protected triggerAttackShot(): void {
+        if (this.shotTriggered || !this.target || !this.target.parent) return;
+
+        const params = this.attackParams;
+
+        // Engine.dll AnimNotify_AttackShot 0x94c414..0x94c589.
+        if (this.stageShot === 0) {
+            this.actionAttack(this.target, params[0]);
+            this.stageShot++;
+            if (this.stageShot === this.maxAtkShotNum)
+                for (let i = 1; i < params.length; i++) this.actionAttack(params[i].actionTarget, params[i]);
+        } else if (this.stageShot < this.maxAtkShotNum) {
+            const param = params.length > 1 ? params[this.stageShot] : params[0];
+            const target = params.length > 1 ? param && param.actionTarget : this.target;
+
+            if (target) {
+                this.actionAttack(target, param);
+                this.stageShot++;
+            }
         }
 
-        return null;
+        this.shotTriggered = this.stageShot === this.maxAtkShotNum;
+    }
+
+    protected actionAttack(target: BaseActor, param: NAttackActionParam_T = null): void {
+        if (!target || !target.parent || param?.isMiss) return;
+
+        // Engine.dll Action_Attack 0x8bda4e / 0x8bdb40 / 0x8bde50.
+        target.getComponent<SoundComponent>("sound").playAttackSounds(param?.isCritical, param?.isShieldDefense, param?.isSpirit);
+        this.skillEffects.addAttackImpact(this.getParent(), target, param?.isCritical, param?.isShieldDefense, param?.isSpirit, param?.soulshotGrade || 0);
+        if (!param?.isShieldDefense) this.skillEffects.addAttackLight(this.getParent(), target);
     }
 
     protected getFirstShotTime(): number {

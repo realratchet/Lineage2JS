@@ -187,7 +187,9 @@ function swapMaterials(root: Object3D, material: Material): void {
         if (!object.visible) continue;
 
         // FShadowSceneNode::FilterAttachment 0x93dad0 tests bActorShadows, not the owner's flag.
-        if (object !== root && (object as any).scriptProperties?.get("bActorShadows") === false) {
+        const castsShadows = (object as any).scriptProperties?.get("bActorShadows");
+
+        if (object !== root && (castsShadows === false || castsShadows === undefined && (object as any).isEmitterActor)) { // Actor defaults bActorShadows to false and Emitter never sets it.
             arrHiddenAttachments.push(object);
             object.visible = false;
             continue;

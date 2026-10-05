@@ -46,6 +46,9 @@ function isLandmarkSurface(actor: ICollidable | null): boolean {
     return !!primitive && primitive.kind === "bsp";
 }
 
+const FOLLOW_CAMERA_DISTANCE = 300;
+const FOLLOW_CAMERA_HEIGHT = 120;
+
 export class InputManager implements IEngineComponent<GameManager> {
     public speedCameraFPS = 5;
     public readonly raycaster = new Raycaster();
@@ -60,6 +63,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected isPrimaryMouseDown = false;
     protected hasMouseDragged = false;
     protected followPlayer = false;
+    protected isCameraLocked = false;
     protected shiftTimeDown = 0;
     protected activeSector = 0;
     protected readonly keyDownHandler: (event: KeyboardEvent) => void;
@@ -104,6 +108,24 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     public getOrbitTarget(): Vector3 { return this.controls.orbit.target; }
     public isUsingOrbitControls(): boolean { return this.isOrbitControls; }
+
+    public setCameraLocked(isLocked: boolean): void {
+        this.isCameraLocked = isLocked;
+        this.controls.orbit.enabled = !isLocked;
+
+        if (isLocked) this.setFollowPlayer(false);
+    }
+
+    public resetFollowCamera(): void {
+        const renderManager = this.renderManager;
+        const yaw = renderManager.player.getRotationYaw() * Math.PI / 32768;
+
+        renderManager.player.getCameraTargetPosition(this.controls.orbit.target);
+        renderManager.camera.position.set(-Math.cos(yaw) * FOLLOW_CAMERA_DISTANCE, -Math.sin(yaw) * FOLLOW_CAMERA_DISTANCE, FOLLOW_CAMERA_HEIGHT).add(this.controls.orbit.target);
+        this.controls.orbit.update();
+        this.setFollowPlayer(true);
+        renderManager.updateCameraMatrices();
+    }
 
     public setFollowPlayer(follow: boolean): void {
         this.followPlayer = follow;
@@ -169,7 +191,9 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected onHandleKeyDown(event: KeyboardEvent): void {
         const renderManager = this.renderManager;
 
-        if (event.key === "F4" || event.code === "F4") {
+        if (this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
+
+        if (event.code === "Backquote" && document.activeElement?.tagName !== "INPUT") {
             event.preventDefault();
             event.stopPropagation();
             this.manGame.getComponent("ui").toggleDebugView();
@@ -317,7 +341,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         this.isPrimaryMouseDown = false;
 
-        if (!isClick || !this.isOrbitControls) return;
+        if (!isClick || !this.isOrbitControls || this.isCameraLocked) return;
 
         const renderManager = this.renderManager;
         const bounds = renderManager.renderer.domElement.getBoundingClientRect();
@@ -350,6 +374,20 @@ export class InputManager implements IEngineComponent<GameManager> {
         const physicsIntersection = pickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, renderManager.player.getCollider(), renderManager.player.getRigidbody()) : null;
 
         renderManager.player.deleteLandmark(true);
+
+        const network = this.manGame.getComponent("network");
+
+        if (network.isInWorld()) {
+            if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, event.shiftKey)) return;
+            if (physicsIntersection && (physicsIntersection.actor as any)?.isActor && network.requestAction(physicsIntersection.actor as any, event.shiftKey)) return;
+            if (physicsIntersection) {
+                tmpMouseIntersection.copy(physicsIntersection.location);
+                network.requestMoveTo(tmpMouseIntersection);
+                if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
+            }
+
+            return;
+        }
 
         if (physicsIntersection) {
             tmpMouseIntersection.copy(physicsIntersection.location);

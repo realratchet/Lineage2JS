@@ -3,16 +3,34 @@ import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } 
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
 import { isScriptSlot, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
-import type { PawnMovementState_T } from "../../physics/components/pawn-movement-component";
+import { PAWN_COLLISION_SIZE_CHANGED_EVENT, type PawnMovementState_T } from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type LocalSpaceSkeleton from "../local-space-skeleton";
+import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
 const MOVEMENT_TWEEN_TIME = 0.1;
 const IDLE_TWEEN_TIME = MOVEMENT_TWEEN_TIME * 2;
 const cacheOnceAnimations = new WeakMap<AnimationClip, AnimationClip>();
+const cacheTweenTwins = new WeakMap<AnimationClip, AnimationClip>();
+
+function getTweenTwin(clip: AnimationClip): AnimationClip { // Same tracks under a second clip, so a restart gets its own action to cross-fade into.
+    let twin = cacheTweenTwins.get(clip);
+
+    if (twin) return twin;
+
+    twin = new AnimationClip(clip.name, clip.duration, clip.tracks, clip.blendMode);
+
+    for (const key of Object.keys(clip))
+        if (!(key in twin)) (twin as any)[key] = (clip as any)[key];
+
+    cacheTweenTwins.set(clip, twin);
+    cacheTweenTwins.set(twin, clip);
+
+    return twin;
+}
 
 function getOnceAnimation(clip: AnimationClip): AnimationClip {
     let once = cacheOnceAnimations.get(clip);
@@ -48,6 +66,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
     protected animationTweenEndTime = 0;
+    protected readonly tweenTimeScales = new Map<AnimationAction, number>();
     protected isAnimationsInit = false;
     protected readonly basicActorAnimations: BasicActorAnimations_T = {
         idle: null,
@@ -66,6 +85,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public onUpdate(_currentTime: number, _deltaTime: number): void {
+        if (this.tweenTimeScales.size > 0 && this.renderManager.mixer.time >= this.animationTweenEndTime) {
+            for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
+
+            this.tweenTimeScales.clear();
+        }
+
         const action = this.animationNotifyAction;
 
         if (!action) return;
@@ -98,6 +123,11 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+        if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT) {
+            this.placeMeshes();
+            return COMPONENT_EVENT_NOT_HANDLED;
+        }
+
         if (type !== SCRIPT_NATIVE_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
 
         const call = data as ScriptNativeCall_T;
@@ -140,7 +170,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         outName.set(action ? action.getClip().name : "None");
         outFrame.set(action && duration > 0 ? action.time / duration : 0);
-        outRate.set(action ? action.getEffectiveTimeScale() : 0);
+        outRate.set(action ? this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale() : 0);
     }
 
     public getMeshes(): readonly Mesh[] { return this.meshes; }
@@ -173,8 +203,19 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             parent.add(mesh);
         }
 
+        this.placeMeshes();
         this.dispatchEvent(MESHES_CHANGED_EVENT, meshes);
         this.renderManager.invalidatePawnLighting(parent);
+    }
+
+    protected placeMeshes(): void {
+        const parent = this.getParent();
+        const collisionHeight = parent.getCollisionHeight();
+        const drawScale = parent.scriptClassId ? parent.getUnrealScriptProperty("DrawScale") as number : 1;
+
+        // USubSkeletalMeshInstance::MeshToWorld 0x946530 draws at Location - Origin * Scale * DrawScale; bindMatrix already cancels meshOrigin
+        for (const mesh of this.meshes as LitSkinnedMesh[])
+            mesh.position.z = mesh.meshOrigin.z + collisionHeight - mesh.meshOrigin.z * mesh.scale.z * drawScale;
     }
 
     public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 {
@@ -225,6 +266,14 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const tweenTime = state === "idle" || state === "swimmingIdle" ? IDLE_TWEEN_TIME : MOVEMENT_TWEEN_TIME;
 
         this.play(this.basicActorAnimations[state], tweenTime);
+    }
+
+    public isPlayingMovement(state: PawnMovementState_T): boolean {
+        const action = this.animationNotifyAction;
+
+        const clip = this.actorAnimations[this.basicActorAnimations[state]];
+
+        return !!action && action.enabled && action.isScheduled() && (action.getClip() === clip || action.getClip() === cacheTweenTwins.get(clip));
     }
 
     public setDeathAnimationFromScript(): void {
@@ -278,14 +327,9 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         this.onUpdate(0, 0);
         if (action !== this.animationNotifyAction) return true;
+        if (isDying) return true;
 
         this.animationNotifyTime = 0;
-
-        if (isDying) {
-            action.stop();
-            this.animationNotifyAction = null;
-            return true;
-        }
 
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
@@ -314,7 +358,6 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         if (!resolvedName) throw new Error(`'${animationName}' is not available.`);
 
         const sourceClip = this.actorAnimations[resolvedName];
-        const clip = loop ? sourceClip : getOnceAnimation(sourceClip);
         const mixer = this.renderManager.mixer;
         const tweenEndTime = mixer.time + Math.max(0, tweenTime);
         let notifyAction: AnimationAction = null;
@@ -326,18 +369,37 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
             const prevAct = this.prevAnimations.get(mesh) || null;
             const currAct = this.currAnimations.get(mesh) || null;
-            const nextAct = mixer.clipAction(clip, mesh);
+            const meshAnimations = (mesh as any).meshAnimations as Record<string, AnimationClip>;
+            const meshClip = (mesh as any).skeleton?.rootBoneSource
+                ? meshAnimations[Object.keys(meshAnimations).find(name => name.toLowerCase() === resolvedName.toLowerCase())]
+                : sourceClip;
+
+            if (!meshClip) {
+                if (prevAct) prevAct.stop();
+                if (currAct) currAct.stop();
+                continue;
+            }
+
+            const clip = loop ? meshClip : getOnceAnimation(meshClip);
+            const twin = cacheTweenTwins.get(clip);
+            let nextAct = currAct && twin && currAct.getClip() === twin ? currAct : mixer.clipAction(clip, mesh);
+
+            if (currAct === nextAct && tweenTime > 0 && (restart || nextAct.paused) && nextAct.isScheduled() && nextAct.enabled)
+                nextAct = mixer.clipAction(getTweenTwin(nextAct.getClip()), mesh);
 
             if (!notifyAction) notifyAction = nextAct;
 
-            nextAct.setEffectiveTimeScale(rate);
+            const timeScale = meshClip === sourceClip ? rate : rate * clip.duration / sourceClip.duration;
+
+            if (this.tweenTimeScales.has(nextAct)) this.tweenTimeScales.set(nextAct, timeScale);
+            else nextAct.setEffectiveTimeScale(timeScale);
             nextAct.setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
             nextAct.clampWhenFinished = !loop;
 
             if (currAct === nextAct) {
                 if (restart || !nextAct.isScheduled() || !nextAct.enabled || nextAct.paused) {
                     nextAct.reset();
-                    if (tweenTime > 0) nextAct.startAt(tweenEndTime);
+                    if (tweenTime > 0) this.holdFirstFrame(nextAct, timeScale);
                     nextAct.play();
                     didBegin = true;
                 }
@@ -355,7 +417,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             } else if (currAct) currAct.stop();
 
             // Engine.dll PlayAnim 0x943c41 / UpdateAnimation 0x94a549: tween before frame zero.
-            if (tweenTime > 0) nextAct.startAt(tweenEndTime);
+            if (tweenTime > 0) this.holdFirstFrame(nextAct, timeScale);
             nextAct.play();
             didBegin = true;
         }
@@ -372,7 +434,14 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         if (didBegin && script?.hasFunction("AnimBegin")) script.call("AnimBegin", [resolvedName]);
     }
 
+    protected holdFirstFrame(action: AnimationAction, timeScale: number): void { // startAt() would drop the action's weight until the tween ends, blending the skeleton toward its bind pose.
+        action.setEffectiveTimeScale(0);
+        this.tweenTimeScales.set(action, timeScale);
+    }
+
     public stop(): void {
+        this.tweenTimeScales.clear();
+
         for (const mesh of this.meshes) {
             if (this.prevAnimations.has(mesh)) this.prevAnimations.get(mesh).stop();
             if (this.currAnimations.has(mesh)) this.currAnimations.get(mesh).stop();

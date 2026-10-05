@@ -32,6 +32,7 @@ export type IBSPSectionDecodeInfo_T = {
     nodeIndices: number[],  // nodes in this section
     isUnlit?: boolean,
     isOutdoor?: boolean,
+    skyZone?: string,
     depthTest?: boolean,
     depthWrite?: boolean,
     side?: Side,
@@ -462,7 +463,7 @@ export abstract class UModel extends UPrimitive {
 
             if (library.isSkyLevel && !isSkyZone) continue;
 
-            if (!library.isSkyLevel && isSkyZone) continue;
+            const skyZone = !library.isSkyLevel && isSkyZone ? zoneActor.uuid : undefined;
 
             if (node.iCollisionBound >= 0) {
                 result.bspColliders.push(nodeInfo.collision.bounds);
@@ -489,7 +490,7 @@ export abstract class UModel extends UPrimitive {
 
             const isOutdoor = zoneIndex === 0 || (zoneActor && (zoneActor as any).isSunAffected); // zone 0 is LevelInfo (Outdoor)
 
-            const composedKey = `${sectionKey}/${isOutdoor}`;
+            const composedKey = `${sectionKey}/${isOutdoor}${skyZone ? `/${skyZone}` : ""}`;
 
             if (!sectionMap.has(priority)) sectionMap.set(priority, new Map());
             const prioritySections = sectionMap.get(priority);
@@ -503,6 +504,7 @@ export abstract class UModel extends UPrimitive {
                     totalVertices: 0,
                     nodes: [],
                     isOutdoor,
+                    skyZone,
                     isWaterSheet: !!(surf.flags & PF_WaterSheet)
                 });
             }
@@ -633,6 +635,7 @@ export abstract class UModel extends UPrimitive {
                 geometry: geometryUuid,
                 nodeIndices,
                 isOutdoor: sectionData.isOutdoor,
+                skyZone: sectionData.skyZone,
                 isUnlit: !!(sectionData.polyFlags & PF_Unlit),
                 sectionName: sectionKey,
                 depthWrite: this.isSky ? false : undefined,
@@ -679,6 +682,7 @@ type ObjectsForSection_T = {
     totalVertices: number,
     nodes: NodeInfo_T[],
     isOutdoor: boolean,
+    skyZone?: string,
     isWaterSheet: boolean
 };
 type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo_T | null, nodeIndex: number };

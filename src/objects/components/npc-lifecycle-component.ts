@@ -5,7 +5,6 @@ import type AnimationComponent from "./animation-component";
 import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
 import type { ScriptComponent } from "../../game/script-component";
 import type BaseActor from "../../base-actor";
-import type { ScriptHost_T } from "../../ue-script/vm";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
@@ -13,7 +12,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     protected deathAnimationFinishedHandler: ((actor: BaseActor) => void) = null;
     protected isDying = false;
     protected isReleased = false;
-    protected readonly scriptDeathController: ScriptHost_T = { scriptClassId: "Engine.Controller", scriptProperties: new Map([["bDead", true]]) };
+    protected readonly scriptDeathController = { scriptClassId: "Engine.Controller", scriptProperties: new Map([["bDead", true]]) };
 
     public onDetach(): void { this.release(); }
 
@@ -44,12 +43,28 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         this.getComponent<PawnMovementComponent>("pawnMovement").setDying();
 
         if (script) {
+            this.scriptDeathController.scriptProperties.set("bDead", true);
             parent.setUnrealScriptProperty("Controller", this.scriptDeathController);
 
             if (script.hasFunction("NotifyDie")) script.call("NotifyDie");
         }
 
         this.getComponent<AnimationComponent>("animation").playDeath();
+    }
+
+    public revive(): void {
+        const parent = this.getParent();
+
+        if (this.isDying) this.getComponent<PawnMovementComponent>("pawnMovement").resetAnimationState();
+
+        this.isDying = false;
+        this.deathAnimationFinishedHandler = null;
+        this.scriptDeathController.scriptProperties.set("bDead", false);
+
+        const animation = (parent.getUnrealScriptProperty("DeathStandAnimName") as string[])[parent.getUnrealScriptProperty("CurWeaponType") as number];
+
+        // OnRevive 0x745373..0x7453c6: clear bDead, then play DeathStandAnimName at NonAttackSpeedRate.
+        if (animation.toLowerCase() !== "none") parent.playAnimation(animation, 0.1, parent.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true);
     }
 
     public release(): void {

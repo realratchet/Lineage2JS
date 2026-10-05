@@ -45,7 +45,7 @@ export type NpcSkillAttack_T = {
     sounds: NpcSkillSound_T[];
 };
 
-export type NpcSkillSound_T = { phase: NpcSkillEffectPhase_T, sound: string, volume: number, radius: number };
+export type NpcSkillSound_T = { phase: NpcSkillEffectPhase_T, sound: string, volume: number, radius: number, charClassId?: number };
 
 export type NpcSkillEffectPhase_T = "casting" | "preshot" | "shot" | "explosion";
 

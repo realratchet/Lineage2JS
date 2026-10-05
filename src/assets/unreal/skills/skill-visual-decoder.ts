@@ -4,6 +4,41 @@ import type { NpcSkillAttack_T, NpcSkillAttachOn_T, NpcSkillEffectAction_T, NpcS
 import getNativeEffect from "./native-effects";
 import { getNativeSkillBinding } from "./native-skill-bindings";
 import createSkillVisualDefinition from "./skill-visual-definition";
+import UConfigLocalization from "../conf-files/un-conf-localization";
+
+let cacheSoulShot: UConfigLocalization = null;
+
+async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: string, hands: number[][] }> {
+    // SpawnNTransientEffect 0x799053 / 0x79905b / 0x79934a / 0x7997b5.
+    const grade = [2039, 2047, 2061].includes(id) ? 0 : id >= 2150 && id <= 2164 ? (id - 2150) % 5 + 1 : -1;
+
+    if (grade < 0) return null;
+    if (!cacheSoulShot) {
+        const config = await new UConfigLocalization("assets/system/soulshot.int").decode();
+
+        await config.load();
+        cacheSoulShot = config;
+    }
+
+    const properties = cacheSoulShot.getProperties(["None", "D", "C", "B", "A", "S"][grade]);
+    const prefix = id === 2039 || id >= 2150 && id <= 2154 ? "" : "Spirit";
+    const sticks = properties.find(property => property.name === `${prefix}OnSticks`);
+    const books = properties.find(property => property.name === `${prefix}OnBooks`);
+
+    if (!sticks || !books) throw new Error(`Soulshot '${id}' has no charging effects.`);
+    const hands = ["HAND", "1HS", "2HS", "DUAL", "POLE", "BOW", "THROW", "DUALFIST"].map(type => {
+        const properties = cacheSoulShot.getProperties(type);
+
+        return ["LH", "RH"].map(hand => {
+            const property = properties.find(property => property.name === hand);
+            const mode = property ? parseInt(property.value, 10) : NaN;
+
+            if (![-1, 0, 1].includes(mode)) throw new Error(`Soulshot weapon '${type}.${hand}' has invalid mode '${mode}'.`);
+            return mode;
+        });
+    });
+    return { sticks: sticks.value, books: books.value, hands };
+}
 
 type SkillVisualDecodeOps_T = {
     loadPackage: (packageName: string) => Promise<APackage>;
@@ -56,12 +91,19 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
         }
 
         // Engine.dll SetMagicInfo 0x79b45e; MagicProcess 0x7b4f65 branches on the resolved object.
-        const native = visual ? null : getNativeSkillBinding(attack.name, attack.id);
+        const soulshot = visual ? null : await getSoulShotEffects(attack.id);
+        const native = visual ? null : soulshot ? { effects: [], soundPhases: ["casting"] as NpcSkillEffectPhase_T[] } : getNativeSkillBinding(attack.name, attack.id);
 
         if (!visual && !native)
             throw new Error(`Skill '${attack.id}:${attack.level}' (${attack.name}) has no resolved visual or implemented native recipe.`);
 
         const decoded = Object.assign({}, attack, { visual: createSkillVisualDefinition(visual ? [] : null, native) });
+
+        if (soulshot) {
+            decoded.visual.soulshot = soulshot;
+            await pullEffectTemplate(soulshot.sticks, true);
+            await pullEffectTemplate(soulshot.books, true);
+        }
 
         library.npcSkillAttacks.push(decoded);
 

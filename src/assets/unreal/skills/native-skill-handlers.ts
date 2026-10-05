@@ -218,6 +218,30 @@ for (const id of [1287])
 for (const id of [314])
     nativeSkillHandlers.set(id, "fatalCounter");
 
+for (const id of [4049])
+    nativeSkillHandlers.set(id, "cubicDrain");
+
+for (const id of [4050])
+    nativeSkillHandlers.set(id, "cubicVampiric");
+
+for (const id of [4051])
+    nativeSkillHandlers.set(id, "cubicHeal");
+
+for (const id of [4052])
+    nativeSkillHandlers.set(id, "cubicPoison");
+
+for (const id of [4053, 4054, 4055])
+    nativeSkillHandlers.set(id, "cubicPoltergeist");
+
+for (const id of [4164])
+    nativeSkillHandlers.set(id, "cubicBinding");
+
+for (const id of [4165])
+    nativeSkillHandlers.set(id, "cubicAqua");
+
+for (const id of [4166])
+    nativeSkillHandlers.set(id, "cubicSpark");
+
 for (const id of [343, 354])
     nativeSkillHandlers.set(id, "lethalShot");
 

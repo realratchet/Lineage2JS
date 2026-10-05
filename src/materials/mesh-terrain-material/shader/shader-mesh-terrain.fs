@@ -51,6 +51,10 @@ void main() {
 
     diffuseColor.rgb *= texelDiffuse.rgb;
 
+    #ifdef TERRAIN_OVERLAY
+        diffuseColor.a *= texelDiffuse.a;
+    #endif
+
     #include <color_fragment>
 
     // D3DTOP_MODULATE2X: ATerrainInfo::Render (0x9bdfb8) passes EnableLighting Modulate2X=1

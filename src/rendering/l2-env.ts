@@ -290,11 +290,11 @@ export class L2Environment {
         if (totalElements === 1) return [0, 0, 1];
 
         const timePerElement = 24.0 / totalElements;
-        const currEnvIndex = Math.floor(timeOfDay / timePerElement) % totalElements;
+        const currEnvIndex = (Math.floor(timeOfDay / timePerElement - 0.5) + totalElements) % totalElements; // GetIndexForTime 0x97e1b0: last slot at or before t, else n-1
         const nextEnvIndex = (currEnvIndex + 1) % totalElements;
 
-        let currEnvTime = currEnvIndex * timePerElement;
-        let nextEnvTime = nextEnvIndex * timePerElement;
+        let currEnvTime = (currEnvIndex + 0.5) * timePerElement; // slot time 0x97e170: i * 24 / n + 24 / n * 0.5
+        let nextEnvTime = (nextEnvIndex + 0.5) * timePerElement;
 
         while (nextEnvTime < currEnvTime) nextEnvTime += 24.0;
 

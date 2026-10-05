@@ -1,5 +1,5 @@
 import type { ISchemaValue } from "./dat-schema";
-import { ConditionalType, SizedContainerType } from "./dat-container";
+import { SizedContainerType } from "./dat-container";
 
 export const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "tag" },
@@ -50,14 +50,13 @@ export const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "UNK_2" },
     { type: "int32", name: "is_hero" },
     { type: "uint32", name: "UNK_3" },
-    { type: "utf16", name: "effA" },
-    { type: new ConditionalType("utf16", "wpn_mesh_cnt", 2), name: "effB" },
-    { type: new SizedContainerType("float", 5), name: "junk1A" },
-    { type: new ConditionalType(new SizedContainerType("float", 5), "wpn_mesh_cnt", 2), name: "junk1B" },
-    { type: "utf16", name: "rangeA" },
-    { type: new ConditionalType("utf16", "wpn_mesh_cnt", 2), name: "rangeB" },
-    { type: new SizedContainerType("float", 6), name: "junk2A" },
-    { type: new ConditionalType(new SizedContainerType("float", 6), "wpn_mesh_cnt", 2), name: "junk2B" }
+    { type: new SizedContainerType("utf16", "wpn_mesh_cnt"), name: "enchantedEffect" },
+    { type: new SizedContainerType(new SizedContainerType("float", 3), "wpn_mesh_cnt"), name: "enchantedEffectOffset" },
+    { type: new SizedContainerType("float", "wpn_mesh_cnt"), name: "enchantedEffectScale" },
+    { type: new SizedContainerType("float", "wpn_mesh_cnt"), name: "enchantedEffectVelocityScale" },
+    { type: new SizedContainerType("utf16", "wpn_mesh_cnt"), name: "enchantedMesh" },
+    { type: new SizedContainerType(new SizedContainerType("float", 3), "wpn_mesh_cnt"), name: "enchantedMeshScale" },
+    { type: new SizedContainerType(new SizedContainerType("float", 3), "wpn_mesh_cnt"), name: "enchantedMeshOffset" }
 ];
 
 export default SCHEMA_WEAPONGRP_DAT;

@@ -785,7 +785,7 @@ export abstract class UTexPanner extends UBaseModifier {
             materialType: "modifier",
             modifierType: "panTexture",
             transform: {
-                matrix: this.matrix.getElements3x3(),
+                matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1], // UTexPanner::GetMatrix (Engine.dll 0x8792a0) replaces cached M from TimeSeconds.
                 map: builder.pullMaterial(this.material),
                 rate: [rateU, rateV]
             }

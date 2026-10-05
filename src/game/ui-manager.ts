@@ -68,7 +68,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         const title = document.createElement("strong");
         title.textContent = "DEBUG";
         const hint = document.createElement("span");
-        hint.textContent = "F4 to close";
+        hint.textContent = "` to close";
         header.append(title, hint);
         this.stats.dom.classList.add("debug-stats");
         this.stats.showPanel(0);

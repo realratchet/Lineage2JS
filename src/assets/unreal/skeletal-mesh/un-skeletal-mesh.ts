@@ -33,6 +33,7 @@ export type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     meshRotOrigin: Vector3Arr;
     meshRotOriginQuaternion: QuaternionArr;
     boneSimulationType: number;
+    weaponLength?: number;
     dynamicHair?: IDynamicHairDecodeInfo;
     scaledGlow?: number;
     ambient?: {
@@ -378,7 +379,7 @@ export abstract class USkeletalMesh extends ULodMesh {
     protected collapseWedge = new FPrimitiveArrayLazy(BufferValue.uint16);
     protected rawFaceLevel = new FPrimitiveArrayLazy(BufferValue.uint16);
     protected boneSimulationType: number;
-    protected sk_unkArr11 = new FPrimitiveArray(BufferValue.uint32);
+    protected sk_unkArr11 = new FPrimitiveArray(BufferValue.float);
     protected sk_unkVar2: number;
 
     public doLoad(pkg: APackage, exp: UExport) {
@@ -609,7 +610,8 @@ export abstract class USkeletalMesh extends ULodMesh {
                 tagOrigins: this.attachCoords.map(coords => [coords.origin.x, coords.origin.y, coords.origin.z]),
                 meshRotOrigin: this.meshRotOrigin.toArray(),
                 meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements(),
-                boneSimulationType: this.boneSimulationType || 0
+                boneSimulationType: this.boneSimulationType || 0,
+                weaponLength: this.sk_unkArr11.length ? this.sk_unkArr11.getElem(0) : 30 // SpawnNTransientEffect 0x7993dc: USkeletalMesh+0x150, default 30.
             } as ISkinnedMeshObjectDecodeInfo,
             geometry: geometryInfo,
             material: materialInfo

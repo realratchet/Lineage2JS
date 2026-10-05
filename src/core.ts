@@ -26,7 +26,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         },
         cache: {
             enabled: true,
-            version: 62 // bump when decode logic changes, invalidates all previously cached assets
+            version: 68 // bump when decode logic changes, invalidates all previously cached assets
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",
@@ -105,6 +105,10 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
     const objectGroup = renderManager.objectGroup;
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
+
+    const params = new URLSearchParams(location.search);
+
+    if (params.has("login")) void engine.getComponent("network").showLogin(params.get("login") || `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:3106/`);
 
     if (interactive) {
         uiManager.addClippingRangeControls();

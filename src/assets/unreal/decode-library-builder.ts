@@ -403,16 +403,17 @@ export class DecodeLibraryBuilder {
 
         this.setScriptClass(actor, result.object);
 
-        for (const leafIndex of result.leafIndices)
-            if (this.library.leafActors[leafIndex])
-                this.library.leafActors[leafIndex].push(result.object);
-
         this.library.exportedActors.add(actor.uuid);
         this.library.geometryInstances[result.geometryUuid]++;
 
-        if (!result.zoneBounds) return;
-
         const zoneInfo = this.library.bspZones[this.library.bspZoneIndexMap[result.zoneUuid]].zoneInfo;
+
+        if (!this.library.isSkyLevel && zoneInfo.type === "Sky") zoneInfo.children.push(result.object);
+        else for (const leafIndex of result.leafIndices)
+            if (this.library.leafActors[leafIndex])
+                this.library.leafActors[leafIndex].push(result.object);
+
+        if (!result.zoneBounds) return;
 
         zoneInfo.bounds.isValid = true;
 

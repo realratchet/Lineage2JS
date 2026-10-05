@@ -178,6 +178,27 @@ export class SkillEffectHost implements SkillEffectHost_T {
         });
     }
 
+    public getWeaponLength(actor: SkillActor_T, left: boolean): number | null {
+        const library = (this.script(actor).getVM() as any).library;
+        const equipment = library.pawnEquipment as L2JS.Engine.IPawnEquipmentDecodeInfo;
+        const hand = left ? "Left" : "Right";
+        const item = equipment && (equipment.items.find(item => item.bone === `${hand}HandBone`) || equipment.items.find(item => item.bone === `${hand}ArmBone`));
+        const path = item ? item.mesh : left && library.npcBow ? library.npcBow.weaponMesh : null;
+
+        if (!path) return null;
+        return library.scriptMeshes[path.toLowerCase()].weaponLength;
+    }
+
+    public setSoulShotVelocity(actor: SkillActor_T, velocity: number): void {
+        let index = 0;
+
+        // SpawnNTransientEffect 0x79955f: first two emitters' StartVelocityRange.X (+0x380/+0x384).
+        this.object(actor).traverse((child: any) => {
+            if (child.particlePool && index++ < 2) child.setStartVelocityRangeX(velocity);
+        });
+        if (index < 2) throw new Error(`Soulshot '${actor.name}' has fewer than two emitters.`);
+    }
+
     public createDamageEffect(actor: SkillActor_T): SkillActor_T | null {
         const effect = this.actor(actor).getComponent<EffectsComponent>("effects").createDamageEffect();
 

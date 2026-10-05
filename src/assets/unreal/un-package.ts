@@ -417,6 +417,7 @@ export class UNativePackage extends ANativePackage {
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
+            case "NCubics": Constructor = UEmitter; break;
             case "NProjectile": Constructor = UEmitter; break;
             case "NSkillProjectile": Constructor = UEmitter; break; // ANSkillProjectile : ANProjectile : AEmitter (EngineClasses.h 3832/3866)
             case "WaterHitEmitter": Constructor = UEmitter; break;
@@ -458,6 +459,12 @@ export class UNativePackage extends ANativePackage {
             // Classes we don't care about atm are marked as UObject for general puprose constructor
             case "L2SeamlessInfo":
             case "SceneManager":
+            case "MatObject":
+            case "MatAction":
+            case "MatSubAction":
+            case "ActionMoveCamera":
+            case "ActionWarp":
+            case "ActionPause":
             case "PathNode":
             case "InterpolationPoint":
             case "Projector":

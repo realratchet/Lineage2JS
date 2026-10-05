@@ -1,0 +1,80 @@
+.nwindow-canvas {
+    position: fixed;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.nwindow-text-input {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    width: 200px;
+    opacity: 0;
+}
+
+.ndom-layer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    pointer-events: none;
+    z-index: 11;
+    overflow: hidden;
+
+    > * { pointer-events: auto; }
+
+    [hidden] { display: none; }
+}
+
+.ndom-window, .ndom-tile, .ndom-button, .ndom-edit, .ndom-absolute {
+    position: absolute;
+}
+
+.ndom-tile, .ndom-button {
+    background-repeat: repeat;
+    image-rendering: pixelated;
+}
+
+.ndom-text {
+    display: inline-block;
+    vertical-align: top;
+    image-rendering: pixelated;
+}
+
+.ndom-button { cursor: default; }
+
+.ndom-inactive .ndom-tile { opacity: 0.502; } // NWindow 0x10012dbd: the +0x70 flag swaps texture alpha 0xff for 0x80; text keeps its alpha.
+
+.ndom-inventory-item {
+    position: absolute;
+    padding: 0;
+    border: 0;
+    background: transparent;
+
+    &:focus-visible { outline: 1px solid #c8d2dc; }
+}
+
+.ndom-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0 2px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: transparent;
+    caret-color: transparent;
+    font: 11px Tahoma, sans-serif;
+}
+
+.ndom-edit-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    image-rendering: pixelated;
+}

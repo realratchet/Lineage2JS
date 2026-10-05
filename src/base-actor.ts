@@ -24,6 +24,7 @@ export class BaseActor extends GameObject implements ICollidable {
     declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
     public effectSpawnBoneIndex: number = null;
+    public charClassId = -1;
 
     protected renderManager: RenderManager;
     protected readonly movementComponent: PawnMovementComponent;
@@ -197,6 +198,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public onAnimationFinished(action: AnimationAction): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").onAnimationFinished(action); }
 
     public playDeathAnimation(onFinished: (actor: BaseActor) => void): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").playDeath(onFinished); }
+    public revive(): void { this.getComponent<NpcLifecycleComponent>("npcLifecycle").revive(); }
 
     public getNpcAttacks(): readonly PawnAttack_T[] { return this.getComponent<PawnAttackComponent>("pawnAttack").getAttacks(); }
     public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void { this.getComponent<PawnAttackComponent>("pawnAttack").attack(target, selection, locList, associatedActors, targetExcepted); }
@@ -219,8 +221,14 @@ export class BaseActor extends GameObject implements ICollidable {
     public isUnderwaterMovement(): boolean { return this.movementComponent.isUnderwaterMovement(); }
     public setFlying(isFlying: boolean): void { this.movementComponent.setFlying(isFlying); }
     public setAirSpeed(airSpeed: number): void { this.movementComponent.setAirSpeed(airSpeed); }
+    public setMovementSpeeds(groundSpeed: number, walkSpeed: number, waterSpeed: number): void { this.movementComponent.setMovementSpeeds(groundSpeed, walkSpeed, waterSpeed); }
+    public setRotationYaw(yaw: number): void { this.movementComponent.setRotationYaw(yaw); }
+    public startRotating(direction: number, speed: number): void { this.movementComponent.startRotating(direction, speed); }
+    public finishRotating(yaw: number, speed: number): void { this.movementComponent.finishRotating(yaw, speed); }
+    public getRotationYaw(): number { return this.movementComponent.getRotationYaw(); }
     public setCollisionSize(collisionRadius: number, collisionHeight: number): void { this.movementComponent.setCollisionSize(collisionRadius, collisionHeight); }
-    public teleportTo(position: Vector3): void { this.movementComponent.teleportTo(position); }
+    public teleportTo(position: Vector3, adjustToFloor: boolean = false): void { this.movementComponent.teleportTo(position, adjustToFloor); }
+    public adjustLocation(position: Vector3): void { this.movementComponent.adjustLocation(position); }
 
 }
 

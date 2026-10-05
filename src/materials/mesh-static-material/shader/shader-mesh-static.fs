@@ -29,8 +29,24 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
+#if defined(USE_FADE) || defined(USE_FADE_MATERIAL2) || defined(USE_FADE_DIFFUSE)
+    struct FadeData {
+        vec3 color1;
+        vec3 color2;
+        float period;
+        float phase;
+        int fadeType;
+    };
+#endif
+
 #ifdef USE_CUBE_MAP_SPECULAR
     uniform samplerCube shSpecularCube;
+    uniform mat3 shSpecularCubeTransform;
+#endif
+
+#ifdef USE_CUBE_MAP_MATERIAL2
+    uniform samplerCube shMaterial2Cube;
+    uniform mat3 shMaterial2CubeTransform;
 #endif
 
 #if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_MATERIAL2) || defined(USE_MAP_DETAIL))
@@ -119,7 +135,7 @@ uniform float opacity;
 #endif
 
 #ifdef USE_DIFFUSE
-    #if defined(USE_UV) && defined(USE_MAP_DIFFUSE)
+    #if (defined(USE_UV) && defined(USE_MAP_DIFFUSE)) || defined(USE_FADE_DIFFUSE)
         #ifdef USE_MAP_DIFFUSE_TRANSFORM
             varying vec2 vUvTransformedDiffuse;
             
@@ -151,6 +167,9 @@ uniform float opacity;
         #endif
 
         struct DiffuseData {
+            #ifdef USE_FADE_DIFFUSE
+                FadeData fadeColors;
+            #endif
             #ifdef USE_MAP_DIFFUSE
                 TextureData map;
 
@@ -242,15 +261,6 @@ uniform float opacity;
 
 #ifdef USE_SPECULAR
     #if defined(USE_MAP_SPECULAR) || defined(USE_FADE)
-        #ifdef USE_FADE
-            struct FadeData {
-                vec3 color1;
-                vec3 color2;
-                float period;
-                float phase;
-                int fadeType;
-            };
-        #endif
 
         #ifdef USE_MAP_SPECULAR_TRANSFORM
             varying vec2 vUvTransformedSpecular;
@@ -377,7 +387,7 @@ uniform float opacity;
 #endif
 
 #ifdef USE_MATERIAL2
-    #if defined(USE_UV) && defined(USE_MAP_MATERIAL2)
+    #if (defined(USE_UV) && defined(USE_MAP_MATERIAL2)) || defined(USE_FADE_MATERIAL2)
         #ifdef USE_MAP_MATERIAL2_TRANSFORM
             varying vec2 vUvTransformedMaterial2;
             
@@ -409,6 +419,9 @@ uniform float opacity;
         #endif
 
         struct Material2Data {
+            #ifdef USE_FADE_MATERIAL2
+                FadeData fadeColors;
+            #endif
             #ifdef USE_MAP_MATERIAL2
                 TextureData map;
 
@@ -495,6 +508,25 @@ uniform float opacity;
     varying vec4 vShadowCoord;
 #endif
 
+#if defined(USE_FADE) || defined(USE_FADE_MATERIAL2) || defined(USE_FADE_DIFFUSE)
+vec3 getFadeColor(FadeData fade) {
+    // UFadeColor::GetColor 0x87b690: phase/period precede linear or sinusoidal interpolation.
+    float fadeTime = (globalTimeSeconds + fade.phase) / fade.period;
+    float fadePercent;
+
+    if (fade.fadeType == 1) {
+        fadePercent = 0.5 + cos(fadeTime * PI * 0.5) * 0.5;
+    } else {
+        float fadeCycle = floor(fadeTime);
+        float fadeFrac = fadeTime - fadeCycle;
+        fadePercent = (mod(fadeCycle, 2.0) != 0.0) ? fadeFrac : 1.0 - fadeFrac;
+    }
+
+    float mixValue = 1.0 - fadePercent;
+    return mix(fade.color1, fade.color2, mixValue);
+}
+#endif
+
 void main() {
     #include <clipping_planes_fragment>
     vec4 diffuseColor = vec4( diffuse, opacity );
@@ -505,6 +537,9 @@ void main() {
     // #include <map_fragment>
     // boomer tech
     #ifdef USE_DIFFUSE
+        #ifdef USE_FADE_DIFFUSE
+            diffuseColor.rgb *= getFadeColor(shDiffuse.fadeColors);
+        #endif
         #ifdef USE_MAP_DIFFUSE
             vec4 texelDiffuse = texture2D(shDiffuse.map.texture, UV_DIFFUSE);
             // texelDiffuse = mapTexelToLinear(texelDiffuse);
@@ -530,6 +565,17 @@ void main() {
         
         vec4 color2 = vec4(1.0);
         #ifdef USE_MATERIAL2
+            #ifdef USE_FADE_MATERIAL2
+                color2.rgb = getFadeColor(shMaterial2.fadeColors);
+            #endif
+            #ifdef USE_CUBE_MAP_MATERIAL2
+                vec3 envMapDirection = vReflect;
+                #ifdef USE_ENVMAP_CAMERA
+                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz;
+                #endif
+                envMapDirection = shMaterial2CubeTransform * envMapDirection;
+                color2 = textureCube(shMaterial2Cube, vec3(-envMapDirection.x, envMapDirection.yz));
+            #endif
             #ifdef USE_MAP_MATERIAL2
                 color2 = texture2D(shMaterial2.map.texture, UV_MATERIAL2);
             #endif
@@ -637,26 +683,14 @@ void main() {
         float specularMaskValue = 1.0;
 
         #ifdef USE_FADE
-            // UFadeColor::GetColor (UnMaterial.cpp line 332): Time = (TimeSeconds + FadePhase) / FadePeriod
-            float fadeTime = (globalTimeSeconds + shSpecular.fadeColors.phase) / shSpecular.fadeColors.period;
-            float fadePercent;
-
-            if (shSpecular.fadeColors.fadeType == 1) {
-                fadePercent = 0.5 + cos(fadeTime * PI * 0.5) * 0.5;
-            } else {
-                float fadeCycle = floor(fadeTime);
-                float fadeFrac = fadeTime - fadeCycle;
-                fadePercent = (mod(fadeCycle, 2.0) != 0.0) ? fadeFrac : 1.0 - fadeFrac;
-            }
-
-            float mixValue = 1.0 - fadePercent;
-            specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
+            specularColor = getFadeColor(shSpecular.fadeColors) * 2.0;
         #else
             #ifdef USE_CUBE_MAP_SPECULAR
                 vec3 envMapDirection = vReflect;
                 #ifdef USE_ENVMAP_CAMERA
                     envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz;
                 #endif
+                envMapDirection = shSpecularCubeTransform * envMapDirection;
                 specularColor = textureCube(shSpecularCube, vec3(-envMapDirection.x, envMapDirection.yz)).rgb;
             #elif defined(USE_MAP_SPECULAR)
                 vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);

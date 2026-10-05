@@ -12,6 +12,7 @@ const tmpNormal = new Vector3();
 const tmpHardwareCenter = new Vector3();
 // const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
+const tmpEnvColor = new ColorByte();
 const arrHardwareLights: DynamicLight[] = [];
 
 const affectedVertexCache = new WeakMap<Uint8Array, Uint32Array>();
@@ -78,7 +79,7 @@ export class LitActorMesh extends GameMesh {
         this.isSunAffected = props.isSunAffected ?? true;
         this.ambient = props.ambient;
 
-        if (this.lightInfo || (this.ambient && !this.ambient.isUnlit) || this.isSunAffected) {
+        if (this.lightInfo || this.ambient || this.isSunAffected) {
             const attrPositions = this.geometry.getAttribute("position");
 
             (
@@ -158,7 +159,7 @@ export class LitActorMesh extends GameMesh {
         return this.vertexToElement;
     }
 
-    protected computeLighting(_sector: SectorObject, lights: AugmentedLight_T[], target: Uint8ClampedArray, multiplier: number, elemVisibility?: Uint8Array, vertexToElement?: Uint32Array) {
+    protected computeLighting(_sector: SectorObject, lights: AugmentedLight_T[], target: Uint8ClampedArray, multiplier: number, elemVisibility?: Uint8Array, vertexToElement?: Uint32Array, color?: ColorByte) {
         if (lights.length === 0) return;
 
         const attrPositions = this.geometry.getAttribute("position");
@@ -176,7 +177,7 @@ export class LitActorMesh extends GameMesh {
             if (!light) continue;
 
             const indices = getAffectedVertices(flags, vertexArrayLen, vertexRangeStart, vertexRangeEnd);
-            const col = light.color;
+            const col = color || light.color;
 
             for (let k = 0, len = indices.length; k < len; k++) {
                 const vi = indices[k];
@@ -344,7 +345,7 @@ export class LitActorMesh extends GameMesh {
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
 
             if (this.perActorAmbient) {
-                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, ambient: typeof this.ambient }[];
+                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: typeof this.ambient }[];
                 for (const actor of perActorAmbient) {
                     if (actor.ambient && actor.ambient.isUnlit) {
                         // unlit renders at 1x: EnableLighting(1,1,0) + SetAmbientLight(255) (UnRenderStaticMesh.cpp line 470), 127 = 1.0 in the Modulate2X domain
@@ -353,7 +354,7 @@ export class LitActorMesh extends GameMesh {
                             this.staticLightingCache[i + 1] = 127;
                             this.staticLightingCache[i + 2] = 127;
                         }
-                    } else if (actor.ambient) {
+                    } else if (actor.ambient && !actor.isSunAffected) { // sun-affected actors only get the env SetAmbientLight (0x90d482), the actor color is the non-sun branch (0x90d4a3)
                         // zone ambient enters the vertex domain halved: FColor(FGetHSV(...) * 0.5f) (UnRenderLight.cpp line 967), ambient >> 1 (0x90d372)
                         tmpColorByte.set(actor.ambient.vector[0], actor.ambient.vector[1], actor.ambient.vector[2]);
                         const r = (tmpColorByte.r + actor.ambient.glow) >> 1;
@@ -382,7 +383,8 @@ export class LitActorMesh extends GameMesh {
                         this.staticLightingCache[i + 1] = 127;
                         this.staticLightingCache[i + 2] = 127;
                     }
-                } else {
+                } else if (this.isSunAffected) this.staticLightingCache.fill(0);
+                else {
                     tmpColorByte.set(vector[0], vector[1], vector[2]);
                     const r = (tmpColorByte.r + glow) >> 1;
                     const g = (tmpColorByte.g + glow) >> 1;
@@ -403,11 +405,13 @@ export class LitActorMesh extends GameMesh {
             // if (staticEnv.length > 0)
             //     debugger;
 
+            const envColor = env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor); // env lights bake with the HSV plane from env vtable+0x78 (0x90bda2), not the light's own color
+
             if (staticEnv.length >= 2) {
                 const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(staticEnv.length);
-                if (lerp < 1.0) this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, 1.0 - lerp);
-                if (lerp > 0.0) this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, lerp);
-            } else if (staticEnv.length === 1) this.computeLighting(sector, staticEnv, this.staticLightingCache, 1.0);
+                if (lerp < 1.0) this.computeLighting(sector, [staticEnv[currEnvIndex]], this.staticLightingCache, 1.0 - lerp, undefined, undefined, envColor);
+                if (lerp > 0.0) this.computeLighting(sector, [staticEnv[nextEnvIndex]], this.staticLightingCache, lerp, undefined, undefined, envColor);
+            } else if (staticEnv.length === 1) this.computeLighting(sector, staticEnv, this.staticLightingCache, 1.0, undefined, undefined, envColor);
 
             this.computeHardwareLighting(sector, this.staticLightingCache);
         }
@@ -422,11 +426,12 @@ export class LitActorMesh extends GameMesh {
         } else colorArray.set(this.staticLightingCache!);
 
         if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0, filterVisibility, vertexToElement);
+        if (dynamicEnv.length > 0) env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor);
         if (dynamicEnv.length >= 2) {
             const [currEnvIndex, nextEnvIndex, lerp] = env.selectEnvironmentLightIndices(dynamicEnv.length);
-            if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp, filterVisibility, vertexToElement);
-            if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp, filterVisibility, vertexToElement);
-        } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0, filterVisibility, vertexToElement);
+            if (lerp < 1.0) this.computeLighting(sector, [dynamicEnv[currEnvIndex]], colorArray, 1.0 - lerp, filterVisibility, vertexToElement, tmpEnvColor);
+            if (lerp > 0.0) this.computeLighting(sector, [dynamicEnv[nextEnvIndex]], colorArray, lerp, filterVisibility, vertexToElement, tmpEnvColor);
+        } else if (dynamicEnv.length === 1) this.computeLighting(sector, dynamicEnv, colorArray, 1.0, filterVisibility, vertexToElement, tmpEnvColor);
 
         this.needsRelightPass = false;
 

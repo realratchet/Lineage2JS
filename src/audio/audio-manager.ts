@@ -39,8 +39,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected unlocked = false;
     protected currentSource?: AudioBufferSourceNode;
     protected currentGain?: GainNode;
-    protected currentIndex?: number;
-    protected playingIndex?: number;
+    protected currentIndex?: number | string;
+    protected playingIndex?: number | string;
+    protected voiceSource: AudioBufferSourceNode = null;
+    protected voicePlayId = 0;
     protected currentIsLooped = false;
     protected nextBuffer?: AudioBuffer;
     protected nextMusicTrackTime?: number;
@@ -170,7 +172,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         }
     }
 
-    public async playMusic(index: number, isLooped: boolean = false, isForced: boolean = false, currentTime?: number) {
+    public async playMusic(index: number | string, isLooped: boolean = false, isForced: boolean = false, currentTime?: number) {
         const time = currentTime ?? this.lastTime;
 
         if (this.playingIndex === index && (this.currentSource || this.nextMusicTrackTime !== undefined)) {
@@ -213,7 +215,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         if (this.currentPlayId !== playId || !buffer) return;
 
         this.playBuffer(buffer, time);
-        this.preloadNext(index);
+        if (typeof index === "number") this.preloadNext(index);
     }
 
     public async stopMusic(incrementPlayId = true, currentTime?: number) {
@@ -319,6 +321,8 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.currentSource = undefined;
         this.currentGain = undefined;
 
+        if (typeof this.currentIndex === "string") this.currentIndex = undefined; // ALineagePlayerController::Tick 0x867ed2 clears the server music request.
+
         if (this.currentIndex === undefined) {
             this.playingIndex = undefined;
             return;
@@ -351,16 +355,55 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
             if (buffer && targetIndex !== undefined && (playId === undefined || this.currentPlayId === playId)) {
                 this.playBuffer(buffer, currentTime);
-                this.preloadNext(targetIndex);
+                if (typeof targetIndex === "number") this.preloadNext(targetIndex);
             }
         }
     }
 
-    protected async preloadNext(index: number) {
+    protected async preloadNext(index: number | string) {
         this.nextBuffer = await this.fetchRandomBuffer(index);
     }
 
-    protected async fetchRandomBuffer(index: number): Promise<AudioBuffer | null> {
+    protected async loadStream(path: string): Promise<AudioBuffer> {
+        const res = await fetch(path);
+
+        if (!res.ok) throw new Error(`Audio '${path}': ${res.statusText}.`);
+
+        const rawBuffer = await res.arrayBuffer();
+        const binary = new Uint8Array(rawBuffer);
+
+        binary.set(replaceBytes, 0); // patch the "encrypted" l2 oggs
+
+        return this.audioContext.decodeAudioData(binary.buffer);
+    }
+
+    public async playVoice(path: string): Promise<void> {
+        const request = ++this.voicePlayId;
+        const pending = this.loadStream(path);
+
+        await this.ensureUnlocked();
+        const buffer = await pending;
+
+        if (request !== this.voicePlayId) return;
+        if (this.voiceSource) {
+            this.voiceSource.stop();
+            this.voiceSource.disconnect();
+        }
+
+        const source = this.audioContext.createBufferSource();
+
+        source.buffer = buffer;
+        source.connect(this.effectsGainNode);
+        source.onended = () => {
+            source.disconnect();
+            if (this.voiceSource === source) this.voiceSource = null;
+        };
+        this.voiceSource = source;
+        source.start();
+    }
+
+    protected async fetchRandomBuffer(index: number | string): Promise<AudioBuffer | null> {
+        if (typeof index === "string") return this.loadStream(index);
         if (!(index in this.musicFiles)) return null;
 
         const files = this.musicFiles[index];
@@ -368,14 +411,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const path = files[rand];
 
         try {
-            const res = await fetch(path);
-            if (!res.ok) throw new Error(res.statusText);
-
-            const rawBuffer = await res.arrayBuffer();
-            const binary = new Uint8Array(rawBuffer);
-            binary.set(replaceBytes, 0); // patch the "encrypted" l2 oggs
-
-            return await this.audioContext.decodeAudioData(binary.buffer);
+            return await this.loadStream(path);
         } catch (e) {
             console.error(`Audio fetch/decode error: ${path}`, e);
             return null;
@@ -628,6 +664,12 @@ export class AudioManager implements IEngineComponent<GameManager> {
         entry.source = source;
 
         source.start(0);
+    }
+
+    public async playInterfaceSound(path: string): Promise<void> {
+        const uri = await this.gameManager.getComponent("asset").loadSound(path);
+
+        await this.playOneShotSound(uri, [0, 0, 0], 1, 1, 0, 0, false); // Engine.dll OnInterfacePlaySound 0x74711b: SOUND_No3D, pitch 1.
     }
 
     public async playOneShotSound(dataUri: string, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true) {

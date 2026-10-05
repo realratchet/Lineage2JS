@@ -277,7 +277,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const mergedColliderIndices = totalColliderIndices > 0 ? new Uint32Array(totalColliderIndices) : null;
 
     const mergedSceneLights = new Map<string, Uint8Array[]>();
-    const mergedEnvLights = new Map<string, Uint8Array[]>();
+    const mergedEnvLights = new Map<string, { light: string, flags: Uint8Array[] }>();
     let hasAnyLights = false;
     const perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[] = [];
 
@@ -366,10 +366,12 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
                 if (!mergedSceneLights.has(entry.light)) mergedSceneLights.set(entry.light, new Array(actorGeometries.length).fill(null));
                 mergedSceneLights.get(entry.light)![ai] = entry.flags;
             }
-            for (const entry of lights.environment) {
-                if (!mergedEnvLights.has(entry.light)) mergedEnvLights.set(entry.light, new Array(actorGeometries.length).fill(null));
-                mergedEnvLights.get(entry.light)![ai] = entry.flags;
-            }
+            lights.environment.forEach((entry, slot) => { // one entry per time slot, all naming the same NMovableSunLight; 0x90bd55 indexes them by slot
+                const key = `${slot}:${entry.light}`;
+
+                if (!mergedEnvLights.has(key)) mergedEnvLights.set(key, { light: entry.light, flags: new Array(actorGeometries.length).fill(null) });
+                mergedEnvLights.get(key)!.flags[ai] = entry.flags;
+            });
         }
         perActorAmbient.push({ startVertex: vertexOffset, count: vertexCount, ambient, scaledGlow, isSunAffected });
         vertexOffset += vertexCount;
@@ -384,7 +386,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
                 const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
                 return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
             }),
-            environment: Array.from(mergedEnvLights.entries()).map(([light, flagArrays]) => {
+            environment: Array.from(mergedEnvLights.values()).map(({ light, flags: flagArrays }) => {
                 const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
                 return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
             })

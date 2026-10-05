@@ -363,13 +363,13 @@ function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     if (info.isSunAffected) object.isSunAffected = true;
     if (info.type === "Sky") {
         (object as any).type = "Sky";
-        (object as any).isSkyZoneInfo = true;
+        object.isSkyZoneInfo = true;
 
         // original position for SkyRenderer only, applying it would double-transform the already-world-space children
         if (info.position) {
-            (object as any).skyOrigin = new Vector3().fromArray(info.position);
+            object.skyOrigin.fromArray(info.position);
         } else if ((info as any).location) {
-            (object as any).skyOrigin = new Vector3().fromArray((info as any).location);
+            object.skyOrigin.fromArray((info as any).location);
         }
     }
     if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
@@ -515,7 +515,8 @@ export function decodeSectorCore(library: DecodeLibrary) {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
                 mesh.visible = true;
-                bspGroup.add(mesh);
+                const parent = section.skyZone ? sector.zones.children[library.bspZoneIndexMap[section.skyZone]] : bspGroup;
+                parent.add(mesh);
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
@@ -526,7 +527,8 @@ export function decodeSectorCore(library: DecodeLibrary) {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
                 mesh.visible = true;
-                bspGroup.add(mesh);
+                const parent = section.skyZone ? sector.zones.children[library.bspZoneIndexMap[section.skyZone]] : bspGroup;
+                parent.add(mesh);
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
@@ -534,6 +536,10 @@ export function decodeSectorCore(library: DecodeLibrary) {
 
         sector.add(bspGroup);
     }
+
+    if (!library.isSkyLevel)
+        for (const zone of sector.zones.children as ZoneObject[])
+            if (zone.isSkyZoneInfo) zone.traverse(object => object.layers.set(1));
 
     return sector;
 }

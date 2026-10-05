@@ -93,9 +93,17 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     }
 
     public addAttackLight(caster: SkillActor_T, target: SkillActor_T): void { this.placement.addAttackLight(caster, target); }
+    public addAttackImpact(caster: SkillActor_T, target: SkillActor_T, critical: boolean, shield: boolean, spirit: boolean, grade: number): void { this.placement.addAttackImpact(caster, target, critical, shield, spirit, grade); }
 
     public start(cast: SkillCast_T, currentTime: number): boolean {
         const skill = cast.skill;
+
+        if (skill.visual.soulshot) {
+            this.placement.spawnSoulShot(skill, cast.caster);
+            for (const sound of skill.sounds)
+                if (sound.phase === "casting") this.host.playSkillSound(cast.caster, sound);
+            return true;
+        }
 
         // Engine.dll OnReceiveMagicSkillUse 0x7506b5..0x75075a: transient effects bypass MagicProcess.
         if (skill.castStyle === 0 && skill.visual.actions === null) {
@@ -110,7 +118,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             return false;
         }
         this.notify("casting", currentTime, cast);
-        return false;
+        return skill.castStyle === 0; // TriggerTransientEffect 0x795c20 executes CastingActions and leaves the action intact.
     }
 
     public notify(phase: NpcSkillEffectPhase_T, phaseTime: number, cast: SkillCast_T, source: SkillActor_T = cast.caster, target: SkillActor_T = cast.target, hitActor: boolean = !!target, associatedActors: readonly SkillActor_T[] = cast.associatedActors, impactActor: SkillActor_T = hitActor ? target : null): boolean {

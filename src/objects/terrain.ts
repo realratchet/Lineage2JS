@@ -16,6 +16,29 @@ const tmpNormal = new Vector3();
 const cbAmbient = new ColorByte();
 const cbLight = new ColorByte();
 
+function expandTerrainPasses(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
+    const materials = Array.isArray(material) ? material : [material];
+
+    if (!materials.some(entry => (entry as any).isTerrainMaterial && (entry as any).passes.length > 0)) return material;
+
+    const groups = geometry.groups.length > 0 ? geometry.groups.slice() : [{ start: 0, count: geometry.index.count, materialIndex: 0 }];
+    const expanded: THREE.Material[] = [];
+
+    geometry.clearGroups();
+
+    for (const group of groups) {
+        const base = materials[group.materialIndex];
+
+        for (const pass of [base, ...((base as any).isTerrainMaterial ? (base as any).passes : [])]) {
+            pass.vertexColors = base.vertexColors;
+            geometry.addGroup(group.start, group.count, expanded.length);
+            expanded.push(pass);
+        }
+    }
+
+    return expanded;
+}
+
 export class Terrain extends GameMesh implements ICollidable {
     public readonly isCollidable = true;
 
@@ -34,6 +57,7 @@ export class Terrain extends GameMesh implements ICollidable {
     protected boundsPosition: THREE.Vector3;
 
     protected lightingInfo?: TerrainLightingInfo_T;
+    public hasTerrainPasses = false;
     protected lastUpdatedTime: number = -1;
     protected lastShadowIndex: number = -1;
     protected lastShadowNextIndex: number = -1;
@@ -65,8 +89,9 @@ export class Terrain extends GameMesh implements ICollidable {
     public batchSectorIndex: number = -1;
 
     public constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], fieldInfo?: TerrainFieldInfo_T, lightingInfo?: TerrainLightingInfo_T) {
-        super(geometry, material);
+        super(geometry, expandTerrainPasses(geometry, material));
 
+        this.hasTerrainPasses = this.material !== material;
         this.lightingInfo = lightingInfo;
 
         if (fieldInfo) this.setTerrainField(fieldInfo);

@@ -274,6 +274,7 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u022_a": sRecharge.filter(effect => effect.effectClass === "LineageEffect.m_u022_a"),
     "lineageeffect.m_u001_a": sHealQueenAnt.filter(effect => effect.effectClass === "LineageEffect.m_u001_a"),
     "lineageeffect.m_u001_b": sHealQueenAnt.filter(effect => effect.effectClass === "LineageEffect.m_u001_b"),
+    "lineageeffect.m_u037_d": [{ phase: "shot", effectClass: "LineageEffect.m_u037_d", host: "target", owner: "target", position: "center" }],
     "lineageeffect.m_u032_a": sGreaterHeal.filter(effect => effect.effectClass === "LineageEffect.m_u032_a"),
     "lineageeffect.m_u032_b": sGreaterHeal.filter(effect => effect.effectClass === "LineageEffect.m_u032_b"),
     "lineageeffect.e_u031_a": sTeleportPc.filter(effect => effect.effectClass === "LineageEffect.e_u031_a"),
