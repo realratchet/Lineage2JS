@@ -699,6 +699,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         await Promise.all(this.charGroups.map(group => this.decodeWorker.prefetchScriptClass(this.loadSettings, `LineageWarrior.${this.getClassName(group.index)}`)));
     }
 
+    public getStreaming() { return this.isStreaming; }
+
     public setStreaming(renderManager: RenderManager, isStreaming: boolean) {
         this.isStreaming = isStreaming;
 

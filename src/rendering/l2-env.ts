@@ -102,6 +102,12 @@ export class L2Environment {
 
     public getTimeOfDay() { return this.time / 3600 % 24; }
     public setTimeOfDay(hours: number) { this.time = (hours % 24) * 3600; }
+    public setTimeToLobbyTime() {
+        // UL2NEnvManager::SetTimeToLobbyTime (0x7b7c30): StartTime, environment 0.
+        this.setTimeOfDay(this.env.setup.startTime);
+        this.setActiveEnv(0);
+        this.setTimeScale(0);
+    }
     public getEnvColor() { return this.envColors[this.activeEnv]; }
     public getTimeSeconds() { return this.time; }
     public getActiveEnv() { return this.activeEnv; }
@@ -116,6 +122,10 @@ export class L2Environment {
     public getEnv() { return this.env; }
 
     public getNormalizedTime() { return this.getTimeOfDay() / 24; }
+
+    public getBaseColorPlaneActorSunLight(target: ColorByte): ColorByte {
+        return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().light.actor, target, false);
+    }
 
     public getBaseColorPlaneStaticMeshSunLight(target: ColorByte): ColorByte {
         const timeOfDay = this.getTimeOfDay();
@@ -373,7 +383,7 @@ function getScaleValue(timeOfDay: number, array: TimeScale[]): number {
     return curr.scale + (next.scale - curr.scale) * lFrac;
 }
 
-function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorByte): ColorByte {
+function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorByte, applyBrightness: boolean = true): ColorByte {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
     if (!hsvCurr) return target.set(255, 255, 255, 255);
 
@@ -383,7 +393,8 @@ function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorB
     target.setFromHSV(hsvCurr.hue, hsvCurr.saturation, 255);
     tmpColorByte_2.setFromHSV(hsvNext.hue, hsvNext.saturation, 255);
 
-    return target.lerp(tmpColorByte_2, lFrac).multiplyScalar(v / 255);
+    target.lerp(tmpColorByte_2, lFrac);
+    return applyBrightness ? target.multiplyScalar(v / 255) : target;
 }
 
 function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: ColorByte): ColorByte {

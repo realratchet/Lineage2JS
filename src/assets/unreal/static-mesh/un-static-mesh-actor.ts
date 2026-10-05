@@ -169,7 +169,11 @@ export abstract class UStaticMeshActor extends UAActor {
         const isMoverWithoutDynamicLight = this.physics === EPhysics_T.PHYS_MovingBrush && !this.isDynamicLightMover;
 
         if (!isStatic && !isMoverWithoutDynamicLight) {
-            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
+            const ambActor = this.getAmbientLightingActor();
+            // UnRenderStaticMesh hardware lights: 0x90d4d3-0x90d50f, no baked instance stream.
+            const ambient = { glow: ambActor.ambientGlow, vector: FColor.fromFloating(...ambActor.getZone().ambientVector.getElements()).toArray(), isUnlit: ambActor.isUnlit, hardwareLighting: true };
+
+            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, ambient);
         }
 
         if (this.isHiddenInEditor) {
@@ -216,7 +220,7 @@ export abstract class UStaticMeshActor extends UAActor {
         return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
     }
 
-    protected getActorDecodeResult(library: DecodeLibrary, meshInfo: IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
+    protected getActorDecodeResult(library: DecodeLibrary, meshInfo: IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: FBox, ambient: IStaticMeshActorDecodeInfo["ambient"], lights?: ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
         this.instance?.loadSelf().setActor(this);
 
         const geometryInfo = library.geometries[meshInfo.geometry];
@@ -260,7 +264,7 @@ export abstract class UStaticMeshActor extends UAActor {
             isSunAffected: this.isUnlit ? false : this.isSunAffected,
             ambient,
             rotating,
-            dontBatch: !!this.dontBatch || !!rotating,
+            dontBatch: !!this.dontBatch || !!rotating || !!ambient?.hardwareLighting,
             isRangeIgnored: !!this.isRangeIgnored,
             scale: this.scale?.multiplyScalar(this.drawScale).getElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],

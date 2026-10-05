@@ -4,7 +4,7 @@ import { SectorObject } from "./zone-object";
 import { BufferAttribute, Matrix4, Vector3 } from "three";
 import type { L2Environment } from "../rendering/l2-env";
 import { ColorByte } from "../utils/color-byte";
-import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
+import MeshStaticMaterial, { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
 import { GameMesh } from "../game/components";
 
 const tmpVertex = new Vector3();
@@ -47,6 +47,7 @@ export class LitActorMesh extends GameMesh {
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
+    protected readonly arrHardwareMaterials: MeshStaticMaterial[] = [];
 
     public isBatch?: boolean;
     public batchActorUuids?: string[];
@@ -79,7 +80,18 @@ export class LitActorMesh extends GameMesh {
         this.isSunAffected = props.isSunAffected ?? true;
         this.ambient = props.ambient;
 
-        if (this.lightInfo || this.ambient || this.isSunAffected) {
+        if (this.ambient?.hardwareLighting) {
+            const source = Array.isArray(this.material) ? this.material : [this.material];
+            const materials = source.map(material => {
+                if (!(material as MeshStaticMaterial).isStaticMeshMaterial) return material;
+
+                const instance = (material as MeshStaticMaterial).clone().setActorLit();
+                this.arrHardwareMaterials.push(instance);
+                return instance;
+            });
+
+            this.material = Array.isArray(this.material) ? materials : materials[0];
+        } else if (this.lightInfo || this.ambient || this.isSunAffected) {
             const attrPositions = this.geometry.getAttribute("position");
 
             (
@@ -261,6 +273,8 @@ export class LitActorMesh extends GameMesh {
     protected lastStaticEnvLerp: number = -1;
 
     public get needsInitialLighting(): boolean {
+        if (this.ambient?.hardwareLighting) return this.lastEnvVersion < 0;
+
         return !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
     }
 
@@ -298,6 +312,28 @@ export class LitActorMesh extends GameMesh {
         if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
         if (this.needsInitialLighting && !this.lightingGate) return;
 
+        if (this.ambient?.hardwareLighting) {
+            if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
+
+            tmpHardwareCenter.copy(this.geometry.boundingSphere.center).applyMatrix4(this.matrixWorld);
+            const radius = this.geometry.boundingSphere.radius * this.matrixWorld.getMaxScaleOnAxis();
+
+            if (this.ambient.isUnlit) {
+                tmpColorByte.set(127, 127, 127);
+                arrHardwareLights.length = 0;
+            } else {
+                sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, this.isSunAffected);
+
+                if (this.isSunAffected) env.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
+                else tmpColorByte.set(this.ambient.vector[0] + this.ambient.glow, this.ambient.vector[1] + this.ambient.glow, this.ambient.vector[2] + this.ambient.glow).shr(1);
+            }
+
+            for (const material of this.arrHardwareMaterials)
+                material.updateHardwareLighting(tmpColorByte, arrHardwareLights, tmpHardwareCenter, radius);
+
+            this.lastEnvVersion = env.getEnvVersion();
+            return;
+        }
 
         const attrColors = this.geometry.getAttribute("lighting");
         const colorArray = attrColors.array as Uint8ClampedArray;

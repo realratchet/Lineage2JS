@@ -1587,20 +1587,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const cameraZoneMask = 1n << BigInt(zoneIndex);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
-            if (zone && zone.fog) {
-                if (zone.isSunAffected) {
-                    const zR = zone.fog.color.r * 255;
-                    const zG = zone.fog.color.g * 255;
-                    const zB = zone.fog.color.b * 255;
-
-                    targetFogColor.set(
-                        (targetFogColor.r + zR) * 0.5,
-                        (targetFogColor.g + zG) * 0.5,
-                        (targetFogColor.b + zB) * 0.5
-                    );
-                } else {
-                    targetFogColor.set(zone.fog.color.r * 255, zone.fog.color.g * 255, zone.fog.color.b * 255);
-                }
+            // FLevelSceneNode::Render: direct zone fog (0x8f327c); outdoor world fog (0x8f3077-0x8f31b2).
+            if (zone && zone.fog && (!zone.isSunAffected || !this.manGame.getComponent("asset").getStreaming())) {
+                targetFogStart = zone.fog.near;
+                targetFogEnd = zone.fog.far;
+                targetFogColor.set(zone.fog.color.r * 255, zone.fog.color.g * 255, zone.fog.color.b * 255);
             }
 
             let accSkyR = 0, accSkyG = 0, accSkyB = 0, totalSkyWeight = 0;

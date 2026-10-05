@@ -3,6 +3,7 @@ import { BufferGeometry, Material, SkinnedMesh, Vector3 } from "three";
 import { ColorByte } from "../utils/color-byte";
 import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { PawnLight_T } from "../rendering/components/pawn-light-component";
+import type MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 
 const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];
@@ -56,41 +57,7 @@ export class LitSkinnedMesh extends SkinnedMesh {
 
             if (!uniforms?.actorLights) continue;
 
-            const entries = uniforms.actorLights.value;
-            const count = Math.min(lights.length, entries.length);
-            const pawnCount = Math.min(pawnLights.length, entries.length - count);
-
-            tmpColorByte.toFloats(uniforms.actorAmbient.value);
-            uniforms.actorScaledGlow.value = this.scaledGlow;
-            uniforms.numActorLights.value = count + pawnCount;
-
-            for (let i = 0; i < count; i++) {
-                const light = lights[i];
-                const entry = entries[i];
-
-                entry.position.copy(light.lightPosition);
-                entry.direction.copy(light.lightDirection);
-                light.color.toFloats(entry.color);
-                entry.radius = light.lightRadius;
-                entry.cone = light.cone;
-                entry.effect = light.lightEffect;
-                entry.isPawnLight = false;
-            }
-
-            for (let i = 0; i < pawnCount; i++) {
-                const light = pawnLights[i];
-                const entry = entries[count + i];
-
-                entry.position.copy(light.position);
-                entry.direction.copy(light.direction);
-                entry.cone = light.cone;
-                // D3DDrv SetPawnLight RVA 0x1cadc: halve RGB under EnableLighting's Modulate2X.
-                entry.color.copy(light.color).multiplyScalar(0.5);
-                entry.radius = light.radius;
-                entry.effect = 0;
-                entry.isPawnLight = true;
-                entry.attenuation.copy(light.attenuation);
-            }
+            (material as MeshStaticMaterial).updateActorLighting(tmpColorByte, this.scaledGlow, lights, pawnLights);
         }
     }
 }

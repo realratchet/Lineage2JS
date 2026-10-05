@@ -49,6 +49,7 @@ export class L2Lobby {
         const [x, y] = render.getSectorId(new Vector3(spots[0][0], spots[0][1], spots[0][2]));
 
         asset.setStreaming(render, false);
+        render.getEnvironment().setTimeToLobbyTime();
         this.manGame.getComponent("input").setCameraLocked(true);
         render.player.visible = false;
 

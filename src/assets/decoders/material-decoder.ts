@@ -91,7 +91,7 @@ function getCanonicalStaticMaterialKey(material: any): string {
 export function canonicalizeStaticMeshMaterials(materials: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
     const source = materials instanceof Array ? materials : [materials];
     const canonical = source.map(material => {
-        if (!(material as any)?.isStaticMeshMaterial) return material;
+        if (!(material as any)?.isStaticMeshMaterial || (material as any).defines.USE_ACTOR_LIGHTS !== undefined) return material;
 
         const key = getCanonicalStaticMaterialKey(material);
         const cached = getWeakCacheValue(canonicalStaticMaterials, key);

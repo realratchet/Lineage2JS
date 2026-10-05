@@ -352,7 +352,7 @@
         float radius;
         float cone;
         int effect;
-        bool isPawnLight;
+        bool isHardwareLight;
         vec2 attenuation;
     };
 
@@ -382,7 +382,7 @@
         float distance = sqrt(distanceSquared);
         float radiusSquared = light.radius * light.radius;
 
-        if (light.isPawnLight) {
+        if (light.isHardwareLight) {
             if (distance > light.radius || distance == 0.0) return 0.0;
             // D3DDrv RVA 0x1c99b..0x1c9a5: Theta=0, Phi=PI/2, Falloff=0.
             if (light.cone >= 0.0 && -dot(delta, light.direction) <= light.cone * distance) return 0.0;

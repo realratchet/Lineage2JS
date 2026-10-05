@@ -1,11 +1,14 @@
 import { SectorObject } from "./zone-object";
 import type { L2Environment } from "../rendering/l2-env";
-import { Color, Object3D, Vector3 } from "three";
+import { Color, Object3D, Vector2, Vector3 } from "three";
 import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
 import ColorByte from "../utils/color-byte";
 
 const tmpVec3_1 = new Vector3();
 const tmpColorByte_1 = new ColorByte();
+const tmpHardwareColorByte = new ColorByte();
+
+type HardwareLight_T = { color: Color, attenuation: Vector2, cone: number };
 
 // ~0.1 degree of rotation on a unit direction vector, squared
 const DIRECTION_CHANGE_EPSILON_SQ = 3e-6;
@@ -56,7 +59,8 @@ export function sunModifierToDirection(polar: number, yaw: number, target: Vecto
     const cosTilt = Math.cos(SUN_TILT);
     const sinTilt = Math.sin(SUN_TILT);
 
-    return target.set(-x, -(y * cosTilt - z * sinTilt), -(y * sinTilt + z * cosTilt));
+    // ANMovableSunLight::Tick 0x869c58 negates the tilt before Core.dll RVA 0x10e30 (RotateAngleAxis).
+    return target.set(-x, -(y * cosTilt + z * sinTilt), -(-y * sinTilt + z * cosTilt));
 }
 
 function isNightTime(timeOfDay: number): boolean {
@@ -135,6 +139,7 @@ export class DynamicLight extends Object3D {
 
     public alpha: number = 1;
     public color: ColorByte = new ColorByte(255, 255, 255);
+    protected readonly hardwareColor = new Color(0, 0, 0);
     public lightDirection: Vector3 = new Vector3(0, 0, 0);
     public lightPosition: Vector3 = new Vector3(0, 0, 0);
     public lightRadius: number = 0;
@@ -158,6 +163,25 @@ export class DynamicLight extends Object3D {
         this.isSunlight = props.lightEffect === LE_SUNLIGHT;
 
         this.isTimeBased = props.isSunlightColor || props.lightMethod === "Sunlight";
+    }
+
+    public getHardwareLight(center: Vector3, radius: number, target: HardwareLight_T) {
+        target.color.copy(this.hardwareColor);
+        target.cone = this.lightEffect === LE_SPOTLIGHT || this.lightEffect === LE_STATIC_SPOT ? Math.cos(Math.fround(Math.PI / 2) / 2) : -1;
+
+        if (this.isSunlight) return;
+
+        // D3DDrv RVA 0x1c51e-0x1c5d0; reciprocal falloff at RVA 0x18f60.
+        const distance = center.distanceTo(this.lightPosition);
+        const near = Math.max(0, distance - radius) + 1;
+        const far = Math.min(this.lightRadius, distance + radius) - 1;
+        const nearAlpha = near / this.lightRadius, farAlpha = far / this.lightRadius;
+        const nearIntensity = 1 / (2 * (2 * nearAlpha * nearAlpha * nearAlpha - 3 * nearAlpha * nearAlpha + 1));
+        const farIntensity = 1 / (2 * (2 * farAlpha * farAlpha * farAlpha - 3 * farAlpha * farAlpha + 1));
+        const constant = Math.max(0, nearIntensity - (farIntensity - nearIntensity) / (far - near) * near);
+
+        target.attenuation.set(constant, (nearIntensity - constant) / near);
+        if (!Number.isFinite(target.attenuation.x) || !Number.isFinite(target.attenuation.y)) throw new Error(`Invalid hardware light attenuation for '${this.name}'.`);
     }
 
     public update(envManager: L2Environment, levelBrightness: number) {
@@ -222,6 +246,15 @@ export class DynamicLight extends Object3D {
         else if (this.lightType === LT_TEXTURE_PALETTE_LOOP) {
             this.isDynamicLight = true;
         }
+
+        // FDynamicLight::Update 0x907554/0x907571 uses the actor base plane and brightness; FGetHSV 0x9c3c13 uses 1.4/255.
+        if (this.isSunlightColor) envManager.getBaseColorPlaneActorSunLight(tmpHardwareColorByte);
+        else tmpHardwareColorByte.setFromHSV(this.colorHSV.hue, this.colorHSV.saturation, 255);
+
+        const hardwareBrightness = this.isSunlightColor ? envManager.getBrightnessActorSunLight() : this.colorHSV.value;
+        tmpHardwareColorByte.toFloats(this.hardwareColor);
+        // D3DDrv SetLight RVA 0x1c381 divides color by 2; 0x1c40e/0x1c5e8 then apply 7/8 or 1/2.
+        this.hardwareColor.multiplyScalar(hardwareBrightness / 255 * intensity * levelBrightness * (this.isSunlight ? 7 / 16 : 1 / 4));
 
         this.color.copy(baseColor);
 

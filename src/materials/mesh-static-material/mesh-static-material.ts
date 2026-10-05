@@ -5,12 +5,16 @@ import { padTransformStages } from "./transform-stage";
 import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
+import type DynamicLight from "../../objects/dynamic-light";
+import type ColorByte from "../../utils/color-byte";
+import type { PawnLight_T } from "../../rendering/components/pawn-light-component";
 
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask", "shDetail"]);
 
 // Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
 export const NUM_ACTOR_LIGHTS = 4;
 const MAX_HARDWARE_LIGHTS = 8; // D3DDrv SetPawnLight RVA 0x1c7b2.
+const arrEmptyPawnLights: PawnLight_T[] = [];
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shDetail" | "shMaterial2";
 type ApplyParams_T = {
@@ -453,7 +457,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             radius: 0,
             cone: 0,
             effect: 0,
-            isPawnLight: false,
+            isHardwareLight: false,
             attenuation: new Vector2()
         })));
 
@@ -470,6 +474,55 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         delete this.defines["USE_LIGHTMAP"];
         this.needsUpdate = true;
         return this;
+    }
+
+    public updateActorLighting(ambient: ColorByte, scaledGlow: number, lights: readonly DynamicLight[], pawnLights: readonly PawnLight_T[] = arrEmptyPawnLights) {
+        const uniforms = this.uniforms;
+        const entries = uniforms.actorLights.value;
+        const count = Math.min(lights.length, entries.length);
+        const pawnCount = Math.min(pawnLights.length, entries.length - count);
+
+        ambient.toFloats(uniforms.actorAmbient.value);
+        uniforms.actorScaledGlow.value = scaledGlow;
+        uniforms.numActorLights.value = count + pawnCount;
+
+        for (let i = 0; i < count; i++) {
+            const light = lights[i];
+            const entry = entries[i];
+
+            entry.position.copy(light.lightPosition);
+            entry.direction.copy(light.lightDirection);
+            light.color.toFloats(entry.color);
+            entry.radius = light.lightRadius;
+            entry.cone = light.cone;
+            entry.effect = light.lightEffect;
+            entry.isHardwareLight = false;
+        }
+
+        for (let i = 0; i < pawnCount; i++) {
+            const light = pawnLights[i];
+            const entry = entries[count + i];
+
+            entry.position.copy(light.position);
+            entry.direction.copy(light.direction);
+            entry.cone = light.cone;
+            // D3DDrv SetPawnLight RVA 0x1cadc: halve RGB under EnableLighting's Modulate2X.
+            entry.color.copy(light.color).multiplyScalar(0.5);
+            entry.radius = light.radius;
+            entry.effect = 0;
+            entry.isHardwareLight = true;
+            entry.attenuation.copy(light.attenuation);
+        }
+    }
+
+    public updateHardwareLighting(ambient: ColorByte, lights: readonly DynamicLight[], center: Vector3, radius: number) {
+        this.updateActorLighting(ambient, 1, lights);
+
+        const entries = this.uniforms.actorLights.value;
+        for (let i = 0; i < this.uniforms.numActorLights.value; i++) {
+            lights[i].getHardwareLight(center, radius, entries[i]);
+            entries[i].isHardwareLight = true;
+        }
     }
 
     public copy(source: this): this {
