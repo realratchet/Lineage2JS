@@ -98,8 +98,8 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
 
     if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
 
-    index.updateRange.offset = 0;
-    index.updateRange.count = offset;
+    index.clearUpdateRanges();
+    index.addUpdateRange(0, offset);
     index.needsUpdate = true;
 }
 

@@ -9,10 +9,12 @@ uniform float opacity;
 #include <common>
 #include <dithering_pars_fragment>
 #include <color_pars_fragment>
-#include <uv_pars_fragment>
+#ifdef USE_UV
+    varying vec2 vUv;
+#endif
 
-// extended to match shader-mesh-static.vs's uv2 gating (adds USE_UV2)
-#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
+// Three reserves USE_UV2 for its third UV set.
+#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV1)
     varying vec2 vUv2;
 #endif
 
@@ -126,7 +128,7 @@ uniform float opacity;
             #if defined(USE_MAP_DETAIL_TRANSFORM)
                 #define UV_DETAIL vUvTransformedDetail
             #endif
-        #elif defined(USE_MAP_DETAIL_UV2)
+        #elif defined(USE_MAP_DETAIL_UV1)
             #define UV_DETAIL vUv2
         #else
             #define UV_DETAIL vUv
@@ -190,7 +192,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_DIFFUSE) && defined(USE_MAP_DIFFUSE_TRANSFORM)
             #define UV_DIFFUSE vUvTransformedDiffuse
-        #elif defined(USE_MAP_DIFFUSE_UV2)
+        #elif defined(USE_MAP_DIFFUSE_UV1)
             #define UV_DIFFUSE vUv2
         #else
             #define UV_DIFFUSE vUv
@@ -251,7 +253,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
             #define UV_OPACITY vUvTransformedOpacity
-        #elif defined(USE_MAP_OPACITY_UV2)
+        #elif defined(USE_MAP_OPACITY_UV1)
             #define UV_OPACITY vUv2
         #else
             #define UV_OPACITY vUv
@@ -317,7 +319,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
             #define UV_SPECULAR vUvTransformedSpecular
-        #elif defined(USE_MAP_SPECULAR_UV2)
+        #elif defined(USE_MAP_SPECULAR_UV1)
             #define UV_SPECULAR vUv2
         #else
             #define UV_SPECULAR vUv
@@ -378,7 +380,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
             #define UV_SPECULAR_MASK vUvTransformedSpecularMask
-        #elif defined(USE_MAP_SPECULAR_MASK_UV2)
+        #elif defined(USE_MAP_SPECULAR_MASK_UV1)
             #define UV_SPECULAR_MASK vUv2
         #else
             #define UV_SPECULAR_MASK vUv
@@ -437,7 +439,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_MATERIAL2) && defined(USE_MAP_MATERIAL2_TRANSFORM)
             #define UV_MATERIAL2 vUvTransformedMaterial2
-        #elif defined(USE_MAP_MATERIAL2_UV2)
+        #elif defined(USE_MAP_MATERIAL2_UV1)
             #define UV_MATERIAL2 vUv2
         #else
             #define UV_MATERIAL2 vUv
@@ -663,7 +665,10 @@ void main() {
         #else
             reflectedLight.indirectDiffuse += vIndirectFront;
         #endif
-        #include <lightmap_fragment>
+        #ifdef USE_LIGHTMAP
+            vec4 lightMapTexel = texture2D( lightMap, vUv2 );
+            reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity;
+        #endif
         reflectedLight.indirectDiffuse *= BRDF_Lambert( diffuseColor.rgb );
         #ifdef DOUBLE_SIDED
             reflectedLight.directDiffuse = ( gl_FrontFacing ) ? vLightFront : vLightBack;
@@ -732,9 +737,9 @@ void main() {
     #endif
     
     #include <envmap_fragment>
-    #include <output_fragment>
+    #include <opaque_fragment>
     #include <tonemapping_fragment>
-    #include <encodings_fragment>
+    #include <colorspace_fragment>
 
     #ifdef USE_TERRAIN_DECORATION_FADE
         gl_FragColor.a *= vTerrainDecorationFade;

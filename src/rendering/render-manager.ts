@@ -1,7 +1,7 @@
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import Player from "../player";
@@ -329,6 +329,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public constructor(viewport: HTMLViewportElement_T) {
         this.viewport = viewport;
+        ColorManagement.enabled = false;
         this.renderer = new WebGLRenderer({
             antialias: true,
             preserveDrawingBuffer: true,
@@ -337,6 +338,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             alpha: true,
         });
 
+        this.renderer.outputColorSpace = LinearSRGBColorSpace;
         this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
@@ -1097,7 +1099,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
 
-            for (const material of materials) material.dispose();
+            for (const material of materials)
+                if (!(material as any).isSharedMaterial) material.dispose();
             if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
         });
 

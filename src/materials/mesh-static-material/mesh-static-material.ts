@@ -1,6 +1,6 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
-import { appendGlobalUniforms } from "../global-uniforms";
+import { appendGlobalUniforms, getLocalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
 import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
@@ -28,6 +28,18 @@ type ApplyParams_T = {
 type SpriteParam_T = {
     framerate: number,
     sprites: any[]
+}
+
+function getProceduralMaps(uniforms: Record<string, Uniform>): any[] {
+    const maps = new Set<any>();
+
+    for (const uniform of Object.values(uniforms)) {
+        const value = (uniform as any)?.value;
+        const map = value?.isTexture ? value : value?.map?.texture;
+        if (map?.isTexture && map.isUpdatable) maps.add(map);
+    }
+
+    return [...maps];
 }
 
 function applyParameters({ name, parameters, uniforms, defines, sprites }: ApplyParams_T): void {
@@ -75,8 +87,8 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         defines[`USE_MAP_${defName}`] = "";
 
         if (parameters.uvIndex === 1) {
-            defines["USE_UV2"] = "";
-            defines[`USE_MAP_${defName}_UV2`] = "";
+            defines["USE_UV1"] = "";
+            defines[`USE_MAP_${defName}_UV1`] = "";
         }
 
         if (parameters.transformType !== "none") {
@@ -135,8 +147,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
                 terrainDecorationFadeRange: new Uniform(new Vector2()),
-                uvTransform: new Uniform(new Matrix3()),
-                uv2Transform: new Uniform(new Matrix3()),
+                uv1Transform: new Uniform(new Matrix3()),
                 transformSpecular: new Uniform(null),
 
                 lightMap: new Uniform(null),
@@ -279,9 +290,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.spriteEntries = Object.entries(sprites);
 
         // procedural maps (water) drive their own animation through update()
-        this.proceduralMaps = Object.values(uniforms)
-            .map((u: any) => u?.value)
-            .filter((v: any) => v?.isTexture && v.isUpdatable);
+        this.proceduralMaps = getProceduralMaps(uniforms);
 
         this.isUpdatable = this.spriteEntries.length > 0 || this.proceduralMaps.length > 0;
 
@@ -526,12 +535,24 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     }
 
     public copy(source: this): this {
-        super.copy(source);
-        // ShaderMaterial.copy clones the shared shadow render target into an unbacked Texture.
+        const copySource = Object.create(source) as this;
+        const uniforms = getLocalUniforms(source.uniforms);
+        const proceduralUniforms: Record<string, Uniform> = {};
+
+        for (const [name, uniform] of Object.entries(uniforms))
+            if ((uniform.value as any)?.isTexture && (uniform.value as any).isUpdatable) {
+                proceduralUniforms[name] = uniform;
+                delete uniforms[name];
+            }
+
+        copySource.uniforms = uniforms;
+
+        super.copy(copySource);
+        Object.assign(this.uniforms, proceduralUniforms);
         appendGlobalUniforms(this.uniforms);
         this.sprites = source.sprites;
         this.spriteEntries = source.spriteEntries;
-        this.proceduralMaps = source.proceduralMaps;
+        this.proceduralMaps = getProceduralMaps(this.uniforms);
         this.isUpdatable = source.isUpdatable;
 
         return this;

@@ -7,7 +7,7 @@ import { Object3D, PerspectiveCamera } from "three";
  * rotations, never a reflection), so it goes in the projection matrix instead,
  * patched once on the prototype so every camera picks it up.
  */
-Object3D.DefaultUp.set(0, 0, 1);
+Object3D.DEFAULT_UP.set(0, 0, 1);
 
 const originalUpdateProjectionMatrix = PerspectiveCamera.prototype.updateProjectionMatrix;
 

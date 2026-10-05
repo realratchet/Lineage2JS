@@ -79,9 +79,9 @@ void main() {
             outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
     }
     #include <envmap_fragment>
-    #include <output_fragment>
+    #include <opaque_fragment>
     #include <tonemapping_fragment>
-    #include <encodings_fragment>
+    #include <colorspace_fragment>
     #include <fog_fragment>
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>

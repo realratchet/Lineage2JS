@@ -57,7 +57,7 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     arrUvs.forEach((arrUv, i) => {
         if (!arrUv) return;
 
-        geometry.setAttribute(`uv${i === 0 ? "" : i + 1}`, new BufferAttribute(arrUv, 2));
+        geometry.setAttribute(`uv${i === 0 ? "" : i}`, new BufferAttribute(arrUv, 2));
     });
 
     if (info.attributes.normals) geometry.setAttribute("normal", new BufferAttribute(info.attributes.normals, 3));

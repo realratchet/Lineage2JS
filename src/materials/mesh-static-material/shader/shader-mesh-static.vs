@@ -1,11 +1,15 @@
 #include <common>
-#include <uv_pars_vertex>
+#ifdef USE_UV
+    varying vec2 vUv;
+#endif
 
-// three's uv2 chunk only gates on USE_LIGHTMAP/USE_AOMAP, extended with USE_UV2
-#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
-    attribute vec2 uv2;
+// Three reserves USE_UV2 for its third UV set.
+#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV1)
+    #ifndef USE_UV1
+        attribute vec2 uv1;
+    #endif
     varying vec2 vUv2;
-    uniform mat3 uv2Transform;
+    uniform mat3 uv1Transform;
 #endif
 
 #include <envmap_pars_vertex>
@@ -531,14 +535,16 @@ void main() {
         vLitColor = clamp(lighting + staticMeshSunAmbient * sunAffected, 0.0, 1.0);
     #endif
 
-    #include <uv_vertex>
+    #ifdef USE_UV
+        vUv = uv;
+    #endif
 
-    #if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
-        vUv2 = ( uv2Transform * vec3( uv2, 1 ) ).xy;
+    #if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV1)
+        vUv2 = ( uv1Transform * vec3( uv1, 1 ) ).xy;
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_DIFFUSE) && defined(USE_MAP_DIFFUSE_TRANSFORM)
-        #ifdef USE_MAP_DIFFUSE_UV2
+        #ifdef USE_MAP_DIFFUSE_UV1
             vUvTransformedDiffuse = vUv2;
         #else
             vUvTransformedDiffuse = uv;
@@ -565,7 +571,7 @@ void main() {
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
-        #ifdef USE_MAP_OPACITY_UV2
+        #ifdef USE_MAP_OPACITY_UV1
             vUvTransformedOpacity = vUv2;
         #else
             vUvTransformedOpacity = uv;
@@ -591,7 +597,7 @@ void main() {
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
-        #ifdef USE_MAP_SPECULAR_UV2
+        #ifdef USE_MAP_SPECULAR_UV1
             vUvTransformedSpecular = vUv2;
         #else
             vUvTransformedSpecular = uv;
@@ -617,7 +623,7 @@ void main() {
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_DETAIL) && defined(USE_MAP_DETAIL_TRANSFORM)
-        #ifdef USE_MAP_DETAIL_UV2
+        #ifdef USE_MAP_DETAIL_UV1
             vUvTransformedDetail = vUv2;
         #else
             vUvTransformedDetail = uv;
@@ -644,7 +650,7 @@ void main() {
     #endif
 
     #if defined(USE_UV) && defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
-        #ifdef USE_MAP_SPECULAR_MASK_UV2
+        #ifdef USE_MAP_SPECULAR_MASK_UV1
             vUvTransformedSpecularMask = vUv2;
         #else
             vUvTransformedSpecularMask = uv;

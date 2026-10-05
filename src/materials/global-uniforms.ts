@@ -1,4 +1,4 @@
-import { Matrix4, Uniform, UniformsLib, UniformsUtils, Vector3 } from "three";
+import { Matrix4, ShaderMaterial, Uniform, UniformsLib, UniformsUtils, Vector3 } from "three";
 
 export const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
     UniformsLib.fog, {
@@ -18,11 +18,31 @@ export const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
     }
 ]) as UniformMap_T);
 
+const GLOBAL_UNIFORM_NAMES = new Set(Object.keys(GLOBAL_UNIFORMS));
+
+export function getLocalUniforms(uniforms: UniformMap_T): UniformMap_T {
+    const local: UniformMap_T = {};
+
+    for (const [k, v] of Object.entries(uniforms))
+        if (!GLOBAL_UNIFORM_NAMES.has(k)) local[k] = v;
+
+    return local;
+}
+
 export function appendGlobalUniforms(uniforms: UniformMap_T): UniformMap_T {
     for (let [k, v] of Object.entries(GLOBAL_UNIFORMS))
         uniforms[k] = v;
 
     return uniforms;
+}
+
+export function copyShaderMaterial(source: ShaderMaterial, target: ShaderMaterial): ShaderMaterial {
+    const copySource = Object.create(source) as ShaderMaterial;
+    copySource.uniforms = {};
+    target.copy(copySource);
+    target.uniforms = source.uniforms;
+
+    return target;
 }
 
 export default GLOBAL_UNIFORMS;

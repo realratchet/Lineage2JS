@@ -1,4 +1,4 @@
-import { CanvasTexture, DoubleSide, NearestFilter, Sprite, SpriteMaterial, SRGBColorSpace } from "three";
+import { CanvasTexture, DoubleSide, NearestFilter, NoColorSpace, Sprite, SpriteMaterial } from "three";
 import { FontType_T } from "../nwindow/nwindow-canvas";
 import type NWindowCanvas from "../nwindow/nwindow-canvas";
 
@@ -24,7 +24,7 @@ export class Nameplate extends Sprite {
 
         texture.minFilter = texture.magFilter = NearestFilter;
         texture.generateMipmaps = false;
-        texture.colorSpace = SRGBColorSpace;
+        texture.colorSpace = NoColorSpace;
         texture.repeat.x = -1; // ue2-conventions.ts mirrors the camera projection.
         texture.offset.x = 1;
 

@@ -27,5 +27,5 @@ void main() {
     #include <l2_fog_fragment>
     
     #include <tonemapping_fragment>
-    #include <encodings_fragment>
+    #include <colorspace_fragment>
 }

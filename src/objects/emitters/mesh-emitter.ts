@@ -34,7 +34,13 @@ export class MeshEmitter extends BaseEmitter {
 
     protected initParticleMesh() {
         const materials = this.materials.map(m => {
-            if ((m as THREE.Material).isMaterial) return (m as THREE.Material).clone();
+            if ((m as THREE.Material).isMaterial) {
+                if (this.ignoreParticleColor && (m as any).isStaticMeshMaterial && !(m as any).isUpdatable) {
+                    (m as any).isSharedMaterial = true;
+                    return m as THREE.Material;
+                }
+                return (m as THREE.Material).clone();
+            }
 
             const isSprite = m.type === "sprite";
 
