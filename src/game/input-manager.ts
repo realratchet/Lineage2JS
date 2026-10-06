@@ -7,6 +7,7 @@ import type RenderManager from "../rendering/render-manager";
 import type PhysicsManager from "../physics/physics-manager";
 import type { ICollidable } from "../objects/objects";
 import type BaseActor from "../base-actor";
+import type { CollisionQuery_T } from "../physics/collision-world";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
 const MOUSE_TARGET_INTERVAL_MS = 50;
@@ -16,6 +17,10 @@ const tmpPickBounds = new Box3();
 const dirForward = new Vector3();
 const dirRight = new Vector3();
 const cameraVelocity = new Vector3();
+const tmpCameraView = new Vector3();
+const tmpCameraTraceStart = new Vector3();
+const tmpCameraTraceDelta = new Vector3();
+const hitCheckCameraExtent = new Vector3(0.1, 0.1, 0.1);
 const arrMouseIntersections: THREE.Intersection[] = [];
 
 function getBatchIntersectionActor(intersection: THREE.Intersection): { actorIndex: number, actorName: string, actorUuid: string } | null {
@@ -59,6 +64,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected manGame: GameManager;
     protected renderManager: RenderManager;
     protected physicsManager: PhysicsManager;
+    protected readonly hitCheckCameraQuery: CollisionQuery_T = { location: tmpCameraTraceStart, delta: tmpCameraTraceDelta, extent: hitCheckCameraExtent, sourceIsPlayer: false, ignorePawns: true }; // TRACE_World 0x86
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected readonly mouseDownPosition = new Vector2();
     protected readonly mousePosition = new Vector2();
@@ -172,7 +178,31 @@ export class InputManager implements IEngineComponent<GameManager> {
         renderManager.camera.position.add(cameraVelocity);
         this.controls.orbit.target.copy(tmpMouseIntersection);
         this.controls.orbit.update();
+        this.hitCheckCamera();
         renderManager.updateCameraMatrices();
+    }
+
+    protected hitCheckCamera(): void { // ALineagePlayerController::CalcBehindView 0x807ce0, bUseHitCheckCamera branch
+        const camera = this.renderManager.camera;
+        const target = this.controls.orbit.target;
+        const distance = camera.position.distanceTo(target);
+        const viewDist = distance + 30;
+
+        tmpCameraView.subVectors(target, camera.position).divideScalar(distance);
+        tmpCameraTraceStart.copy(target);
+        tmpCameraTraceDelta.copy(tmpCameraView).multiplyScalar(-(viewDist + 30));
+        tmpCameraTraceDelta.z -= 10;
+
+        const hit = this.physicsManager.singleLineCheck(this.hitCheckCameraQuery);
+
+        if (!hit) return;
+
+        const hitDist = Math.min(tmpCameraTraceDelta.subVectors(target, hit.location).dot(tmpCameraView), viewDist);
+
+        if (hitDist >= viewDist) return;
+
+        this.controls.orbit.unclippedDistance = distance;
+        camera.position.copy(tmpCameraView).multiplyScalar(30 - hitDist).add(target);
     }
 
     protected clearDirectionKeys(): void {

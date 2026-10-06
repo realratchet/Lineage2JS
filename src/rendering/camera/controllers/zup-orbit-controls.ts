@@ -11,6 +11,7 @@ export class ZUpOrbitControls extends EventDispatcher {
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;
+    public unclippedDistance: number = 0;
     protected nativeLike: boolean;
 
     [key: string]: any;
@@ -174,6 +175,11 @@ export class ZUpOrbitControls extends EventDispatcher {
 
                 // angle from z-axis around y-axis
                 spherical.setFromVector3(offset);
+
+                if (scope.unclippedDistance > 0) {
+                    spherical.radius = scope.unclippedDistance;
+                    scope.unclippedDistance = 0;
+                }
 
                 if (scope.autoRotate && state === STATE.NONE) {
 
