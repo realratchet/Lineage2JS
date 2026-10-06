@@ -165,8 +165,9 @@ export class DynamicLight extends Object3D {
         this.isTimeBased = props.isSunlightColor || props.lightMethod === "Sunlight";
     }
 
-    public getHardwareLight(center: Vector3, radius: number, target: HardwareLight_T) {
+    public getHardwareLight(center: Vector3, radius: number, target: HardwareLight_T, isColorHalved: boolean = true) {
         target.color.copy(this.hardwareColor);
+        if (!isColorHalved) target.color.multiplyScalar(2); // D3DDrv SetLight 0x1001b8eb halves GetLightColor only for color type 1; pawns pass 0
         target.cone = this.lightEffect === LE_SPOTLIGHT || this.lightEffect === LE_STATIC_SPOT ? Math.cos(Math.fround(Math.PI / 2) / 2) : -1;
 
         if (this.isSunlight) return;

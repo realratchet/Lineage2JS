@@ -267,11 +267,12 @@ export class SectorObject extends GameObject {
     }
 
     // GetRelevantLights, UnRenderVisibility.cpp line 439: Consider only contains zone-relevant lights.
-    public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean): DynamicLight[] {
+    public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, permeatingLights: string[] = null): DynamicLight[] {
         target.length = 0;
 
         for (const light of this.lightList) {
             if (light.isSunlight && !allowSunlight) continue;
+            if (permeatingLights && !light.isSunlight && !light.isDynamic && !permeatingLights.includes(light.name)) continue;
 
             const key = light.getSortKey(position, radius);
 
@@ -1524,6 +1525,7 @@ class BSPZoneData {
 class BSPLeafData {
     public zone: number
     public permiating: number
+    public permeatingLights: string[]
     public volumetric: number
     public visibleZones: bigint
     public musicId?: number
@@ -1535,6 +1537,7 @@ class BSPLeafData {
 
         leaf.zone = info.zone;
         leaf.permiating = info.permiating;
+        leaf.permeatingLights = info.permeatingLights;
         leaf.volumetric = info.volumetric;
         leaf.visibleZones = info.visibleZones;
         leaf.musicId = info.musicId;

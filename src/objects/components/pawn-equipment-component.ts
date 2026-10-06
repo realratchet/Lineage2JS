@@ -82,6 +82,8 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         item.traverse((object: any) => {
             if (!object.isMesh) return;
 
+            object.isUnlit = true; // retail draws the enchant shell with D3DRS_LIGHTING off, TFACTOR fade x cube only
+
             const materials = Array.isArray(object.material) ? object.material : [object.material];
 
             for (const material of materials) {

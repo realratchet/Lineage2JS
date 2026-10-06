@@ -3,6 +3,7 @@ import type { APackage, Constructable_T } from "@l2js/core";
 export type IBSPLeafDecodeInfo_T = {
     zone: number,
     permiating: number,
+    permeatingLights: string[],
     volumetric: number,
     visibleZones: bigint,
     musicId?: number
@@ -28,6 +29,7 @@ export class FLeaf implements Constructable_T {
         return {
             zone: this.iZone,
             permiating: this.iPermeating,
+            permeatingLights: [],
             volumetric: this.iVolumetric,
             visibleZones: this.visibleZones,
             musicId: this.musicId

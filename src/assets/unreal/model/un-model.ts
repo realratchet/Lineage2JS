@@ -339,7 +339,15 @@ export abstract class UModel extends UPrimitive {
     public getZoneDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): ModelZoneDecodeResult_T {
         const result: ModelZoneDecodeResult_T = { bspLeaves: [], bspZones: [], bspZoneIndexMap: {} };
 
-        this.leaves.forEach((leaf: FLeaf) => result.bspLeaves.push(leaf.getDecodeInfo()));
+        this.leaves.forEach((leaf: FLeaf) => {
+            const info = leaf.getDecodeInfo();
+
+            if (leaf.iPermeating >= 0)
+                for (let i = leaf.iPermeating; this.lights[i]; i++)
+                    info.permeatingLights.push(this.lights[i].objectName);
+
+            result.bspLeaves.push(info);
+        });
         this.zones.forEach((zone: FZoneProperties, index: number) => {
             const bspZone = zone.getDecodeInfo(library, uLevelInfo);
 

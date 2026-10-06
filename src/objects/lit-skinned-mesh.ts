@@ -1,5 +1,5 @@
 import DynamicLight from "./dynamic-light";
-import { BufferGeometry, Material, SkinnedMesh, Vector3 } from "three";
+import { BufferGeometry, Material, Sphere, SkinnedMesh, Vector3 } from "three";
 import { ColorByte } from "../utils/color-byte";
 import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { PawnLight_T } from "../rendering/components/pawn-light-component";
@@ -28,7 +28,7 @@ export class LitSkinnedMesh extends SkinnedMesh {
         (this as any).isLitSkinnedMesh = true;
     }
 
-    public updateActorLighting(zoneInfo: any, lights: DynamicLight[], sunAmbient: ColorByte, pawnLights: readonly PawnLight_T[] = arrEmptyPawnLights) {
+    public updateActorLighting(zoneInfo: any, lights: DynamicLight[], sunAmbient: ColorByte, pawnLights: readonly PawnLight_T[] = arrEmptyPawnLights, sphere: Sphere = null) {
         if (this.isUnlit) {
             // unlit renders at 1x: EnableLighting(0,0) + SetAmbientLight(255) (UnSkeletalMesh.cpp line 4900), 127 = 1.0 in the Modulate2X domain
             tmpColorByte.set(127, 127, 127);
@@ -57,7 +57,7 @@ export class LitSkinnedMesh extends SkinnedMesh {
 
             if (!uniforms?.actorLights) continue;
 
-            (material as MeshStaticMaterial).updateActorLighting(tmpColorByte, this.scaledGlow, lights, pawnLights);
+            (material as MeshStaticMaterial).updateActorLighting(tmpColorByte, this.scaledGlow, lights, pawnLights, sphere ? sphere.center : null, sphere ? sphere.radius : 0);
         }
     }
 }

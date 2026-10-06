@@ -485,7 +485,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
-    public updateActorLighting(ambient: ColorByte, scaledGlow: number, lights: readonly DynamicLight[], pawnLights: readonly PawnLight_T[] = arrEmptyPawnLights) {
+    public updateActorLighting(ambient: ColorByte, scaledGlow: number, lights: readonly DynamicLight[], pawnLights: readonly PawnLight_T[] = arrEmptyPawnLights, center: Vector3 = null, radius: number = 0) {
         const uniforms = this.uniforms;
         const entries = uniforms.actorLights.value;
         const count = Math.min(lights.length, entries.length);
@@ -505,7 +505,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             entry.radius = light.lightRadius;
             entry.cone = light.cone;
             entry.effect = light.lightEffect;
-            entry.isHardwareLight = false;
+            entry.isHardwareLight = !!center;
+
+            if (center) light.getHardwareLight(center, radius, entry, false);
         }
 
         for (let i = 0; i < pawnCount; i++) {

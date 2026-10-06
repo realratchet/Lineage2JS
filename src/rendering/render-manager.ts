@@ -1380,7 +1380,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             relevantLightUpdated = relevantLightUpdated || light.needsUpdate;
 
         if (moved || locationChanged) {
-            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected);
+            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected, state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights);
             relevantLightsChanged = state.lights.length !== arrPawnLights.length;
 
             for (let i = 0, len = arrPawnLights.length; i < len; i++) {
@@ -1399,7 +1399,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
 
-        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getRenderSphere());
+        const sphere = (actor as BaseActor).isActor ? (actor as BaseActor).getRenderSphere() : null;
+
+        if (pawnLights) pawnLights.updateLighting(sphere);
 
         arrLightingObjects.length = 0;
         arrLightingObjects.push(actor);
@@ -1410,7 +1412,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (const child of object.children) arrLightingObjects.push(child);
 
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
-                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined);
+                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined, sphere);
         }
 
         state.envVersion = envVersion;
