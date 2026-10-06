@@ -182,7 +182,7 @@ export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> 
         console.log(`[decode-cache] ${enabled ? "swept" : "cleared"} ${doomed.length} cache entries`);
 }
 
-// Blob URLs are scoped to the thread owning the library.
+// Blob URLs are scoped to the thread owning the library, minted on first read so loading never pays for unplayed sounds.
 export function refreshSoundBlobUris(library: any): void {
     const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array, mimeType: string }>;
 
@@ -193,6 +193,17 @@ export function refreshSoundBlobUris(library: any): void {
 
         if (entry.uri) URL.revokeObjectURL(entry.uri);
 
-        entry.uri = URL.createObjectURL(new Blob([entry.data], { type: entry.mimeType }));
+        let uri: string = null;
+
+        Object.defineProperty(entry, "uri", { configurable: true, enumerable: true, get: () => uri ?? (uri = URL.createObjectURL(new Blob([entry.data], { type: entry.mimeType }))), set: (value: string) => { uri = value; } });
+        Object.defineProperty(entry, "mintedUri", { configurable: true, get: () => uri });
     }
+}
+
+export function getMintedSoundUri(entry: any): string | null { return "mintedUri" in entry ? entry.mintedUri : entry.uri || null; }
+
+export function revokeSoundUri(entry: any): void {
+    const uri = getMintedSoundUri(entry);
+
+    if (uri) URL.revokeObjectURL(uri);
 }

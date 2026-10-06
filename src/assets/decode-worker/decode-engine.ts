@@ -56,6 +56,7 @@ type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T };
 type SkillTables_T = { skills: Record<string, any>[], names: Record<string, any>[], sounds: Record<string, any>[] };
 
 const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
+const SCRIPT_KEYS = ["scriptClasses", "scriptFunctions", "scriptStates"] as const;
 const SKILL_VOICE_GROUPS = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman"];
 
 function characterBundleCacheName(charIndex: number, name: string): string {
@@ -363,6 +364,7 @@ export class DecodeEngine {
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheCharacterHairTables = new Map<string, Record<string, any>[]>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
+    protected readonly sentScriptIds = { scriptClasses: new Set<string>(), scriptFunctions: new Set<string>(), scriptStates: new Set<string>() };
     protected readonly cacheDecodePackages = new Map<APackage, number>();
     protected cacheAudioConfig: UConfigAudio = null;
     protected cacheHairConfig: UConfigHair = null;
@@ -1006,6 +1008,10 @@ export class DecodeEngine {
         return library;
     }
 
+    public async precacheNpcBundle(settings: LoadSettings_T, packageName: string): Promise<void> {
+        await this.getNpcBundle(settings, packageName);
+    }
+
     protected async getNpcBundle(settings: LoadSettings_T, packageName: string): Promise<CachedBundle_T> {
         const bundleName = getNpcBundleName(packageName);
         let bundle = this.cacheNpcBundles.get(bundleName);
@@ -1065,6 +1071,7 @@ export class DecodeEngine {
         library.effectSpawnBoneIndex = entry.effectSpawnBoneIndex;
         library.damageEffect = entry.damageEffect;
         if (entry.damageEffect) await this.pullEffectTemplate(library, builder, entry.damageEffect, true);
+        await this.pullAttackImpactEffects(library, builder);
         await this.pullAnimationNotifyEffects(builder, sourceInfo.animationNotifies);
         await this.pullScriptEffectTemplates(library, builder);
         await this.pullScriptActorTemplates(library, builder);
@@ -1168,8 +1175,38 @@ export class DecodeEngine {
         return library;
     }
 
+    protected serializeTransfer(library: DecodeLibrary): ArrayBuffer { // the main thread keeps script data, each entry crosses once per worker
+        const transfer = Object.assign(Object.create(Object.getPrototypeOf(library)), library);
+        const sharedScript: Record<string, string[]> = {};
+        const fresh: [Set<string>, string][] = [];
+
+        for (const key of SCRIPT_KEYS) {
+            const sent = this.sentScriptIds[key], kept: Record<string, any> = {};
+
+            sharedScript[key] = [];
+
+            for (const [id, value] of Object.entries(library[key])) {
+                if (sent.has(id)) sharedScript[key].push(id);
+                else {
+                    kept[id] = value;
+                    fresh.push([sent, id]);
+                }
+            }
+
+            transfer[key] = kept;
+        }
+
+        transfer.sharedScript = sharedScript;
+
+        const buffer = serializeLibrary(transfer).buffer as ArrayBuffer;
+
+        for (const [sent, id] of fresh) sent.add(id);
+
+        return buffer;
+    }
+
     public async decodeItemBinary(settings: LoadSettings_T, id: number): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeItem(settings, id)).buffer as ArrayBuffer;
+        return this.serializeTransfer(await this.decodeItem(settings, id));
     }
 
     public async decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
@@ -1571,6 +1608,10 @@ export class DecodeEngine {
         library.damageEffect = damageEffect ? damageEffect.name : null;
         if (damageEffect) await this.pullEffectTemplate(library, builder, damageEffect.name, true);
 
+        await this.pullAttackImpactEffects(library, builder);
+    }
+
+    protected async pullAttackImpactEffects(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> { // SkillEffectPlacement.addAttackImpact spawns these from the attacker's own library
         await this.pullEffectTemplate(library, builder, "LineageEffect.p_u004_a", true);
         for (let grade = 505; grade <= 510; grade++)
             for (const suffix of ["c", "d", "e"]) await this.pullEffectTemplate(library, builder, `LineageEffect.e_u${grade}_${suffix}`, true);
@@ -1800,23 +1841,23 @@ export class DecodeEngine {
     }
 
     public async decodeCharacterEquipmentBinary(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeCharacterEquipment(settings, charIndex, hairVariant, equipment)).buffer as ArrayBuffer;
+        return this.serializeTransfer(await this.decodeCharacterEquipment(settings, charIndex, hairVariant, equipment));
     }
 
     public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean, equipment: L2JS.Engine.ICharacterEquipment): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment)).buffer as ArrayBuffer;
+        return this.serializeTransfer(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment));
     }
 
     public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment)).buffer as ArrayBuffer;
+        return this.serializeTransfer(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment));
     }
 
     public async decodeEffectTemplatesBinary(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths)).buffer as ArrayBuffer;
+        return this.serializeTransfer(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths));
     }
 
     public async decodeSkillBinary(settings: LoadSettings_T, id: number, level: number): Promise<ArrayBuffer> {
-        return serializeLibrary(await this.decodeSkill(settings, id, level)).buffer as ArrayBuffer;
+        return this.serializeTransfer(await this.decodeSkill(settings, id, level));
     }
 
     public async precacheCharacters(settings: LoadSettings_T): Promise<void> {

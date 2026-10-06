@@ -38,9 +38,10 @@ import type { CharSelectEntry_T, CharTemplate_T, ShortCut_T, UserInfo_T, Invento
 import NCTooltip from "../nwindow/nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
-export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, isTarget: boolean };
+export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, isTarget: boolean, isMouseTarget: boolean };
 
 const TEX_TARGET_BRACKET = "L2ui.NWindow.target";
+const TEX_MOUSE_TARGET_BRACKET = "L2ui.NWindow.normal"; // UCanvas::Init 0x7f0769, TargetRenderType 1
 const arrGaugeTextures = ["L2UI_CH3.Etc.Minibar_Magic", "L2UI_CH3.Etc.Minibar_Arrow", "L2UI_CH3.Etc.Minibar_water", "L2UI_CH3.Etc.Minibar_Food"];
 const arrGaugeBack = ["L2UI_CH3.Etc.Minibar_Back21", "L2UI_CH3.Etc.Minibar_Back22", "L2UI_CH3.Etc.Minibar_Back23"];
 const arrGaugeOrder = [GaugeColor_T.CYAN, GaugeColor_T.RED, GaugeColor_T.BLUE, GaugeColor_T.GREEN];
@@ -419,8 +420,7 @@ export class NetworkUI {
         if (this.areHudWindowsAdded) return;
 
         this.areHudWindowsAdded = true;
-        void this.nwindow.canvas.loadTextures([TEX_TARGET_BRACKET, ...arrGaugeTextures, ...arrGaugeBack]);
-        this.nwindow.overlayPaint = canvas => { if (this.screen === "world") this.paintGauges(canvas); };
+        void this.nwindow.canvas.loadTextures([TEX_TARGET_BRACKET, TEX_MOUSE_TARGET_BRACKET, ...arrGaugeTextures, ...arrGaugeBack]);
         void this.nwindow.addWindow(this.playerStatusWnd);
         void this.nwindow.addWindow(this.abnormalStatusWnd);
         void this.nwindow.addWindow(this.targetStatusWnd);
@@ -478,7 +478,9 @@ export class NetworkUI {
                 this.nameplates.set(plate.actor, nameplate);
                 this.manRender.scene.add(nameplate);
             }
-            nameplate.update(canvas, plate.name, plate.title, getNameColor(plate), getTitleColor(plate), plate.isTarget && canvas.hasTexture(TEX_TARGET_BRACKET), TEX_TARGET_BRACKET);
+            const bracket = plate.isTarget ? TEX_TARGET_BRACKET : plate.isMouseTarget ? TEX_MOUSE_TARGET_BRACKET : null;
+
+            nameplate.update(canvas, plate.name, plate.title, getNameColor(plate), getTitleColor(plate), bracket && canvas.hasTexture(bracket) ? bracket : null);
             tmpNameplateAnchor.x = sx / width * 2 - 1;
             tmpNameplateAnchor.y = 1 - sy / height * 2;
             nameplate.position.copy(tmpNameplateAnchor.unproject(camera));
@@ -492,6 +494,13 @@ export class NetworkUI {
 
         if (remaining <= 0 || maximum <= 0) this.gauges.delete(color);
         else this.gauges.set(color, { remaining, maximum, startedAt: performance.now() });
+
+        this.updateGaugeOverlay();
+    }
+
+    protected updateGaugeOverlay() { // the overlay repaints every window each frame, so it is only installed while a gauge runs
+        this.nwindow.overlayPaint = this.gauges.size > 0 ? canvas => { if (this.screen === "world") this.paintGauges(canvas); } : null;
+        this.nwindow.invalidate();
     }
 
     protected paintGauges(canvas: NWindowCanvas) {
@@ -542,11 +551,14 @@ export class NetworkUI {
                 tmpGaugeAnchor.add(tmpGaugeDown);
             }
         }
+
+        if (this.gauges.size === 0) this.updateGaugeOverlay();
     }
 
     public hideWorld() {
         this.dialogBox.hide();
         this.gauges.clear();
+        this.updateGaugeOverlay();
         this.skillCoolTimes.clear();
         this.abnormalStatusWnd.setEffects([]);
         this.abnormalStatusWnd.setVisible(false);

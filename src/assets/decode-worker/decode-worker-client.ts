@@ -7,6 +7,31 @@ import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";
 import getNpcBundleName from "./npc-bundle";
 
+const cacheScript = { scriptClasses: new Map<string, any>(), scriptFunctions: new Map<string, any>(), scriptStates: new Map<string, any>() };
+
+function shareScript(library: any): void {
+    const sharedScript = library.sharedScript as Record<keyof typeof cacheScript, string[]>;
+
+    if (!sharedScript) return;
+
+    for (const key of Object.keys(cacheScript) as (keyof typeof cacheScript)[]) {
+        const cache = cacheScript[key], dict = library[key];
+
+        for (const id of Object.keys(dict)) {
+            if (cache.has(id)) dict[id] = cache.get(id);
+            else cache.set(id, dict[id]);
+        }
+
+        for (const id of sharedScript[key]) {
+            if (!cache.has(id)) throw new Error(`Shared ${key} entry '${id}' never reached the main thread.`);
+
+            dict[id] = cache.get(id);
+        }
+    }
+
+    delete library.sharedScript;
+}
+
 type PendingRequest_T = {
     resolve(value: any): void;
     reject(error: Error): void;
@@ -118,7 +143,7 @@ export class DecodeWorkerClient {
         if (stickyIndex !== undefined) {
             const slot = this.slots[stickyIndex];
 
-            if (slot && !slot.isDead) return stickyIndex;
+            if (slot && !slot.isDead && slot.inFlight === 0) return stickyIndex;
         }
 
         let best = -1, bestLoad = Infinity;
@@ -138,7 +163,7 @@ export class DecodeWorkerClient {
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
-        const workerIndex = this.pickWorker(this.sectorWorker.get(sectorName));
+        const workerIndex = sectorName === "skylevel" && this.sectorWorker.has(sectorName) ? this.sectorWorker.get(sectorName) : this.pickWorker(this.sectorWorker.get(sectorName));
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
@@ -182,6 +207,8 @@ export class DecodeWorkerClient {
 
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
 
+        this.sectorWorker.set("skylevel", workerIndex); // env layer names carry skylevel's session uuids, both decode in one worker
+
         return this.dispatch(workerIndex, { type: "decodeEnv" });
     }
 
@@ -196,7 +223,7 @@ export class DecodeWorkerClient {
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
-        const workerIndex = this.pickScriptWorker();
+        const workerIndex = this.pickCharacterWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
@@ -211,7 +238,7 @@ export class DecodeWorkerClient {
     public async decodeCharacterEquipment(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) return Object.setPrototypeOf(await this.mainThreadEngine.decodeCharacterEquipment(settings, charIndex, hairVariant, equipment), DecodeLibrary.prototype) as DecodeLibrary;
 
-        const workerIndex = this.pickScriptWorker();
+        const workerIndex = this.pickCharacterWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
@@ -231,7 +258,7 @@ export class DecodeWorkerClient {
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
-        const workerIndex = bundleName === null ? this.pickWorker() : this.pickCharacterWorker(this.npcWorker.get(bundleName));
+        const workerIndex = bundleName === null ? this.pickWorker() : this.pickNpcWorker(bundleName);
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
@@ -263,9 +290,18 @@ export class DecodeWorkerClient {
 
         const library = await deserializeLibraryAsync((await this.getScriptBuffer(settings, classPath)).slice(0));
 
+        shareScript(library);
         refreshSoundBlobUris(library);
 
         return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+    }
+
+    public async warmScriptClass(settings: LoadSettings_T, classPath: string): Promise<void> { // character decodes run on every worker, each one has to load the script class import closure once
+        if (this.mainThreadEngine) return;
+
+        const scriptIndex = this.pickScriptWorker();
+
+        await Promise.all(this.slots.map((slot, i) => slot.isDead || i === scriptIndex ? null : this.dispatch(i, { type: "decodeEffectTemplates", settings, classPaths: [], soundPaths: [], scriptClassPaths: [classPath] })));
     }
 
     public async prefetchScriptClass(settings: LoadSettings_T, classPath: string): Promise<void> {
@@ -368,6 +404,35 @@ export class DecodeWorkerClient {
         if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
 
         return this.dispatch(workerIndex, { type: "listNpcs" });
+    }
+
+    protected pickNpcWorker(bundleName: string): number { // the bundle and its packages only live in the worker that opened it
+        const index = this.npcWorker.get(bundleName);
+
+        if (index !== undefined && !this.slots[index].isDead) return index;
+
+        const scriptIndex = this.pickScriptWorker(); // player skill preloads queue there on world entry
+        let best = scriptIndex, bestLoad = Infinity;
+
+        for (let i = 0; i < this.slots.length; i++) {
+            if (this.slots[i].isDead || i === scriptIndex) continue;
+            if (this.slots[i].inFlight < bestLoad) { best = i; bestLoad = this.slots[i].inFlight; }
+        }
+
+        return best;
+    }
+
+    public async precacheNpcBundle(settings: LoadSettings_T, packageName: string): Promise<void> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.precacheNpcBundle(settings, packageName);
+
+        const bundleName = getNpcBundleName(packageName);
+        const workerIndex = this.pickNpcWorker(bundleName);
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        this.npcWorker.set(bundleName, workerIndex);
+
+        return this.dispatch(workerIndex, { type: "precacheNpcBundle", settings, packageName });
     }
 
     public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
@@ -473,11 +538,6 @@ export class DecodeWorkerClient {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
 
-                if (request.isRaw) {
-                    request.resolve(msg.buffer);
-                    break;
-                }
-
                 this.binaryDecodeQueue.push({ buffer: msg.buffer, request });
                 void this.processBinaryDecodeQueue();
                 break;
@@ -521,6 +581,7 @@ export class DecodeWorkerClient {
                 request.resolve(msg.stats);
                 break;
             }
+            case "npcBundlePrecached":
             case "charactersPrecached": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
@@ -610,8 +671,15 @@ export class DecodeWorkerClient {
             const { buffer, request } = this.binaryDecodeQueue.shift();
 
             try {
+                if (request.isRaw) { // registers its script entries in worker order, later results may only carry their ids
+                    shareScript(await deserializeLibraryAsync(buffer.slice(0)));
+                    request.resolve(buffer);
+                    continue;
+                }
+
                 const library = await deserializeLibraryAsync(buffer);
 
+                shareScript(library);
                 refreshSoundBlobUris(library);
                 request.resolve(Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary);
             } catch (e) {

@@ -54,6 +54,26 @@ function getFieldName(id: string): string {
     return index < 0 ? id : id.slice(index + 1);
 }
 
+const cacheClassFields = new WeakMap<IScriptClassDecodeInfo, Map<string, IScriptClassDecodeInfo["fields"][number]>>();
+
+function getClassField(cls: IScriptClassDecodeInfo, fieldName: string) {
+    let fields = cacheClassFields.get(cls);
+
+    if (!fields) {
+        fields = new Map();
+
+        for (const field of cls.fields) {
+            const name = getFieldName(field.name).toLowerCase();
+
+            if (!fields.has(name)) fields.set(name, field);
+        }
+
+        cacheClassFields.set(cls, fields);
+    }
+
+    return fields.get(fieldName);
+}
+
 function getProperties(host: ScriptHost_T): ScriptProperties_T {
     if (host.scriptProperties) return host.scriptProperties;
 
@@ -627,6 +647,10 @@ export class UnScriptVM {
 
         const properties = getProperties(host);
         const initialProperties = new Map<string, ScriptValue_T>();
+        const keysByLower = new Map<string, string>();
+
+        for (const key of properties instanceof Map ? properties.keys() : Object.keys(properties))
+            if (!keysByLower.has(key.toLowerCase())) keysByLower.set(key.toLowerCase(), key);
 
         if (properties instanceof Map) {
             for (const [name, value] of properties)
@@ -642,9 +666,9 @@ export class UnScriptVM {
             if (!defaults) throw new Error(`UnrealScript class '${classes[i].id}' has no decoded defaults`);
 
             for (const [name, value] of Object.entries(defaults)) {
-                const key = findPropertyKey(properties, name);
                 const fieldName = getFieldName(name).toLowerCase();
-                const field = classes[i].fields.find(field => getFieldName(field.name).toLowerCase() === fieldName);
+                const key = keysByLower.get(name.toLowerCase()) ?? keysByLower.get(fieldName) ?? null;
+                const field = getClassField(classes[i], fieldName);
                 const initial = initialProperties.get(fieldName);
 
                 if (initialProperties.has(fieldName) && !(initial === null && field && ((field.type as any) === "Struct" || (field.type as any) === "Array"))) continue;
@@ -652,6 +676,8 @@ export class UnScriptVM {
 
                 if (properties instanceof Map) properties.set(key ?? name, initialized);
                 else properties[key ?? name] = initialized;
+
+                if (key === null) keysByLower.set(name.toLowerCase(), name);
             }
         }
     }

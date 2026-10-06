@@ -74,6 +74,7 @@ const NAMEPLATE_DISTANCE = 1000;
 const STOP_SNAP_DISTANCE = 32;
 const GAME_TIME_SCALE = 1 / 6; // GameTimeController: one in-game day lasts four real hours.
 const NETWORK_BOW_RANGE = 2000;
+const NPC_SPAWN_CONCURRENCY = 2;
 const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 4165, 4166]);
 
 const tmpLocation: Location_T = { x: 0, y: 0, z: 0 };
@@ -147,6 +148,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected petStatusType = -1;
     protected petInfo: { objectId: number; isMountable: boolean } = null;
     protected isMounted = false;
+    protected npcSpawnCount = 0;
+    protected readonly npcSpawnWaiters: (() => void)[] = [];
     protected readonly petInventory = new Map<number, InventoryItem_T>();
     protected petRemainTime: PetRemainTime_T = null;
     protected readonly abnormalStatuses = new Map<string, AbnormalStatus_T>();
@@ -1842,7 +1845,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         await this.userAppearanceLoad;
         await this.skillListLoad;
 
-        while (this.inWorld && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
+        while (this.inWorld && (!asset.isAreaLoaded(render, render.player.position) || this.npcSpawnCount > 0)) await new Promise(resolve => setTimeout(resolve, 100));
 
         if (this.inWorld) this.ui.showWorld();
     }
@@ -2061,12 +2064,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const render = this.manGame.getComponent("render");
         let actor: BaseActor;
 
+        while (this.npcSpawnCount >= NPC_SPAWN_CONCURRENCY) await new Promise<void>(resolve => this.npcSpawnWaiters.push(resolve));
+        this.npcSpawnCount++;
+
         try {
             actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null);
         } catch (e) {
             console.error(`[network] npc ${npcId} (object ${object.objectId}) failed to spawn:`, e);
+            this.npcSpawnCount--;
+            this.npcSpawnWaiters.shift()?.();
             return;
         }
+
+        this.npcSpawnCount--;
+        this.npcSpawnWaiters.shift()?.();
 
         if (info.runSpd <= 0) {
             const groundSpeed = Number(actor.getUnrealScriptProperty("GroundSpeed"));
@@ -2225,7 +2236,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         setVector(object.position, position);
 
         // AdjustPawnLocation 0x7425a0: remote living pawns, more than 200 units from the server feet position.
-        if (object.actor && object.kind !== "user" && !object.isDead && object.actor.position.distanceTo(object.position) > 200) object.actor.adjustLocation(object.position);
+        if (object.actor && object.kind !== "user" && !object.isDead && (!object.actor.visible || object.actor.position.distanceTo(object.position) > 200)) object.actor.adjustLocation(object.position);
     }
 
     protected getStopSnapDistance(object: NetObject_T) { return object.kind === "user" ? SNAP_DISTANCE : STOP_SNAP_DISTANCE; } // Server AI starts casts anywhere within range + 100 and ignores our X/Y, so small user gaps are left alone.
@@ -2240,7 +2251,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         setVector(object.position, this.readLocation(packet));
 
         if (!object.actor) return;
-        if (object.kind !== "user" && distanceXY(object.actor.position, object.position) > SNAP_DISTANCE) object.actor.teleportTo(object.position, true);
+        if (object.kind !== "user" && (!object.actor.visible || distanceXY(object.actor.position, object.position) > SNAP_DISTANCE)) object.actor.teleportTo(object.position, true);
 
         object.actor.goTo(destination);
     }
@@ -2279,7 +2290,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         object.actor.stopMoving();
 
-        if (distanceXY(object.actor.position, object.position) > this.getStopSnapDistance(object)) object.actor.teleportTo(object.position, true);
+        if (!object.actor.visible || distanceXY(object.actor.position, object.position) > this.getStopSnapDistance(object)) object.actor.teleportTo(object.position, true);
 
         object.actor.setRotationYaw(object.heading);
     }
@@ -2292,7 +2303,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         setVector(object.position, this.readLocation(packet));
         object.heading = packet.d() & 0xffff;
 
-        if (object.actor && distanceXY(object.actor.position, object.position) > SNAP_DISTANCE) object.actor.teleportTo(object.position, true);
+        if (object.actor && (!object.actor.visible || distanceXY(object.actor.position, object.position) > SNAP_DISTANCE)) object.actor.teleportTo(object.position, true);
     }
 
     protected onTeleport(packet: PacketReader) {
@@ -2980,8 +2991,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.ui.showCharacters(this.characters);
 
         const lastUsed = this.characters.findIndex(character => character.isLastUsed);
+        const asset = this.manGame.getComponent("asset");
 
         await this.lobby.showSelect(this.characters);
+
+        void asset.precacheNpcBundle("LineageMonsters"); // after the lobby pawns, opening the bundles held two workers for seconds
+        void asset.precacheNpcBundle("LineageNPCs");
 
         if (lastUsed >= 0) this.previewCharacter(lastUsed);
     }
@@ -3750,6 +3765,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public getNameplates(): Nameplate_T[] {
         const player = this.manGame.getComponent("render").player;
+        const mouseTarget = this.manGame.getComponent("input").getMouseTarget();
         const plates: Nameplate_T[] = [];
 
         for (const object of this.objects.values()) {
@@ -3762,11 +3778,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             while (parent && parent.visible) parent = parent.parent as BaseActor;
             if (parent) continue;
 
-            const isTarget = object.objectId === this.targetId;
+            const isTarget = object.objectId === this.targetId, isMouseTarget = actor === mouseTarget;
 
-            if (!isTarget && Math.trunc(actor.position.distanceTo(player.position)) >= NAMEPLATE_DISTANCE) continue; // FDynamicActor::Render branch C: retail l2.ini [CharacterDisplay] Name=true, Dist=1000.
+            if (!isTarget && !isMouseTarget && Math.trunc(actor.position.distanceTo(player.position)) >= NAMEPLATE_DISTANCE) continue; // FDynamicActor::Render branch C: retail l2.ini [CharacterDisplay] Name=true, Dist=1000.
 
-            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", isSummon: object.isSummon, isDead: object.isDead, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, isTarget });
+            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", isSummon: object.isSummon, isDead: object.isDead, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, isTarget, isMouseTarget });
         }
 
         return plates;

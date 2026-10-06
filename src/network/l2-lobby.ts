@@ -32,6 +32,7 @@ export class L2Lobby {
     protected createSelection: PawnCreateSelection_T = null;
     protected selected = -1;
     protected generation = 0;
+    protected enterPromise: Promise<void> = null;
 
     public constructor(game: GameManager, loadAppearance: AppearanceLoader_T) {
         this.manGame = game;
@@ -44,6 +45,18 @@ export class L2Lobby {
         this.spots = spots;
 
         if (this.sector) return;
+        if (this.enterPromise) return this.enterPromise;
+
+        this.enterPromise = this.load(spots);
+
+        try {
+            await this.enterPromise;
+        } finally {
+            this.enterPromise = null;
+        }
+    }
+
+    protected async load(spots: [number, number, number, number][]) {
 
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
         const [x, y] = render.getSectorId(new Vector3(spots[0][0], spots[0][1], spots[0][2]));

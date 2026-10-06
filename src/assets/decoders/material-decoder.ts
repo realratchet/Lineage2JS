@@ -1,6 +1,6 @@
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
-import { Color, CubeTexture, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
+import { Color, CompressedCubeTexture, CubeTexture, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { IBaseMaterialDecodeInfo, ICubemapDecodeInfo, IFadeColorDecodeInfo, IDecodedParameter, ITexPannerDecodeInfo, ITexRotatorDecodeInfo, ITexOscillatorDecodeInfo, ITexEnvMapDecodeInfo, IFinalBlendDecodeInfo, ITexCoordSourceDecodeInfo, IColorModifierDecodeInfo, IBaseMaterialModifierDecodeInfo, IDecodedSpriteParameter, IShaderDecodeInfo, ICombinerDecodeInfo, IMaterialGroupDecodeInfo, ILightmappedDecodeInfo, ILightAmbientMaterialModifier, ILightDirectionalMaterialModifier, IBaseLightingMaterialModifier, IMaterialModifier, ISolidMaterialDecodeInfo, IParticleMaterialDecodeInfo } from "@l2js/engine/contracts/material";
@@ -182,7 +182,16 @@ function decodeCubemap(library: DecodeLibrary, info: ICubemapDecodeInfo): MapDat
     if (faces.length !== 6 || faces.some(face => !face))
         throw new Error(`Cubemap '${info.name}' must decode six texture faces.`);
 
-    const texture = new CubeTexture(faces.map(face => face.texture));
+    const compressedFaces = faces.filter(face => (face.texture as any).isCompressedTexture).length;
+
+    if (compressedFaces !== 0 && compressedFaces !== 6) throw new Error(`Cubemap '${info.name}' mixes compressed and uncompressed faces.`);
+
+    const texture = compressedFaces === 6 // three picks the cube upload path from the cube's own format, compressed faces in a plain CubeTexture go up as raw RGBA
+        ? new CompressedCubeTexture(faces.map(face => ({ width: (face.texture.image as any).width, height: (face.texture.image as any).height, mipmaps: (face.texture as any).mipmaps })) as any, faces[0].texture.format as THREE.CompressedPixelFormat)
+        : new CubeTexture(faces.map(face => face.texture));
+
+    if (compressedFaces === 6) texture.minFilter = faces[0].texture.minFilter;
+
     texture.name = info.name ?? "Cubemap";
     texture.needsUpdate = true;
 

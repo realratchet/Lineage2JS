@@ -8,10 +8,11 @@ const SHADOW_BAND_Z = 200; // AShadowProjector::CheckVisible 0x93dc80.
 const LIGHT_DISTANCE = 704;
 const SHADOW_DARKNESS = 255 / 255;
 
-const SHADOW_SIZE = 1024; // Retail uses one 256x256 projector per actor; this covers the full shared range.
+const SHADOW_SIZE = 256;
 const MAX_CASTERS = 16;
+const SHADOW_UPDATE_INTERVAL = 4;
 
-const SHADOW_BLUR_PASSES = 3; // One-texel separable gaussian; scaling the taps produces discrete silhouettes.
+const SHADOW_BLUR_PASSES = 1;
 
 const BLUR_VERTEX = `
 varying vec2 vUv;
@@ -62,6 +63,12 @@ export class ShadowProjector {
     // the sun is directional, so the casters share one orthographic projection instead of a cone
     protected readonly camera = new OrthographicCamera(-SHADOW_RANGE, SHADOW_RANGE, SHADOW_RANGE, -SHADOW_RANGE, 1, LIGHT_DISTANCE * 2);
     protected readonly silhouette = new MeshBasicMaterial({ color: 0x000000 });
+    protected readonly lastFocusPosition = new Vector3(NaN, NaN, NaN);
+    protected readonly lastLightDirection = new Vector3(NaN, NaN, NaN);
+    protected readonly lastCasterPositions: Vector3[] = [];
+    protected readonly lastCasters: Object3D[] = [];
+    protected frame = 0;
+    protected lastUpdateFrame = -SHADOW_UPDATE_INTERVAL;
 
     public constructor() {
         this.target.texture.wrapS = ClampToEdgeWrapping;
@@ -90,6 +97,7 @@ export class ShadowProjector {
     }
 
     public update(renderer: THREE.WebGLRenderer, focus: THREE.Object3D, casters: Iterable<THREE.Object3D>, lightDirection: Vector3) {
+        this.frame++;
         focus.getWorldPosition(tmpFocusPos);
 
         // LightDirection is where the light travels, so step back along it to stand at the light
@@ -121,7 +129,31 @@ export class ShadowProjector {
 
         if (arrCasting.length === 0) {
             GLOBAL_UNIFORMS.shadowActive.value = 0;
+            this.lastCasters.length = 0;
             return;
+        }
+
+        let changed = !this.lastFocusPosition.equals(tmpFocusPos) || !this.lastLightDirection.equals(lightDirection);
+
+        if (!changed && this.lastCasters.length !== arrCasting.length) changed = true;
+
+        for (let i = 0; !changed && i < arrCasting.length; i++) {
+            arrCasting[i].getWorldPosition(tmpCasterPos);
+            if (this.lastCasters[i] !== arrCasting[i] || !this.lastCasterPositions[i].equals(tmpCasterPos)) changed = true;
+        }
+
+        if (!changed && this.frame - this.lastUpdateFrame < SHADOW_UPDATE_INTERVAL) return;
+
+        this.lastFocusPosition.copy(tmpFocusPos);
+        this.lastLightDirection.copy(lightDirection);
+        this.lastUpdateFrame = this.frame;
+        this.lastCasters.length = arrCasting.length;
+        this.lastCasterPositions.length = arrCasting.length;
+
+        for (let i = 0; i < arrCasting.length; i++) {
+            this.lastCasters[i] = arrCasting[i];
+            if (!this.lastCasterPositions[i]) this.lastCasterPositions[i] = new Vector3();
+            this.lastCasterPositions[i].copy(arrCasting[i].getWorldPosition(tmpCasterPos));
         }
 
         arrSwappedObjects.length = 0;

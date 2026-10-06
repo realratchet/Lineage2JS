@@ -217,6 +217,18 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             return;
         }
 
+        const parent = this.getParent();
+        if (!(parent as any).isPlayer && !parent.findComponent("npcSimulation") && !parent.visible) {
+            if (this.actorState.locomotion) {
+                this.position.copy(this.actorState.desired.position);
+                this.velocity.set(0, 0, 0);
+                this.actorState.locomotion = false;
+            }
+
+            this.checkAnimationState();
+            return;
+        }
+
         const isInteractive = this.isInteractive();
 
         this.collisionProfile.collideActors = isInteractive;
@@ -307,7 +319,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             for (let i = 0; i < 30; i++) {
                 const start = tmpFloorPosition.copy(position).addScaledVector(tmpUp, 20 + i * 30);
                 const delta = tmpMovement.set(0, 0, -50 - this.collisionHeight - i * 60);
-                const hit = this.findFloor(start, delta);
+                const hit = this.findFloor(start, delta, true); // trace flags 0x86 at 0x7426fe: movers and level geometry, no TRACE_Pawns
 
                 if (!hit) continue;
 
@@ -324,7 +336,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                 this.physicsMode = "swimming";
             } else {
                 const floorMovement = tmpMovement.set(0, 0, -SPAWN_FLOOR_PROBE);
-                const floorHit = this.findFloor(position, floorMovement);
+                const floorHit = this.findFloor(position, floorMovement, true);
 
                 this.hasStartedPhysics = true;
                 this.isGrounded = false;
@@ -563,6 +575,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = false;
+        query.ignorePawns = false;
         query.zeroExtent = false;
 
         return this.physicsManager.singleLineCheck(query);
@@ -945,6 +958,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = true;
+        query.ignorePawns = false;
         query.zeroExtent = false;
 
         const hit = this.physicsManager.moveActor(query);
@@ -954,7 +968,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return hit;
     }
 
-    protected castShape(position: Vector3, movement: Vector3): CheckResult_T | null {
+    protected castShape(position: Vector3, movement: Vector3, ignorePawns: boolean = false): CheckResult_T | null {
         const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
         const query = this.collisionQuery;
 
@@ -968,13 +982,14 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = false;
+        query.ignorePawns = ignorePawns;
         query.zeroExtent = false;
 
         return this.physicsManager.singleLineCheck(query);
     }
 
-    protected findFloor(position: Vector3, movement: Vector3): CheckResult_T | null {
-        let hit = this.castShape(position, movement);
+    protected findFloor(position: Vector3, movement: Vector3, ignorePawns: boolean = false): CheckResult_T | null {
+        let hit = this.castShape(position, movement, ignorePawns);
 
         if (hit && hit.normal.z >= MIN_FLOOR_Z) return hit;
 
@@ -990,6 +1005,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = false;
+        query.ignorePawns = ignorePawns;
         query.zeroExtent = false;
 
         hit = this.physicsManager.singleLineCheck(query);

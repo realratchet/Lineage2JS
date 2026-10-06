@@ -35,6 +35,7 @@ export type CollisionQuery_T = {
     sourceProfile?: ActorCollisionProfile_T;
     ignoredActors?: Set<ICollidable>;
     ignoreBases?: boolean;
+    ignorePawns?: boolean;
     zeroExtent?: boolean;
 };
 
@@ -94,6 +95,7 @@ type AnalyticalEntry_T = {
     dynamic: boolean;
     active: boolean;
     cells: { x: number, y: number, z: number, entries: AnalyticalEntry_T[] }[];
+    cellRange: number[];
 };
 
 const defaultProfile: ActorCollisionProfile_T = {
@@ -235,7 +237,7 @@ export class CollisionWorld {
             }
         }
 
-        const entry: AnalyticalEntry_T = { actor: object, primitive, bounds, order: this.nextOrder++, queryMark: 0, dynamic, active: true, cells: [] };
+        const entry: AnalyticalEntry_T = { actor: object, primitive, bounds, order: this.nextOrder++, queryMark: 0, dynamic, active: true, cells: [], cellRange: [] };
 
         this.entriesByActor.set(object, entry);
         this.analyticalEntries.push(entry);
@@ -285,6 +287,8 @@ export class CollisionWorld {
 
             entry.primitive = entry.actor.getCollisionPrimitive();
             entry.bounds = entry.primitive.bounds;
+
+            if (this.isInCellRange(entry, DYNAMIC_CELL_MARGIN)) continue;
 
             this.removeFromCells(entry);
             removeEntry(this.largeEntries, entry);
@@ -636,10 +640,22 @@ export class CollisionWorld {
         entry.cells.length = 0;
     }
 
+    protected isInCellRange(entry: AnalyticalEntry_T, margin: number): boolean {
+        const bounds = entry.bounds, range = entry.cellRange;
+
+        return range.length === 6
+            && range[0] === Math.floor((bounds.min.x - margin) / CELL_SIZE) && range[1] === Math.floor((bounds.min.y - margin) / CELL_SIZE) && range[2] === Math.floor((bounds.min.z - margin) / CELL_SIZE)
+            && range[3] === Math.floor((bounds.max.x + margin) / CELL_SIZE) && range[4] === Math.floor((bounds.max.y + margin) / CELL_SIZE) && range[5] === Math.floor((bounds.max.z + margin) / CELL_SIZE);
+    }
+
     protected insertEntry(entry: AnalyticalEntry_T, margin: number) {
         const bounds = entry.bounds;
         const minX = Math.floor((bounds.min.x - margin) / CELL_SIZE), minY = Math.floor((bounds.min.y - margin) / CELL_SIZE), minZ = Math.floor((bounds.min.z - margin) / CELL_SIZE);
         const maxX = Math.floor((bounds.max.x + margin) / CELL_SIZE), maxY = Math.floor((bounds.max.y + margin) / CELL_SIZE), maxZ = Math.floor((bounds.max.z + margin) / CELL_SIZE);
+
+        entry.cellRange.length = 0;
+        entry.cellRange.push(minX, minY, minZ, maxX, maxY, maxZ);
+
         const cellCount = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
 
         if (!Number.isFinite(cellCount) || cellCount <= 0 || cellCount > MAX_ENTRY_CELLS) {
@@ -759,9 +775,11 @@ export class CollisionWorld {
 
         if (actor === source) return true;
         if (query.ignoredActors && query.ignoredActors.has(actor)) return true;
-        if (!query.ignoreBases || !source) return false;
 
         const profile = actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile;
+
+        if (query.ignorePawns && profile.isPawn) return true;
+        if (!query.ignoreBases || !source) return false;
 
         if (profile.worldGeometry) return false;
 

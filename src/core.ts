@@ -116,7 +116,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         uiManager.addNpcControls();
         await uiManager.addCharacterControls();
 
-        void precacheCharacters(assetManager);
+        if (!params.has("login")) void precacheCharacters(assetManager);
     }
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");

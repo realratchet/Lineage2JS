@@ -6,8 +6,10 @@ import type GameManager from "./game-manager";
 import type RenderManager from "../rendering/render-manager";
 import type PhysicsManager from "../physics/physics-manager";
 import type { ICollidable } from "../objects/objects";
+import type BaseActor from "../base-actor";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
+const MOUSE_TARGET_INTERVAL_MS = 50;
 const tmpScreenPosition = new Vector2();
 const tmpMouseIntersection = new Vector3();
 const tmpPickBounds = new Box3();
@@ -59,6 +61,11 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected physicsManager: PhysicsManager;
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected readonly mouseDownPosition = new Vector2();
+    protected readonly mousePosition = new Vector2();
+    protected isMouseInViewport = false;
+    protected mousePickDistance = 0;
+    protected mouseTarget: BaseActor = null;
+    protected lastMouseTargetTime = -Infinity;
     protected isOrbitControls = true;
     protected isPrimaryMouseDown = false;
     protected hasMouseDragged = false;
@@ -99,6 +106,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         viewport.addEventListener("mousedown", this.mouseDownHandler);
         viewport.addEventListener("mousemove", this.mouseMoveHandler);
+        viewport.addEventListener("mouseleave", () => this.isMouseInViewport = false);
         viewport.addEventListener("mouseup", this.mouseUpHandler);
         window.addEventListener("keydown", this.keyDownHandler);
         window.addEventListener("keyup", this.keyUpHandler);
@@ -108,6 +116,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     public getOrbitTarget(): Vector3 { return this.controls.orbit.target; }
     public isUsingOrbitControls(): boolean { return this.isOrbitControls; }
+    public isFollowingPlayer(): boolean { return this.followPlayer; }
 
     public setCameraLocked(isLocked: boolean): void {
         this.isCameraLocked = isLocked;
@@ -324,6 +333,9 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleMouseMove(event: MouseEvent): void {
+        this.mousePosition.set(event.clientX, event.clientY);
+        this.isMouseInViewport = true;
+
         if (!this.isPrimaryMouseDown || this.hasMouseDragged) return;
 
         const dx = event.clientX - this.mouseDownPosition.x;
@@ -370,8 +382,8 @@ export class InputManager implements IEngineComponent<GameManager> {
             } else console.log(intersection.object.name, intersection);
         }
 
-        const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
-        const physicsIntersection = pickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, renderManager.player.getCollider(), renderManager.player.getRigidbody()) : null;
+        const physicsIntersection = this.traceMouse();
+        const pickDistance = this.mousePickDistance;
 
         renderManager.player.deleteLandmark(true);
 
@@ -399,6 +411,42 @@ export class InputManager implements IEngineComponent<GameManager> {
         }
 
         renderManager.pickBSPNode(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance);
+    }
+
+    protected traceMouse(): ReturnType<PhysicsManager["rayCheck"]> {
+        const player = this.renderManager.player;
+
+        this.mousePickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
+
+        return this.mousePickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, this.mousePickDistance, player.getCollider(), player.getRigidbody()) : null;
+    }
+
+    public getMouseTarget(): BaseActor { return this.mouseTarget; }
+
+    public updateMouseTarget(): void { // UGameEngine::FindMouseTargetObject 0x829bc0 retraces every frame, a full-length ray here costs ~0.5ms so it runs at 20Hz
+        const now = performance.now();
+
+        if (now - this.lastMouseTargetTime < MOUSE_TARGET_INTERVAL_MS) return;
+
+        this.lastMouseTargetTime = now;
+
+        let actor: BaseActor = null;
+
+        if (this.isMouseInViewport && this.isOrbitControls && !this.isCameraLocked) {
+            const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+
+            tmpScreenPosition.set((this.mousePosition.x - bounds.left) / bounds.width * 2 - 1, 1 - (this.mousePosition.y - bounds.top) / bounds.height * 2);
+            this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
+
+            const hit = this.traceMouse();
+
+            if (hit && (hit.actor as any)?.isActor && hit.actor !== this.renderManager.player as ICollidable) actor = hit.actor as any as BaseActor;
+        }
+
+        if (actor === this.mouseTarget) return;
+
+        this.mouseTarget = actor;
+        this.renderManager.needsUpdate = true;
     }
 
     protected getPickDistance(origin: Vector3, direction: Vector3): number {

@@ -1,5 +1,6 @@
 import AssetManager, { type AssetList_T } from "../assets/asset-manager";
 import SkillViewerDecodeWorkerClient from "./skill-viewer-decode-worker-client";
+import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
 import type RenderManager from "../rendering/render-manager";
 import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
@@ -18,7 +19,7 @@ export class SkillViewerAssetManager extends AssetManager {
         const textureMode = (this.loadSettings as any).textures ?? "auto";
 
         this.glCapabilities = manRender.renderer.capabilities;
-        this.hasS3TC = manRender.renderer.extensions.get("WEBGL_compressed_texture_s3tc");
+        this.hasS3TC = !!manRender.renderer.extensions.get("WEBGL_compressed_texture_s3tc");
         this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && this.hasS3TC);
 
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
@@ -44,9 +45,11 @@ export class SkillViewerAssetManager extends AssetManager {
     public releaseUsedLibraries(renderManager: RenderManager): void {
         for (const library of this.decodeWorker.takeUsedLibraries())
             for (const sound of library.soundBlobCache.values()) {
-                if (!sound.uri) continue;
+                const uri = getMintedSoundUri(sound);
 
-                renderManager.audioManager.releaseSound(sound.uri);
+                if (!uri) continue;
+
+                renderManager.audioManager.releaseSound(uri);
             }
     }
 

@@ -9,7 +9,6 @@ import type { IStaticMeshCollisionDecodeInfo, IBSPCollisionModelDecodeInfo } fro
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
 const tmpScale = new Vector3();
-const tmpSimpleBounds = new Box3();
 const HULL_FLIP = 0x40000000;
 
 export class CollidingMesh extends LitActorMesh implements ICollidable {
@@ -29,6 +28,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     protected readonly analyticalBounds = new Box3();
     protected readonly analyticalCenter = new Vector3();
     protected readonly simpleCollisionBounds = new Box3();
+    protected readonly localColliderBounds = new Box3();
     protected analyticalPrimitive: CollisionPrimitive_T = null;
     protected readonly basedActors = new Set<ICollidable>();
 
@@ -60,6 +60,8 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         this.simpleCollisionBounds.makeEmpty();
         if (simpleCollisionHulls)
             for (const hull of simpleCollisionHulls) this.simpleCollisionBounds.union(hull.bounds);
+
+        this.localColliderBounds.setFromArray(vertices).union(this.simpleCollisionBounds);
 
         if (this.staticMeshCollision?.nodes.length) {
             this.collisionNodes = this.staticMeshCollision.nodes;
@@ -141,10 +143,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             this.analyticalBounds.max.set(this.analyticalCenter.x + this.analyticalPrimitive.radius, this.analyticalCenter.y + this.analyticalPrimitive.radius, this.analyticalCenter.z + this.analyticalPrimitive.halfHeight);
         } else {
             this.updateWorldMatrix(true, false);
-            this.analyticalBounds.setFromArray(this.colliderVertices).applyMatrix4(this.matrixWorld);
-
-            if (!this.simpleCollisionBounds.isEmpty())
-                this.analyticalBounds.union(tmpSimpleBounds.copy(this.simpleCollisionBounds).applyMatrix4(this.matrixWorld));
+            this.analyticalBounds.copy(this.localColliderBounds).applyMatrix4(this.matrixWorld);
         }
 
         return this.analyticalPrimitive;

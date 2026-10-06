@@ -1,4 +1,5 @@
 import DecodeWorkerClient from "../assets/decode-worker/decode-worker-client";
+import { revokeSoundUri } from "../assets/decode-worker/decode-cache";
 import type DecodeLibrary from "../assets/unreal/decode-library";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
@@ -113,8 +114,7 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
 function hasAnimations(library: DecodeLibrary): boolean { return library.pawnActors.some(info => Object.keys(info.animations).length > 0); }
 
 function revokeSounds(library: DecodeLibrary): void {
-    for (const sound of library.soundBlobCache.values())
-        if (sound.uri) URL.revokeObjectURL(sound.uri);
+    for (const sound of library.soundBlobCache.values()) revokeSoundUri(sound);
 }
 
 async function reportPreloadFailure(npc: INpcDefinition, library: Promise<DecodeLibrary>): Promise<void> {

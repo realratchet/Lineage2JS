@@ -51,7 +51,7 @@ let gridClipT1 = 1;
 
 export type PrimitiveHit_T = { time: number, normal: Vector3, item: number };
 type ClipState_T = { t0: number, t1: number, normal: Vector3, item: number, hit: boolean };
-type GridCellVisitor_T = (x: number, y: number) => void;
+type GridCellVisitor_T = (x: number, y: number) => number; // returns the best hit time so far
 type HullPlane_T = [number, number, number, number, number];
 
 function resetClip(maxTime: number, item: number) {
@@ -313,14 +313,17 @@ function walkGridCells(startX: number, startY: number, endX: number, endY: numbe
     let nextX = stepX > 0 ? (cellX + 1 - fromX) * rateX : stepX < 0 ? (fromX - cellX) * rateX : Infinity;
     let nextY = stepY > 0 ? (cellY + 1 - fromY) * rateY : stepY < 0 ? (fromY - cellY) * rateY : Infinity;
 
+    let bestTime = Infinity;
+
     for (let steps = 0; steps <= maxSteps; steps++) {
         const x0 = Math.max(minCellX, cellX - padX), x1 = Math.min(maxCellX, cellX + padX);
         const y0 = Math.max(minCellY, cellY - padY), y1 = Math.min(maxCellY, cellY + padY);
 
         for (let y = y0; y <= y1; y++)
-            for (let x = x0; x <= x1; x++) visit(x, y);
+            for (let x = x0; x <= x1; x++) bestTime = visit(x, y);
 
         if (cellX === lastX && cellY === lastY) return;
+        if (gridClipT0 + Math.min(nextX, nextY) * (gridClipT1 - gridClipT0) >= bestTime) return; // cells come in ray order, nothing further along can be nearer
 
         if (nextX <= nextY) {
             if (nextX > 1) return;
@@ -557,6 +560,8 @@ function visitStaticIndexCell(x: number, y: number) {
         staticBestItem = hit.item;
         tmpBestHit.normal.copy(hit.normal);
     }
+
+    return staticBestTime;
 }
 
 function queryTerrainIndex(primitive: Extract<CollisionPrimitive_T, { kind: "terrain" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
@@ -619,6 +624,8 @@ function visitTerrainIndexCell(x: number, y: number) {
         terrainBestItem = hit.item;
         tmpBestHit.normal.copy(hit.normal);
     }
+
+    return terrainBestTime;
 }
 
 function queryTriangles(primitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" | "terrain" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
@@ -924,9 +931,11 @@ function visitBspCell(x: number, y: number) {
     const bspIndex = bspPrimitive.index;
     const cell = findBspCell(x, y, 0);
 
-    if (cell < 0) return;
+    if (cell < 0) return Infinity;
 
     for (let i = bspIndex.offsets[cell]; i < bspIndex.offsets[cell + 1]; i++) queryIndexedHull(bspIndex.hullIndices[i]);
+
+    return Infinity; // hull bounds don't contain every hit point, an early exit here dropped nearer hits
 }
 
 function queryBsp(primitive: Extract<CollisionPrimitive_T, { kind: "bsp" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {

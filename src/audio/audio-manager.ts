@@ -6,6 +6,10 @@ import type AmbientSoundComponent from "./components/ambient-sound-component";
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const MAX_AUDIOCHANNELS = 32, ROLLOFF = 0.5; // hardcoded from l2.ini
 const AL_SOURCE_RADIUS_FALLBACK = 10; // ALAudioSubsystem::PlaySound uses 10 when Radius is zero.
+const AMBIENT_CELL_SIZE = 4096;
+const arrNoAmbientSounds: AmbientSoundComponent[] = [];
+
+function getAmbientCellKey(x: number, y: number): number { return (x + 32768) * 65536 + (y + 32768); }
 
 type AmbientInfo_T = {
     dataUri: string,
@@ -442,18 +446,47 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
     protected readonly activeAmbientSounds = new Map<string, AmbientChannel_T>();
     protected readonly ambientSounds = new Set<AmbientSoundComponent>();
+    protected readonly cacheAmbientCells = new Map<number, AmbientSoundComponent[]>();
+    protected isAmbientGridDirty = true;
     protected readonly ambientCandidates: AmbientCandidate_T[] = [];
     protected readonly audibleAmbientSounds = new Map<string, number>();
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
     protected readonly ambientSlotAnchors = new Map<string, number>();
     protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
 
-    public registerAmbientSound(component: AmbientSoundComponent): void { this.ambientSounds.add(component); }
+    public registerAmbientSound(component: AmbientSoundComponent): void {
+        this.ambientSounds.add(component);
+        this.isAmbientGridDirty = true;
+    }
 
     public unregisterAmbientSound(component: AmbientSoundComponent): void {
         this.ambientSounds.delete(component);
+        this.isAmbientGridDirty = true;
         this.stopAmbientSound(component.info.uuid);
         this.ambientSlotAnchors.delete(component.info.uuid);
+    }
+
+    protected rebuildAmbientGrid(): void { // every emitter whose audible radius reaches a cell is listed there, in registration order
+        this.cacheAmbientCells.clear();
+
+        for (const component of this.ambientSounds) {
+            const { position, maxDistance } = component.info;
+            const minX = Math.floor((position[0] - maxDistance) / AMBIENT_CELL_SIZE), maxX = Math.floor((position[0] + maxDistance) / AMBIENT_CELL_SIZE);
+            const minY = Math.floor((position[1] - maxDistance) / AMBIENT_CELL_SIZE), maxY = Math.floor((position[1] + maxDistance) / AMBIENT_CELL_SIZE);
+
+            for (let x = minX; x <= maxX; x++) {
+                for (let y = minY; y <= maxY; y++) {
+                    const key = getAmbientCellKey(x, y);
+                    let cell = this.cacheAmbientCells.get(key);
+
+                    if (!cell) this.cacheAmbientCells.set(key, cell = []);
+
+                    cell.push(component);
+                }
+            }
+        }
+
+        this.isAmbientGridDirty = false;
     }
 
     public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isDaytime: boolean, isSubmerged: boolean): void {
@@ -463,7 +496,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
         candidates.length = 0;
         audibleSounds.clear();
 
-        for (const component of this.ambientSounds) {
+        if (this.isAmbientGridDirty) this.rebuildAmbientGrid();
+
+        for (const component of this.cacheAmbientCells.get(getAmbientCellKey(Math.floor(px / AMBIENT_CELL_SIZE), Math.floor(py / AMBIENT_CELL_SIZE))) || arrNoAmbientSounds) {
             const info = component.info;
 
             if (info.soundType === "day" && !isDaytime) continue;

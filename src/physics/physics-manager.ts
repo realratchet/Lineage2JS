@@ -105,12 +105,14 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public setEmitterWarmupGate(root: Object3D, allowed: boolean): void { EmitterSimulation.setWarmupGate(root, allowed); }
     public isEmitterEffectFinished(effect: Object3D): boolean { return EmitterSimulation.isEffectFinished(effect); }
 
-    public addPawn(pawn: BaseActor, expires: number = Infinity, nextTurn: number = Infinity): void {
+    public addPawn(pawn: BaseActor, expires: number = Infinity, nextTurn: number = Infinity, simulate: boolean = false): void {
         const movement = pawn.getComponent<PawnMovementComponent>("pawnMovement");
-        const simulation = pawn.findComponent<NpcSimulationComponent>("npcSimulation") || pawn.addComponent(new NpcSimulationComponent());
 
         movement.setPhysicsTickRate(PhysicsManager.PHYSICS_HZ);
-        simulation.configure(expires, nextTurn);
+        if (simulate) {
+            const simulation = pawn.findComponent<NpcSimulationComponent>("npcSimulation") || pawn.addComponent(new NpcSimulationComponent());
+            simulation.configure(expires, nextTurn);
+        }
         this.registerSimulationObjects(pawn);
 
         arrMoverPawns.length = 0;
@@ -120,9 +122,9 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     }
 
     public removePawn(pawn: BaseActor): boolean {
-        const simulation = pawn.findComponent<NpcSimulationComponent>("npcSimulation");
+        const movement = pawn.findComponent<PawnMovementComponent>("pawnMovement");
 
-        if (!simulation || !simulation.isPhysicsAdded(this)) return false;
+        if (!movement || !movement.isPhysicsAdded(this)) return false;
 
         this.unregisterSimulationObjects(pawn);
 
@@ -158,7 +160,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
                 manRender.scene.add(pawn);
                 pawn.position.copy(this_.manGame.getComponent("input").getOrbitTarget());
                 pawn.updateMatrixWorld(true);
-                this_.addPawn(pawn, performance.now() + NpcSimulationComponent.LIFETIME, 0);
+                this_.addPawn(pawn, performance.now() + NpcSimulationComponent.LIFETIME, 0, true);
                 manRender.needsUpdate = true;
             }
         }

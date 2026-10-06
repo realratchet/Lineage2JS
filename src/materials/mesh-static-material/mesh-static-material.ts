@@ -515,8 +515,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             entry.position.copy(light.position);
             entry.direction.copy(light.direction);
             entry.cone = light.cone;
-            // D3DDrv SetPawnLight RVA 0x1cadc: halve RGB under EnableLighting's Modulate2X.
-            entry.color.copy(light.color).multiplyScalar(0.5);
+            entry.color.copy(light.color);
             entry.radius = light.radius;
             entry.effect = 0;
             entry.isHardwareLight = true;

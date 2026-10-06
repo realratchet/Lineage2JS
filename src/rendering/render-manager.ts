@@ -15,6 +15,7 @@ import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
 import AudioManager from "../audio/audio-manager";
 import type AssetManager from "../assets/asset-manager";
+import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
 import InstancedSpriteBatcher from "../objects/emitters/instanced-sprite-batcher";
 import type MovableObject from "../objects/movable-object";
 import DisplayGammaPass from "./display-gamma";
@@ -272,10 +273,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected readonly arrLoadedSectors: SectorObject[] = [];
+    protected readonly arrSceneSectors: SectorObject[] = [];
 
     protected readonly pendingSectorWarmups: SectorWarmup_T[] = [];
     protected static readonly TEXTURE_WARMUP_FRAME_MS = 2;
     protected static readonly MATERIAL_RESTORES_PER_FRAME = 8;
+    protected readonly pendingShaderCompiles = new Set<THREE.Object3D>();
 
     // deferred shader link/compile error reporting, see processShaderDiagnostics
     protected readonly pendingShaderChecks: any[] = [];
@@ -1052,6 +1055,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         pawn.updateMatrixWorld(true);
         this.physicsManager.addPawn(pawn);
         pawn.beginPlay();
+        this.queueShaderCompile(pawn);
         this.needsUpdate = true;
     }
 
@@ -1071,6 +1075,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const script = object.findComponent<ScriptComponent>("script");
 
         if (script) script.beginPlay();
+        this.queueShaderCompile(effect);
         this.needsUpdate = true;
     }
 
@@ -1201,10 +1206,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public unregisterActorMesh(component: ActorMeshComponent): void { this.actorMeshes.delete(component); }
     public registerHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.add(component); }
     public unregisterHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.delete(component); }
+    public queueShaderCompile(root: THREE.Object3D): void { this.pendingShaderCompiles.add(root); }
 
     protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
-        for (const component of this.pawnRenderables)
-            component.getParent().updatePresentation(currentTime, deltaTime / 1000);
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent();
+            if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) continue;
+
+            pawn.updatePresentation(currentTime, deltaTime / 1000);
+        }
     }
 
     protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
@@ -1222,8 +1232,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected updatePawnVisibility(): void {
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
+            const state = this.resolvePawnLocation(pawn);
 
-            pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(component.getRenderSphere());
+            if (!state.sector || state.leafIndex === null) {
+                pawn.visible = false;
+                continue;
+            }
+
+            pawn.visible = state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || this.frustum.intersectsSphere(component.getRenderSphere()));
         }
 
         this.sectors.forEach(row => row.forEach(sector => {
@@ -1252,10 +1268,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updatePawnShadow();
 
         for (const component of this.pawnRenderables)
-            this.updateActorLighting(component.getParent(), sunAmbient);
+            if (component.getParent().visible) this.updateActorLighting(component.getParent(), sunAmbient);
 
-        for (const component of this.actorMeshes)
+        for (const component of this.actorMeshes) {
+            let parent = component.getParent().parent;
+            while (parent && !(parent as any).isActor) parent = parent.parent;
+            if (parent) continue;
+
             this.updateActorLighting(component.getParent(), sunAmbient);
+        }
 
         for (const pickup of this.pickups) {
             pickup.placeOnGround();
@@ -1288,9 +1309,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
 
         arrShadowCasters.length = 0;
-        for (const component of this.pawnRenderables) arrShadowCasters.push(component.getParent());
-
-        if (sector) for (const pawn of sector.pawns.children) arrShadowCasters.push(pawn);
+        arrShadowCasters.push(this.player);
 
         this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
     }
@@ -1468,30 +1487,27 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.physicsManager.setTriggerPosition(this.camera.position);
         this.updateSectorRenderOrder(activeSector);
 
-        this.scene.traverse((object: THREE.Object3D) => {
-            if ((object as any).isSectorObject) {
-                const sector = object as SectorObject;
-                const isCameraInSector = activeSector === sector;
-                const wasVisible = sector.visible;
+        for (const sector of this.arrSceneSectors) {
+            const isCameraInSector = activeSector === sector;
+            const wasVisible = sector.visible;
 
-                if (!isCameraInSector) {
-                    if (!fogSphere.intersectsBox(sector.worldBounds)) {
-                        sector.visible = false;
-                        return;
-                    }
-                }
-
-                sector.visible = true;
-
-                const topLevelOnly = !isCameraInSector;
-
-                if (isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
-                    sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq, emitterCullDistSq);
-                } else {
-                    this.neighborVisibilitySectors.push(sector);
+            if (!isCameraInSector) {
+                if (!fogSphere.intersectsBox(sector.worldBounds)) {
+                    sector.visible = false;
+                    continue;
                 }
             }
-        });
+
+            sector.visible = true;
+
+            const topLevelOnly = !isCameraInSector;
+
+            if (isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
+                sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq, emitterCullDistSq);
+            } else {
+                this.neighborVisibilitySectors.push(sector);
+            }
+        }
 
         if (this.neighborVisibilitySectors.length > 0) {
             const index = this.neighborVisibilityCursor++ % this.neighborVisibilitySectors.length;
@@ -1873,6 +1889,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.manGame.getComponent("asset").tick(this);
         this.processSectorWarmups();
+        for (const root of this.pendingShaderCompiles)
+            if (root.parent) this.renderer.compileAsync(root, this.camera, this.scene);
+
+        this.pendingShaderCompiles.clear();
         this.processShaderDiagnostics();
         this.viewShakeDelta = deltaTime / 1000;
 
@@ -1932,6 +1952,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updatePawnPresentation(currentTime, deltaTime);
 
         this.inputManager.updateFollowPlayer();
+        this.inputManager.updateMouseTarget();
 
         this.audioManager.update(currentTime);
 
@@ -2213,6 +2234,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         sector.worldBounds.setFromObject(sector);
         this.sectorBounds.push(sector.worldBounds);
 
+        this.arrSceneSectors.push(sector);
         this.objectGroup.add(sector);
         this.physicsManager.registerSimulationObjects(sector);
         this.updateColliderOverlay();
@@ -2323,6 +2345,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.pendingSectorWarmups.splice(jobIndex, 1);
         job.fallbackMaterials.forEach(material => material.dispose());
 
+        this.queueShaderCompile(job.sector);
+
         if (job.releaseEmitters)
             this.physicsManager.setEmitterWarmupGate(job.sector, true);
 
@@ -2339,6 +2363,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         setLightingGate(root, true);
         if (releaseEmitters) this.physicsManager.setEmitterWarmupGate(sector, true);
+
+        this.queueShaderCompile(root);
     }
 
     // polls COMPLETION_STATUS_KHR instead of gl.getProgramInfoLog directly - see checkShaderErrors above
@@ -2411,6 +2437,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (sectorIndex >= 0) this.arrLoadedSectors.splice(sectorIndex, 1);
 
+        const sceneIndex = this.arrSceneSectors.indexOf(sector);
+
+        if (sceneIndex >= 0) this.arrSceneSectors.splice(sceneIndex, 1);
+
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
 
@@ -2435,9 +2465,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (soundCache) {
             for (const entry of soundCache.values()) {
-                if (!entry.uri) continue;
+                const uri = getMintedSoundUri(entry);
 
-                this.audioManager.releaseSound(entry.uri);
+                if (!uri) continue;
+
+                this.audioManager.releaseSound(uri);
                 entry.uri = null;
             }
         }

@@ -69,6 +69,8 @@ export type MatineeScenesMessage_T = { type: "matineeScenes"; requestId: number;
 export type DecodeUITexturesMessage_T = { type: "decodeUITextures"; requestId: number; settings: LoadSettings_T; paths: string[]; };
 export type PrecacheCharactersMessage_T = { type: "precacheCharacters"; requestId: number; settings: LoadSettings_T; };
 export type CharactersPrecachedMessage_T = { type: "charactersPrecached"; requestId: number; };
+export type PrecacheNpcBundleMessage_T = { type: "precacheNpcBundle"; requestId: number; settings: LoadSettings_T; packageName: string; };
+export type NpcBundlePrecachedMessage_T = { type: "npcBundlePrecached"; requestId: number; };
 export type CharGroupsDecodedMessage_T = { type: "charGroupsDecoded"; requestId: number; groups: ICharacterGroup[]; };
 export type NpcResolvedMessage_T = { type: "npcResolved"; requestId: number; npc: INpcDefinition; };
 export type NpcsListedMessage_T = { type: "npcsListed"; requestId: number; npcs: INpcDefinition[]; };
@@ -103,6 +105,7 @@ export type MainToWorkerMessage_T =
     | MatineeScenesMessage_T
     | DecodeUITexturesMessage_T
     | PrecacheCharactersMessage_T
+    | PrecacheNpcBundleMessage_T
     | MusicInfoMessage_T
     | ClientConfigMessage_T
     | ScriptLocalizationMessage_T
@@ -155,6 +158,7 @@ export type WorkerToMainMessage_T =
     | MatineeScenesDecodedMessage_T
     | UITexturesDecodedMessage_T
     | CharactersPrecachedMessage_T
+    | NpcBundlePrecachedMessage_T
     | MusicInfoDecodedMessage_T
     | ClientConfigDecodedMessage_T
     | ScriptLocalizationDecodedMessage_T

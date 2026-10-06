@@ -1120,6 +1120,8 @@ function decodeFogInfo(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     object.fogRange5 = toRange(info.fogRange5 as any);
     object.colors = info.colors as any;
     object.zoneMask = (info as any).zoneMask ?? 0n;
+    object.updateMatrix();
+    object.matrixAutoUpdate = false;
 
     return object;
 }

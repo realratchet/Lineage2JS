@@ -74,6 +74,16 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "precacheNpcBundle": {
+            try {
+                await engine.precacheNpcBundle(msg.settings, msg.packageName);
+                post({ type: "npcBundlePrecached", requestId: msg.requestId });
+            } catch (e) {
+                console.error(`[decode-worker] failed to precache npc bundle '${msg.packageName}':`, e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
         case "charGroups": {
             try {
                 post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups() });

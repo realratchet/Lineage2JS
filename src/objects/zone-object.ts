@@ -229,9 +229,11 @@ export class SectorObject extends GameObject {
 
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
-    protected readonly candidateStaticActorUuids = new Set<string>();
-    protected readonly visibleStaticActorUuids = new Set<string>();
-    protected readonly visibleStaticActorDistances = new Map<string, number>();
+    protected readonly cacheStaticActorIndices = new Map<string, number>();
+    protected staticActorCandidateStamps = new Uint32Array(256);
+    protected staticActorVisibleStamps = new Uint32Array(256);
+    protected staticActorDistances = new Float64Array(256);
+    protected staticVisibilityStamp = 0;
     protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
     protected visibilityCacheInitialized = false;
     protected readonly visibilityCachePosition = new Vector3();
@@ -1048,12 +1050,7 @@ export class SectorObject extends GameObject {
         }
 
         if (library && this.staticMeshGroup && this.staticMeshMap.size > 0) {
-            const candidateActorUuids = this.candidateStaticActorUuids;
-            const visibleActorUuids = this.visibleStaticActorUuids;
-            const visibleActorDistances = this.visibleStaticActorDistances;
-            candidateActorUuids.clear();
-            visibleActorUuids.clear();
-            visibleActorDistances.clear();
+            const stamp = ++this.staticVisibilityStamp;
 
             for (const leafIndex of visibleLeaves) {
                 const actors = library.leafActors[leafIndex];
@@ -1061,8 +1058,9 @@ export class SectorObject extends GameObject {
                     for (const actorBase of actors) {
                         if (actorBase.type !== "StaticMeshActor") continue;
                         const actor = actorBase as StaticMeshActorDecodeInfo_T;
-                        if (candidateActorUuids.has(actor.uuid)) continue;
-                        candidateActorUuids.add(actor.uuid);
+                        const actorIndex = this.getStaticActorIndex(actor.uuid);
+                        if (this.staticActorCandidateStamps[actorIndex] === stamp) continue;
+                        this.staticActorCandidateStamps[actorIndex] = stamp;
 
                         tmpActorBox.min.fromArray(actor.bounds.min);
                         tmpActorBox.max.fromArray(actor.bounds.max);
@@ -1076,8 +1074,8 @@ export class SectorObject extends GameObject {
                         const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
 
                         if (isFrustumVisible && isZoneVisible && isInRange) {
-                            visibleActorUuids.add(actor.uuid);
-                            visibleActorDistances.set(actor.uuid, distSq);
+                            this.staticActorVisibleStamps[actorIndex] = stamp;
+                            this.staticActorDistances[actorIndex] = distSq;
                         }
                     }
                 }
@@ -1117,15 +1115,22 @@ export class SectorObject extends GameObject {
                     let elemRelight = (object as any).elemRelight as Uint8Array;
                     if (!elemRelight || elemRelight.length !== batchElements.length)
                         elemRelight = (object as any).elemRelight = new Uint8Array(batchElements.length);
+                    let elemActorIndices = (object as any).elemActorIndices as Int32Array;
+                    if (!elemActorIndices || elemActorIndices.length !== batchElements.length) {
+                        elemActorIndices = (object as any).elemActorIndices = new Int32Array(batchElements.length);
+                        for (let ei = 0; ei < batchElements.length; ei++) elemActorIndices[ei] = this.getStaticActorIndex(batchElements[ei].uuid);
+                    }
+                    const candidateStamps = this.staticActorCandidateStamps, visibleStamps = this.staticActorVisibleStamps, actorDistances = this.staticActorDistances;
                     let visibilityChanged = false;
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
                         const elem = batchElements[ei];
+                        const actorIndex = elemActorIndices[ei];
 
-                        let elemVisible = visibleActorUuids.has(elem.uuid);
-                        let distSq = visibleActorDistances.get(elem.uuid) ?? 0;
+                        let elemVisible = visibleStamps[actorIndex] === stamp;
+                        let distSq = elemVisible ? actorDistances[actorIndex] : 0;
 
-                        if (!elemVisible && !candidateActorUuids.has(elem.uuid)) {
+                        if (!elemVisible && candidateStamps[actorIndex] !== stamp) {
                             let inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
                             if (!inVisibleLeaves) {
                                 for (const li of elem.leaves) {
@@ -1207,7 +1212,7 @@ export class SectorObject extends GameObject {
                     if (object.visible) visibleCount++;
 
                 } else {
-                    let isVisible = visibleActorUuids.has(uuid);
+                    let isVisible = this.staticActorVisibleStamps[this.getStaticActorIndex(uuid)] === stamp;
 
                     if (!isVisible && (object as any).actorBoundsMin && !isCameraInSector) {
                         tmpActorBox.min.fromArray((object as any).actorBoundsMin);
@@ -1279,6 +1284,29 @@ export class SectorObject extends GameObject {
 
         const terrainZoneVisible = !frustumCullingEnabled || (finalZoneMask & this.outdoorZoneMask) !== 0n;
         this.updateTerrainSectors(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, terrainZoneVisible);
+    }
+
+    protected getStaticActorIndex(uuid: string): number { // string-keyed sets dominated the per-frame visibility pass while the camera turns
+        let index = this.cacheStaticActorIndices.get(uuid);
+
+        if (index !== undefined) return index;
+
+        index = this.cacheStaticActorIndices.size;
+        this.cacheStaticActorIndices.set(uuid, index);
+
+        if (index >= this.staticActorVisibleStamps.length) {
+            const size = this.staticActorVisibleStamps.length * 2;
+            const candidates = new Uint32Array(size), visible = new Uint32Array(size), distances = new Float64Array(size);
+
+            candidates.set(this.staticActorCandidateStamps);
+            visible.set(this.staticActorVisibleStamps);
+            distances.set(this.staticActorDistances);
+            this.staticActorCandidateStamps = candidates;
+            this.staticActorVisibleStamps = visible;
+            this.staticActorDistances = distances;
+        }
+
+        return index;
     }
 
     protected emitterObjectsByUuid?: Map<string, THREE.Object3D[]>;
