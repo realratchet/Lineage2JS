@@ -227,7 +227,7 @@ export class CollisionWorld {
         const dynamic = primitive.kind === "cylinder" || !!(object as any).isMovableObject || !!(object as any).isRotatingObject;
         let bounds = primitive.bounds;
 
-        if (primitive.kind === "bsp") {
+        if (primitive.kind === "bsp" && !(object as any).isVolume) {
             const sector = object.parent as any;
 
             if (sector?.gridBounds && sector?.worldBounds) {
@@ -810,7 +810,7 @@ function getTraceBackoff(primitive: CollisionPrimitive_T | null, testDistance: n
     if (!primitive) return 0;
     if (primitive.kind === "terrain") return 0.5;
     if (primitive.kind === "bsp") return zeroExtent ? 0.5 : Math.max(0.1, Math.min(4, 0.1 * testDistance));
-    if (primitive.kind === "staticMesh" && primitive.simpleCollisionHulls && (zeroExtent ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
+    if (primitive.kind === "staticMesh" && primitive.collisionModel && (zeroExtent ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
         return zeroExtent ? 0.5 : Math.max(0.1, Math.min(4, 0.1 * testDistance));
     if (primitive.kind === "staticMesh") return Math.max(0.1, Math.min(1, 0.1 * testDistance));
 

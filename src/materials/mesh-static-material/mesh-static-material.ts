@@ -198,6 +198,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             case "modulate": defines["USE_MODULATED_FOG"] = ""; break;
             case "alphaModulate":
             case "translucent":
+            case "additive":
             case "brighten":
             case "darken":
             case "invisible": defines["USE_ADDITIVE_FOG"] = ""; break;
@@ -321,6 +322,13 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 this.blending = CustomBlending;
                 this.blendSrc = OneFactor;
                 this.blendDst = OneMinusSrcColorFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "additive":
+                this.blending = CustomBlending;
+                this.blendSrc = OneFactor;
+                this.blendDst = OneFactor;
                 this.transparent = true;
                 this.depthWrite = false;
                 break;

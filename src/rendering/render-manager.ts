@@ -1961,7 +1961,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this._updateObjects(currentTime);
 
         const activeSector = this.getSector(this.camera.position);
-        const musicInfo = activeSector ? activeSector.getMusicIdAt(this.camera.position) : { musicId: -1, isLooped: false, isForced: false };
+        const musicPosition = this.inputManager.isFollowingPlayer() ? this.player.position : this.camera.position;
+        const musicSector = this.getSector(musicPosition);
+        const musicInfo = musicSector ? musicSector.getMusicIdAt(musicPosition) : { musicId: -1, isLooped: false, isForced: false };
         const musicId = musicInfo.musicId ?? -1;
 
         if (musicId !== this.activeMusicId) {

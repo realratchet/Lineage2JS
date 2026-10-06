@@ -70,7 +70,7 @@ export abstract class UStaticMesh extends UPrimitive {
     declare protected authenticationKey: number;
 
     protected useSimpleLineCollision: boolean = false;
-    protected UseSimpleBoxCollision: boolean = false;
+    protected UseSimpleBoxCollision: boolean = true;
     public useVertexColor: boolean = false;
 
     public static getUnserializedProperties(): UnserializedProperty_T[] {

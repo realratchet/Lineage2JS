@@ -2,6 +2,7 @@ import FVector from "./un-vector";
 import UObject, { type IDecodableStruct } from "./un-object";
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector4Arr } from "./library-types";
+import type FMatrix from "./un-matrix";
 
 export abstract class FPlane extends UObject implements IDecodableStruct<Vector4Arr> {
     declare public ["constructor"]: typeof FPlane;
@@ -71,6 +72,39 @@ export abstract class FPlane extends UObject implements IDecodableStruct<Vector4
             this.z - other.z,
             this.w - other.w
         );
+    }
+
+    public transformByUsingAdjointT(matrix: FMatrix, matrixTA: FMatrix, target: FPlane = FPlane.make()): FPlane {
+        const pX = matrix.planeX, pY = matrix.planeY, pZ = matrix.planeZ;
+        const det = pX.x * (pY.y * pZ.z - pY.z * pZ.y)
+            - pX.y * (pY.x * pZ.z - pY.z * pZ.x)
+            + pX.z * (pY.x * pZ.y - pY.y * pZ.x);
+
+        let nx = matrixTA.planeX.x * this.x + matrixTA.planeY.x * this.y + matrixTA.planeZ.x * this.z;
+        let ny = matrixTA.planeX.y * this.x + matrixTA.planeY.y * this.y + matrixTA.planeZ.y * this.z;
+        let nz = matrixTA.planeX.z * this.x + matrixTA.planeY.z * this.y + matrixTA.planeZ.z * this.z;
+        const length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+
+        if (length > 1e-8) {
+            nx /= length;
+            ny /= length;
+            nz /= length;
+        }
+
+        if (det < 0) {
+            nx = -nx;
+            ny = -ny;
+            nz = -nz;
+        }
+
+        const sx = this.x * this.w, sy = this.y * this.w, sz = this.z * this.w;
+        const px = pX.x * sx + pY.x * sy + pZ.x * sz + matrix.planeW.x;
+        const py = pX.y * sx + pY.y * sy + pZ.y * sz + matrix.planeW.y;
+        const pz = pX.z * sx + pY.z * sy + pZ.z * sz + matrix.planeW.z;
+
+        target.set(nx, ny, nz, px * nx + py * ny + pz * nz);
+
+        return target;
     }
 
     public getElements(): Vector4Arr { return [this.x, this.y, this.z, this.w]; }

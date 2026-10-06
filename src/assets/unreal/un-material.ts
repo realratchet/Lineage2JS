@@ -144,7 +144,7 @@ export type ICombinerDecodeInfo = IBaseMaterialDecodeInfo & {
     alphaFrom2: boolean
 };
 
-export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
+export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "additive" | "invisible" | "brighten" | "darken";
 
 abstract class UBaseMaterial extends UObject {
     // public readonly skipRemaining = true;
@@ -508,9 +508,9 @@ export abstract class UShader extends UMaterial {
             case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
             case OutputBlending_T.OB_Masked: blendingMode = "masked"; break;
             case OutputBlending_T.OB_Modulate: blendingMode = "modulate"; break;
-            case OutputBlending_T.OB_Translucent: blendingMode = "translucent"; break;
+            case OutputBlending_T.OB_Translucent: blendingMode = "additive"; break; // ONE, ONE - not FB_Translucent's ONE, INVSRCCOLOR (cruma_inside call 9124000)
             case OutputBlending_T.OB_Invisible: blendingMode = "invisible"; break;
-            case OutputBlending_T.OB_Brighten: blendingMode = "brighten"; break;
+            case OutputBlending_T.OB_Brighten: blendingMode = "translucent"; break; // ONE, INVSRCCOLOR, which FB_* calls translucent
             case OutputBlending_T.OB_Darken: blendingMode = "darken"; break;
             default: console.warn("Unknown blending mode:", this.outputBlending); break;
         }

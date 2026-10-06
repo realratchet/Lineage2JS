@@ -3,7 +3,7 @@ import { FPlane } from "../un-plane";
 import type { Vector4Arr } from "../library-types";
 import type { IBoxDecodeInfo } from "../un-box";
 
-export type IBSPNodeCollisionInfo_T = { flags: number[], bounds: IBoxDecodeInfo };
+export type IBSPNodeCollisionInfo_T = { flags: number[], bounds: IBoxDecodeInfo, boxPlanes?: Vector4Arr[] };
 export type IBSPNodeDecodeInfo_T = {
     children: [number, number],
     plane: Vector4Arr,
@@ -11,6 +11,7 @@ export type IBSPNodeDecodeInfo_T = {
     zones: [number, number],
     surfFlags: number,
     iPlane: number,
+    isCsg: boolean,
     iRenderBound: number,
     spheres: {
         exclusive: Vector4Arr,
@@ -122,6 +123,7 @@ export class FBSPNode implements Constructable_T {
             zones: [this.iZone[0], this.iZone[1]],
             surfFlags,
             iPlane: this.iPlane,
+            isCsg: this.numVertices > 0 && !(this.flags & (BspNodeFlags_T.NF_IsNew | BspNodeFlags_T.NF_NotCsg)),
             iRenderBound: this.iRenderBound !== -1 ? this.iRenderBound : undefined, // INDEX_NONE = -1
             spheres: {
                 exclusive: [this.exclusiveSphereBound.x, this.exclusiveSphereBound.y, this.exclusiveSphereBound.z, this.exclusiveSphereBound.w],

@@ -20,17 +20,18 @@ export type ICollidable = THREE.Object3D<THREE.Event> & {
 
 export type CollisionHull_T = {
     planes: [number, number, number, number, number][];
+    boxPlanes: [number, number, number, number, number][];
     bounds: THREE.Box3;
 };
 
-export type CollisionBspIndex_T = {
-    cellSize: number;
-    keys: Int32Array;
-    offsets: Uint32Array;
-    hullIndices: Uint32Array;
-    largeHullIndices: Uint32Array;
-    marks: Uint32Array;
-    queryTag: number;
+export type CollisionModel_T = {
+    planes: Float32Array;
+    children: Int32Array;
+    isCsg: Uint8Array;
+    hullIndices: Int32Array;
+    hulls: CollisionHull_T[];
+    rootOutside: boolean;
+    bounds: THREE.Box3;
 };
 
 export type CollisionTriangleIndex_T = {
@@ -51,8 +52,7 @@ export type CollisionTriangleIndex_T = {
 type CollisionPrimitiveUnion_T =
     | {
         kind: "bsp";
-        hulls: CollisionHull_T[];
-        index: CollisionBspIndex_T;
+        model: CollisionModel_T;
         bounds: THREE.Box3;
         supportsZeroExtent: boolean;
         supportsNonZeroExtent: boolean;
@@ -65,7 +65,7 @@ type CollisionPrimitiveUnion_T =
         collisionNodes: Int32Array;
         collisionBounds: Float32Array;
         index?: CollisionTriangleIndex_T;
-        simpleCollisionHulls?: CollisionHull_T[];
+        collisionModel?: CollisionModel_T;
         useSimpleLineCollision?: boolean;
         useSimpleBoxCollision?: boolean;
         matrixWorld: THREE.Matrix4;

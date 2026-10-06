@@ -23,6 +23,7 @@ import type { UPawn } from "./un-pawn";
 import type { UStaticMeshActor } from "./static-mesh/un-static-mesh-actor";
 import type { ULight } from "./un-light";
 import type { UMusicVolume } from "./un-music-volume";
+import type { UBlockingVolume } from "./un-blocking-volume";
 import type { UAmbientSoundObject } from "./un-ambient-sound";
 import type { Vector3Arr } from "./library-types";
 
@@ -172,6 +173,7 @@ export class DecodeLibraryBuilder {
         this.library.bspZones.push(...result.bspZones);
         Object.assign(this.library.bspZoneIndexMap, result.bspZoneIndexMap);
 
+        this.library.bspRootOutside = result.bspRootOutside;
         this.library.bspNodes.push(...result.bspNodes);
         this.library.bspColliders.push(...result.bspColliders);
         this.library.leafActors.push(...result.leafActors);
@@ -371,6 +373,12 @@ export class DecodeLibraryBuilder {
                     const light = actor.loadSelf() as ULight;
 
                     if (!light.isDeleteMe) this.library.lightActors.push(light.getDecodeInfo(this.library));
+                    break;
+                }
+                case "BlockingVolume": {
+                    const volume = actor.loadSelf() as UBlockingVolume;
+
+                    if (!volume.isDeleteMe) this.library.blockingVolumes.push(volume.getDecodeInfo());
                     break;
                 }
                 case "MusicVolume": {

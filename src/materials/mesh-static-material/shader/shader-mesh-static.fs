@@ -573,10 +573,9 @@ void main() {
             #ifdef USE_CUBE_MAP_MATERIAL2
                 vec3 envMapDirection = vReflect;
                 #ifdef USE_ENVMAP_CAMERA
-                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz;
+                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz * vec3(-1.0, 1.0, -1.0); // D3D camera space: X flipped in clip (ue2-conventions.ts), +Z forward
                 #endif
-                envMapDirection = shMaterial2CubeTransform * envMapDirection;
-                color2 = textureCube(shMaterial2Cube, vec3(-envMapDirection.x, envMapDirection.yz));
+                color2 = textureCube(shMaterial2Cube, shMaterial2CubeTransform * envMapDirection);
             #endif
             #ifdef USE_MAP_MATERIAL2
                 color2 = texture2D(shMaterial2.map.texture, UV_MATERIAL2);
@@ -693,10 +692,9 @@ void main() {
             #ifdef USE_CUBE_MAP_SPECULAR
                 vec3 envMapDirection = vReflect;
                 #ifdef USE_ENVMAP_CAMERA
-                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz;
+                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz * vec3(-1.0, 1.0, -1.0); // D3D camera space: X flipped in clip (ue2-conventions.ts), +Z forward
                 #endif
-                envMapDirection = shSpecularCubeTransform * envMapDirection;
-                specularColor = textureCube(shSpecularCube, vec3(-envMapDirection.x, envMapDirection.yz)).rgb;
+                specularColor = textureCube(shSpecularCube, shSpecularCubeTransform * envMapDirection).rgb;
             #elif defined(USE_MAP_SPECULAR)
                 vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
                 specularColor = texelSpecular.rgb;

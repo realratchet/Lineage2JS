@@ -1,15 +1,15 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import type { ActorCollisionProfile_T, CollisionHull_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
+import type { ActorCollisionProfile_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
 import LitActorMesh, { MeshLight_T } from "./lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
-import type { IStaticMeshCollisionDecodeInfo, IBSPCollisionModelDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { IStaticMeshCollisionDecodeInfo } from "@l2js/engine/contracts/mesh";
+import buildCollisionModel from "../physics/collision-model";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
 const tmpScale = new Vector3();
-const HULL_FLIP = 0x40000000;
 
 export class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
@@ -54,12 +54,11 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         this.colliderDesc = ColliderDesc.trimesh(vertices, indices);
         this.rigidbodyDesc = RigidBodyDesc.fixed();
 
-        const collisionModel = this.staticMeshCollision?.collisionModel;
-        const simpleCollisionHulls = collisionModel ? buildCollisionHulls(collisionModel) : null;
+        const collisionModelInfo = this.staticMeshCollision?.collisionModel;
+        const collisionModel = collisionModelInfo ? buildCollisionModel(collisionModelInfo.nodes, collisionModelInfo.rootOutside) : null;
 
         this.simpleCollisionBounds.makeEmpty();
-        if (simpleCollisionHulls)
-            for (const hull of simpleCollisionHulls) this.simpleCollisionBounds.union(hull.bounds);
+        if (collisionModel) this.simpleCollisionBounds.copy(collisionModel.bounds);
 
         this.localColliderBounds.setFromArray(vertices).union(this.simpleCollisionBounds);
 
@@ -81,7 +80,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
                 collisionNodes: this.collisionNodes,
                 collisionBounds: this.collisionBounds,
                 index: this.collisionIndex || (this.colliderIndices.length < 384 ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices)),
-                simpleCollisionHulls,
+                collisionModel,
                 useSimpleLineCollision: !!collisionModel && this.staticMeshCollision.useSimpleLineCollision,
                 useSimpleBoxCollision: !!collisionModel && this.staticMeshCollision.useSimpleBoxCollision,
                 matrixWorld: this.matrixWorld,
@@ -148,36 +147,6 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
         return this.analyticalPrimitive;
     }
-}
-
-function buildCollisionHulls(model: IBSPCollisionModelDecodeInfo): CollisionHull_T[] {
-    const hulls: CollisionHull_T[] = [];
-    const cacheHulls = new Set<string>();
-
-    for (const collision of model.hulls) {
-        if (!collision.bounds.isValid) continue;
-
-        const key = `${collision.flags.join(",")}/${collision.bounds.min.join(",")}/${collision.bounds.max.join(",")}`;
-
-        if (cacheHulls.has(key)) continue;
-
-        cacheHulls.add(key);
-
-        hulls.push({
-            planes: collision.flags.map(flag => {
-                const nodeIndex = flag & ~HULL_FLIP;
-                const plane = model.planes[nodeIndex];
-                const scale = flag & HULL_FLIP ? -1 : 1;
-
-                if (!plane) throw new Error(`Collision model plane '${nodeIndex}' is missing.`);
-
-                return [plane[0] * scale, plane[1] * scale, plane[2] * scale, plane[3] * scale, nodeIndex];
-            }),
-            bounds: new Box3(new Vector3().fromArray(collision.bounds.min), new Vector3().fromArray(collision.bounds.max))
-        });
-    }
-
-    return hulls;
 }
 
 export default CollidingMesh;

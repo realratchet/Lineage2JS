@@ -414,7 +414,7 @@ export class SectorObject extends GameObject {
 
     public setSun(sunMaterial: any) { this.sunTexture = sunMaterial; }
 
-    public getMusicIdAt(cameraPosition: THREE.Vector3): { musicId: number | null, isLooped: boolean, isForced: boolean } {
+    public getMusicIdAt(position: THREE.Vector3): { musicId: number | null, isLooped: boolean, isForced: boolean } {
         let highestPriority = -Infinity;
         let selectedMusicId: number | null = null;
         let isLooped = false, isForced = false;
@@ -422,7 +422,7 @@ export class SectorObject extends GameObject {
         if (this.musicVolumes) {
             for (const vol of this.musicVolumes) {
                 if (vol.priority <= highestPriority) continue; // seems that it's first match, previous implementation used order in which export table was created this made it seem like its working fine but after it was changed to use from level it caused a regression i didn't notce until now
-                if (!encompassesVolume(cameraPosition, vol.bsp)) continue;
+                if (!encompassesVolume(position, vol.bsp)) continue;
 
                 highestPriority = vol.priority;
                 selectedMusicId = vol.musicId;

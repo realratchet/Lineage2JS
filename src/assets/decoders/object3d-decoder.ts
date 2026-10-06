@@ -39,6 +39,8 @@ import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T } from "@l2js/engine/
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
 
+const tmpNormalA = new Vector3(), tmpNormalB = new Vector3(), tmpNormalC = new Vector3();
+
 function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): IndexTypedArrayAttribute {
     switch (IndexArrayConstructor) {
         case Uint8Array: return Uint8BufferAttribute;
@@ -490,7 +492,15 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.nodeToSection = library.nodeToSection;
     sector.nodeZoneMasks = library.nodeZoneMasks;
 
-    if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes, library.levelInfoCollisionRadius));
+    if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes, library.bspRootOutside, library.levelInfoCollisionRadius));
+
+    for (const info of library.blockingVolumes) {
+        const volume = new BSPCollider(info.nodes, info.rootOutside, info.collision.collisionRadius, info.collision);
+
+        (volume as any).isVolume = true;
+        volume.name = info.name;
+        sector.add(volume);
+    }
 
     if (library.bspSections && library.bspSections.length > 0) {
         const bspGroup = new Group();
@@ -893,6 +903,41 @@ function prepareSkinnedMaterials(materials: THREE.Material | THREE.Material[], e
     }
 }
 
+function computePointNormals(geometry: BufferGeometry) { // per point, not per wedge: area-weighted over every face at the position (cruma_inside VB, call 3369562, matches exactly)
+    const positions = geometry.getAttribute("position").array, index = geometry.getIndex().array;
+    const arrPoints = new Uint32Array(positions.length / 3), cachePoints = new Map<string, number>();
+    const pointNormals = new Float32Array(positions.length), normals = new Float32Array(positions.length);
+
+    for (let i = 0; i < arrPoints.length; i++) {
+        const key = `${positions[i * 3]},${positions[i * 3 + 1]},${positions[i * 3 + 2]}`;
+
+        if (!cachePoints.has(key)) cachePoints.set(key, i);
+
+        arrPoints[i] = cachePoints.get(key);
+    }
+
+    for (let i = 0; i < index.length; i += 3) {
+        tmpNormalA.fromArray(positions, index[i] * 3);
+        tmpNormalB.fromArray(positions, index[i + 1] * 3).sub(tmpNormalA);
+        tmpNormalC.fromArray(positions, index[i + 2] * 3).sub(tmpNormalA);
+        tmpNormalB.cross(tmpNormalC);
+
+        for (let k = 0; k < 3; k++) {
+            const point = arrPoints[index[i + k]] * 3;
+
+            pointNormals[point] += tmpNormalB.x;
+            pointNormals[point + 1] += tmpNormalB.y;
+            pointNormals[point + 2] += tmpNormalB.z;
+        }
+    }
+
+    // wedges keep UE's winding, which ue2-conventions.ts undoes by flipping X in clip space
+    for (let i = 0; i < arrPoints.length; i++)
+        tmpNormalA.fromArray(pointNormals, arrPoints[i] * 3).normalize().negate().toArray(normals, i * 3);
+
+    geometry.setAttribute("normal", new BufferAttribute(normals, 3));
+}
+
 export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo, skins: string[] = null) {
     const geometry = fetchGeometry(library.geometries[info.geometry]);
     let infoMats = library.materials[info.materials];
@@ -918,14 +963,7 @@ export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObje
     }
 
     // LodMesh wire data is points + wedges only, UE builds vertex normals at load (UnMesh.cpp)
-    if (!geometry.getAttribute("normal")) {
-        geometry.computeVertexNormals();
-
-        // wedges keep UE's winding, which ue2-conventions.ts undoes by flipping X in clip space
-        const arrNormals = geometry.getAttribute("normal").array as Float32Array;
-
-        for (let i = 0, len = arrNormals.length; i < len; i++) arrNormals[i] = -arrNormals[i];
-    }
+    if (!geometry.getAttribute("normal")) computePointNormals(geometry);
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const extendedBoneInfluences = geometry.getAttribute("skinWeight2") !== undefined;

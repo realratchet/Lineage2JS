@@ -10,6 +10,7 @@ import type { ILightDecodeInfo } from "./un-light";
 import type { ISunLightDecodeInfo } from "./un-movable-sunlight";
 import type { IMusicVolumeDecodeInfo } from "./un-music-volume";
 import type { IWaterVolumeDecodeInfo } from "./un-physics-volume";
+import type { IBlockingVolumeDecodeInfo } from "./un-blocking-volume";
 import type { IAmbientSoundObjectDecodeInfo } from "./un-ambient-sound";
 import type { IScriptClassDecodeInfo, IScriptFunctionDecodeInfo, IScriptStateDecodeInfo, ScriptPropertyValue_T } from "./script-dump-loader";
 import type { QuaternionArr, Vector3Arr, EulerArr, ArrGeometryGroup, IndexLikeArray } from "./library-types";
@@ -41,6 +42,7 @@ export type DecodableObject_T =
     | "Sky"
     | "SkyZoneInfo"
     | "WaterVolume"
+    | "BlockingVolume"
     | "L2FogInfo";
 
 export type IBaseObjectOrInstanceDecodeInfo = {
@@ -105,6 +107,7 @@ export class DecodeLibrary {
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
     public levelInfoCollisionRadius: number;
+    public bspRootOutside: boolean;
     public helpersZoneBounds = false;
     public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
     public readonly bspColliders: IBoxDecodeInfo[] = [];
@@ -134,6 +137,7 @@ export class DecodeLibrary {
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public readonly musicVolumes: IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
     public readonly waterVolumes: IWaterVolumeDecodeInfo[] = [];
+    public readonly blockingVolumes: IBlockingVolumeDecodeInfo[] = [];
     public readonly ambientSounds: IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly sounds: Record<string, string> = {};

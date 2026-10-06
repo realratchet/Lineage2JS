@@ -1,16 +1,16 @@
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
-import { Box3, Quaternion, Vector3 } from "three";
-import type { CollisionBspIndex_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
+import { Quaternion, Vector3 } from "three";
+import type { ActorCollisionProfile_T, CollisionHull_T, CollisionPrimitive_T, ICollidable } from "./objects";
 import { GameObject } from "../game/components";
 import { ColliderComponent } from "../physics/components/physics-component";
 import type { Vector3Arr } from "@l2js/engine";
-import type { IBSPNodeDecodeInfo_T, IBSPNodeCollisionInfo_T } from "@l2js/engine/contracts/zone";
+import type { IBSPCollisionNodeDecodeInfo_T } from "@l2js/engine/contracts/mesh";
+import buildCollisionModel from "../physics/collision-model";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
 const tmpCapA = new Vector3();
 const tmpCapB = new Vector3();
-const HULL_FLIP = 0x40000000;
 const CLIP_EPSILON = 0.01;
 
 type HullPlane_T = { normal: Vector3, constant: number };
@@ -21,53 +21,29 @@ export class BSPCollider extends GameObject implements ICollidable {
     declare public readonly isCollidable: boolean;
 
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
-    protected readonly analyticalHulls: CollisionHull_T[] = [];
-    protected readonly analyticalBounds = new Box3();
     protected readonly analyticalPrimitive: CollisionPrimitive_T<"bsp">;
     protected readonly colliders: RAPIER.Collider[] = [];
     protected rigidbody: RAPIER.RigidBody = null;
     protected readonly collisionRadius: number;
+    protected readonly collisionProfile: ActorCollisionProfile_T;
 
-    public constructor(nodes: IBSPNodeDecodeInfo_T[], collisionRadius: number) {
+    public constructor(nodes: IBSPCollisionNodeDecodeInfo_T[], rootOutside: boolean, collisionRadius: number, collisionProfile: ActorCollisionProfile_T = null) {
         super();
 
         if (!Number.isFinite(collisionRadius)) throw new Error(`BSP collision has invalid LevelInfo radius '${collisionRadius}'.`);
         this.collisionRadius = collisionRadius;
+        this.collisionProfile = collisionProfile;
 
         (this as any).isCollidable = true;
 
         this.name = "BSPCollision";
 
-        const cacheHulls = new Set<string>();
+        const model = buildCollisionModel(nodes, rootOutside);
 
-        for (let i = 0, len = nodes.length; i < len; i++) {
-            const collision = nodes[i].collision;
-
-            if (!collision || !collision.bounds.isValid) continue;
-
-            const key = `${collision.flags.join(",")}/${collision.bounds.min.join(",")}/${collision.bounds.max.join(",")}`;
-
-            if (cacheHulls.has(key)) continue;
-
-            cacheHulls.add(key);
-
-            const min = collision.bounds.min;
-            const max = collision.bounds.max;
-            const bounds = new Box3(new Vector3().fromArray(min), new Vector3().fromArray(max));
-            const center = new Vector3((min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5);
-            const geometry = buildHullGeometry(nodes, collision, center);
-
-            this.analyticalHulls.push({
-                planes: collision.flags.map(flag => {
-                    const nodeIndex = flag & ~HULL_FLIP;
-                    const plane = nodes[nodeIndex].plane;
-                    const scale = flag & HULL_FLIP ? -1 : 1;
-
-                    return [plane[0] * scale, plane[1] * scale, plane[2] * scale, plane[3] * scale, nodeIndex];
-                }),
-                bounds
-            });
-            this.analyticalBounds.union(bounds);
+        for (let i = 0, len = model.hulls.length; i < len; i++) {
+            const hull = model.hulls[i];
+            const center = hull.bounds.getCenter(new Vector3());
+            const geometry = buildHullGeometry(hull, center);
 
             if (geometry.indices.length < 3) throw new Error(`BSP collision hull ${i} has no faces.`);
 
@@ -77,7 +53,7 @@ export class BSPCollider extends GameObject implements ICollidable {
             this.colliderDescs.push({ desc: colliderDesc, nodeIndex: i });
         }
 
-        this.analyticalPrimitive = { kind: "bsp", hulls: this.analyticalHulls, index: buildHullIndex(this.analyticalHulls), bounds: this.analyticalBounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
+        this.analyticalPrimitive = { kind: "bsp", model, bounds: model.bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
         this.addComponent(new ColliderComponent());
     }
 
@@ -108,82 +84,17 @@ export class BSPCollider extends GameObject implements ICollidable {
 
     public getCollider(): RAPIER.Collider { return this.colliders[0]; }
     public getCollisionRadius(): number { return this.collisionRadius; }
+    public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
     public getColliders(): RAPIER.Collider[] { return this.colliders; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
     public getCollisionPrimitive(): CollisionPrimitive_T { return this.analyticalPrimitive; }
 }
 
-function buildHullIndex(hulls: CollisionHull_T[]): CollisionBspIndex_T {
-    const cellSize = 1024;
-    const cacheCells = new Map<string, number[]>();
-    const largeHullIndices: number[] = [];
+function buildHullGeometry(hull: CollisionHull_T, center: Vector3): HullGeometry_T {
+    let faces = makeBoxFaces(hull.bounds.min.toArray() as Vector3Arr, hull.bounds.max.toArray() as Vector3Arr);
 
-    for (let i = 0, len = hulls.length; i < len; i++) {
-        const bounds = hulls[i].bounds;
-        const minX = Math.floor(bounds.min.x / cellSize), minY = Math.floor(bounds.min.y / cellSize);
-        const maxX = Math.floor(bounds.max.x / cellSize), maxY = Math.floor(bounds.max.y / cellSize);
-        const cellCount = (maxX - minX + 1) * (maxY - minY + 1);
-
-        if (!Number.isFinite(cellCount) || cellCount <= 0 || cellCount > 4096) {
-            largeHullIndices.push(i);
-            continue;
-        }
-
-        for (let x = minX; x <= maxX; x++)
-            for (let y = minY; y <= maxY; y++) {
-                const key = `${x},${y}`;
-                let arrIndices = cacheCells.get(key);
-
-                if (!arrIndices) {
-                    arrIndices = [];
-                    cacheCells.set(key, arrIndices);
-                }
-
-                arrIndices.push(i);
-            }
-    }
-
-    const cells = [...cacheCells].map(([key, arrIndices]) => ({ key: [...key.split(",").map(Number), 0], arrIndices }));
-
-    cells.sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1] || a.key[2] - b.key[2]);
-
-    const keys = new Int32Array(cells.length * 3);
-    const offsets = new Uint32Array(cells.length + 1);
-    let hullIndexCount = 0;
-
-    for (let i = 0, len = cells.length; i < len; i++) {
-        keys.set(cells[i].key, i * 3);
-        offsets[i] = hullIndexCount;
-        hullIndexCount += cells[i].arrIndices.length;
-    }
-
-    offsets[cells.length] = hullIndexCount;
-
-    const hullIndices = new Uint32Array(hullIndexCount);
-
-    for (let i = 0, len = cells.length; i < len; i++) hullIndices.set(cells[i].arrIndices, offsets[i]);
-
-    return { cellSize, keys, offsets, hullIndices, largeHullIndices: new Uint32Array(largeHullIndices), marks: new Uint32Array(hulls.length), queryTag: 0 };
-}
-
-function buildHullGeometry(nodes: IBSPNodeDecodeInfo_T[], collision: IBSPNodeCollisionInfo_T, center: Vector3): HullGeometry_T {
-    const min = collision.bounds.min;
-    const max = collision.bounds.max;
-    let faces = makeBoxFaces(min, max);
-
-    for (const flag of collision.flags) {
-        const nodeIndex = flag & ~HULL_FLIP;
-        const node = nodes[nodeIndex];
-
-        if (!node) throw new Error(`BSP collision references missing node ${nodeIndex}.`);
-
-        const plane = node.plane;
-        const scale = flag & HULL_FLIP ? -1 : 1;
-
-        faces = clipFaces(faces, {
-            normal: new Vector3(plane[0] * scale, plane[1] * scale, plane[2] * scale),
-            constant: plane[3] * scale
-        });
+    for (const plane of hull.planes) {
+        faces = clipFaces(faces, { normal: new Vector3(plane[0], plane[1], plane[2]), constant: plane[3] });
 
         if (faces.length === 0) break;
     }

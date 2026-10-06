@@ -40,9 +40,10 @@ export type IBSPSectionDecodeInfo_T = {
     blendingMode?: SupportedBlendingTypes_T
 };
 
+export type IBSPCollisionNodeDecodeInfo_T = { plane: Vector4Arr, children: [number, number], isCsg: boolean, collision?: IBSPNodeCollisionInfo_T };
 export type IBSPCollisionModelDecodeInfo = {
-    planes: Vector4Arr[];
-    hulls: IBSPNodeCollisionInfo_T[];
+    rootOutside: boolean;
+    nodes: IBSPCollisionNodeDecodeInfo_T[];
 };
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
@@ -148,6 +149,16 @@ export abstract class UModel extends UPrimitive {
     public getLevelInfo() { return this.levelInfo; }
     public getBspNodes() { return this.bspNodes; }
     public getIsRootOutside() { return this.isRootOutside; }
+    public getLeafHull(node: FBSPNode): IBSPNodeCollisionInfo_T {
+        const hullIndexList = (this.leafHulls.getTypedArray() as Int32Array).slice(node.iCollisionBound);
+        let hullPlanesCount = 0;
+
+        while (hullIndexList[hullPlanesCount] >= 0) hullPlanesCount++;
+
+        const bounds = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 7)).buffer);
+
+        return { flags: [...hullIndexList.slice(0, hullPlanesCount)], bounds: { isValid: true, min: [bounds[0], bounds[1], bounds[2]], max: [bounds[3], bounds[4], bounds[5]] } };
+    }
 
     protected preLoad(pkg: APackage, exp: UExport): void {
         super.preLoad(pkg, exp);
@@ -360,37 +371,21 @@ export abstract class UModel extends UPrimitive {
     }
 
     public getCollisionModelDecodeInfo(): IBSPCollisionModelDecodeInfo {
-        const planes = this.bspNodes.map((node: FBSPNode) => node.plane.getElements());
-        const hulls: IBSPNodeCollisionInfo_T[] = [];
-        const leafHulls = this.leafHulls.getTypedArray() as Int32Array;
+        const nodes = this.bspNodes.map((node: FBSPNode) => {
+            const info: IBSPCollisionNodeDecodeInfo_T = { plane: node.plane.getElements(), children: [node.iFront, node.iBack], isCsg: this.isCsg(node) };
 
-        for (const node of this.bspNodes) {
-            if (node.iCollisionBound < 0) continue;
+            if (node.iCollisionBound >= 0) info.collision = this.getLeafHull(node);
 
-            const hullIndexList = leafHulls.slice(node.iCollisionBound);
-            let hullPlanesCount = 0;
+            return info;
+        });
 
-            while (hullIndexList[hullPlanesCount] >= 0) hullPlanesCount++;
-
-            const bounds = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 7)).buffer);
-
-            hulls.push({
-                flags: [...hullIndexList.slice(0, hullPlanesCount)],
-                bounds: {
-                    isValid: true,
-                    min: [bounds[0], bounds[1], bounds[2]],
-                    max: [bounds[3], bounds[4], bounds[5]]
-                }
-            });
-        }
-
-        return { planes, hulls };
+        return { rootOutside: this.isRootOutside, nodes };
     }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder, uLevelInfo: ULevelInfo): ModelDecodeResult_T {
         const library = builder.library;
         const result: ModelDecodeResult_T = Object.assign(this.getZoneDecodeInfo(library, uLevelInfo), {
-            bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
+            bspRootOutside: this.isRootOutside, bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
         });
 
         this.multiLightmaps.map((lm: FMultiLightmapTexture) => builder.pullStaticLightmap(lm.textures[0].staticLightmap));
@@ -681,7 +676,7 @@ function boxPushOut(normal: FVector | FPlane, size: FVector) {
 
 type PriorityGroups_T = "opaque" | "transparent";
 type ModelZoneDecodeResult_T = { bspLeaves: IBSPLeafDecodeInfo_T[], bspZones: IBSPZoneDecodeInfo_T[], bspZoneIndexMap: Record<string, number> };
-type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspNodes: IBSPNodeDecodeInfo_T[], bspColliders: IBoxDecodeInfo[], leafActors: IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: IBoxDecodeInfo[], bspSections: IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, IGeometryDecodeInfo][], materials: [string, IBaseMaterialDecodeInfo][] };
+type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspRootOutside: boolean, bspNodes: IBSPNodeDecodeInfo_T[], bspColliders: IBoxDecodeInfo[], leafActors: IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: IBoxDecodeInfo[], bspSections: IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, IGeometryDecodeInfo][], materials: [string, IBaseMaterialDecodeInfo][] };
 type ObjectsForSection_T = {
     material: string,  // material UUID
     lightmap: string | null,  // lightmap UUID

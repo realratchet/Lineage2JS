@@ -1,5 +1,5 @@
 import { Box3, Matrix3, Matrix4, Vector3 } from "three";
-import type { CollisionHull_T, CollisionPrimitive_T, CollisionTriangleIndex_T } from "../objects/objects";
+import type { CollisionModel_T, CollisionPrimitive_T, CollisionTriangleIndex_T } from "../objects/objects";
 
 const tmpA = new Vector3();
 const tmpB = new Vector3();
@@ -18,15 +18,18 @@ const tmpPointExtent = new Vector3();
 const tmpLocalStart = new Vector3();
 const tmpLocalEnd = new Vector3();
 const tmpLocalExtent = new Vector3();
-const tmpBounds = new Box3();
 const tmpMatrix = new Matrix4();
 const tmpNormalMatrix = new Matrix3();
+const tmpModelNormalMatrix = new Matrix3();
+const tmpPlanePoint = new Vector3();
+const tmpPlaneNormal = new Vector3();
 const tmpTriangleHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
 const tmpHullHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
 const tmpBestHit: PrimitiveHit_T = { time: 1, normal: new Vector3(), item: -1 };
 const tmpPointHit: PrimitiveHit_T = { time: 0, normal: new Vector3(), item: -1 };
 const clipState: ClipState_T = { t0: -1, t1: 1, normal: new Vector3(), item: -1, hit: false };
-const arrModelPlanes: HullPlane_T[] = [];
+const arrHullPlanes: HullPlane_T[] = [];
+const arrHullBoxPlanes: HullPlane_T[] = [];
 let pointBestDistance = Infinity;
 let staticPrimitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }> = null;
 let staticStart: Vector3 = null;
@@ -37,12 +40,21 @@ let staticWorldEnd: Vector3 = null;
 let staticWorldExtent: Vector3 = null;
 let staticBestTime = 1;
 let staticBestItem = -1;
-let bspPrimitive: Extract<CollisionPrimitive_T, { kind: "bsp" }> = null;
+let bspModel: CollisionModel_T = null;
+let bspMatrix: Matrix4 = null;
+let bspPlaneX = 0;
+let bspPlaneY = 0;
+let bspPlaneZ = 0;
+let bspPlaneW = 0;
 let bspStart: Vector3 = null;
 let bspEnd: Vector3 = null;
 let bspExtent: Vector3 = null;
-let bspBestTime = 1;
-let bspBestItem = -1;
+let bspBestTime = 2;
+let bspHit = false;
+let bspHitX = 0;
+let bspHitY = 0;
+let bspHitZ = 0;
+let bspHitItem = -1;
 let terrainPrimitive: Extract<CollisionPrimitive_T, { kind: "terrain" }> = null;
 let terrainBestTime = 1;
 let terrainBestItem = -1;
@@ -805,26 +817,20 @@ function pointTriangle(location: Vector3, extent: Vector3, a: Vector3, b: Vector
     return tmpPointHit;
 }
 
-function pointHull(hull: CollisionHull_T, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Vector3, extent: Vector3): PrimitiveHit_T | null {
     pointBestDistance = Infinity;
 
-    for (const plane of hull.planes)
+    for (const plane of planes)
         if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
 
-    const min = hull.bounds.min, max = hull.bounds.max;
+    for (const plane of boxPlanes)
+        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
 
-    if (!pointClip(0, 0, -1, 0.1 - min.z, location, extent)) return null;
-    if (!pointClip(0, 0, 1, max.z + 0.1, location, extent)) return null;
-    if (!pointClip(-1, 0, 0, 0.1 - min.x, location, extent)) return null;
-    if (!pointClip(1, 0, 0, max.x - 0.1, location, extent)) return null;
-    if (!pointClip(0, -1, 0, 0.1 - min.y, location, extent)) return null;
-    if (!pointClip(0, 1, 0, max.y - 0.1, location, extent)) return null;
-
-    for (let i = 0, len = hull.planes.length; i < len; i++) {
-        const a = hull.planes[i];
+    for (let i = 0, len = planes.length; i < len; i++) {
+        const a = planes[i];
 
         for (let j = 0; j < i; j++) {
-            const b = hull.planes[j];
+            const b = planes[j];
             const flags = planeFlags(a[0], a[1], a[2]) | planeFlags(b[0], b[1], b[2]);
 
             if (!intersectPlanes(a, b)) continue;
@@ -852,128 +858,231 @@ function pointHull(hull: CollisionHull_T, location: Vector3, extent: Vector3): P
     return tmpPointHit;
 }
 
-function pointModelHull(location: Vector3, extent: Vector3): PrimitiveHit_T | null {
-    pointBestDistance = Infinity;
+function loadBspPlane(x: number, y: number, z: number, w: number) {
+    if (!bspMatrix) {
+        bspPlaneX = x;
+        bspPlaneY = y;
+        bspPlaneZ = z;
+        bspPlaneW = w;
+        return;
+    }
 
-    for (const plane of arrModelPlanes)
-        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+    tmpPlaneNormal.set(x, y, z).applyMatrix3(tmpModelNormalMatrix).normalize();
+    tmpPlanePoint.set(x * w, y * w, z * w).applyMatrix4(bspMatrix);
 
-    for (let i = 0, len = arrModelPlanes.length; i < len; i++) {
-        const a = arrModelPlanes[i];
+    bspPlaneX = tmpPlaneNormal.x;
+    bspPlaneY = tmpPlaneNormal.y;
+    bspPlaneZ = tmpPlaneNormal.z;
+    bspPlaneW = tmpPlaneNormal.dot(tmpPlanePoint);
+}
 
-        for (let j = 0; j < i; j++) {
-            const b = arrModelPlanes[j];
-            const flags = planeFlags(a[0], a[1], a[2]) | planeFlags(b[0], b[1], b[2]);
+function loadBspNodePlane(iNode: number) {
+    const planes = bspModel.planes, p = iNode * 4;
 
-            if (!intersectPlanes(a, b)) continue;
+    loadBspPlane(planes[p], planes[p + 1], planes[p + 2], planes[p + 3]);
+}
 
-            if ((flags & 3) === 3) {
-                tmpN.set(0, -tmpD.z, tmpD.y).normalize();
-                if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
-            }
-            if ((flags & 12) === 12) {
-                tmpN.set(tmpD.z, 0, -tmpD.x).normalize();
-                if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
-            }
-            if ((flags & 48) === 48) {
-                tmpN.set(-tmpD.y, tmpD.x, 0).normalize();
-                if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
-            }
+function loadBspHullPlanes(source: HullPlane_T[], target: HullPlane_T[]): HullPlane_T[] {
+    if (!bspMatrix) return source;
+
+    target.length = source.length;
+
+    for (let i = 0, len = source.length; i < len; i++) {
+        const plane = target[i] || (target[i] = [0, 0, 0, 0, 0]);
+
+        loadBspPlane(source[i][0], source[i][1], source[i][2], source[i][3]);
+        plane[0] = bspPlaneX;
+        plane[1] = bspPlaneY;
+        plane[2] = bspPlaneZ;
+        plane[3] = bspPlaneW;
+        plane[4] = source[i][4];
+    }
+
+    return target;
+}
+
+function beginBspQuery(model: CollisionModel_T, matrix: Matrix4) {
+    bspModel = model;
+    bspMatrix = matrix;
+
+    if (matrix) tmpModelNormalMatrix.getNormalMatrix(matrix);
+}
+
+function bspChildOutside(iNode: number, isFront: number, outside: boolean): boolean {
+    return isFront ? outside || bspModel.isCsg[iNode] === 1 : outside && bspModel.isCsg[iNode] === 0;
+}
+
+function bspLineCheck(iHit: number, iNode: number, endX: number, endY: number, endZ: number, startX: number, startY: number, startZ: number, outside: boolean): boolean { // retail 0x9cb370, ExtraNodeFlags is always 0 so NF_BrightCorners never applies
+    const children = bspModel.children;
+
+    while (iNode !== -1) {
+        loadBspNodePlane(iNode);
+
+        const dist1 = bspPlaneX * startX + bspPlaneY * startY + bspPlaneZ * startZ - bspPlaneW;
+        const dist2 = bspPlaneX * endX + bspPlaneY * endY + bspPlaneZ * endZ - bspPlaneW;
+
+        if (dist1 > -0.001 && dist2 > -0.001) {
+            outside = bspChildOutside(iNode, 1, outside);
+            iNode = children[iNode * 2 + 1];
+        } else if (dist1 < 0.001 && dist2 < 0.001) {
+            outside = bspChildOutside(iNode, 0, outside);
+            iNode = children[iNode * 2];
+        } else {
+            const alpha = dist1 / (dist2 - dist1);
+            const middleX = startX + (startX - endX) * alpha, middleY = startY + (startY - endY) * alpha, middleZ = startZ + (startZ - endZ) * alpha;
+            const frontFirst = dist1 > 0 ? 1 : 0;
+
+            if (!bspLineCheck(iHit, children[iNode * 2 + frontFirst], middleX, middleY, middleZ, startX, startY, startZ, bspChildOutside(iNode, frontFirst, outside))) return false;
+
+            outside = bspChildOutside(iNode, 1 - frontFirst, outside);
+            iHit = iNode;
+            iNode = children[iNode * 2 + 1 - frontFirst];
+            startX = middleX;
+            startY = middleY;
+            startZ = middleZ;
         }
     }
 
-    tmpPointHit.item = -1;
-
-    return tmpPointHit;
-}
-
-function findBspCell(x: number, y: number, z: number): number {
-    const keys = bspPrimitive.index.keys;
-    let min = 0, max = keys.length / 3 - 1;
-
-    while (min <= max) {
-        const middle = (min + max) >> 1;
-        const offset = middle * 3;
-        const difference = keys[offset] - x || keys[offset + 1] - y || keys[offset + 2] - z;
-
-        if (difference < 0) min = middle + 1;
-        else if (difference > 0) max = middle - 1;
-        else return middle;
+    if (!outside) {
+        bspHitX = startX;
+        bspHitY = startY;
+        bspHitZ = startZ;
+        bspHitItem = iHit;
     }
 
-    return -1;
+    return outside;
 }
 
-function queryIndexedHull(index: number) {
-    const bspIndex = bspPrimitive.index;
+function bspBoxLineCheck(iParent: number, iNode: number, outside: boolean) { // retail 0x9cd7b0
+    const children = bspModel.children;
 
-    if (bspIndex.marks[index] === bspIndex.queryTag) return;
+    while (iNode !== -1) {
+        loadBspNodePlane(iNode);
 
-    bspIndex.marks[index] = bspIndex.queryTag;
+        const d0 = bspPlaneX * bspStart.x + bspPlaneY * bspStart.y + bspPlaneZ * bspStart.z - bspPlaneW;
+        const d1 = bspPlaneX * bspEnd.x + bspPlaneY * bspEnd.y + bspPlaneZ * bspEnd.z - bspPlaneW;
+        const pushOut = Math.abs(bspPlaneX * bspExtent.x * 1.1) + Math.abs(bspPlaneY * bspExtent.y * 1.1) + Math.abs(bspPlaneZ * bspExtent.z * 1.1);
+        const useBack = d0 <= pushOut || d1 <= pushOut, useFront = d0 >= -pushOut || d1 >= -pushOut;
+        const frontFirst = d0 >= d1 ? 1 : 0;
 
-    const hull = bspPrimitive.hulls[index];
+        if (frontFirst ? useFront : useBack) bspBoxLineCheck(iNode, children[iNode * 2 + frontFirst], bspChildOutside(iNode, frontFirst, outside));
+        if (!(frontFirst ? useBack : useFront)) return;
 
-    if (!sweptIntersectsBox(bspStart, bspEnd, bspExtent, hull.bounds)) return;
-
-    const hit = queryHull(hull, bspStart, bspEnd, bspExtent, bspBestTime);
-
-    if (!hit || hit.time >= bspBestTime) return;
-
-    bspBestTime = hit.time;
-    bspBestItem = hit.item;
-    tmpBestHit.normal.copy(hit.normal);
-}
-
-function visitBspCell(x: number, y: number) {
-    const bspIndex = bspPrimitive.index;
-    const cell = findBspCell(x, y, 0);
-
-    if (cell < 0) return Infinity;
-
-    for (let i = bspIndex.offsets[cell]; i < bspIndex.offsets[cell + 1]; i++) queryIndexedHull(bspIndex.hullIndices[i]);
-
-    return Infinity; // hull bounds don't contain every hit point, an early exit here dropped nearer hits
-}
-
-function queryBsp(primitive: Extract<CollisionPrimitive_T, { kind: "bsp" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
-    const bspIndex = primitive.index;
-
-    bspIndex.queryTag++;
-
-    if (bspIndex.queryTag === 0xffffffff) {
-        bspIndex.queryTag = 1;
-        bspIndex.marks.fill(0);
+        iParent = iNode;
+        outside = bspChildOutside(iNode, 1 - frontFirst, outside);
+        iNode = children[iNode * 2 + 1 - frontFirst];
     }
 
-    bspPrimitive = primitive;
+    const hullIndex = bspModel.hullIndices[iParent];
+
+    if (outside || hullIndex === -1) return;
+
+    const hull = bspModel.hulls[hullIndex];
+
+    resetClip(bspBestTime, -1);
+
+    if (!clipBspHull(loadBspHullPlanes(hull.planes, arrHullPlanes), loadBspHullPlanes(hull.boxPlanes, arrHullBoxPlanes), bspStart, bspEnd, bspExtent)) return;
+    if (!(clipState.t0 > -1 && clipState.t0 < clipState.t1 && clipState.t1 > 0)) return;
+
+    bspBestTime = clipState.t0;
+    bspHit = true;
+    tmpBestHit.normal.copy(clipState.normal);
+    tmpBestHit.item = clipState.item;
+}
+
+function queryBsp(model: CollisionModel_T, matrix: Matrix4, start: Vector3, end: Vector3, extent: Vector3): PrimitiveHit_T | null { // retail UModel::LineCheck 0x9ce810
+    beginBspQuery(model, matrix);
+
+    if (extent.x === 0 && extent.y === 0 && extent.z === 0) {
+        if (bspLineCheck(0, 0, end.x, end.y, end.z, start.x, start.y, start.z, model.rootOutside)) return null;
+
+        const dx = end.x - start.x, dy = end.y - start.y, dz = end.z - start.z;
+
+        loadBspNodePlane(bspHitItem);
+
+        tmpBestHit.time = ((bspHitX - start.x) * dx + (bspHitY - start.y) * dy + (bspHitZ - start.z) * dz) / (dx * dx + dy * dy + dz * dz);
+        tmpBestHit.normal.set(bspPlaneX, bspPlaneY, bspPlaneZ);
+        tmpBestHit.item = bspHitItem;
+
+        if (-dx * bspPlaneX - dy * bspPlaneY - dz * bspPlaneZ < 0) tmpBestHit.normal.negate();
+
+        return tmpBestHit;
+    }
+
     bspStart = start;
     bspEnd = end;
     bspExtent = extent;
-    bspBestTime = maxTime;
-    bspBestItem = -1;
+    bspBestTime = 2;
+    bspHit = false;
 
-    const cellSize = bspIndex.cellSize;
-    const bounds = primitive.bounds;
+    bspBoxLineCheck(0, 0, model.rootOutside);
 
-    for (const index of bspIndex.largeHullIndices) queryIndexedHull(index);
-
-    walkGridCells(
-        start.x / cellSize, start.y / cellSize, end.x / cellSize, end.y / cellSize,
-        Math.ceil(extent.x / cellSize), Math.ceil(extent.y / cellSize),
-        Math.floor(bounds.min.x / cellSize), Math.floor(bounds.min.y / cellSize),
-        Math.floor(bounds.max.x / cellSize), Math.floor(bounds.max.y / cellSize),
-        visitBspCell
-    );
-
-    if (bspBestItem < 0 && bspBestTime === maxTime) return null;
+    if (!bspHit) return null;
 
     tmpBestHit.time = bspBestTime;
-    tmpBestHit.item = bspBestItem;
 
     return tmpBestHit;
+}
+
+function bspBoxPointCheck(iParent: number, iNode: number, outside: boolean, location: Vector3, extent: Vector3): boolean { // retail 0x9cc580
+    const children = bspModel.children;
+    let result = true;
+
+    while (iNode !== -1) {
+        loadBspNodePlane(iNode);
+
+        const dist = bspPlaneX * location.x + bspPlaneY * location.y + bspPlaneZ * location.z - bspPlaneW;
+        const pushOut = Math.abs(bspPlaneX * extent.x * 1.1) + Math.abs(bspPlaneY * extent.y * 1.1) + Math.abs(bspPlaneZ * extent.z * 1.1);
+
+        if (dist > -pushOut && !bspBoxPointCheck(iNode, children[iNode * 2 + 1], bspChildOutside(iNode, 1, outside), location, extent)) result = false;
+
+        iParent = iNode;
+        outside = bspChildOutside(iNode, 0, outside);
+        iNode = children[iNode * 2];
+
+        if (dist > pushOut) return result;
+    }
+
+    const hullIndex = bspModel.hullIndices[iParent];
+
+    if (outside || hullIndex === -1) return result;
+
+    const hull = bspModel.hulls[hullIndex];
+
+    if (!pointHull(loadBspHullPlanes(hull.planes, arrHullPlanes), loadBspHullPlanes(hull.boxPlanes, arrHullBoxPlanes), location, extent)) return result;
+
+    return false;
+}
+
+function pointBsp(model: CollisionModel_T, matrix: Matrix4, location: Vector3, extent: Vector3): PrimitiveHit_T | null { // retail UModel::PointCheck 0x9cd410
+    beginBspQuery(model, matrix);
+
+    if (extent.x !== 0 || extent.y !== 0 || extent.z !== 0) {
+        if (bspBoxPointCheck(0, 0, model.rootOutside, location, extent)) return null;
+
+        tmpPointHit.item = -1;
+
+        return tmpPointHit;
+    }
+
+    const children = model.children;
+    let iNode = 0, iPrevNode = 0, isFront = 0, outside = model.rootOutside;
+
+    do {
+        loadBspNodePlane(iNode);
+
+        iPrevNode = iNode;
+        isFront = bspPlaneX * location.x + bspPlaneY * location.y + bspPlaneZ * location.z - bspPlaneW > 0 ? 1 : 0;
+        outside = bspChildOutside(iNode, isFront, outside);
+        iNode = children[iNode * 2 + isFront];
+    } while (iNode !== -1);
+
+    if (outside) return null;
+
+    tmpPointHit.normal.set(0, 0, 0);
+    tmpPointHit.item = iPrevNode * 2 + isFront;
+
+    return tmpPointHit;
 }
 
 export function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
@@ -991,23 +1100,10 @@ export function pointPrimitive(primitive: CollisionPrimitive_T, location: Vector
         return tmpPointHit;
     }
 
-    if (primitive.kind === "staticMesh" && primitive.simpleCollisionHulls && primitive.useSimpleBoxCollision)
-        return pointModel(primitive, location, extent);
+    if (primitive.kind === "staticMesh" && primitive.collisionModel && primitive.useSimpleBoxCollision)
+        return pointBsp(primitive.collisionModel, primitive.matrixWorld, location, extent);
 
-    if (primitive.kind === "bsp") {
-        tmpBounds.min.copy(location).sub(extent);
-        tmpBounds.max.copy(location).add(extent);
-
-        for (const hull of primitive.hulls) {
-            if (!tmpBounds.intersectsBox(hull.bounds)) continue;
-
-            const hit = pointHull(hull, location, extent);
-
-            if (hit) return hit;
-        }
-
-        return null;
-    }
+    if (primitive.kind === "bsp") return pointBsp(primitive.model, null, location, extent);
 
     if (primitive.kind === "terrain") {
         tmpPointStart.copy(location).setZ(location.z + extent.z);
@@ -1041,7 +1137,7 @@ function intersectPlanes(a: [number, number, number, number, number], b: [number
 
     const denominator = tmpD.lengthSq();
 
-    if (denominator < 1e-12) return false;
+    if (denominator < 0.000001) return false; // FIntersectPlanes2 0x9cc310 zeroes I and D below this, which makes the convolved plane a NaN no-op
 
     tmpIntersection.crossVectors(tmpN2, tmpD).multiplyScalar(a[3]);
     tmpIntersection.add(tmpE.crossVectors(tmpD, tmpN).multiplyScalar(b[3])).multiplyScalar(1 / denominator);
@@ -1075,161 +1171,36 @@ function clipHullEdge(a: [number, number, number, number, number], b: [number, n
     return clipBspPlane(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), -1, start, end, extent);
 }
 
-function queryHull(hull: CollisionHull_T, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
-    resetClip(maxTime, -1);
+function clipBspHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], start: Vector3, end: Vector3, extent: Vector3): boolean {
+    for (const plane of planes)
+        if (!clipBspPlane(plane[0], plane[1], plane[2], plane[3], plane[4], start, end, extent)) return false;
 
-    for (const plane of hull.planes)
-        if (!clipBspPlane(plane[0], plane[1], plane[2], plane[3], plane[4], start, end, extent)) return null;
+    for (const plane of boxPlanes)
+        if (!clipBspPlane(plane[0], plane[1], plane[2], plane[3], -1, start, end, extent)) return false;
 
-    const min = hull.bounds.min, max = hull.bounds.max;
-
-    if (!clipBspPlane(0, 0, -1, 0.1 - min.z, -1, start, end, extent)) return null;
-    if (!clipBspPlane(0, 0, 1, max.z + 0.1, -1, start, end, extent)) return null;
-    if (!clipBspPlane(-1, 0, 0, 0.1 - min.x, -1, start, end, extent)) return null;
-    if (!clipBspPlane(1, 0, 0, max.x - 0.1, -1, start, end, extent)) return null;
-    if (!clipBspPlane(0, -1, 0, 0.1 - min.y, -1, start, end, extent)) return null;
-    if (!clipBspPlane(0, 1, 0, max.y - 0.1, -1, start, end, extent)) return null;
-
-    for (let i = 0, len = hull.planes.length; i < len; i++) {
-        const a = hull.planes[i];
+    for (let i = 0, len = planes.length; i < len; i++) {
+        const a = planes[i];
 
         for (let j = 0; j < i; j++) {
-            const b = hull.planes[j];
+            const b = planes[j];
             const flags = planeFlags(a[0], a[1], a[2]) | planeFlags(b[0], b[1], b[2]);
 
-            if ((flags & 3) === 3 && !clipHullEdge(a, b, 0, start, end, extent)) return null;
-            if ((flags & 12) === 12 && !clipHullEdge(a, b, 1, start, end, extent)) return null;
-            if ((flags & 48) === 48 && !clipHullEdge(a, b, 2, start, end, extent)) return null;
+            if ((flags & 3) === 3 && !clipHullEdge(a, b, 0, start, end, extent)) return false;
+            if ((flags & 12) === 12 && !clipHullEdge(a, b, 1, start, end, extent)) return false;
+            if ((flags & 48) === 48 && !clipHullEdge(a, b, 2, start, end, extent)) return false;
         }
     }
 
-    if (!clipState.hit || clipState.t0 < 0 || clipState.t0 >= clipState.t1 || clipState.t1 <= 0) return null;
-
-    tmpHullHit.time = clipState.t0;
-    tmpHullHit.normal.copy(clipState.normal);
-    tmpHullHit.item = clipState.item;
-
-    return tmpHullHit;
-}
-
-function queryModelHull(start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
-    resetClip(maxTime, -1);
-
-    for (const plane of arrModelPlanes)
-        if (!clipBspPlane(plane[0], plane[1], plane[2], plane[3], plane[4], start, end, extent)) return null;
-
-    for (let i = 0, len = arrModelPlanes.length; i < len; i++) {
-        const a = arrModelPlanes[i];
-
-        for (let j = 0; j < i; j++) {
-            const b = arrModelPlanes[j];
-            const flags = planeFlags(a[0], a[1], a[2]) | planeFlags(b[0], b[1], b[2]);
-
-            if ((flags & 3) === 3 && !clipHullEdge(a, b, 0, start, end, extent)) return null;
-            if ((flags & 12) === 12 && !clipHullEdge(a, b, 1, start, end, extent)) return null;
-            if ((flags & 48) === 48 && !clipHullEdge(a, b, 2, start, end, extent)) return null;
-        }
-    }
-
-    if (!clipState.hit || clipState.t0 < 0 || clipState.t0 >= clipState.t1 || clipState.t1 <= 0) return null;
-
-    tmpHullHit.time = clipState.t0;
-    tmpHullHit.normal.copy(clipState.normal);
-    tmpHullHit.item = clipState.item;
-
-    return tmpHullHit;
-}
-
-function addModelPlane(nx: number, ny: number, nz: number, constant: number, item: number, matrix: Matrix4) {
-    tmpN.set(nx, ny, nz);
-    tmpIntersection.copy(tmpN).multiplyScalar(constant / tmpN.lengthSq()).applyMatrix4(matrix);
-    tmpN.applyMatrix3(tmpNormalMatrix).normalize();
-    arrModelPlanes.push([tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), item]);
-}
-
-function loadModelPlanes(hull: CollisionHull_T, matrix: Matrix4) {
-    arrModelPlanes.length = 0;
-    tmpNormalMatrix.getNormalMatrix(matrix);
-
-    for (const plane of hull.planes) addModelPlane(plane[0], plane[1], plane[2], plane[3], plane[4], matrix);
-
-    const min = hull.bounds.min, max = hull.bounds.max;
-
-    addModelPlane(0, 0, -1, 0.1 - min.z, -1, matrix);
-    addModelPlane(0, 0, 1, max.z + 0.1, -1, matrix);
-    addModelPlane(-1, 0, 0, 0.1 - min.x, -1, matrix);
-    addModelPlane(1, 0, 0, max.x - 0.1, -1, matrix);
-    addModelPlane(0, -1, 0, 0.1 - min.y, -1, matrix);
-    addModelPlane(0, 1, 0, max.y - 0.1, -1, matrix);
-}
-
-function getLocalQuery(matrix: Matrix4, start: Vector3, end: Vector3, extent: Vector3) {
-    tmpMatrix.copy(matrix).invert();
-    tmpLocalStart.copy(start).applyMatrix4(tmpMatrix);
-    tmpLocalEnd.copy(end).applyMatrix4(tmpMatrix);
-
-    const elements = tmpMatrix.elements;
-
-    tmpLocalExtent.set(
-        Math.abs(elements[0]) * extent.x + Math.abs(elements[4]) * extent.y + Math.abs(elements[8]) * extent.z,
-        Math.abs(elements[1]) * extent.x + Math.abs(elements[5]) * extent.y + Math.abs(elements[9]) * extent.z,
-        Math.abs(elements[2]) * extent.x + Math.abs(elements[6]) * extent.y + Math.abs(elements[10]) * extent.z
-    );
-}
-
-function queryModel(primitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
-    getLocalQuery(primitive.matrixWorld, start, end, extent);
-
-    let bestTime = maxTime;
-    let bestItem = -1;
-
-    for (const hull of primitive.simpleCollisionHulls) {
-        if (!sweptIntersectsBox(tmpLocalStart, tmpLocalEnd, tmpLocalExtent, hull.bounds)) continue;
-
-        loadModelPlanes(hull, primitive.matrixWorld);
-
-        const hit = queryModelHull(start, end, extent, bestTime);
-
-        if (!hit || hit.time >= bestTime) continue;
-
-        bestTime = hit.time;
-        bestItem = hit.item;
-        tmpBestHit.normal.copy(hit.normal);
-    }
-
-    if (bestItem < 0 && bestTime === maxTime) return null;
-
-    tmpBestHit.time = bestTime;
-    tmpBestHit.item = bestItem;
-
-    return tmpBestHit;
-}
-
-function pointModel(primitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }>, location: Vector3, extent: Vector3): PrimitiveHit_T | null {
-    getLocalQuery(primitive.matrixWorld, location, location, extent);
-    tmpBounds.min.copy(tmpLocalStart).sub(tmpLocalExtent);
-    tmpBounds.max.copy(tmpLocalStart).add(tmpLocalExtent);
-
-    for (const hull of primitive.simpleCollisionHulls) {
-        if (!tmpBounds.intersectsBox(hull.bounds)) continue;
-
-        loadModelPlanes(hull, primitive.matrixWorld);
-
-        const hit = pointModelHull(location, extent);
-
-        if (hit) return hit;
-    }
-
-    return null;
+    return true;
 }
 
 export function queryPrimitive(primitive: CollisionPrimitive_T, start: Vector3, end: Vector3, extent: Vector3, maxTime: number = 1): PrimitiveHit_T | null {
     if (primitive.kind === "cylinder") return queryCylinder(primitive, start, end, extent, maxTime);
-    if (primitive.kind === "staticMesh" && primitive.simpleCollisionHulls && (extent.lengthSq() === 0 ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
-        return queryModel(primitive, start, end, extent, maxTime);
+    if (primitive.kind === "staticMesh" && primitive.collisionModel && (extent.lengthSq() === 0 ? primitive.useSimpleLineCollision : primitive.useSimpleBoxCollision))
+        return queryBsp(primitive.collisionModel, primitive.matrixWorld, start, end, extent);
     if (primitive.kind !== "bsp") return queryTriangles(primitive, start, end, extent, maxTime);
 
-    return queryBsp(primitive, start, end, extent, maxTime);
+    return queryBsp(primitive.model, null, start, end, extent);
 }
 
 export function sweptBounds(start: Vector3, end: Vector3, extent: Vector3, target: Box3): Box3 {

@@ -177,20 +177,25 @@ function decodeCubemap(library: DecodeLibrary, info: ICubemapDecodeInfo): MapDat
     if (info.faces.length !== 6)
         throw new Error(`Cubemap '${info.name}' has ${info.faces.length} faces.`);
 
-    const faces = info.faces.map(face => face ? fetchMapTexture(library, library.materials[face]) : fetchTexture(library, null));
+    const faces = info.faces.map(face => face ? fetchMapTexture(library, library.materials[face]) : null);
+    const first = faces.find(face => face);
 
-    if (faces.length !== 6 || faces.some(face => !face))
-        throw new Error(`Cubemap '${info.name}' must decode six texture faces.`);
+    if (!first) throw new Error(`Cubemap '${info.name}' has no texture faces.`);
 
-    const compressedFaces = faces.filter(face => (face.texture as any).isCompressedTexture).length;
+    const isCompressed = !!(first.texture as any).isCompressedTexture;
 
-    if (compressedFaces !== 0 && compressedFaces !== 6) throw new Error(`Cubemap '${info.name}' mixes compressed and uncompressed faces.`);
+    if (faces.some(face => face && !!(face.texture as any).isCompressedTexture !== isCompressed)) throw new Error(`Cubemap '${info.name}' mixes compressed and uncompressed faces.`);
 
-    const texture = compressedFaces === 6 // three picks the cube upload path from the cube's own format, compressed faces in a plain CubeTexture go up as raw RGBA
-        ? new CompressedCubeTexture(faces.map(face => ({ width: (face.texture.image as any).width, height: (face.texture.image as any).height, mipmaps: (face.texture as any).mipmaps })) as any, faces[0].texture.format as THREE.CompressedPixelFormat)
-        : new CubeTexture(faces.map(face => face.texture));
+    const texture = isCompressed // three picks the cube upload path from the cube's own format, compressed faces in a plain CubeTexture go up as raw RGBA
+        ? new CompressedCubeTexture(faces.map(face => {
+            const source = (face ?? first).texture as any;
+            const mipmaps = face ? source.mipmaps : source.mipmaps.map((mip: any) => ({ width: mip.width, height: mip.height, data: new Uint8Array(mip.data.length) })); // D3D skips a NULL face's upload, leaving zeroed (black) blocks
 
-    if (compressedFaces === 6) texture.minFilter = faces[0].texture.minFilter;
+            return { width: source.image.width, height: source.image.height, mipmaps };
+        }) as any, first.texture.format as THREE.CompressedPixelFormat)
+        : new CubeTexture(faces.map(face => (face ?? fetchTexture(library, null)).texture));
+
+    if (isCompressed) texture.minFilter = first.texture.minFilter;
 
     texture.name = info.name ?? "Cubemap";
     texture.needsUpdate = true;
