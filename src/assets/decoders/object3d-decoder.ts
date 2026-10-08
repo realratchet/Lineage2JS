@@ -480,9 +480,10 @@ export function decodeSectorCore(library: DecodeLibrary) {
     library.skyZoneInfos.forEach(info => sector.add(decodeObject3D(library, info)));
     sector.musicVolumes = library.musicVolumes;
     sector.waterVolumes = library.waterVolumes;
+    sector.physicsVolumes = library.physicsVolumes;
     sector.ambientSounds = library.ambientSounds;
 
-    for (const volume of sector.waterVolumes) sector.scriptVM.initializeHost(volume);
+    for (const volume of sector.physicsVolumes) sector.scriptVM.initializeHost(volume);
 
     for (const pawnInfo of library.pawnActors)
         sector.pawns.add(decodeObject3D(library, pawnInfo));

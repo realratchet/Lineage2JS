@@ -1,7 +1,7 @@
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
-import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T } from "./collision-world";
+import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T } from "./collision-world";
 import Player from "../player";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
@@ -12,6 +12,7 @@ import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
 import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
+import type { ScriptHost_T } from "../ue-script/vm";
 
 const arrMoverPawns: BaseActor[] = [];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
@@ -181,6 +182,9 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public updateDynamicEntries(currentTime: number): void { this.collisionWorld.updateDynamicEntries(currentTime); }
     public moveActor(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.moveActor(query); }
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.singleLineCheck(query); }
+    public physicsVolumeLineCheck(start: Vector3, end: Vector3, source: ScriptHost_T = null, sourceIsPawn: boolean = false): PhysicsVolumeHit_T | null {
+        return this.collisionWorld.physicsVolumeLineCheck(start, end, source, sourceIsPawn);
+    }
     public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true): RayCheckResult_T | null {
         return this.collisionWorld.rayCheck(origin, direction, maxDistance, sourceCollider, sourceBody, sourceIsPlayer);
     }
@@ -188,6 +192,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public registerSimulationObjects(root: Object3D): void {
         root.updateMatrixWorld(true);
         root.traverse(object => {
+            if ((object as any).isSectorObject) this.collisionWorld.registerPhysicsVolumes((object as SectorObject).physicsVolumes);
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.registerObjectComponents(terrain);
 
@@ -209,6 +214,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
     public unregisterSimulationObjects(root: Object3D): void {
         root.traverse(object => {
+            if ((object as any).isSectorObject) this.collisionWorld.unregisterPhysicsVolumes((object as SectorObject).physicsVolumes);
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.unregisterObjectComponents(terrain);
 

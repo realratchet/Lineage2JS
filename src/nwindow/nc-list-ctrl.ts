@@ -29,9 +29,9 @@ export function paintListColumn(layer: NDomLayer, parent: HTMLElement, width: nu
     layer.text(parent, text, 0xffe6dcbe, undefined, Math.trunc(width * 0.5 - Math.trunc(layer.measureText(text) / 2)), Math.trunc(19 * 0.5 - Math.trunc(canvas.getLineHeight() / 2)) + 1);
 }
 
-export function paintListSelection(layer: NDomLayer, parent: HTMLElement, width: number, y: number) {
-    layer.tile(parent, 1, y - 1, width - 49, 17, 0, 0, 16, 13, TEX_LIST + "TextSelect");
-    layer.tile(parent, width - 48, y - 1, 32, 17, 0, 0, 32, 13, TEX_LIST + "TextSelect2");
+export function paintListSelection(layer: NDomLayer, parent: HTMLElement, width: number, y: number, height: number = 17) {
+    layer.tile(parent, 1, y - 1, width - 49, height, 0, 0, 16, 13, TEX_LIST + "TextSelect");
+    layer.tile(parent, width - 48, y - 1, 32, height, 0, 0, 32, 13, TEX_LIST + "TextSelect2");
 }
 
 export function createClassTooltip(layer: NDomLayer, classId: number, x: number, anchorY: number) {
@@ -69,11 +69,11 @@ export class NCListCtrl {
     protected tooltip: HTMLDivElement = null;
     protected tooltipRow: ListRow_T = null;
 
-    public constructor(protected readonly layer: NDomLayer, parent: HTMLElement, x: number, y: number, protected readonly width: number, protected readonly height: number, protected readonly columns: ListColumn_T[]) {
+    public constructor(protected readonly layer: NDomLayer, parent: HTMLElement, x: number, y: number, protected readonly width: number, protected readonly height: number, protected readonly columns: ListColumn_T[], protected readonly rowHeight: number = 17, protected readonly visibleRows: number = Math.ceil((height - 19) / rowHeight)) {
         this.strings = layer.getManager().strings;
         this.ascending = columns.map(() => true);
         this.element = layer.createWindow(x, y, width, height, parent);
-        this.list = layer.scrollPane(this.element, 0, 19, width, height - 19, 17);
+        this.list = layer.scrollPane(this.element, 0, 19, width, height - 19, rowHeight, false, visibleRows);
         this.list.content.style.width = `${width}px`;
         this.list.setAttribute("role", "listbox");
         const setScroll = this.list.setScroll;
@@ -119,7 +119,7 @@ export class NCListCtrl {
 
                 window.addEventListener("mouseup", up, true);
             }, true);
-            header.addEventListener("wheel", event => this.list.setScroll(this.list.getScroll() + Math.sign(event.deltaY) * 17));
+            header.addEventListener("wheel", event => this.list.setScroll(this.list.getScroll() + Math.sign(event.deltaY) * this.rowHeight));
             this.headers.push(face);
             paint();
             columnX += column.width;
@@ -147,16 +147,16 @@ export class NCListCtrl {
     public setRows(rows: ListRow_T[], isReset = false) {
         this.rows = rows;
         if (isReset) { this.selectedIndex = this.hoverIndex = -1; this.list.setScroll(0); }
-        this.list.setContentHeight(rows.length * 17);
+        this.list.setContentHeight(rows.length * this.rowHeight);
         this.list.content.style.top = "0px";
         this.paintRows();
     }
 
     protected hitRow(clientY: number) {
         const y = this.layer.toUI(clientY - this.list.getBoundingClientRect().top);
-        const index = Math.floor(y / 17) + this.list.getScroll() / 17;
+        const index = Math.floor(y / this.rowHeight) + this.list.getScroll() / this.rowHeight;
 
-        return y >= 0 && y < this.height - 19 && index < this.rows.length ? index : -1;
+        return y >= 0 && y < Math.min(this.height - 19, this.visibleRows * this.rowHeight) && index < this.rows.length ? index : -1;
     }
 
     protected sort(column: number) {
@@ -175,31 +175,35 @@ export class NCListCtrl {
     }
 
     protected paintRows() {
-        const parent = this.list.content, layer = this.layer, first = this.list.getScroll() / 17, visibleRows = Math.ceil((this.height - 19) / 17);
+        const parent = this.list.content, layer = this.layer, first = this.list.getScroll() / this.rowHeight, visibleRows = this.visibleRows;
 
         this.hideTooltip();
         parent.replaceChildren();
         parent.style.height = `${this.height - 19}px`;
-        for (let visible = 1; visible <= visibleRows; visible += 2) layer.tile(parent, 0, visible * 17 - 1, this.width, 17, 0, 0, 8, 15, "L2UI_CH3.Etc.textbackline");
+        for (let visible = 1; visible <= visibleRows; visible += 2) layer.tile(parent, 0, visible * this.rowHeight - 1, this.width, this.rowHeight, 0, 0, 8, 15, "L2UI_CH3.Etc.textbackline");
         for (let visible = 0; visible < visibleRows; visible++) {
             const index = first + visible, row = this.rows[index];
 
             if (!row) break;
-            if (index === this.selectedIndex) paintListSelection(layer, parent, this.width, visible * 17);
+            if (index === this.selectedIndex) paintListSelection(layer, parent, this.width, visible * this.rowHeight, this.rowHeight);
             let x = 0;
 
             this.columns.forEach((column, cellIndex) => {
-                const cell = layer.createWindow(x, visible * 17 + 2, column.width, 15, parent);
+                const cell = layer.createWindow(x, visible * this.rowHeight + 2, column.width, 15, parent);
 
                 cell.style.overflow = "hidden";
                 cell.dataset.listRow = String(row.id);
                 cell.dataset.listCell = String(cellIndex);
-                if (column.isClass) layer.tile(cell, Math.trunc(column.width / 2) - 5, 1, 11, 11, 0, 0, 11, 11, getClassIcon(row.classId));
-                else layer.text(cell, row.cells[cellIndex], 0xffdcdcdc, undefined, 10, 1);
+                this.paintCell(cell, row, cellIndex, column);
                 x += column.width;
             });
         }
         this.showTooltip();
+    }
+
+    protected paintCell(cell: HTMLElement, row: ListRow_T, cellIndex: number, column: ListColumn_T) {
+        if (column.isClass) this.layer.tile(cell, Math.trunc(column.width / 2) - 5, 1, 11, 11, 0, 0, 11, 11, getClassIcon(row.classId));
+        else this.layer.text(cell, row.cells[cellIndex], 0xffdcdcdc, undefined, 10, 1);
     }
 
     protected showTooltip() {
@@ -212,7 +216,7 @@ export class NCListCtrl {
         const rect = this.list.getBoundingClientRect();
 
         this.tooltipRow = row;
-        this.tooltip = createClassTooltip(this.layer, row.classId, this.layer.toUI(rect.left), this.layer.toUI(rect.top) + (this.hoverIndex - this.list.getScroll() / 17) * 17 + 3);
+        this.tooltip = createClassTooltip(this.layer, row.classId, this.layer.toUI(rect.left), this.layer.toUI(rect.top) + (this.hoverIndex - this.list.getScroll() / this.rowHeight) * this.rowHeight + 3);
     }
 }
 

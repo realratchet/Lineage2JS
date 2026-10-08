@@ -34,6 +34,8 @@ export class NCAbnormalStatusWnd extends NWnd {
         void this.loadIcons();
     }
 
+    public getEffects() { return this.effects; }
+
     public setEffects(effects: AbnormalStatus_T[]) {
         this.effects = effects.map(effect => ({ ...effect, alpha: 255, isFading: true, tooltipTime: effect.duration }));
         this.hoveredSlot = -1;

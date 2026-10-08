@@ -285,10 +285,9 @@ export class DecodeLibraryBuilder {
                 const volume = actor.loadSelf() as UPhysicsVolume;
                 const volumeInfo = volume.getDecodeInfo(this.library);
 
-                if (volumeInfo) {
-                    this.setScriptClass(volume, volumeInfo);
-                    this.library.waterVolumes.push(volumeInfo);
-                }
+                this.setScriptClass(volume, volumeInfo);
+                this.library.physicsVolumes.push(volumeInfo);
+                if (volumeInfo.type === "WaterVolume" && volumeInfo.bsp) this.library.waterVolumes.push(volumeInfo as any);
                 continue;
             }
 

@@ -45,6 +45,7 @@ import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import Radar from "./radar";
 import ViewportWindow from "./viewport-window";
+import type PawnFishingComponent from "../objects/components/pawn-fishing-component";
 
 export type HTMLViewportElement_T = HTMLDivElement;
 
@@ -264,6 +265,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
+    protected readonly pawnFishing = new Set<PawnFishingComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
     protected readonly pickups = new Set<L2Pickup>();
     protected readonly transientGeometries = new WeakMap<Object3D, Set<THREE.BufferGeometry>>();
@@ -1203,6 +1205,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
     public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
+    public registerPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.add(component); }
+    public unregisterPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.delete(component); }
     public registerActorMesh(component: ActorMeshComponent): void {
         this.actorMeshes.add(component);
         this.invalidatePawnLighting(component.getParent());
@@ -1966,6 +1970,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // }
 
         this.updatePawnPresentation(currentTime, deltaTime);
+        for (const fishing of this.pawnFishing) fishing.tick(deltaTime / 1000);
 
         this.inputManager.updateFollowPlayer();
         this.inputManager.updateMouseTarget();

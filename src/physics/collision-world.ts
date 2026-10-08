@@ -2,6 +2,9 @@ import RAPIER from "@dimforge/rapier3d";
 import { Box3, Quaternion, Vector3 } from "three";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../objects/objects";
 import { pointPrimitive, queryPrimitive, sweptBounds, sweptIntersectsBox } from "./collision-primitive";
+import buildCollisionModel from "./collision-model";
+import type { PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
+import type { ScriptHost_T } from "../ue-script/vm";
 
 const tmpBodyPosition = new Vector3();
 const tmpTestDelta = new Vector3();
@@ -63,6 +66,9 @@ export type RayCheckResult_T = {
     actor: ICollidable | null;
 };
 
+export type PhysicsVolumeHit_T = { time: number, location: Vector3, normal: Vector3, actor: PhysicsVolumeDecodeInfo_T };
+type PhysicsVolumeEntry_T = { actor: PhysicsVolumeDecodeInfo_T, primitive: CollisionPrimitive_T };
+
 export type CollisionStats_T = {
     backend: CollisionBackend_T;
     queries: number;
@@ -115,6 +121,8 @@ export class CollisionWorld {
     protected readonly world: RAPIER.World;
     protected backend: CollisionBackend_T;
     protected readonly colliderOwners = new Map<number, ICollidable>();
+    protected readonly physicsVolumes = new Map<PhysicsVolumeDecodeInfo_T[], PhysicsVolumeEntry_T[]>();
+    protected readonly volumeHit: PhysicsVolumeHit_T = { time: 1, location: new Vector3(), normal: new Vector3(), actor: null };
     protected readonly entriesByActor = new Map<ICollidable, AnalyticalEntry_T>();
     protected readonly unsupportedActors = new Set<ICollidable>();
     protected readonly analyticalEntries: AnalyticalEntry_T[] = [];
@@ -308,6 +316,78 @@ export class CollisionWorld {
     // ULevel::SingleLineCheck is a plain trace; only MoveActor extends and backs the result off
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null {
         return this.sweepQuery(query, 0);
+    }
+
+    public registerPhysicsVolumes(volumes: PhysicsVolumeDecodeInfo_T[]): void {
+        if (this.physicsVolumes.has(volumes)) return;
+
+        const entries: PhysicsVolumeEntry_T[] = [];
+
+        for (const actor of volumes) {
+            let primitive: CollisionPrimitive_T;
+
+            if (actor.bsp) {
+                const nodes = actor.bsp.nodes.map(node => ({ plane: node.plane, children: [node.iFront, node.iBack], isCsg: node.isCsg }));
+                const model = buildCollisionModel(nodes as any, actor.bsp.isRootOutside);
+                primitive = { kind: "bsp", model, bounds: model.bounds, supportsZeroExtent: true, supportsNonZeroExtent: false, supportsPointCheck: false };
+            } else {
+                const properties = actor.scriptProperties;
+                primitive = { kind: "cylinder", center: new Vector3().fromArray(properties.Location as number[]), radius: properties.CollisionRadius as number, halfHeight: properties.CollisionHeight as number, bounds: new Box3(), supportsZeroExtent: true, supportsNonZeroExtent: false, supportsPointCheck: false };
+            }
+
+            entries.push({ actor, primitive });
+        }
+
+        this.physicsVolumes.set(volumes, entries);
+    }
+
+    public unregisterPhysicsVolumes(volumes: PhysicsVolumeDecodeInfo_T[]): void { this.physicsVolumes.delete(volumes); }
+
+    public physicsVolumeLineCheck(start: Vector3, end: Vector3, source: ScriptHost_T = null, sourceIsPawn: boolean = false): PhysicsVolumeHit_T | null {
+        const distance = start.distanceTo(end);
+        if (distance === 0 || source && getTraceProperty(source, "bOnlyAffectPawns")) return null;
+
+        const result = this.volumeHit;
+        result.time = Infinity;
+        result.actor = null;
+
+        for (const entries of this.physicsVolumes.values()) {
+            for (const entry of entries) {
+                const actor = entry.actor, properties = actor.scriptProperties, primitive = entry.primitive;
+                if (!properties.bCollideActors || !properties.bBlockZeroExtentTraces || properties.bDeleteMe || properties.bPendingDelete) continue;
+                if (properties.bOnlyAffectPawns && source && !sourceIsPawn) continue;
+
+                let ignored = false;
+                let depth = 0;
+                for (let owner: any = source; owner; owner = owner.scriptOwner || getTraceProperty(owner, "Owner")) {
+                    if (owner === actor || owner === actor.objectPath) { ignored = true; break; }
+                    if (typeof owner === "string") throw new Error(`Unresolved trace source Owner '${owner}'.`);
+                    if (++depth === 64) throw new Error(`Trace source Owner chain is cyclic.`);
+                }
+                if (ignored) continue;
+
+                if (primitive.kind === "bsp" && primitive.model.planes.length === 0) continue;
+                if (primitive.kind === "cylinder") {
+                    primitive.center.fromArray(properties.Location as number[]);
+                    primitive.radius = properties.CollisionRadius as number;
+                    primitive.halfHeight = properties.CollisionHeight as number;
+                }
+
+                const hit = queryPrimitive(primitive, start, end, zeroExtentVector);
+                if (!hit) continue;
+
+                const time = Math.min(1, Math.max(0, hit.time - getTraceBackoff(primitive, distance, true) / distance));
+                if (time < result.time) {
+                    result.time = time;
+                    result.actor = actor;
+                    result.normal.copy(hit.normal);
+                }
+            }
+        }
+
+        if (!result.actor) return null;
+        result.location.copy(end).sub(start).multiplyScalar(result.time).add(start);
+        return result;
     }
 
     protected sweepQuery(query: CollisionQuery_T, extension: number): CheckResult_T | null {
@@ -804,6 +884,12 @@ function isBasedOn(actor: ICollidable, base: ICollidable): boolean {
     }
 
     return false;
+}
+
+function getTraceProperty(actor: ScriptHost_T, name: string): any {
+    if (actor.getUnrealScriptProperty) return actor.getUnrealScriptProperty(name);
+    const properties = actor.scriptProperties;
+    return properties instanceof Map ? properties.get(name) : properties[name];
 }
 
 function getTraceBackoff(primitive: CollisionPrimitive_T | null, testDistance: number, zeroExtent: boolean): number {

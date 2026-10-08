@@ -21,6 +21,7 @@ export class LandmarkComponent extends ObjectComponent<Player> {
     protected hasOwnerMoved = false;
 
     public readonly componentName = "landmark";
+    public isEnabled = true;
 
     public constructor(renderManager: RenderManager, createEffect: EffectFactory_T) {
         super();
@@ -30,7 +31,7 @@ export class LandmarkComponent extends ObjectComponent<Player> {
     }
 
     public addLandmark(position: Vector3, normal: Vector3): void {
-        if (normal.z <= MIN_SURFACE_NORMAL_Z || normal.z > 1) return;
+        if (!this.isEnabled || normal.z <= MIN_SURFACE_NORMAL_Z || normal.z > 1) return;
 
         this.deleteLandmark(true);
 

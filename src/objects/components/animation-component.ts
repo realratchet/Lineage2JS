@@ -8,6 +8,7 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type LocalSpaceSkeleton from "../local-space-skeleton";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type PawnFishingComponent from "./pawn-fishing-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
@@ -278,14 +279,18 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
     public playMovement(state: PawnMovementState_T): void {
         const tweenTime = state === "idle" || state === "swimmingIdle" ? IDLE_TWEEN_TIME : MOVEMENT_TWEEN_TIME;
+        const fishing = state === "idle" ? this.findComponent<PawnFishingComponent>("pawnFishing") : null;
+        const fishingAnimation = fishing && fishing.getIdleAnimationName();
 
-        this.play(this.basicActorAnimations[state], tweenTime);
+        this.play(fishingAnimation || this.basicActorAnimations[state], tweenTime, fishingAnimation ? this.getParent().getUnrealScriptProperty("NonAttackSpeedRate") as number : 1);
     }
 
     public isPlayingMovement(state: PawnMovementState_T): boolean {
         const action = this.animationNotifyAction;
 
-        const clip = this.actorAnimations[this.basicActorAnimations[state]];
+        const fishing = state === "idle" ? this.findComponent<PawnFishingComponent>("pawnFishing") : null;
+        const fishingAnimation = fishing && fishing.getIdleAnimationName();
+        const clip = fishingAnimation ? this.getAnimationClip(fishingAnimation) : this.actorAnimations[this.basicActorAnimations[state]];
 
         return !!action && action.enabled && action.isScheduled() && (action.getClip() === clip || action.getClip() === cacheTweenTwins.get(clip));
     }

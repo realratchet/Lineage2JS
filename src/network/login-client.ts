@@ -121,6 +121,8 @@ export class LoginClient {
         return [opcode, packet];
     }
 
+    public onLoginOk: () => Promise<void> = null;
+
     public async login(url: string, account: string, password: string): Promise<GameServerInfo_T[]> {
         this.url = new URL(url);
 
@@ -146,6 +148,7 @@ export class LoginClient {
         if (opcode === LoginServerPacket_T.LoginOk) {
             this.loginOk1 = packet.d();
             this.loginOk2 = packet.d();
+            if (this.onLoginOk) await this.onLoginOk();
             this.send(new PacketWriter().c(LoginClientPacket_T.RequestServerList).d(this.loginOk1).d(this.loginOk2).c(4));
             [, packet] = await this.expect(LoginServerPacket_T.ServerList);
         }

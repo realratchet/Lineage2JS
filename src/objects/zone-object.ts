@@ -10,7 +10,7 @@ import { ColorByte } from "../utils/color-byte";
 import type UnScriptVM from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
-import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
+import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
 import type { IBSPSectionDecodeInfo_T, IBSPZoneDecodeInfo_T, IBSPNodeDecodeInfo_T, IBSPLeafDecodeInfo_T } from "@l2js/engine/contracts/zone";
 
 const tmpColor = new Color();
@@ -211,6 +211,7 @@ export class SectorObject extends GameObject {
 
     public musicVolumes?: IMusicVolumeDecodeInfo[];
     public waterVolumes?: IWaterVolumeDecodeInfo[];
+    public physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
     public ambientSounds?: IAmbientSoundObjectDecodeInfo[];
 
     public bspSections?: IBSPSectionDecodeInfo_T[];

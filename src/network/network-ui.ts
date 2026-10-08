@@ -5,6 +5,7 @@ import type NWindowCanvas from "../nwindow/nwindow-canvas";
 import type BaseActor from "../base-actor";
 import type RenderManager from "../rendering/render-manager";
 import Nameplate from "../rendering/nameplate";
+import LandmarkComponent from "../rendering/components/landmark-component";
 import NDomLayer, { NDOM_EDIT_TEXTURES } from "../nwindow/ndom";
 import NCPlayerStatusWnd from "../nwindow/nc-player-status-wnd";
 import NCAbnormalStatusWnd from "../nwindow/nc-abnormal-status-wnd";
@@ -41,6 +42,8 @@ import NCHennaInfoWnd from "../nwindow/nc-henna-info-wnd";
 import NCMatchWnd from "../nwindow/nc-match-wnd";
 import NCPartyRoomMakingWnd from "../nwindow/nc-party-room-making-wnd";
 import NCPartyRoomWnd from "../nwindow/nc-party-room-wnd";
+import NCHeroTowerWnd from "../nwindow/nc-hero-tower-wnd";
+import NCCommandInfoWnd from "../nwindow/nc-command-info-wnd";
 import NCTrainWnd from "../nwindow/nc-train-wnd";
 import NCPrivateShopWnd from "../nwindow/nc-private-shop-wnd";
 import NCPrivateBuyWnd from "../nwindow/nc-private-buy-wnd";
@@ -50,9 +53,14 @@ import NCGMMagicSkillWnd from "../nwindow/nc-gm-magic-skill-wnd";
 import NCGMInventoryWnd from "../nwindow/nc-gm-inventory-wnd";
 import NCGMStoreWnd from "../nwindow/nc-gm-store-wnd";
 import NCGMQuestWnd from "../nwindow/nc-gm-quest-wnd";
+import NCGMWnd from "../nwindow/nc-gm-wnd";
+import NCGMClanWnd from "../nwindow/nc-gm-clan-wnd";
 import NCGMDetailStatusWnd, { type GMClanInfo_T } from "../nwindow/nc-gm-detail-status-wnd";
 import { convertDDSTextureInfo } from "../assets/unreal/dds/dxt-decode";
 import NCOlympiadControlWnd from "../nwindow/nc-olympiad-control-wnd";
+import NCOlympiadPlayerWnd from "../nwindow/nc-olympiad-player-wnd";
+import NCOlympiadTargetWnd from "../nwindow/nc-olympiad-target-wnd";
+import NWnd from "../nwindow/nwnd";
 import NCDeliverWnd from "../nwindow/nc-deliver-wnd";
 import NCSelectDeliverWnd from "../nwindow/nc-select-deliver-wnd";
 import NCMenuWnd, { type MenuButton_T } from "../nwindow/nc-menu-wnd";
@@ -69,7 +77,7 @@ import type { TargetStatus_T } from "../nwindow/nc-target-status-wnd";
 import type { LobbyPawnLabel_T } from "../nwindow/nc-lobby-wnd";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { GameServerInfo_T } from "./login-client";
-import type { Macro_T, CharSelectEntry_T, CharTemplate_T, ShortCut_T, UserInfo_T, InventoryItem_T, TradeItem_T, ShopItem_T, ShopPreviewList_T, WarehouseList_T, PackageTarget_T, PackageSendableList_T, PrivateStoreManageSell_T, PrivateStoreManageBuy_T, PrivateStoreSellList_T, PrivateStoreBuyList_T, MultiSellList_T, SkillEntry_T, AbnormalStatus_T, ClanInfo_T, HennaStatus_T, ClanMember_T, PetStatus_T, QuestState_T, ShowBoardPart_T, PartySpelled_T, RecipeBook_T, RecipeItemMakeInfo_T, RecipeShopManageList_T, RecipeShopSellList_T, RecipeShopItemInfo_T, HennaEquipList_T, HennaItemInfo_T, PartyMatchList_T, PartyMatchDetail_T, PartyRoomMember_T, EnchantSkill_T, EnchantSkillInfo_T, AquireSkillEntry_T, AquireSkillInfo_T, BuyListSeed_T, SellListProcure_T, GMViewSkillInfo_T, GMViewItemList_T, GMViewWarehouseWithdrawList_T, GMViewQuestList_T, GMViewCharacterInfo_T } from "./game-packets";
+import type { Macro_T, CharSelectEntry_T, CharTemplate_T, ShortCut_T, UserInfo_T, InventoryItem_T, TradeItem_T, ShopItem_T, ShopPreviewList_T, WarehouseList_T, PackageTarget_T, PackageSendableList_T, PrivateStoreManageSell_T, PrivateStoreManageBuy_T, PrivateStoreSellList_T, PrivateStoreBuyList_T, MultiSellList_T, SkillEntry_T, AbnormalStatus_T, ClanInfo_T, HennaStatus_T, ClanMember_T, PetStatus_T, QuestState_T, ShowBoardPart_T, PartySpelled_T, RecipeBook_T, RecipeItemMakeInfo_T, RecipeShopManageList_T, RecipeShopSellList_T, RecipeShopItemInfo_T, HennaEquipList_T, HennaItemInfo_T, PartyMatchList_T, PartyMatchDetail_T, PartyRoomMember_T, EnchantSkill_T, EnchantSkillInfo_T, AquireSkillEntry_T, AquireSkillInfo_T, BuyListSeed_T, SellListProcure_T, GMViewSkillInfo_T, GMViewItemList_T, GMViewWarehouseWithdrawList_T, GMViewQuestList_T, GMViewCharacterInfo_T, GMViewPledgeInfo_T, OlympiadUserInfo_T, HeroEntry_T, CommandChannelInfo_T } from "./game-packets";
 import NCTooltip from "../nwindow/nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
@@ -161,6 +169,8 @@ export class NetworkUI {
     protected matchWnd: NCMatchWnd = null;
     protected partyRoomMakingWnd: NCPartyRoomMakingWnd = null;
     protected partyRoomWnd: NCPartyRoomWnd = null;
+    protected heroTowerWnd: NCHeroTowerWnd = null;
+    protected commandInfoWnd: NCCommandInfoWnd = null;
     protected trainWnd: NCTrainWnd = null;
     protected readonly options: AssetManager["userConfig"];
     protected privateShopWnd: NCPrivateShopWnd = null;
@@ -173,10 +183,19 @@ export class NetworkUI {
     protected gmStoreWnd: NCGMStoreWnd = null;
     protected gmQuestWnd: NCGMQuestWnd = null;
     protected gmDetailWnd: NCGMDetailStatusWnd = null;
+    protected gmClanWnd: NCGMClanWnd = null;
+    protected gmWnd: NCGMWnd = null;
     protected gmDetailClan: GMClanInfo_T = null;
     protected cacheCrests = new Map<number, HTMLCanvasElement>();
+    protected cacheServerCrests = new Map<number, Map<number, HTMLCanvasElement>>([[0, this.cacheCrests]]);
     protected olympiadControlWnd: NCOlympiadControlWnd = null;
     protected isOlympiadObserver = false;
+    protected readonly olympiadPlayerWnds = [new NCOlympiadPlayerWnd(1), new NCOlympiadPlayerWnd(2)];
+    protected readonly olympiadAbnormalWnds = [new NCAbnormalStatusWnd(), new NCAbnormalStatusWnd()];
+    protected readonly olympiadTargetWnd = new NCOlympiadTargetWnd();
+    protected windowGroup = 0;
+    protected savedLandmarkEnabled: boolean = null;
+    protected readonly savedWindowGroups: (NWnd | HTMLElement)[][] = [[], [], []];
     protected deliverWnd: NCDeliverWnd = null;
     protected selectDeliverWnd: NCSelectDeliverWnd = null;
     protected inventory: InventoryItem_T[] = [];
@@ -257,6 +276,13 @@ export class NetworkUI {
             event.preventDefault();
             this.chatWnd.focusInput();
         });
+        window.addEventListener("keydown", event => {
+            if (this.screen !== "world" || this.windowGroup !== 0 || !event.altKey || event.code !== "KeyG" || !this.statusInfo || !(this.statusInfo.gmLevel > 0 && this.statusInfo.gmLevel < 7)) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            this.gmWnd.toggle();
+        }, true);
         window.addEventListener("resize", () => this.placeScreens());
         window.addEventListener("dragover", event => this.onSkillDrop(event));
         window.addEventListener("drop", event => this.onSkillDrop(event));
@@ -291,6 +317,7 @@ export class NetworkUI {
         if (this.mainWnd) void this.mainWnd.actionWnd.setActions(strings);
         if (this.mainWnd) void this.mainWnd.questWnd.setStrings(strings);
         if (this.mainWnd) this.mainWnd.clanWnd.setStrings(strings);
+        if (this.gmClanWnd) this.gmClanWnd.setStrings(strings);
         if (this.petWnd) void this.petWnd.setActions(strings);
         if (this.summonedWnd) void this.summonedWnd.setActions(strings);
         this.nwindow.invalidate();
@@ -430,7 +457,7 @@ export class NetworkUI {
     public async createScreens() {
         if (this.loginWnd) return;
 
-        await this.layer.loadTextures([...NCLoginWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES]);
+        await this.layer.loadTextures([...NCLoginWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES]);
 
         const network = this.manNetwork;
 
@@ -670,12 +697,30 @@ export class NetworkUI {
         this.gmInventoryWnd = new NCGMInventoryWnd(this.layer);
         this.gmStoreWnd = new NCGMStoreWnd(this.layer);
         this.gmQuestWnd = new NCGMQuestWnd(this.layer);
+        this.heroTowerWnd = new NCHeroTowerWnd(this.layer);
+        this.heroTowerWnd.onWriteWords = words => network.writeHeroWords(words);
+        this.heroTowerWnd.onDiary = classId => network.bypass(`_diary?class=${classId}&page=1`);
+        this.heroTowerWnd.setCrestGetter((crestId, isAlly) => network.getHeroCrest(crestId, isAlly));
+        this.commandInfoWnd = new NCCommandInfoWnd(this.layer);
+        this.commandInfoWnd.onUpdate = () => network.userCommand(97);
+        this.commandInfoWnd.onLeave = () => network.userCommand(96);
+        this.commandInfoWnd.onOust = name => network.oustFromCommandChannel(name);
+        this.commandInfoWnd.onSay = (text, type) => network.say(text, type);
         this.gmDetailWnd = new NCGMDetailStatusWnd(this.layer);
+        this.gmWnd = new NCGMWnd(this.layer);
+        this.gmWnd.onView = (target, kind) => [this.gmDetailWnd, this.gmClanWnd, this.gmSkillWnd, this.gmQuestWnd, this.gmInventoryWnd, this.gmStoreWnd][kind - 1].toggle(target);
+        this.gmWnd.onCommand = command => network.sendBypassBuildCmd(command);
+        this.gmWnd.onMessage = id => this.addSystemMessage(this.nwindow.getSystemMessage(id), 0xffb09b79);
+        this.gmWnd.onInfo = text => this.dialogBox.show(text, DialogType_T.OK, null);
+        this.gmWnd.onConfirm = (id, target, onReply) => this.dialogBox.show(this.formatSystemMessage(id, target), DialogType_T.OK_CANCEL, onReply);
+        this.gmWnd.onServerTransfer = id => network.startGMServerTransfer(id);
+        this.gmClanWnd = new NCGMClanWnd(this.layer);
+        this.gmClanWnd.onAction = (action, member) => this.clanAction(action, member);
         this.olympiadControlWnd = new NCOlympiadControlWnd(this.layer);
         this.olympiadControlWnd.onStopObserving = () => network.endOlympiadObserver();
         this.olympiadControlWnd.onOtherGame = () => network.requestOlympiadMatchList();
         this.gmQuestWnd.onShowQuestList = () => network.requestQuestList();
-        for (const wnd of [this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd]) wnd.onRequest = (target, kind) => network.gmCommand(target, kind);
+        for (const wnd of [this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd]) wnd.onRequest = (target, kind) => network.gmCommand(target, kind);
         this.gmSkillWnd.skillWnd.onDragMove = event => this.macroWnd.highlightCommand(event.clientX, event.clientY);
         this.gmSkillWnd.skillWnd.onDragEnd = () => this.macroWnd.highlightCommand(-1, -1);
         this.gmStoreWnd.onQuantity = (side, item, maxCount) => {
@@ -946,12 +991,14 @@ export class NetworkUI {
         this.show(null);
     }
 
+    protected getDOMWindows() { return [this.loginWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.macroWnd, this.systemMenuWnd, this.messageWnd, this.dialogBox, this.yesNoDialogBox]; }
+
     protected placeScreens() {
         if (!this.loginWnd) return;
 
         const width = this.nwindow.canvas.width, height = this.nwindow.canvas.height;
 
-        for (const wnd of [this.loginWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.macroWnd, this.systemMenuWnd, this.messageWnd, this.dialogBox, this.yesNoDialogBox]) wnd.placeOnScreen(width, height);
+        for (const wnd of this.getDOMWindows()) wnd.placeOnScreen(width, height);
         this.manRender.radar.uiScale = this.nwindow.canvas.cssScale;
     }
 
@@ -1011,6 +1058,8 @@ export class NetworkUI {
         this.show("login");
     }
 
+    public getSystemMessage(id: number) { return this.nwindow.getSystemMessage(id); }
+
     public setLoginBusy(isBusy: boolean) { this.loginWnd.setBusy(isBusy); }
 
     public showServers(servers: GameServerInfo_T[], lastServerId: number) {
@@ -1063,6 +1112,19 @@ export class NetworkUI {
         void this.nwindow.addWindow(this.shortCutWnd);
         void this.nwindow.addWindow(this.chatWnd);
         void this.nwindow.addWindow(this.restartMenuWnd);
+        for (let i = 0; i < 2; i++) {
+            const player = this.olympiadPlayerWnds[i], abnormal = this.olympiadAbnormalWnds[i];
+
+            abnormal.setVisible(false);
+            void this.nwindow.addWindow(player);
+            void this.nwindow.addWindow(abnormal);
+            abnormal.x = player.x;
+            abnormal.y = 47;
+            abnormal.width = 252;
+            abnormal.height = 50;
+            player.onExpand = delta => { abnormal.y += delta; abnormal.invalidate(); };
+        }
+        void this.nwindow.addWindow(this.olympiadTargetWnd);
     }
 
     public showWorld() {
@@ -1085,6 +1147,7 @@ export class NetworkUI {
     public hideHtml() { this.npcHtmlViewer.hide(); }
     public tick(deltaTime: number) {
         this.abnormalStatusWnd.tick(deltaTime / 1000);
+        for (const wnd of this.olympiadAbnormalWnds) wnd.tick(deltaTime / 1000);
 
         if (!this.communityWnd) return;
 
@@ -1093,6 +1156,7 @@ export class NetworkUI {
         this.summonedStatusWnd.tick(deltaTime);
         this.matchWnd.tick(deltaTime);
         this.partyRoomWnd.tick(deltaTime);
+        this.commandInfoWnd.tick(deltaTime);
 
         this.communityWnd.viewer.tick(deltaSeconds);
         this.npcHtmlViewer.tick(deltaSeconds);
@@ -1258,10 +1322,19 @@ export class NetworkUI {
         this.gmStoreWnd.setVisible(false);
         this.gmQuestWnd.setVisible(false);
         this.gmDetailWnd.setVisible(false);
+        this.heroTowerWnd.setVisible(false);
+        this.commandInfoWnd.setVisible(false);
+        this.gmClanWnd.setVisible(false);
+        this.gmWnd.setVisible(false);
         this.gmDetailClan = null;
-        this.cacheCrests.clear();
         this.olympiadControlWnd.setVisible(false);
         this.isOlympiadObserver = false;
+        this.windowGroup = 0;
+        if (this.savedLandmarkEnabled !== null) this.manRender.player.getComponent<LandmarkComponent>("landmark").isEnabled = this.savedLandmarkEnabled;
+        this.savedLandmarkEnabled = null;
+        for (const saved of this.savedWindowGroups) saved.length = 0;
+        this.resetOlympiadMatch();
+        for (const wnd of [...this.olympiadPlayerWnds, ...this.olympiadAbnormalWnds, this.olympiadTargetWnd]) wnd.setVisible(false);
         this.deliverWnd.setVisible(false);
         this.selectDeliverWnd.setVisible(false);
         this.menuWnd.setVisible(false);
@@ -1324,6 +1397,8 @@ export class NetworkUI {
         this.playerStatusWnd.setStatus(info);
         this.mainWnd.detailStatusWnd.setStatus(info);
         this.mainWnd.clanWnd.setStatus(info);
+        this.gmClanWnd.setStatus(info);
+        this.gmWnd.setPlayerName(info.name);
         this.inventoryWnd.setWeight(info.curLoad, info.maxLoad);
         this.inventoryWnd.setDwarvenCraft(info.hasDwarvenCraft);
         this.setInventory(this.inventory);
@@ -1359,42 +1434,142 @@ export class NetworkUI {
 
     public setMacros(macros: Macro_T[]) { this.macroWnd.setMacros(macros); }
 
-    public setOlympiadMode(mode: number) {
-        if (mode === 3) {
-            this.isOlympiadObserver = true;
+    protected setGroupWindowVisible(wnd: NWnd | HTMLElement, isVisible: boolean) {
+        if (!(wnd instanceof HTMLElement)) { wnd.setVisible(isVisible); return; }
+        const owner = [...this.getDOMWindows(), this.petWnd, this.summonedWnd, this.pledgePowerWnd].find(owner => owner.element === wnd);
+
+        if (owner) owner.setVisible(isVisible);
+        else wnd.hidden = !isVisible;
+    }
+
+    protected setWindowGroup(group: number) {
+        if (group === this.windowGroup) return;
+
+        const landmark = this.manRender.player.getComponent<LandmarkComponent>("landmark");
+
+        if (group !== 0 && this.savedLandmarkEnabled === null) { this.savedLandmarkEnabled = landmark.isEnabled; landmark.isEnabled = false; }
+        if (group === 0 && this.savedLandmarkEnabled !== null) { landmark.isEnabled = this.savedLandmarkEnabled; this.savedLandmarkEnabled = null; }
+
+        const saved = this.savedWindowGroups[this.windowGroup];
+
+        saved.length = 0;
+        for (const wnd of this.nwindow.getWindows())
+            if (wnd.isVisible) saved.push(wnd);
+        for (const wnd of Array.from(this.layer.root.children) as HTMLElement[])
+            if (!wnd.hidden) saved.push(wnd);
+        for (const wnd of saved) this.setGroupWindowVisible(wnd, false);
+        for (const wnd of this.savedWindowGroups[group]) this.setGroupWindowVisible(wnd, true);
+        this.windowGroup = group;
+        if (group === 2) {
             this.olympiadControlWnd.setVisible(true);
-        } else if (mode === 0 && this.isOlympiadObserver) {
-            this.isOlympiadObserver = false;
-            this.olympiadControlWnd.setVisible(false);
+            for (let i = 0; i < 2; i++) {
+                this.olympiadPlayerWnds[i].setVisible(true);
+                this.olympiadAbnormalWnds[i].setVisible(this.olympiadAbnormalWnds[i].getEffects().length > 0);
+            }
+            this.chatWnd.setVisible(true);
         }
     }
+
+    public setOlympiadMode(mode: number) {
+        if (mode === 3) {
+            this.setWindowGroup(2);
+            this.isOlympiadObserver = true;
+        } else if (mode === 0) {
+            if (this.windowGroup === 2) this.setWindowGroup(0);
+            else this.olympiadTargetWnd.setVisible(false);
+            this.isOlympiadObserver = false;
+        } else {
+            this.olympiadTargetWnd.initialize(mode === 1 ? 2 : 1);
+            this.olympiadTargetWnd.setVisible(true);
+        }
+    }
+
+    public setOlympiadUserInfo(info: OlympiadUserInfo_T) {
+        const side = info.side << 24 >> 24;
+
+        if (this.windowGroup === 2) {
+            if (side === 1 || side === 2) this.olympiadPlayerWnds[side - 1].setInfo(info);
+        } else if (side === this.olympiadTargetWnd.getSide()) this.olympiadTargetWnd.setInfo(info);
+    }
+
+    public setOlympiadEffects(objectId: number, effects: AbnormalStatus_T[]) {
+        const index = this.olympiadPlayerWnds.findIndex(wnd => wnd.getObjectId() === objectId);
+
+        if (index < 0) return;
+        this.olympiadAbnormalWnds[index].setEffects(effects.slice(0, 31));
+        this.olympiadAbnormalWnds[index].setVisible(effects.length > 0);
+    }
+
+    public resetOlympiadMatch() {
+        for (const wnd of this.olympiadPlayerWnds) wnd.reset();
+        for (const wnd of this.olympiadAbnormalWnds) { wnd.setEffects([]); wnd.setVisible(false); }
+        this.olympiadTargetWnd.reset();
+    }
+
+    public notifyOlympiadSkill(objectId: number, skillId: number) {
+        if (skillId < 0 || skillId > 1999) return;
+        const skill = this.strings.skillInfos[`${skillId}:1`];
+        const message = this.formatSystemMessage(46, skill ? skill.name : "");
+
+        for (const wnd of this.olympiadPlayerWnds)
+            if (wnd.getObjectId() === objectId) wnd.appendMessage(message);
+    }
+
+    public notifyOlympiadAttack(attackerId: number, defenderId: number, attackerName: string, isMiss: boolean, isCritical: boolean) {
+        for (const wnd of this.olympiadPlayerWnds) {
+            if (wnd.getObjectId() === attackerId) {
+                if (isCritical) wnd.appendMessage(this.nwindow.getSystemMessage(44));
+            } else if (wnd.getObjectId() === defenderId && isMiss) wnd.appendMessage(this.formatSystemMessage(42, attackerName));
+        }
+    }
+    public setGMPledgeInfo(info: GMViewPledgeInfo_T) { this.gmClanWnd.setInfo(info); }
+
     public setGMCharacterInfo(info: GMViewCharacterInfo_T, clan: GMClanInfo_T) {
         this.gmDetailClan = clan;
         this.gmDetailWnd.setClan(clan, clan ? this.cacheCrests.get(clan.crestId) || null : null);
         this.gmDetailWnd.setCharacterInfo(info);
     }
-    public setPledgeCrest(crestId: number, data: Uint8Array) {
-        if (!data.length) this.cacheCrests.delete(crestId);
-        else {
-            if (data.length < 128) throw new Error(`Invalid crest DDS length ${data.length}`);
-            const header = new DataView(data.buffer, data.byteOffset, data.byteLength);
-            const height = header.getUint32(12, true), width = header.getUint32(16, true), fourCC = header.getUint32(84, true);
-            const blockSize = fourCC === 0x31545844 ? 8 : fourCC === 0x33545844 || fourCC === 0x35545844 ? 16 : 0;
+    public setCrestServer(serverId: number) {
+        let cache = this.cacheServerCrests.get(serverId);
 
-            if (header.getUint32(0, true) !== 0x20534444 || !width || !height || !blockSize || Math.ceil(width / 4) * Math.ceil(height / 4) * blockSize > data.length - 128)
-                throw new Error(`Invalid crest DDS ${crestId}`);
-            const info = { textureType: "dds", buffer: data.slice().buffer } as any;
+        if (!cache) { cache = new Map(); this.cacheServerCrests.set(serverId, cache); }
+        this.cacheCrests = cache;
+    }
+    public getCachedCrest(crestId: number) { return this.cacheCrests.get(crestId) || null; }
+    public setPledgeCrest(crestId: number, data: Uint8Array): HTMLCanvasElement {
+        if (crestId <= 0 || !data.length || this.cacheCrests.has(crestId)) return null;
 
-            if (!convertDDSTextureInfo(info)) throw new Error(`Unsupported crest DDS ${crestId}`);
-            const canvas = document.createElement("canvas");
+        if (data.length < 128) throw new Error(`Invalid crest DDS length ${data.length}`);
+        const header = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        const height = header.getUint32(12, true), width = header.getUint32(16, true), fourCC = header.getUint32(84, true);
+        const blockSize = fourCC === 0x31545844 ? 8 : fourCC === 0x33545844 || fourCC === 0x35545844 ? 16 : 0;
 
-            canvas.width = info.width;
-            canvas.height = info.height;
-            canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(info.buffer), info.width, info.height), 0, 0);
-            this.cacheCrests.set(crestId, canvas);
+        if (header.getUint32(0, true) !== 0x20534444 || !(header.getUint32(8, true) & 0x80000) || !width || !height || width & (width - 1) || height & (height - 1) || !blockSize)
+            throw new Error(`Invalid crest DDS ${crestId}`);
+        const mipCount = header.getUint32(28, true) || 1;
+        let mipWidth = width, mipHeight = height, remaining = data.length - 128;
+
+        if (mipCount > remaining / blockSize) throw new Error(`Invalid crest DDS mip count ${crestId}`);
+        for (let index = 0; index < mipCount; index++) {
+            const size = Math.max(4, mipWidth) * Math.max(4, mipHeight) * blockSize / 16;
+
+            if (size > remaining) throw new Error(`Truncated crest DDS mip ${crestId}`);
+            remaining -= size;
+            mipWidth = Math.ceil(mipWidth / 2);
+            mipHeight = Math.ceil(mipHeight / 2);
         }
+        const info = { textureType: "dds", buffer: data.slice().buffer } as any;
+
+        if (!convertDDSTextureInfo(info)) throw new Error(`Unsupported crest DDS ${crestId}`);
+        const canvas = document.createElement("canvas");
+
+        canvas.width = info.width;
+        canvas.height = info.height;
+        canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(info.buffer), info.width, info.height), 0, 0);
+        this.cacheCrests.set(crestId, canvas);
         if (this.gmDetailClan && this.gmDetailClan.crestId === crestId)
             this.gmDetailWnd.setClan(this.gmDetailClan, this.cacheCrests.get(crestId) || null);
+        return canvas;
     }
     public setGMQuestList(info: GMViewQuestList_T) { void this.gmQuestWnd.setQuestList(info); }
     public setGMSkillInfo(info: GMViewSkillInfo_T) { void this.gmSkillWnd.setSkillInfo(info); }
@@ -1836,8 +2011,14 @@ export class NetworkUI {
 
     public setTarget(target: TargetStatus_T) { this.targetStatusWnd.setTarget(target); }
 
+    public showHeroList(entries: HeroEntry_T[]) { this.heroTowerWnd.show(entries, this.statusInfo ? !!this.statusInfo.isHero : undefined); }
+    public openCommandChannel() { this.commandInfoWnd.open(); }
+    public closeCommandChannel() { this.commandInfoWnd.closeChannel(); }
+    public setCommandChannelInfo(info: CommandChannelInfo_T) { this.commandInfoWnd.setInfo(info); }
+
     public addChat(name: string, text: string, type: Say2_T) {
         if (type === Say2_T.PARTYROOM_ALL) this.partyRoomWnd.appendChat(`${name}: ${text}`);
+        else if (type === Say2_T.PARTYROOM_COMMANDER || type === Say2_T.CHANNEL_ALL) this.commandInfoWnd.addChat(name, text, type);
         else this.chatWnd.addCreatureSay(name, text, type);
     }
     public addSystemMessage(text: string, color: number) { this.chatWnd.addSystemMessage(text, color); }

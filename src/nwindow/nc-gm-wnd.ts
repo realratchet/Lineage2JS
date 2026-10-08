@@ -95,12 +95,12 @@ export class NCGMWnd {
 
         if (id === 0xf0f01c) rows = Object.keys(strings.npcNames).map(key => [Number(key) + 1000000, strings.npcNames[key]]);
         else if (id === 0xf0f02c) {
-            const keys = Object.keys(strings.itemNames);
+            const keys = Object.keys(strings.itemInfos);
 
             rows = [];
             for (const templateClass of ["etc", "armor", "weapon"])
                 for (const key of keys)
-                    if (strings.itemInfos[key].templateClass === templateClass) rows.push([Number(key), strings.itemNames[key]]);
+                    if (strings.itemInfos[key].templateClass === templateClass && strings.itemNames[key]) rows.push([Number(key), strings.itemNames[key]]);
         } else rows = Object.keys(strings.skillInfos).map(key => [Number(key.split(":")[0]), strings.skillInfos[key].name]);
 
         for (const [classId, text] of rows) {

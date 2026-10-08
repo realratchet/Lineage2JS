@@ -145,6 +145,8 @@ export class NWindowManager {
         this.invalidate();
     }
 
+    public getWindows() { return this.windows; }
+
     public invalidate() { this.isDirty = true; }
 
     public playButtonSound(isEnabled: boolean): void {
@@ -183,7 +185,15 @@ export class NWindowManager {
         this.invalidate();
     }
 
-    public blurText() { this.textInput.blur(); }
+    public blurText(wnd: NWnd = null) {
+        if (wnd) {
+            let owner = this.textOwner;
+
+            while (owner && owner !== wnd) owner = owner.parent;
+            if (!owner) return;
+        }
+        this.textInput.blur();
+    }
     public isTextFocused(owner: NWnd) { return this.textOwner === owner; }
     public getCaretPosition() { return (this.textInput.selectionDirection === "backward" ? this.textInput.selectionEnd : this.textInput.selectionStart) || 0; }
     public getSelectionStart() { return this.textInput.selectionStart || 0; }
@@ -283,6 +293,33 @@ export class NWindowManager {
 
     public getSysString(id: number): string { return this.strings.sysStrings[id] ?? ""; } // GL2GameData+0x9871c+id*12 in NWindow is the sysstring-e.dat table.
     public getSystemMessage(id: number): string { return this.strings.systemMessages[id] ?? ""; }
+
+    public filterText(value: string) {
+        const replacement = this.getSysString(740);
+        let text = "";
+
+        for (let i = 0; i < value.length; i++) {
+            const character = value[i];
+
+            if (character === "\r" || character === "\n" || this.canvas.hasGlyphs(character)) text += character;
+        }
+
+        let search = text.replace(/[A-Z]/g, character => character.toLowerCase());
+
+        this.strings.obsceneWords.forEach(word => {
+            if (!word) return;
+
+            let index = search.indexOf(word);
+
+            while (index >= 0) {
+                text = text.slice(0, index) + replacement + text.slice(index + word.length);
+                search = search.slice(0, index) + replacement + search.slice(index + word.length);
+                index = search.indexOf(word);
+            }
+        });
+
+        return text;
+    }
 
     public getClassName(classId: number): string { return this.getSysString(classId >= 0 && classId < 88 ? 247 + classId : 1071 + classId); } // 0x1006b250: class names are sysstrings 247+id below class 88, 1071+id above.
 

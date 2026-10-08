@@ -50,6 +50,7 @@ export class NWnd {
 
     public setVisible(isVisible: boolean) {
         this.isVisible = isVisible;
+        if (!isVisible && this.manager) this.manager.blurText(this);
         this.invalidate();
     }
 

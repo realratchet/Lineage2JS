@@ -581,7 +581,9 @@ export type CharSelectEntry_T = Appearance_T & {
     exp: number;
     level: number;
     karma: number;
+    deleteState: number;
     deleteSeconds: number;
+    isDeletionMarked: boolean;
     activeClassId: number;
     isLastUsed: boolean;
 };
@@ -590,7 +592,7 @@ export type CharSelected_T = Location_T & { name: string, charId: number, title:
 
 export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number };
 
-export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, isGM: boolean, paperdollObjects: number[], cubics: number[] };
+export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
 
 export type CharInfo_T = CreatureInfo_T & Appearance_T & { isSitting: boolean, mountType: number, cubics: number[] };
 
@@ -652,11 +654,12 @@ export function readCharSelectInfo(packet: PacketReader): CharSelectEntry_T[] {
         const paperdoll = readPaperdollItems(packet);
         const hairStyle = packet.d(), hairColor = packet.d(), face = packet.d();
         const maxHp = packet.f(), maxMp = packet.f();
-        const deleteSeconds = packet.d(), activeClassId = packet.d(), isLastUsed = packet.d() === 1;
+        const deleteState = packet.d(), deleteSeconds = deleteState & 0x7fffffff, isDeletionMarked = deleteState < 0;
+        const activeClassId = packet.d(), isLastUsed = packet.d() !== 0;
 
         const enchantLevel = packet.c();
 
-        entries.push({ slot, name, charId, clanId, sex, race, classId, curHp, curMp, maxHp, maxMp, sp, exp, level, karma, paperdoll, hairStyle, hairColor, face, deleteSeconds, activeClassId, isLastUsed, enchantLevel });
+        entries.push({ slot, name, charId, clanId, sex, race, classId, curHp, curMp, maxHp, maxMp, sp, exp, level, karma, paperdoll, hairStyle, hairColor, face, deleteState, deleteSeconds, isDeletionMarked, activeClassId, isLastUsed, enchantLevel });
     }
 
     return entries;
@@ -727,7 +730,8 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.hairStyle = packet.d();
     info.hairColor = packet.d();
     info.face = packet.d();
-    info.isGM = packet.d() !== 0;
+    info.gmLevel = packet.d();
+    info.isGM = info.gmLevel !== 0;
     info.title = packet.S();
 
     info.clanId = packet.d();
@@ -1632,15 +1636,24 @@ export function readGMViewCharacterInfo(packet: PacketReader): GMViewCharacterIn
 }
 
 export function readGMViewPledgeInfo(packet: PacketReader): GMViewPledgeInfo_T {
-    const charName = packet.S(), clanId = packet.d(), name = packet.S(), leaderName = packet.S(), crestId = packet.d(), level = packet.d(), hasCastle = packet.d(), hasHideout = packet.d();
+    const charName = packet.S(), clanId = packet.d(), name = packet.S(), leaderName = packet.S();
+    let crestId = 0, level = 0, hasCastle = 0, hasHideout = 0, memberLevel = 0, dissolving = -1, allyId = 0, allyName = "", allyCrestId = 0, isAtWar = false;
 
-    packet.d();
-
-    const memberLevel = packet.d(), dissolving = packet.d();
-
-    packet.d();
-
-    const allyId = packet.d(), allyName = packet.S(), allyCrestId = packet.d(), isAtWar = packet.d() !== 0, count = packet.d();
+    if (clanId !== 0 && name) {
+        crestId = packet.d();
+        level = packet.d();
+        hasCastle = packet.d();
+        hasHideout = packet.d();
+        packet.d();
+        memberLevel = packet.d();
+        dissolving = packet.d();
+        packet.d();
+        allyId = packet.d();
+        allyName = packet.S();
+        allyCrestId = packet.d();
+        isAtWar = packet.d() !== 0;
+    }
+    const count = packet.d();
 
     if (count < 0 || count > packet.getRemaining() / 22) throw new Error(`Invalid GMViewPledgeInfo count '${count}'.`);
 

@@ -60,6 +60,7 @@ import UMovableStaticMeshActor, { FL2RotatorTime } from "./static-mesh/un-movabl
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "./un-fog-info";
 import { fetchAssetHandle } from "./asset-handle";
 import UPawn from "./un-pawn";
+import UL2Float from "./un-l2-float";
 import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
@@ -88,6 +89,7 @@ export type NativeClientTypes_T =
     | "SkillAction_LocateEffect"
     | "SkillAction_SwordTrail"
     | "NProjectile"
+    | "L2Float"
     | "NSkillProjectile"
     | "AnimNotify"
     | "AnimNotify_IdleSound"
@@ -367,6 +369,7 @@ export class UNativePackage extends ANativePackage {
 
         switch (constructorName) {
             case "Level": Constructor = ULevel; break;
+            case "L2Float": Constructor = UL2Float; break;
             case "Model": Constructor = UModel; break;
             case "Brush": Constructor = UBrush; break;
 

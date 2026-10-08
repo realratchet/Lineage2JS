@@ -9,7 +9,7 @@ import type { ISkinnedMeshObjectDecodeInfo } from "./skeletal-mesh/un-skeletal-m
 import type { ILightDecodeInfo } from "./un-light";
 import type { ISunLightDecodeInfo } from "./un-movable-sunlight";
 import type { IMusicVolumeDecodeInfo } from "./un-music-volume";
-import type { IWaterVolumeDecodeInfo } from "./un-physics-volume";
+import type { IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "./un-physics-volume";
 import type { IBlockingVolumeDecodeInfo } from "./un-blocking-volume";
 import type { IAmbientSoundObjectDecodeInfo } from "./un-ambient-sound";
 import type { IScriptClassDecodeInfo, IScriptFunctionDecodeInfo, IScriptStateDecodeInfo, ScriptPropertyValue_T } from "./script-dump-loader";
@@ -42,6 +42,7 @@ export type DecodableObject_T =
     | "Sky"
     | "SkyZoneInfo"
     | "WaterVolume"
+    | "PhysicsVolume"
     | "BlockingVolume"
     | "L2FogInfo";
 
@@ -137,6 +138,7 @@ export class DecodeLibrary {
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public readonly musicVolumes: IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
     public readonly waterVolumes: IWaterVolumeDecodeInfo[] = [];
+    public readonly physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
     public readonly blockingVolumes: IBlockingVolumeDecodeInfo[] = [];
     public readonly ambientSounds: IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)

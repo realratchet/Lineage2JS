@@ -25,6 +25,13 @@ function roundPosition(position: Vector3): void {
     position.set(Math.fround(position.x), Math.fround(position.y), Math.fround(position.z));
 }
 
+function addScaledDirection(position: Vector3, direction: Vector3, scale: number): void {
+    direction.multiplyScalar(scale);
+    roundPosition(direction);
+    position.add(direction);
+    roundPosition(position);
+}
+
 export class ViewportWindowController {
     public readonly location = new Vector3();
     public readonly rotation = new Rotator();
@@ -38,8 +45,8 @@ export class ViewportWindowController {
     protected targetSkeleton: LocalSpaceSkeleton = null;
 
     public constructor(pawnLocation: Vector3, pawnRotation: Rotator) {
-        this.location.copy(pawnLocation).addScaledVector(getDirection(pawnRotation, tmpDirection), 200);
-        roundPosition(this.location);
+        this.location.copy(pawnLocation);
+        addScaledDirection(this.location, getDirection(pawnRotation, tmpDirection), 200);
         this.rotation.set(pawnRotation.pitch, (pawnRotation.yaw + 32768) | 0, pawnRotation.roll);
         this.updateViewRotation();
     }
@@ -51,18 +58,17 @@ export class ViewportWindowController {
             case ECALCSTEP_T.STEP_TARGET_PLAYER: break;
             case ECALCSTEP_T.STEP_MOVE_BACK:
                 this.targetRotation.set(this.rotation.pitch, this.rotation.yaw, this.rotation.roll);
-                this.targetLocation.copy(this.location).addScaledVector(getDirection(this.rotation, tmpDirection).normalize(), -200);
-                roundPosition(this.targetLocation);
+                this.targetLocation.copy(this.location);
+                addScaledDirection(this.targetLocation, getDirection(this.rotation, tmpDirection).normalize(), -200);
                 break;
             case ECALCSTEP_T.STEP_ROTATE_FLOAT:
                 this.targetRotation.set(-5400, (pawnRotation.yaw + 32768) | 0, pawnRotation.roll);
                 this.targetLocation.copy(floatLocation);
                 this.targetLocation.z = Math.fround(this.targetLocation.z - 5);
-                this.targetLocation.addScaledVector(getDirection(this.targetRotation, tmpDirection), -100);
-                roundPosition(this.targetLocation);
+                addScaledDirection(this.targetLocation, getDirection(this.targetRotation, tmpDirection), -100);
                 this.arrCameraPath[0].copy(this.location);
-                this.arrCameraPath[1].copy(this.location).addScaledVector(getDirection(pawnRotation, tmpDirection), 200);
-                roundPosition(this.arrCameraPath[1]);
+                this.arrCameraPath[1].copy(this.location);
+                addScaledDirection(this.arrCameraPath[1], getDirection(pawnRotation, tmpDirection), 200);
                 this.arrCameraPath[2].copy(this.targetLocation);
                 break;
             case ECALCSTEP_T.STEP_TARGET_FLOAT:
@@ -91,7 +97,7 @@ export class ViewportWindowController {
                     // Engine 1070CE1E calls SetCalcStep before storing the new Location at 1070CE97.
                     this.setCalcStep(ECALCSTEP_T.STEP_ROTATE_FLOAT, pawnRotation, floatLocation);
                     this.location.copy(tmpPosition);
-                } else this.location.addScaledVector(tmpDirection.normalize(), distance);
+                } else addScaledDirection(this.location, tmpDirection.normalize(), distance);
 
                 roundPosition(this.location);
                 pathElapsed = 0;

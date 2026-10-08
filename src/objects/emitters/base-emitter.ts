@@ -390,6 +390,29 @@ export abstract class BaseEmitter extends Object3D {
         this.initialSettings.velocity.min.multiplyScalar(scale);
         this.initialSettings.velocity.max.multiplyScalar(scale);
     }
+
+    public setSpeedScale(scale: number): void {
+        if (!Number.isFinite(scale)) throw new Error(`Invalid emitter speed scale '${scale}'.`);
+        if (scale <= 0) scale = Math.fround(0.001);
+
+        const inverse = Math.fround(1 / scale);
+        this.lifetimeRange.min = Math.fround(this.lifetimeRange.min * inverse);
+        this.lifetimeRange.max = Math.fround(this.lifetimeRange.max * inverse);
+        this.initialParticlesPerSecond = Math.fround(this.initialParticlesPerSecond * scale);
+        this.fadeInEndTime = Math.fround(this.fadeInEndTime * inverse);
+        this.fadeOutStartTime = Math.fround(this.fadeOutStartTime * inverse);
+        this.minSquaredVelocity = Math.fround(this.minSquaredVelocity * scale);
+
+        this.acceleration.set(Math.fround(this.acceleration.x * scale * scale), Math.fround(this.acceleration.y * scale * scale), Math.fround(this.acceleration.z * scale * scale));
+        for (const range of [this.spinsPerSecondRange, this.initialSettings.velocity, this.velocityLossRange]) {
+            range.min.set(Math.fround(range.min.x * scale), Math.fround(range.min.y * scale), Math.fround(range.min.z * scale));
+            range.max.set(Math.fround(range.max.x * scale), Math.fround(range.max.y * scale), Math.fround(range.max.z * scale));
+        }
+
+        // Engine 105D3278/105D3290 both scale MaxAbsVelocity.X; Y is untouched.
+        this.maxAbsVelocity.x = Math.fround(Math.fround(this.maxAbsVelocity.x * scale) * scale);
+        this.maxAbsVelocity.z = Math.fround(this.maxAbsVelocity.z * scale);
+    }
     public setStartLocationRangeXZ(x: number, z: number): void {
         this.initialSettings.position.min.x = this.initialSettings.position.max.x = x;
         this.initialSettings.position.min.z = this.initialSettings.position.max.z = z;

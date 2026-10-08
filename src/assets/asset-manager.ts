@@ -184,6 +184,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected charGroups: ICharacterGroup[] = null;
     protected effectLibrary: DecodeLibrary = null;
     protected cubicLibrary: Promise<DecodeLibrary> = null;
+    protected fishingLibrary: Promise<DecodeLibrary> = null;
     protected readonly pawnLibraries = new WeakMap<BaseActor, DecodeLibrary>();
     protected readonly cacheSounds = new Map<string, Promise<string>>();
     protected readonly characterLoads = new WeakMap<BaseActor, number>();
@@ -305,6 +306,21 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         library.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (library as any).preferCompressedTextures = this.preferCompressedTextures;
+        return library;
+    }
+
+    public loadFishingLibrary(): Promise<DecodeLibrary> {
+        if (!this.fishingLibrary) this.fishingLibrary = this.decodeFishingLibrary();
+        return this.fishingLibrary;
+    }
+
+    protected async decodeFishingLibrary(): Promise<DecodeLibrary> {
+        const [library, effects] = await Promise.all([
+            this.decodeWorker.decodeSkeletalMesh(this.loadSettings, "LineageDecos", "float_m00"),
+            this.decodeWorker.decodeEffectTemplates(this.loadSettings, ["LineageEffect.e_u075_w"], [], ["Engine.L2Float"])
+        ]);
+
+        mergePawnLibrary(library, effects);
         return library;
     }
 

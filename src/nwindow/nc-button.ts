@@ -49,7 +49,7 @@ export class NCButton extends NWnd {
         if (this.label) {
             const width = canvas.measureText(this.label);
 
-            canvas.drawText(Math.trunc(this.width * 0.5 + this.labelOffsetX - width / 2), Math.trunc(this.height * 0.5 + this.labelOffsetY - canvas.getLineHeight() / 2), this.isEnabled ? LABEL_ENABLED : LABEL_DISABLED, this.label);
+            canvas.drawText(Math.trunc(this.width * 0.5 + this.labelOffsetX - Math.trunc(width / 2)), Math.trunc(this.height * 0.5 + this.labelOffsetY - Math.trunc(canvas.getLineHeight() / 2)), this.isEnabled ? LABEL_ENABLED : LABEL_DISABLED, this.label);
         }
     }
 

@@ -72,39 +72,11 @@ export class NCPartyRoomMakingWnd {
         this.setVisible(true);
     }
 
-    protected filterTitle(value: string) {
-        const manager = this.layer.getManager();
-        const replacement = manager.getSysString(740);
-        let title = "";
-
-        for (let i = 0; i < value.length; i++) {
-            const character = value[i];
-
-            if (character === "\r" || character === "\n" || manager.canvas.hasGlyphs(character)) title += character;
-        }
-
-        let search = title.replace(/[A-Z]/g, character => character.toLowerCase());
-
-        manager.strings.obsceneWords.forEach(word => {
-            if (!word) return;
-
-            let index = search.indexOf(word);
-
-            while (index >= 0) {
-                title = title.slice(0, index) + replacement + title.slice(index + word.length);
-                search = search.slice(0, index) + replacement + search.slice(index + word.length);
-                index = search.indexOf(word);
-            }
-        });
-
-        return title;
-    }
-
     public submit() {
         const minLevel = Math.max(1, Math.min(78, parseInt(this.minimum.getValue().replace(/,/g, ""), 10) || 0));
         const maxLevel = Math.max(minLevel, Math.max(1, Math.min(78, parseInt(this.maximum.getValue().replace(/,/g, ""), 10) || 0)));
         const value = this.title.getValue();
-        const title = value ? this.filterTitle(value) : this.layer.getManager().getSystemMessage(1398);
+        const title = value ? this.layer.getManager().filterText(value) : this.layer.getManager().getSystemMessage(1398);
 
         if (this.onSubmit) this.onSubmit({ roomId: this.roomId, maxMembers: this.maxMembers, minLevel, maxLevel, lootType: this.getLootType ? this.getLootType() : this.lootType, title });
 

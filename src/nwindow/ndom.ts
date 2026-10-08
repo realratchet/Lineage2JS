@@ -285,11 +285,12 @@ export class NDomLayer {
             if (!text) return;
 
             this.renderText(caption, text, isEnabled ? LABEL_ENABLED : LABEL_DISABLED);
-            caption.style.left = `${Math.trunc(w * 0.5 - this.measureText(text) / 2)}px`;
-            caption.style.top = `${Math.trunc(h * 0.5 - this.manager.canvas.getLineHeight() / 2)}px`;
+            caption.style.left = `${Math.trunc(w * 0.5 - Math.trunc(this.measureText(text) / 2))}px`;
+            caption.style.top = `${Math.trunc(h * 0.5 - Math.trunc(this.manager.canvas.getLineHeight() / 2))}px`;
         };
 
         element.className = "ndom-button";
+        element.style.overflow = "hidden";
         face.className = "ndom-tile";
         this.place(face, 0, 0, w, h);
         caption.className = "ndom-text ndom-absolute";

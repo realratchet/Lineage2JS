@@ -55,7 +55,7 @@ export class GameClient {
     public close() { this.socket.close(); }
 
     public authLogin(account: string, key: SessionKey_T) { this.send(this.write(GameClientPacket_T.AuthLogin).S(account).d(key.playOk2).d(key.playOk1).d(key.loginOk1).d(key.loginOk2)); }
-    public characterSelected(slot: number) { this.send(this.write(GameClientPacket_T.CharacterSelected).d(slot).h(0).d(0).d(0).d(0)); }
+    public characterSelected(slot: number, position: Location_T = null) { this.send(this.write(GameClientPacket_T.CharacterSelected).d(slot).h(position ? 1 : 0).d(position ? Math.trunc(position.x) : 0).d(position ? Math.trunc(position.y) : 0).d(position ? Math.trunc(position.z) : 0)); }
     public newCharacter() { this.send(this.write(GameClientPacket_T.NewCharacter)); }
     public characterDelete(slot: number) { this.send(this.write(GameClientPacket_T.CharacterDelete).d(slot)); }
     public characterRestore(slot: number) { this.send(this.write(GameClientPacket_T.CharacterRestore).d(slot)); }

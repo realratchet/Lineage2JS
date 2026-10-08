@@ -635,7 +635,7 @@ const REQUIRED_SETTINGS = [
     "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter", "autoResetTimeRange", "isAutoDestroyed", "isAutoReset",
     "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
-    "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
+    "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning", "minSquaredVelocity",
     "initialDelayRange", "startVelocityRadialRange", "isIndependentSprayAccel",
     "isDisabled", "isFadingIn", "isFadingOut", "isResetOnTrigger", "isRespawningDeadParticles", "isTriggerDisabled", "isBlendBetweenSubdivisions", "isDepthTesting", "isDepthWriting",
     "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",

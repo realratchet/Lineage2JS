@@ -11,6 +11,7 @@ import L2Lobby from "./l2-lobby";
 import L2Pickup from "../objects/l2-pickup";
 import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
 import { GameServerPacket_T, GameServerExPacket_T, ShortCutType_T, readShortCut, Paperdoll_T, Race_T, Say2_T, StatusUpdate_T, SystemMessageParam_T, NPC_ID_OFFSET, readCharInfo, readCharSelectInfo, readCharSelected, readCharTemplates, readNpcInfo, readServerObjectInfo, readPetInfo, readUserInfo, readInventoryItem, readShowBoard, WaitType_T, PlaySoundType_T, GaugeColor_T, AttackFlags_T, readPledgeWar, readCrest, readPledgeCrestLarge, readWarehouseList, readPackageSendableList, readPackageToList, readPrivateStoreManageListSell, readPrivateStoreListSell, readPrivateStoreManageListBuy, readPrivateStoreListBuy, readMultiSellList, readShopPreviewList, readShopPreviewInfo, readBuyListSeed, readSellListProcure, readPoint, readVehicleLocation, readVehicleDeparture, readVehicleRider, readVehicleRiderStop, readVehicleRiderMove, readRide, readFlyToLocation, readSpecialCamera, readObservationMode, readRadarControl, readTownMap, readMonRaceInfo, readDice, readSSQStatus, readClanHallDecoration, readSiegeInfo, readSiegeClanList, readRecipeBookItemList, readRecipeItemMakeInfo, readRecipeShopManageList, readRecipeShopSellList, readRecipeShopItemInfo, readRecipeShopMsg, readHennaEquipList, readHennaItemInfo, readPartyMatchList, readPartyMatchDetail, readPartySpelled, readSnoop, readGMViewCharacterInfo, readGMViewPledgeInfo, readGMViewSkillInfo, readGMViewQuestList, readGMViewItemList, readGMViewWarehouseWithdrawList, readGMViewHennaInfo, readEnchantSkillList, readEnchantSkillInfo, readHeroList, readCommandChannelInfo, readOlympiadUserInfo, readOlympiadSpelledInfo, readPartyRoomMember, readPartyRoomMembers, readManorList, readShowSeedInfo, readShowCropInfo, readShowManorDefaultInfo, readShowSeedSetting, readShowCropSetting, readShowSellCropList, readShowProcureCropDetail, MountType_T, BlockType_T, EventMatchMessage_T, PartyRoomMemberChange_T } from "./game-packets";
+import PawnFishingComponent from "../objects/components/pawn-fishing-component";
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import type PacketReader from "./packet-reader";
 import type { SessionKey_T } from "./login-client";
@@ -73,7 +74,7 @@ type NetObject_T = {
 };
 type NetVehicle_T = { objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 type PetRemainTime_T = { maxTime: number, remainingTime: number };
-type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number };
+type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number, crest: HTMLCanvasElement, allyCrest: HTMLCanvasElement };
 
 const MYSTIC_BODY_CLASS_IDS = new Set([10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 38, 39, 40, 41, 42, 43, 49, 50, 51, 52, 94, 95, 96, 97, 98, 103, 104, 105, 110, 111, 112, 115, 116]); // ClassId.isMage excludes orcMage (49), which uses the Shaman body.
 const VALIDATE_POSITION_INTERVAL = 1000;
@@ -103,6 +104,8 @@ function getDistance(a: Vector3, b: Vector3): number {
     return Math.fround(Math.sqrt(x * x + y * y + z * z));
 }
 
+type GMServerTransfer_T = { phase: number, lastPhase: number, serverId: number, position: Location_T, selectedSlot: number, error: string };
+
 export class NetworkManager implements IEngineComponent<GameManager> {
     protected manGame: GameManager;
     protected ui: NetworkUI;
@@ -111,6 +114,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected loginUrl: string = null;
     protected game: GameClient = null;
     protected account: string = null;
+    protected loginAccount: string = null;
+    protected loginPassword: string = null;
+    protected gmTransfer: GMServerTransfer_T = null;
     protected sessionKey: SessionKey_T = null;
     protected characters: CharSelectEntry_T[] = [];
     protected templates: CharTemplate_T[] = [];
@@ -343,8 +349,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public async connectLogin(account: string, password: string) {
+        this.gmTransfer = null;
         if (this.login) this.login.close();
 
+        this.loginAccount = account;
+        this.loginPassword = password;
         this.login = new LoginClient();
         this.account = account.toLowerCase();
         this.ui.setLoginBusy(true);
@@ -360,21 +369,30 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public cancelLogin() {
+        this.gmTransfer = null;
         this.login.close();
         this.ui.showLogin();
     }
 
     public async connectGame(serverId: number) {
-        const server = this.login.servers.find(entry => entry.id === serverId);
+        const login = this.login, transfer = this.gmTransfer;
+        const server = login.servers.find(entry => entry.id === serverId);
 
         try {
-            this.sessionKey = await this.login.selectServer(server.id);
-            this.game = new GameClient();
-            this.game.onPacket = (opcode, packet) => this.onPacket(opcode, packet);
-            this.game.onClose = (code, reason) => void this.onDisconnected(`Game server closed the connection (${code}${reason ? ` ${reason}` : ""}).`);
+            const key = await login.selectServer(server.id);
 
-            await this.game.connect(this.login.getGameServerUrl(server));
+            if (this.login !== login || this.gmTransfer !== transfer) return;
+            this.sessionKey = key;
+            this.ui.setCrestServer(server.id);
+            const game = this.game = new GameClient();
+
+            game.onPacket = (opcode, packet) => { if (this.game === game) this.onPacket(opcode, packet); };
+            game.onClose = (code, reason) => { if (this.game === game) void this.onDisconnected(`Game server closed the connection (${code}${reason ? ` ${reason}` : ""}).`); };
+
+            await game.connect(login.getGameServerUrl(server));
         } catch (e) {
+            if (this.login !== login || this.gmTransfer !== transfer) return;
+            if (transfer) transfer.error = (e as Error).message;
             this.ui.showLogin();
             this.ui.showMessage((e as Error).message);
         }
@@ -388,6 +406,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public previewCharacter(index: number) {
+        if (this.gmTransfer) this.gmTransfer.selectedSlot = index;
         this.lobby.select(index);
         this.ui.setSelectedCharacter(index);
     }
@@ -402,9 +421,69 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public zoomCreatePreview(isIn: boolean) { this.lobby.zoomCreate(isIn); }
 
     public selectCharacter(slot: number) {
+        const character = this.characters[slot];
+
+        if (slot < 0 || slot >= 7 || !character || character.deleteSeconds > 0 || character.isDeletionMarked) return;
+        if (character.name && !this.ui.getScreenCanvas().hasGlyphs(character.name)) { this.ui.showMessage(this.ui.getSystemMessage(205)); return; }
+
         this.selectedSlot = slot;
         this.ui.showLoading();
-        this.game.characterSelected(slot);
+        this.game.characterSelected(slot, this.gmTransfer ? this.gmTransfer.position : null);
+    }
+
+    public startGMServerTransfer(serverId: number) {
+        if (!this.inWorld) return;
+        if (this.loginAccount === null || this.loginPassword === null) throw new Error(`GM server transfer has no saved authentication.`);
+        const position = this.manGame.getComponent("render").player.position;
+
+        this.gmTransfer = { phase: 1, lastPhase: 0, serverId, position: { x: Math.fround(position.x), y: Math.fround(position.y), z: Math.fround(position.z) }, selectedSlot: -1, error: null };
+    }
+
+    protected tickGMServerTransfer() {
+        const transfer = this.gmTransfer;
+
+        if (!transfer || transfer.error || transfer.phase === transfer.lastPhase) return;
+        transfer.lastPhase = transfer.phase;
+        switch (transfer.phase) {
+            case 1: transfer.phase = 2; break;
+            case 2: this.game.requestRestart(); break;
+            case 3: void this.reconnectGMServer(transfer); break;
+            case 4: break;
+            case 5:
+                if (transfer.serverId > 0 && this.login.servers.some(server => server.id === transfer.serverId)) void this.connectGame(transfer.serverId);
+                break;
+            case 6:
+                this.selectCharacter(transfer.selectedSlot);
+                transfer.phase = 7;
+                this.gmTransfer = null;
+                break;
+            case 7: this.gmTransfer = null; break;
+            default: throw new Error(`Invalid GM transfer phase ${transfer.phase}.`);
+        }
+    }
+
+    protected async reconnectGMServer(transfer: GMServerTransfer_T) {
+        this.game.logout();
+        this.game.onClose = null;
+        this.game.close();
+        this.game = null;
+        this.login.close();
+        const login = this.login = new LoginClient();
+
+        login.onLoginOk = async () => {
+            if (this.gmTransfer !== transfer || transfer.phase !== 3) return;
+            transfer.phase = 4;
+            await this.waitNextTick();
+        };
+        try {
+            await login.login(this.loginUrl, this.loginAccount, this.loginPassword);
+            if (this.gmTransfer === transfer && transfer.phase === 4) transfer.phase = 5;
+        } catch (e) {
+            if (this.gmTransfer !== transfer) return;
+            transfer.error = (e as Error).message;
+            this.ui.showLogin();
+            this.ui.showMessage(transfer.error);
+        }
     }
 
     public requestNewCharacter() { this.game.newCharacter(); }
@@ -581,6 +660,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected async onDisconnected(reason: string) {
+        if (this.gmTransfer) this.gmTransfer.error = reason;
         this.leaveWorld();
         this.game = null;
         this.ui.showMessage(reason);
@@ -606,6 +686,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const cubics = render.player.findComponent<PawnCubicComponent>("pawnCubic");
 
         if (cubics) render.player.removeComponent(cubics);
+        const fishing = render.player.findComponent<PawnFishingComponent>("pawnFishing");
+
+        if (fishing) render.player.removeComponent(fishing);
         for (const pickup of this.pickups.values()) render.removePickup(pickup);
         this.pickups.clear();
         this.gnoCategory = this.gnoElapsed = 0;
@@ -740,6 +823,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.partyRoomMembers.clear();
         this.isInCommandChannel = false;
         this.commandChannel = null;
+        this.ui.closeCommandChannel();
         this.commandChannelInviter = null;
         this.olympiadMode = 0;
         this.olympiadUsers.clear();
@@ -763,10 +847,16 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 this.inventoryOrderNamespace = packet.d(); // Engine 0x103fe0ba, NWindow 0x10065d4d.
                 this.game.authLogin(this.account, this.sessionKey);
                 break;
-            case GameServerPacket_T.AuthLoginFail: this.ui.showMessage(`Game server refused the session (reason ${packet.d()}).`); break;
+            case GameServerPacket_T.AuthLoginFail: {
+                const message = `Game server refused the session (reason ${packet.d()}).`;
+
+                if (this.gmTransfer) this.gmTransfer.error = message;
+                this.ui.showMessage(message);
+                break;
+            }
             case GameServerPacket_T.CharSelectInfo:
                 this.login.close();
-                this.characters = readCharSelectInfo(packet);
+                this.characters = readCharSelectInfo(packet).slice(0, 7);
                 void this.showLobby();
                 break;
             case GameServerPacket_T.CharTemplates:
@@ -984,7 +1074,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.TutorialShowQuestionMark: this.tutorialQuestionMarks.add(packet.d()); break;
             case GameServerPacket_T.TutorialEnableClientEvent: this.tutorialClientEvents = packet.d(); break;
             case GameServerPacket_T.GMViewCharacterInfo: this.gmCharacterInfo = readGMViewCharacterInfo(packet); this.updateGMCharacterInfo(); break;
-            case GameServerPacket_T.GMViewPledgeInfo: this.gmPledgeInfo = readGMViewPledgeInfo(packet); break;
+            case GameServerPacket_T.GMViewPledgeInfo: this.gmPledgeInfo = readGMViewPledgeInfo(packet); this.ui.setGMPledgeInfo(this.gmPledgeInfo); break;
             case GameServerPacket_T.GMViewSkillInfo: this.gmSkillInfo = readGMViewSkillInfo(packet); this.ui.setGMSkillInfo(this.gmSkillInfo); break;
             case GameServerPacket_T.GMViewQuestList: this.gmQuestList = readGMViewQuestList(packet); this.ui.setGMQuestList(this.gmQuestList); break;
             case GameServerPacket_T.GMViewItemList: this.gmItemList = readGMViewItemList(packet); this.ui.setGMInventoryInfo(this.gmItemList); break;
@@ -1022,13 +1112,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     case GameServerExPacket_T.ExShowCropSetting: this.manorCropSettings = readShowCropSetting(packet); break;
                     case GameServerExPacket_T.ExShowSellCropList: this.manorSellCrops = readShowSellCropList(packet); break;
                     case GameServerExPacket_T.ExShowProcureCropDetail: this.manorProcureCropDetail = readShowProcureCropDetail(packet); break;
-                    case GameServerExPacket_T.ExHeroList: this.heroes = readHeroList(packet); break;
+                    case GameServerExPacket_T.ExHeroList: this.heroes = readHeroList(packet); this.ui.showHeroList(this.heroes); break;
                     case GameServerExPacket_T.ExOpenMPCC: this.onOpenMPCC(packet); break;
                     case GameServerExPacket_T.ExCloseMPCC: this.onCloseMPCC(packet); break;
                     case GameServerExPacket_T.ExAskJoinMPCC: this.onAskJoinMPCC(packet); break;
-                    case GameServerExPacket_T.ExMultiPartyCommandChannelInfo: this.commandChannel = readCommandChannelInfo(packet); break;
-                    case GameServerExPacket_T.ExOlympiadUserInfo: { const info = readOlympiadUserInfo(packet); this.olympiadUsers.set(info.objectId, info); break; }
-                    case GameServerExPacket_T.ExOlympiadSpelledInfo: { const info = readOlympiadSpelledInfo(packet); this.olympiadEffects.set(info.objectId, info.effects); break; }
+                    case GameServerExPacket_T.ExMultiPartyCommandChannelInfo: this.commandChannel = readCommandChannelInfo(packet); this.ui.setCommandChannelInfo(this.commandChannel); break;
+                    case GameServerExPacket_T.ExOlympiadUserInfo: { const info = readOlympiadUserInfo(packet); this.olympiadUsers.set(info.objectId, info); this.ui.setOlympiadUserInfo(info); break; }
+                    case GameServerExPacket_T.ExOlympiadSpelledInfo: { const info = readOlympiadSpelledInfo(packet); this.olympiadEffects.set(info.objectId, info.effects); this.ui.setOlympiadEffects(info.objectId, info.effects); break; }
                     case GameServerExPacket_T.ExOlympiadMode: this.onOlympiadMode(packet); break;
                     case GameServerExPacket_T.ExOlympiadMatchEnd: this.onOlympiadMatchEnd(packet); break;
                     case GameServerExPacket_T.ExMailArrived: this.onMailArrived(packet); break;
@@ -1041,6 +1131,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     this.ui.saveInventoryOrder();
                     this.ui.clearQuestLocation();
                     this.leaveWorld();
+                    if (this.gmTransfer && this.gmTransfer.phase === 2) this.gmTransfer.phase = 3;
                 }
                 break;
             case GameServerPacket_T.LeaveWorld:
@@ -1949,7 +2040,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         user.allyCrestId = allyCrestId;
         const info = this.pledgeInfos.get(clanId);
 
-        this.pledgeInfos.set(clanId, { name: info ? info.name : "", allyName: info ? info.allyName : "", crestId, allyId, allyCrestId, unknown });
+        this.pledgeInfos.set(clanId, { name: info ? info.name : "", allyName: info ? info.allyName : "", crestId, allyId, allyCrestId, unknown, crest: info ? info.crest : null, allyCrest: info ? info.allyCrest : null });
+        if (!info || info.allyId !== allyId) this.game.requestPledgeInfo(clanId);
+        this.seedPledgeCrests(clanId, crestId, allyCrestId);
         this.updateGMCharacterInfo();
         this.ui.setPledgeStatus(objectId, clanId);
     }
@@ -1992,7 +2085,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListAll trailing data.");
 
         this.clanInfo = { leaderId: 0, clanId, name, leaderName, crestId, level, hasCastle, hasHideout, memberLevel, dissolving, allyId, allyName, allyCrestId, isAtWar };
-        this.pledgeInfos.set(clanId, { name, allyName, crestId, allyId, allyCrestId, unknown: 0 });
+        this.pledgeInfos.set(clanId, { name, allyName, crestId, allyId, allyCrestId, unknown: 0, crest: null, allyCrest: null });
         this.updateGMCharacterInfo();
         this.clanMembers.clear();
         this.ui.setClan(this.clanInfo);
@@ -2839,6 +2932,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (distanceXY(attacker.actor.position, attacker.position) > this.getStopSnapDistance(attacker)) attacker.actor.teleportTo(attacker.position, true);
         this.stopSkill(attacker.objectId);
         attacker.actor.getComponent<PawnAttackComponent>("pawnAttack").attackFromServer(hits);
+        if (!attacker.isDead)
+            for (const hit of hits) {
+                const defender = this.objects.get(hit.targetObjectId);
+
+                if (defender && defender.actor && defender.actor !== attacker.actor) this.ui.notifyOlympiadAttack(attacker.objectId, defender.objectId, attacker.name, hit.isMiss, hit.isCritical);
+            }
     }
 
     protected flushPendingAttacks(targetObjectId?: number) {
@@ -2919,6 +3018,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (isTransient && skill.visual.transientRejected) this.stopSkill(caster.objectId);
         actor.getComponent<PawnAttackComponent>("pawnAttack").castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0);
+        if (target.actor) this.ui.notifyOlympiadSkill(caster.objectId, cast.id);
     }
 
     protected onMagicSkillLaunched(packet: PacketReader) {
@@ -3496,19 +3596,30 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected async showLobby() {
+        const game = this.game, characters = this.characters, transfer = this.gmTransfer;
+        const isTransferList = transfer && transfer.phase === 5;
+
         await this.lobby.enter(this.ui.getStrings().logonSpots);
+        if (this.game !== game || this.characters !== characters) return;
 
-        this.ui.showCharacters(this.characters);
+        this.ui.showCharacters(characters);
+        let lastUsed = characters.findIndex(character => character.isLastUsed);
 
-        const lastUsed = this.characters.findIndex(character => character.isLastUsed);
+        if (isTransferList) {
+            lastUsed = -1;
+            characters.slice(0, 7).forEach((character, index) => { if (character.isLastUsed && (character.deleteSeconds <= 0 || character.isDeletionMarked)) lastUsed = index; });
+            transfer.selectedSlot = lastUsed;
+        }
         const asset = this.manGame.getComponent("asset");
 
-        await this.lobby.showSelect(this.characters);
+        await this.lobby.showSelect(characters);
+        if (this.game !== game || this.characters !== characters) return;
 
         void asset.precacheNpcBundle("LineageMonsters"); // after the lobby pawns, opening the bundles held two workers for seconds
         void asset.precacheNpcBundle("LineageNPCs");
 
         if (lastUsed >= 0) this.previewCharacter(lastUsed);
+        if (isTransferList && this.gmTransfer === transfer && transfer.phase === 5) transfer.phase = 6;
     }
 
     protected onManagePledgePower(packet: PacketReader) {
@@ -3521,17 +3632,56 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.ui.setPledgePower(privs);
     }
 
+    public getHeroCrest(crestId: number, isAlly: boolean): HTMLCanvasElement {
+        if (crestId <= 0) return null;
+
+        for (const info of this.pledgeInfos.values())
+            if ((isAlly ? info.allyCrestId : info.crestId) === crestId) return isAlly ? info.allyCrest : info.crest;
+        return null;
+    }
+
+    protected bindImportedCrest(crestId: number, canvas: HTMLCanvasElement, isAlly: boolean) {
+        if (!canvas) return;
+
+        for (const info of this.pledgeInfos.values()) {
+            if ((isAlly ? info.allyCrestId : info.crestId) !== crestId) continue;
+
+            if (isAlly) info.allyCrest = canvas;
+            else info.crest = canvas;
+        }
+    }
+
+    protected seedPledgeCrests(clanId: number, crestId: number, allyCrestId: number) {
+        const info = this.pledgeInfos.get(clanId);
+
+        if (crestId === 0) info.crest = null;
+        else if (crestId > 0) {
+            const canvas = this.ui.getCachedCrest(crestId);
+
+            if (canvas) this.bindImportedCrest(crestId, canvas, false);
+            else this.game.requestPledgeCrest(crestId);
+        }
+        if (allyCrestId === 0) info.allyCrest = null;
+        else if (allyCrestId > 0) {
+            const canvas = this.ui.getCachedCrest(allyCrestId);
+
+            if (canvas) this.bindImportedCrest(allyCrestId, canvas, true);
+            else this.game.requestAllyCrest(allyCrestId);
+        }
+    }
+
     protected onPledgeCrest(packet: PacketReader) {
         const crest = readCrest(packet);
 
         this.pledgeCrests.set(crest.crestId, crest.data);
-        this.ui.setPledgeCrest(crest.crestId, crest.data);
+        this.bindImportedCrest(crest.crestId, this.ui.setPledgeCrest(crest.crestId, crest.data), false);
     }
 
     protected onAllyCrest(packet: PacketReader) {
         const crest = readCrest(packet);
 
         this.allyCrests.set(crest.crestId, crest.data);
+        this.bindImportedCrest(crest.crestId, this.ui.setPledgeCrest(crest.crestId, crest.data), true);
     }
 
     protected onPledgeCrestLarge(packet: PacketReader) {
@@ -4409,7 +4559,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining()) throw new Error("Invalid ExFishingStart payload.");
 
-        if (object) object.fishing = { fishType, x, y, z, isFighting: false, time: 0, fishHp: 0, maxFishHp: 0, mode: 0, lureType: 0, isGoodUse: false, animation: 0, penalty: 0 };
+        if (!object || !object.actor || object.actor.getUnrealScriptProperty("bFish")) return;
+
+        const render = this.manGame.getComponent("render");
+        let component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
+
+        if (!component) component = object.actor.addComponent(new PawnFishingComponent(render));
+        void component.start(new Vector3(x, y, z), fishType, object.actor === render.player, this.ui.getScreenCanvas().width);
+        object.fishing = { fishType, x, y, z, isFighting: false, time: 0, fishHp: 0, maxFishHp: 0, mode: 0, lureType: 0, isGoodUse: false, animation: 0, penalty: 0 };
     }
 
     protected onFishingEnd(packet: PacketReader) {
@@ -4417,7 +4574,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (isWin > 1 || packet.getRemaining()) throw new Error("Invalid ExFishingEnd payload.");
 
-        if (object) object.fishing = null;
+        if (!object || !object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
+
+        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
+
+        if (component) component.end(isWin !== 0);
+        object.fishing = null;
     }
 
     protected onFishingStartCombat(packet: PacketReader) {
@@ -4428,6 +4590,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object || !object.fishing) return;
 
         Object.assign(object.fishing, { isFighting: true, time, fishHp: maxFishHp, maxFishHp, mode, lureType });
+        if (object.actor) object.actor.findComponent<PawnFishingComponent>("pawnFishing")?.startCombat(mode);
     }
 
     protected onFishingHpRegen(packet: PacketReader) {
@@ -4438,6 +4601,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object || !object.fishing) return; // Broadcast: a fisher seen mid-fight never sent us ExFishingStart.
 
         Object.assign(object.fishing, { isFighting: true, time, fishHp, mode, isGoodUse, animation, penalty });
+        if (object.actor) object.actor.findComponent<PawnFishingComponent>("pawnFishing")?.updateCombat(mode, animation);
     }
 
     protected onShowQuestMark(packet: PacketReader) {
@@ -4452,6 +4616,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (packet.getRemaining()) throw new Error("Invalid ExOpenMPCC payload.");
 
         this.isInCommandChannel = true;
+        this.ui.openCommandChannel();
     }
 
     protected onCloseMPCC(packet: PacketReader) {
@@ -4483,6 +4648,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.olympiadUsers.clear();
         this.olympiadEffects.clear();
+        this.ui.resetOlympiadMatch();
     }
 
     protected onMailArrived(packet: PacketReader) {
@@ -4521,6 +4687,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public onEngineTick(currentTime: number, deltaTime: number): void {
+        this.tickGMServerTransfer();
         if (this.ui) this.ui.tick(deltaTime);
 
         if (this.resolveNextTick) {
