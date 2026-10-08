@@ -870,6 +870,7 @@ function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDe
 
     (clip as any).attackEffectFrame = sequence.attackEffectFrame;
     (clip as any).attackEndEffectFrame = sequence.attackEndEffectFrame;
+    (clip as any).framerate = sequence.framerate;
     (clip as any).animationNotifies = notifications;
     (clip as any).skinNotify = skinNotify;
 

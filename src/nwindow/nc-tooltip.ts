@@ -6,7 +6,7 @@ import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 const TEXT_COLOR = 0xffdcdcdc;
 const TEX_SLICES = Array.from({ length: 9 }, (_, i) => `L2UI_ch3.Tooltip.Tooltip${i + 1}`);
 
-export type TooltipInfo_T = { title: string; titleRuns?: { text: string; color: number }[]; lines: { label: string; value: string }[]; description: string; };
+export type TooltipInfo_T = { title: string; extentTitle?: string; titleRuns?: { text: string; color: number; gap?: number }[]; lines: { label: string; value: string }[]; description: string; minimumWidth?: number; };
 type TooltipLayout_T = { width: number; height: number; runs: { x: number; y: number; color: number; text: string }[]; };
 
 export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCWnd::OnCreate 0x100360d6); nine 8x8 slices.
@@ -25,7 +25,7 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
 
         const name = info ? info.name : strings.skillNames[id], label = ` ${strings.sysStrings[88]} `;
 
-        return { title: `${name}${label}${level}`, titleRuns: [{ text: name, color: TEXT_COLOR }, { text: label, color: 0xffa3a3a3 }, { text: String(level), color: 0xffb09b79 }], lines, description: info ? info.description : "" };
+        return { title: `${name}${label}${level}`, titleRuns: [{ text: name, color: TEXT_COLOR }, { text: label, color: 0xffa3a3a3 }, { text: String(level), color: 0xffb09b79 }], lines, description: info ? info.description : "", minimumWidth: 144 };
     }
 
     public static shortcutSkill(strings: GameStrings_T, id: number, level: number): TooltipInfo_T { // NWindow 0x1002fbb8: shortcut type 2 adds level and MP to the title.
@@ -33,6 +33,7 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
 
         info.lines = [];
         info.description = "";
+        info.minimumWidth = 0;
         if (skill && skill.mpConsume > 0) {
             const text = ` (${strings.sysStrings[91]}:${skill.mpConsume})`;
 
@@ -49,14 +50,49 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         return { title: action.command, lines: [], description: action.name };
     }
 
+    public static abnormal(strings: GameStrings_T, id: number, level: number, remaining: number, isSecondary = false): TooltipInfo_T {
+        const skill = strings.skillInfos[`${id}:${level}`], name = skill ? skill.name : "", addName = !isSecondary && skill && skill.isEnchanted ? skill.enchantName : "", shownLevel = addName ? skill.enchantSkillLevel : level;
+        const titleRuns: TooltipInfo_T["titleRuns"] = [{ text: name, color: TEXT_COLOR }];
+        const lines: TooltipInfo_T["lines"] = [];
+        let title = name;
+
+        if (addName) {
+            title += ` ${addName}`;
+            titleRuns.push({ text: addName, color: 0xffffd969, gap: 5 });
+        }
+        if (shownLevel > 0) {
+            const label = ` ${strings.sysStrings[88]} `;
+
+            title += `${label}${shownLevel}`;
+            titleRuns.push({ text: label, color: 0xffa3a3a3 }, { text: String(shownLevel), color: 0xffb09b79 });
+        }
+        if (remaining >= 0) {
+            const seconds = remaining % 86400, hours = Math.trunc(seconds / 3600), minutes = Math.trunc(seconds % 3600 / 60);
+            const value = hours > 0 ? `${hours}${strings.sysStrings[1110]}` : minutes > 0 ? `${minutes}${strings.sysStrings[1111]}` : `${seconds % 60}초`;
+
+            lines.push({ label: strings.sysStrings[1199], value });
+        }
+
+        const extentTitle = `${name}${addName ? ` ${addName}` : ""}${level > 0 ? ` ${strings.sysStrings[88]} ${level}` : ""}`;
+
+        return { title, extentTitle, titleRuns, lines, description: skill ? skill.description : "", minimumWidth: 144 };
+    }
+
     protected layout(canvas: NWindowCanvas, text: string | TooltipInfo_T): TooltipLayout_T {
-        const info: TooltipInfo_T = typeof text === "string" ? { title: text, lines: [], description: "" } : text;
-        const width = Math.ceil(Math.max(info.lines.length || info.description ? 144 : 0, canvas.measureText(info.title), ...info.lines.map(line => canvas.measureText(line.label ? `${line.label} : ${line.value}` : line.value))));
+        if (typeof text === "string") {
+            const lines = text.split("\n");
+
+            return { width: Math.max(...lines.map(line => canvas.measureText(line))) + 10, height: lines.length * canvas.getLineHeight() + 10, runs: [{ x: 5, y: 5, color: TEXT_COLOR, text }] };
+        }
+
+        const info = text;
+        const width = Math.ceil(Math.max(info.minimumWidth || 0, info.lines.length || info.description ? 144 : 0, canvas.measureText(info.extentTitle ?? info.title)));
         const step = canvas.getLineHeight() + 6;
         const runs: TooltipLayout_T["runs"] = [];
         let titleX = 5;
 
         for (const run of info.titleRuns || [{ text: info.title, color: TEXT_COLOR }]) {
+            titleX += run.gap || 0;
             runs.push({ x: titleX, y: 5, color: run.color, text: run.text });
             titleX += canvas.measureText(run.text);
         }
@@ -74,20 +110,9 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
             }
             runs.push({ x, y, color: 0xffb09b79, text: line.value });
         });
-        if (info.description) for (const paragraph of info.description.split("\n")) {
-            let current = "";
-
-            for (const word of paragraph.split(" ")) {
-                const next = current ? `${current} ${word}` : word;
-
-                if (current && canvas.measureText(next) > width) {
-                    y += step;
-                    runs.push({ x: 5, y, color: 0xffb2becf, text: current });
-                    current = word;
-                } else current = next;
-            }
+        if (info.description) for (const line of canvas.wrapText(info.description.replace(/\\n/g, "\n"), width)) {
             y += step;
-            runs.push({ x: 5, y, color: 0xffb2becf, text: current });
+            runs.push({ x: 5, y, color: 0xffb2becf, text: line });
         }
 
         return { width: width + 10, height: y + canvas.getLineHeight() + 5, runs };
@@ -128,14 +153,15 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         button.addEventListener("blur", hide);
     }
 
-    public paint(canvas: NWindowCanvas, wnd: NWnd, anchorX: number, anchorY: number, text: string | TooltipInfo_T) { // 0x10032560: above the anchor, flipped 32 px below at the top edge, clamped horizontally.
+    public paint(canvas: NWindowCanvas, wnd: NWnd, anchorX: number, anchorY: number, text: string | TooltipInfo_T, topOffset = 32) { // 0x10032560 uses32 at the top edge; NCButton's0x10032860 uses0.
         if (!text) return;
 
         const layout = this.layout(canvas, text);
         const screenX = wnd.getScreenX(), screenY = wnd.getScreenY();
         const x = Math.max(-screenX, Math.min(anchorX, canvas.width - screenX - layout.width));
-        const y = screenY + anchorY - layout.height < 0 ? anchorY + 32 : anchorY - layout.height;
+        const y = screenY + anchorY - layout.height < 0 ? anchorY + topOffset : anchorY - layout.height;
 
+        canvas.setOrigin(screenX, screenY);
         this.draw(layout, (tx, ty, w, h, texture) => canvas.drawTile(x + tx, y + ty, w, h, 0, 0, 8, 8, texture), (tx, ty, color, value) => canvas.drawText(x + tx, y + ty, color, value));
     }
 }

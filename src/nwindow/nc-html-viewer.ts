@@ -1,4 +1,5 @@
-import NDomLayer, { NDOM_EDIT_TEXTURES, NDomEdit_T } from "./ndom";
+import NDomLayer, { NDOM_EDIT_TEXTURES } from "./ndom";
+import CHtmlMultiEdit from "./c-html-multi-edit";
 import { FontType_T } from "./nwindow-canvas";
 
 const TEXT_COLOR = 0xffdcdcdc;
@@ -18,6 +19,7 @@ const TEX_THUMB_CENTER = "L2UI_CH3.ScrollBar.SliderBarCenter";
 const TEX_THUMB_BOTTOM = "L2UI_CH3.ScrollBar.SliderBarBottom";
 const DEFAULT_FORE = "NWindow.BlackTexture";
 const DEFAULT_BACK = "NWindow.WhiteTexture";
+const TEXT_ENTITIES = [["&nbsp;", " "], ["&apos;", "'"], ["&quot;", "\""], ["&amp;", "&"], ["&lt;", "<"], ["&gt;", "> "], ["&#160;", " "]]; // 0x100449e0, table 0x102369e4.
 
 const TAG_TABLE: [string, string[]][] = [ // Tag table 0x10234020, attribute lists verbatim (misspellings and unsorted lists included, both are binary-searched).
     ["A", ["ACTION", "CMD", "HREF", "LINK", "MSG"]], ["ADDRESS", []], ["B", []], ["BAR", ["ALIGN", "DISABLED", "HEIGHT", "MAX", "MIN", "NAME", "TOOLTIP", "VALUE", "WIDTH"]],
@@ -43,7 +45,7 @@ type HtmlToken_T = { tag: string, isOpen: boolean, attrs: Record<string, string>
 type HtmlBlock_T = { element: HTMLElement, paragraph: HTMLDivElement, paragraphAlign: number };
 type HtmlTable_T = { table: HTMLTableElement, row: HTMLTableRowElement, cell: HTMLTableCellElement, border: number, padding: number };
 type HtmlLink_T = { target: string, isUnderlined: boolean };
-type HtmlVariable_T = { name: string, edit: NDomEdit_T };
+type HtmlVariable_T = { name: string, isMultiline: boolean, edit: { getValue(): string, setValue(value: string): void } };
 
 function compareNoCase(a: string, b: string) {
     const x = a.toLowerCase(), y = b.toLowerCase();
@@ -200,6 +202,11 @@ function parseTextRun(html: string, start: number): [HtmlSegment_T[], number] { 
         hasSpace = false;
     }
 
+    for (const segment of segments)
+        for (const [entity, value] of TEXT_ENTITIES)
+            while (segment.text.includes(entity))
+                segment.text = segment.text.split(entity).join(value);
+
     return [segments, end];
 }
 
@@ -308,7 +315,9 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     public readonly element: HTMLDivElement;
     public title: string = null;
     public onBypass: (command: string) => void = null;
+    public onWrite: (kind: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) => void = null;
     public onLink: (path: string) => void = null;
+    public onFile: (path: string) => void = null;
     public onHide: () => void = null;
     protected readonly layer: NDomLayer;
     protected readonly width: number;
@@ -320,6 +329,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     protected readonly thumbBottom: HTMLDivElement;
     protected background: HTMLDivElement = null;
     protected variables: HtmlVariable_T[] = [];
+    protected arrMultiEdits: CHtmlMultiEdit[] = [];
     protected contentHeight = 0;
     protected scroll = 0;
     protected thumbPos = 0;
@@ -360,15 +370,17 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
 
             this.scrollBy(direction * this.getLineStep());
 
-            const timer = window.setInterval(() => this.scrollBy(direction * this.getLineStep()), REPEAT_PERIOD);
+            const timer = window.setInterval(() => {
+                if (button.matches(":hover")) this.scrollBy(direction * this.getLineStep());
+            }, REPEAT_PERIOD);
             const stop = () => {
                 window.clearInterval(timer);
-                window.removeEventListener("mouseup", stop);
-                button.removeEventListener("mouseleave", stop);
+                window.removeEventListener("mouseup", stop, true);
+                window.removeEventListener("blur", stop);
             };
 
-            window.addEventListener("mouseup", stop);
-            button.addEventListener("mouseleave", stop);
+            window.addEventListener("mouseup", stop, true);
+            window.addEventListener("blur", stop);
         });
     }
 
@@ -377,23 +389,19 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
 
         event.preventDefault();
 
-        const startY = this.layer.toUI(event.clientY), startScroll = this.scroll, step = this.getLineStep();
-        const move = (moveEvent: MouseEvent) => {
+        const startY = this.layer.toUI(event.clientY), startPos = this.thumbPos, step = this.getLineStep();
+
+        this.layer.beginDrag(moveEvent => {
             const travel = this.height - 30 - this.thumbLen;
 
             if (travel <= 0) return;
 
-            const position = startScroll + (this.layer.toUI(moveEvent.clientY) - startY) * (this.contentHeight - this.height) / travel;
+            const position = Math.max(0, Math.min(travel, Math.trunc(startPos + this.layer.toUI(moveEvent.clientY) - startY)));
 
-            this.setScroll(Math.ceil(position / step) * step);
-        };
-        const stop = () => {
-            window.removeEventListener("mousemove", move);
-            window.removeEventListener("mouseup", stop);
-        };
-
-        window.addEventListener("mousemove", move);
-        window.addEventListener("mouseup", stop);
+            this.setScroll(Math.ceil(Math.trunc(position * (this.contentHeight - this.height) / travel) / step) * step);
+            this.thumbPos = position;
+            this.layer.place(this.thumb, 0, 15 + position);
+        });
     }
 
     public scrollBy(delta: number) { this.setScroll(this.scroll + delta); }
@@ -422,12 +430,15 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
         this.layer.place(this.thumbBottom, 0, this.thumbLen - 8);
     }
 
+    public tick(deltaSeconds: number) { this.arrMultiEdits.forEach(edit => edit.tick(deltaSeconds)); }
+
     public async setHtml(html: string) { // Load from string 0x100419d0: tokenize, build, layout, create controls.
         const serial = ++this.loadSerial;
         const tokens = tokenizeHtml(html);
         const textures: string[] = [];
 
         for (const token of tokens) {
+            if (token.tag === "MULTIEDIT") textures.push(...CHtmlMultiEdit.getTextures());
             if (token.tag === "IMG" && token.attrs.SRC) textures.push(`?${token.attrs.SRC}`);
             if (token.tag === "HTML" && token.attrs.IMGSRC) textures.push(`?${token.attrs.IMGSRC}`);
             if (token.tag === "BUTTON") {
@@ -443,6 +454,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
 
         this.content.replaceChildren();
         this.variables = [];
+        this.arrMultiEdits = [];
         this.title = null;
 
         if (this.background) this.background.remove();
@@ -553,7 +565,20 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
 
                     holder.style.marginBottom = `${LINE_SPACING}px`;
 
-                    if ("VAR" in attrs) this.variables.push({ name: attrs.VAR, edit });
+                    this.variables.push({ name: attrs.VAR, isMultiline: false, edit });
+                    break;
+                }
+                case "MULTIEDIT": { // 0x10040b7e: defaults 50x40, HEIGHT+6 layout.
+                    if (!token.isOpen) break;
+
+                    const width = "WIDTH" in attrs ? atoi(attrs.WIDTH) : 50, height = "HEIGHT" in attrs ? atoi(attrs.HEIGHT) : 40;
+                    const holder = addHolder(addRow(), width, height);
+                    const edit = new CHtmlMultiEdit(this.layer, holder, 0, 0, width, height);
+
+                    holder.style.marginBottom = `${LINE_SPACING}px`;
+                    edit.input.setAttribute("aria-label", attrs.VAR || "");
+                    this.arrMultiEdits.push(edit);
+                    this.variables.push({ name: attrs.VAR, isMultiline: true, edit });
                     break;
                 }
                 case "TABLE": { // TABLE 0x1003e110: border 0, cellpadding 1, cellspacing 2 by default (ctor 0x1003dfb0); "ALIGN," never matches.
@@ -664,7 +689,11 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     if (link && link.target !== null) {
                         const target = link.target;
 
-                        word.addEventListener("click", () => { this.layer.getManager().playButtonSound(true); this.dispatch(target); });
+                        word.addEventListener("click", () => {
+                            this.layer.getManager().playButtonSound(true);
+                            if (link.isUnderlined) { if (this.onFile) this.onFile(target); }
+                            else this.dispatch(target);
+                        });
                     }
                 }
 
@@ -689,15 +718,18 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
         return variable ? variable.edit.getValue() : null;
     }
 
-    protected dispatch(target: string) { // Console link handler 0x10072560: BYPASS args re-tokenized, first "-h" dropped and hides the window, "$var" replaced by the edit value.
-        if (!target) return;
+    public dispatch(target: string): number { // Console link handler 0x10072560: BYPASS args re-tokenized, first "-h" dropped and hides the window, "$var" replaced by the edit value.
+        if (!target) return 0;
 
         let rest = parseCommand(target, "BYPASS");
 
         if (rest !== null) {
             let command = "", isHide = false;
+            const tokens = parseTokens(rest);
 
-            for (const token of parseTokens(rest)) {
+            if (tokens.length === 0) return 0;
+
+            for (const token of tokens) {
                 if (!isHide && token === "-h") {
                     isHide = true;
                     continue;
@@ -713,18 +745,49 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             if (this.onBypass) this.onBypass(command);
             if (isHide && this.onHide) this.onHide();
 
-            return;
+            return isHide ? 2 : 1;
+        }
+
+        rest = parseCommand(target, "WRITE");
+
+        if (rest !== null) {
+            const tokens = parseTokens(rest);
+
+            if (tokens.length < 4) return 0;
+
+            const value = this.getVariable(tokens[3]);
+
+            if (value === null) return 0;
+
+            let arg4 = "-", arg5 = "-";
+
+            if (tokens[0] === "4" || tokens[0] === "5" || tokens[0] === "7") {
+                if (tokens.length < 5) return 0;
+
+                arg4 = this.getVariable(tokens[4]);
+                if (arg4 === null) return 0;
+            }
+            if (tokens[0] === "4" || tokens[0] === "7") {
+                if (tokens.length < 6) return 0;
+
+                arg5 = this.getVariable(tokens[5]);
+                if (arg5 === null) return 0;
+            }
+            if (this.onWrite) this.onWrite(tokens[0], tokens[1], tokens[2], value, arg4, arg5);
+            return 1;
         }
 
         rest = parseCommand(target, "LINK");
 
         if (rest !== null) {
-            if (this.onLink) this.onLink(rest);
+            const tokens = parseTokens(rest);
 
-            return;
+            if (tokens.length && this.onLink) this.onLink(tokens[0]);
+            return 1;
         }
 
         debugger;
+        return 0;
     }
 }
 

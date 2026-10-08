@@ -904,8 +904,8 @@ export class SectorObject extends GameObject {
         return false;
     }
 
-    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity) {
-        this.updateLights(environment);
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false) {
+        if (!auxiliary) this.updateLights(environment);
 
         if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) return;
 
@@ -936,7 +936,7 @@ export class SectorObject extends GameObject {
         const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
         const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
 
-        if (zoneChanged || leafChanged) {
+        if (!auxiliary && (zoneChanged || leafChanged)) {
             if (zoneChanged) {
                 const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
                 console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
@@ -1035,7 +1035,7 @@ export class SectorObject extends GameObject {
                 }
             });
 
-            if (zoneChanged && bspAmbientColor) {
+            if (!auxiliary && zoneChanged && bspAmbientColor) {
                 console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
             }
 
@@ -1234,7 +1234,7 @@ export class SectorObject extends GameObject {
                 }
             }
 
-            if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
+            if (!auxiliary && leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
                 console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
                 this._lastLoggedStaticMeshLeaf = leafIndex;
             }

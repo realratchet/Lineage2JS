@@ -11,7 +11,7 @@ export type HennaStatus_T = { stats: number[], slots: number, symbols: HennaSymb
 export type MacroCommand_T = { index: number, type: number, data1: number, data2: number, command: string };
 export type Macro_T = { id: number, name: string, description: string, acronym: string, icon: number, commands: MacroCommand_T[] };
 export type FriendEntry_T = { objectId: number, name: string, isOnline: boolean };
-export type ShowBoardPart_T = { show: boolean, id: string, html: string };
+export type ShowBoardPart_T = { show: boolean, actions: string[], content: string };
 export type PartyMember_T = { objectId: number, name: string, curCp: number, maxCp: number, curHp: number, maxHp: number, curMp: number, maxMp: number, level: number, classId: number };
 export type PartyInvite_T = { name: string, itemDistribution: number };
 export type PledgeInvite_T = { requestorId: number, pledgeName: string };
@@ -21,7 +21,7 @@ export type ClanMember_T = { name: string, level: number, classId: number, objec
 export type AquireSkillEntry_T = { id: number, nextLevel: number, maxLevel: number, spCost: number, requirements: number };
 export type AquireSkillRequirement_T = { type: number, itemId: number, count: number, unknown: number };
 export type AquireSkillInfo_T = { id: number, level: number, spCost: number, mode: number, requirements: AquireSkillRequirement_T[] };
-export type TradeItem_T = { tradeType: number, type1: number, objectId: number, itemId: number, count: number, type2: number, bodyPart: number, enchantLevel: number, customType2: number };
+export type TradeItem_T = { tradeType: number, type1: number, objectId: number, itemId: number, count: number, initialCount: number, type2: number, bodyPart: number, enchantLevel: number, customType2: number };
 export type ShopItem_T = { type1: number, objectId: number, itemId: number, count: number, type2: number, bodyPart: number, enchantLevel: number, customType2: number, price: number };
 export type StorageMaxCount_T = { inventory: number, warehouse: number, freight: number, privateSell: number, privateBuy: number, recipeDwarf: number, recipe: number };
 
@@ -84,6 +84,7 @@ export enum GameServerPacket_T {
     JoinParty = 0x3a,
     WareHouseDepositList = 0x41,
     WareHouseWithdrawalList = 0x42,
+    WareHouseDone = 0x43,
     ShortCutRegister = 0x44,
     ShortCutInit = 0x45,
     StopMove = 0x47,
@@ -204,6 +205,8 @@ export enum GameServerPacket_T {
     HennaEquipList = 0xe2,
     HennaItemInfo = 0xe3,
     HennaInfo = 0xe4,
+    HennaUnequipList = 0xe5,
+    HennaUnequipInfo = 0xe6,
     SendMacroList = 0xe7,
     BuyListSeed = 0xe8,
     SellListProcure = 0xe9,
@@ -396,6 +399,7 @@ export enum GameClientPacket_T {
     RequestPetGetItem = 0x8f,
     RequestPrivateStoreManageBuy = 0x90,
     SetPrivateStoreListBuy = 0x91,
+    RequestPrivateStoreManageCancelBuy = 0x92,
     RequestPrivateStoreQuitBuy = 0x93,
     SetPrivateStoreMsgBuy = 0x94,
     RequestPrivateStoreSell = 0x96,
@@ -414,9 +418,11 @@ export enum GameClientPacket_T {
     RequestRecipeBookDestroy = 0xad,
     RequestRecipeItemMakeInfo = 0xae,
     RequestRecipeItemMakeSelf = 0xaf,
+    RequestRecipeShopManageList = 0xb0,
     RequestRecipeShopMessageSet = 0xb1,
     RequestRecipeShopListSet = 0xb2,
     RequestRecipeShopManageQuit = 0xb3,
+    RequestRecipeShopManageCancel = 0xb4,
     RequestRecipeShopMakeInfo = 0xb5,
     RequestRecipeShopMakeItem = 0xb6,
     RequestRecipeShopManagePrev = 0xb7,
@@ -425,6 +431,9 @@ export enum GameClientPacket_T {
     RequestHennaList = 0xba,
     RequestHennaItemInfo = 0xbb,
     RequestHennaEquip = 0xbc,
+    RequestHennaUnequipList = 0xbd,
+    RequestHennaUnequipInfo = 0xbe,
+    RequestHennaUnequip = 0xbf,
     RequestPledgePower = 0xc0,
     RequestMakeMacro = 0xc1,
     RequestDeleteMacro = 0xc2,
@@ -463,46 +472,27 @@ export enum ShortCutType_T { TYPE_ITEM = 1, TYPE_SKILL = 2, TYPE_ACTION = 3, TYP
 export enum GaugeColor_T { BLUE, RED, CYAN, GREEN } // SetupGauge.java.
 export enum ItemType2_T { TYPE2_WEAPON, TYPE2_SHIELD_ARMOR, TYPE2_ACCESSORY, TYPE2_QUEST, TYPE2_MONEY, TYPE2_OTHER } // L2Item.java.
 
-export type ShortCut_T = { type: ShortCutType_T, slot: number, id: number, level: number };
+export type ShortCut_T = { type: ShortCutType_T, slot: number, id: number, level: number, characterType?: number };
 
-export function readShortCut(packet: PacketReader): ShortCut_T { // ShortCutInit/ShortCutRegister: d type, d slot+page*12, d id, [d level for skills], d 1.
+export function readShortCut(packet: PacketReader): ShortCut_T { // ShortCutInit/ShortCutRegister: type, slot, id, [skill level], character type.
     const type = packet.d() as ShortCutType_T, slot = packet.d(), id = packet.d();
     const level = type === ShortCutType_T.TYPE_SKILL ? packet.d() : -1;
 
-    packet.d();
+    const characterType = packet.d();
 
-    return { type, slot, id, level };
+    return { type, slot, id, level, characterType };
 }
 
 export function readShowBoard(packet: PacketReader): ShowBoardPart_T {
     const show = packet.c();
-    if (show !== 0 && show !== 1) throw new Error(`Invalid ShowBoard visibility '${show}'.`);
 
-    for (let i = 0; i < 8; i++) packet.S();
+    if (show !== 1) return { show: false, actions: [], content: "" };
 
-    let id = "";
-    for (;;) {
-        const code = packet.h();
-        if (code === 0) return { show: show !== 0, id, html: "" };
-        if (code === 8) break;
-        id += String.fromCharCode(code);
-    }
+    const actions: string[] = [];
 
-    if (id === "1002") {
-        packet.b(packet.getRemaining());
-        return { show: show !== 0, id, html: "" };
-    }
+    for (let i = 0; i < 8; i++) actions.push(packet.getRemaining() === 0 ? "" : packet.S().slice(0, 127));
 
-    let html = "";
-    for (;;) {
-        const code = packet.h();
-        if (code === 0) break;
-        html += String.fromCharCode(code);
-    }
-
-    if (packet.getRemaining() !== 2 || packet.h() !== 0) throw new Error("Invalid ShowBoard trailing data."); // ShowBoard.java sizes its buffer for three terminators but writes two.
-
-    return { show: show !== 0, id, html };
+    return { show: true, actions, content: packet.getRemaining() === 0 ? "" : packet.S().slice(0, 8191) };
 }
 
 export enum Race_T { HUMAN, ELF, DARK_ELF, ORC, DWARF }
@@ -600,7 +590,7 @@ export type CharSelected_T = Location_T & { name: string, charId: number, title:
 
 export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number };
 
-export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, mountType: number, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, isGM: boolean, paperdollObjects: number[], cubics: number[] };
+export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, isGM: boolean, paperdollObjects: number[], cubics: number[] };
 
 export type CharInfo_T = CreatureInfo_T & Appearance_T & { isSitting: boolean, mountType: number, cubics: number[] };
 
@@ -741,13 +731,16 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.title = packet.S();
 
     info.clanId = packet.d();
-    packet.skip(4 * 4);
+    packet.skip(3 * 4);
+    info.clanRelation = packet.d();
     info.mountType = packet.c();
-    packet.skip(2);
+    packet.skip(1);
+    info.hasDwarvenCraft = packet.c() !== 0;
     info.pkKills = packet.d();
     info.pvpKills = packet.d();
     info.cubics = readCubics(packet);
-    packet.skip(1 + 4 + 1 + 4 + 7 * 4);
+    packet.skip(1 + 4 + 1);
+    info.pledgePrivileges = packet.b(32);
 
     info.recommendationsLeft = packet.h();
     info.recommendations = packet.h();
@@ -859,22 +852,33 @@ export function readServerObjectInfo(packet: PacketReader): ServerObjectInfo_T {
     return { objectId, npcId, isAttackable, x, y, z, heading, name, title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffffff, runSpd: 0, walkSpd: 0, swimRunSpd: 0, swimWalkSpd: 0, moveMultiplier, attackSpeedMultiplier, collisionRadius, collisionHeight, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false, curHp, maxHp };
 }
 
-export function readPetInfo(packet: PacketReader) {
-    packet.d();
+export type PetStatus_T = { objectId: number, npcId: number, name: string, x: number, y: number, z: number, statusType: number, curFood: number, maxFood: number, curHp: number, maxHp: number, curMp: number, maxMp: number, field42: number, level: number, exp: number, minExp: number, nextExp: number, weight: number, maxWeight: number, pAtk: number, pDef: number, mAtk: number, mDef: number, accuracy: number, evasion: number, critical: number, speed: number, attackSpeed: number, castSpeed: number, field60: number, isMountable: boolean, soulshotsUsed: number, spiritshotsUsed: number };
+
+export type PetInfo_T = NpcInfo_T & PetStatus_T;
+
+export function readPetInfo(packet: PacketReader): PetInfo_T { // Engine 0x1041cdf0, format 0x107c6e58.
+    const statusType = packet.d();
 
     const info = readNpcInfo(packet);
 
-    packet.skip(2 * 4);
-
+    const curFood = packet.d(), maxFood = packet.d();
     const curHp = packet.d(), maxHp = packet.d(), curMp = packet.d(), maxMp = packet.d();
 
-    packet.skip(18 * 4);
+    const field42 = packet.d();
 
-    const isMountable = packet.h() !== 0;
+    const level = packet.d(), exp = packet.d(), minExp = packet.d(), nextExp = packet.d();
+    const weight = packet.d(), maxWeight = packet.d();
+    const pAtk = packet.d(), pDef = packet.d(), mAtk = packet.d(), mDef = packet.d(), accuracy = packet.d(), evasion = packet.d(), critical = packet.d(), speed = packet.d(), attackSpeed = packet.d(), castSpeed = packet.d();
 
-    packet.skip(1 + 2 + 1 + 2 * 4);
+    packet.d();
 
-    return { ...info, curHp, maxHp, curMp, maxMp, isMountable };
+    const field60 = packet.d(), isMountable = (field60 & 0xffff) !== 0;
+
+    packet.skip(2);
+
+    const soulshotsUsed = packet.d(), spiritshotsUsed = packet.d();
+
+    return { ...info, statusType, curFood, maxFood, curHp, maxHp, curMp, maxMp, field42, level, exp, minExp, nextExp, weight, maxWeight, pAtk, pDef, mAtk, mDef, accuracy, evasion, critical, speed, attackSpeed, castSpeed, field60, isMountable, soulshotsUsed, spiritshotsUsed };
 }
 
 export function readCharTemplates(packet: PacketReader): CharTemplate_T[] {
@@ -954,10 +958,10 @@ export type PrivateStoreManageBuy_T = { playerId: number, adena: number, items: 
 export type PrivateStoreBuyList_T = { storePlayerId: number, adena: number, items: PrivateStoreBuyItem_T[] };
 export type MultiSellProduct_T = { itemId: number, bodyPart: number, type2: number, count: number, enchantLevel: number };
 export type MultiSellIngredient_T = { itemId: number, type2: number, count: number, enchantLevel: number };
-export type MultiSellEntry_T = { entryId: number, products: MultiSellProduct_T[], ingredients: MultiSellIngredient_T[] };
+export type MultiSellEntry_T = { entryId: number, mode: number, products: MultiSellProduct_T[], ingredients: MultiSellIngredient_T[] };
 export type MultiSellList_T = { listId: number, page: number, isFinished: boolean, pageSize: number, entries: MultiSellEntry_T[] };
 export type ShopPreviewItem_T = { itemId: number, type2: number, bodyPart: number, price: number };
-export type ShopPreviewList_T = { adena: number, listId: number, items: ShopPreviewItem_T[] };
+export type ShopPreviewList_T = { unknown: number, adena: number, listId: number, items: ShopPreviewItem_T[] };
 export type ManorItem_T = { type1: number, objectId: number, itemId: number, count: number, type2: number, price: number };
 export type BuyListSeed_T = { adena: number, manorId: number, items: ManorItem_T[] };
 export type SellListProcure_T = { adena: number, listId: number, items: ManorItem_T[] };
@@ -965,8 +969,8 @@ export type ItemCount_T = { objectId: number, count: number };
 export type ItemIdCount_T = { itemId: number, count: number };
 export type SellItemRequest_T = { objectId: number, itemId: number, count: number };
 export type PrivateStoreOffer_T = { objectId: number, count: number, price: number };
-export type PrivateStoreBuyOffer_T = { itemId: number, enchantLevel: number, count: number, price: number };
-export type PrivateStoreSellOffer_T = { objectId: number, itemId: number, enchantLevel: number, count: number, price: number };
+export type PrivateStoreBuyOffer_T = { itemId: number, enchantLevel: number, type2: number, count: number, price: number };
+export type PrivateStoreSellOffer_T = { objectId: number, itemId: number, enchantLevel: number, type2: number, count: number, price: number };
 
 function readStorageItem(packet: PacketReader): StorageItem_T { // WareHouseDepositList/WareHouseWithdrawalList/PackageSendableList: trailing d repeats objectId.
     const type1 = packet.h(), objectId = packet.d(), itemId = packet.d(), count = packet.d(), type2 = packet.h(), customType1 = packet.h(), bodyPart = packet.d(), enchantLevel = packet.h();
@@ -1062,13 +1066,9 @@ export function readPrivateStoreListSell(packet: PacketReader): PrivateStoreSell
 }
 
 function readPrivateStoreBuyItem(packet: PacketReader, isStoreList: boolean, hasPrice: boolean): PrivateStoreBuyItem_T {
-    const objectId = isStoreList ? packet.d() : 0, itemId = packet.d(), enchantLevel = packet.h(), count = packet.d(), referencePrice = packet.d();
-
-    packet.h();
-
-    const bodyPart = packet.d(), type2 = packet.h(), price = hasPrice ? packet.d() : 0, maxCount = isStoreList ? packet.d() : 0;
-
-    if (hasPrice && !isStoreList) packet.d(); // Fixed store price, repeats referencePrice.
+    const objectId = isStoreList ? packet.d() : 0, itemId = packet.d(), enchantLevel = packet.h(), count = packet.d(), firstPrice = packet.d();
+    const category = packet.h(), bodyPart = packet.d(), type1 = packet.h(), finalPrice = hasPrice ? packet.d() : 0, maxCount = hasPrice ? packet.d() : 0;
+    const type2 = isStoreList ? type1 : category, price = isStoreList ? finalPrice : hasPrice ? firstPrice : 0, referencePrice = !isStoreList && hasPrice ? finalPrice : firstPrice;
     if (isStoreList && objectId <= 0 || itemId <= 0 || count < 0 || price < 0) throw new Error(`Invalid private store buy item '${itemId}'.`);
 
     return { objectId, itemId, enchantLevel, count, referencePrice, bodyPart, type2, price, maxCount };
@@ -1114,9 +1114,7 @@ export function readMultiSellList(packet: PacketReader): MultiSellList_T {
     const entries: MultiSellEntry_T[] = [];
 
     for (let i = 0; i < count; i++) {
-        const entryId = packet.d();
-
-        packet.c();
+        const entryId = packet.d(), mode = packet.c();
 
         const productCount = packet.h(), ingredientCount = packet.h();
 
@@ -1125,7 +1123,7 @@ export function readMultiSellList(packet: PacketReader): MultiSellList_T {
         const products = Array.from({ length: productCount }, () => ({ itemId: packet.h(), bodyPart: packet.d(), type2: packet.h(), count: packet.d(), enchantLevel: packet.h() }));
         const ingredients = Array.from({ length: ingredientCount }, () => ({ itemId: packet.h(), type2: packet.h(), count: packet.d(), enchantLevel: packet.h() }));
 
-        entries.push({ entryId, products, ingredients });
+        entries.push({ entryId, mode, products, ingredients });
     }
 
     if (packet.getRemaining()) throw new Error("Invalid MultiSellList trailing data.");
@@ -1134,9 +1132,7 @@ export function readMultiSellList(packet: PacketReader): MultiSellList_T {
 }
 
 export function readShopPreviewList(packet: PacketReader): ShopPreviewList_T {
-    packet.skip(4);
-
-    const adena = packet.d(), listId = packet.d(), count = packet.h();
+    const unknown = packet.d(), adena = packet.d(), listId = packet.d(), count = packet.h();
 
     if (adena < 0 || count > packet.getRemaining() / 12) throw new Error(`Invalid ShopPreviewList count '${count}'.`);
 
@@ -1144,7 +1140,7 @@ export function readShopPreviewList(packet: PacketReader): ShopPreviewList_T {
 
     if (packet.getRemaining()) throw new Error("Invalid ShopPreviewList trailing data.");
 
-    return { adena, listId, items };
+    return { unknown, adena, listId, items };
 }
 
 const arrShopPreviewSlots = [Paperdoll_T.PAPERDOLL_REAR, Paperdoll_T.PAPERDOLL_LEAR, Paperdoll_T.PAPERDOLL_NECK, Paperdoll_T.PAPERDOLL_RFINGER, Paperdoll_T.PAPERDOLL_LFINGER, Paperdoll_T.PAPERDOLL_HEAD, Paperdoll_T.PAPERDOLL_RHAND, Paperdoll_T.PAPERDOLL_LHAND, Paperdoll_T.PAPERDOLL_GLOVES, Paperdoll_T.PAPERDOLL_CHEST, Paperdoll_T.PAPERDOLL_LEGS, Paperdoll_T.PAPERDOLL_FEET, Paperdoll_T.PAPERDOLL_UNDER, Paperdoll_T.PAPERDOLL_LRHAND, Paperdoll_T.PAPERDOLL_HAIR];
@@ -1402,23 +1398,25 @@ export type RecipeBook_T = { isDwarven: boolean, maxMp: number, recipes: RecipeB
 export type RecipeItemMakeInfo_T = { recipeId: number, isDwarven: boolean, curMp: number, maxMp: number, status: number };
 export type RecipeShopManageList_T = RecipeBook_T & { curMp: number, items: RecipeShopItem_T[] };
 export type RecipeShopSellList_T = { objectId: number, curMp: number, maxMp: number, adena: number, items: RecipeShopItem_T[] };
-export type RecipeShopItemInfo_T = { objectId: number, recipeId: number, curMp: number, maxMp: number, status: number };
+export type RecipeShopItemInfo_T = { objectId: number, recipeId: number, curMp: number, maxMp: number, status: number, price: number };
 export type RecipeShopMsg_T = { objectId: number, storeName: string };
 export type HennaEquipEntry_T = { symbolId: number, dyeItemId: number, dyeCount: number, price: number, isAvailable: boolean };
 export type HennaEquipList_T = { adena: number, slots: number, hennas: HennaEquipEntry_T[] };
 export type HennaItemInfo_T = HennaEquipEntry_T & { adena: number, stats: number[], equippedStats: number[] };
 export type PartyMatchRoom_T = { roomId: number, title: string, location: number, minLevel: number, maxLevel: number, members: number, maxMembers: number, ownerName: string };
+export type PartyMatchList_T = { page: number, rooms: PartyMatchRoom_T[] };
 export type PartyMatchDetail_T = { roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, location: number, title: string };
 export type PartySpelled_T = { type: PartySpelledType_T, objectId: number, effects: AbnormalStatus_T[] };
 export type Snoop_T = { conversationId: number, name: string, unknown: number, type: Say2_T, speaker: string, message: string };
 export type GMViewPledgeInfo_T = { charName: string, clan: ClanInfo_T, members: ClanMember_T[] };
 export type GMViewSkillInfo_T = { charName: string, skills: SkillEntry_T[] };
-export type GMViewQuestList_T = { charName: string, quests: QuestState_T[] };
+export type GMQuestItem_T = { raw0: number, itemId: number, count: number, raw3: number };
+export type GMViewQuestList_T = { charName: string, quests: QuestState_T[], items: GMQuestItem_T[] };
 export type GMViewItemList_T = { charName: string, inventoryLimit: number, showWindow: boolean, items: InventoryItem_T[] };
 export type GMWarehouseItem_T = { type1: number, objectId: number, itemId: number, count: number, type2: number, customType1: number, isEquipable: boolean, bodyPart: number, enchantLevel: number };
 export type GMViewWarehouseWithdrawList_T = { charName: string, adena: number, items: GMWarehouseItem_T[] };
 
-export type GMViewCharacterInfo_T = Location_T & Speeds_T & { heading: number, objectId: number, name: string, race: Race_T, sex: number, classId: number, level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, maxHp: number, curHp: number, maxMp: number, curMp: number, sp: number, curLoad: number, maxLoad: number, hasWeapon: boolean, paperdollObjects: number[], paperdoll: number[], pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, pvpFlag: number, karma: number, hairStyle: number, hairColor: number, face: number, isGM: boolean, title: string, clanId: number, clanCrestId: number, allyId: number, mountType: number, privateStoreType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, recommendations: number, maxCp: number, curCp: number };
+export type GMViewCharacterInfo_T = Location_T & Speeds_T & { flyRunSpd: number, flyWalkSpd: number, heading: number, objectId: number, name: string, race: Race_T, sex: number, classId: number, level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, maxHp: number, curHp: number, maxMp: number, curMp: number, sp: number, curLoad: number, maxLoad: number, hasWeapon: boolean, paperdollObjects: number[], paperdoll: number[], pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, pvpFlag: number, karma: number, hairStyle: number, hairColor: number, face: number, isGM: boolean, title: string, clanId: number, clanCrestId: number, allyId: number, mountType: number, privateStoreType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, recommendations: number, maxCp: number, curCp: number };
 
 function readCraftType(packet: PacketReader): boolean {
     const type = packet.d();
@@ -1477,11 +1475,11 @@ export function readRecipeShopSellList(packet: PacketReader): RecipeShopSellList
 }
 
 export function readRecipeShopItemInfo(packet: PacketReader): RecipeShopItemInfo_T {
-    const objectId = packet.d(), recipeId = packet.d(), curMp = packet.d(), maxMp = packet.d(), status = packet.d();
+    const objectId = packet.d(), recipeId = packet.d(), curMp = packet.d(), maxMp = packet.d(), status = packet.d(), price = packet.d();
 
     if (objectId <= 0 || packet.getRemaining()) throw new Error("Invalid RecipeShopItemInfo payload.");
 
-    return { objectId, recipeId, curMp, maxMp, status };
+    return { objectId, recipeId, curMp, maxMp, status, price };
 }
 
 export function readRecipeShopMsg(packet: PacketReader): RecipeShopMsg_T {
@@ -1524,10 +1522,10 @@ export function readHennaItemInfo(packet: PacketReader): HennaItemInfo_T {
     return { symbolId, dyeItemId, dyeCount, price, isAvailable: isAvailable === 1, adena, stats, equippedStats };
 }
 
-export function readPartyMatchList(packet: PacketReader): PartyMatchRoom_T[] {
-    const hasRooms = packet.d(), count = packet.d();
+export function readPartyMatchList(packet: PacketReader): PartyMatchList_T {
+    const page = packet.d(), count = packet.d();
 
-    if (count < 0 || count > packet.getRemaining() / 28 || hasRooms !== (count > 0 ? 1 : 0)) throw new Error(`Invalid PartyMatchList count '${count}'.`);
+    if (count < 0 || count > packet.getRemaining() / 28) throw new Error(`Invalid PartyMatchList count '${count}'.`);
 
     const rooms: PartyMatchRoom_T[] = [];
 
@@ -1535,7 +1533,7 @@ export function readPartyMatchList(packet: PacketReader): PartyMatchRoom_T[] {
 
     if (packet.getRemaining()) throw new Error("Invalid PartyMatchList trailing data.");
 
-    return rooms;
+    return { page, rooms };
 }
 
 export function readPartyMatchDetail(packet: PacketReader): PartyMatchDetail_T {
@@ -1598,7 +1596,17 @@ export function readGMViewCharacterInfo(packet: PacketReader): GMViewCharacterIn
     info.mDef = packet.d();
     info.pvpFlag = packet.d();
     info.karma = packet.d();
-    readSpeeds(packet, info);
+    info.runSpd = packet.d();
+    info.walkSpd = packet.d();
+    info.swimRunSpd = packet.d();
+    info.swimWalkSpd = packet.d();
+    info.flyRunSpd = packet.d();
+    info.flyWalkSpd = packet.d();
+    packet.skip(8);
+    info.moveMultiplier = packet.f();
+    info.attackSpeedMultiplier = packet.f();
+    info.collisionRadius = packet.f();
+    info.collisionHeight = packet.f();
     info.hairStyle = packet.d();
     info.hairColor = packet.d();
     info.face = packet.d();
@@ -1672,9 +1680,18 @@ export function readGMViewSkillInfo(packet: PacketReader): GMViewSkillInfo_T {
 export function readGMViewQuestList(packet: PacketReader): GMViewQuestList_T {
     const charName = packet.S(), count = packet.h();
 
-    if (count !== packet.getRemaining() / 8) throw new Error(`Invalid GMViewQuestList count '${count}'.`);
+    if (count > packet.getRemaining() / 8) throw new Error(`Invalid GMViewQuestList count '${count}'.`);
 
-    return { charName, quests: Array.from({ length: count }, () => ({ id: packet.d(), condition: packet.d() })) };
+    const quests = Array.from({ length: count }, () => ({ id: packet.d(), condition: packet.d() }));
+    const items: GMQuestItem_T[] = [];
+
+    if (packet.getRemaining()) {
+        const itemCount = packet.h();
+
+        if (itemCount !== packet.getRemaining() / 16) throw new Error(`Invalid GMViewQuestList item count '${itemCount}'.`);
+        for (let index = 0; index < itemCount; index++) items.push({ raw0: packet.d(), itemId: packet.d(), count: packet.d(), raw3: packet.d() });
+    }
+    return { charName, quests, items };
 }
 
 export function readGMViewItemList(packet: PacketReader): GMViewItemList_T {

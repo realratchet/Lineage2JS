@@ -195,16 +195,39 @@ export class NCPawnSetupWnd { // NCPawnSetupWnd OnCreate 0x100cf680, OnPaint 0x1
 
 export class NCPawnInfoWnd { // NCPawnInfoWnd OnCreate 0x100ccc10, OnPaint 0x100ccc70: (24,249) 256x205 class description box.
     public readonly element: HTMLDivElement;
+    protected readonly layer: NDomLayer;
+    protected readonly textCanvas: HTMLCanvasElement;
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
+        this.layer = layer;
         this.element = layer.createWindow(24, 249, 256, 205, parent);
         this.element.style.pointerEvents = "auto";
 
         layer.tile(this.element, 0, 0, 256, 205, 0, 0, 256, 205, TEX_SETUP_BACK);
 
         for (let i = 1; i < 13; i += 2)
-            layer.tile(this.element, 5, i * 15 + 5, 256 - 10, 15, 0, 0, 8, 15, TEX_TEXTBACKLINE); // TODO: description text (7,7) comes from GL2GameData+0xaa05c + n*12, table not resolved
+            layer.tile(this.element, 5, i * 15 + 5, 256 - 10, 15, 0, 0, 8, 15, TEX_TEXTBACKLINE);
 
+        this.textCanvas = layer.text(this.element, "", TEXT_COLOR, FontType_T.SMALL, 7, 7);
+        this.setDescription(0);
+    }
+
+    public setDescription(index: number) {
+        const nwindow = this.layer.getManager().canvas, scale = nwindow.scale;
+        const text = index < 0 ? "" : this.layer.getManager().strings.classNames[index];
+
+        if (text === undefined) throw new Error(`Missing character description ${index}.`);
+
+        this.textCanvas.width = Math.round(249 * scale);
+        this.textCanvas.height = Math.round(198 * scale);
+        this.textCanvas.style.width = "249px";
+        this.textCanvas.style.height = "198px";
+
+        const context = this.textCanvas.getContext("2d");
+
+        context.setTransform(scale, 0, 0, scale, 0, 0);
+        context.imageSmoothingEnabled = false;
+        nwindow.renderWrappedText(context, 0, 0, TEXT_COLOR, text, 242, 6);
     }
 }
 
@@ -253,33 +276,22 @@ export class NCPawnCreateWnd { // NCPawnCreateWnd OnCreate 0x100cfbd0: character
         this.info = new NCPawnInfoWnd(layer, this.element);
         this.functionWnd = new NCPawnCreateFunctionWnd(layer, this.element, () => this.create(), () => { if (this.onBack) this.onBack(); });
 
-        this.leftButton = this.createRoundButton(TEX_LEFT, TEX_LEFT_DOWN, null); // flag 2 buttons (0x100cfd77): no implicit '_over' texture
-        this.rightButton = this.createRoundButton(TEX_RIGHT, TEX_RIGHT_DOWN, null);
+        this.leftButton = this.createRoundButton(TEX_LEFT, TEX_LEFT_DOWN, null, isDown => { if (this.onRotate) this.onRotate(isDown ? 2 : 0); }); // flag 2 buttons (0x100cfd77): no implicit '_over' texture
+        this.rightButton = this.createRoundButton(TEX_RIGHT, TEX_RIGHT_DOWN, null, isDown => { if (this.onRotate) this.onRotate(isDown ? -2 : 0); });
         this.zoomInButton = this.createRoundButton(TEX_ZOOMIN, TEX_ZOOMIN_DOWN, () => this.toggleZoom());
         this.zoomOutButton = this.createRoundButton(TEX_ZOOMOUT, TEX_ZOOMOUT_DOWN, () => this.toggleZoom());
 
-        this.bindRotate(this.leftButton, 2); // NCExButton notifies press and release: slot74 0x100cc8d0 turn +2.0, slot75 0x100cc910 turn -2.0, release stops
-        this.bindRotate(this.rightButton, -2);
         this.showControls(false);
 
         this.setup.onPick = step => this.pick(step);
     }
 
-    protected createRoundButton(normal: string, down: string, onPress: () => void): NDomButton_T {
-        const button = this.layer.button(this.element, 0, 0, 44, 44, normal, down, normal, null, onPress);
+    protected createRoundButton(normal: string, down: string, onPress: () => void, onHold: (isDown: boolean) => void = null): NDomButton_T {
+        const button = this.layer.button(this.element, 0, 0, 44, 44, normal, down, normal, null, onPress, onHold);
 
         button.style.pointerEvents = "auto";
 
         return button;
-    }
-
-    protected bindRotate(button: NDomButton_T, direction: number) {
-        button.addEventListener("mousedown", event => {
-            if (event.button !== 0) return;
-            if (this.onRotate) this.onRotate(direction);
-
-            window.addEventListener("mouseup", () => { if (this.onRotate) this.onRotate(0); }, { once: true });
-        });
     }
 
     protected showControls(isShown: boolean) { // 0x100cc7e0: round buttons appear once race, class and gender are chosen; hiding clears the zoom.
@@ -301,6 +313,9 @@ export class NCPawnCreateWnd { // NCPawnCreateWnd OnCreate 0x100cfbd0: character
     protected pick(step: PawnCreateStep_T) {
         this.step = step;
 
+        if (step === "race") this.info.setDescription(-1);
+        if (step === "class") this.info.setDescription(this.setup.race * 2 + this.setup.classType + 1);
+        if (step === "sex") this.showControls(false);
         if (step !== "appearance") this.showControls(step === "sex");
         if (this.onChange) this.onChange(this.setup.getSelection(step));
     }

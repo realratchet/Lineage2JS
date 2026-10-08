@@ -85,6 +85,7 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
 
     public onSend: (text: string, type: number, target: string) => void = null;
     public onBuildCommand: (command: string) => void = null;
+    public onCommand: (command: string, isShift: boolean) => void = null;
 
     public constructor() {
         super(0, 0, 348, MIN_HEIGHT);
@@ -109,7 +110,7 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
         this.optionButton = this.addChild(new NCButton(5, H - 20, 15, 15, TEX_OPTION1, TEX_OPTION2));
         this.messengerButton = this.addChild(new NCButton(5, H - 39, 15, 15, TEX_MSN1, TEX_MSN2));
         this.editBox = this.addChild(new NCEditBox(39, H - 22, 303, 16));
-        this.editBox.onSubmit = text => this.submit(text);
+        this.editBox.onSubmit = (text, isShift) => this.submit(text, isShift);
         this.resizeFrame = this.addChild(new NCResizeFrame(this, 0, 0, 24, 10));
     }
 
@@ -166,16 +167,30 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
             this.lists[i].setVisible(i === index);
     }
 
-    protected submit(line: string) { // Enter handler 0x10059a3a..0x10059f66; U+FF02 is a tell prefix (0x10059aff) outside the strip list.
+    protected submit(line: string, isShift: boolean = false) { // Enter handler 0x10059a3a..0x10059f66; U+FF02 is a tell prefix (0x10059aff) outside the strip list.
         this.editBox.setText("");
 
+        this.sendText(line, isShift);
+    }
+
+    public dispatchCommand(line: string, isShift: boolean = false) {
         if (line.startsWith("//")) {
             const command = line.slice(2).trim();
 
             if (command && this.onBuildCommand) this.onBuildCommand(command);
 
-            return;
+            return true;
         }
+        if (line.startsWith("/") || line.startsWith("／")) {
+            if (this.onCommand) this.onCommand(line, isShift);
+            return true;
+        }
+
+        return false;
+    }
+
+    public sendText(line: string, isShift: boolean = false) {
+        if (this.dispatchCommand(line, isShift)) return;
 
         const first = line.charAt(0);
         const hasPrefix = CHAT_PREFIXES.has(first);

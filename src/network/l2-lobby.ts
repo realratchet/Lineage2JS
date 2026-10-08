@@ -30,6 +30,7 @@ export class L2Lobby {
     protected pawns: BaseActor[] = [];
     protected readonly previewPawns = new Map<number, BaseActor>();
     protected createSelection: PawnCreateSelection_T = null;
+    protected createStage = 0;
     protected selected = -1;
     protected generation = 0;
     protected enterPromise: Promise<void> = null;
@@ -159,6 +160,7 @@ export class L2Lobby {
     public showCreate() {
         this.clearPawns();
         this.createSelection = null;
+        this.createStage = 0;
         this.matinee.trigger("Char_Create_Warp");
     }
 
@@ -186,13 +188,18 @@ export class L2Lobby {
         actor.setRotationYaw(yaw);
     }
 
-    public async previewCreate(selection: PawnCreateSelection_T) { // NWindow 0x100cdee0 builds the create-screen event names; flag=1 variants (zoom out, back steps) are not decoded.
+    public async previewCreate(selection: PawnCreateSelection_T) { // NWindow 0x100cdee0: stage-specific scene tags and reverse flag.
         const race = RACE_EVENT_NAMES[selection.race];
+        const previous = this.createSelection;
+
+        for (const [index, actor] of this.previewPawns)
+            if (actor.parent) actor.resetRotationYaw(this.spots[PREVIEW_ROW_OFFSET + index][3]);
 
         this.createSelection = selection;
 
         if (selection.step === "race") {
             this.triggerScene(race);
+            this.createStage = 1;
 
             for (const isMystic of selection.race === 4 ? [false] : [false, true])
                 for (const sex of [0, 1]) void this.spawnPreview(selection.race, isMystic, sex, 0, 0, 0);
@@ -202,13 +209,43 @@ export class L2Lobby {
 
         const klass = CLASS_EVENT_NAMES[selection.isMystic ? 1 : 0];
 
-        if (selection.step === "class") return this.triggerScene(`${race}_${klass}`);
+        if (selection.step === "class") {
+            if (this.createStage >= 2 && selection.race === 4) return;
+
+            const otherClass = CLASS_EVENT_NAMES[selection.isMystic ? 0 : 1];
+
+            if (this.createStage === 3) this.triggerScene(`${race}_${klass}_${otherClass[0]}${SEX_EVENT_NAMES[previous.sex]}`, true);
+            else if (this.createStage === 2) this.triggerScene(`${race}_${otherClass}_${klass}`);
+            else this.triggerScene(`${race}_${klass}`);
+
+            this.createStage = 2;
+            return;
+        }
 
         const sex = `${klass[0]}${SEX_EVENT_NAMES[selection.sex]}`;
 
-        if (selection.step === "sex") return this.triggerScene(`${race}_${klass}_${sex}`);
+        if (selection.step === "sex") {
+            if (this.createStage === 3) this.triggerScene(`${race}_${klass[0]}${SEX_EVENT_NAMES[1 - selection.sex]}_${sex}`);
+            else this.triggerScene(`${race}_${klass}_${sex}`);
+
+            this.createStage = 3;
+            return;
+        }
 
         await this.spawnPreview(selection.race, selection.isMystic, selection.sex, selection.hairStyle, selection.hairColor, selection.face);
+    }
+
+    public rotateCreate(direction: number) { // DefaultCharacterTurn / Stop 0x1042d880 / 0x1042d8d0 use APawn's keyboard rotation.
+        const selection = this.createSelection;
+
+        if (!selection || selection.sex < 0) return;
+
+        const actor = this.previewPawns.get(this.getPreviewIndex(selection.race as Race_T, selection.isMystic, selection.sex));
+
+        if (!actor || !actor.parent) return;
+
+        if (direction) actor.startRotating(Math.trunc(direction), 0);
+        else actor.stopRotating();
     }
 
     public zoomCreate(isIn: boolean) {
@@ -218,10 +255,10 @@ export class L2Lobby {
 
         const race = RACE_EVENT_NAMES[selection.race], klass = CLASS_EVENT_NAMES[selection.isMystic ? 1 : 0];
 
-        this.triggerScene(isIn ? `${race}_${klass[0]}${SEX_EVENT_NAMES[selection.sex]}_CHEST` : `${race}_${klass}_${klass[0]}${SEX_EVENT_NAMES[selection.sex]}`);
+        this.triggerScene(`${race}_${klass[0]}${SEX_EVENT_NAMES[selection.sex]}_CHEST`, !isIn);
     }
 
-    public triggerScene(tag: string) { if (this.matinee.hasScene(tag)) this.matinee.trigger(tag); }
+    public triggerScene(tag: string, isReverse = false) { if (this.matinee.hasScene(tag)) this.matinee.trigger(tag, isReverse); }
 
     protected clearPawns() {
         const render = this.manGame.getComponent("render");

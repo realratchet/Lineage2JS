@@ -44,6 +44,7 @@ import type HairSimulationComponent from "../objects/components/hair-simulation-
 import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import Radar from "./radar";
+import ViewportWindow from "./viewport-window";
 
 export type HTMLViewportElement_T = HTMLDivElement;
 
@@ -66,6 +67,8 @@ const tmpL2EventPosition = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
+const tmpViewMatrix = new Matrix4();
+const tmpViewSphere = new Sphere();
 const arrBSPGroups: Object3D[] = [];
 const arrBSPIntersections: THREE.Intersection[] = [];
 // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
@@ -253,6 +256,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
     public readonly radar = new Radar();
+    protected viewportWindow: ViewportWindow = null;
     protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
@@ -1229,7 +1233,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }));
     }
 
-    protected updatePawnVisibility(): void {
+    protected updatePawnVisibility(frustum = this.frustum): void {
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
             const state = this.resolvePawnLocation(pawn);
@@ -1239,7 +1243,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 continue;
             }
 
-            pawn.visible = state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || this.frustum.intersectsSphere(component.getRenderSphere()));
+            pawn.visible = state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere()));
         }
 
         this.sectors.forEach(row => row.forEach(sector => {
@@ -1257,7 +1261,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     // USkeletalMeshInstance::Render, UnSkeletalMesh.cpp line 4908: zone ambient plus hardware lights.
-    protected updatePawnLighting(): void {
+    protected updatePawnLighting(updateShadow = true): void {
         const sunAmbient = this.environment.getAmbientPlaneActorLightHalved(tmpPawnSunAmbient);
 
         for (const row of this.sectors.values())
@@ -1265,7 +1269,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 for (const pawn of sector.pawns.children)
                     if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
 
-        this.updatePawnShadow();
+        if (updateShadow) this.updatePawnShadow();
 
         for (const component of this.pawnRenderables)
             if (component.getParent().visible) this.updateActorLighting(component.getParent(), sunAmbient);
@@ -1279,7 +1283,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         for (const pickup of this.pickups) {
-            pickup.placeOnGround();
+            if (updateShadow) pickup.placeOnGround();
             if (pickup.visible) this.updateActorLighting(pickup, sunAmbient);
         }
     }
@@ -1422,6 +1426,85 @@ export class RenderManager implements IEngineComponent<GameManager> {
         state.ambientB = sunAmbient.b;
     }
 
+    protected updateViewBillboards(camera: PerspectiveCamera) {
+        const projUp = tmpBillboardUp.copy(camera.up).normalize();
+        const projFront = tmpBillboardFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
+        const projRight = tmpBillboardRight.crossVectors(projFront, projUp).normalize();
+        projUp.crossVectors(projRight, projFront).normalize();
+        (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight);
+        (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
+    }
+
+    protected updateViewVisibility(camera: PerspectiveCamera, frustum: Frustum, auxiliary = false) {
+        const bspCullingPosition = camera.position;
+
+        const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
+        const fogSphere = tmpViewSphere.set(bspCullingPosition, fogFar);
+
+        frustum.setFromProjectionMatrix(tmpViewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+
+        // UE2: BoundingPlanes[4] = FPlane(ViewOrigin + Z * FarClip, Z)
+        {
+            tmpCamDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
+            tmpFarPoint.copy(bspCullingPosition).addScaledVector(tmpCamDir, fogFar);
+            frustum.planes[4].setFromNormalAndCoplanarPoint(tmpCamDir.negate(), tmpFarPoint);
+        }
+
+        // TODO: Clip static meshes against [ClippingRange] StaticMesh instead of fog.
+        const STATIC_MESH_CLIPPING_RANGE = 1;
+        const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
+        const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
+        const assetMan = this.manGame.getComponent("asset");
+        const emitterCullDist = assetMan.userConfig.clippingRange.actor * CLIPPING_RANGE_SCALE;
+        const emitterCullDistSq = emitterCullDist * emitterCullDist;
+
+        const activeSector = this.getSector(bspCullingPosition);
+
+        if (!auxiliary) {
+            this.physicsManager.setActiveSector(activeSector);
+            this.physicsManager.setTriggerPosition(this.camera.position);
+        }
+        this.updateSectorRenderOrder(activeSector);
+
+        for (const sector of this.arrSceneSectors) {
+            const isCameraInSector = activeSector === sector;
+            const wasVisible = sector.visible;
+
+            if (!isCameraInSector) {
+                if (!fogSphere.intersectsBox(sector.worldBounds)) {
+                    sector.visible = false;
+                    continue;
+                }
+            }
+
+            sector.visible = true;
+
+            const topLevelOnly = !isCameraInSector;
+
+            if (auxiliary || isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
+                sector.updateVisibility(this.environment, bspCullingPosition, frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq, emitterCullDistSq, auxiliary);
+            } else {
+                this.neighborVisibilitySectors.push(sector);
+            }
+        }
+
+        if (!auxiliary && this.neighborVisibilitySectors.length > 0) {
+            const index = this.neighborVisibilityCursor++ % this.neighborVisibilitySectors.length;
+            this.neighborVisibilitySectors[index].updateVisibility(
+                this.environment,
+                bspCullingPosition,
+                frustum,
+                this.frustumCullingEnabled,
+                true,
+                staticMeshCullDistSq,
+                emitterCullDistSq
+            );
+        }
+
+        this.updatePawnVisibility(frustum);
+        return activeSector;
+    }
+
     protected _updateObjects(currentTime: number) {
         this.visibleWorldBatchEmitters.length = 0;
         this.neighborVisibilitySectors.length = 0;
@@ -1431,15 +1514,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const ambientSun = this.environment.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte); // SetAmbientLight(amb >> 1) at 0x90d482; the HSV*32 add (0x90d3a3) only runs for far-LOD mode 2, which we never draw
         (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(ambientSun.r / 255, ambientSun.g / 255, ambientSun.b / 255);
 
-        {
-            const camera = this.camera;
-            const projUp = tmpBillboardUp.copy(camera.up).normalize();
-            const projFront = tmpBillboardFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
-            const projRight = tmpBillboardRight.crossVectors(projFront, projUp).normalize();
-            projUp.crossVectors(projRight, projFront).normalize();
-            (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight);
-            (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
-        }
+        this.updateViewBillboards(this.camera);
 
         if (this.bspHelperCamera) {
             if (!this.bspHelperActive) {
@@ -1461,70 +1536,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
 
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
-        const bspCullingPosition = bspCullingCamera.position;
-
-        const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
-        const fogSphere = new Sphere(bspCullingPosition, fogFar);
-
-        this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
-
-        // UE2: BoundingPlanes[4] = FPlane(ViewOrigin + Z * FarClip, Z)
-        {
-            tmpCamDir.set(0, 0, -1).applyQuaternion(bspCullingCamera.quaternion);
-            tmpFarPoint.copy(bspCullingPosition).addScaledVector(tmpCamDir, fogFar);
-            this.frustum.planes[4].setFromNormalAndCoplanarPoint(tmpCamDir.negate(), tmpFarPoint);
-        }
-
-        // TODO: Clip static meshes against [ClippingRange] StaticMesh instead of fog.
-        const STATIC_MESH_CLIPPING_RANGE = 1;
-        const staticMeshCullDist = fogFar * STATIC_MESH_CLIPPING_RANGE;
-        const staticMeshCullDistSq = staticMeshCullDist * staticMeshCullDist;
-        const assetMan = this.manGame.getComponent("asset");
-        const emitterCullDist = assetMan.userConfig.clippingRange.actor * CLIPPING_RANGE_SCALE;
-        const emitterCullDistSq = emitterCullDist * emitterCullDist;
-
-        const activeSector = this.getSector(bspCullingPosition);
-
-        this.physicsManager.setActiveSector(activeSector);
-        this.physicsManager.setTriggerPosition(this.camera.position);
-        this.updateSectorRenderOrder(activeSector);
-
-        for (const sector of this.arrSceneSectors) {
-            const isCameraInSector = activeSector === sector;
-            const wasVisible = sector.visible;
-
-            if (!isCameraInSector) {
-                if (!fogSphere.intersectsBox(sector.worldBounds)) {
-                    sector.visible = false;
-                    continue;
-                }
-            }
-
-            sector.visible = true;
-
-            const topLevelOnly = !isCameraInSector;
-
-            if (isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
-                sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq, emitterCullDistSq);
-            } else {
-                this.neighborVisibilitySectors.push(sector);
-            }
-        }
-
-        if (this.neighborVisibilitySectors.length > 0) {
-            const index = this.neighborVisibilityCursor++ % this.neighborVisibilitySectors.length;
-            this.neighborVisibilitySectors[index].updateVisibility(
-                this.environment,
-                bspCullingPosition,
-                this.frustum,
-                this.frustumCullingEnabled,
-                true,
-                staticMeshCullDistSq,
-                emitterCullDistSq
-            );
-        }
-
-        this.updatePawnVisibility();
+        const activeSector = this.updateViewVisibility(bspCullingCamera, this.frustum);
         this.updatePawnLighting();
 
         this.scene.traverseVisible(child => {
@@ -1589,7 +1601,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this._updateEnvironment();
     }
 
-    protected _updateEnvironment() {
+    protected _updateEnvironment(camera = this.camera, updateAudio = true) {
         const env = this.environment;
         if (!env) return;
 
@@ -1617,7 +1629,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // targetFogStart = 1;
         // targetFogEnd = 10
 
-        const sector = this.getSector(this.camera.position);
+        const sector = this.getSector(camera.position);
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let skyVisibility = 1.0;
 
@@ -1628,7 +1640,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         ];
 
         if (sector) {
-            const zoneIndex = sector.findPositionZone(this.camera.position);
+            const zoneIndex = sector.findPositionZone(camera.position);
             const cameraZoneMask = 1n << BigInt(zoneIndex);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
@@ -1654,8 +1666,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             const fogInfosAll: any[] = [];
             const sectorSize = 256 * 128;
-            const currentX = Math.floor(this.camera.position.x / sectorSize) + 20;
-            const currentY = Math.floor(this.camera.position.y / sectorSize) + 18;
+            const currentX = Math.floor(camera.position.x / sectorSize) + 20;
+            const currentY = Math.floor(camera.position.y / sectorSize) + 18;
 
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
@@ -1673,7 +1685,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             this.activeFogId = null;
             let minFogDist = Infinity;
-            const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
+            const bspCullingCamera = (camera === this.camera && this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : camera;
             const fogRefPosition = bspCullingCamera.position;
 
             let maxHArrLen = 0;
@@ -1835,10 +1847,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
             } else tmpColorByte_4.set(255, 255, 255, 255);
         }
 
-        const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
+        const waterVolume = sector ? sector.getWaterVolumeAt(camera.position) : null;
 
-        this.waterEffects.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
-        this.audioManager.setUnderwater(!!waterVolume);
+        if (updateAudio) {
+            this.waterEffects.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
+            this.audioManager.setUnderwater(!!waterVolume);
+        }
 
         if (waterVolume) {
             if (waterVolume.fog) {
@@ -1861,7 +1875,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (skyVisibility < 1.0)
             targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
 
-        this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
+        this.skyRenderer.update(camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
 
         const clearColorThree = new Color().setRGB(targetClearColor.r / 255, targetClearColor.g / 255, targetClearColor.b / 255);
         this.renderer.setClearColor(clearColorThree);
@@ -2003,10 +2017,84 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.clear();
     }
 
+    public setViewportWindowParam(location: Vector3, rotation: Quaternion, screenWidth: number) {
+        this.clearViewportWindowParam();
+        this.viewportWindow = new ViewportWindow(screenWidth);
+        this.modifyViewportWindowParam(location, rotation);
+        return this.viewportWindow.target;
+    }
+
+    public modifyViewportWindowParam(location: Vector3, rotation: Quaternion) {
+        if (!this.viewportWindow) throw new Error(`Viewport window is not initialized`);
+
+        const camera = this.viewportWindow.camera;
+        camera.position.copy(location);
+        camera.quaternion.copy(rotation);
+        camera.updateMatrixWorld(true);
+        this.needsUpdate = true;
+    }
+
+    public getViewportSceneTexture() { return this.viewportWindow ? this.viewportWindow.target.texture : null; }
+
+    public clearViewportWindowParam() {
+        if (!this.viewportWindow) return;
+
+        this.viewportWindow.dispose();
+        this.viewportWindow = null;
+    }
+
+    protected drawCameraSceneNode() {
+        const viewport = this.viewportWindow;
+        if (!viewport) return;
+
+        const renderer = this.renderer;
+        const mainFogId = this.activeFogId;
+        const mainRenderOrderSector = this.lastRenderOrderSector;
+        const shadowActive = GLOBAL_UNIFORMS.shadowActive.value;
+        viewport.capture(renderer, this.scene);
+        try {
+            this._updateEnvironment(viewport.camera, false);
+            this.updateViewBillboards(viewport.camera);
+            this.updateViewVisibility(viewport.camera, viewport.frustum, true);
+            this.updatePawnLighting(false);
+            this.particleBatcher.root.visible = false;
+            this.visualizer.getGroup().visible = false;
+            this.visualizer.getFogGroup().visible = false;
+            this.visualizer.getEmitterLabelGroup().visible = false;
+            this.colliderOverlay.visible = false;
+            this.scene.traverse(object => {
+                const node = object as any;
+                if (node.isNameplate) node.visible = false;
+                if (node.isInstancedSpriteMesh && node.isWorldBatchCandidate) node.material.visible = true;
+                if (node.isSectorObject) node.helpers.visible = false;
+            });
+
+            renderer.setRenderTarget(viewport.target);
+            renderer.setScissorTest(false);
+            renderer.setClearColor(0, 1);
+            renderer.autoClear = false;
+            renderer.clear(true, true, true);
+            GLOBAL_UNIFORMS.shadowActive.value = 0;
+            this.skyRenderer.render(renderer);
+            GLOBAL_UNIFORMS.shadowActive.value = shadowActive;
+            renderer.clearDepth();
+            renderer.render(this.scene, viewport.camera);
+        } finally {
+            try {
+                this._updateEnvironment(this.camera, false);
+            } finally {
+                this.activeFogId = mainFogId;
+                this.lastRenderOrderSector = mainRenderOrderSector;
+                viewport.restore(renderer, this.scene);
+            }
+        }
+    }
+
     public onEngineTick(currentTime: number, _deltaTime: number): void {
         if (!this.isRenderingFrame) return;
 
         this.renderer.info.reset();
+        this.drawCameraSceneNode();
 
         const viewShakeActive = this.applyViewShake(currentTime);
 

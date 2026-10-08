@@ -1,7 +1,7 @@
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
-import type { UserInfo_T, ClanInfo_T } from "../network/game-packets";
+import type { UserInfo_T, ClanInfo_T, HennaStatus_T } from "../network/game-packets";
 
 const TEX_BACK = "L2UI_CH3.PlayerStatusWnd.myinfo_back";
 const TEX_HP = "L2UI_CH3.PlayerStatusWnd.ps_hpbar";
@@ -22,6 +22,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
     protected readonly rank: HTMLDivElement;
     protected status: UserInfo_T = null;
     protected clan: ClanInfo_T = null;
+    protected henna: HennaStatus_T = null;
 
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement) {
         this.element = layer.createWindow(0, 66, 256, 335, parent);
@@ -39,6 +40,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
     public setStatus(status: UserInfo_T) { this.status = status; this.paint(); }
     public setClan(clan: ClanInfo_T) { this.clan = clan; this.paint(); }
+    public setHenna(henna: HennaStatus_T) { this.henna = henna; this.paint(); }
 
     protected drawText(context: CanvasRenderingContext2D, x: number, y: number, text: string, color: number = VALUE_COLOR, align: CanvasTextAlign = "left") {
         const width = this.layer.measureText(text);
@@ -60,19 +62,23 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
         const exp = levelEnd ? (info.exp - levelStart) / (levelEnd - levelStart) : 0;
         const weight = info.maxLoad ? info.curLoad / info.maxLoad : 0;
-        const weightIndex = weight > 1 ? 4 : weight > 0.8 ? 3 : weight > 0.666 ? 2 : weight > 0.5 ? 1 : 0;
+        const weightWidth = info.maxLoad ? Math.trunc(info.curLoad * 85 / info.maxLoad) : 0;
+        const weightPercent = weightWidth > 0 ? Math.fround(weight * 100) : 0;
+        const weightIndex = weight * 100 <= 50 ? 0 : weightPercent <= 66.6 ? 1 : weightPercent <= 80 ? 2 : weightPercent <= 100 ? 3 : 4;
         const arrValues = [info.maxHp ? info.curHp / info.maxHp : 0, info.maxMp ? info.curMp / info.maxMp : 0, info.maxCp ? info.curCp / info.maxCp : 0, exp, weight];
         const arrTextures = [TEX_HP, TEX_MP, TEX_CP, TEX_EXP, arrWeight[weightIndex]];
 
         this.bars.forEach((bar, index) => {
-            const width = Math.trunc(arrValues[index] * 85), height = index < 3 && width > 85 ? 10 : 12;
+            const width = index === 4 ? weightWidth : Math.trunc(arrValues[index] * 85);
+            const height = (index === 4 ? weightPercent > 100 : index < 3 && width > 85) ? 10 : 12;
+            const drawWidth = index === 4 ? width : Math.min(width, 85);
 
             bar.hidden = width <= 0;
             if (bar.hidden) return;
 
-            bar.style.width = `${Math.min(width, 85)}px`;
+            bar.style.width = `${drawWidth}px`;
             bar.style.height = `${height}px`;
-            layer.setTile(bar, Math.min(width, 85), height, 0, 0, 8, 12, arrTextures[index]);
+            layer.setTile(bar, drawWidth, height, 0, 0, index === 4 ? width : 8, 12, arrTextures[index]);
         });
         this.rank.hidden = !info.isHero && !info.isNoble;
         if (!this.rank.hidden) layer.setTile(this.rank, 13, 15, 0, 0, 13, 15, info.isHero ? TEX_HERO : TEX_NOBLE);
@@ -90,7 +96,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
             canvas.renderDigits(context, x + 6, y, 0xffdcdcdc, String(maximum));
         }
         for (const [x, y, value] of [[77, 89, exp], [198, 75, weight]]) {
-            const text = `${(value * 100).toFixed(2)}%`;
+            const text = `${(y === 75 ? weightPercent : value * 100).toFixed(2)}%`;
 
             canvas.renderDigits(context, x - Math.trunc(layer.measureText(text) / 2), y, y === 89 ? 0xffb4b4b4 : 0xffdcdcdc, text);
         }
@@ -98,7 +104,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
         let title = info.title, name = info.name;
 
-        if (layer.measureText(title) + layer.measureText(name) > 220) {
+        if (title && layer.measureText(title) + layer.measureText(name) > 220) {
             if (layer.measureText(title) > 109) title = `${title.slice(0, 9)}..`;
             if (layer.measureText(name) > 109) name = `${name.slice(0, 9)}..`;
         }
@@ -111,7 +117,12 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
         [info.pAtk, info.pDef, info.accuracy, info.critical, info.atkSpd].forEach((value, index) => this.drawText(context, 114, 132 + index * 15, String(value), VALUE_COLOR, "right"));
         [info.mAtk, info.mDef, info.evasion, Math.trunc((info.isRunning ? info.runSpd : info.walkSpd) * info.moveMultiplier), info.castSpd].forEach((value, index) => this.drawText(context, 235, 132 + index * 15, String(value), VALUE_COLOR, "right"));
-        [info.str, info.dex, info.con, info.int, info.wit, info.men].forEach((value, index) => this.drawText(context, [65, 148, 229][index % 3], index < 3 ? 236 : 252, String(value), VALUE_COLOR, "center"));
+        [info.str, info.dex, info.con, info.int, info.wit, info.men].forEach((value, index) => {
+            const modifier = this.henna ? this.henna.stats[[1, 4, 2, 0, 5, 3][index]] : 0;
+            const text = modifier > 0 ? `${value} (+${modifier})` : modifier < 0 ? `${value}(${modifier})` : String(value);
+
+            this.drawText(context, [65, 148, 229][index % 3], index < 3 ? 236 : 252, text, VALUE_COLOR, "center");
+        });
         this.drawText(context, 114, 294, `${info.karma}${info.karma >= 999999 ? "+" : ""}`, VALUE_COLOR, "right");
         this.drawText(context, 235, 294, `${info.pvpKills}/${info.pkKills}`, VALUE_COLOR, "right");
         this.drawText(context, 114, 310, String(info.recommendations), VALUE_COLOR, "right");

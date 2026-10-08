@@ -229,17 +229,17 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onHandleKeyDown(event: KeyboardEvent): void {
         const renderManager = this.renderManager;
+        const target = event.target as HTMLElement;
 
         if (this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
-        if (event.code === "Backquote" && document.activeElement?.tagName !== "INPUT") {
+        if (event.code === "Backquote") {
             event.preventDefault();
             event.stopPropagation();
             this.manGame.getComponent("ui").toggleDebugView();
             return;
         }
-
-        if (document.activeElement?.tagName === "INPUT") return;
 
         if (event.key === "F1" || event.code === "F1") {
             event.preventDefault();

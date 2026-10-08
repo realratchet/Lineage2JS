@@ -15,6 +15,7 @@ export class Nameplate extends Sprite {
     public constructor() {
         super(new SpriteMaterial({ depthTest: true, depthWrite: false, sizeAttenuation: false, side: DoubleSide, toneMapped: false, fog: false }));
 
+        (this as any).isNameplate = true;
         this.material.map = this.createTexture();
         this.frustumCulled = false;
     }

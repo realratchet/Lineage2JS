@@ -1172,13 +1172,24 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public finishRotating(yaw: number, speed: number) {
-        this.keyboardRotationDirection = null;
+        this.stopRotating();
         this.keyboardRotationSpeed = speed;
-        this.desiredRotationYaw = this.rotationYaw;
-        this.hasDesiredRotation = false;
 
         // OnFinishRotating 0x73caee..0x73cb09 only starts correcting errors greater than 5000.
         if (this.keyboardRotationYaw !== null || Math.abs(signedYaw(yaw) - signedYaw(this.rotationYaw)) > 5000) this.keyboardRotationYaw = signedYaw(yaw);
+    }
+
+    public stopRotating() {
+        this.keyboardRotationDirection = null;
+        this.desiredRotationYaw = this.rotationYaw;
+        this.hasDesiredRotation = false;
+    }
+
+    public resetRotationYaw(yaw: number) { // ResetDefaultCharacterYaw 0x1042d920 queues keyboard yaw correction, retaining the held direction.
+        while (yaw > 65536) yaw -= 65536;
+        while (yaw < 0) yaw += 65536;
+
+        if (this.rotationYaw !== yaw) this.keyboardRotationYaw = signedYaw(Math.trunc(yaw));
     }
 
     public getRotationYaw(): number { return this.rotationYaw; }

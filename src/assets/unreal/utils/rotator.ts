@@ -69,8 +69,11 @@ export function getRotatorQuaternionElements(pitch: number, yaw: number, roll: n
     return target;
 }
 
-function sinRotator(value: number): number {
-    return Math.sin(((value >> 2) & 0x3fff) * _TWO_PI / 0x4000);
+export function sinRotator(value: number): number {
+    const index = (value >> 2) & 0x3fff;
+
+    // Core 0x101e29dc: float32 SinTab; its half-turn value differs from Math.sin(Math.PI).
+    return index === 0x2000 ? 1.2246063538223773e-16 : Math.fround(Math.sin(index * _TWO_PI / 0x4000));
 }
 
 export default getRotatorQuaternionElements;

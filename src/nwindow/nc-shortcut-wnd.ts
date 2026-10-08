@@ -36,7 +36,7 @@ const RECT_PREV = [[1, 13, 14, 14], [13, 31, 14, 14]];
 const RECT_ROTATE = [[16, 489, 15, 15], [489, 16, 15, 15]];
 const RECT_GRIP = [[0, 0, 46, 12], [0, 0, 12, 46]];
 
-export type ShortcutEntry_T = { icon: string, label: string, tooltip: string | TooltipInfo_T, skillKey?: string, isAutoSoulShot?: boolean };
+export type ShortcutEntry_T = { icon: string, label: string, tooltip: string | TooltipInfo_T, skillKey?: string, isAutoSoulShot?: boolean, acronym?: string };
 
 function setRect(wnd: NWnd, [x, y, w, h]: number[]) {
     wnd.x = x;
@@ -62,8 +62,15 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
     protected page = 0;
     protected hoveredSlot = -1;
     protected pressedSlot = -1;
+    protected pressedPage = 0;
+    protected isDragging = false;
 
-    public onUse: (page: number, slot: number) => void = null;
+    public onUse: (page: number, slot: number, ctrl: boolean, shift: boolean) => void = null;
+    public onMove: (page: number, slot: number, targetPage: number, targetSlot: number) => void = null;
+    public onDelete: (page: number, slot: number) => void = null;
+    public onDrop: (page: number, slot: number, x: number, y: number) => boolean = null;
+    public onDrag: (entry: ShortcutEntry_T) => void = null;
+    public onDragMove: (x: number, y: number) => void = null;
     public onAutoSoulShot: (page: number, slot: number) => void = null;
 
     public constructor(protected readonly coolTimes: Map<string, NCCoolTimeIcon>) {
@@ -89,7 +96,7 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
 
             event.preventDefault();
 
-            if (this.onUse) this.onUse(this.page, Number(match[1]) - 1);
+            if (this.onUse) this.onUse(this.page, Number(match[1]) - 1, event.ctrlKey, event.shiftKey);
         });
     }
 
@@ -180,6 +187,12 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
     public onMouseMove(event: NMouseEvent_T) {
         const slot = this.getSlotAt(event.x, event.y);
 
+        if (this.manager.isPressed(this) && this.pressedSlot >= 0 && this.entries[this.pressedPage * SLOTS_PER_PAGE + this.pressedSlot] && !this.isDragging) {
+            this.isDragging = true;
+            if (this.onDrag) this.onDrag(this.entries[this.pressedPage * SLOTS_PER_PAGE + this.pressedSlot]);
+        }
+        if (this.isDragging && this.onDragMove) this.onDragMove(event.x + this.getScreenX(), event.y + this.getScreenY());
+
         if (slot === this.hoveredSlot) return;
 
         this.hoveredSlot = slot;
@@ -201,16 +214,53 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
         if (event.button !== 0) return;
 
         this.pressedSlot = this.getSlotAt(event.x, event.y);
-        if (this.pressedSlot >= 0) this.manager.playButtonSound(!!this.entries[this.page * SLOTS_PER_PAGE + this.pressedSlot]);
+        this.pressedPage = this.page;
+        this.isDragging = false;
         this.invalidate();
     }
 
-    public onClick(event: NMouseEvent_T) {
+    public onMouseUp(event: NMouseEvent_T) { // NWindow 0x10107df0: register destination, delete source, then register the old destination.
+        if (event.button !== 0) return;
+
+        const source = this.pressedSlot, page = this.pressedPage;
         const slot = this.getSlotAt(event.x, event.y);
+        const target = this.manager.findWindow(event.x + this.getScreenX(), event.y + this.getScreenY());
 
-        if (event.button !== 0 || slot < 0 || slot !== this.pressedSlot) return;
+        const isBlocked = event.target instanceof Element && event.target.closest(".ndom-layer");
 
-        if (this.onUse) this.onUse(this.page, slot);
+        this.onMouseCancel();
+
+        if (source < 0 || !this.entries[page * SLOTS_PER_PAGE + source]) return;
+
+        if (slot === source && this.page === page) {
+            if (!isBlocked && target === this && this.onUse) this.onUse(page, source, event.ctrl, event.shift);
+            return;
+        }
+
+        if (this.onDrop && this.onDrop(page, source, event.x + this.getScreenX(), event.y + this.getScreenY())) return;
+
+        if (!isBlocked && target === this) {
+            if (slot >= 0 && this.onMove) this.onMove(page, source, this.page, slot);
+            return;
+        }
+        if (event.target instanceof Element && event.target.closest(".ndom-edit")) return;
+
+        const x = event.x < 0 ? event.x + 30 : event.x > this.width ? event.x - 30 : event.x;
+        const y = event.y < 0 ? event.y + 30 : event.y > this.height ? event.y - 30 : event.y;
+
+        if ((x < 0 || y < 0 || x > this.width || y > this.height) && this.onDelete) this.onDelete(page, source);
+    }
+
+    public onMouseCancel() {
+        this.pressedSlot = -1;
+        this.isDragging = false;
+        if (this.onDrag) this.onDrag(null);
+        this.invalidate();
+    }
+
+    public setVisible(isVisible: boolean) {
+        if (!isVisible) this.onMouseCancel();
+        super.setVisible(isVisible);
     }
 
     protected drawSlot(canvas: NWindowCanvas, slot: number, offset: number) {
@@ -230,6 +280,14 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
 
             if (isPressed) tile(6, offset - 1, 34, TEX_OUTLINE_DOWN);
             if (entry.isAutoSoulShot) tile(7, offset, ICON_SIZE, TEX_TOGGLE);
+
+            if (entry.acronym) {
+                for (let i = 0; i < entry.acronym.length; i++) {
+                    const x = 11 + Math.trunc(i / 2) * 13, y = offset + 4 + i % 2 * 13;
+
+                    canvas.drawText(horizontal ? y : x, horizontal ? x : y, TEXT_COLOR, entry.acronym[i]);
+                }
+            }
 
             const coolTime = this.coolTimes.get(entry.skillKey);
 

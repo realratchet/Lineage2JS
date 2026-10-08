@@ -2,9 +2,11 @@ import { LoopOnce, Raycaster, Vector3 } from "three";
 import BaseActor from "../base-actor";
 import PawnAttackComponent, { type NAttackActionParam_T } from "../objects/components/pawn-attack-component";
 import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
+import { CHARACTER_FULL_ARMOR_SLOT, CHARACTER_ALLDRESS_SLOT } from "@l2js/engine/datafile/schema/armorgrp.schema";
 import LoginClient from "./login-client";
 import GameClient from "./game-client";
 import NetworkUI from "./network-ui";
+import getCommandTokens from "./command-parser";
 import L2Lobby from "./l2-lobby";
 import L2Pickup from "../objects/l2-pickup";
 import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
@@ -14,7 +16,7 @@ import type PacketReader from "./packet-reader";
 import type { SessionKey_T } from "./login-client";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { CharacterCreate_T } from "./game-client";
-import type { ShortCut_T, Appearance_T, CharSelectEntry_T, CharTemplate_T, CreatureInfo_T, NpcInfo_T, Location_T, Speeds_T, InventoryItem_T, SkillEntry_T, AbnormalStatus_T, QuestState_T, HennaStatus_T, Macro_T, FriendEntry_T, PartyMember_T, PartyInvite_T, PledgeInvite_T, FriendInvite_T, ClanInfo_T, ClanMember_T, AquireSkillEntry_T, AquireSkillInfo_T, AquireSkillRequirement_T, TradeItem_T, ShopItem_T, StorageMaxCount_T, AllyInvite_T, PledgeWar_T, WarehouseList_T, PackageSendableList_T, PrivateStoreManageSell_T, PrivateStoreSellList_T, PrivateStoreManageBuy_T, PrivateStoreBuyList_T, MultiSellList_T, ShopPreviewList_T, BuyListSeed_T, SellListProcure_T, ItemCount_T, ItemIdCount_T, SellItemRequest_T, PrivateStoreOffer_T, PrivateStoreBuyOffer_T, PrivateStoreSellOffer_T, Ride_T, SpecialCamera_T, TownMap_T, MonRaceInfo_T, Dice_T, SSQStatus_T, ClanHallDecoration_T, SiegeInfo_T, SiegeClanList_T, RecipeShopListEntry_T, RecipeBook_T, RecipeItemMakeInfo_T, RecipeShopManageList_T, RecipeShopSellList_T, RecipeShopItemInfo_T, HennaEquipList_T, HennaItemInfo_T, PartyMatchRoom_T, PartyMatchDetail_T, PartySpelled_T, Snoop_T, GMViewPledgeInfo_T, GMViewSkillInfo_T, GMViewQuestList_T, GMViewItemList_T, GMViewWarehouseWithdrawList_T, GMViewCharacterInfo_T, EnchantSkill_T, EnchantSkillInfo_T, HeroEntry_T, CommandChannelInfo_T, OlympiadUserInfo_T, PartyRoomMember_T, ManorEntry_T, ManorDefaultCrop_T, ManorSeedInfo_T, ManorCropInfo_T, ManorSeedSettings_T, ManorCropSettings_T, ManorSellCropList_T, ManorProcureCropDetail_T, ProcureCropRequest_T, SeedSettingRequest_T, CropSettingRequest_T, FishingState_T } from "./game-packets";
+import type { ShortCut_T, Appearance_T, CharSelectEntry_T, CharTemplate_T, CreatureInfo_T, NpcInfo_T, PetStatus_T, Location_T, Speeds_T, InventoryItem_T, SkillEntry_T, AbnormalStatus_T, QuestState_T, HennaStatus_T, Macro_T, FriendEntry_T, PartyMember_T, PartyInvite_T, PledgeInvite_T, FriendInvite_T, ClanInfo_T, ClanMember_T, AquireSkillEntry_T, AquireSkillInfo_T, AquireSkillRequirement_T, TradeItem_T, ShopItem_T, StorageMaxCount_T, AllyInvite_T, PledgeWar_T, WarehouseList_T, PackageSendableList_T, PrivateStoreManageSell_T, PrivateStoreSellList_T, PrivateStoreManageBuy_T, PrivateStoreBuyList_T, MultiSellList_T, ShopPreviewList_T, BuyListSeed_T, SellListProcure_T, ItemCount_T, ItemIdCount_T, SellItemRequest_T, PrivateStoreOffer_T, PrivateStoreBuyOffer_T, PrivateStoreSellOffer_T, Ride_T, SpecialCamera_T, TownMap_T, MonRaceInfo_T, Dice_T, SSQStatus_T, ClanHallDecoration_T, SiegeInfo_T, SiegeClanList_T, RecipeShopListEntry_T, RecipeBook_T, RecipeItemMakeInfo_T, RecipeShopManageList_T, RecipeShopSellList_T, RecipeShopItemInfo_T, HennaEquipList_T, HennaItemInfo_T, PartyMatchRoom_T, PartyMatchDetail_T, PartySpelled_T, Snoop_T, GMViewPledgeInfo_T, GMViewSkillInfo_T, GMViewQuestList_T, GMViewItemList_T, GMViewWarehouseWithdrawList_T, GMViewCharacterInfo_T, EnchantSkill_T, EnchantSkillInfo_T, HeroEntry_T, CommandChannelInfo_T, OlympiadUserInfo_T, PartyRoomMember_T, ManorEntry_T, ManorDefaultCrop_T, ManorSeedInfo_T, ManorCropInfo_T, ManorSeedSettings_T, ManorCropSettings_T, ManorSellCropList_T, ManorProcureCropDetail_T, ProcureCropRequest_T, SeedSettingRequest_T, CropSettingRequest_T, FishingState_T } from "./game-packets";
 import type { IEngineComponent } from "../game/components";
 import type { Nameplate_T } from "./network-ui";
 import type GameManager from "../game/game-manager";
@@ -24,6 +26,8 @@ import Radar from "../rendering/radar";
 import type { RadarState_T } from "../rendering/radar";
 
 type NetObjectKind_T = "user" | "player" | "npc";
+type MacroRow_T = { command: Macro_T["commands"][number], duration: number, start: number, elapsed: number };
+type MacroExecution_T = { macro: Macro_T, active: boolean, current: number, rows: MacroRow_T[] };
 type NetSkill_T = { id: number, level: number, hitTime: number, associatedActors: BaseActor[], associatedObjectIds: number[] };
 type PendingAttack_T = { hits: readonly NAttackActionParam_T[], position: Location_T };
 type PendingSkill_T = { targetObjectId: number, id: number, level: number, hitTime: number, position: Location_T, isTransient: boolean, associatedObjectIds: number[] };
@@ -31,6 +35,10 @@ type PendingSkill_T = { targetObjectId: number, id: number, level: number, hitTi
 type NetObject_T = {
     objectId: number;
     selectedId: number;
+    clanId: number;
+    clanCrestId: number;
+    allyId: number;
+    allyCrestId: number;
     kind: NetObjectKind_T;
     actor: BaseActor;
     isRemoved: boolean;
@@ -49,6 +57,7 @@ type NetObject_T = {
     recommendations: number;
     nameColor: number;
     isSummon: boolean;
+    isAttackable: boolean;
     isDead: boolean;
     appearanceKey: string;
     speeds: Speeds_T;
@@ -64,6 +73,7 @@ type NetObject_T = {
 };
 type NetVehicle_T = { objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 type PetRemainTime_T = { maxTime: number, remainingTime: number };
+type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number };
 
 const MYSTIC_BODY_CLASS_IDS = new Set([10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 38, 39, 40, 41, 42, 43, 49, 50, 51, 52, 94, 95, 96, 97, 98, 103, 104, 105, 110, 111, 112, 115, 116]); // ClassId.isMage excludes orcMage (49), which uses the Shaman body.
 const VALIDATE_POSITION_INTERVAL = 1000;
@@ -87,6 +97,12 @@ function setVector(target: Vector3, location: Location_T): Vector3 { return targ
 
 function distanceXY(a: Vector3, b: Vector3): number { return Math.hypot(a.x - b.x, a.y - b.y); }
 
+function getDistance(a: Vector3, b: Vector3): number {
+    const x = Math.fround(Math.fround(a.x) - Math.fround(b.x)), y = Math.fround(Math.fround(a.y) - Math.fround(b.y)), z = Math.fround(Math.fround(a.z) - Math.fround(b.z));
+
+    return Math.fround(Math.sqrt(x * x + y * y + z * z));
+}
+
 export class NetworkManager implements IEngineComponent<GameManager> {
     protected manGame: GameManager;
     protected ui: NetworkUI;
@@ -104,10 +120,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected readonly staticObjects = new Map<number, number>();
     protected readonly appearances = new Map<number, Appearance_T>();
     protected readonly pickups = new Map<number, L2Pickup>();
+    protected gnoCategory = 0;
+    protected gnoObjectId = -1;
+    protected gnoElapsed = 0;
+    protected nextTargetLock = false;
     protected readonly npcNames = new Map<number, string>();
     protected readonly shortcuts = new Map<number, ShortCut_T>();
     protected readonly autoSoulShots = new Set<number>();
     protected readonly inventory = new Map<number, InventoryItem_T>();
+    protected inventoryOrderNamespace = 0;
     protected readonly appearanceLoads = new WeakMap<BaseActor, Promise<void>>();
     protected readonly bodyKeys = new WeakMap<BaseActor, string>();
     protected readonly appearanceRequests = new WeakMap<BaseActor, number>();
@@ -115,8 +136,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected readonly skills = new Map<number, SkillEntry_T>();
     protected readonly questStates = new Map<number, QuestState_T>();
     protected hennaStatus: HennaStatus_T = null;
-    protected macroRevision = -1;
+    protected isMacroListComplete = true;
+    protected macroListReceived = 0;
     protected readonly macros = new Map<number, Macro_T>();
+    protected readonly macroExecutions = new Map<number, MacroExecution_T>();
     protected readonly friends = new Map<number, FriendEntry_T>();
     protected readonly partyMembers = new Map<number, PartyMember_T>();
     protected partyInvite: PartyInvite_T = null;
@@ -125,6 +148,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected partyJoinResult = -1;
     protected pledgeJoinId = 0;
     protected clanInfo: ClanInfo_T = null;
+    protected readonly pledgeInfos = new Map<number, PledgeInfo_T>();
     protected readonly clanMembers = new Map<string, ClanMember_T>();
     protected aquireSkillFishing = false;
     protected aquireSkills: AquireSkillEntry_T[] = [];
@@ -146,15 +170,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected etcStatus: { charges: number, weightPenalty: number, messageRefusal: number, dangerArea: number, expertisePenalty: number } = null;
     protected signsSky = 0;
     protected petStatusType = -1;
-    protected petInfo: { objectId: number; isMountable: boolean } = null;
+    protected petInfo: PetStatus_T = { objectId: -1, npcId: -NPC_ID_OFFSET, name: "", x: 0, y: 0, z: 0, statusType: 0, curFood: 0, maxFood: 0, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, field42: 0, level: 0, exp: 0, minExp: 0, nextExp: 0, weight: 0, maxWeight: 0, pAtk: 0, pDef: 0, mAtk: 0, mDef: 0, accuracy: 0, evasion: 0, critical: 0, speed: 0, attackSpeed: 0, castSpeed: 0, field60: 0, isMountable: false, soulshotsUsed: 0, spiritshotsUsed: 0 };
     protected isMounted = false;
     protected npcSpawnCount = 0;
     protected readonly npcSpawnWaiters: (() => void)[] = [];
     protected readonly petInventory = new Map<number, InventoryItem_T>();
     protected petRemainTime: PetRemainTime_T = null;
-    protected readonly abnormalStatuses = new Map<string, AbnormalStatus_T>();
+    protected readonly abnormalStatuses: AbnormalStatus_T[] = [];
     protected shortBuff: AbnormalStatus_T = null;
-    protected boardHtml = "";
     protected userId = 0;
     protected selectedSlot = -1;
     protected inWorld = false;
@@ -168,7 +191,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected nextTick: Promise<void> = null;
     protected resolveNextTick: () => void = null;
     protected allyInvite: AllyInvite_T = null;
-    protected pledgePower = 0;
+    protected pledgePower = new Uint8Array(32);
     protected pledgeWarStart: PledgeWar_T = null;
     protected pledgeWarStop: PledgeWar_T = null;
     protected pledgeWarSurrender: PledgeWar_T = null;
@@ -218,6 +241,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected hennaEquipList: HennaEquipList_T = null;
     protected hennaItemInfo: HennaItemInfo_T = null;
     protected partyMatchRooms: PartyMatchRoom_T[] = [];
+    protected partyMatchPage = 1;
     protected partyMatchDetail: PartyMatchDetail_T = null;
     protected readonly partyEffects = new Map<number, PartySpelled_T>();
     protected readonly tutorialQuestionMarks = new Set<number>();
@@ -374,7 +398,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public previewCreate(selection: PawnCreateSelection_T) { void this.lobby.previewCreate(selection); }
-    public rotateCreatePreview(_direction: number) { } // TODO: DefaultCharacterTurn(idx, +-2.0) rate units are not decoded.
+    public rotateCreatePreview(direction: number) { this.lobby.rotateCreate(direction); }
     public zoomCreatePreview(isIn: boolean) { this.lobby.zoomCreate(isIn); }
 
     public selectCharacter(slot: number) {
@@ -389,6 +413,66 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public restoreCharacter(slot: number) { this.game.characterRestore(slot); }
 
     public say(text: string, type: Say2_T, target: string = null) { this.game.say2(text, type, target); }
+    public execCommand(text: string, isShift: boolean = false) {
+        if (!this.inWorld) return;
+        if (text.startsWith("//")) { this.sendBypassBuildCmd(text.slice(2)); return; }
+        if (!text.startsWith("/")) return;
+
+        const tokens = getCommandTokens(text), strings = this.ui.getStrings();
+        const entry = Object.entries(strings.commands).find(([, name]) => `/${name.toLowerCase()}` === tokens[0].toLowerCase());
+
+        if (!entry) return; // NWindow 0x100599d9: unknown command goes directly to the return at 0x1005a16a.
+
+        const type = Number(entry[0]);
+
+        switch (type) {
+            case 4: case 5: this.game.changeWaitType(type === 5); break;
+            case 6: case 7: this.game.changeMoveType(type === 7); break;
+            case 8: case 9: case 10: this.useAction(2, type === 9, type === 10); break;
+            case 11: this.useAction(3); break;
+            case 13: this.useAction(4, false, isShift); break;
+            case 14: this.useAction(5, false, isShift); break;
+            case 15: this.useAction(6, false, isShift); break;
+            case 12: {
+                if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], 0xffb09b79); break; }
+
+                const name = tokens.slice(1).join(" ").toLowerCase();
+                let target: NetObject_T = null;
+
+                if (!name) break;
+
+                for (const object of this.objects.values()) {
+                    if (object.name.toLowerCase() !== name) continue;
+
+                    target = object;
+                    if (!object.isSummon) break; // Engine 0x104204cd: first non-summon match, otherwise the last match.
+                }
+
+                if (target && target.actor && this.manGame.getComponent("render").player) this.requestAction(target.actor, isShift);
+                break;
+            }
+            case 20: this.ui.openPartyMatch(); break;
+            case 21: case 22: case 23: this.game.requestSocialAction(type - 19); break;
+            case 46: case 47: case 48: case 49: case 50: case 51: this.game.requestSocialAction(type - 41); break;
+            case 54: case 55: case 56: this.game.requestSocialAction(type - 43); break;
+            case 57: this.useAction(0, this.ui.getInputModifiers()[0], isShift); break;
+            case 24: case 25: case 26: {
+                if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], 0xffb09b79); break; }
+
+                const id = strings.skillCommands[tokens.slice(1).join(" ").toLowerCase()];
+
+                if (id) this.game.requestMagicSkillUse(id, type === 25, type === 26);
+                break;
+            }
+            case 27: case 28: case 29: {
+                const page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
+
+                if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12) this.useShortCut(page - 1, slot - 1, type === 28, type === 29);
+                break;
+            }
+            default: debugger; break;
+        }
+    }
     public sendBypassBuildCmd(command: string) { this.game.sendBypassBuildCmd(command); }
     public bypass(command: string) { this.game.requestBypassToServer(command); }
     public link(link: string) { this.game.requestLinkHtml(link); }
@@ -411,6 +495,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return true;
     }
 
+    public requestPetAction(objectId: number, isShift: boolean) {
+        if (objectId <= 0 || !this.objects.get(this.userId)) return;
+
+        this.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
+    }
+
     public requestPickup(raycaster: Raycaster, maxDistance: number, isShift: boolean = false): boolean {
         let nearest: L2Pickup = null;
 
@@ -427,6 +517,60 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.game.action(nearest.objectId, this.manGame.getComponent("render").player.position, isShift);
         return true;
+    }
+
+    protected getNextEnemy(radius: number, excluded: number): NetObject_T { // Engine 0x10421350.
+        const player = this.objects.get(this.userId);
+
+        if (!player || !player.actor) return null;
+        if (this.gnoCategory !== 2) {
+            this.gnoCategory = 2;
+            this.gnoObjectId = -1;
+            this.gnoElapsed = 0;
+        }
+
+        const previous = this.objects.get(this.gnoObjectId);
+        const distance = previous && previous.actor ? getDistance(previous.actor.position, player.actor.position) : -1;
+        const lower = distance > 0 ? distance : 0;
+        let nearest: NetObject_T = null, next: NetObject_T = null, nearestDistance = radius, nextDistance = radius;
+
+        for (const object of this.objects.values()) {
+            if (!object.isAttackable || object.isDead || !object.actor || object.objectId === excluded) continue;
+
+            const distance = getDistance(object.actor.position, player.actor.position);
+
+            if (!(distance >= 0)) continue;
+            if (distance < nearestDistance) { nearest = object; nearestDistance = distance; }
+            if (distance > lower && distance < nextDistance) { next = object; nextDistance = distance; }
+        }
+
+        const result = next || nearest;
+
+        if (result) this.gnoObjectId = result.objectId;
+        return result;
+    }
+
+    protected getNearestItem(radius: number, excluded: number, sourceId: number = this.userId): L2Pickup { // Engine 0x104211c0 / pet 0x103f9980.
+        const player = this.objects.get(sourceId);
+
+        if (!player || !player.actor) return null;
+
+        let nearest: L2Pickup = null, nearestDistance = radius;
+
+        for (const pickup of this.pickups.values()) {
+            if (pickup.objectId === excluded) continue;
+
+            const distance = getDistance(pickup.position, player.actor.position);
+
+            if (distance >= 0 && distance < nearestDistance) { nearest = pickup; nearestDistance = distance; }
+        }
+
+        return nearest;
+    }
+
+    protected updateGNOManager(deltaTime: number) { // Engine 0x103f9940.
+        this.gnoElapsed = Math.fround(this.gnoElapsed + Math.fround(deltaTime / 1000));
+        if (this.gnoElapsed > 3) { this.gnoCategory = this.gnoElapsed = 0; this.gnoObjectId = -1; }
     }
 
     protected findObjectByActor(actor: BaseActor): NetObject_T {
@@ -447,6 +591,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected leaveWorld() {
         const render = this.manGame.getComponent("render");
 
+        render.clearViewportWindowParam();
+
         for (const object of this.objects.values()) {
             object.isRemoved = true;
 
@@ -462,6 +608,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (cubics) render.player.removeComponent(cubics);
         for (const pickup of this.pickups.values()) render.removePickup(pickup);
         this.pickups.clear();
+        this.gnoCategory = this.gnoElapsed = 0;
+        this.gnoObjectId = -1;
         this.inventory.clear();
         this.shortcuts.clear();
         this.autoSoulShots.clear();
@@ -470,9 +618,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.skills.clear();
         this.ui.setSkills([]);
         this.questStates.clear();
+        this.ui.setQuestStates([]);
         this.hennaStatus = null;
-        this.macroRevision = -1;
+        this.ui.setHenna(null);
+        this.isMacroListComplete = true;
+        this.macroListReceived = 0;
         this.macros.clear();
+        this.macroExecutions.clear();
+        this.ui.setMacros([]);
         this.friends.clear();
         this.partyMembers.clear();
         this.partyPositions.clear();
@@ -484,7 +637,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.partyLeaderId = 0;
         this.partyLootDistribution = 0;
         this.clanInfo = null;
+        this.pledgeInfos.clear();
         this.clanMembers.clear();
+        this.ui.setClan(null);
+        this.ui.clearClanMembers();
         this.aquireSkillFishing = false;
         this.aquireSkills = [];
         this.aquireSkillInfo = null;
@@ -504,16 +660,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.etcStatus = null;
         this.signsSky = 0;
         this.petStatusType = -1;
-        this.petInfo = null;
+        Object.assign(this.petInfo, { objectId: -1, name: "", field60: 0, isMountable: false });
         this.isMounted = false;
         this.ui.setMountable(false);
         this.petInventory.clear();
         this.petRemainTime = null;
-        this.abnormalStatuses.clear();
+        this.abnormalStatuses.length = 0;
         this.shortBuff = null;
-        this.boardHtml = "";
         this.allyInvite = null;
-        this.pledgePower = 0;
+        this.pledgePower = new Uint8Array(32);
         this.pledgeWarStart = null;
         this.pledgeWarStop = null;
         this.pledgeWarSurrender = null;
@@ -562,6 +717,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.hennaEquipList = null;
         this.hennaItemInfo = null;
         this.partyMatchRooms = [];
+        this.partyMatchPage = 1;
         this.partyMatchDetail = null;
         this.partyEffects.clear();
         this.tutorialQuestionMarks.clear();
@@ -603,7 +759,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected onPacket(opcode: GameServerPacket_T, packet: PacketReader) {
         switch (opcode) {
-            case GameServerPacket_T.KeyPacket: this.game.authLogin(this.account, this.sessionKey); break;
+            case GameServerPacket_T.KeyPacket:
+                this.inventoryOrderNamespace = packet.d(); // Engine 0x103fe0ba, NWindow 0x10065d4d.
+                this.game.authLogin(this.account, this.sessionKey);
+                break;
             case GameServerPacket_T.AuthLoginFail: this.ui.showMessage(`Game server refused the session (reason ${packet.d()}).`); break;
             case GameServerPacket_T.CharSelectInfo:
                 this.login.close();
@@ -647,7 +806,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.PetItemList: this.onPetItemList(packet); break;
             case GameServerPacket_T.PetInventoryUpdate: this.onPetInventoryUpdate(packet); break;
             case GameServerPacket_T.PetStatusUpdate: this.onPetStatusUpdate(packet); break;
-            case GameServerPacket_T.PetDelete: packet.d(); this.removeObject(packet.d()); break;
+            case GameServerPacket_T.PetDelete: this.onPetDelete(packet); break;
             case GameServerPacket_T.SpawnItem: void this.onSpawnItem(packet, false); break;
             case GameServerPacket_T.DropItem: void this.onSpawnItem(packet, true); break;
             case GameServerPacket_T.GetItem: this.onGetItem(packet); break;
@@ -661,7 +820,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.TeleportToLocation: this.onTeleport(packet); break;
             case GameServerPacket_T.Attack: this.onAttack(packet); break;
             case GameServerPacket_T.MagicSkillUse: this.onMagicSkillUse(packet); break;
-            case GameServerPacket_T.MagicSkillCanceld: this.stopSkill(packet.d()); break;
+            case GameServerPacket_T.MagicSkillCanceld: {
+                const objectId = packet.d(), object = this.objects.get(objectId);
+
+                if (object && object.actor === this.manGame.getComponent("render").player) this.notifyMacroSkill(0, 1);
+                this.stopSkill(objectId);
+                break;
+            }
             case GameServerPacket_T.MagicSkillLaunched: this.onMagicSkillLaunched(packet); break;
             case GameServerPacket_T.Die: this.onDie(packet); break;
             case GameServerPacket_T.Revive: this.onRevive(packet.d()); break;
@@ -672,7 +837,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.AutoAttackStart: this.onCombatState(packet.d(), true); break;
             case GameServerPacket_T.AutoAttackStop: this.onCombatState(packet.d(), false); break;
             case GameServerPacket_T.SocialAction: this.onSocialAction(packet.d(), packet.d()); break;
-            case GameServerPacket_T.MyTargetSelected: this.setTarget(packet.d(), (packet.h() << 16) >> 16); break;
+            case GameServerPacket_T.MyTargetSelected: {
+                const targetId = packet.d(), levelDifference = (packet.h() << 16) >> 16;
+
+                this.nextTargetLock = false;
+                this.setTarget(targetId, levelDifference);
+                this.notifyMacroCommand([12, 13, 15], Math.fround(0.001));
+                break;
+            }
             case GameServerPacket_T.PartyMemberPosition: this.onPartyMemberPosition(packet); break;
             case GameServerPacket_T.TargetSelected: this.onTargetSelected(packet, true); break;
             case GameServerPacket_T.TargetUnselected: this.onTargetSelected(packet, false); break;
@@ -736,21 +908,28 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.PledgeCrest: this.onPledgeCrest(packet); break;
             case GameServerPacket_T.AskJoinAlly: this.onAskJoinAlly(packet); break;
             case GameServerPacket_T.AllyCrest: this.onAllyCrest(packet); break;
-            case GameServerPacket_T.WareHouseDepositList: this.warehouseDeposit = readWarehouseList(packet); break;
-            case GameServerPacket_T.WareHouseWithdrawalList: this.warehouseWithdraw = readWarehouseList(packet); break;
+            case GameServerPacket_T.WareHouseDepositList: this.warehouseDeposit = readWarehouseList(packet); this.ui.showWarehouse(false, this.warehouseDeposit); break;
+            case GameServerPacket_T.WareHouseWithdrawalList: this.warehouseWithdraw = readWarehouseList(packet); this.ui.showWarehouse(true, this.warehouseWithdraw); break;
+            case GameServerPacket_T.WareHouseDone: this.onWareHouseDone(packet); break;
             case GameServerPacket_T.PrivateStoreManageListSell: this.onPrivateStoreManageListSell(packet); break;
-            case GameServerPacket_T.PrivateStoreListSell: this.privateStoreSell = readPrivateStoreListSell(packet); break;
+            case GameServerPacket_T.PrivateStoreListSell: this.privateStoreSell = readPrivateStoreListSell(packet); this.ui.showPrivateStoreSell(this.privateStoreSell); break;
             case GameServerPacket_T.PrivateStoreMsgSell: this.onPrivateStoreMsg(packet, this.privateStoreSellMsgs); break;
             case GameServerPacket_T.PrivateStoreManageListBuy: this.onPrivateStoreManageListBuy(packet); break;
-            case GameServerPacket_T.PrivateStoreListBuy: this.privateStoreBuy = readPrivateStoreListBuy(packet); break;
+            case GameServerPacket_T.PrivateStoreListBuy: this.privateStoreBuy = readPrivateStoreListBuy(packet); this.ui.showPrivateStoreBuy(this.privateStoreBuy); break;
             case GameServerPacket_T.PrivateStoreMsgBuy: this.onPrivateStoreMsg(packet, this.privateStoreBuyMsgs); break;
             case GameServerPacket_T.PackageToList: this.onPackageToList(packet); break;
-            case GameServerPacket_T.PackageSendableList: this.packageSendable = readPackageSendableList(packet); break;
+            case GameServerPacket_T.PackageSendableList: this.packageSendable = readPackageSendableList(packet); this.ui.showPackage(this.packageSendable); break;
             case GameServerPacket_T.MultiSellList: this.onMultiSellList(packet); break;
-            case GameServerPacket_T.ShopPreviewList: this.shopPreview = readShopPreviewList(packet); break;
-            case GameServerPacket_T.ShopPreviewInfo: this.shopPreviewItems = readShopPreviewInfo(packet); break;
-            case GameServerPacket_T.BuyListSeed: this.seedShop = readBuyListSeed(packet); break;
-            case GameServerPacket_T.SellListProcure: this.cropProcure = readSellListProcure(packet); break;
+            case GameServerPacket_T.ShopPreviewList: this.shopPreview = readShopPreviewList(packet); this.ui.showPreviewShop(this.shopPreview); break;
+            case GameServerPacket_T.ShopPreviewInfo: this.onShopPreviewInfo(packet); break;
+            case GameServerPacket_T.BuyListSeed:
+                this.seedShop = readBuyListSeed(packet);
+                this.ui.showManorShop(this.seedShop, false);
+                break;
+            case GameServerPacket_T.SellListProcure:
+                this.cropProcure = readSellListProcure(packet);
+                this.ui.showManorShop(this.cropProcure, true);
+                break;
             case GameServerPacket_T.VehicleInfo: this.onVehicleLocation(packet, true); break;
             case GameServerPacket_T.OnVehicleCheckLocation: this.onVehicleLocation(packet, false); break;
             case GameServerPacket_T.VehicleDeparture: this.onVehicleDeparture(packet); break;
@@ -779,25 +958,37 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.SiegeAttackerList: this.siegeAttackers = readSiegeClanList(packet, false); break;
             case GameServerPacket_T.SiegeDefenderList: this.siegeDefenders = readSiegeClanList(packet, true); break;
             case GameServerPacket_T.GameGuardQuery: this.onGameGuardQuery(packet); break;
-            case GameServerPacket_T.RecipeBookItemList: this.recipeBook = readRecipeBookItemList(packet); break;
-            case GameServerPacket_T.RecipeItemMakeInfo: this.recipeItemMakeInfo = readRecipeItemMakeInfo(packet); break;
-            case GameServerPacket_T.RecipeShopManageList: this.recipeShopManageList = readRecipeShopManageList(packet); break;
-            case GameServerPacket_T.RecipeShopSellList: this.recipeShopSellList = readRecipeShopSellList(packet); break;
-            case GameServerPacket_T.RecipeShopItemInfo: this.recipeShopItemInfo = readRecipeShopItemInfo(packet); break;
+            case GameServerPacket_T.RecipeBookItemList: this.recipeBook = readRecipeBookItemList(packet); this.ui.showRecipeBook(this.recipeBook); break;
+            case GameServerPacket_T.RecipeItemMakeInfo: this.recipeItemMakeInfo = readRecipeItemMakeInfo(packet); this.ui.showRecipeManufacture(this.recipeItemMakeInfo); break;
+            case GameServerPacket_T.RecipeShopManageList: this.recipeShopManageList = readRecipeShopManageList(packet); this.ui.showRecipeShopManage(this.recipeShopManageList); break;
+            case GameServerPacket_T.RecipeShopSellList: this.recipeShopSellList = readRecipeShopSellList(packet); this.ui.showRecipeShopSellList(this.recipeShopSellList); break;
+            case GameServerPacket_T.RecipeShopItemInfo: this.recipeShopItemInfo = readRecipeShopItemInfo(packet); this.ui.showRecipeShopItemInfo(this.recipeShopItemInfo); break;
             case GameServerPacket_T.RecipeShopMsg: this.onRecipeShopMsg(packet); break;
-            case GameServerPacket_T.HennaEquipList: this.hennaEquipList = readHennaEquipList(packet); break;
-            case GameServerPacket_T.HennaItemInfo: this.hennaItemInfo = readHennaItemInfo(packet); break;
-            case GameServerPacket_T.PartyMatchList: this.partyMatchRooms = readPartyMatchList(packet); break;
-            case GameServerPacket_T.PartyMatchDetail: this.partyMatchDetail = readPartyMatchDetail(packet); break;
+            case GameServerPacket_T.HennaEquipList: this.hennaEquipList = readHennaEquipList(packet); this.ui.showHennaList(this.hennaEquipList); break;
+            case GameServerPacket_T.HennaItemInfo: this.hennaItemInfo = readHennaItemInfo(packet); this.ui.showHennaInfo(this.hennaItemInfo); break;
+            case GameServerPacket_T.HennaUnequipList: this.ui.showHennaList(readHennaEquipList(packet), true); break;
+            case GameServerPacket_T.HennaUnequipInfo: this.ui.showHennaInfo(readHennaItemInfo(packet), true); break;
+            case GameServerPacket_T.PartyMatchList: {
+                const list = readPartyMatchList(packet);
+
+                this.partyMatchRooms = list.rooms;
+                this.partyMatchPage = list.page;
+                this.ui.showPartyMatchList(list);
+                break;
+            }
+            case GameServerPacket_T.PartyMatchDetail:
+                this.partyMatchDetail = readPartyMatchDetail(packet);
+                this.ui.showPartyMatchDetail(this.partyMatchDetail);
+                break;
             case GameServerPacket_T.PartySpelled: this.onPartySpelled(packet); break;
             case GameServerPacket_T.TutorialShowQuestionMark: this.tutorialQuestionMarks.add(packet.d()); break;
             case GameServerPacket_T.TutorialEnableClientEvent: this.tutorialClientEvents = packet.d(); break;
-            case GameServerPacket_T.GMViewCharacterInfo: this.gmCharacterInfo = readGMViewCharacterInfo(packet); break;
+            case GameServerPacket_T.GMViewCharacterInfo: this.gmCharacterInfo = readGMViewCharacterInfo(packet); this.updateGMCharacterInfo(); break;
             case GameServerPacket_T.GMViewPledgeInfo: this.gmPledgeInfo = readGMViewPledgeInfo(packet); break;
-            case GameServerPacket_T.GMViewSkillInfo: this.gmSkillInfo = readGMViewSkillInfo(packet); break;
-            case GameServerPacket_T.GMViewQuestList: this.gmQuestList = readGMViewQuestList(packet); break;
-            case GameServerPacket_T.GMViewItemList: this.gmItemList = readGMViewItemList(packet); break;
-            case GameServerPacket_T.GMViewWarehouseWithdrawList: this.gmWarehouseList = readGMViewWarehouseWithdrawList(packet); break;
+            case GameServerPacket_T.GMViewSkillInfo: this.gmSkillInfo = readGMViewSkillInfo(packet); this.ui.setGMSkillInfo(this.gmSkillInfo); break;
+            case GameServerPacket_T.GMViewQuestList: this.gmQuestList = readGMViewQuestList(packet); this.ui.setGMQuestList(this.gmQuestList); break;
+            case GameServerPacket_T.GMViewItemList: this.gmItemList = readGMViewItemList(packet); this.ui.setGMInventoryInfo(this.gmItemList); break;
+            case GameServerPacket_T.GMViewWarehouseWithdrawList: this.gmWarehouseList = readGMViewWarehouseWithdrawList(packet); this.ui.setGMWarehouseInfo(this.gmWarehouseList); break;
             case GameServerPacket_T.GMViewHennaInfo: this.gmHennaStatus = readGMViewHennaInfo(packet); break;
             case GameServerPacket_T.Snoop: this.onSnoop(packet); break;
             case GameServerPacket_T.Extended:
@@ -813,8 +1004,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     case GameServerExPacket_T.ExFishingEnd: this.onFishingEnd(packet); break;
                     case GameServerExPacket_T.ExFishingStartCombat: this.onFishingStartCombat(packet); break;
                     case GameServerExPacket_T.ExFishingHpRegen: this.onFishingHpRegen(packet); break;
-                    case GameServerExPacket_T.ExEnchantSkillList: this.enchantSkills = readEnchantSkillList(packet); break;
-                    case GameServerExPacket_T.ExEnchantSkillInfo: this.enchantSkillInfo = readEnchantSkillInfo(packet); break;
+                    case GameServerExPacket_T.ExEnchantSkillList:
+                        this.enchantSkills = readEnchantSkillList(packet);
+                        this.ui.showEnchantSkillList(this.enchantSkills);
+                        break;
+                    case GameServerExPacket_T.ExEnchantSkillInfo:
+                        this.enchantSkillInfo = readEnchantSkillInfo(packet);
+                        this.ui.showEnchantSkillInfo(this.enchantSkillInfo);
+                        break;
                     case GameServerExPacket_T.ExQuestInfo: if (packet.getRemaining()) throw new Error("Invalid ExQuestInfo payload."); break;
                     case GameServerExPacket_T.ExShowQuestMark: this.onShowQuestMark(packet); break;
                     case GameServerExPacket_T.ExSendManorList: this.manors = readManorList(packet); break;
@@ -839,7 +1036,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 break;
             case GameServerPacket_T.SunRise: this.manGame.getComponent("render").getEnvironment().setTimeOfDay(6); break;
             case GameServerPacket_T.SunSet: this.manGame.getComponent("render").getEnvironment().setTimeOfDay(18); break;
-            case GameServerPacket_T.RestartResponse: this.leaveWorld(); break;
+            case GameServerPacket_T.RestartResponse:
+                if (packet.d() !== 0) { // Engine 0x104283d9 / 0x10480f82.
+                    this.ui.saveInventoryOrder();
+                    this.ui.clearQuestLocation();
+                    this.leaveWorld();
+                }
+                break;
             case GameServerPacket_T.LeaveWorld:
             case GameServerPacket_T.ServerClose:
                 this.game.close();
@@ -945,6 +1148,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const object = this.findObjectByActor(actor);
 
         if (object) {
+            actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
             this.applySpeeds(actor, object.speeds, object.isRunning);
             this.setIdleAnimation(object);
             this.applyPartyMember(object);
@@ -982,7 +1186,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, selectedId: 0, kind, actor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, isSummon: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? WaitType_T.WT_SITTING : WaitType_T.WT_STANDING, pendingAttack: null, pendingSkill: null };
+        const object: NetObject_T = { objectId, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? WaitType_T.WT_SITTING : WaitType_T.WT_STANDING, pendingAttack: null, pendingSkill: null };
 
         this.objects.set(objectId, object);
 
@@ -992,6 +1196,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected applySpeeds(actor: BaseActor, speeds: Speeds_T, isRunning: boolean) {
         actor.setMovementSpeeds(speeds.runSpd * speeds.moveMultiplier, speeds.walkSpd * speeds.moveMultiplier, speeds.swimRunSpd * speeds.moveMultiplier);
         actor.setUnrealScriptProperty("AttackSpeedRate", speeds.attackSpeedMultiplier);
+        actor.setUnrealScriptProperty("NonAttackSpeedRate", Math.fround(speeds.moveMultiplier)); // Engine 0x1047ab88: User+118 double to Pawn+5fc float.
         actor.setCollisionSize(speeds.collisionRadius, speeds.collisionHeight);
         actor.setWalking(!isRunning);
     }
@@ -1007,7 +1212,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.inventory.set(item.objectId, item);
         }
 
-        this.updateInventory(showWindow);
+        this.updateInventory(showWindow, true);
     }
 
     protected onInventoryUpdate(packet: PacketReader) {
@@ -1019,6 +1224,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             const sound = item.isEquipped && !(previous && previous.isEquipped) ? this.ui.getStrings().itemInfos[item.itemId].equipSound : "";
 
             if (sound && sound.toLowerCase() !== "none") void this.manGame.getComponent("audio").playInterfaceSound(sound); // UGameEngine::OnEquipItemPlaySound 0x74ee20: grp equip_sound, no 3D.
+
+            this.ui.updateInventoryOrder(change, item);
 
             switch (change) {
                 case 1:
@@ -1050,18 +1257,18 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected onSellList(packet: PacketReader) {
         const money = packet.d(), npcId = packet.d(), count = packet.h();
-        const hasPrice = npcId === 0;
 
-        if (money < 0 || npcId < 0 || count > Math.trunc(packet.getRemaining() / (hasPrice ? 32 : 28))) throw new Error(`Invalid SellList count '${count}'.`);
+        if (money < 0 || npcId < 0 || count > Math.trunc(packet.getRemaining() / 32)) throw new Error(`Invalid SellList count '${count}'.`);
 
         const items: ShopItem_T[] = [];
-        for (let i = 0; i < count; i++) items.push(this.readShopItem(packet, hasPrice, false, false));
+        for (let i = 0; i < count; i++) items.push(this.readShopItem(packet, true, false, false));
         if (packet.getRemaining()) throw new Error("Invalid SellList trailing data.");
 
         this.shopSellMoney = money;
         this.shopSellNpcId = npcId;
         this.shopSellItems.length = 0;
         this.shopSellItems.push(...items);
+        this.ui.showShop(true, money, items);
     }
 
     protected onBuyList(packet: PacketReader) {
@@ -1077,6 +1284,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.shopBuyListId = listId;
         this.shopBuyItems.length = 0;
         this.shopBuyItems.push(...items);
+        this.ui.showShop(false, money, items);
     }
 
     protected readTradeItem(packet: PacketReader, hasTradeType: boolean): TradeItem_T {
@@ -1091,10 +1299,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const customType2 = packet.h();
 
-        if (objectId <= 0 || itemId <= 0 || count <= 0 || hasTradeType && tradeType !== 2 && tradeType !== 3)
+        if (objectId <= 0 || itemId <= 0 || count < 0 || count === 0 && !hasTradeType || hasTradeType && tradeType !== 1 && tradeType !== 2 && tradeType !== 3)
             throw new Error(`Invalid trade item '${itemId}'.`);
 
-        return { tradeType, type1, objectId, itemId, count, type2, bodyPart, enchantLevel, customType2 };
+        return { tradeType, type1, objectId, itemId, count, initialCount: count, type2, bodyPart, enchantLevel, customType2 };
     }
 
     protected readTradeItems(packet: PacketReader, count: number, hasTradeType: boolean): TradeItem_T[] {
@@ -1108,6 +1316,21 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return items;
     }
 
+    protected addTradeItems(target: TradeItem_T[], items: TradeItem_T[], mode: number) {
+        const infos = this.ui.getStrings().itemInfos;
+
+        for (const item of items) {
+            if (target.length >= 160) continue;
+
+            const previous = target.find(entry => entry.objectId === item.objectId);
+            const consumeType = previous ? infos[previous.itemId].consumeType : 0;
+
+            if (previous && consumeType >= 1 && consumeType <= 3) previous.count += item.count;
+            else target.push(item);
+            this.ui.recalculateTradeRows(mode, target.length);
+        }
+    }
+
     protected onTradeStart(packet: PacketReader) {
         const partnerId = packet.d(), count = packet.h(), items = this.readTradeItems(packet, count, false);
 
@@ -1118,8 +1341,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.tradeOwnItems.length = 0;
         this.tradeOtherItems.length = 0;
         this.tradeAvailableItems.length = 0;
-        this.tradeAvailableItems.push(...items);
         this.tradeDone = 0;
+
+        const own = this.objects.get(this.userId), other = this.objects.get(partnerId);
+
+        this.ui.startTrade(own ? own.name : null, other ? other.name : null);
+
+        if (!own || !other) this.game.tradeDone(false);
+        this.addTradeItems(this.tradeAvailableItems, items, 0);
+        this.ui.setTradeItems(0, this.tradeAvailableItems, null);
     }
 
     protected onTradeOwnAdd(packet: PacketReader) {
@@ -1127,7 +1357,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining()) throw new Error("Invalid TradeOwnAdd trailing data.");
 
-        this.tradeOwnItems.push(...items);
+        this.addTradeItems(this.tradeOwnItems, items, 1);
+        this.ui.setTradeItems(1, this.tradeOwnItems, null);
     }
 
     protected onTradeOtherAdd(packet: PacketReader) {
@@ -1135,7 +1366,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining()) throw new Error("Invalid TradeOtherAdd trailing data.");
 
-        this.tradeOtherItems.push(...items);
+        this.addTradeItems(this.tradeOtherItems, items, 2);
+        this.ui.setTradeItems(2, this.tradeOtherItems, null);
     }
 
     protected onTradeUpdate(packet: PacketReader) {
@@ -1143,8 +1375,21 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining()) throw new Error("Invalid TradeUpdate trailing data.");
 
-        this.tradeAvailableItems.length = 0;
-        this.tradeAvailableItems.push(...items);
+        for (const item of items) {
+            if (item.tradeType === 1) {
+                this.addTradeItems(this.tradeAvailableItems, [item], 0);
+                continue;
+            }
+
+            const index = this.tradeAvailableItems.findIndex(entry => entry.objectId === item.objectId);
+
+            if (index < 0) continue;
+
+            if (item.tradeType === 3) this.tradeAvailableItems[index] = item;
+            else this.tradeAvailableItems.splice(index, 1);
+        }
+
+        this.ui.setTradeItems(0, this.tradeAvailableItems, null);
     }
 
     protected onSendTradeRequest(packet: PacketReader) {
@@ -1152,6 +1397,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (senderId <= 0 || packet.getRemaining()) throw new Error("Invalid SendTradeRequest payload.");
 
+        const sender = this.objects.get(senderId);
+
+        if (!sender) {
+            this.game.answerTradeRequest(false);
+            return;
+        }
+
+        this.ui.showTradeInvite(sender.name, isAccepted => this.answerTradeRequest(isAccepted));
         this.tradeRequestId = senderId;
     }
 
@@ -1161,6 +1414,69 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (packet.getRemaining()) throw new Error("Invalid SendTradeDone payload.");
 
         this.tradeDone = result;
+        this.tradePartnerId = 0;
+        this.tradeRequestId = 0;
+        this.tradeAvailableItems.length = 0;
+        this.tradeOwnItems.length = 0;
+        this.tradeOtherItems.length = 0;
+        this.ui.finishTrade();
+    }
+
+    protected onWareHouseDone(packet: PacketReader) {
+        const result = packet.d();
+
+        if (packet.getRemaining()) throw new Error("Invalid WareHouseDone payload.");
+        if (result !== 0) return;
+
+        const strings = this.ui.getStrings();
+
+        this.ui.addSystemMessage(strings.systemMessages[307], strings.systemMessageColors[307]);
+        this.playSystemMessageSound(307);
+    }
+
+    protected onShopPreviewInfo(packet: PacketReader) {
+        this.shopPreviewItems = readShopPreviewInfo(packet);
+        const object = this.objects.get(this.userId), appearance = this.appearances.get(this.userId);
+
+        if (!object || !object.actor || !appearance) return;
+
+        const paperdoll = appearance.paperdoll;
+        const slots = [Paperdoll_T.PAPERDOLL_HEAD, Paperdoll_T.PAPERDOLL_RHAND, Paperdoll_T.PAPERDOLL_LHAND, Paperdoll_T.PAPERDOLL_GLOVES, Paperdoll_T.PAPERDOLL_FEET, Paperdoll_T.PAPERDOLL_LEGS, Paperdoll_T.PAPERDOLL_CHEST, Paperdoll_T.PAPERDOLL_UNDER, Paperdoll_T.PAPERDOLL_LRHAND, Paperdoll_T.PAPERDOLL_HAIR];
+
+        for (const slot of slots) {
+            const itemId = this.shopPreviewItems[slot];
+
+            if (!itemId) continue;
+
+            switch (slot) {
+                case Paperdoll_T.PAPERDOLL_RHAND:
+                case Paperdoll_T.PAPERDOLL_LHAND:
+                    if (paperdoll[Paperdoll_T.PAPERDOLL_LRHAND]) {
+                        paperdoll[Paperdoll_T.PAPERDOLL_LRHAND] = 0;
+                        paperdoll[slot === Paperdoll_T.PAPERDOLL_RHAND ? Paperdoll_T.PAPERDOLL_LHAND : Paperdoll_T.PAPERDOLL_RHAND] = 0;
+                    }
+                    break;
+                case Paperdoll_T.PAPERDOLL_GLOVES:
+                case Paperdoll_T.PAPERDOLL_FEET:
+                case Paperdoll_T.PAPERDOLL_LEGS: {
+                    const chest = paperdoll[Paperdoll_T.PAPERDOLL_CHEST];
+                    const bodyPart = chest > 0 ? this.ui.getStrings().itemInfos[chest].bodyPart : 0;
+
+                    if (bodyPart === CHARACTER_ALLDRESS_SLOT) {
+                        paperdoll[Paperdoll_T.PAPERDOLL_GLOVES] = paperdoll[Paperdoll_T.PAPERDOLL_FEET] = 0;
+                        if (slot !== Paperdoll_T.PAPERDOLL_LEGS) paperdoll[Paperdoll_T.PAPERDOLL_CHEST] = 0;
+                    } else if (slot === Paperdoll_T.PAPERDOLL_LEGS && bodyPart === CHARACTER_FULL_ARMOR_SLOT) paperdoll[Paperdoll_T.PAPERDOLL_CHEST] = 0;
+                    break;
+                }
+                case Paperdoll_T.PAPERDOLL_LRHAND:
+                    paperdoll[Paperdoll_T.PAPERDOLL_RHAND] = paperdoll[Paperdoll_T.PAPERDOLL_LHAND] = 0;
+                    break;
+            }
+            if (slot === Paperdoll_T.PAPERDOLL_RHAND || slot === Paperdoll_T.PAPERDOLL_LRHAND) appearance.enchantLevel = 0;
+            paperdoll[slot] = itemId;
+        }
+        object.appearanceKey = this.getAppearanceKey(appearance);
+        this.userAppearanceLoad = this.loadAppearance(appearance, object.actor);
     }
 
     protected onEquipUpdate(packet: PacketReader) {
@@ -1235,15 +1551,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (objectId <= 0 || (isOpen !== 0 && isOpen !== 1) || damage < 0 || (showHp !== 0 && showHp !== 1) || doorId <= 0 || maxHp < 0 || currentHp < 0 || currentHp > maxHp || packet.getRemaining())
             throw new Error("Invalid DoorStatusUpdate payload.");
 
-        const mover = this.doors.get(objectId) || this.manGame.getComponent("render").findMovableByRealId(doorId);
+        const mover = this.doors.get(objectId);
         if (!mover) return;
 
-        this.doors.set(objectId, mover);
         mover.setPosition(isOpen === 0 ? 1 : 0);
     }
 
-    protected updateInventory(showWindow: boolean = false) {
-        this.ui.setInventory([...this.inventory.values()], showWindow);
+    protected updateInventory(showWindow: boolean = false, isFull: boolean = false) {
+        this.ui.setInventory([...this.inventory.values()], showWindow, isFull);
 
         for (const shortcut of this.shortcuts.values())
             if (shortcut.type === ShortCutType_T.TYPE_ITEM) this.setShortCut(shortcut);
@@ -1290,6 +1605,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.aquireSkillFishing = fishing !== 0;
         this.aquireSkills = skills;
+        this.ui.showAquireSkillList(skills, fishing);
     }
 
     protected onAquireSkillInfo(packet: PacketReader) {
@@ -1302,6 +1618,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (packet.getRemaining()) throw new Error("Invalid AquireSkillInfo trailing data.");
 
         this.aquireSkillInfo = { id, level, spCost, mode, requirements };
+        this.ui.showAquireSkillInfo(this.aquireSkillInfo);
     }
 
     protected onAquireSkillDone(packet: PacketReader) {
@@ -1309,6 +1626,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.aquireSkills = [];
         this.aquireSkillInfo = null;
+        this.ui.hideTrainWnd();
     }
 
     protected onQuestList(packet: PacketReader) {
@@ -1317,17 +1635,29 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (count > Math.trunc(packet.getRemaining() / 8)) throw new Error(`Invalid QuestList count ${count}.`);
 
         this.questStates.clear();
+        const states: QuestState_T[] = [];
+
         for (let i = 0; i < count; i++) {
             const id = packet.d(), condition = packet.d();
+            const state = { id, condition };
 
-            this.questStates.set(id, { id, condition });
+            this.questStates.set(id, state);
+            states.push(state);
         }
+        if (packet.getRemaining()) {
+            const itemCount = packet.h();
+
+            if (itemCount > Math.trunc(packet.getRemaining() / 16)) throw new Error(`Invalid QuestList item count ${itemCount}.`);
+            packet.skip(itemCount * 16);
+        }
+        if (packet.getRemaining()) throw new Error("Invalid QuestList trailing data.");
+        this.ui.setQuestStates(states);
     }
 
     protected onHennaInfo(packet: PacketReader) {
         const stats: number[] = [];
 
-        for (let i = 0; i < 6; i++) stats.push(packet.c());
+        for (let i = 0; i < 6; i++) stats.push(packet.c() << 24 >> 24);
 
         const slots = packet.d(), count = packet.d();
 
@@ -1337,41 +1667,62 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         for (let i = 0; i < count; i++) symbols.push({ symbolId: packet.d(), itemId: packet.d() });
 
         this.hennaStatus = { stats, slots, symbols };
+        this.ui.setHenna(this.hennaStatus);
     }
 
     protected onSendMacroList(packet: PacketReader) {
-        const revision = packet.d();
+        const type = packet.c(), id = packet.d(), total = packet.c(), count = packet.c();
+        const macros: Macro_T[] = [];
 
-        packet.c();
+        if (total > 127 || count > 100) throw new Error(`Invalid SendMacroList count ${total}:${count}.`);
 
-        packet.c();
+        for (let i = 0; i < count; i++) {
+            const id = packet.d(), name = packet.S(), description = packet.S(), acronym = packet.S(), icon = packet.c(), commandCount = packet.c();
 
-        const hasMacro = packet.c();
+            if (commandCount > 12) throw new Error(`Invalid macro command count ${commandCount}.`);
 
-        if (hasMacro > 1) throw new Error(`Invalid SendMacroList macro flag ${hasMacro}.`);
-        const isNewRevision = revision !== this.macroRevision;
+            const commands = [];
+            for (let j = 0; j < commandCount; j++) commands.push({ index: packet.c(), type: packet.c(), data1: packet.d(), data2: packet.c(), command: packet.S() });
 
-        if (!hasMacro) {
-            if (isNewRevision) this.macros.clear();
-            this.macroRevision = revision;
-            return;
+            macros.push({ id, name, description, acronym, icon, commands });
         }
 
-        const id = packet.d(), name = packet.S(), description = packet.S(), acronym = packet.S(), icon = packet.c(), commandCount = packet.c();
+        if (packet.getRemaining() || total > 0 && count === 0) throw new Error(`Invalid SendMacroList payload.`);
 
-        if (commandCount > Math.trunc(packet.getRemaining() / 9)) throw new Error(`Invalid SendMacroList command count ${commandCount}.`);
+        if (this.isMacroListComplete) {
+            this.macros.clear();
+            this.macroExecutions.clear();
+            this.macroListReceived = 0;
+            this.isMacroListComplete = false;
+        }
 
-        const commands = [];
-        for (let i = 0; i < commandCount; i++) commands.push({ index: packet.c(), type: packet.c(), data1: packet.d(), data2: packet.c(), command: packet.S() });
+        for (const macro of macros) {
+            this.macros.set(macro.id, macro);
+            this.macroListReceived++;
+        }
 
-        if (isNewRevision) this.macros.clear();
-        this.macroRevision = revision;
-        this.macros.set(id, { id, name, description, acronym, icon, commands });
+        if (this.macroListReceived < total) return;
+
+        this.isMacroListComplete = true;
+        this.ui.setMacros(Array.from(this.macros.values()));
+        for (const shortcut of this.shortcuts.values()) {
+            if (shortcut.type !== ShortCutType_T.TYPE_MACRO) continue;
+
+            if (type === 0 && shortcut.id === id) this.deleteShortCut(Math.trunc(shortcut.slot / 12), shortcut.slot % 12);
+            else if (type === 2 && shortcut.id === id) this.setShortCut(shortcut);
+        }
     }
 
     protected onEtcStatusUpdate(packet: PacketReader) {
-        // FL2NetNotify::OnReceiveEtcStatus is a retail nullsub.
         this.etcStatus = { charges: packet.d(), weightPenalty: packet.d(), messageRefusal: packet.d(), dangerArea: packet.d(), expertisePenalty: packet.d() };
+
+        const effects: AbnormalStatus_T[] = [];
+        const levels = [this.etcStatus.charges, this.etcStatus.weightPenalty, this.etcStatus.messageRefusal, this.etcStatus.dangerArea, this.etcStatus.expertisePenalty];
+
+        levels.forEach((value, i) => {
+            if (value > 0) effects.push({ id: 4271 - i, level: i < 2 ? value : 1, duration: -1 });
+        });
+        this.ui.setSecondaryAbnormalStatus(effects);
     }
 
     protected onSignsSky(packet: PacketReader) {
@@ -1385,18 +1736,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected onShowBoard(packet: PacketReader) {
         const part = readShowBoard(packet);
 
-        if (!part.show) {
-            this.boardHtml = "";
-            this.ui.hideHtml();
-            return;
-        }
-
-        if (part.id === "101") this.boardHtml = part.html;
-        else if (part.id === "102" || part.id === "103") this.boardHtml += part.html;
-        else if (part.id === "1001") this.boardHtml = part.html;
-        else return;
-
-        this.ui.showHtml(this.boardHtml);
+        this.ui.setBoard(part);
     }
 
     protected readPartyMember(packet: PacketReader, hasUnknown: boolean): PartyMember_T {
@@ -1499,7 +1839,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected onAskJoinParty(packet: PacketReader) {
         const name = packet.S(), itemDistribution = packet.d();
 
-        if (!name || itemDistribution < 0 || packet.getRemaining()) throw new Error("Invalid AskJoinParty payload.");
+        if (!name || itemDistribution < 0 || itemDistribution > 4 || packet.getRemaining()) throw new Error("Invalid AskJoinParty payload.");
 
         const invite: PartyInvite_T = { name, itemDistribution };
         this.partyInvite = invite;
@@ -1508,7 +1848,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             this.partyInvite = null;
             this.game.answerJoinParty(isAccepted);
-        });
+        }, itemDistribution);
     }
 
     protected onJoinParty(packet: PacketReader) {
@@ -1562,7 +1902,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const objectId = packet.d();
 
-        return { name, level, classId, objectId, isOnline: objectId !== 0 };
+        return { name, level, classId, objectId, isOnline: objectId > 0 };
     }
 
     protected readClanMemberUpdate(packet: PacketReader): ClanMember_T {
@@ -1571,37 +1911,47 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         packet.d();
         packet.d();
         member.objectId = packet.d();
-        member.isOnline = member.objectId !== 0;
+        member.isOnline = member.objectId > 0;
 
         return member;
+    }
+
+    protected updateGMCharacterInfo() {
+        if (!this.gmCharacterInfo) return;
+
+        const clanId = this.gmCharacterInfo.clanId;
+        const clan = clanId > 0 ? this.pledgeInfos.get(clanId) : null;
+
+        this.ui.setGMCharacterInfo(this.gmCharacterInfo, clan ? { clanId, name: clan.name, crestId: clan.crestId } : null);
     }
 
     protected onPledgeInfo(packet: PacketReader) {
         const clanId = packet.d(), name = packet.S(), allyName = packet.S();
 
-        if (!name) throw new Error("Invalid PledgeInfo clan name.");
         if (packet.getRemaining()) throw new Error("Invalid PledgeInfo trailing data.");
+        const info = this.pledgeInfos.get(clanId);
 
-        if (this.clanInfo) {
-            this.clanInfo.clanId = clanId;
-            this.clanInfo.name = name;
-            this.clanInfo.allyName = allyName;
-        } else this.clanInfo = { leaderId: 0, clanId, name, leaderName: "", crestId: 0, level: 0, hasCastle: 0, hasHideout: 0, memberLevel: 0, dissolving: 0, allyId: 0, allyName, allyCrestId: 0, isAtWar: false };
+        if (clanId > 0 && info) { info.name = name; info.allyName = allyName; this.updateGMCharacterInfo(); }
     }
 
     protected onPledgeStatusChanged(packet: PacketReader) {
-        const leaderId = packet.d(), clanId = packet.d(), crestId = packet.d(), allyId = packet.d(), allyCrestId = packet.d();
+        const objectId = packet.d(), clanId = packet.d(), crestId = packet.d(), allyId = packet.d(), allyCrestId = packet.d();
+        const unknown = packet.getRemaining() === 4 ? packet.d() : 0; // Retail 0x10428ad0 reads six DWORDs; Lisvus sends five.
 
-        if (leaderId < 0 || clanId < 0 || crestId < 0 || allyId < 0 || allyCrestId < 0 || packet.getRemaining()) throw new Error("Invalid PledgeStatusChanged payload.");
+        if (objectId < 0 || clanId < 0 || crestId < 0 || allyId < 0 || allyCrestId < 0 || packet.getRemaining()) throw new Error("Invalid PledgeStatusChanged payload.");
+        const user = this.objects.get(objectId);
 
-        if (!this.clanInfo) this.clanInfo = { leaderId, clanId, name: "", leaderName: "", crestId, level: 0, hasCastle: 0, hasHideout: 0, memberLevel: 0, dissolving: 0, allyId, allyName: "", allyCrestId, isAtWar: false };
-        else {
-            this.clanInfo.leaderId = leaderId;
-            this.clanInfo.clanId = clanId;
-            this.clanInfo.crestId = crestId;
-            this.clanInfo.allyId = allyId;
-            this.clanInfo.allyCrestId = allyCrestId;
-        }
+        if (!user || clanId <= 0) return;
+
+        user.clanId = clanId;
+        user.clanCrestId = crestId;
+        user.allyId = allyId;
+        user.allyCrestId = allyCrestId;
+        const info = this.pledgeInfos.get(clanId);
+
+        this.pledgeInfos.set(clanId, { name: info ? info.name : "", allyName: info ? info.allyName : "", crestId, allyId, allyCrestId, unknown });
+        this.updateGMCharacterInfo();
+        this.ui.setPledgeStatus(objectId, clanId);
     }
 
     protected onPledgeShowInfoUpdate(packet: PacketReader) {
@@ -1621,6 +1971,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const current = this.clanInfo;
 
         this.clanInfo = { leaderId: current?.leaderId || 0, clanId, name: current?.name || "", leaderName: current?.leaderName || "", crestId, level, hasCastle, hasHideout, memberLevel, dissolving, allyId, allyName, allyCrestId, isAtWar: isAtWar !== 0 };
+        this.ui.setClan(this.clanInfo);
     }
 
     protected onPledgeShowMemberListAll(packet: PacketReader) {
@@ -1641,8 +1992,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListAll trailing data.");
 
         this.clanInfo = { leaderId: 0, clanId, name, leaderName, crestId, level, hasCastle, hasHideout, memberLevel, dissolving, allyId, allyName, allyCrestId, isAtWar };
+        this.pledgeInfos.set(clanId, { name, allyName, crestId, allyId, allyCrestId, unknown: 0 });
+        this.updateGMCharacterInfo();
         this.clanMembers.clear();
-        for (const member of members) this.clanMembers.set(member.name, member);
+        this.ui.setClan(this.clanInfo);
+        this.ui.clearClanMembers();
+        for (const member of members) {
+            this.clanMembers.set(member.name, member);
+            this.ui.addClanMember(member);
+        }
     }
 
     protected onPledgeShowMemberListUpdate(packet: PacketReader) {
@@ -1650,6 +2008,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListUpdate trailing data.");
         this.setClanMember(member);
+        this.ui.updateClanMember(member);
     }
 
     protected onPledgeShowMemberListAdd(packet: PacketReader) {
@@ -1657,6 +2016,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListAdd trailing data.");
         this.setClanMember(member);
+        this.ui.addClanMember(member);
     }
 
     protected setClanMember(member: ClanMember_T) {
@@ -1669,6 +2029,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!name || packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListDelete payload.");
         this.clanMembers.delete(name);
+        this.ui.deleteClanMember(name);
     }
 
     protected onPledgeShowMemberListDeleteAll(packet: PacketReader) {
@@ -1676,6 +2037,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.clanMembers.clear();
         this.clanInfo = null;
+        this.ui.clearClanMembers();
+        this.ui.setClan(null);
     }
 
     protected onChooseInventoryItem(packet: PacketReader) {
@@ -1728,33 +2091,25 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected onMagicEffectIcons(packet: PacketReader) {
-        const count = packet.h();
+        const count = packet.h() << 16 >> 16;
 
         if (count > Math.trunc(packet.getRemaining() / 10)) throw new Error(`Invalid MagicEffectIcons count ${count}.`);
 
-        this.abnormalStatuses.clear();
+        this.abnormalStatuses.length = 0;
         for (let i = 0; i < count; i++) {
-            const effect = { id: packet.d(), level: packet.h(), duration: packet.d() };
+            const effect = { id: packet.d(), level: packet.h() << 16 >> 16, duration: packet.d() };
 
-            this.abnormalStatuses.set(`${effect.id}:${effect.level}`, effect);
+            this.abnormalStatuses.push(effect);
         }
 
-        this.updateAbnormalStatus();
+        this.ui.setAbnormalStatus(this.abnormalStatuses.slice(0, 31));
     }
 
     protected onShortBuffStatusUpdate(packet: PacketReader) {
         const id = packet.d(), level = packet.d(), duration = packet.d();
 
-        this.shortBuff = id || level || duration ? { id, level, duration } : null;
-
-        this.updateAbnormalStatus();
-    }
-
-    protected updateAbnormalStatus() {
-        const effects = [...this.abnormalStatuses.values()];
-
-        if (this.shortBuff) effects.push(this.shortBuff);
-        this.ui.setAbnormalStatus(effects);
+        this.shortBuff = { id, level, duration };
+        this.ui.setShortBuff(this.shortBuff);
     }
 
     protected onSkillCoolTime(packet: PacketReader) {
@@ -1766,17 +2121,73 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public requestSkillList() { if (this.inWorld) this.game.requestSkillList(); }
-    public useSkill(id: number) {
+    public useSkill(id: number, ctrl: boolean = false, shift: boolean = false) {
         const skill = this.skills.get(id);
 
-        if (this.inWorld && skill && !skill.isPassive) this.game.requestMagicSkillUse(id, false, false);
+        if (this.inWorld && skill) this.game.requestMagicSkillUse(id, ctrl, shift);
     }
-    public useAction(id: number) { if (this.inWorld) this.game.requestActionUse(id, false, false); }
+    public useAction(id: number, ctrl: boolean = false, shift: boolean = false) {
+        if (!this.inWorld) return;
+
+        switch (id) {
+            case 2: {
+                if (this.nextTargetLock) break; // NWindow 0x10071c06, Engine bNextTargetLock.
+
+                const targetId = this.targetId;
+
+                if (this.objects.has(targetId) || this.pickups.has(targetId)) {
+                    const position = this.manGame.getComponent("render").player.position;
+
+                    if (ctrl) this.game.attackRequest(targetId, position, shift);
+                    else this.game.action(targetId, position, shift);
+                }
+                break;
+            }
+            case 3: {
+                const target = this.objects.get(this.targetId);
+
+                if (target && target.actor) this.requestTrade(target.objectId);
+                break;
+            }
+            case 4: {
+                const selected = this.objects.get(this.targetId);
+                const next = this.getNextEnemy(200, selected && selected.actor ? selected.objectId : -1);
+
+                if (next) {
+                    this.nextTargetLock = true;
+                    this.game.action(next.objectId, this.manGame.getComponent("render").player.position, shift);
+                }
+                break;
+            }
+            case 5: {
+                const item = this.getNearestItem(200, -1);
+
+                if (item) this.game.action(item.objectId, this.manGame.getComponent("render").player.position, shift);
+                break;
+            }
+            case 6: {
+                const target = this.objects.get(this.targetId);
+
+                if (target && target.actor && (this.objects.has(target.selectedId) || this.pickups.has(target.selectedId)))
+                    this.game.action(target.selectedId, this.manGame.getComponent("render").player.position, shift);
+                break;
+            }
+            case 10: this.requestPrivateStoreManageSell(); break;
+            case 18: {
+                const item = this.petInfo ? this.getNearestItem(200, -1, this.petInfo.objectId) : null;
+
+                if (item) this.game.requestPetGetItem(item.objectId);
+                break;
+            }
+            case 28: this.requestPrivateStoreManageBuy(); break;
+            default: this.game.requestActionUse(id, ctrl, shift); break;
+        }
+    }
     public requestRestart() { if (this.inWorld) this.game.requestRestart(); }
     public logout() { if (this.inWorld) this.game.logout(); }
 
     public requestItemList() { if (this.inWorld) this.game.requestItemList(); }
-    public useItem(objectId: number) { if (this.inWorld && this.inventory.has(objectId)) this.game.useItem(objectId); }
+    public useItem(objectId: number) { if (this.inWorld) this.game.useItem(objectId, this.ui.getInputModifiers()[0]); }
     public chooseInventoryItem(objectId: number) { if (this.inWorld && this.inventory.has(objectId)) this.game.requestEnchantItem(objectId); }
 
     protected onUserInfo(packet: PacketReader) {
@@ -1794,12 +2205,17 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             object.appearanceKey = this.getAppearanceKey(this.characters[this.selectedSlot]);
         }
 
+        this.objects.delete(info.objectId);
+        this.objects.set(info.objectId, object);
+        object.isAttackable = false;
+
         this.userId = info.objectId;
         this.appearances.set(info.objectId, { ...info, paperdoll: info.paperdoll.slice() });
         object.heading = info.heading;
         setVector(object.position, info);
         object.name = info.name;
         object.title = info.title;
+        object.clanId = info.clanId;
         object.curHp = info.curHp;
         object.maxHp = info.maxHp;
         object.curMp = info.curMp;
@@ -1814,6 +2230,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.cubics = info.cubics;
         object.isRunning = this.isRunning;
 
+        player.setUnrealScriptProperty("bNpc", false);
         this.applySpeeds(player, info, this.isRunning);
         player.setRotationYaw(info.heading);
 
@@ -1825,6 +2242,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.updateCubics(object);
         this.isMounted = info.mountType !== 0;
         this.updateMountable();
+        this.ui.setInventoryOrderOwner(info.name, this.inventoryOrderNamespace);
         this.ui.setStatus(info);
         this.ui.setClan(this.clanInfo);
 
@@ -1856,6 +2274,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         let object = this.objects.get(info.objectId);
 
         if (object) {
+            this.objects.delete(info.objectId);
+            this.objects.set(info.objectId, object);
+            object.isAttackable = false;
+
             const wasDead = object.isDead;
             object.heading = info.heading;
             this.adjustPawnLocation(object, info);
@@ -1932,7 +2354,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected onPetInfo(packet: PacketReader) {
         const info = readPetInfo(packet);
 
-        this.petInfo = info;
+        Object.assign(this.petInfo, info, { name: info.name || this.ui.getStrings().npcNames[info.npcId] });
+        this.ui.setPetRenameAvailable(info.name.length === 0);
+        this.ui.setPetInfo(this.petInfo);
         this.updateMountable();
         const object = this.setNpc(info);
 
@@ -1941,9 +2365,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.curMp = info.curMp;
         object.maxMp = info.maxMp;
         if (object.objectId === this.targetId) this.updateTarget();
+        if (info.spawnType === 0 || info.spawnType === 2) this.ui.showPetStatus(info.statusType);
     }
 
-    protected updateMountable() { this.ui.setMountable(this.isMounted || !!this.petInfo && this.petInfo.isMountable); }
+    protected updateMountable() { this.ui.setMountable(this.isMounted || this.petInfo.objectId >= 0 && this.petInfo.isMountable); }
 
     protected readPetInventoryItem(packet: PacketReader, allowZeroCount: boolean = false): InventoryItem_T {
         const item = { type1: packet.h(), objectId: packet.d(), itemId: packet.d(), count: packet.d(), type2: packet.h(), customType1: packet.h(), isEquipped: packet.h() !== 0, bodyPart: packet.d(), enchantLevel: packet.h(), customType2: packet.h() };
@@ -1964,6 +2389,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.petInventory.clear();
         for (const item of items) this.petInventory.set(item.objectId, item);
+        this.ui.setPetInventory(Array.from(this.petInventory.values()), true);
     }
 
     protected onPetInventoryUpdate(packet: PacketReader) {
@@ -1981,7 +2407,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         for (const change of changes) {
             if (change.change === 3) this.petInventory.delete(change.item.objectId);
-            else this.petInventory.set(change.item.objectId, change.item);
+            else if (change.change === 1 || this.petInventory.has(change.item.objectId)) this.petInventory.set(change.item.objectId, change.item);
+            if (change.change !== 1) this.updatePetShortCutItem(change.item.objectId);
+        }
+        this.ui.setPetInventory(Array.from(this.petInventory.values()));
+    }
+
+    protected updatePetShortCutItem(objectId: number) {
+        for (const shortcut of this.shortcuts.values()) {
+            if (shortcut.type !== ShortCutType_T.TYPE_ITEM || shortcut.id !== objectId) continue;
+            if (this.petInventory.has(shortcut.id)) this.setShortCut(shortcut);
+            else {
+                this.shortcuts.delete(shortcut.slot);
+                this.ui.removeShortCut(shortcut.slot);
+            }
         }
     }
 
@@ -1990,28 +2429,39 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (summonType < 0 || packet.getRemaining()) throw new Error("Invalid PetStatusShow payload.");
         this.petStatusType = summonType;
+        this.ui.setPetInfo(this.petInfo);
+        this.ui.showPet(summonType);
+    }
+
+    protected onPetDelete(packet: PacketReader) { // Engine 0x103fefd0.
+        const statusType = packet.d(), objectId = packet.d();
+
+        this.ui.hidePet();
+        Object.assign(this.petInfo, { statusType, objectId: -1, x: 0, y: 0, z: 0 });
+        this.updateMountable();
+        this.removeObject(objectId);
     }
 
     protected onSetSummonRemainTime(packet: PacketReader) {
         const maxTime = packet.d(), remainingTime = packet.d();
 
-        if (maxTime < 0 || remainingTime < 0 || remainingTime > maxTime || packet.getRemaining()) throw new Error("Invalid SetSummonRemainTime payload.");
+        if (packet.getRemaining()) throw new Error("Invalid SetSummonRemainTime payload.");
 
         this.petRemainTime = { maxTime, remainingTime };
+        this.ui.setSummonRemainTime(maxTime, remainingTime);
     }
 
     protected onPetStatusUpdate(packet: PacketReader) {
-        packet.d();
+        const statusType = packet.d(), objectId = packet.d(), x = packet.d(), y = packet.d(), z = packet.d();
 
-        const objectId = packet.d();
-
-        packet.skip(3 * 4);
         packet.S();
-        packet.skip(2 * 4);
 
+        const curFood = packet.d(), maxFood = packet.d();
         const curHp = packet.d(), maxHp = packet.d(), curMp = packet.d(), maxMp = packet.d();
+        const level = packet.d(), exp = packet.d(), minExp = packet.d(), nextExp = packet.d();
 
-        packet.skip(4 * 4);
+        Object.assign(this.petInfo, { statusType, objectId, x, y, z, curFood, maxFood, curHp, maxHp, curMp, maxMp, level, exp, minExp, nextExp }); // Engine 0x103fecfb..0x103feda6.
+        this.ui.setPetInfo(this.petInfo);
 
         const object = this.objects.get(objectId);
 
@@ -2037,6 +2487,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             object.isInCombat = info.isInCombat;
             object.isDead = info.isAlikeDead;
             object.isSummon = info.isSummon;
+            object.isAttackable = info.isAttackable;
             object.speeds = info;
 
             if (object.actor) {
@@ -2054,6 +2505,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const created = this.createObject(info.objectId, "npc", info);
 
         created.isSummon = info.isSummon;
+        created.isAttackable = info.isAttackable;
 
         void this.spawnNpc(created, info.npcId, info);
 
@@ -2104,6 +2556,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected attachActor(object: NetObject_T, actor: BaseActor, info: CreatureInfo_T) {
         object.actor = actor;
 
+        actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
         this.applySpeeds(actor, info, info.isRunning);
         this.setIdleAnimation(object);
         actor.setRotationYaw(object.heading);
@@ -2169,6 +2622,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             const animation = (actor.getUnrealScriptProperty("PicItemAnimName") as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
 
             if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnGetItem 0x7455a9..0x7455f3.
+            this.notifyMacroCommand([14], 1);
         }
 
         this.removeObject(objectId);
@@ -2177,8 +2631,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected removeObject(objectId: number) {
         const wasTarget = objectId === this.targetId;
 
-        if (this.petInfo && this.petInfo.objectId === objectId) {
-            this.petInfo = null;
+        if (this.petInfo.objectId === objectId) {
+            Object.assign(this.petInfo, { objectId: -1, x: 0, y: 0, z: 0 });
             this.updateMountable();
         }
 
@@ -2419,6 +2873,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const isTransient = CUBIC_SKILLS.has(id) || this.ui.getStrings().skillCastStyles[`${id}:${level}`] === 0;
 
         if (!caster || hitTime < 0) return;
+
+        if (caster.actor === this.manGame.getComponent("render").player && !caster.isDead && (target ? target.actor : this.doors.has(targetObjectId)) && this.ui.getStrings().skillInfos[`${id}:${level}`])
+            this.notifyMacroSkill(id, hitTime);
 
         if (!caster.actor || !target || !target.actor) {
             if (!isTransient) this.stopSkill(caster.objectId);
@@ -2824,12 +3281,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const object = this.objects.get(packet.d());
 
         packet.d();
-        packet.d();
+        const isAttackable = packet.d() !== 0;
         const karma = packet.d();
         const pvpFlag = packet.d();
 
         if (!object) return;
 
+        object.isAttackable = isAttackable;
         object.karma = karma;
         object.pvpFlag = pvpFlag;
         if (object.objectId === this.targetId) this.updateTarget();
@@ -2868,7 +3326,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.ui.showConfirm(message.id, message.text, isOk => this.game.dlgAnswer(message.id, isOk));
     }
 
-    protected playSystemMessageSound(id: number) {
+    public playSystemMessageSound(id: number) {
         const sound = this.ui.getStrings().systemMessageSounds[id];
 
         if (sound) void this.manGame.getComponent("audio").playInterfaceSound(sound);
@@ -2900,11 +3358,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return { id: messageId, text };
     }
 
-    protected setShortCut(shortcut: ShortCut_T) {
-        this.shortcuts.set(shortcut.slot, shortcut);
-        const item = this.inventory.get(shortcut.id);
+    protected getShortCutItem(shortcut: ShortCut_T) { return (shortcut.characterType === 2 ? this.petInventory : this.inventory).get(shortcut.id); }
 
-        this.ui.setShortCut(shortcut, item, !!item && this.autoSoulShots.has(item.itemId));
+    protected setShortCut(shortcut: ShortCut_T) {
+        const item = this.getShortCutItem(shortcut);
+
+        if (shortcut.type === ShortCutType_T.TYPE_ITEM && shortcut.characterType === 2 && !item) return;
+        this.shortcuts.set(shortcut.slot, shortcut);
+        this.ui.setShortCut(shortcut, item, !!item && this.autoSoulShots.has(item.itemId), this.macros.get(shortcut.id));
     }
 
     protected onAutoSoulShot(packet: PacketReader) {
@@ -2916,7 +3377,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         for (const shortcut of this.shortcuts.values()) {
             if (shortcut.type !== ShortCutType_T.TYPE_ITEM) continue;
 
-            const item = this.inventory.get(shortcut.id);
+            const item = this.getShortCutItem(shortcut);
 
             if (item && item.itemId === itemId) this.setShortCut(shortcut);
         }
@@ -2929,6 +3390,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.storageMaxCount = { inventory: values[0], warehouse: values[1], freight: values[2], privateSell: values[3], privateBuy: values[4], recipeDwarf: values[5], recipe: values[6] };
         this.ui.setInventoryLimit(values[0]);
+        this.ui.setWarehouseLimit(values[1]);
+        this.ui.setPrivateSellLimit(values[3]);
+        this.ui.setPrivateBuyLimit(values[4]);
+        this.ui.setRecipeLimits(values[5], values[6]);
     }
 
     public toggleAutoSoulShot(page: number, slot: number) {
@@ -2936,7 +3401,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!this.inWorld || !shortcut || shortcut.type !== ShortCutType_T.TYPE_ITEM) return;
 
-        const item = this.inventory.get(shortcut.id);
+        const item = this.getShortCutItem(shortcut);
 
         if (!item) return;
 
@@ -2948,39 +3413,84 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.game.requestAutoSoulShot(id, !this.autoSoulShots.has(id));
     }
 
+    protected requestShortCutReg(type: ShortCutType_T, index: number, id: number, level: number = 1) { // NWindow 0x1007a1e0 plays pickup after registration.
+        this.game.requestShortCutReg(type, index, id, level);
+        void this.manGame.getComponent("audio").playInterfaceSound("ItemSound.pickup");
+    }
+
     public registerSkillShortCut(id: number, page: number, slot: number) {
         const skill = this.skills.get(id);
 
-        if (!this.inWorld || !skill || skill.isPassive) return;
+        if (!this.inWorld || !skill) return;
         if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
 
-        this.game.requestShortCutReg(ShortCutType_T.TYPE_SKILL, page * 12 + slot, id);
+        this.requestShortCutReg(ShortCutType_T.TYPE_SKILL, page * 12 + slot, id);
+    }
+
+    public registerRecipeShortCut(id: number, page: number, slot: number) {
+        if (!this.inWorld) return;
+        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
+
+        this.requestShortCutReg(ShortCutType_T.TYPE_RECIPE, page * 12 + slot, id);
+    }
+
+    public registerMacroShortCut(id: number, page: number, slot: number) {
+        if (!this.inWorld || !this.macros.has(id)) return;
+        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
+
+        this.requestShortCutReg(ShortCutType_T.TYPE_MACRO, page * 12 + slot, id);
     }
 
     public registerItemShortCut(objectId: number, page: number, slot: number) {
         if (!this.inWorld || !this.inventory.has(objectId)) return;
         if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
 
-        this.game.requestShortCutReg(ShortCutType_T.TYPE_ITEM, page * 12 + slot, objectId);
+        this.requestShortCutReg(ShortCutType_T.TYPE_ITEM, page * 12 + slot, objectId);
+    }
+
+    public registerPetItemShortCut(objectId: number, page: number, slot: number) {
+        if (!this.inWorld || !this.petInventory.has(objectId)) return;
+        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
+
+        this.requestShortCutReg(ShortCutType_T.TYPE_ITEM, page * 12 + slot, objectId, 2);
     }
 
     public registerActionShortCut(id: number, page: number, slot: number) {
         if (!this.inWorld || !this.ui.getStrings().actions[id]) return;
         if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
 
-        this.game.requestShortCutReg(ShortCutType_T.TYPE_ACTION, page * 12 + slot, id);
+        this.requestShortCutReg(ShortCutType_T.TYPE_ACTION, page * 12 + slot, id, id >= 0 && id <= 14 ? 1 : id >= 15 && id <= 27 ? 2 : 0);
     }
 
-    public useShortCut(page: number, slot: number) {
+    public moveShortCut(page: number, slot: number, targetPage: number, targetSlot: number) {
+        const index = page * 12 + slot, targetIndex = targetPage * 12 + targetSlot;
+        const source = this.shortcuts.get(index), target = this.shortcuts.get(targetIndex);
+
+        if (!this.inWorld || !source || index === targetIndex) return;
+        if (![page, targetPage].every(value => Number.isInteger(value) && value >= 0 && value < 10) || ![slot, targetSlot].every(value => Number.isInteger(value) && value >= 0 && value < 12)) throw new Error(`Invalid shortcut move ${page}:${slot} -> ${targetPage}:${targetSlot}.`);
+
+        this.requestShortCutReg(source.type, targetIndex, source.id);
+        this.game.requestShortCutDel(index);
+        this.shortcuts.delete(index);
+        this.ui.removeShortCut(index);
+
+        if (target) this.requestShortCutReg(target.type, index, target.id);
+    }
+
+    public useShortCut(page: number, slot: number, ctrl: boolean = false, shift: boolean = false) {
         const shortcut = this.shortcuts.get(page * 12 + slot);
 
         if (!shortcut) return;
 
         switch (shortcut.type) {
-            case ShortCutType_T.TYPE_SKILL: this.game.requestMagicSkillUse(shortcut.id, false, false); break;
-            case ShortCutType_T.TYPE_ACTION: this.game.requestActionUse(shortcut.id, false, false); break;
-            case ShortCutType_T.TYPE_ITEM: this.useItem(shortcut.id); break;
-            case ShortCutType_T.TYPE_MACRO: case ShortCutType_T.TYPE_RECIPE: break; // TODO: macros and recipes need the macro list / recipe book windows.
+            case ShortCutType_T.TYPE_SKILL: this.game.requestMagicSkillUse(shortcut.id, ctrl, shift); break;
+            case ShortCutType_T.TYPE_ACTION: this.useAction(shortcut.id, ctrl, shift); break;
+            case ShortCutType_T.TYPE_ITEM:
+                if (shortcut.characterType === 2) this.usePetItem(shortcut.id);
+                else if ((shortcut.characterType ?? 1) === 1) this.useItem(shortcut.id);
+                break;
+            case ShortCutType_T.TYPE_MACRO: this.activateMacro(shortcut.id); break;
+            case ShortCutType_T.TYPE_RECIPE: this.game.requestRecipeItemMakeInfo(shortcut.id); break;
             default: throw new Error(`Unknown shortcut type ${shortcut.type}.`);
         }
     }
@@ -3002,17 +3512,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected onManagePledgePower(packet: PacketReader) {
-        const unknown1 = packet.d(), unknown2 = packet.d(), privs = packet.d();
+        packet.skip(8);
+        const privs = packet.b(32);
 
-        if (unknown1 !== 0 || unknown2 !== 0 || privs < 0 || packet.getRemaining()) throw new Error(`Invalid ManagePledgePower payload (privs ${privs}).`);
+        if (packet.getRemaining()) throw new Error("Invalid ManagePledgePower trailing data.");
 
         this.pledgePower = privs;
+        this.ui.setPledgePower(privs);
     }
 
     protected onPledgeCrest(packet: PacketReader) {
         const crest = readCrest(packet);
 
         this.pledgeCrests.set(crest.crestId, crest.data);
+        this.ui.setPledgeCrest(crest.crestId, crest.data);
     }
 
     protected onAllyCrest(packet: PacketReader) {
@@ -3046,6 +3559,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public getPledgePower() { return this.pledgePower; }
+    public getClanInfo() { return this.clanInfo; }
     public getPledgeCrest(crestId: number) { return this.pledgeCrests.get(crestId); }
     public getPledgeLargeCrest(crestId: number) { return this.pledgeLargeCrests.get(crestId); }
     public getClanLargeCrestId(clanId: number) { return this.clanLargeCrestIds.get(clanId); }
@@ -3053,12 +3567,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public requestPledgeInfo(clanId: number) { if (this.inWorld) this.game.requestPledgeInfo(clanId); }
     public requestPledgeMemberList() { if (this.inWorld) this.game.requestPledgeMemberList(); }
+    public getSelectedPlayer() { const target = this.objects.get(this.targetId); return target && (target.kind === "user" || target.kind === "player") ? target : null; }
+    public invitePledge(objectId: number) { if (this.inWorld) this.game.requestJoinPledge(objectId); }
     public withdrawPledge() { if (this.inWorld) this.game.requestWithdrawalPledge(); }
     public oustPledgeMember(name: string) { if (this.inWorld) this.game.requestOustPledgeMember(name); }
     public giveNickName(name: string, title: string) { if (this.inWorld) this.game.requestGiveNickName(name, title); }
     public requestPledgePower() { if (this.inWorld) this.game.requestPledgePower(this.userId); }
     public requestMemberPledgePower(objectId: number) { if (this.inWorld) this.game.requestMemberPledgePower(objectId); }
-    public setMemberPledgePower(objectId: number, privs: number) { if (this.inWorld) this.game.setMemberPledgePower(objectId, privs); }
+    public setMemberPledgePower(objectId: number, privs: Uint8Array) { if (this.inWorld) this.game.setMemberPledgePower(objectId, privs); }
 
     public startPledgeWar(pledgeName: string) { if (this.inWorld) this.game.requestStartPledgeWar(pledgeName); }
     public stopPledgeWar(pledgeName: string) { if (this.inWorld) this.game.requestStopPledgeWar(pledgeName); }
@@ -3117,6 +3633,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (list.playerId !== this.userId) throw new Error(`PrivateStoreManageListSell for foreign player '${list.playerId}'.`);
 
         this.privateStoreManageSell = list;
+        this.ui.showPrivateStoreManageSell(list);
     }
 
     protected onPrivateStoreManageListBuy(packet: PacketReader) {
@@ -3125,6 +3642,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (list.playerId !== this.userId) throw new Error(`PrivateStoreManageListBuy for foreign player '${list.playerId}'.`);
 
         this.privateStoreManageBuy = list;
+        this.ui.showPrivateStoreManageBuy(list);
     }
 
     protected onPrivateStoreMsg(packet: PacketReader, messages: Map<number, string>) {
@@ -3140,25 +3658,43 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.packageTargets.clear();
         for (const target of targets) this.packageTargets.set(target.objectId, target.name);
+        this.ui.showPackageTargets(targets);
     }
 
     protected onMultiSellList(packet: PacketReader) {
         const list = readMultiSellList(packet);
 
-        if (list.page === 1) {
-            this.multiSell = list;
-            return;
+        if (list.page === 1 || !this.multiSell) this.multiSell = { ...list, listId: list.page === 1 ? list.listId : 0, entries: [] };
+        if (list.page === 1) this.ui.clearMultiSell(list.listId);
+
+        for (const entry of list.entries) {
+            let group = this.multiSell.entries.find(group => group.entryId === entry.entryId);
+
+            entry.products.forEach((product, index) => {
+                if (!group) {
+                    group = { entryId: entry.entryId, mode: entry.mode, products: [], ingredients: [] };
+                    this.multiSell.entries.push(group);
+                }
+                group.products.length++;
+                group.products[index] = product;
+                group.mode = entry.mode;
+            });
+            if (group) group.ingredients.push(...entry.ingredients);
         }
-
-        if (!this.multiSell || this.multiSell.listId !== list.listId || list.page !== this.multiSell.page + 1) throw new Error(`Unexpected MultiSellList page ${list.page} for list ${list.listId}.`);
-
         this.multiSell.page = list.page;
         this.multiSell.isFinished = list.isFinished;
-        this.multiSell.entries.push(...list.entries);
+        if (list.isFinished) this.ui.showMultiSell(this.multiSell);
+
     }
 
     public requestTrade(objectId: number) { if (this.inWorld) this.game.tradeRequest(objectId); }
-    public addTradeItem(objectId: number, count: number) { if (this.inWorld && this.tradePartnerId && this.inventory.has(objectId)) this.game.addTradeItem(this.tradePartnerId, objectId, count); }
+    public canAddTradeItem(objectId: number) { return this.inWorld && this.tradePartnerId > 0 && this.tradeAvailableItems.some(item => item.objectId === objectId) && !this.tradeOwnItems.some(item => item.objectId === objectId); }
+    public addTradeItem(objectId: number, count: number) {
+        if (!this.canAddTradeItem(objectId)) return;
+        if (!Number.isInteger(count) || count <= 0 || count > 0x7fffffff) throw new Error(`Invalid trade item count '${count}'.`);
+
+        this.game.addTradeItem(objectId, count);
+    }
     public confirmTrade(isConfirmed: boolean) { if (this.inWorld && this.tradePartnerId) this.game.tradeDone(isConfirmed); }
 
     public answerTradeRequest(isAccepted: boolean) {
@@ -3169,32 +3705,47 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public sellItems(items: SellItemRequest_T[]) { if (this.inWorld) this.game.requestSellItem(this.shopSellNpcId, items); }
-    public buyItems(items: ItemIdCount_T[]) { if (this.inWorld && this.shopBuyListId) this.game.requestBuyItem(this.shopBuyListId, items); }
+    public buyItems(items: ItemIdCount_T[]) { if (this.inWorld) this.game.requestBuyItem(this.shopBuyListId, items); }
     public depositWarehouse(items: ItemCount_T[]) { if (this.inWorld && this.warehouseDeposit) this.game.sendWareHouseDepositList(items); }
     public withdrawWarehouse(items: ItemCount_T[]) { if (this.inWorld && this.warehouseWithdraw) this.game.sendWareHouseWithDrawList(items); }
     public requestPrivateStoreManageSell() { if (this.inWorld) this.game.requestPrivateStoreManageSell(); }
     public setPrivateStoreListSell(isPackage: boolean, items: PrivateStoreOffer_T[]) { if (this.inWorld) this.game.setPrivateStoreListSell(isPackage, items); }
     public quitPrivateStoreSell() { if (this.inWorld) this.game.requestPrivateStoreQuitSell(); }
     public setPrivateStoreMsgSell(message: string) { if (this.inWorld) this.game.setPrivateStoreMsgSell(message); }
-    public buyFromPrivateStore(items: PrivateStoreOffer_T[]) { if (this.inWorld && this.privateStoreSell) this.game.requestPrivateStoreBuy(this.privateStoreSell.storePlayerId, items); }
+    public getPrivateStoreMsgSell() { return this.privateStoreSellMsgs.get(this.userId) ?? ""; }
+    public buyFromPrivateStore(ownerId: number, items: PrivateStoreOffer_T[]) { if (this.inWorld) this.game.requestPrivateStoreBuy(ownerId, items); }
     public requestPrivateStoreManageBuy() { if (this.inWorld) this.game.requestPrivateStoreManageBuy(); }
     public setPrivateStoreListBuy(items: PrivateStoreBuyOffer_T[]) { if (this.inWorld) this.game.setPrivateStoreListBuy(items); }
     public quitPrivateStoreBuy() { if (this.inWorld) this.game.requestPrivateStoreQuitBuy(); }
+    public cancelPrivateStoreManageBuy() { if (this.inWorld) this.game.requestPrivateStoreManageCancelBuy(); }
     public setPrivateStoreMsgBuy(message: string) { if (this.inWorld) this.game.setPrivateStoreMsgBuy(message); }
-    public sellToPrivateStore(items: PrivateStoreSellOffer_T[]) { if (this.inWorld && this.privateStoreBuy) this.game.requestPrivateStoreSell(this.privateStoreBuy.storePlayerId, items); }
-    public requestPackageSendableItemList(objectId: number) { if (this.inWorld && this.packageTargets.has(objectId)) this.game.requestPackageSendableItemList(objectId); }
-    public sendPackage(items: ItemCount_T[]) { if (this.inWorld && this.packageSendable) this.game.requestPackageSend(this.packageSendable.targetId, items); }
-    public chooseMultiSell(entryId: number, amount: number) { if (this.inWorld && this.multiSell) this.game.multiSellChoose(this.multiSell.listId, entryId, amount); }
-    public requestPreviewItems(itemIds: number[]) { if (this.inWorld && this.shopPreview) this.game.requestPreviewItem(this.shopPreview.listId, itemIds); }
-    public buySeeds(items: ItemIdCount_T[]) { if (this.inWorld && this.seedShop) this.game.requestBuySeed(this.seedShop.manorId, items); }
-    public sellCrops(items: SellItemRequest_T[]) { if (this.inWorld && this.cropProcure) this.game.requestBuyProcure(this.cropProcure.listId, items); }
-    public dropItem(objectId: number, count: number, point: Location_T) { if (this.inWorld && this.inventory.has(objectId)) this.game.requestDropItem(objectId, count, point); }
-    public destroyItem(objectId: number, count: number) { if (this.inWorld && this.inventory.has(objectId)) this.game.requestDestroyItem(objectId, count); }
-    public crystallizeItem(objectId: number, count: number) { if (this.inWorld && this.inventory.has(objectId)) this.game.requestCrystallizeItem(objectId, count); }
+    public getPrivateStoreMsgBuy() { return this.privateStoreBuyMsgs.get(this.userId) ?? ""; }
+    public sellToPrivateStore(ownerId: number, items: PrivateStoreSellOffer_T[]) { if (this.inWorld) this.game.requestPrivateStoreSell(ownerId, items); }
+    public requestPackageSendableItemList(objectId: number) { if (this.inWorld) this.game.requestPackageSendableItemList(objectId); }
+    public sendPackage(objectId: number, items: ItemCount_T[]) { if (this.inWorld) this.game.requestPackageSend(objectId, items); }
+    public clearMultiSell() { if (this.multiSell) { this.multiSell.entries = []; this.multiSell.listId = 0; } }
+    public chooseMultiSell(listId: number, entryId: number, amount: number) { if (this.inWorld) this.game.multiSellChoose(listId, entryId, amount); }
+    public requestPreviewItems(itemIds: number[]) { if (this.inWorld && this.shopPreview) this.game.requestPreviewItem(this.shopPreview.unknown, this.shopPreview.listId, itemIds); }
+    public buySeeds(items: ItemIdCount_T[], manorId?: number) { if (this.inWorld && this.seedShop) this.game.requestBuySeed(manorId ?? this.seedShop.manorId, items); }
+    public sellCrops(items: SellItemRequest_T[], listId?: number) { if (this.inWorld && this.cropProcure) this.game.requestBuyProcure(listId ?? this.cropProcure.listId, items); }
+    public dropItem(objectId: number, count: number, point: Location_T) { // NCGaraDialogBox kind4 reply 0x100097bd.
+        if (!this.inWorld) return;
+
+        const player = this.manGame.getComponent("render").player;
+
+        if (player.getUnrealScriptProperty("bGetOnVehicle")) {
+            this.ui.addSystemMessage(this.ui.nwindow.getSystemMessage(179), 0xffdcdcdc);
+            return;
+        }
+
+        this.game.requestDropItem(objectId, count, point);
+    }
+    public destroyItem(objectId: number, count: number) { if (this.inWorld) this.game.requestDestroyItem(objectId, count); }
+    public crystallizeItem(objectId: number, count: number) { if (this.inWorld) this.game.requestCrystallizeItem(objectId, count); }
     public unequipBodyPart(bodyPart: number) { if (this.inWorld) this.game.requestUnEquipItem(bodyPart); }
-    public giveItemToPet(objectId: number, count: number) { if (this.inWorld && this.inventory.has(objectId)) this.game.requestGiveItemToPet(objectId, count); }
-    public getItemFromPet(objectId: number, count: number) { if (this.inWorld && this.petInventory.has(objectId)) this.game.requestGetItemFromPet(objectId, count); }
-    public usePetItem(objectId: number) { if (this.inWorld && this.petInventory.has(objectId)) this.game.requestPetUseItem(objectId); }
+    public giveItemToPet(objectId: number, count: number) { if (this.inWorld) this.game.requestGiveItemToPet(objectId, count); }
+    public getItemFromPet(objectId: number, count: number) { if (this.inWorld) this.game.requestGetItemFromPet(objectId, count); }
+    public usePetItem(objectId: number) { if (this.inWorld) this.game.requestPetUseItem(objectId); }
     public petPickup(objectId: number) { if (this.inWorld && this.pickups.has(objectId)) this.game.requestPetGetItem(objectId); }
     public changePetName(name: string) { if (this.inWorld) this.game.requestChangePetName(name); }
 
@@ -3281,6 +3832,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!vehicle) return;
 
+        this.withActor(rider.objectId, actor => actor.setUnrealScriptProperty("bGetOnVehicle", true)); // FL2NetNotify 0x104760e2.
         this.setVehicleRider(vehicle, rider.objectId, rider);
         this.placeVehicleRider(vehicle, rider.objectId);
     }
@@ -3293,6 +3845,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (vehicle) vehicle.riders.delete(rider.objectId);
         if (!object) return;
 
+        if (object.actor) object.actor.setUnrealScriptProperty("bGetOnVehicle", false); // FL2NetNotify 0x10476264.
         setVector(object.position, rider);
         object.destination = null;
 
@@ -3465,6 +4018,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const spelled = readPartySpelled(packet);
 
         this.partyEffects.set(spelled.objectId, spelled);
+        this.ui.setPetStatusEffects(spelled);
     }
 
     protected onSnoop(packet: PacketReader) {
@@ -3484,6 +4038,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getHennaEquipList() { return this.hennaEquipList; }
     public getHennaItemInfo() { return this.hennaItemInfo; }
     public getPartyMatchRooms() { return this.partyMatchRooms; }
+    public getPartyMatchPage() { return this.partyMatchPage; }
     public getPartyMatchDetail() { return this.partyMatchDetail; }
     public getPartyEffects(objectId: number) { return this.partyEffects.get(objectId); }
     public getTutorialQuestionMarks() { return this.tutorialQuestionMarks; }
@@ -3494,20 +4049,27 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public destroyRecipe(recipeId: number) { if (this.inWorld) this.game.requestRecipeBookDestroy(recipeId); }
     public requestRecipeItemMakeInfo(recipeId: number) { if (this.inWorld) this.game.requestRecipeItemMakeInfo(recipeId); }
     public makeRecipeItem(recipeId: number) { if (this.inWorld) this.game.requestRecipeItemMakeSelf(recipeId); }
+    public requestRecipeShopManage() { if (this.inWorld) this.game.requestRecipeShopManageList(); }
+    public getOwnRecipeShopMessage() { return this.recipeShopMessages.get(this.userId) ?? ""; }
     public setRecipeShopMessage(name: string) { if (this.inWorld) this.game.requestRecipeShopMessageSet(name); }
     public setRecipeShopList(items: RecipeShopListEntry_T[]) { if (this.inWorld) this.game.requestRecipeShopListSet(items); }
     public quitRecipeShopManage() { if (this.inWorld) this.game.requestRecipeShopManageQuit(); }
+    public cancelRecipeShopManage() { if (this.inWorld) this.game.requestRecipeShopManageCancel(); }
     public requestRecipeShopMakeInfo(objectId: number, recipeId: number) { if (this.inWorld) this.game.requestRecipeShopMakeInfo(objectId, recipeId); }
-    public makeRecipeShopItem(objectId: number, recipeId: number) { if (this.inWorld) this.game.requestRecipeShopMakeItem(objectId, recipeId, 0); }
-    public recipeShopManagePrev() { if (this.inWorld) this.game.requestRecipeShopManagePrev(); }
+    public makeRecipeShopItem(objectId: number, recipeId: number, price: number) { if (this.inWorld) this.game.requestRecipeShopMakeItem(objectId, recipeId, price); }
+    public recipeShopManagePrev(objectId: number) { if (this.inWorld) this.game.requestRecipeShopManagePrev(objectId); }
 
     public requestHennaList() { if (this.inWorld) this.game.requestHennaList(0); }
     public requestHennaItemInfo(symbolId: number) { if (this.inWorld) this.game.requestHennaItemInfo(symbolId); }
     public equipHenna(symbolId: number) { if (this.inWorld) this.game.requestHennaEquip(symbolId); }
+    public requestHennaUnequipList() { if (this.inWorld) this.game.requestHennaUnequipList(0); } // TODO: Capture the retail BD trailing DWORD; 103fa8b0 supplies no vararg.
+    public requestHennaUnequipInfo(symbolId: number) { if (this.inWorld) this.game.requestHennaUnequipInfo(symbolId); }
+    public unequipHenna(symbolId: number) { if (this.inWorld) this.game.requestHennaUnequip(symbolId); }
 
-    public requestPartyMatchConfig(auto: number, location: number, limit: number) { if (this.inWorld) this.game.requestPartyMatchConfig(auto, location, limit); }
+    public requestPartyMatchConfig(page: number, location: number, limit: number) { if (this.inWorld) this.game.requestPartyMatchConfig(page, location, limit); }
     public requestPartyMatchList(roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string) { if (this.inWorld) this.game.requestPartyMatchList(roomId, maxMembers, minLevel, maxLevel, lootType, title); } // Creates (roomId 0) or edits a party room.
-    public requestPartyMatchDetail(roomId: number) { if (this.inWorld) this.game.requestPartyMatchDetail(roomId, 0); }
+    public requestPartyMatchDetail(roomId: number, location = 0) { if (this.inWorld) this.game.requestPartyMatchDetail(roomId, location); }
+    public inviteToParty(name: string, lootType: number) { if (this.inWorld) this.game.requestJoinParty(name, lootType); }
     public withdrawParty() { if (this.inWorld) this.game.requestWithDrawalParty(); }
     public oustPartyMember(name: string) { if (this.inWorld) this.game.requestOustPartyMember(name); }
 
@@ -3540,7 +4102,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public sendFriendMessage(receiver: string, message: string) { if (this.inWorld) this.game.requestSendFriendMsg(message, receiver); }
 
     public requestQuestList() { if (this.inWorld) this.game.requestQuestList(); }
-    public abortQuest(questId: number) { if (this.inWorld && this.questStates.has(questId)) this.game.requestQuestAbort(questId); }
+    public abortQuest(questId: number) { if (this.inWorld) this.game.requestQuestAbort(questId); }
 
     public makeMacro(macro: Macro_T) {
         if (!this.inWorld) return;
@@ -3551,19 +4113,243 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public deleteMacro(id: number) { if (this.inWorld && this.macros.has(id)) this.game.requestDeleteMacro(id); }
 
+    public activateMacro(id: number) { // NWindow 0x10074e00 / 0x100a994c.
+        const macro = this.macros.get(id);
+
+        if (!this.inWorld || !macro) return;
+
+        let execution = this.macroExecutions.get(id);
+
+        if (!execution) {
+            const rows: MacroRow_T[] = new Array(macro.commands.length);
+
+            for (const command of macro.commands) {
+                const index = command.index > 0 ? command.index - 1 : command.index;
+
+                if (index < 0 || index >= rows.length) throw new Error(`Invalid macro row index ${command.index}.`);
+                rows[index] = { command, duration: 0, start: 0, elapsed: 0 };
+            }
+
+            for (let i = 0; i < rows.length; i++)
+                if (!rows[i]) throw new Error(`Macro ${id} has an uninitialized row ${i}.`);
+
+            execution = { macro, rows, active: false, current: 0 };
+            this.macroExecutions.set(id, execution);
+        }
+
+        execution.active = true;
+    }
+
+    public resetMacros() { // NWindow 0x100a76c0.
+        for (const execution of this.macroExecutions.values()) {
+            if (!execution.active) continue;
+
+            execution.active = false;
+            execution.current = 0;
+            for (const row of execution.rows) row.duration = row.start = row.elapsed = 0;
+        }
+    }
+
+    protected getMacroCommandType(text: string): number {
+        if (text[0] !== "/" && text[0] !== "／") return 0x20000000;
+
+        const tokens = getCommandTokens(text);
+        const entry = Object.entries(this.ui.getStrings().commands).find(([, name]) => `/${name.toLowerCase()}` === tokens[0].toLowerCase());
+
+        return entry ? Number(entry[0]) : -1;
+    }
+
+    protected executeMacroRow(execution: MacroExecution_T) { // NWindow 0x100a7f80.
+        const row = execution.rows[execution.current], command = row.command;
+        const [ctrl, shift] = this.ui.getInputModifiers();
+        const player = this.manGame.getComponent("render").player;
+        let animation = -1;
+
+        switch (command.type) {
+            case 1: this.game.requestMagicSkillUse(command.data1, ctrl, shift); return;
+            case 2: {
+                const actions: Record<number, number> = { 12: 2, 13: 3, 14: 4, 24: 6, 25: 5, 26: 7, 29: 8, 30: 9, 31: 10, 33: 11, 34: 12, 35: 13 };
+
+                animation = command.data1 === 0 ? this.objects.get(this.userId).waitType === WaitType_T.WT_SITTING ? 0 : 1 : actions[command.data1] ?? -1;
+                break;
+            }
+            case 3: {
+                this.ui.sendMacroText(command.command);
+
+                const type = this.getMacroCommandType(command.command);
+                const actions: Record<number, number> = { 4: 0, 5: 1, 21: 2, 22: 3, 23: 4, 46: 5, 47: 6, 48: 7, 49: 8, 50: 9, 51: 10, 54: 11, 55: 12, 56: 13 };
+                const next = execution.rows[execution.current + 1];
+
+                if (type === 0x20000000 && next && next.command.type === 3 && this.getMacroCommandType(next.command.command) === 0x20000000)
+                    row.duration = Math.fround(command.command.length * Math.fround(0.2));
+
+                if (type === 28 || type === 29) {
+                    const tokens = getCommandTokens(command.command), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
+
+                    if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12 && this.shortcuts.get((page - 1) * 12 + slot - 1)?.type === ShortCutType_T.TYPE_MACRO) this.cancelRecursiveMacro();
+                }
+
+                animation = type === 57 ? this.objects.get(this.userId).waitType === WaitType_T.WT_SITTING ? 0 : 1 : actions[type] ?? -1;
+                break;
+            }
+            case 4: {
+                if (command.data1 < 0 || command.data1 > 9 || command.data2 < 0 || command.data2 > 11) return;
+
+                this.useShortCut(command.data1, command.data2, ctrl, shift);
+                if (this.shortcuts.get(command.data1 * 12 + command.data2)?.type === ShortCutType_T.TYPE_MACRO) this.cancelRecursiveMacro();
+                return;
+            }
+            case 5: debugger; throw new Error(`Macro item row has no initialized retail object ID.`);
+            case 6: row.duration = Math.fround(command.data1); return;
+            default: throw new Error(`Unknown macro row type ${command.type}.`);
+        }
+
+        const duration = player.getSocialAnimDuration(animation);
+
+        if (duration > 0) row.duration = Math.fround(duration);
+    }
+
+    protected cancelRecursiveMacro() {
+        for (const execution of this.macroExecutions.values()) execution.active = false;
+        this.ui.showNotice(1339); // NWindow 0x10075990, dialog kind 31.
+        this.playSystemMessageSound(1339);
+    }
+
+    protected getActiveMacroRow(): MacroRow_T {
+        for (const id of this.macros.keys()) {
+            const execution = this.macroExecutions.get(id);
+
+            if (execution && execution.active) return execution.rows[execution.current];
+        }
+
+        return null;
+    }
+
+    protected notifyMacroCommand(types: number[], duration: number) {
+        const row = this.getActiveMacroRow();
+
+        if (row && row.command.type === 3 && types.includes(this.getMacroCommandType(row.command.command))) row.duration = duration;
+    }
+
+    protected notifyMacroSkill(id: number, hitTime: number) { // NWindow 0x100a8850.
+        const row = this.getActiveMacroRow();
+
+        if (!row) return;
+
+        const command = row.command;
+        let skillId: number;
+
+        if (command.type === 1) skillId = command.data1;
+        else if (command.type === 4) {
+            if (command.data1 < 0 || command.data1 > 9 || command.data2 < 0 || command.data2 > 11) return;
+            skillId = this.shortcuts.get(command.data1 * 12 + command.data2)?.id;
+        } else if (command.type === 3) {
+            const type = this.getMacroCommandType(command.command), tokens = getCommandTokens(command.command);
+
+            if (type === 25 || type === 26) skillId = this.ui.getStrings().skillCommands[tokens.slice(1).join(" ").toLowerCase()];
+            else if (type === 28 || type === 29) {
+                const page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
+
+                if (!(page >= 1 && page <= 10 && slot >= 1 && slot <= 12)) return;
+                skillId = this.shortcuts.get((page - 1) * 12 + slot - 1)?.id;
+            } else if (id !== 0) return;
+        } else return;
+
+        if (id && skillId !== id) return;
+        row.duration = Math.fround(Math.trunc(hitTime / 1000) + 1);
+    }
+
+    protected updateMacros(deltaTime: number) { // NWindow 0x100aaf60.
+        const delta = Math.fround(deltaTime / 1000);
+
+        for (const id of this.macros.keys()) {
+            const execution = this.macroExecutions.get(id);
+
+            if (!execution || !execution.active) continue;
+            if (execution.current >= execution.rows.length) { execution.active = false; execution.current = 0; continue; }
+
+            const row = execution.rows[execution.current], command = row.command;
+
+            if (execution.current === 0 && row.start === 0) {
+                row.start = row.elapsed = delta;
+                this.executeMacroRow(execution);
+                continue;
+            }
+
+            row.elapsed = Math.fround(row.elapsed + delta);
+            let canAdvance = command.type !== 1;
+
+            if (command.type === 4) {
+                const shortcut = this.shortcuts.get(command.data1 * 12 + command.data2);
+
+                if (shortcut && shortcut.type === ShortCutType_T.TYPE_MACRO) { execution.active = false; execution.current = 0; this.cancelRecursiveMacro(); continue; }
+                if (shortcut && shortcut.type === ShortCutType_T.TYPE_SKILL) canAdvance = false;
+            }
+            if (command.type === 3) {
+                const type = this.getMacroCommandType(command.command);
+
+                if ([24, 25, 26, 14, 12, 13, 15].includes(type)) canAdvance = false;
+                if (type === 12 || type === 13 || type === 15) {
+                    const selected = this.objects.get(this.targetId);
+                    let target: NetObject_T = null;
+
+                    if (type === 12) {
+                        const name = getCommandTokens(command.command).slice(1).join(" ").toLowerCase();
+
+                        for (const object of this.objects.values()) {
+                            if (object.name.toLowerCase() !== name) continue;
+                            target = object;
+                            if (!object.isSummon) break;
+                        }
+                    } else if (selected && selected.actor) target = type === 13 ? this.getNextEnemy(200, selected.objectId) : this.objects.get(selected.selectedId);
+
+                    if (selected && selected.actor && target && target.actor && selected.objectId === target.objectId)
+                        this.notifyMacroCommand([12, 13, 15], Math.fround(0.001));
+                }
+                if (type === 28 || type === 29) {
+                    const tokens = getCommandTokens(command.command), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
+                    const shortcut = page >= 1 && page <= 10 && slot >= 1 && slot <= 12 ? this.shortcuts.get((page - 1) * 12 + slot - 1) : null;
+
+                    if (shortcut && shortcut.type === ShortCutType_T.TYPE_MACRO) { execution.active = false; execution.current = 0; this.cancelRecursiveMacro(); continue; }
+                    if (shortcut && shortcut.type === ShortCutType_T.TYPE_SKILL) canAdvance = false;
+                }
+            }
+
+            if (!(row.duration > 0 && row.elapsed - row.start > row.duration) && !(canAdvance && row.duration === 0)) continue;
+
+            row.duration = row.start = row.elapsed = 0;
+            execution.current++;
+            if (execution.current >= execution.rows.length) continue;
+
+            const next = execution.rows[execution.current];
+
+            next.start = next.elapsed = delta;
+            this.executeMacroRow(execution);
+        }
+    }
+
     public block(type: BlockType_T, name: string = null) { if (this.inWorld) this.game.requestBlock(type, name); }
     public userCommand(id: number) { if (this.inWorld) this.game.requestUserCommand(id); }
     public evaluate(objectId: number) { if (this.inWorld) this.game.requestEvaluate(objectId); }
-    public showBoard() { if (this.inWorld) this.game.requestShowBoard(0); }
+    public showBoard() { if (this.inWorld) this.game.requestShowBoard(1); }
     public writeBoard(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { if (this.inWorld) this.game.requestBBSwrite(url, arg1, arg2, arg3, arg4, arg5); }
 
-    public requestAquireSkillInfo(id: number, level: number) { if (this.inWorld) this.game.requestAquireSkillInfo(id, level, this.aquireSkillFishing); }
-    public aquireSkill(id: number, level: number) { if (this.inWorld) this.game.requestAquireSkill(id, level, this.aquireSkillFishing); }
+    public requestAquireSkillInfo(id: number, level: number, mode = Number(this.aquireSkillFishing)) { if (this.inWorld) this.game.requestAquireSkillInfo(id, level, mode); }
+    public aquireSkill(id: number, level: number, mode = Number(this.aquireSkillFishing)) { if (this.inWorld) this.game.requestAquireSkill(id, level, mode); }
 
     public deleteShortCut(page: number, slot: number) {
         const index = page * 12 + slot;
 
         if (!this.inWorld || !this.shortcuts.has(index)) return;
+
+        const source = this.shortcuts.get(index);
+        const item = source.type === ShortCutType_T.TYPE_ITEM ? this.getShortCutItem(source) : null;
+
+        if (item && this.autoSoulShots.has(item.itemId)) {
+            const isKept = [...this.shortcuts.values()].some(shortcut => shortcut.slot !== index && shortcut.type === ShortCutType_T.TYPE_ITEM && this.getShortCutItem(shortcut)?.itemId === item.itemId);
+
+            if (!isKept) this.game.requestAutoSoulShot(item.itemId, false);
+        }
 
         this.game.requestShortCutDel(index);
         this.shortcuts.delete(index);
@@ -3586,7 +4372,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.partyRoomMode = room.mode;
         this.partyRoomMembers.clear();
-        for (const member of room.members) this.partyRoomMembers.set(member.objectId, member);
+        for (const member of room.members.slice(0, 20)) this.partyRoomMembers.set(member.objectId, member);
+        this.ui.setPartyRoomMembers(this.partyRoomMode, Array.from(this.partyRoomMembers.values()), true);
     }
 
     protected onManagePartyRoomMember(packet: PacketReader) {
@@ -3596,10 +4383,16 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         switch (mode) {
             case PartyRoomMemberChange_T.ADD:
-            case PartyRoomMemberChange_T.MODIFY: this.partyRoomMembers.set(member.objectId, member); break;
+                if (this.partyRoomMembers.size < 20) this.partyRoomMembers.set(member.objectId, member);
+                break;
+            case PartyRoomMemberChange_T.MODIFY:
+                if (this.partyRoomMembers.has(member.objectId)) this.partyRoomMembers.set(member.objectId, member);
+                break;
             case PartyRoomMemberChange_T.REMOVE: this.partyRoomMembers.delete(member.objectId); break;
             default: throw new Error(`Invalid ExManagePartyRoomMember mode ${mode}.`);
         }
+        if (member.objectId === this.userId) this.partyRoomMode = mode === PartyRoomMemberChange_T.REMOVE || mode === PartyRoomMemberChange_T.MODIFY && !this.partyRoomMembers.has(member.objectId) ? 0 : member.role;
+        this.ui.setPartyRoomMembers(this.partyRoomMode, Array.from(this.partyRoomMembers.values()), false);
     }
 
     protected onClosePartyRoom(packet: PacketReader) {
@@ -3607,6 +4400,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.partyRoomMode = -1;
         this.partyRoomMembers.clear();
+        this.ui.closePartyRoom();
     }
 
     protected onFishingStart(packet: PacketReader) {
@@ -3681,6 +4475,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (mode > 3 || packet.getRemaining()) throw new Error(`Invalid ExOlympiadMode ${mode}.`);
 
         this.olympiadMode = mode;
+        this.ui.setOlympiadMode(mode);
     }
 
     protected onOlympiadMatchEnd(packet: PacketReader) {
@@ -3726,6 +4521,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public onEngineTick(currentTime: number, deltaTime: number): void {
+        if (this.ui) this.ui.tick(deltaTime);
+
         if (this.resolveNextTick) {
             const resolve = this.resolveNextTick;
 
@@ -3736,6 +4533,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (this.lobby) this.lobby.tick(deltaTime);
         if (this.lobby && this.ui.isLobbyVisible()) this.ui.setPawnLabels(this.lobby.getPawnLabels(this.characters, this.ui.getScreenCanvas().width, this.ui.getScreenCanvas().height));
         if (!this.inWorld) return;
+
+        this.updateGNOManager(deltaTime);
+        this.updateMacros(deltaTime);
         this.updateVehicles(deltaTime);
 
         const player = this.manGame.getComponent("render").player;

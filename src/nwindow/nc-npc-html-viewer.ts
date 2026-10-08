@@ -20,36 +20,41 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
     public readonly element: HTMLDivElement;
     public onBypass: (command: string) => void = null;
     public onLink: (path: string) => void = null;
+    public onFile: (path: string) => void = null;
     public onClose: () => void = null;
     protected readonly layer: NDomLayer;
     protected readonly frame: HTMLDivElement;
     protected readonly viewer: NCHtmlViewer;
     protected titleText: HTMLCanvasElement = null;
+    protected readonly titleId: number;
 
-    public constructor(layer: NDomLayer) {
+    public constructor(layer: NDomLayer, height = HEIGHT, titleId = TITLE_SYSSTRING, background = TEX_BACK) {
         this.layer = layer;
+        this.titleId = titleId;
 
-        this.element = layer.createWindow(0, 0, WIDTH, HEIGHT);
+        this.element = layer.createWindow(0, 0, WIDTH, height);
         this.element.hidden = true;
-        layer.tile(this.element, 0, TITLE_HEIGHT, WIDTH, HEIGHT - TITLE_HEIGHT, 0, 0, WIDTH, HEIGHT - TITLE_HEIGHT, TEX_BACK);
+        layer.tile(this.element, 0, TITLE_HEIGHT, WIDTH, height - TITLE_HEIGHT, 0, 0, WIDTH, height - TITLE_HEIGHT, background);
 
         this.frame = layer.createWindow(0, 0, WIDTH, TITLE_HEIGHT, this.element); // NCFrameCtrl ctor(1,0,0) at (0,0,W,20), paint 0x10011caa..0x10011d14.
         layer.tile(this.frame, 0, 0, 16, TITLE_HEIGHT, 0, 0, 16, TITLE_HEIGHT, TEX_FRAME_LEFT);
         layer.tile(this.frame, 16, 0, WIDTH - 32, TITLE_HEIGHT, 0, 0, 32, TITLE_HEIGHT, TEX_FRAME_MID);
         layer.tile(this.frame, WIDTH - 16, 0, 16, TITLE_HEIGHT, 0, 0, 16, TITLE_HEIGHT, TEX_FRAME_RIGHT);
-        this.setTitle(layer.getManager().getSysString(TITLE_SYSSTRING));
+        this.setTitle(layer.getManager().getSysString(titleId));
 
         const close = layer.button(this.frame, WIDTH - 23, 3, 15, 15, TEX_CLOSE, TEX_CLOSE_DOWN, null, null, () => {
             this.hide();
 
             if (this.onClose) this.onClose();
         });
+        close.setAttribute("aria-label", "Close");
 
         this.frame.addEventListener("mousedown", event => { if (event.button === 0 && !close.contains(event.target as Node)) this.beginDrag(event); });
 
-        this.viewer = new NCHtmlViewer(layer, this.element, 7, 30, WIDTH - 14, HEIGHT - 37);
+        this.viewer = new NCHtmlViewer(layer, this.element, 7, 30, WIDTH - 14, height - 37);
         this.viewer.onBypass = command => { if (this.onBypass) this.onBypass(command); };
         this.viewer.onLink = path => { if (this.onLink) this.onLink(path); };
+        this.viewer.onFile = path => { if (this.onFile) this.onFile(path); };
         this.viewer.onHide = () => this.hide();
     }
 
@@ -74,9 +79,11 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
     public async show(html: string) {
         this.element.hidden = false;
         await this.viewer.setHtml(html);
-        this.setTitle(this.viewer.title || this.layer.getManager().getSysString(TITLE_SYSSTRING));
+        this.setTitle(this.viewer.title || this.layer.getManager().getSysString(this.titleId));
     }
 
+    public isVisible() { return !this.element.hidden; }
+    public tick(deltaSeconds: number) { this.viewer.tick(deltaSeconds); }
     public hide() { this.element.hidden = true; }
     public setVisible(isVisible: boolean) { this.element.hidden = !isVisible; }
 }

@@ -5,7 +5,7 @@ import type { NMouseEvent_T } from "./nwnd";
 import type AssetManager from "../assets/asset-manager";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
-type TextInputHandler_T = { onTextInput(text: string): void, onTextSubmit(text: string): void, onTextBlur(): void };
+type TextInputHandler_T = { onTextInput(text: string): void, onTextSubmit(text: string, isShift: boolean): void, onTextBlur(): void };
 
 export class NWindowManager {
     public readonly canvas: NWindowCanvas;
@@ -22,7 +22,7 @@ export class NWindowManager {
     protected isReady = false;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
-    public strings: GameStrings_T = { systemMessages: {}, systemMessageColors: {}, systemMessageSounds: {}, sysStrings: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
+    public strings: GameStrings_T = { systemMessages: {}, systemMessageColors: {}, systemMessageSounds: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
     public constructor(protected readonly asset: AssetManager) {
         this.canvas = new NWindowCanvas(asset);
@@ -35,10 +35,10 @@ export class NWindowManager {
         this.textInput.addEventListener("keydown", event => {
             event.stopPropagation();
 
-            if (event.key === "Enter" && this.textHandler) this.textHandler.onTextSubmit(this.textInput.value);
+            if (event.key === "Enter" && this.textHandler) this.textHandler.onTextSubmit(this.textInput.value, event.shiftKey);
             if (event.key === "Escape") this.textInput.blur();
         });
-        this.textInput.addEventListener("keyup", event => event.stopPropagation());
+        this.textInput.addEventListener("keyup", event => { event.stopPropagation(); this.invalidate(); });
         this.textInput.addEventListener("blur", () => {
             const handler = this.textHandler;
 
@@ -58,6 +58,7 @@ export class NWindowManager {
         window.addEventListener("mousemove", event => this.onMouse(event, "move"), true);
         window.addEventListener("blur", () => this.cancelMouse());
         window.addEventListener("click", event => { const target = event.target instanceof Element ? event.target : null; if (!target?.closest(".ndom-layer") && this.findClientWindow(event)) event.stopPropagation(); }, true);
+        window.addEventListener("contextmenu", event => { if (this.findClientWindow(event)) event.preventDefault(); }, true);
         window.addEventListener("wheel", event => {
             if (event.target instanceof Element && event.target.closest(".ndom-layer")) return;
 
@@ -112,7 +113,24 @@ export class NWindowManager {
     public removeWindow(wnd: NWnd) {
         const index = this.windows.indexOf(wnd);
 
-        if (index >= 0) this.windows.splice(index, 1);
+        if (index >= 0) {
+            function isRemoved(node: NWnd) {
+                while (node && node !== wnd) node = node.parent;
+
+                return node === wnd;
+            }
+
+            const pressed = this.pressed;
+
+            if (isRemoved(pressed) || isRemoved(this.dragged)) this.cancelMouse();
+            if (isRemoved(this.hovered)) {
+                if (this.hovered !== pressed) this.hovered.onMouseLeave();
+                this.hovered = null;
+            }
+
+            this.windows.splice(index, 1);
+            wnd.detach();
+        }
 
         this.invalidate();
     }
@@ -135,6 +153,12 @@ export class NWindowManager {
 
     public playPickupSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("ItemSound.pickup"); } // 0x10074e60(3), sound table 0x10242368.
 
+    public playTrashSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("itemsound.trash_basket"); } // 0x10074e60(4), sound table 0x10242368.
+
+    public playWindowSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("itemsound.window_open"); } // 0x10074e60(5), sound table 0x10242368.
+
+    public playWindowCloseSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("itemsound.window_close"); } // 0x10074e60(6), sound table 0x10242368.
+
     public beginDrag(wnd: NWnd, x: number, y: number) {
         this.dragged = wnd;
         this.dragOffsetX = x - wnd.x;
@@ -142,6 +166,10 @@ export class NWindowManager {
     }
 
     public focusText(owner: NWnd & TextInputHandler_T, value: string, isPassword: boolean, maxLength: number) {
+        const isOwnerChanged = this.textOwner !== owner;
+
+        if (isOwnerChanged && this.textHandler) this.blurText();
+
         this.textHandler = null;
         this.textOwner = owner;
         this.textInput.type = isPassword ? "password" : "text";
@@ -149,12 +177,21 @@ export class NWindowManager {
         this.textInput.value = value;
         this.textHandler = owner;
         this.textInput.focus();
+
+        if (isOwnerChanged) this.textInput.setSelectionRange(value.length, value.length);
+
         this.invalidate();
     }
 
     public blurText() { this.textInput.blur(); }
     public isTextFocused(owner: NWnd) { return this.textOwner === owner; }
-    public getCaretPosition() { return this.textInput.selectionStart || 0; }
+    public getCaretPosition() { return (this.textInput.selectionDirection === "backward" ? this.textInput.selectionEnd : this.textInput.selectionStart) || 0; }
+    public getSelectionStart() { return this.textInput.selectionStart || 0; }
+    public getSelectionEnd() { return this.textInput.selectionEnd || 0; }
+    public setTextSelection(start: number, end: number, direction: "forward" | "backward" = "forward") {
+        this.textInput.setSelectionRange(start, end, direction);
+        this.invalidate();
+    }
 
     public findWindow(x: number, y: number): NWnd {
         for (let i = this.windows.length - 1; i >= 0; i--) {
@@ -170,7 +207,7 @@ export class NWindowManager {
     public findClientWindow(event: MouseEvent): NWnd { return this.findWindow(this.canvas.toUI(event.clientX), this.canvas.toUI(event.clientY)); }
 
     protected toLocal(wnd: NWnd, event: MouseEvent): NMouseEvent_T {
-        return { x: this.canvas.toUI(event.clientX) - wnd.getScreenX(), y: this.canvas.toUI(event.clientY) - wnd.getScreenY(), button: event.button, shift: event.shiftKey, ctrl: event.ctrlKey };
+        return { x: this.canvas.toUI(event.clientX) - wnd.getScreenX(), y: this.canvas.toUI(event.clientY) - wnd.getScreenY(), button: event.button, shift: event.shiftKey, ctrl: event.ctrlKey, clickCount: event.detail, target: event.target };
     }
 
     protected onMouse(event: MouseEvent, type: "down" | "up" | "move") {
@@ -237,7 +274,7 @@ export class NWindowManager {
     }
 
     protected cancelMouse() {
-        if (this.pressed) this.pressed.onMouseLeave();
+        if (this.pressed) this.pressed.onMouseCancel();
 
         this.dragged = null;
         this.pressed = null;

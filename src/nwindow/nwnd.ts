@@ -1,7 +1,7 @@
 import type NWindowCanvas from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
 
-export type NMouseEvent_T = { x: number, y: number, button: number, shift: boolean, ctrl: boolean };
+export type NMouseEvent_T = { x: number, y: number, button: number, shift: boolean, ctrl: boolean, clickCount?: number, target?: EventTarget };
 
 export class NWnd {
     public x = 0;
@@ -39,6 +39,12 @@ export class NWnd {
         for (const child of this.children) child.attach(manager);
     }
 
+    public detach() {
+        for (const child of this.children) child.detach();
+
+        this.manager = null;
+    }
+
     public getScreenX(): number { return this.parent ? this.parent.getScreenX() + this.x : this.x; }
     public getScreenY(): number { return this.parent ? this.parent.getScreenY() + this.y : this.y; }
 
@@ -61,7 +67,7 @@ export class NWnd {
     public onPaint(_canvas: NWindowCanvas) { }
 
     public hitTest(x: number, y: number): NWnd {
-        if (!this.isVisible || x < 0 || y < 0 || x >= this.width || y >= this.height) return null;
+        if (!this.isVisible || x < 0 || y < 0 || x > this.width || y > this.height) return null;
 
         for (let i = this.children.length - 1; i >= 0; i--) {
             const child = this.children[i];
@@ -78,6 +84,7 @@ export class NWnd {
     public onMouseMove(_event: NMouseEvent_T) { }
     public onMouseEnter() { }
     public onMouseLeave() { }
+    public onMouseCancel() { this.onMouseLeave(); }
     public onClick(_event: NMouseEvent_T) { }
     public onWheel(_delta: number): boolean { return false; }
 }

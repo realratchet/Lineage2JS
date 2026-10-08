@@ -15,7 +15,7 @@ export type ClippingRangeConfig_T = {
 };
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
-export type GameConfig_T = { systemMsgWnd: boolean; transparencyMode: boolean; };
+export type GameConfig_T = { systemMsgWnd: boolean; transparencyMode: boolean; partyLooting: number; };
 export type UserConfig_T = { clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; };
 
 export class UConfigSystem extends BaseConfigFile {
@@ -41,7 +41,7 @@ export class UConfigSystem extends BaseConfigFile {
         gamma: 0.8
     };
 
-    public game: GameConfig_T = { systemMsgWnd: true, transparencyMode: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
+    public game: GameConfig_T = { systemMsgWnd: true, transparencyMode: true, partyLooting: 0 }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
     public readonly definedGameKeys = new Set<keyof GameConfig_T>();
 
     public async load(): Promise<this> {
@@ -53,13 +53,20 @@ export class UConfigSystem extends BaseConfigFile {
         this._loadSection(fileContents, "WinDrv.WindowsClient", this.display, this.definedDisplayKeys);
         this._loadSection(fileContents, "Video", this.display, this.definedDisplayKeys);
 
-        for (const [key, name] of [["systemMsgWnd", "SystemMsgWnd"], ["transparencyMode", "TransparencyMode"]] as [keyof GameConfig_T, string][]) {
+        for (const [key, name] of [["systemMsgWnd", "SystemMsgWnd"], ["transparencyMode", "TransparencyMode"]] as ["systemMsgWnd" | "transparencyMode", string][]) {
             const match = new RegExp(`\\[Game\\][^[]*?^\\s*${name}\\s*=\\s*(\\w+)`, "im").exec(fileContents);
 
             if (!match) continue;
 
             this.game[key] = match[1].toLowerCase() === "true";
             this.definedGameKeys.add(key);
+        }
+
+        const partyLooting = /\[Game\][^[]*?^\s*PartyLooting\s*=\s*([+-]?\d+)/im.exec(fileContents);
+
+        if (partyLooting) {
+            this.game.partyLooting = parseInt(partyLooting[1], 10);
+            this.definedGameKeys.add("partyLooting");
         }
 
         return this;
@@ -133,7 +140,7 @@ export async function getUserConfig(): Promise<UserConfig_T> {
         (defaults.display as any)[key] = (options.display as any)[key];
 
     for (const key of options.definedGameKeys)
-        defaults.game[key] = options.game[key];
+        (defaults.game as any)[key] = options.game[key];
 
     return { clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game };
 }

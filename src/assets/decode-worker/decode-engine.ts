@@ -37,6 +37,8 @@ import type { UMaterial } from "@l2js/engine/un-material";
 import type { USound } from "@l2js/engine/un-sound";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
 
+enum EPathStyle_T { PATHSTYLE_Linear, PATHSTYLE_Bezier }
+
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type CharacterBundle_T = {
     name: string;
@@ -1249,11 +1251,20 @@ export class DecodeEngine {
 
                 const action = ref.loadSelf(), point = (action.propertyDict.get("IntPoint") as UObject).loadSelf();
                 const location = point.propertyDict.get("Location") as any, rotation = point.propertyDict.get("Rotation") as any;
+                const start = action.propertyDict.get("StartControlPoint") as any, end = action.propertyDict.get("EndControlPoint") as any;
+                const pathStyle = action.constructor.friendlyName === "ActionMoveCamera" ? action.propertyDict.get("PathStyle") : EPathStyle_T.PATHSTYLE_Linear;
+
+                if (pathStyle !== EPathStyle_T.PATHSTYLE_Linear && pathStyle !== EPathStyle_T.PATHSTYLE_Bezier)
+                    throw new Error(`Unsupported Matinee path style ${pathStyle}.`);
 
                 actions.push({
                     action: action.constructor.friendlyName,
                     duration: action.propertyDict.get("Duration") as number,
-                    pathStyle: action.propertyDict.get("PathStyle") as number,
+                    pathStyle: pathStyle === EPathStyle_T.PATHSTYLE_Linear ? "linear" : "bezier",
+                    startControlPoint: [start.x, start.y, start.z],
+                    endControlPoint: [end.x, end.y, end.z],
+                    constantPathVelocity: action.propertyDict.get("bConstantPathVelocity") as boolean,
+                    pathVelocity: action.propertyDict.get("PathVelocity") as number,
                     location: [location.x, location.y, location.z],
                     rotation: [rotation.pitch, rotation.yaw, rotation.roll]
                 });
@@ -1309,7 +1320,7 @@ export class DecodeEngine {
     }
 
     public async decodeGameStrings(): Promise<GameStrings_T> {
-        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols] = await Promise.all([
+        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols, commands, npcNames, obscene, quests, residences, recipes, hennas] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_SYSTEMMSG_E_DAT, "assets/system/systemmsg-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SYSSTRING_E_DAT, "assets/system/sysstring-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SERVERNAME_E_DAT, "assets/system/servername-e.dat").asReadable()).decode(),
@@ -1321,15 +1332,22 @@ export class DecodeEngine {
             this.decodeWeaponGrp(),
             this.decodeArmorGrp(),
             this.decodeEtcItemGrp(),
-            (new UDataFile(SchemasC4.SCHEMA_SYMBOLNAME_E_DAT, "assets/system/symbolname-e.dat").asReadable()).decode()
+            (new UDataFile(SchemasC4.SCHEMA_SYMBOLNAME_E_DAT, "assets/system/symbolname-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_COMMANDNAME_E_DAT, "assets/system/commandname-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_NPCNAME_E_DAT, "assets/system/npcname-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_OBSCENE_E_DAT, "assets/system/obscene-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_QUESTNAME_E_DAT, "assets/system/questname-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_CASTLENAME_E_DAT, "assets/system/castlename-e.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_RECIPE_C_DAT, "assets/system/recipe-c.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_HENNAGRP_E_DAT, "assets/system/hennagrp-e.dat").asReadable()).decode()
         ]);
         const itemInfos: Record<number, ItemInfo_T> = {};
 
-        for (const row of items) itemInfos[row.id] = { addName: row.add_name, description: row.description.replace(/\\n/g, "\n"), equipSound: "", weight: 0, crystalType: 0, consumeType: 0, weaponType: 0, pAtk: 0, mAtk: 0, speed: 0, soulshots: 0, spiritshots: 0, mpConsume: 0, shieldPDef: 0, shieldRate: 0, avoidModify: 0, armorType: 0, pDef: 0, mDef: 0, mpBonus: 0 }; // NWindow 0x1006b130 turns the literal "\n" into line breaks.
+        for (const row of items) itemInfos[row.id] = { templateClass: null, addName: row.add_name, description: row.description.replace(/\\n/g, "\n"), popup: row.popup, isRecipe: false, isArrowOrLure: false, crystallizable: false, canShowEnchant: true, equipSound: "", weight: 0, crystalType: 0, consumeType: 0, etcType: -1, weaponType: 0, pAtk: 0, mAtk: 0, speed: 0, soulshots: 0, spiritshots: 0, mpConsume: 0, shieldPDef: 0, shieldRate: 0, avoidModify: 0, armorType: 0, bodyPart: 0, pDef: 0, mDef: 0, mpBonus: 0 }; // NWindow 0x1006b130 turns the literal "\n" into line breaks.
 
-        for (const row of weapons) Object.assign(itemInfos[row.id], { equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, weaponType: row.weapon_type, pAtk: row.patt, mAtk: row.matt, speed: row.speed, soulshots: row.SS_count, spiritshots: row.SPS_count, mpConsume: row.mp_consume, shieldPDef: row.shield_pdef, shieldRate: row.shield_rate, avoidModify: row.avoid_mod });
-        for (const row of armor) Object.assign(itemInfos[row.id], { equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, armorType: row.armor_type, pDef: row.physical_defence, mDef: row.magical_defence, mpBonus: row.mp_bonus });
-        for (const row of etcItems) Object.assign(itemInfos[row.id], { equipSound: row.equip_sound, weight: row.weight, crystalType: row.grade, consumeType: row.stackable });
+        for (const row of weapons) Object.assign(itemInfos[row.id], { templateClass: "weapon", crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, weaponType: row.weapon_type, pAtk: row.patt, mAtk: row.matt, speed: row.speed, soulshots: row.SS_count, spiritshots: row.SPS_count, mpConsume: row.mp_consume, shieldPDef: row.shield_pdef, shieldRate: row.shield_rate, avoidModify: row.avoid_mod });
+        for (const row of armor) Object.assign(itemInfos[row.id], { templateClass: "armor", crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, armorType: row.armor_type, bodyPart: row.body_part, pDef: row.physical_defence, mDef: row.magical_defence, mpBonus: row.mp_bonus });
+        for (const row of etcItems) Object.assign(itemInfos[row.id], { templateClass: "etc", crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.grade, consumeType: row.stackable, etcType: row.family, canShowEnchant: row.family !== 7 && row.family !== 13 && row.family !== 14, isRecipe: row.family === 5, isArrowOrLure: row.family === 2 || row.family === 16 });
 
         const skillNames: Record<number, string> = {};
         const skillIcons: Record<number, string> = {};
@@ -1339,7 +1357,7 @@ export class DecodeEngine {
         for (const row of tables.skills) {
             const text = skillTexts.get(`${row.skill_id}:${row.skill_level}`);
 
-            if (text) skillInfos[`${row.skill_id}:${row.skill_level}`] = { name: text.name, description: text.description.replace(/\\n/g, "\n"), icon: row.icon_name, type: row.is_magic ? 313 : row.oper_type === 2 ? 312 : 311, hpConsume: row.hp_consume, mpConsume: row.mp_consume, range: row.cast_range };
+            if (text) skillInfos[`${row.skill_id}:${row.skill_level}`] = { name: text.name, description: text.description.replace(/\\n/g, "\n"), icon: row.icon_name, type: row.is_magic ? 313 : row.oper_type === 2 ? 312 : 311, hpConsume: row.hp_consume, mpConsume: row.mp_consume, range: row.cast_range, isDebuff: row.extra_eff !== 0, isEnchanted: row.is_ench !== 0, enchantName: text.desc_add1, enchantDescription: text.desc_add2.replace(/\\n/g, "\n"), enchantSkillLevel: row.ench_skill_id };
         }
 
         for (const row of tables.names)
@@ -1357,10 +1375,18 @@ export class DecodeEngine {
             skillIcons,
             skillInfos,
             skillCastStyles: Object.fromEntries(tables.skills.map(row => [`${row.skill_id}:${row.skill_level}`, row.cast_style])),
-            actions: Object.fromEntries(actions.datarows.filter((row: any) => row.tag).map((row: any) => [row.id, { name: row.name.replace(/\\n/g, "\n"), icon: row.icon, type: row.type, category: row.category, command: row.cmd, requiresMount: row.c[0] === -1 }])),
+            npcNames: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, row.name])),
+            obsceneWords: obscene.datarows.map((row: any) => row.text),
+            residences: Object.fromEntries(residences.datarows.slice().reverse().filter((row: any) => row.tag).map((row: any) => [row.id, row.castle_name])),
+            recipes: recipes.datarows.map((row: any) => ({ id: row.id_mk, itemId: row.id_recipe, level: row.level, productId: row.id_item, count: row.count, mpCost: row.mp_cost, successRate: row.success_rate, materials: row.materials })),
+            hennas: Object.fromEntries(hennas.datarows.map((row: any) => [row.id, { dyeItemId: row.dye_id, name: row.name, icon: row.icon, addName: row.symbol_add_name, description: row.symbol_add_desc.replace(/\\n/g, "\n") }])),
+            quests: quests.datarows.map((row: any) => ({ tag: row["tag_?"], id: row.quest_id, progressId: row.quest_prog | 0, title: row.main_name, progressTitle: row.prog_name, description: row.description.replace(/\\n/g, "\n"), itemIds: row.tab1, itemCounts: row.tab2, minLevel: row["UNK_npc1_?"] | 0, maxLevel: row["UNK_npc2_?"] | 0, classification: row["UNK_npc3_?"] | 0, entityName: row.entity_name, questX: row.quest_x, questY: row.quest_y, questZ: row.quest_z, unk0: row.UNK_0, unk1: row.UNK_1, unk2: row.UNK_2, unk3: row.UNK_3, entityX: row["entity_x_?"], entityY: row["entity_y_?"], entityZ: row["entity_z_?"], raceRestriction: row.race_restricion, shortDescription: row.short_description })),
+            actions: Object.fromEntries(actions.datarows.filter((row: any) => row.tag).map((row: any) => [row.id, { name: row.name.replace(/\\n/g, "\n"), icon: row.icon, type: row.type, category: row.category, allowedNpcIds: row.c, command: row.cmd, macroCommand: row.desc, requiresMount: row.c[0] === -1 }])),
             logonSpots: logon.datarows.map((row: any) => [row.x, row.y, row.z, row.yaw]),
             classNames: Object.fromEntries(classes.datarows.map((row: any) => [row.id, row.name])),
             skillNames,
+            skillCommands: Object.fromEntries(tables.names.filter(row => row.id >= 1 && row.id <= 1999).map(row => [row.name.toLowerCase(), row.id])),
+            commands: Object.fromEntries(commands.datarows.map((row: any) => [row.id, row.name])),
             itemNames: Object.fromEntries(items.map(row => [row.id, row.name])),
             itemIcons: Object.fromEntries([...weapons, ...etcItems].map(row => [row.id, row.icon[0]]).concat(armor.map(row => [row.id, row.icon]))),
             itemInfos,

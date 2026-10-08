@@ -4,16 +4,17 @@ import { FontType_T } from "./nwindow-canvas";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
 const TEX_BACK = "L2UI_CH3.ActionWnd.Action_Back";
-const TEX_OUTLINE = "L2UI.NWindow.Icon_Back";
-const TEX_PRESSED = "L2UI.NWindow.Icon_Click";
+const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
+const TEX_PRESSED = "L2UI_CH3.InventoryWnd.Inventory_OutLine_down";
 
 export class NCActionWnd { // C4 NWindow RVA 0x506a0 (groups), 0x4d2a0 (labels).
     public static getTextures() { return [TEX_BACK, TEX_OUTLINE, TEX_PRESSED, ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
-    public onUse: (id: number) => void = null;
+    public onUse: (id: number, ctrl: boolean, shift: boolean) => void = null;
     public actionsReady = false;
     protected classId = -1;
     protected canMount = false;
+    protected pressedFrame: HTMLDivElement = null;
     protected readonly lists: HTMLDivElement[] = [];
 
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement) {
@@ -51,9 +52,15 @@ export class NCActionWnd { // C4 NWindow RVA 0x506a0 (groups), 0x4d2a0 (labels).
         if (this.actionsReady) this.paintActions();
     }
 
+    public clearSelection() {
+        if (this.pressedFrame) this.pressedFrame.hidden = true;
+        this.pressedFrame = null;
+    }
+
     protected paintActions() { // NWindow RVA 0x50100: class-gated manufacture and mountable pet/mounted user.
         const actions = Object.entries(this.layer.getManager().strings.actions).filter(([id, action]) => (!action.requiresMount || this.canMount) && (Number(id) !== 37 || [53, 54, 55, 56, 57, 117, 118].includes(this.classId)));
 
+        this.clearSelection();
         this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
         this.lists.forEach(list => list.replaceChildren());
 
@@ -64,20 +71,25 @@ export class NCActionWnd { // C4 NWindow RVA 0x506a0 (groups), 0x4d2a0 (labels).
             button.draggable = false;
             button.className = "ndom-inventory-item";
             button.dataset.actionId = id;
+            button.dataset.icon = action.icon;
             button.setAttribute("aria-label", action.command);
             layer.tooltip(this.element, button, NCTooltip.action(this.layer.getManager().strings, Number(id)));
-            layer.place(button, index % 6 * 37, Math.trunc(index / 6) * 35, 34, 34);
+            layer.place(button, index % 6 * 37, Math.trunc(index / 6) * 35, index % 6 === 5 ? 38 : 37, 35);
             layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, action.icon);
-            const outline = layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE);
+            layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE);
+            const frame = layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_PRESSED);
+
+            frame.hidden = true;
 
             button.addEventListener("mousedown", event => {
                 if (event.button !== 0) return;
 
-                layer.getManager().playButtonSound(true);
-                layer.setTile(outline, 34, 34, 0, 0, 34, 34, TEX_PRESSED);
+                this.clearSelection();
+                this.pressedFrame = frame;
+                frame.hidden = false;
+                layer.getManager().playPickupSound();
             });
-            for (const type of ["mouseup", "mouseleave"]) button.addEventListener(type, () => layer.setTile(outline, 34, 34, 0, 0, 34, 34, TEX_OUTLINE));
-            button.addEventListener("click", () => { if (this.onUse) this.onUse(Number(id)); });
+            button.addEventListener("click", event => { if (this.onUse) this.onUse(Number(id), event.ctrlKey, event.shiftKey); });
             list.appendChild(button);
         }));
     }

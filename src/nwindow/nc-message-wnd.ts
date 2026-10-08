@@ -5,39 +5,6 @@ const TEXT_COLOR = 0xffdcdcdc;
 const BAR_HEIGHT = 52;
 const TEX_BACK = "sek.cbui141";
 
-function wrapLines(layer: NDomLayer, text: string, width: number): string[] { // DrawNormalText per-glyph wrap (0x10527d0a): break before a glyph past the width, spaces never break.
-    const lines: string[] = [];
-    let line = "", lineWidth = 0;
-
-    for (const char of text) {
-        if (char === "\n") {
-            lines.push(line);
-            line = "";
-            lineWidth = 0;
-            continue;
-        }
-
-        if (char.charCodeAt(0) < 0x20) continue;
-
-        const advance = layer.measureText(char);
-
-        if (advance === 0) continue;
-
-        if (char !== " " && lineWidth + advance > width) {
-            lines.push(line);
-            line = "";
-            lineWidth = 0;
-        }
-
-        line += char;
-        lineWidth += advance;
-    }
-
-    lines.push(line);
-
-    return lines;
-}
-
 export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b8460, paint 0x100b8540; NCGodWnd::ShowMessage 0x10090bd0 feeds it.
     public static getTextures(): string[] { return [TEX_BACK]; }
 
@@ -108,7 +75,7 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
             return;
         }
 
-        const lines = wrapLines(this.layer, this.text, this.screenWidth - 100);
+        const lines = nwindow.wrapText(this.text, this.screenWidth - 100);
 
         for (let i = 0; i < lines.length; i++)
             nwindow.renderText(context, 50, 8 + i * lineHeight, TEXT_COLOR, lines[i], FontType_T.SMALL);

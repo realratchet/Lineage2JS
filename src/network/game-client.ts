@@ -61,7 +61,7 @@ export class GameClient {
     public characterRestore(slot: number) { this.send(this.write(GameClientPacket_T.CharacterRestore).d(slot)); }
     public enterWorld() { this.send(this.write(GameClientPacket_T.EnterWorld)); }
     public requestSkillList() { this.send(this.write(GameClientPacket_T.RequestSkillList)); }
-    public requestShortCutReg(type: number, slot: number, id: number) { this.send(this.write(GameClientPacket_T.RequestShortCutReg).d(type).d(slot).d(id).d(1)); }
+    public requestShortCutReg(type: number, slot: number, id: number, level: number = 1) { this.send(this.write(GameClientPacket_T.RequestShortCutReg).d(type).d(slot).d(id).d(level)); }
     public requestAutoSoulShot(itemId: number, isEnabled: boolean) { this.send(this.write(GameClientPacket_T.Extended).h(GameClientExPacket_T.RequestAutoSoulShot).d(itemId).d(isEnabled ? 1 : 0)); }
     public requestSkillCoolTime() { this.send(this.write(GameClientPacket_T.RequestSkillCoolTime)); }
     public dlgAnswer(messageId: number, isOk: boolean) { this.send(this.write(GameClientPacket_T.DlgAnswer).d(messageId).d(isOk ? 1 : 0)); }
@@ -84,7 +84,7 @@ export class GameClient {
     public answerFriendInvite(isAccepted: boolean) { this.send(this.write(GameClientPacket_T.RequestAnswerFriendInvite).d(isAccepted ? 1 : 0)); }
     public sendBypassBuildCmd(command: string) { this.send(this.write(GameClientPacket_T.SendBypassBuildCmd).S(command)); } // UNetworkHandler::SendBypassBuildCmd, Engine.dll 0x6c8fd0: "cS", 0x5b.
     public requestLinkHtml(link: string) { this.send(this.write(GameClientPacket_T.RequestLinkHtml).S(link)); }
-    public useItem(objectId: number) { this.send(this.write(GameClientPacket_T.UseItem).d(objectId)); }
+    public useItem(objectId: number, ctrl: boolean = false) { this.send(this.write(GameClientPacket_T.UseItem).d(objectId).d(ctrl ? 1 : 0)); }
     public requestEnchantItem(objectId: number) { this.send(this.write(GameClientPacket_T.RequestEnchantItem).d(objectId)); }
     public requestItemList() { this.send(this.write(GameClientPacket_T.RequestItemList)); }
 
@@ -105,11 +105,15 @@ export class GameClient {
     }
 
     public action(objectId: number, origin: Location_T, isShift: boolean) {
-        this.send(this.write(GameClientPacket_T.Action).d(objectId).d(Math.round(origin.x)).d(Math.round(origin.y)).d(Math.round(origin.z)).c(isShift ? 1 : 0));
+        if (objectId <= 0) return;
+
+        this.send(this.write(GameClientPacket_T.Action).d(objectId).d(Math.trunc(Math.fround(origin.x))).d(Math.trunc(Math.fround(origin.y))).d(Math.trunc(Math.fround(origin.z))).c(isShift ? 1 : 0));
     }
 
     public attackRequest(objectId: number, origin: Location_T, isShift: boolean) {
-        this.send(this.write(GameClientPacket_T.AttackRequest).d(objectId).d(Math.round(origin.x)).d(Math.round(origin.y)).d(Math.round(origin.z)).c(isShift ? 1 : 0));
+        if (objectId <= 0) return;
+
+        this.send(this.write(GameClientPacket_T.AttackRequest).d(objectId).d(Math.trunc(Math.fround(origin.x))).d(Math.trunc(Math.fround(origin.y))).d(Math.trunc(Math.fround(origin.z))).c(isShift ? 1 : 0));
     }
 
     public say2(text: string, type: Say2_T, target: string = null) {
@@ -127,7 +131,11 @@ export class GameClient {
     public requestGiveNickName(name: string, title: string) { this.send(this.write(GameClientPacket_T.RequestGiveNickName).S(name).S(title)); }
     public requestPledgePower(objectId: number) { this.send(this.write(GameClientPacket_T.RequestPledgePower).d(objectId).d(1)); }
     public requestMemberPledgePower(objectId: number) { this.send(this.write(GameClientPacket_T.RequestPledgePower).d(objectId).d(2)); }
-    public setMemberPledgePower(objectId: number, privs: number) { this.send(this.write(GameClientPacket_T.RequestPledgePower).d(objectId).d(3).d(privs)); }
+    public setMemberPledgePower(objectId: number, privs: Uint8Array) {
+        if (privs.length !== 32) throw new Error(`Invalid pledge power size ${privs.length}.`);
+
+        this.send(this.write(GameClientPacket_T.RequestPledgePower).d(objectId).d(3).b(privs));
+    }
     public requestStartPledgeWar(pledgeName: string) { this.send(this.write(GameClientPacket_T.RequestStartPledgeWar).S(pledgeName)); }
     public requestReplyStartPledgeWar(name: string, isAccepted: boolean) { this.send(this.write(GameClientPacket_T.RequestReplyStartPledgeWar).S(name).d(isAccepted ? 1 : 0)); }
     public requestStopPledgeWar(pledgeName: string) { this.send(this.write(GameClientPacket_T.RequestStopPledgeWar).S(pledgeName)); }
@@ -151,13 +159,14 @@ export class GameClient {
 
 
     public tradeRequest(objectId: number) { this.send(this.write(GameClientPacket_T.TradeRequest).d(objectId)); }
-    public addTradeItem(tradeId: number, objectId: number, count: number) { this.send(this.write(GameClientPacket_T.AddTradeItem).d(tradeId).d(objectId).d(count)); }
+    public addTradeItem(objectId: number, count: number) { this.send(this.write(GameClientPacket_T.AddTradeItem).d(1).d(objectId).d(count)); }
     public tradeDone(isConfirmed: boolean) { this.send(this.write(GameClientPacket_T.TradeDone).d(isConfirmed ? 1 : 0)); }
     public answerTradeRequest(isAccepted: boolean) { this.send(this.write(GameClientPacket_T.AnswerTradeRequest).d(isAccepted ? 1 : 0)); }
     public requestPrivateStoreManageSell() { this.send(this.write(GameClientPacket_T.RequestPrivateStoreManageSell)); }
     public requestPrivateStoreQuitSell() { this.send(this.write(GameClientPacket_T.RequestPrivateStoreQuitSell)); }
     public setPrivateStoreMsgSell(message: string) { this.send(this.write(GameClientPacket_T.SetPrivateStoreMsgSell).S(message)); }
     public requestPrivateStoreManageBuy() { this.send(this.write(GameClientPacket_T.RequestPrivateStoreManageBuy)); }
+    public requestPrivateStoreManageCancelBuy() { this.send(this.write(GameClientPacket_T.RequestPrivateStoreManageCancelBuy)); }
     public requestPrivateStoreQuitBuy() { this.send(this.write(GameClientPacket_T.RequestPrivateStoreQuitBuy)); }
     public setPrivateStoreMsgBuy(message: string) { this.send(this.write(GameClientPacket_T.SetPrivateStoreMsgBuy).S(message)); }
     public requestPackageSendableItemList(objectId: number) { this.send(this.write(GameClientPacket_T.RequestPackageSendableItemList).d(objectId)); }
@@ -172,7 +181,7 @@ export class GameClient {
     public requestChangePetName(name: string) { this.send(this.write(GameClientPacket_T.RequestChangePetName).S(name)); }
 
     public requestDropItem(objectId: number, count: number, point: Location_T) {
-        this.send(this.write(GameClientPacket_T.RequestDropItem).d(objectId).d(count).d(Math.round(point.x)).d(Math.round(point.y)).d(Math.round(point.z)));
+        this.send(this.write(GameClientPacket_T.RequestDropItem).d(objectId).d(count).d(Math.trunc(point.x)).d(Math.trunc(point.y)).d(Math.trunc(point.z)));
     }
 
     public sendWareHouseDepositList(items: ItemCount_T[]) {
@@ -210,7 +219,7 @@ export class GameClient {
     public setPrivateStoreListBuy(items: PrivateStoreBuyOffer_T[]) {
         const writer = this.write(GameClientPacket_T.SetPrivateStoreListBuy).d(items.length);
 
-        for (const item of items) writer.d(item.itemId).h(item.enchantLevel).h(0).d(item.count).d(item.price);
+        for (const item of items) writer.d(item.itemId).h(item.enchantLevel).h(item.type2).d(item.count).d(item.price);
 
         this.send(writer);
     }
@@ -218,7 +227,7 @@ export class GameClient {
     public requestPrivateStoreSell(storePlayerId: number, items: PrivateStoreSellOffer_T[]) {
         const writer = this.write(GameClientPacket_T.RequestPrivateStoreSell).d(storePlayerId).d(items.length);
 
-        for (const item of items) writer.d(item.objectId).d(item.itemId).h(item.enchantLevel).h(0).d(item.count).d(item.price);
+        for (const item of items) writer.d(item.objectId).d(item.itemId).h(item.enchantLevel).h(item.type2).d(item.count).d(item.price);
 
         this.send(writer);
     }
@@ -231,8 +240,8 @@ export class GameClient {
         this.send(writer);
     }
 
-    public requestPreviewItem(listId: number, itemIds: number[]) {
-        const writer = this.write(GameClientPacket_T.RequestPreviewItem).d(0).d(listId).d(itemIds.length); // Leading d is read as _unknown and ignored by the server.
+    public requestPreviewItem(unknown: number, listId: number, itemIds: number[]) {
+        const writer = this.write(GameClientPacket_T.RequestPreviewItem).d(unknown).d(listId).d(itemIds.length);
 
         for (const itemId of itemIds) writer.d(itemId);
 
@@ -303,24 +312,29 @@ export class GameClient {
     public requestRecipeBookDestroy(recipeId: number) { this.send(this.write(GameClientPacket_T.RequestRecipeBookDestroy).d(recipeId)); }
     public requestRecipeItemMakeInfo(recipeId: number) { this.send(this.write(GameClientPacket_T.RequestRecipeItemMakeInfo).d(recipeId)); }
     public requestRecipeItemMakeSelf(recipeId: number) { this.send(this.write(GameClientPacket_T.RequestRecipeItemMakeSelf).d(recipeId)); }
+    public requestRecipeShopManageList() { this.send(this.write(GameClientPacket_T.RequestRecipeShopManageList)); }
     public requestRecipeShopMessageSet(name: string) { this.send(this.write(GameClientPacket_T.RequestRecipeShopMessageSet).S(name)); }
     public requestRecipeShopManageQuit() { this.send(this.write(GameClientPacket_T.RequestRecipeShopManageQuit)); }
+    public requestRecipeShopManageCancel() { this.send(this.write(GameClientPacket_T.RequestRecipeShopManageCancel)); }
     public requestRecipeShopMakeInfo(objectId: number, recipeId: number) { this.send(this.write(GameClientPacket_T.RequestRecipeShopMakeInfo).d(objectId).d(recipeId)); }
-    public requestRecipeShopMakeItem(objectId: number, recipeId: number, unknown: number) { this.send(this.write(GameClientPacket_T.RequestRecipeShopMakeItem).d(objectId).d(recipeId).d(unknown)); }
-    public requestRecipeShopManagePrev() { this.send(this.write(GameClientPacket_T.RequestRecipeShopManagePrev)); }
+    public requestRecipeShopMakeItem(objectId: number, recipeId: number, price: number) { this.send(this.write(GameClientPacket_T.RequestRecipeShopMakeItem).d(objectId).d(recipeId).d(price)); }
+    public requestRecipeShopManagePrev(objectId: number) { this.send(this.write(GameClientPacket_T.RequestRecipeShopManagePrev).d(objectId)); }
     public requestHennaList(unknown: number) { this.send(this.write(GameClientPacket_T.RequestHennaList).d(unknown)); }
     public requestHennaItemInfo(symbolId: number) { this.send(this.write(GameClientPacket_T.RequestHennaItemInfo).d(symbolId)); }
     public requestHennaEquip(symbolId: number) { this.send(this.write(GameClientPacket_T.RequestHennaEquip).d(symbolId)); }
-    public requestPartyMatchConfig(auto: number, location: number, limit: number) { this.send(this.write(GameClientPacket_T.RequestPartyMatchConfig).d(auto).d(location).d(limit)); }
+    public requestHennaUnequipList(unknown: number) { this.send(this.write(GameClientPacket_T.RequestHennaUnequipList).d(unknown)); }
+    public requestHennaUnequipInfo(symbolId: number) { this.send(this.write(GameClientPacket_T.RequestHennaUnequipInfo).d(symbolId)); }
+    public requestHennaUnequip(symbolId: number) { this.send(this.write(GameClientPacket_T.RequestHennaUnequip).d(symbolId)); }
+    public requestPartyMatchConfig(page: number, location: number, limit: number) { this.send(this.write(GameClientPacket_T.RequestPartyMatchConfig).d(page).d(location).d(limit)); }
     public requestPartyMatchList(roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string) { this.send(this.write(GameClientPacket_T.RequestPartyMatchList).d(roomId).d(maxMembers).d(minLevel).d(maxLevel).d(lootType).S(title)); }
-    public requestPartyMatchDetail(roomId: number, unknown: number) { this.send(this.write(GameClientPacket_T.RequestPartyMatchDetail).d(roomId).d(unknown)); }
+    public requestPartyMatchDetail(roomId: number, location: number) { this.send(this.write(GameClientPacket_T.RequestPartyMatchDetail).d(roomId).d(location)); }
     public requestWithDrawalParty() { this.send(this.write(GameClientPacket_T.RequestWithDrawalParty)); }
     public requestOustPartyMember(name: string) { this.send(this.write(GameClientPacket_T.RequestOustPartyMember).S(name)); }
     public requestTutorialLinkHtml(link: string) { this.send(this.write(GameClientPacket_T.RequestTutorialLinkHtml).S(link)); }
     public requestTutorialPassCmdToServer(command: string) { this.send(this.write(GameClientPacket_T.RequestTutorialPassCmdToServer).S(command)); }
     public requestTutorialQuestionMark(id: number) { this.send(this.write(GameClientPacket_T.RequestTutorialQuestionMark).d(id)); }
     public requestTutorialClientEvent(eventId: number) { this.send(this.write(GameClientPacket_T.RequestTutorialClientEvent).d(eventId)); }
-    public requestGMCommand(targetName: string, command: number) { this.send(this.write(GameClientPacket_T.RequestGMCommand).S(targetName).d(command)); }
+    public requestGMCommand(targetName: string, command: number) { this.send(this.write(GameClientPacket_T.RequestGMCommand).S(targetName).d(command).d(0)); }
     public requestGmList() { this.send(this.write(GameClientPacket_T.RequestGmList)); }
     public snoopQuit(objectId: number) { this.send(this.write(GameClientPacket_T.SnoopQuit).d(objectId)); }
     public requestPetition(content: string, type: number) { this.send(this.write(GameClientPacket_T.RequestPetition).S(content).d(type)); }
@@ -336,8 +350,8 @@ export class GameClient {
     public requestEvaluate(objectId: number) { this.send(this.write(GameClientPacket_T.RequestEvaluate).d(objectId)); }
     public requestShowBoard(unknown: number) { this.send(this.write(GameClientPacket_T.RequestShowBoard).d(unknown)); }
     public requestBBSwrite(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { this.send(this.write(GameClientPacket_T.RequestBBSwrite).S(url).S(arg1).S(arg2).S(arg3).S(arg4).S(arg5)); }
-    public requestAquireSkillInfo(id: number, level: number, isFishing: boolean) { this.send(this.write(GameClientPacket_T.RequestAquireSkillInfo).d(id).d(level).d(isFishing ? 1 : 0)); }
-    public requestAquireSkill(id: number, level: number, isFishing: boolean) { this.send(this.write(GameClientPacket_T.RequestAquireSkill).d(id).d(level).d(isFishing ? 1 : 0)); }
+    public requestAquireSkillInfo(id: number, level: number, mode: number) { this.send(this.write(GameClientPacket_T.RequestAquireSkillInfo).d(id).d(level).d(mode)); }
+    public requestAquireSkill(id: number, level: number, mode: number) { this.send(this.write(GameClientPacket_T.RequestAquireSkill).d(id).d(level).d(mode)); }
 
     public requestRecipeShopListSet(items: RecipeShopListEntry_T[]) {
         const writer = this.write(GameClientPacket_T.RequestRecipeShopListSet).d(items.length);

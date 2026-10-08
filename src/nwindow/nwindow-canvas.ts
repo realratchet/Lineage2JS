@@ -211,6 +211,16 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
 
     public getLineHeight(type: FontType_T = FontType_T.SMALL): number { return this.fonts.get(type).lineHeight; }
 
+    public hasGlyphs(text: string, type: FontType_T = FontType_T.SMALL): boolean {
+        const font = this.fonts.get(type);
+
+        if (!text) return false;
+        for (let i = 0; i < text.length; i++)
+            if (!font.glyphs.has(text.charCodeAt(i))) return false;
+
+        return true;
+    }
+
     public measureText(text: string, type: FontType_T = FontType_T.SMALL): number {
         const font = this.fonts.get(type);
         let width = 0;
@@ -222,6 +232,36 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         }
 
         return width;
+    }
+
+    public wrapText(text: string, width: number, continuationWidth = width): string[] {
+        const lines: string[] = [];
+        const tokens = text.replace(/[\x00-\x09\x0b-\x1f]/g, "").match(/[^ \n]+| +|\n/g) || [];
+        let line = "", lineWidth = 0;
+
+        for (const token of tokens) {
+            if (token === "\n") {
+                lines.push(line);
+                line = "";
+                lineWidth = 0;
+                continue;
+            }
+
+            const advance = this.measureText(token);
+
+            if (token[0] !== " " && line.trim().length && lineWidth + advance > (lines.length ? continuationWidth : width)) {
+                lines.push(line.trimEnd());
+                line = "";
+                lineWidth = 0;
+            }
+
+            line += token;
+            lineWidth += advance;
+        }
+
+        lines.push(line);
+
+        return lines;
     }
 
     public measureDigits(text: string, type: DigitFont_T = DigitFont_T.NORMAL): number {
@@ -287,6 +327,96 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         this.tinted.set(key, atlas);
 
         return atlas;
+    }
+
+    public renderWrappedText(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, width: number, lineSpacing = 0, type: FontType_T = FontType_T.SMALL) { // FL2TextAlignParser::GetLineBuffer 0x10521cf0, English bitmap-font path.
+        const tokens = text.match(/[^ \n]+| |\n/g) || [];
+        const spaceWidth = this.measureText(" ", type), minSpaceWidth = Math.trunc(spaceWidth / 2) + 2;
+        const lineHeight = this.getLineHeight(type) + lineSpacing;
+        let line = "", lineWidth = 0, spaces: number[] = [], tokenIndex = 0, lineIndex = 0;
+        const canvas = this;
+
+        function drawLine(adjustment = 0) {
+            const count = spaces.length;
+            const delta = count ? Math.trunc(Math.abs(adjustment) / count) : 0;
+            const remainder = count ? Math.abs(adjustment) - delta * count : 0;
+            const direction = adjustment < 0 ? -1 : 1;
+            let penX = x, spaceIndex = 0;
+
+            for (const part of line.split(/( )/)) {
+                if (part === " ") {
+                    penX += spaces[spaceIndex] + direction * (delta + (spaceIndex < remainder ? 1 : 0));
+                    spaceIndex++;
+                } else {
+                    canvas.renderText(context, penX, y + lineIndex * lineHeight, color, part, type);
+                    penX += canvas.measureText(part, type);
+                }
+            }
+
+            lineIndex++;
+            line = "";
+            lineWidth = 0;
+            spaces = [];
+        }
+
+        while (tokenIndex < tokens.length) {
+            const token = tokens[tokenIndex];
+
+            if (token === "\n") {
+                drawLine();
+                tokenIndex++;
+                continue;
+            }
+
+            if (token === " ") {
+                if (lineWidth + spaceWidth >= width) drawLine(width - lineWidth);
+                else {
+                    line += token;
+                    lineWidth += spaceWidth;
+                    spaces.push(spaceWidth);
+                }
+
+                tokenIndex++;
+                continue;
+            }
+
+            const tokenWidth = this.measureText(token, type);
+            const nextWidth = lineWidth + tokenWidth;
+
+            if (nextWidth <= width) {
+                line += token;
+                lineWidth = nextWidth;
+                tokenIndex++;
+            } else if (!line) {
+                let count = 0, partWidth = 0;
+
+                while (count < token.length) {
+                    const nextWidth = partWidth + this.measureText(token[count], type);
+
+                    if (nextWidth >= width) break;
+
+                    partWidth = nextWidth;
+                    count++;
+                }
+
+                if (!count) return;
+
+                line = token.slice(0, count);
+                tokens[tokenIndex] = token.slice(count);
+                if (count === token.length) tokenIndex++;
+                drawLine();
+            } else if (!spaces.length) {
+                line += token;
+                tokenIndex++;
+                drawLine();
+            } else if (nextWidth - width <= (spaceWidth - minSpaceWidth) * spaces.length) {
+                line += token;
+                tokenIndex++;
+                drawLine(width - nextWidth);
+            } else drawLine(width - lineWidth);
+        }
+
+        if (line) drawLine();
     }
 
     public renderText(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: FontType_T = FontType_T.SMALL) { // Engine.dll DrawNormalText 0x10527880: one 1:1 quad per glyph, pen advances by the glyph width.

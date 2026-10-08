@@ -47,12 +47,15 @@ export class BaseActor extends GameObject implements ICollidable {
     public get scriptProperties(): Map<string, ScriptValue_T> { return this.scriptComponent ? this.scriptComponent.getProperties() : null; }
 
     public setScriptRuntime(vm: UnScriptVM, classId: string, objectFactory: ScriptObjectFactory_T): void {
+        const isOnVehicle = this.scriptComponent ? this.getStoredUnrealScriptProperty("bGetOnVehicle") : null;
+
         if (this.scriptComponent) this.removeComponent(this.scriptComponent);
 
         const component = new ScriptComponent<BaseActor>(vm, objectFactory, classId);
 
         this.scriptComponent = component;
         this.addComponent(component);
+        if (isOnVehicle !== null) this.setUnrealScriptProperty("bGetOnVehicle", isOnVehicle);
         this.setCollisionSize(this.getStoredUnrealScriptProperty("CollisionRadius") as number, this.getStoredUnrealScriptProperty("CollisionHeight") as number);
     }
 
@@ -122,6 +125,18 @@ export class BaseActor extends GameObject implements ICollidable {
     }
 
     public getAnimationAction(): AnimationAction { return this.animationComponent.getAction(); }
+
+    public getSocialAnimDuration(action: number): number { // Engine 0x105e5a20.
+        if (this.getUnrealScriptProperty("bNpc") || action < 0 || action >= 20) return -1;
+
+        const weapon = this.getUnrealScriptProperty("CurWeaponType") as number;
+        const names = this.getUnrealScriptProperty(action === 0 ? "SitAnimName" : action === 1 ? "StandAnimName" : "PcSocialAnimName") as string[];
+        const clip = this.animationComponent.getAnimationClip(names[action < 2 ? weapon : action]);
+
+        if (!clip) return -1;
+
+        return ((clip as any).skinNotify.frameCount / (clip as any).framerate + Math.fround(action < 2 ? 0.1 : 0.3)) / (this.getUnrealScriptProperty("NonAttackSpeedRate") as number);
+    }
 
     public getCollisionRadius(): number { return this.movementComponent.getCollisionRadius(); }
     public getCollisionHeight(): number { return this.movementComponent.getCollisionHeight(); }
@@ -229,6 +244,8 @@ export class BaseActor extends GameObject implements ICollidable {
     public setRotationYaw(yaw: number): void { this.movementComponent.setRotationYaw(yaw); }
     public startRotating(direction: number, speed: number): void { this.movementComponent.startRotating(direction, speed); }
     public finishRotating(yaw: number, speed: number): void { this.movementComponent.finishRotating(yaw, speed); }
+    public stopRotating(): void { this.movementComponent.stopRotating(); }
+    public resetRotationYaw(yaw: number): void { this.movementComponent.resetRotationYaw(yaw); }
     public getRotationYaw(): number { return this.movementComponent.getRotationYaw(); }
     public setCollisionSize(collisionRadius: number, collisionHeight: number): void { this.movementComponent.setCollisionSize(collisionRadius, collisionHeight); }
     public teleportTo(position: Vector3, adjustToFloor: boolean = false): void { this.movementComponent.teleportTo(position, adjustToFloor); }

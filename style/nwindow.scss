@@ -73,6 +73,8 @@
     color: transparent;
     caret-color: transparent;
     font: 11px Tahoma, sans-serif;
+
+    &::selection { background: transparent; color: transparent; }
 }
 
 .ndom-edit-overlay {

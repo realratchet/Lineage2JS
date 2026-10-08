@@ -12,8 +12,7 @@ const REPEAT_PERIOD = 100; // NCPushButton auto-repeat period (0x10003940).
 class NCSliderBar extends NWnd { // NCSliderBar (vtable 0x101a6368): thumb only, no track texture.
     public thumbPos = 0;
     public thumbLen = 0;
-    protected dragStartY = 0;
-    protected dragStartPos = 0;
+    protected dragOffsetY = 0;
     protected isDragging = false;
     public readonly owner: NCScrollBar;
 
@@ -34,11 +33,12 @@ class NCSliderBar extends NWnd { // NCSliderBar (vtable 0x101a6368): thumb only,
     }
 
     public onMouseDown(event: NMouseEvent_T) {
-        if (event.y >= this.thumbPos && event.y < this.thumbPos + this.thumbLen) {
+        if (event.button !== 0) return;
+
+        if (this.owner.content > this.owner.view && event.y >= this.thumbPos && event.y <= this.thumbPos + this.thumbLen) {
             this.isDragging = true;
-            this.dragStartY = event.y;
-            this.dragStartPos = this.owner.position;
-        } else this.owner.scrollBy(event.y < this.thumbPos ? -this.owner.view : this.owner.view);
+            this.dragOffsetY = event.y - this.thumbPos;
+        }
     }
 
     public onMouseMove(event: NMouseEvent_T) {
@@ -49,7 +49,15 @@ class NCSliderBar extends NWnd { // NCSliderBar (vtable 0x101a6368): thumb only,
 
         const travel = this.height - this.thumbLen;
 
-        if (travel > 0) this.owner.setPosition(Math.round(this.dragStartPos + (event.y - this.dragStartY) * (this.owner.content - this.owner.view) / travel));
+        if (travel <= 0) return;
+
+        const position = Math.max(0, Math.min(travel, Math.trunc(event.y - this.dragOffsetY)));
+
+        if (position === this.thumbPos) return;
+
+        this.owner.setPosition(Math.trunc(position * (this.owner.content - this.owner.view) / travel)); // NCSliderBar::OnMouseMove, NWindow RVA 0x2c230: pixel offset, then signed integer division.
+        this.thumbPos = position;
+        this.invalidate();
     }
 
     public onMouseUp() { this.isDragging = false; }
@@ -67,7 +75,7 @@ class NCPushButton extends NCButton {
 
         this.timer = window.setInterval(() => {
             if (!this.manager.isPressed(this)) return this.stop();
-            if (this.onPress) this.onPress();
+            if (this.manager.isHovered(this) && this.onPress) this.onPress(); // NCPushButton::OnMouseMove/OnTimer, RVAs 0x1940/0x19a0.
         }, REPEAT_PERIOD);
     }
 
@@ -78,6 +86,7 @@ class NCPushButton extends NCButton {
 
     public onMouseUp() { this.stop(); }
     public onClick() { }
+    public detach() { this.stop(); super.detach(); }
 }
 
 export class NCScrollBar extends NWnd { // NCScrollWnd scrollbar column (0x1002bdc3..0x1002bfdb): up arrow, slider, down arrow, 15 px wide.
@@ -107,6 +116,8 @@ export class NCScrollBar extends NWnd { // NCScrollWnd scrollbar column (0x1002b
     }
 
     public setRange(content: number, view: number) { // SetRange 0x1002c0a0: thumb = int(view * sliderH / content), min 15; hidden when everything fits.
+        if (this.content === content && this.view === view && this.slider.thumbLen > 0) return;
+
         this.content = content;
         this.view = view;
         this.position = Math.max(0, Math.min(this.position, Math.max(0, content - view)));

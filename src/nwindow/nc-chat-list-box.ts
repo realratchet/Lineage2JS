@@ -12,23 +12,6 @@ const INDENT = 12;
 type ChatLine_T = { text: string, color: number, indent: number };
 type ChatEntry_T = { text: string, color: number };
 
-function splitLine(canvas: NWindowCanvas, text: string, maxWidth: number): [string, string] { // 0x100137e0 / 0x10013be0: per-glyph wrap, the glyph that passes maxWidth starts the next line; '\n' ends one.
-    let width = 0;
-
-    for (let i = 0; i < text.length; i++) {
-        const code = text.charCodeAt(i);
-
-        if (code === 0x0a) return [text.slice(0, i + 1), text.slice(i + 1)];
-        if (code < 0x20) continue;
-
-        width += canvas.measureText(text[i], FontType_T.SMALL);
-
-        if (width > maxWidth) return [text.slice(0, i), text.slice(i)];
-    }
-
-    return [text, ""];
-}
-
 export class NCChatListBox extends NWnd { // NCChatListBox (vtable 0x101ac928), ctor 0x1005a520(200, 9, 15); scroll column on the left at (5,10).
     protected readonly scrollBar: NCScrollBar;
     protected readonly lines: ChatLine_T[] = [];
@@ -78,14 +61,11 @@ export class NCChatListBox extends NWnd { // NCChatListBox (vtable 0x101ac928), 
 
     protected flush(canvas: NWindowCanvas) {
         for (const entry of this.pending) {
-            let [line, rest] = splitLine(canvas, entry.text, this.getWrapWidth());
-            let indent = 0;
+            if (!entry.text) continue;
 
-            while (line) {
-                this.pushLine({ text: line, color: entry.color, indent });
-                [line, rest] = splitLine(canvas, rest, this.getWrapWidth() - INDENT);
-                indent = INDENT;
-            }
+            canvas.wrapText(entry.text, this.getWrapWidth(), this.getWrapWidth() - INDENT).forEach((text, index) => {
+                this.pushLine({ text, color: entry.color, indent: index ? INDENT : 0 });
+            });
         }
 
         this.pending.length = 0;
