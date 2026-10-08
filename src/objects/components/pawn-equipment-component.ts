@@ -6,9 +6,15 @@ import ActorMeshComponent from "../../rendering/components/actor-mesh-component"
 import decodeObject3D from "../../assets/decoders/object3d-decoder";
 import type { IEmitterActorDecodeInfo, IEmitterDecodeInfo } from "@l2js/engine/contracts/emitter";
 import type RenderManager from "../../rendering/render-manager";
+import { ExtraMeshAnimationComponent } from "./animation-component";
+import type LitSkinnedMesh from "../lit-skinned-mesh";
 
 class EquippedItem extends GameObject {
     public readonly scriptProperties = new Map<string, any>();
+}
+
+class EquipmentMeshComponent extends ActorMeshComponent {
+    public getMesh(): LitSkinnedMesh { return this.mesh; }
 }
 
 function disposeMaterials(item: EquippedItem): void {
@@ -26,7 +32,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnEquipment";
     protected readonly library: DecodeLibrary;
     protected readonly renderManager: RenderManager;
-    protected readonly items: { object: GameObject; bone: string | number }[] = [];
+    protected readonly items: { object: GameObject; bone: string | number; mesh?: LitSkinnedMesh; animation?: ExtraMeshAnimationComponent }[] = [];
     protected hiddenAnimation: string = null;
 
     public constructor(library: DecodeLibrary, renderManager: RenderManager) {
@@ -42,14 +48,14 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
         if (equipment) {
             for (const item of equipment.items) {
-                this.attachItem(item.mesh, item.skins, item.bone);
+                this.attachItem(item.mesh, item.skins, item.bone, item.extraMesh);
                 if (item.enchantMesh) this.attachEnchantMesh(item.enchantMesh, item.bone);
                 if (item.enchantEffect) this.attachEnchantEffect(item.enchantEffect, typeof item.bone === "string" && item.bone.startsWith("Left") ? "LeftHandBone" : "RightHandBone");
             }
         } else if (bow) this.attachItem(bow.weaponMesh, bow.weaponSkins, "LeftHandBone");
     }
 
-    protected attachItem(mesh: string, skins: string[], bone: string | number): EquippedItem {
+    protected attachItem(mesh: string, skins: string[], bone: string | number, extraMesh = false): EquippedItem {
         const parent = this.getParent();
         const item = new EquippedItem();
 
@@ -58,8 +64,9 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         item.scriptProperties.set("bUnlit", false);
         item.scriptProperties.set("AmbientGlow", parent.getUnrealScriptProperty("AmbientGlow"));
         item.scriptProperties.set("ScaleGlow", parent.getUnrealScriptProperty("ScaleGlow"));
-        item.addComponent(new ActorMeshComponent(this.library, this.renderManager));
-        item.getComponent<ActorMeshComponent>("actorMesh").onUpdate();
+        const meshComponent = item.addComponent(new EquipmentMeshComponent(this.library, this.renderManager));
+        meshComponent.onUpdate();
+        const animation = extraMesh ? item.addComponent(new ExtraMeshAnimationComponent(this.renderManager, meshComponent.getMesh())) : null;
 
         const boneName = typeof bone === "number" ? bone : parent.getUnrealScriptProperty(bone) as string;
 
@@ -69,7 +76,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
             throw new Error(`Pawn '${parent.scriptClassId}' cannot attach '${mesh}' to ${bone}.`);
         }
 
-        this.items.push({ object: item, bone });
+        this.items.push({ object: item, bone, mesh: meshComponent.getMesh(), animation });
         return item;
     }
 
@@ -141,7 +148,28 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
             object.visible = !(typeof bone === "string" && (bone.startsWith("Right") && right || bone.startsWith("Left") && left));
     }
 
-    public onUpdate(): void {
+    public getWeaponMesh(kind: number): LitSkinnedMesh {
+        const bone = ["RightHandBone", "LeftHandBone", "RightArmBone", "LeftArmBone"][kind - 8];
+        const item = this.items.find(item => item.bone === bone && item.mesh);
+        return item ? item.mesh : null;
+    }
+
+    public playWeaponAnimation(kind: number, name: string, tween: number, rate: number, loop: boolean): void {
+        const mesh = this.getWeaponMesh(kind);
+        const item = this.items.find(item => item.mesh === mesh);
+        if (item && item.animation) item.animation.play(name, tween, rate, loop, true);
+    }
+
+    public playExtraAnimation(name: string, tween: number, rate: number, loop: boolean, restart: boolean): void {
+        for (const item of this.items)
+            if (item.animation) item.animation.playOwnerAnimation(name, tween, rate, loop, restart);
+    }
+
+    public onUpdate(_currentTime: number, deltaTime: number): void {
+        const action = this.getParent().getAnimationAction();
+        for (const item of this.items)
+            if (item.animation) item.animation.copyOwnerAnimation(action, deltaTime);
+
         if (!this.hiddenAnimation || this.getParent().isPlayingOneShotAnimation(this.hiddenAnimation)) return;
 
         for (const item of this.items) item.object.visible = true;

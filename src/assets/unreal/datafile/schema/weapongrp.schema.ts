@@ -47,7 +47,7 @@ export const SCHEMA_WEAPONGRP_DAT: ISchemaValue[] = [
     { type: "uint32", name: "SS_count" },
     { type: "uint32", name: "SPS_count" },
     { type: "uint32", name: "curvature" },
-    { type: "uint32", name: "UNK_2" },
+    { type: "uint32", name: "add_bone" },
     { type: "int32", name: "is_hero" },
     { type: "uint32", name: "UNK_3" },
     { type: new SizedContainerType("utf16", "wpn_mesh_cnt"), name: "enchantedEffect" },

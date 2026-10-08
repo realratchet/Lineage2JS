@@ -592,9 +592,9 @@ export type CharSelected_T = Location_T & { name: string, charId: number, title:
 
 export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number };
 
-export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
+export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, largeCrestId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
 
-export type CharInfo_T = CreatureInfo_T & Appearance_T & { isSitting: boolean, mountType: number, cubics: number[] };
+export type CharInfo_T = CreatureInfo_T & Appearance_T & { clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, cubics: number[] };
 
 export type NpcInfo_T = CreatureInfo_T & { npcId: number, isAttackable: boolean, rightHand: number, chest: number, leftHand: number, spawnType: number, isSummon: boolean };
 export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number };
@@ -735,7 +735,9 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.title = packet.S();
 
     info.clanId = packet.d();
-    packet.skip(3 * 4);
+    info.clanCrestId = packet.d();
+    info.allyId = packet.d();
+    info.allyCrestId = packet.d();
     info.clanRelation = packet.d();
     info.mountType = packet.c();
     packet.skip(1);
@@ -757,7 +759,8 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.curCp = packet.d();
     info.isRunning = info.isInCombat = info.isAlikeDead = false;
     info.enchantLevel = packet.c();
-    packet.skip(1 + 4);
+    packet.skip(1);
+    info.largeCrestId = packet.d();
     info.isNoble = packet.c() !== 0;
     info.isHero = packet.c() !== 0;
     packet.skip(1 + 3 * 4);
@@ -788,7 +791,11 @@ export function readCharInfo(packet: PacketReader): CharInfo_T {
     info.face = packet.d();
     info.title = packet.S();
 
-    packet.skip(5 * 4);
+    info.clanId = packet.d();
+    info.clanCrestId = packet.d();
+    info.allyId = packet.d();
+    info.allyCrestId = packet.d();
+    info.clanRelation = packet.d();
 
     info.isSitting = packet.c() === 0;
     info.isRunning = packet.c() !== 0;
@@ -807,7 +814,9 @@ export function readCharInfo(packet: PacketReader): CharInfo_T {
 
     packet.skip(4 + 4 + 4);
     info.enchantLevel = packet.c();
-    packet.skip(1 + 4 + 1 + 1 + 1 + 3 * 4);
+    packet.skip(1);
+    info.largeCrestId = packet.d();
+    packet.skip(1 + 1 + 1 + 3 * 4);
 
     info.nameColor = packet.d() >>> 0;
 
@@ -1764,7 +1773,7 @@ export type EnchantSkill_T = { id: number, nextLevel: number, sp: number, exp: n
 export type EnchantSkillInfo_T = { id: number, level: number, spCost: number, expCost: number, rate: number, requirements: AquireSkillRequirement_T[] };
 export type HeroEntry_T = { name: string, classId: number, clanName: string, clanCrestId: number, allyName: string, allyCrestId: number, count: number };
 export type CommandChannelParty_T = { leaderName: string, memberCount: number };
-export type CommandChannelInfo_T = { leaderName: string, memberCount: number, parties: CommandChannelParty_T[] };
+export type CommandChannelInfo_T = { leaderName: string, memberCount: number, partyCount?: number, parties: CommandChannelParty_T[] };
 export type OlympiadUserInfo_T = { side: number, objectId: number, name: string, classId: number, curHp: number, maxHp: number, curCp: number, maxCp: number };
 export type OlympiadSpelledInfo_T = { objectId: number, effects: AbnormalStatus_T[] };
 export type PartyRoomMember_T = { objectId: number, name: string, classId: number, level: number, location: number, role: number };
@@ -1834,12 +1843,14 @@ export function readHeroList(packet: PacketReader): HeroEntry_T[] {
 
 export function readCommandChannelInfo(packet: PacketReader): CommandChannelInfo_T {
     const leaderName = packet.S(), memberCount = packet.d();
-    const count = readListCount(packet, 6, "ExMultiPartyCommandChannelInfo");
+    const partyCount = packet.d(), count = Math.max(0, partyCount);
+
+    if (count > Math.trunc(packet.getRemaining() / 6)) throw new Error(`Invalid ExMultiPartyCommandChannelInfo count ${count}.`);
     const parties = Array.from({ length: count }, () => ({ leaderName: packet.S(), memberCount: packet.d() }));
 
-    if (!leaderName || memberCount < 0 || packet.getRemaining()) throw new Error("Invalid ExMultiPartyCommandChannelInfo payload.");
+    if (packet.getRemaining()) throw new Error("Invalid ExMultiPartyCommandChannelInfo payload.");
 
-    return { leaderName, memberCount, parties };
+    return { leaderName, memberCount, partyCount, parties };
 }
 
 export function readOlympiadUserInfo(packet: PacketReader): OlympiadUserInfo_T {

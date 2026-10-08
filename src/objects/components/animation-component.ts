@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, LoopOnce, LoopRepeat, Matrix4, Mesh, Skeleton, Texture, Vector3 } from "three";
+import { AnimationAction, AnimationClip, AnimationMixer, LoopOnce, LoopRepeat, Matrix4, Mesh, Skeleton, Texture, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
@@ -9,6 +9,7 @@ import type RenderManager from "../../rendering/render-manager";
 import type LocalSpaceSkeleton from "../local-space-skeleton";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type PawnFishingComponent from "./pawn-fishing-component";
+import type PawnEquipmentComponent from "./pawn-equipment-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
@@ -60,6 +61,7 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
 export class AnimationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "animation";
     protected readonly renderManager: RenderManager;
+    protected mixer: AnimationMixer;
     protected meshes: Mesh[] = [];
     protected meshTextures = new Set<Texture>();
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
@@ -84,10 +86,11 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         super();
 
         this.renderManager = renderManager;
+        this.mixer = renderManager.mixer;
     }
 
     public onUpdate(_currentTime: number, _deltaTime: number): void {
-        if (this.tweenTimeScales.size > 0 && this.renderManager.mixer.time >= this.animationTweenEndTime) {
+        if (this.tweenTimeScales.size > 0 && this.mixer.time >= this.animationTweenEndTime) {
             for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
 
             this.tweenTimeScales.clear();
@@ -182,7 +185,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public isAnimating(): boolean {
         const action = this.animationNotifyAction;
 
-        return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.renderManager.mixer.time < this.animationTweenEndTime);
+        return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.mixer.time < this.animationTweenEndTime);
     }
 
     public setMeshes(meshes: Mesh[]): void {
@@ -196,7 +199,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.renderManager.retainMeshTextures(meshes, textures);
         for (const mesh of this.meshes) {
             parent.remove(mesh);
-            this.renderManager.mixer.uncacheRoot(mesh);
+            this.mixer.uncacheRoot(mesh);
             this.renderManager.releaseGeometry(mesh.geometry);
         }
         this.disposeSkeletons();
@@ -377,7 +380,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         if (!resolvedName) throw new Error(`'${animationName}' is not available.`);
 
         const sourceClip = this.actorAnimations[resolvedName];
-        const mixer = this.renderManager.mixer;
+        const mixer = this.mixer;
         const tweenEndTime = mixer.time + Math.max(0, tweenTime);
         let notifyAction: AnimationAction = null;
         let didBegin = false;
@@ -448,6 +451,9 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         if (didBegin) this.animationTweenEndTime = tweenEndTime;
 
+        const equipment = this.findComponent<PawnEquipmentComponent>("pawnEquipment");
+        if (equipment) equipment.playExtraAnimation(animationName, tweenTime, rate, loop, restart);
+
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
         if (didBegin && script?.hasFunction("AnimBegin")) script.call("AnimBegin", [resolvedName]);
@@ -475,7 +481,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.stop();
 
         for (const mesh of this.meshes) {
-            this.renderManager.mixer.uncacheRoot(mesh);
+            this.mixer.uncacheRoot(mesh);
             this.renderManager.releaseGeometry(mesh.geometry);
         }
         this.disposeSkeletons();
@@ -486,5 +492,61 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 }
 
 type BasicActorAnimations_T = Record<PawnMovementState_T, string>;
+
+export class ExtraMeshAnimationComponent extends AnimationComponent {
+    public constructor(renderManager: RenderManager, mesh: LitSkinnedMesh) {
+        super(renderManager);
+
+        this.mixer = new AnimationMixer(mesh);
+        this.mixer.addEventListener("finished", event => this.onAnimationFinished(event.action, false));
+        this.meshes = [mesh];
+        this.actorAnimations = (mesh as any).meshAnimations;
+        this.isAnimationsInit = true;
+        (mesh as any).hasStartedAnimation = true;
+    }
+
+    protected resolveOwnerAnimation(name: string): string {
+        if (this.getAnimationClip(name)) return name;
+
+        const suffix = name.lastIndexOf("_");
+        if (suffix < 0) return null;
+
+        return name.slice(0, suffix);
+    }
+
+    public playOwnerAnimation(name: string, tween: number, rate: number, loop: boolean, restart: boolean): void {
+        const resolved = this.resolveOwnerAnimation(name);
+        if (resolved === null) return;
+        if (!this.getAnimationClip(resolved)) { this.stop(); return; }
+
+        this.play(resolved, tween, rate, loop, restart);
+    }
+
+    public copyOwnerAnimation(owner: AnimationAction, deltaTime: number): void {
+        if (!owner) return;
+
+        const name = owner.getClip().name;
+        const resolved = this.resolveOwnerAnimation(name);
+        if (resolved === null) return;
+
+        let action = this.getAction();
+        if (!action || action.getClip().name.toLowerCase() !== name.toLowerCase()) {
+            if (!this.getAnimationClip(resolved)) { this.stop(); return; }
+            this.play(resolved, 0, owner.getEffectiveTimeScale(), owner.loop === LoopRepeat, true);
+            action = this.getAction();
+        }
+
+        if (!action) return;
+        this.mixer.update(deltaTime);
+        this.onUpdate(0, deltaTime);
+        action.time = owner.getClip().duration > 0 ? owner.time / owner.getClip().duration * action.getClip().duration : 0;
+        this.mixer.update(0);
+    }
+
+    public onDetach(): void {
+        this.stop();
+        this.mixer.uncacheRoot(this.meshes[0]);
+    }
+}
 
 export default AnimationComponent;

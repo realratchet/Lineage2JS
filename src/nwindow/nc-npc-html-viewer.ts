@@ -43,6 +43,7 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
         this.setTitle(layer.getManager().getSysString(titleId));
 
         const close = layer.button(this.frame, WIDTH - 23, 3, 15, 15, TEX_CLOSE, TEX_CLOSE_DOWN, null, null, () => {
+            layer.getManager().playWindowCloseSound();
             this.hide();
 
             if (this.onClose) this.onClose();
@@ -80,6 +81,13 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
         this.element.hidden = false;
         await this.viewer.setHtml(html);
         this.setTitle(this.viewer.title || this.layer.getManager().getSysString(this.titleId));
+    }
+
+    public async showPacket(html: string, caption: string) {
+        this.element.hidden = false;
+        this.layer.activate(this.element);
+        if (caption) this.setTitle(caption);
+        if (html) await this.viewer.setHtml(html);
     }
 
     public isVisible() { return !this.element.hidden; }

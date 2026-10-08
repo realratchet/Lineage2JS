@@ -847,7 +847,7 @@ export class DecodeEngine {
         if (info.drawType === "mesh") await this.pullScriptMeshAssets(library, builder, cls.name, info.scriptProperties);
     }
 
-    protected async pullScriptMeshAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>): Promise<void> {
+    protected async pullScriptMeshAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>, animations = false): Promise<void> {
         const meshes = new Set<string>();
         const materials = new Set<string>();
 
@@ -874,7 +874,7 @@ export class DecodeEngine {
             }
 
         for (const path of meshes)
-            if (!library.scriptMeshes[path.toLowerCase()]) library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), false);
+            if (!library.scriptMeshes[path.toLowerCase()]) library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), animations);
         for (const path of materials)
             if (!library.scriptMaterials[path.toLowerCase()]) library.scriptMaterials[path.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
     }
@@ -2021,19 +2021,19 @@ export class DecodeEngine {
 
             // User::GetPcMeshName 0x738171..0x738282: dual weapons split mesh and texture indices.
             for (let i = 0; i < bones.length; i++) {
-                const item: L2JS.Engine.IPawnEquipmentDecodeInfo["items"][number] = { mesh: right.wpn_mesh[i], skins: dual ? [right.wpn_tex[i]] : right.wpn_tex.slice(), bone: bones[i] };
+                const item: L2JS.Engine.IPawnEquipmentDecodeInfo["items"][number] = { mesh: right.wpn_mesh[i], skins: dual ? [right.wpn_tex[i]] : right.wpn_tex.slice(), bone: bones[i], extraMesh: !!right.add_bone };
 
                 await this.pullWeaponEnchant(library, builder, right, equipment.enchantLevel || 0, i, item);
                 info.items.push(item);
             }
             info.weaponType = right.handness === WeaponType.WT_HAND ? WeaponType.WT_1HS : right.handness;
-            await this.pullNpcEquipment(library, builder, { rightHand: right.id, attackRange: 2000 });
+            if (right.handness === WeaponType.WT_BOW) await this.pullNpcEquipment(library, builder, { rightHand: right.id, attackRange: 2000 });
         }
 
         if (left && left.id !== equipment.rightHand) {
             if (left.wpn_mesh.length !== 1) throw new Error(`Left-hand item '${left.id}' has ${left.wpn_mesh.length} meshes.`);
 
-            info.items.push({ mesh: left.wpn_mesh[0], skins: left.wpn_tex.slice(), bone: left.handness === WeaponType.WT_HAND ? "LeftArmBone" : "LeftHandBone" });
+            info.items.push({ mesh: left.wpn_mesh[0], skins: left.wpn_tex.slice(), bone: left.handness === WeaponType.WT_HAND ? "LeftArmBone" : "LeftHandBone", extraMesh: !!left.add_bone });
             if (!right) info.weaponType = WeaponType.WT_1HS;
         } else if (equipment.leftHand && !left) {
             if (!(await this.decodeEtcItemGrp()).some(row => row.id === equipment.leftHand)) throw new Error(`Missing left-hand equipment '${equipment.leftHand}'.`);
@@ -2047,7 +2047,7 @@ export class DecodeEngine {
             for (const [mesh, texture] of getCharacterArmorPaths(row, head)) info.items.push({ mesh, skins: [texture], bone: "HeadBone" });
         }
 
-        for (const item of info.items) await this.pullScriptMeshAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins });
+        for (const item of info.items) await this.pullScriptMeshAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins }, item.extraMesh);
 
         if (equipment.hair) {
             let locations = this.cacheCharacterHairTables.get("hairaccessorylocgrp");

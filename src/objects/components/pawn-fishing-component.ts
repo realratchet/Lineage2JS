@@ -7,6 +7,7 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type PhysicsManager from "../../physics/physics-manager";
 import type AssetManager from "../../assets/asset-manager";
+import type PawnEquipmentComponent from "./pawn-equipment-component";
 import type { DecodeLibrary } from "@l2js/engine";
 
 export enum FishingType_T {
@@ -136,6 +137,8 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
                 });
                 this.renderManager.addTransientEffect(this.float);
                 pawn.setUnrealScriptProperty("FishFloat", this.float as any);
+                const equipment = pawn.findComponent<PawnEquipmentComponent>("pawnEquipment");
+                if (equipment) equipment.playWeaponAnimation(8, "Fishing_wait", 0.1, pawn.getUnrealScriptProperty("NonAttackSpeedRate") as number, true);
                 this.actionStage = 1;
                 if (this.controller) this.controller.setCalcStep(ECALCSTEP_T.STEP_MOVE_BACK, this.rotation);
             }

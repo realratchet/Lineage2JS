@@ -202,7 +202,7 @@ export class NCCommandInfoWnd {
 
         layer.text(this.header, leader, 0xffdcdcdc, FontType_T.SMALL, 22, 9);
         layer.text(this.header, this.info.leaderName, 0xffb09b79, FontType_T.SMALL, 27 + layer.measureText(leader), 9);
-        [[1266, 29, this.info.parties.length], [1267, 44, this.info.memberCount]].forEach(([id, y, value]) => {
+        [[1266, 29, this.info.partyCount ?? this.info.parties.length], [1267, 44, this.info.memberCount]].forEach(([id, y, value]) => {
             const label = manager.getSysString(id);
 
             layer.text(this.header, label, 0xffdcdcdc, FontType_T.SMALL, 243, y);

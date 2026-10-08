@@ -11,7 +11,7 @@ import L2Lobby from "./l2-lobby";
 import L2Pickup from "../objects/l2-pickup";
 import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
 import { GameServerPacket_T, GameServerExPacket_T, ShortCutType_T, readShortCut, Paperdoll_T, Race_T, Say2_T, StatusUpdate_T, SystemMessageParam_T, NPC_ID_OFFSET, readCharInfo, readCharSelectInfo, readCharSelected, readCharTemplates, readNpcInfo, readServerObjectInfo, readPetInfo, readUserInfo, readInventoryItem, readShowBoard, WaitType_T, PlaySoundType_T, GaugeColor_T, AttackFlags_T, readPledgeWar, readCrest, readPledgeCrestLarge, readWarehouseList, readPackageSendableList, readPackageToList, readPrivateStoreManageListSell, readPrivateStoreListSell, readPrivateStoreManageListBuy, readPrivateStoreListBuy, readMultiSellList, readShopPreviewList, readShopPreviewInfo, readBuyListSeed, readSellListProcure, readPoint, readVehicleLocation, readVehicleDeparture, readVehicleRider, readVehicleRiderStop, readVehicleRiderMove, readRide, readFlyToLocation, readSpecialCamera, readObservationMode, readRadarControl, readTownMap, readMonRaceInfo, readDice, readSSQStatus, readClanHallDecoration, readSiegeInfo, readSiegeClanList, readRecipeBookItemList, readRecipeItemMakeInfo, readRecipeShopManageList, readRecipeShopSellList, readRecipeShopItemInfo, readRecipeShopMsg, readHennaEquipList, readHennaItemInfo, readPartyMatchList, readPartyMatchDetail, readPartySpelled, readSnoop, readGMViewCharacterInfo, readGMViewPledgeInfo, readGMViewSkillInfo, readGMViewQuestList, readGMViewItemList, readGMViewWarehouseWithdrawList, readGMViewHennaInfo, readEnchantSkillList, readEnchantSkillInfo, readHeroList, readCommandChannelInfo, readOlympiadUserInfo, readOlympiadSpelledInfo, readPartyRoomMember, readPartyRoomMembers, readManorList, readShowSeedInfo, readShowCropInfo, readShowManorDefaultInfo, readShowSeedSetting, readShowCropSetting, readShowSellCropList, readShowProcureCropDetail, MountType_T, BlockType_T, EventMatchMessage_T, PartyRoomMemberChange_T } from "./game-packets";
-import PawnFishingComponent from "../objects/components/pawn-fishing-component";
+import PawnFishingComponent, { FishingType_T } from "../objects/components/pawn-fishing-component";
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import type PacketReader from "./packet-reader";
 import type { SessionKey_T } from "./login-client";
@@ -983,7 +983,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GameServerPacket_T.EnchantResult: this.onEnchantResult(packet); break;
             case GameServerPacket_T.SystemMessage: this.onSystemMessage(packet); break;
             case GameServerPacket_T.ConfirmDlg: this.onConfirmDlg(packet); break;
-            case GameServerPacket_T.NpcHtmlMessage: packet.d(); this.ui.showHtml(packet.S()); break;
+            case GameServerPacket_T.NpcHtmlMessage: this.onNpcHtmlMessage(packet); break;
             case GameServerPacket_T.ShortCutInit:
                 this.shortcuts.clear();
                 this.ui.clearShortCuts();
@@ -2013,7 +2013,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const clanId = this.gmCharacterInfo.clanId;
         const clan = clanId > 0 ? this.pledgeInfos.get(clanId) : null;
 
-        this.ui.setGMCharacterInfo(this.gmCharacterInfo, clan ? { clanId, name: clan.name, crestId: clan.crestId } : null);
+        this.ui.setGMCharacterInfo(this.gmCharacterInfo, clan ? { clanId, name: clan.name, crestId: clan.crestId } : null, clan ? clan.crest : null);
     }
 
     protected onPledgeInfo(packet: PacketReader) {
@@ -2023,6 +2023,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const info = this.pledgeInfos.get(clanId);
 
         if (clanId > 0 && info) { info.name = name; info.allyName = allyName; this.updateGMCharacterInfo(); }
+    }
+
+    protected updatePledgeInfo(clanId: number, crestId: number, allyId: number, allyCrestId: number, unknown: number) {
+        const info = this.pledgeInfos.get(clanId);
+
+        this.pledgeInfos.set(clanId, { name: info ? info.name : "", allyName: info ? info.allyName : "", crestId, allyId, allyCrestId, unknown, crest: info ? info.crest : null, allyCrest: info ? info.allyCrest : null });
+        if (!info || info.allyId !== allyId) this.game.requestPledgeInfo(clanId);
+        this.seedPledgeCrests(clanId, crestId, allyCrestId);
+        this.updateGMCharacterInfo();
     }
 
     protected onPledgeStatusChanged(packet: PacketReader) {
@@ -2038,12 +2047,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         user.clanCrestId = crestId;
         user.allyId = allyId;
         user.allyCrestId = allyCrestId;
-        const info = this.pledgeInfos.get(clanId);
-
-        this.pledgeInfos.set(clanId, { name: info ? info.name : "", allyName: info ? info.allyName : "", crestId, allyId, allyCrestId, unknown, crest: info ? info.crest : null, allyCrest: info ? info.allyCrest : null });
-        if (!info || info.allyId !== allyId) this.game.requestPledgeInfo(clanId);
-        this.seedPledgeCrests(clanId, crestId, allyCrestId);
-        this.updateGMCharacterInfo();
+        this.updatePledgeInfo(clanId, crestId, allyId, allyCrestId, unknown);
         this.ui.setPledgeStatus(objectId, clanId);
     }
 
@@ -2068,7 +2072,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected onPledgeShowMemberListAll(packet: PacketReader) {
-        const clanId = packet.d(), name = packet.S(), leaderName = packet.S(), crestId = packet.d(), level = packet.d(), hasCastle = packet.d(), hasHideout = packet.d();
+        const clanId = packet.d(), name = packet.S(), leaderName = packet.S();
+
+        if (clanId === 0 || !name) return;
+        const crestId = packet.d(), level = packet.d(), hasCastle = packet.d(), hasHideout = packet.d();
 
         packet.d();
 
@@ -2078,15 +2085,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const allyId = packet.d(), allyName = packet.S(), allyCrestId = packet.d(), isAtWar = packet.d() !== 0, count = packet.d();
 
-        if (!name || count < 0 || count > 1000) throw new Error(`Invalid PledgeShowMemberListAll payload (count ${count}).`);
+        if (count < 0 || count > 1000) throw new Error(`Invalid PledgeShowMemberListAll payload (count ${count}).`);
 
         const members = [];
         for (let i = 0; i < count; i++) members.push(this.readClanMember(packet));
         if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListAll trailing data.");
 
         this.clanInfo = { leaderId: 0, clanId, name, leaderName, crestId, level, hasCastle, hasHideout, memberLevel, dissolving, allyId, allyName, allyCrestId, isAtWar };
-        this.pledgeInfos.set(clanId, { name, allyName, crestId, allyId, allyCrestId, unknown: 0, crest: null, allyCrest: null });
-        this.updateGMCharacterInfo();
+        this.updatePledgeInfo(clanId, crestId, allyId, allyCrestId, 0);
         this.clanMembers.clear();
         this.ui.setClan(this.clanInfo);
         this.ui.clearClanMembers();
@@ -2309,6 +2315,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.name = info.name;
         object.title = info.title;
         object.clanId = info.clanId;
+        object.clanCrestId = info.clanCrestId;
+        object.allyId = info.allyId;
+        object.allyCrestId = info.allyCrestId;
+        if (info.clanId > 0) this.updatePledgeInfo(info.clanId, info.clanCrestId, info.allyId, info.allyCrestId, info.largeCrestId);
         object.curHp = info.curHp;
         object.maxHp = info.maxHp;
         object.curMp = info.curMp;
@@ -2363,10 +2373,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected onCharInfo(packet: PacketReader) {
         const info = readCharInfo(packet);
+
+        if (info.clanId > 0) this.updatePledgeInfo(info.clanId, info.clanCrestId, info.allyId, info.allyCrestId, info.largeCrestId);
         this.appearances.set(info.objectId, { ...info, paperdoll: info.paperdoll.slice() });
         let object = this.objects.get(info.objectId);
 
         if (object) {
+            Object.assign(object, { clanId: info.clanId, clanCrestId: info.clanCrestId, allyId: info.allyId, allyCrestId: info.allyCrestId });
             this.objects.delete(info.objectId);
             this.objects.set(info.objectId, object);
             object.isAttackable = false;
@@ -2404,6 +2417,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         object = this.createObject(info.objectId, "player", info);
+        Object.assign(object, { clanId: info.clanId, clanCrestId: info.clanCrestId, allyId: info.allyId, allyCrestId: info.allyCrestId });
         object.appearanceKey = this.getAppearanceKey(info);
         this.applyPartyMember(object);
 
@@ -3649,6 +3663,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             if (isAlly) info.allyCrest = canvas;
             else info.crest = canvas;
         }
+        if (!isAlly) this.updateGMCharacterInfo();
     }
 
     protected seedPledgeCrests(clanId: number, crestId: number, allyCrestId: number) {
@@ -3662,12 +3677,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             else this.game.requestPledgeCrest(crestId);
         }
         if (allyCrestId === 0) info.allyCrest = null;
-        else if (allyCrestId > 0) {
+        else if (info.allyId > 0 && allyCrestId > 0) {
             const canvas = this.ui.getCachedCrest(allyCrestId);
 
             if (canvas) this.bindImportedCrest(allyCrestId, canvas, true);
             else this.game.requestAllyCrest(allyCrestId);
         }
+    }
+
+    protected onNpcHtmlMessage(packet: PacketReader) {
+        packet.d();
+        const html = packet.S(), type = packet.d();
+
+        if (packet.getRemaining()) throw new Error(`Invalid NpcHtmlMessage trailing data.`);
+        this.ui.showNpcHtml(html, type);
     }
 
     protected onPledgeCrest(packet: PacketReader) {
@@ -4566,6 +4589,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!component) component = object.actor.addComponent(new PawnFishingComponent(render));
         void component.start(new Vector3(x, y, z), fishType, object.actor === render.player, this.ui.getScreenCanvas().width);
+        if (object.actor === render.player) this.ui.startFishing();
         object.fishing = { fishType, x, y, z, isFighting: false, time: 0, fishHp: 0, maxFishHp: 0, mode: 0, lureType: 0, isGoodUse: false, animation: 0, penalty: 0 };
     }
 
@@ -4579,6 +4603,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
 
         if (component) component.end(isWin !== 0);
+        if (object.actor === this.manGame.getComponent("render").player) this.ui.endFishing(isWin !== 0);
         object.fishing = null;
     }
 
@@ -4590,7 +4615,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object || !object.fishing) return;
 
         Object.assign(object.fishing, { isFighting: true, time, fishHp: maxFishHp, maxFishHp, mode, lureType });
-        if (object.actor) object.actor.findComponent<PawnFishingComponent>("pawnFishing")?.startCombat(mode);
+        if (!object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
+        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
+        const hasFloat = component && component.getFloat();
+        const wasBattle = object.actor.getUnrealScriptProperty("CurFishingType") === FishingType_T.FST_BATTLE;
+
+        if (component) component.startCombat(mode);
+        if (hasFloat && !wasBattle && object.actor === this.manGame.getComponent("render").player) this.ui.startFishingCombat(maxFishHp, time, mode, lureType);
     }
 
     protected onFishingHpRegen(packet: PacketReader) {
@@ -4601,7 +4632,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object || !object.fishing) return; // Broadcast: a fisher seen mid-fight never sent us ExFishingStart.
 
         Object.assign(object.fishing, { isFighting: true, time, fishHp, mode, isGoodUse, animation, penalty });
-        if (object.actor) object.actor.findComponent<PawnFishingComponent>("pawnFishing")?.updateCombat(mode, animation);
+        if (!object.actor || !object.actor.getUnrealScriptProperty("bFish") || object.actor.getUnrealScriptProperty("CurFishingType") !== FishingType_T.FST_BATTLE) return;
+        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
+
+        if (component) component.updateCombat(mode, animation);
+        if (component && component.getFloat() && object.actor === this.manGame.getComponent("render").player) this.ui.updateFishing(fishHp, time, isGoodUse, mode, animation, penalty);
     }
 
     protected onShowQuestMark(packet: PacketReader) {
@@ -4624,6 +4659,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.isInCommandChannel = false;
         this.commandChannel = null;
+        this.ui.closeCommandChannel();
     }
 
     protected onAskJoinMPCC(packet: PacketReader) {
