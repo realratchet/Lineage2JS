@@ -387,7 +387,7 @@ export class NCLobbyWnd { // NCLobbyWnd OnCreate 0x1009cff0, OnPaint 0x1009c7e0:
         this.functionWnd.deleteButton.setEnabled(isSelectable);
     }
 
-    protected pick(index: number) { // NCPawnSelectWnd slot75 0x1009c590: a pending-delete pick deselects the pawn and asks systemmsg 1555 instead.
+    public pick(index: number) { // NCPawnSelectWnd slot75 0x1009c590: a pending-delete pick deselects the pawn and asks systemmsg 1555 instead.
         this.setSelected(index);
 
         if (isPendingDelete(this.characters[index])) {

@@ -435,8 +435,8 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.addCheckbox(sky, "Celestials", render.skyRenderer.config.celestials, value => render.skyRenderer.config.celestials = value);
         this.addCheckbox(sky, "Haze", render.skyRenderer.config.haze1, value => render.skyRenderer.config.haze1 = value);
         this.addCheckbox(sky, "Stars/Clouds", render.skyRenderer.config.starsClouds, value => render.skyRenderer.config.starsClouds = value);
-        this.addRange(audio, "Music Volume", render.audioManager.musicVolume, 0, 1, 0.01, value => render.audioManager.musicVolume = value);
-        this.addRange(audio, "Ambient Volume", render.audioManager.ambientVolume, 0, 1, 0.01, value => render.audioManager.ambientVolume = value);
+        this.addRange(audio, "Music Volume", render.audioManager.getMusicVolume(), 0, 1, 0.01, value => render.audioManager.setMusicVolume(value));
+        this.addRange(audio, "Ambient Volume", render.audioManager.getAmbientVolume(), 0, 1, 0.01, value => render.audioManager.setAmbientVolume(value));
 
         const timeRange = this.addRange(world, "Time", environment.getTimeOfDay(), 0, 24, 0.01, value => { environment.setTimeOfDay(value); timeClock.value = formatClock(value); render.needsUpdate = true; });
         const timeClock = this.addText(world, "Time (HH:MM)", formatClock(environment.getTimeOfDay()), value => {

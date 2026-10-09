@@ -2,6 +2,7 @@ import NWnd, { type NMouseEvent_T } from "./nwnd";
 import NCButton from "./nc-button";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCNameCtrl from "./nc-name-ctrl";
+import NCStatusSizeCtrl from "./nc-status-size-ctrl";
 import NCTooltip from "./nc-tooltip";
 import type NWindowCanvas from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
@@ -11,41 +12,10 @@ const TEX_BACK = "L2UI_CH3.SmallWnd.smallwindow_back";
 const TEX_FRAME = "L2UI_CH3.FrameCtrl.smallbar";
 const arrBars = ["HPBAR", "MPBAR", "FATIGUEBAR"].map(name => `L2UI_CH3.SmallWnd.${name}`);
 const TEX_BUTTON = "L2UI_CH3.Etc.pet_button";
-const CURSOR_SIZE = 'url("/cursors/status-resize.cur") 17 15, default';
 
 class NCStatusButton extends NCButton {
     public onMouseDown(event: NMouseEvent_T) { if (!(event.clickCount > 1)) super.onMouseDown(event); }
     public onClick(event: NMouseEvent_T) { if (!(event.clickCount > 1)) super.onClick(event); }
-}
-
-class NCStatusSizeCtrl extends NWnd {
-    protected grabX = 0;
-    protected isSizing = false;
-
-    public constructor(protected readonly status: NCPetStatusWnd) { super(status.width - 10, 0, 10, status.height); }
-
-    public onMouseDown(event: NMouseEvent_T) {
-        if (event.button !== 0 || event.clickCount > 1) return;
-
-        this.grabX = event.x;
-        this.isSizing = true;
-    }
-
-    public onMouseMove(event: NMouseEvent_T) {
-        if (event.x >= 0 && event.x <= this.width && event.y >= 0 && event.y <= this.height) document.documentElement.style.cursor = CURSOR_SIZE;
-        else if (!this.isSizing) document.documentElement.style.cursor = "";
-
-        if (this.isSizing) this.status.resize(Math.trunc(event.x - this.grabX));
-    }
-
-    public onMouseLeave() { if (!this.isSizing) document.documentElement.style.cursor = ""; }
-    public onMouseUp(event: NMouseEvent_T) {
-        if (event.button !== 0) return;
-
-        this.isSizing = false;
-        if (event.x < 0 || event.x > this.width || event.y < 0 || event.y > this.height) window.addEventListener("mousemove", () => { if (!this.manager.isHovered(this)) document.documentElement.style.cursor = ""; }, { capture: true, once: true });
-    }
-    public onMouseCancel() { this.isSizing = false; document.documentElement.style.cursor = ""; }
 }
 
 export class NCPetStatusWnd extends NWnd {

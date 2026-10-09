@@ -45,10 +45,7 @@ export class NCFrameCtrl extends NWnd {
             if (event.button !== 0 || close.contains(event.target as Node)) return;
 
             event.preventDefault();
-
-            const x = layer.toUI(event.clientX) - element.offsetLeft, y = layer.toUI(event.clientY) - element.offsetTop;
-
-            layer.beginDrag(e => layer.place(element, layer.toUI(e.clientX) - x, layer.toUI(e.clientY) - y));
+            layer.dragWindow(element, event);
         });
 
         return caption;

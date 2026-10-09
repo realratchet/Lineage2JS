@@ -383,6 +383,18 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         this.isPrimaryMouseDown = false;
 
+        if (isClick && this.isCameraLocked) {
+            const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+
+            tmpScreenPosition.set((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2);
+            this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
+
+            const hit = this.traceMouse();
+
+            if (hit && (hit.actor as any)?.isActor) this.manGame.getComponent("network").pickLobbyPawn(hit.actor as any as BaseActor);
+            return;
+        }
+
         if (!isClick || !this.isOrbitControls || this.isCameraLocked) return;
 
         const renderManager = this.renderManager;
@@ -426,6 +438,9 @@ export class InputManager implements IEngineComponent<GameManager> {
                 tmpMouseIntersection.copy(physicsIntersection.location);
                 network.requestMoveTo(tmpMouseIntersection);
                 if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
+            } else if (pickDistance > 0 && renderManager.player.isSwimmingMovement()) {
+                tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
+                network.requestMoveTo(tmpMouseIntersection);
             }
 
             return;
@@ -452,6 +467,20 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public getMouseTarget(): BaseActor { return this.mouseTarget; }
+
+    public traceScreenPoint(clientX: number, clientY: number, target: Vector3): boolean {
+        const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+
+        tmpScreenPosition.set((clientX - bounds.left) / bounds.width * 2 - 1, 1 - (clientY - bounds.top) / bounds.height * 2);
+        this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
+
+        const hit = this.traceMouse();
+
+        if (!hit) return false;
+
+        target.copy(hit.location);
+        return true;
+    }
 
     public updateMouseTarget(): void { // UGameEngine::FindMouseTargetObject 0x829bc0 retraces every frame, a full-length ray here costs ~0.5ms so it runs at 20Hz
         const now = performance.now();

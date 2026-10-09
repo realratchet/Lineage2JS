@@ -22,7 +22,7 @@ import DisplayGammaPass from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
 import type PhysicsManager from "../physics/physics-manager";
 import LitSkinnedMesh from "../objects/lit-skinned-mesh";
-import type L2Pickup from "../objects/l2-pickup";
+import type GroundPickup from "../objects/ground-pickup";
 import ShadowProjector from "../objects/shadow-projector";
 import type DynamicLight from "../objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
@@ -36,6 +36,7 @@ import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
 import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
+import type AnimationComponent from "../objects/components/animation-component";
 import type { ScriptHost_T } from "../ue-script/vm";
 import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
 import NPawnLightComponent from "./components/pawn-light-component";
@@ -237,6 +238,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
     protected horizontalFov = DEFAULT_HORIZONTAL_FOV;
+    protected fovMaxAspect = Infinity;
     public readonly cameraTarget = new Vector3(-87086.51708877791, 239936.94718888338, -3685.930229617832);
     public readonly scene = new Scene();
     public readonly objectGroup = new Object3D();
@@ -270,7 +272,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
-    protected readonly pickups = new Set<L2Pickup>();
+    protected readonly pickups = new Set<GroundPickup>();
     protected readonly transientGeometries = new WeakMap<Object3D, Set<THREE.BufferGeometry>>();
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
@@ -295,8 +297,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected parallelShaderCompileExt: any = undefined; // resolved lazily, null if unsupported
     protected isRendering = false;
     protected isRenderingFrame = false;
-    protected readonly _lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
-    protected readonly _lastListenerQuat = new Quaternion(0, 0, 0, 0);
+    protected readonly lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
+    protected readonly lastListenerQuat = new Quaternion(0, 0, 0, 0);
     protected pixelRatio: number = global.devicePixelRatio;
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
@@ -322,13 +324,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
 
-    protected get physicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
-    protected get inputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
+    protected getPhysicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
+    protected getInputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
     public readonly audioManager: AudioManager = new AudioManager();
     protected activeMusicId: number = -1;
+    protected isZoneMusicEnabled = true;
 
     protected manGame: GameManager;
     public setParent(parent: GameManager): this {
@@ -586,7 +589,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public getEnvironment(): L2Environment { return this.environment; }
 
     public debugPrintCamera(): void {
-        const camera = this.camera, controls = this.inputManager.controls;
+        const camera = this.camera, controls = this.getInputManager().controls;
 
         console.log([
             `this.camera.position.set(${camera.position.toArray().join(",")});`,
@@ -666,6 +669,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.audioManager.cancelMusic();
     }
 
+    public setZoneMusicEnabled(isEnabled: boolean): void {
+        this.isZoneMusicEnabled = isEnabled;
+        if (!isEnabled) this.cancelMusic();
+    }
+
     public getSectorBounds(): readonly Box3[] { return this.sectorBounds; }
 
     public updateCameraMatrices(): void {
@@ -714,10 +722,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.lastSize.set(width, height);
     }
 
-    public setHorizontalFov(fov = DEFAULT_HORIZONTAL_FOV) {
+    public setHorizontalFov(fov = DEFAULT_HORIZONTAL_FOV, maxAspect = Infinity) {
         this.horizontalFov = fov;
+        this.fovMaxAspect = maxAspect;
         const hFOV = MathUtils.degToRad(fov);
-        const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / this.camera.aspect);
+        const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / Math.min(this.camera.aspect, maxAspect));
         this.camera.fov = MathUtils.radToDeg(vFOV);
 
         if (this.bspHelperCamera) {
@@ -735,7 +744,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const { width, height } = this.viewport.getBoundingClientRect();
 
         this.camera.aspect = width / height;
-        this.setHorizontalFov(this.horizontalFov);
+        this.setHorizontalFov(this.horizontalFov, this.fovMaxAspect);
         this.setSize(width, height);
 
         const pixelRatio = this.pixelRatio;
@@ -1062,7 +1071,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public addPawn(pawn: BaseActor): void {
         this.scene.add(pawn);
         pawn.updateMatrixWorld(true);
-        this.physicsManager.addPawn(pawn);
+        this.getPhysicsManager().addPawn(pawn);
         pawn.beginPlay();
         this.queueShaderCompile(pawn);
         this.needsUpdate = true;
@@ -1077,8 +1086,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.retainTransientGeometries(effect);
         this.scene.add(effect);
-        this.physicsManager.registerPhysicsComponent(lifetime);
-        this.physicsManager.registerSimulationObjects(effect);
+        this.getPhysicsManager().registerPhysicsComponent(lifetime);
+        this.getPhysicsManager().registerSimulationObjects(effect);
 
         if (owner) (owner.findComponent<ActorOwnershipComponent>("actorOwnership") || owner.addComponent(new ActorOwnershipComponent())).gainScriptChild(effect);
         const script = object.findComponent<ScriptComponent>("script");
@@ -1103,7 +1112,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (ownership)
             for (const child of ownership.getScriptChildren()) ownership.loseScriptChild(child);
 
-        this.physicsManager.unregisterSimulationObjects(effect);
+        this.getPhysicsManager().unregisterSimulationObjects(effect);
         effect.removeFromParent();
 
         effect.traverse(child => {
@@ -1150,12 +1159,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         textures.clear();
     }
 
-    public addPickup(pickup: L2Pickup): void {
+    public addPickup(pickup: GroundPickup): void {
         this.pickups.add(pickup);
         this.scene.add(pickup);
     }
 
-    public removePickup(pickup: L2Pickup): void {
+    public removePickup(pickup: GroundPickup): void {
         this.pickups.delete(pickup);
         pickup.release();
     }
@@ -1175,7 +1184,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public removePawn(pawn: BaseActor): void {
-        if (!this.physicsManager.removePawn(pawn)) return;
+        if (!this.getPhysicsManager().removePawn(pawn)) return;
 
         arrPawnEffects.length = 0;
         for (const effect of pawn.getScriptChildren()) arrPawnEffects.push(effect);
@@ -1198,8 +1207,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.deferredMixerOperations.length = 0;
     }
 
-    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<BaseActor> {
-        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment);
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true): Promise<BaseActor> {
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering);
     }
 
     public listNpcs(): Promise<INpcDefinition[]> {
@@ -1222,7 +1231,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
-            if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) continue;
+            if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) {
+                const animation = pawn.findComponent<AnimationComponent>("animation");
+
+                if (animation) animation.onUpdate(currentTime, deltaTime / 1000);
+                continue;
+            }
 
             pawn.updatePresentation(currentTime, deltaTime / 1000);
         }
@@ -1468,7 +1482,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const activeSector = this.getSector(bspCullingPosition);
 
         if (!auxiliary) {
-            this.physicsManager.setTriggerPosition(this.camera.position);
+            this.getPhysicsManager().setTriggerPosition(this.camera.position);
         }
         this.updateSectorRenderOrder(activeSector);
 
@@ -1508,7 +1522,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         this.updatePawnVisibility(frustum);
-        for (const emitter of this.physicsManager.getParticleEmitters()) {
+        for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
             let sector: SectorObject = null;
             for (let parent = emitter.parent; parent; parent = parent.parent)
                 if (parent.isSectorObject) { sector = parent; break; }
@@ -1521,7 +1535,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         return activeSector;
     }
 
-    protected _updateObjects(currentTime: number) {
+    protected updateObjects(currentTime: number) {
         this.visibleWorldBatchEmitters.length = 0;
         this.neighborVisibilitySectors.length = 0;
 
@@ -1555,7 +1569,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const activeSector = this.updateViewVisibility(bspCullingCamera, this.frustum);
         this.updatePawnLighting();
 
-        for (const emitter of this.physicsManager.getParticleEmitters()) {
+        for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
             if (!emitter.pendingSounds.length) continue;
 
             let sector: SectorObject = null;
@@ -1583,7 +1597,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                     const mesh = (child as any).instancedMesh;
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
-                } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
+                } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting?.()) return;
                 else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment);
                 else (child as any).update(currentTime);
             }
@@ -1612,10 +1626,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
 
-        this._updateEnvironment();
+        this.updateEnvironment();
     }
 
-    protected _updateEnvironment(camera = this.camera, updateAudio = true) {
+    protected updateEnvironment(camera = this.camera, updateAudio = true) {
         const env = this.environment;
         if (!env) return;
 
@@ -1959,7 +1973,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.waterEffects.setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
         this.waterEffects.underWaterEffect.updatePresentation(this.camera);
 
-        this.inputManager.updateCamera();
+        this.getInputManager().updateCamera();
 
         // const sector = this.scene.children[1].children[0].children[0] as any;
 
@@ -1982,20 +1996,20 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updatePawnPresentation(currentTime, deltaTime);
         for (const fishing of this.pawnFishing) fishing.tick(deltaTime / 1000);
 
-        this.inputManager.updateFollowPlayer();
-        this.inputManager.updateMouseTarget();
+        this.getInputManager().updateFollowPlayer();
+        this.getInputManager().updateMouseTarget();
 
         this.audioManager.update(currentTime);
 
-        this._updateObjects(currentTime);
+        this.updateObjects(currentTime);
 
         const activeSector = this.getSector(this.camera.position);
-        const musicPosition = this.inputManager.isFollowingPlayer() ? this.player.position : this.camera.position;
+        const musicPosition = this.getInputManager().isFollowingPlayer() ? this.player.position : this.camera.position;
         const musicSector = this.getSector(musicPosition);
         const musicInfo = musicSector ? musicSector.getMusicIdAt(musicPosition) : { musicId: -1, isLooped: false, isForced: false };
         const musicId = musicInfo.musicId ?? -1;
 
-        if (musicId !== this.activeMusicId) {
+        if (this.isZoneMusicEnabled && musicId !== this.activeMusicId) {
             this.activeMusicId = musicId;
 
             if (musicId >= 0) {
@@ -2015,9 +2029,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isDaytime, isSubmerged);
 
-            if (!this._lastListenerPos.equals(camPos) || !this._lastListenerQuat.equals(this.camera.quaternion)) {
-                this._lastListenerPos.copy(camPos);
-                this._lastListenerQuat.copy(this.camera.quaternion);
+            if (!this.lastListenerPos.equals(camPos) || !this.lastListenerQuat.equals(this.camera.quaternion)) {
+                this.lastListenerPos.copy(camPos);
+                this.lastListenerQuat.copy(this.camera.quaternion);
 
                 const fwd = this.camera.getWorldDirection(new Vector3());
                 const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
@@ -2070,7 +2084,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const shadowActive = GLOBAL_UNIFORMS.shadowActive.value;
         viewport.capture(renderer, this.scene);
         try {
-            this._updateEnvironment(viewport.camera, false);
+            this.updateEnvironment(viewport.camera, false);
             this.updateViewBillboards(viewport.camera);
             this.updateViewVisibility(viewport.camera, viewport.frustum, true);
             this.updatePawnLighting(false);
@@ -2118,7 +2132,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
         } finally {
             try {
-                this._updateEnvironment(this.camera, false);
+                this.updateEnvironment(this.camera, false);
             } finally {
                 this.activeFogId = mainFogId;
                 this.lastRenderOrderSector = mainRenderOrderSector;
@@ -2300,7 +2314,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public startTicking(_currentTime: number): void {
         this.scene.updateMatrixWorld(true);
-        this.physicsManager.registerSimulationObjects(this.scene);
+        this.getPhysicsManager().registerSimulationObjects(this.scene);
         this.updateColliderOverlay();
         this.stitchTerrains();
         this.isRendering = true;
@@ -2317,7 +2331,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     protected updateColliderOverlay(): void {
-        if (this.showColliders) this.colliderOverlay.rebuild(this.physicsManager.getColliders());
+        if (this.showColliders) this.colliderOverlay.rebuild(this.getPhysicsManager().getColliders());
     }
 
     public setSky(sector: SectorObject) {
@@ -2370,14 +2384,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.arrSceneSectors.push(sector);
         this.objectGroup.add(sector);
-        this.physicsManager.registerSimulationObjects(sector);
+        this.getPhysicsManager().registerSimulationObjects(sector);
         this.updateColliderOverlay();
         this.stitchTerrains();
 
         setLightingGate(sector, false);
 
         if (sector.staticMeshGroup) {
-            this.physicsManager.setEmitterWarmupGate(sector, false);
+            this.getPhysicsManager().setEmitterWarmupGate(sector, false);
         }
 
         this.queueSectorWarmup(sector, sector, !!sector.staticMeshGroup);
@@ -2482,7 +2496,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.queueShaderCompile(job.sector);
 
         if (job.releaseEmitters)
-            this.physicsManager.setEmitterWarmupGate(job.sector, true);
+            this.getPhysicsManager().setEmitterWarmupGate(job.sector, true);
 
         (job.sector as any).visibilityCacheInitialized = false;
     }
@@ -2496,7 +2510,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         setLightingGate(root, true);
-        if (releaseEmitters) this.physicsManager.setEmitterWarmupGate(sector, true);
+        if (releaseEmitters) this.getPhysicsManager().setEmitterWarmupGate(sector, true);
 
         this.queueShaderCompile(root);
     }
@@ -2550,7 +2564,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         sector.worldBounds.setFromObject(sector);
 
         sector.staticMeshGroup.updateMatrixWorld(true);
-        this.physicsManager.registerSimulationObjects(sector.staticMeshGroup);
+        this.getPhysicsManager().registerSimulationObjects(sector.staticMeshGroup);
         this.updateColliderOverlay();
         if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
 
@@ -2580,7 +2594,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         for (const component of sector.getComponents<AmbientSoundComponent>("ambientSound")) sector.removeComponent(component);
 
-        this.physicsManager.unregisterSimulationObjects(sector);
+        this.getPhysicsManager().unregisterSimulationObjects(sector);
         this.updateColliderOverlay();
         this.objectGroup.remove(sector);
         this.stitchTerrains();
@@ -2670,7 +2684,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         (window as any).terrainDebug = result;
 
         // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
-        for (const terrain of result.modified) this.physicsManager.refreshCollider(terrain);
+        for (const terrain of result.modified) this.getPhysicsManager().refreshCollider(terrain);
 
         this.updateColliderOverlay();
     }

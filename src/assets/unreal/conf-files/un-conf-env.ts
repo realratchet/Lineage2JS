@@ -2,7 +2,7 @@ import type { ANativePackage, APackage, EnginePackage_T } from "@l2js/core";
 import { EEnvCycle } from "../env-consts";
 import BaseConfigFile from "./un-base-config";
 import UConfigTimeEnv from "./un-conf-timeenv";
-import { consumeNextValue, consumeTuple, findSection } from "./conf-parser";
+import { consumeNextValue, consumeTuple, findSection, skipToNextToken } from "./conf-parser";
 import type { UMaterial } from "../un-material";
 import type { Vector2Arr, ColorArr } from "../library-types";
 import type { IL2NEnvLightDecodeInfo } from "../un-l2env";
@@ -108,19 +108,19 @@ export class UConfigEnv extends BaseConfigFile {
         const fileContents = this.decodeConfig();
 
         // Parse [EnvSetup]
-        this._loadEnvSetup(fileContents);
+        this.loadEnvSetup(fileContents);
 
         // Parse [FOG]
-        this._loadFog(fileContents);
+        this.loadFog(fileContents);
 
         // Parse [WaterVolume]
-        this._loadWaterVolume(fileContents);
+        this.loadWaterVolume(fileContents);
 
         // // Parse [GlowEffect]
-        // this._loadGlowEffect(fileContents);
+        // this.loadGlowEffect(fileContents);
 
         // Parse TimeEnvFileName and load them
-        await this._loadTimeEnvs(fileContents, pkgNative, pkgEngine);
+        await this.loadTimeEnvs(fileContents, pkgNative, pkgEngine);
 
         this.envSetup.clouds = new Array(this.envSetup.cloudNames.length);
 
@@ -147,7 +147,7 @@ export class UConfigEnv extends BaseConfigFile {
         };
     }
 
-    private _loadEnvSetup(fileContents: string): void {
+    private loadEnvSetup(fileContents: string): void {
         let readOffset = findSection(fileContents, "EnvSetup");
 
         const setup = this.envSetup = new EnvSetup();
@@ -155,7 +155,7 @@ export class UConfigEnv extends BaseConfigFile {
         setup.cloudNames = [];
 
         while (true) {
-            readOffset = this._skipToNextToken(fileContents, readOffset);
+            readOffset = skipToNextToken(fileContents, readOffset);
             if (readOffset >= fileContents.length || fileContents[readOffset] === "[") break;
 
             let nameMax: string, nameVal: string, readContent: number;
@@ -186,7 +186,7 @@ export class UConfigEnv extends BaseConfigFile {
         }
     }
 
-    private _loadFog(fileContents: string): void {
+    private loadFog(fileContents: string): void {
         let readOffset = findSection(fileContents, "FOG");
         const fog: Partial<EnvFog> = {
             ranges: []
@@ -196,7 +196,7 @@ export class UConfigEnv extends BaseConfigFile {
         const ends: number[] = [];
 
         while (true) {
-            readOffset = this._skipToNextToken(fileContents, readOffset);
+            readOffset = skipToNextToken(fileContents, readOffset);
             if (readOffset >= fileContents.length || fileContents[readOffset] === "[") break;
 
             let nameMax: string, nameVal: string, readContent: number;
@@ -231,12 +231,12 @@ export class UConfigEnv extends BaseConfigFile {
         this.fog = fog as EnvFog;
     }
 
-    private _loadWaterVolume(fileContents: string): void {
+    private loadWaterVolume(fileContents: string): void {
         let readOffset = findSection(fileContents, "WaterVolume");
         const water: Partial<EnvWaterVolume> = {};
 
         while (true) {
-            readOffset = this._skipToNextToken(fileContents, readOffset);
+            readOffset = skipToNextToken(fileContents, readOffset);
             if (readOffset >= fileContents.length || fileContents[readOffset] === "[") break;
 
             let nameMax: string, nameVal: string, readContent: number;
@@ -266,12 +266,12 @@ export class UConfigEnv extends BaseConfigFile {
         this.waterVolume = water as EnvWaterVolume;
     }
 
-    private _loadGlowEffect(fileContents: string): void {
+    private loadGlowEffect(fileContents: string): void {
         let readOffset = findSection(fileContents, "GlowEffect");
         const glow: Partial<EnvGlowEffect> = {};
 
         while (true) {
-            readOffset = this._skipToNextToken(fileContents, readOffset);
+            readOffset = skipToNextToken(fileContents, readOffset);
             if (readOffset >= fileContents.length || fileContents[readOffset] === "[") break;
 
             let nameMax: string, nameVal: string, readContent: number;
@@ -298,24 +298,7 @@ export class UConfigEnv extends BaseConfigFile {
         this.glowEffect = glow as EnvGlowEffect;
     }
 
-    private _skipToNextToken(fileContents: string, offset: number): number {
-        while (offset < fileContents.length) {
-            if (fileContents[offset] === ';') {
-                const eol = fileContents.indexOf('\r\n', offset);
-                if (eol === -1) return fileContents.length;
-                offset = eol + 2;
-                continue;
-            }
-            if (/\s/.test(fileContents[offset])) {
-                offset++;
-                continue;
-            }
-            break;
-        }
-        return offset;
-    }
-
-    private async _loadTimeEnvs(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): Promise<void> {
+    private async loadTimeEnvs(fileContents: string, pkgNative: ANativePackage, pkgEngine: EnginePackage_T): Promise<void> {
         let readOffset = findSection(fileContents, "EnvSetup");
 
         // Skip till TimeEnvFileNum

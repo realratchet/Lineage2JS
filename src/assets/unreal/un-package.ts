@@ -347,6 +347,7 @@ export class UNativePackage extends ANativePackage {
             case "Orientation":
             case "AccessoryType":
             case "L2Event":
+            case "NMagicInfo":
             case "ParticleBeamEndPoint": Constructor = PEmitter.UParticleBeamEndPoint; break;
             case "ParticleBeamScale": Constructor = PEmitter.UParticleBeamScale; break;
             case "ADrop": Constructor = UADrop; break;

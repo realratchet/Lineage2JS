@@ -549,6 +549,7 @@ export enum StatusUpdate_T {
 
 export enum SystemMessageParam_T { TYPE_TEXT, TYPE_NUMBER, TYPE_NPC_NAME, TYPE_ITEM_NAME, TYPE_SKILL_NAME } // SystemMessage.TYPE_*
 export enum WaitType_T { WT_SITTING, WT_STANDING, WT_START_FAKEDEATH, WT_STOP_FAKEDEATH }
+export enum PrivateStoreType_T { STORE_PRIVATE_NONE = 0, STORE_PRIVATE_SELL = 1, STORE_PRIVATE_SELL_MANAGE = 2, STORE_PRIVATE_BUY = 3, STORE_PRIVATE_BUY_MANAGE = 4, STORE_PRIVATE_MANUFACTURE = 5, STORE_PRIVATE_MANUFACTURE_MANAGE = 6, STORE_PRIVATE_PACKAGE_SELL = 8 }
 export enum PlaySoundType_T { SOUND, MUSIC, VOICE }
 
 export const HITFLAG_USESS = 0x10;
@@ -590,11 +591,11 @@ export type CharSelectEntry_T = Appearance_T & {
 
 export type CharSelected_T = Location_T & { name: string, charId: number, title: string, sex: number, race: Race_T, classId: number, curHp: number, curMp: number, level: number, gameTime: number };
 
-export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number };
+export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, abnormalState: number };
 
-export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, largeCrestId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
+export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, largeCrestId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, privateStoreType: PrivateStoreType_T, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
 
-export type CharInfo_T = CreatureInfo_T & Appearance_T & { clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, cubics: number[] };
+export type CharInfo_T = CreatureInfo_T & Appearance_T & { clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, privateStoreType: PrivateStoreType_T, cubics: number[] };
 
 export type NpcInfo_T = CreatureInfo_T & { npcId: number, isAttackable: boolean, rightHand: number, chest: number, leftHand: number, spawnType: number, isSummon: boolean };
 export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number };
@@ -740,12 +741,14 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.allyCrestId = packet.d();
     info.clanRelation = packet.d();
     info.mountType = packet.c();
-    packet.skip(1);
+    info.privateStoreType = packet.c();
     info.hasDwarvenCraft = packet.c() !== 0;
     info.pkKills = packet.d();
     info.pvpKills = packet.d();
     info.cubics = readCubics(packet);
-    packet.skip(1 + 4 + 1);
+    packet.skip(1);
+    info.abnormalState = packet.d();
+    packet.skip(1);
     info.pledgePrivileges = packet.b(32);
 
     info.recommendationsLeft = packet.h();
@@ -805,10 +808,11 @@ export function readCharInfo(packet: PacketReader): CharInfo_T {
     packet.c();
 
     info.mountType = packet.c();
-
-    packet.c();
+    info.privateStoreType = packet.c();
     info.cubics = readCubics(packet);
-    packet.skip(1 + 4 + 1);
+    packet.skip(1);
+    info.abnormalState = packet.d();
+    packet.skip(1);
 
     info.recommendations = packet.h();
 
@@ -862,7 +866,7 @@ export function readServerObjectInfo(packet: PacketReader): ServerObjectInfo_T {
     if (objectId <= 0 || npcId <= 0 || !Number.isFinite(moveMultiplier) || moveMultiplier <= 0 || !Number.isFinite(attackSpeedMultiplier) || attackSpeedMultiplier <= 0 || !Number.isFinite(collisionRadius) || collisionRadius <= 0 || !Number.isFinite(collisionHeight) || collisionHeight <= 0 || curHp < 0 || maxHp < 0 || curHp > maxHp || packet.getRemaining())
         throw new Error("Invalid ServerObjectInfo payload.");
 
-    return { objectId, npcId, isAttackable, x, y, z, heading, name, title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffffff, runSpd: 0, walkSpd: 0, swimRunSpd: 0, swimWalkSpd: 0, moveMultiplier, attackSpeedMultiplier, collisionRadius, collisionHeight, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false, curHp, maxHp };
+    return { objectId, npcId, isAttackable, x, y, z, heading, name, title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffffff, runSpd: 0, walkSpd: 0, swimRunSpd: 0, swimWalkSpd: 0, moveMultiplier, attackSpeedMultiplier, collisionRadius, collisionHeight, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false, abnormalState: 0, curHp, maxHp };
 }
 
 export type PetStatus_T = { objectId: number, npcId: number, name: string, x: number, y: number, z: number, statusType: number, curFood: number, maxFood: number, curHp: number, maxHp: number, curMp: number, maxMp: number, field42: number, level: number, exp: number, minExp: number, nextExp: number, weight: number, maxWeight: number, pAtk: number, pDef: number, mAtk: number, mDef: number, accuracy: number, evasion: number, critical: number, speed: number, attackSpeed: number, castSpeed: number, field60: number, isMountable: boolean, soulshotsUsed: number, spiritshotsUsed: number };

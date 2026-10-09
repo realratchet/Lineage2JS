@@ -52,6 +52,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     protected readonly pendingEffects: SkillPhase_T[] = [];
     protected readonly pendingSounds: { dueTime: number, sound: NpcSkillSound_T, pawn: SkillActor_T }[] = [];
     protected readonly preparedProjectiles: SkillActor_T[] = [];
+    protected readonly castingEffects: SkillActor_T[] = [];
     protected frame: SkillPhase_T = null;
     protected lastTime = 0;
 
@@ -89,7 +90,17 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     public clear(): void {
         this.finish();
         this.preparedProjectiles.length = 0;
+        this.castingEffects.length = 0;
         this.placement.clear();
+    }
+
+    public cancel(): void {
+        for (const effect of this.castingEffects) // Engine.dll MagicStop 0x7b5410 destroys Pawn+0x52c (TriggerCasting) and Pawn+0x364 (NSkillProjectileActor) only.
+            if (this.host.isAlive(effect)) this.host.removeEffect(effect);
+        for (const projectile of this.preparedProjectiles)
+            if (this.host.isAlive(projectile)) this.host.removeEffect(projectile);
+        this.castingEffects.length = 0;
+        this.preparedProjectiles.length = 0;
     }
 
     public addAttackLight(caster: SkillActor_T, target: SkillActor_T): void { this.placement.addAttackLight(caster, target); }
@@ -117,6 +128,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             if (!skill.visual.transientRejected) throw new Error(`Native transient effect '${skill.name}' is not implemented.`);
             return false;
         }
+        this.castingEffects.length = 0;
         this.notify("casting", currentTime, cast);
         return skill.castStyle === 0; // TriggerTransientEffect 0x795c20 executes CastingActions and leaves the action intact.
     }
@@ -213,6 +225,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
                         this.notify("explosion", this.lastTime, cast, projectile, destination, !!destination, targets);
                     });
                 });
+                if (frame.lastEffect && phase === "casting" && cast.shotTime > 0) this.castingEffects.push(frame.lastEffect); // Engine.dll TriggerCasting 0x7969ea.
                 if (frame.lastEffect && this.host.getProjectile(frame.lastEffect)) frame.projectileExplosion = true;
             }
             return true;

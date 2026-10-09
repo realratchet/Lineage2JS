@@ -29,6 +29,8 @@ export class BaseActor extends GameObject implements ICollidable {
     protected renderManager: RenderManager;
     protected readonly movementComponent: PawnMovementComponent;
     protected scriptComponent: ScriptComponent<BaseActor> = null;
+    public scriptClassId: string = null;
+    public scriptProperties: Map<string, ScriptValue_T> = null;
 
     public constructor(renderManager: RenderManager) {
         super();
@@ -42,9 +44,7 @@ export class BaseActor extends GameObject implements ICollidable {
         this.addComponent(new ColliderComponent());
     }
 
-    protected get animationComponent(): AnimationComponent { return this.getComponent("animation"); }
-    public get scriptClassId(): string { return this.scriptComponent ? this.scriptComponent.getClassId() : null; }
-    public get scriptProperties(): Map<string, ScriptValue_T> { return this.scriptComponent ? this.scriptComponent.getProperties() : null; }
+    protected getAnimationComponent(): AnimationComponent { return this.getComponent("animation"); }
 
     public setScriptRuntime(vm: UnScriptVM, classId: string, objectFactory: ScriptObjectFactory_T): void {
         const isOnVehicle = this.scriptComponent ? this.getStoredUnrealScriptProperty("bGetOnVehicle") : null;
@@ -54,6 +54,8 @@ export class BaseActor extends GameObject implements ICollidable {
         const component = new ScriptComponent<BaseActor>(vm, objectFactory, classId);
 
         this.scriptComponent = component;
+        this.scriptClassId = classId;
+        this.scriptProperties = component.getProperties();
         this.addComponent(component);
         if (isOnVehicle !== null) this.setUnrealScriptProperty("bGetOnVehicle", isOnVehicle);
         this.setCollisionSize(this.getStoredUnrealScriptProperty("CollisionRadius") as number, this.getStoredUnrealScriptProperty("CollisionHeight") as number);
@@ -124,14 +126,14 @@ export class BaseActor extends GameObject implements ICollidable {
         throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${call.context.scriptClassId}'.`);
     }
 
-    public getAnimationAction(): AnimationAction { return this.animationComponent.getAction(); }
+    public getAnimationAction(): AnimationAction { return this.getAnimationComponent().getAction(); }
 
     public getSocialAnimDuration(action: number): number { // Engine 0x105e5a20.
         if (this.getUnrealScriptProperty("bNpc") || action < 0 || action >= 20) return -1;
 
         const weapon = this.getUnrealScriptProperty("CurWeaponType") as number;
         const names = this.getUnrealScriptProperty(action === 0 ? "SitAnimName" : action === 1 ? "StandAnimName" : "PcSocialAnimName") as string[];
-        const clip = this.animationComponent.getAnimationClip(names[action < 2 ? weapon : action]);
+        const clip = this.getAnimationComponent().getAnimationClip(names[action < 2 ? weapon : action]);
 
         if (!clip) return -1;
 
@@ -168,7 +170,7 @@ export class BaseActor extends GameObject implements ICollidable {
         if (this.visible) super.updateMatrixWorld(force);
     }
 
-    public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 { return this.animationComponent.getBoneWorldPosition(name, target, offset); }
+    public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 { return this.getAnimationComponent().getBoneWorldPosition(name, target, offset); }
 
     public getEffectTargetLocation(target: Vector3): Vector3 {
         // Retail Engine.u Pawn.GetEffTargetLocation directly uses EffectSpawnBoneIdx; no SpineBone fallback.
@@ -187,11 +189,11 @@ export class BaseActor extends GameObject implements ICollidable {
 
     public getRenderSphere(): Sphere { return this.getComponent<PawnRenderableComponent>("pawnRenderable").getRenderSphere(); }
 
-    public setMeshes(meshes: Mesh[]): void { this.animationComponent.setMeshes(meshes); }
+    public setMeshes(meshes: Mesh[]): void { this.getAnimationComponent().setMeshes(meshes); }
 
-    public setAnimations(animations: Record<string, AnimationClip>): void { this.animationComponent.setAnimations(animations); }
-    public getAnimationNames(): string[] { return this.animationComponent.getAnimationNames(); }
-    public stopAnimations(): void { this.animationComponent.stop(); }
+    public setAnimations(animations: Record<string, AnimationClip>): void { this.getAnimationComponent().setAnimations(animations); }
+    public getAnimationNames(): string[] { return this.getAnimationComponent().getAnimationNames(); }
+    public stopAnimations(): void { this.getAnimationComponent().stop(); }
 
     // materials stay - material-decoder hands those out of name-keyed shared caches
     public release(): void {
@@ -199,16 +201,16 @@ export class BaseActor extends GameObject implements ICollidable {
         this.detachComponents();
     }
 
-    public setIdleAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("idle", animationName); }
-    public setWalkingAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("walking", animationName); }
-    public setRunningAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("running", animationName); }
-    public setDeathAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("dying", animationName); }
-    public setFallingAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("falling", animationName); }
-    public setSwimmingAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("swimming", animationName); }
-    public setSwimmingIdleAnimation(animationName: string): void { this.animationComponent.setBasicAnimation("swimmingIdle", animationName); }
-    public playMovementAnimation(state: PawnMovementState_T): void { this.animationComponent.playMovement(state); }
-    public setDeathAnimationFromScript(): void { this.animationComponent.setDeathAnimationFromScript(); }
-    public initAnimations(): void { this.animationComponent.init(); }
+    public setIdleAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("idle", animationName); }
+    public setWalkingAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("walking", animationName); }
+    public setRunningAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("running", animationName); }
+    public setDeathAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("dying", animationName); }
+    public setFallingAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("falling", animationName); }
+    public setSwimmingAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("swimming", animationName); }
+    public setSwimmingIdleAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("swimmingIdle", animationName); }
+    public playMovementAnimation(state: PawnMovementState_T): void { this.getAnimationComponent().playMovement(state); }
+    public setDeathAnimationFromScript(): void { this.getAnimationComponent().setDeathAnimationFromScript(); }
+    public initAnimations(): void { this.getAnimationComponent().init(); }
 
     public spawnEnterEvent(event: INpcEnterEvent): void {
         this.getComponent<NpcLifecycleComponent>("npcLifecycle").spawnEnter(event);
@@ -223,8 +225,8 @@ export class BaseActor extends GameObject implements ICollidable {
     public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void { this.getComponent<PawnAttackComponent>("pawnAttack").attack(target, selection, locList, associatedActors, targetExcepted); }
     public stopAttack(): void { this.getComponent<PawnAttackComponent>("pawnAttack").stop(); }
 
-    public isPlayingOneShotAnimation(animationName: string): boolean { return this.animationComponent.isPlayingOneShot(animationName); }
-    public playAnimation(animationName: string, tweenTime: number = 0.1, rate: number = 1, loop: boolean = true, restart: boolean = false): void { this.animationComponent.play(animationName, tweenTime, rate, loop, restart); }
+    public isPlayingOneShotAnimation(animationName: string): boolean { return this.getAnimationComponent().isPlayingOneShot(animationName); }
+    public playAnimation(animationName: string, tweenTime: number = 0.1, rate: number = 1, loop: boolean = true, restart: boolean = false): void { this.getAnimationComponent().play(animationName, tweenTime, rate, loop, restart); }
 
     public goTo(position: Vector3): void { this.movementComponent.goTo(position); }
     public goToActor(actor: Object3D, offset: number = 0): void { this.movementComponent.goToActor(actor, offset); }

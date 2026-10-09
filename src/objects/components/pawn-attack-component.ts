@@ -493,22 +493,25 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public stop(): void {
-        this.skillEffects.clear();
+        if (!this.isActive && !this.currentAttack) return;
 
-        if (!this.isActive && !this.currentAttack && !this.skillEffects.hasPending() && this.attackEffects.length === 0) return;
-
-        for (const effect of this.attackEffects)
-            if (effect.parent) this.renderManager.removeTransientEffect(effect);
-
-        this.attackEffects.length = 0;
+        this.skillEffects.cancel();
+        if (this.bowProjectile?.parent) this.renderManager.removeTransientEffect(this.bowProjectile);
 
         this.finish();
     }
 
+    public clear(): void {
+        this.stop();
+        this.skillEffects.clear();
+        for (const effect of this.attackEffects)
+            if (effect.parent) this.renderManager.removeTransientEffect(effect);
+
+        this.attackEffects.length = 0;
+    }
+
     protected finish(): void {
         const parent = this.getParent();
-
-        this.skillEffects.finish();
 
         this.associatedActors.length = 0;
         this.requestedAssociatedActors = null;
@@ -526,7 +529,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.pendingPreShot = false;
         this.pendingShot = null;
         this.isActive = false;
-        parent.stopMoving();
+        if (!this.isServerAction) parent.stopMoving();
         parent.faceActor(null);
         parent.playMovementAnimation("idle");
     }

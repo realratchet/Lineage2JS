@@ -13,9 +13,10 @@ export class Nameplate extends Sprite {
     public height = 0;
 
     public constructor() {
-        super(new SpriteMaterial({ depthTest: true, depthWrite: false, sizeAttenuation: false, side: DoubleSide, toneMapped: false, fog: false }));
+        super(new SpriteMaterial({ depthTest: false, depthWrite: false, sizeAttenuation: false, side: DoubleSide, toneMapped: false, fog: false }));
 
         (this as any).isNameplate = true;
+        this.renderOrder = 10000;
         this.material.map = this.createTexture();
         this.frustumCulled = false;
     }

@@ -32,7 +32,7 @@ export class NCMapWnd {
         this.element = layer.createWindow(0, 0, 334, 383);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 334, 363, 0, 0, 334, 363, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 334, "Map");
+        NCFrameCtrl.createDOM(layer, this.element, 334, layer.getManager().getSysString(447)); // NWindow 0x10062182: minimap window title
         this.viewport = layer.createWindow(3, 21, 328, 328, this.element);
         this.viewport.style.overflow = "hidden";
         this.viewport.tabIndex = 0;

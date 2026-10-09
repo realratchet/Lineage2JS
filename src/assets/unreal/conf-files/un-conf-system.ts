@@ -1,6 +1,6 @@
 
 import BaseConfigFile from "./un-base-config";
-import { consumeNextValue } from "./conf-parser";
+import { consumeNextValue, skipToNextToken } from "./conf-parser";
 
 export type ClippingRangeConfig_T = {
     staticMesh: number;
@@ -47,32 +47,39 @@ export class UConfigSystem extends BaseConfigFile {
     public async load(): Promise<this> {
         const fileContents = this.decodeConfig();
 
-        this._loadSection(fileContents, "ClippingRange", this.clippingRange, this.definedClippingKeys);
+        this.loadNumbers(fileContents, "ClippingRange", this.clippingRange, this.definedClippingKeys);
 
         // C4 UClient::Init overrides the l2.ini config field with Option.ini [Video] Gamma.
-        this._loadSection(fileContents, "WinDrv.WindowsClient", this.display, this.definedDisplayKeys);
-        this._loadSection(fileContents, "Video", this.display, this.definedDisplayKeys);
+        this.loadNumbers(fileContents, "WinDrv.WindowsClient", this.display, this.definedDisplayKeys);
+        this.loadNumbers(fileContents, "Video", this.display, this.definedDisplayKeys);
 
-        for (const [key, name] of [["systemMsgWnd", "SystemMsgWnd"], ["transparencyMode", "TransparencyMode"]] as ["systemMsgWnd" | "transparencyMode", string][]) {
-            const match = new RegExp(`\\[Game\\][^[]*?^\\s*${name}\\s*=\\s*(\\w+)`, "im").exec(fileContents);
-
-            if (!match) continue;
-
-            this.game[key] = match[1].toLowerCase() === "true";
-            this.definedGameKeys.add(key);
-        }
-
-        const partyLooting = /\[Game\][^[]*?^\s*PartyLooting\s*=\s*([+-]?\d+)/im.exec(fileContents);
-
-        if (partyLooting) {
-            this.game.partyLooting = parseInt(partyLooting[1], 10);
-            this.definedGameKeys.add("partyLooting");
-        }
+        this.loadSection(fileContents, "Game", (key, value) => {
+            switch (key.toLowerCase()) {
+                case "systemmsgwnd": this.game.systemMsgWnd = value.toLowerCase() === "true"; this.definedGameKeys.add("systemMsgWnd"); break;
+                case "transparencymode": this.game.transparencyMode = value.toLowerCase() === "true"; this.definedGameKeys.add("transparencyMode"); break;
+                case "partylooting": this.game.partyLooting = parseInt(value, 10); this.definedGameKeys.add("partyLooting"); break;
+            }
+        });
 
         return this;
     }
 
-    private _loadSection(fileContents: string, section: string, target: object, definedKeys: Set<string>): void {
+    protected loadNumbers(fileContents: string, section: string, target: object, definedKeys: Set<string>): void {
+        this.loadSection(fileContents, section, (key, value) => {
+            const val = parseFloat(value);
+
+            if (!isNaN(val)) {
+                Object.keys(target).forEach(k => {
+                    if (k.toLowerCase() === key.toLowerCase()) {
+                        (target as any)[k] = val;
+                        definedKeys.add(k);
+                    }
+                });
+            }
+        });
+    }
+
+    protected loadSection(fileContents: string, section: string, onValue: (key: string, value: string) => void): void {
         const sectionHeader = `[${section}]\r\n`;
         const sectionOffset = fileContents.indexOf(sectionHeader);
 
@@ -81,7 +88,7 @@ export class UConfigSystem extends BaseConfigFile {
         let readOffset = sectionOffset + sectionHeader.length;
 
         while (true) {
-            let nextOffset = this._skipToNextToken(fileContents, readOffset);
+            let nextOffset = skipToNextToken(fileContents, readOffset);
             if (nextOffset >= fileContents.length || fileContents[nextOffset] === "[") break;
 
             readOffset = nextOffset;
@@ -95,34 +102,9 @@ export class UConfigSystem extends BaseConfigFile {
             readOffset += readContent;
 
             const key = nameMax;//.toLowerCase();
-            const val = parseFloat(nameVal);
 
-            if (!isNaN(val)) {
-                Object.keys(target).forEach(k => {
-                    if (k.toLowerCase() === key.toLowerCase()) {
-                        (target as any)[k] = val;
-                        definedKeys.add(k);
-                    }
-                });
-            }
+            onValue(key, nameVal);
         }
-    }
-
-    private _skipToNextToken(fileContents: string, offset: number): number {
-        while (offset < fileContents.length) {
-            if (fileContents[offset] === ';') {
-                const eol = fileContents.indexOf('\r\n', offset);
-                if (eol === -1) return fileContents.length;
-                offset = eol + 2;
-                continue;
-            }
-            if (/\s/.test(fileContents[offset])) {
-                offset++;
-                continue;
-            }
-            break;
-        }
-        return offset;
     }
 }
 

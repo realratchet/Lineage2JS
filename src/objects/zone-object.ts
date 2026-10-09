@@ -246,10 +246,10 @@ export class SectorObject extends GameObject {
     protected visibilityCacheEmitterDistanceSq = Infinity;
     protected visibilityCacheEnvVersion = -1;
     protected visibilityCacheTimeStep = -1;
-    protected _lastLoggedStaticMeshLeaf: number | null = null;
+    protected lastLoggedStaticMeshLeaf: number | null = null;
 
-    protected _lastLoggedZone: number | null = null;
-    protected _lastLoggedLeaf: number | null = null;
+    protected lastLoggedZone: number | null = null;
+    protected lastLoggedLeaf: number | null = null;
 
     public setLights(lights: DynamicLight[]): this {
         for (const light of lights) {
@@ -785,19 +785,19 @@ export class SectorObject extends GameObject {
             currentZone = this.findPositionZone(cameraPosition);
         }
 
-        const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
-        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
+        const zoneChanged = currentZone !== null && currentZone >= 0 && (this.lastLoggedZone === null || this.lastLoggedZone !== currentZone);
+        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this.lastLoggedLeaf === null || this.lastLoggedLeaf !== leafIndex);
 
         if (zoneChanged || leafChanged) {
             if (zoneChanged) {
-                const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
+                const previousZone = this.lastLoggedZone !== null ? this.lastLoggedZone : "unknown";
                 console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
-                this._lastLoggedZone = currentZone;
+                this.lastLoggedZone = currentZone;
             }
             if (leafChanged) {
-                const previousLeaf = this._lastLoggedLeaf !== null ? this._lastLoggedLeaf : "unknown";
+                const previousLeaf = this.lastLoggedLeaf !== null ? this.lastLoggedLeaf : "unknown";
                 console.log(`[Leaf Change] Leaf: ${previousLeaf} -> ${leafIndex}`);
-                this._lastLoggedLeaf = leafIndex;
+                this.lastLoggedLeaf = leafIndex;
             }
         }
 
@@ -839,21 +839,21 @@ export class SectorObject extends GameObject {
         }
     }
 
-    protected _animatedLights?: DynamicLight[];
-    protected _lastLightEnvVersion = -1;
+    protected animatedLights?: DynamicLight[];
+    protected lastLightEnvVersion = -1;
 
     protected updateLights(environment: L2Environment) {
         const envVersion = environment.getEnvVersion();
 
-        if (this._lastLightEnvVersion !== envVersion || !this._animatedLights) {
-            this._lastLightEnvVersion = envVersion;
-            this._animatedLights = [];
+        if (this.lastLightEnvVersion !== envVersion || !this.animatedLights) {
+            this.lastLightEnvVersion = envVersion;
+            this.animatedLights = [];
 
             for (const light of Object.values(this.lights)) {
                 light.update(environment, this.brightness);
 
                 if (light.isDynamic || light.isTimeBased) {
-                    this._animatedLights.push(light);
+                    this.animatedLights.push(light);
                 } else {
                     light.needsUpdate = false;
                 }
@@ -861,7 +861,7 @@ export class SectorObject extends GameObject {
             return;
         }
 
-        for (const light of this._animatedLights) light.update(environment, this.brightness);
+        for (const light of this.animatedLights) light.update(environment, this.brightness);
     }
 
     protected isVisibilityCacheValid(environment: L2Environment, cameraPosition: Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, topLevelOnly: boolean, staticMeshCullDistanceSq: number, emitterCullDistanceSq: number) {
@@ -935,19 +935,19 @@ export class SectorObject extends GameObject {
             currentZone = this.findPositionZone(cameraPosition);
         }
 
-        const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
-        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
+        const zoneChanged = currentZone !== null && currentZone >= 0 && (this.lastLoggedZone === null || this.lastLoggedZone !== currentZone);
+        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this.lastLoggedLeaf === null || this.lastLoggedLeaf !== leafIndex);
 
         if (!auxiliary && (zoneChanged || leafChanged)) {
             if (zoneChanged) {
-                const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
+                const previousZone = this.lastLoggedZone !== null ? this.lastLoggedZone : "unknown";
                 console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
-                this._lastLoggedZone = currentZone;
+                this.lastLoggedZone = currentZone;
             }
             if (leafChanged) {
-                const previousLeaf = this._lastLoggedLeaf !== null ? this._lastLoggedLeaf : "unknown";
+                const previousLeaf = this.lastLoggedLeaf !== null ? this.lastLoggedLeaf : "unknown";
                 console.log(`[Leaf Change] Leaf: ${previousLeaf} -> ${leafIndex}`);
-                this._lastLoggedLeaf = leafIndex;
+                this.lastLoggedLeaf = leafIndex;
             }
         }
 
@@ -1236,9 +1236,9 @@ export class SectorObject extends GameObject {
                 }
             }
 
-            if (!auxiliary && leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
+            if (!auxiliary && leafIndex !== null && leafIndex >= 0 && leafIndex !== this.lastLoggedStaticMeshLeaf) {
                 console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
-                this._lastLoggedStaticMeshLeaf = leafIndex;
+                this.lastLoggedStaticMeshLeaf = leafIndex;
             }
         }
 
@@ -1499,9 +1499,9 @@ export class SectorObject extends GameObject {
         });
 
         const leafIndex = this.findPositionLeaf(cameraPosition);
-        if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
+        if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this.lastLoggedStaticMeshLeaf) {
             console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
-            this._lastLoggedStaticMeshLeaf = leafIndex;
+            this.lastLoggedStaticMeshLeaf = leafIndex;
         }
     }
 }

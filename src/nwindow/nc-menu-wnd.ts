@@ -31,10 +31,7 @@ export class NCMenuWnd {
             if (event.button !== 0) return;
 
             event.preventDefault();
-
-            const x = layer.toUI(event.clientX) - this.element.offsetLeft, y = layer.toUI(event.clientY) - this.element.offsetTop;
-
-            layer.beginDrag(e => layer.place(this.element, layer.toUI(e.clientX) - x, layer.toUI(e.clientY) - y));
+            layer.dragWindow(this.element, event);
         });
 
         layer.tile(this.element, 12, 0, 16, 46, 0, 0, 16, 46, arrBack[0]);
@@ -44,9 +41,9 @@ export class NCMenuWnd {
         arrTextures.forEach((path, index) => {
             const label = layer.getManager().getSysString(arrLabels[index]);
             const select = () => { if (this.onSelect) this.onSelect(arrButtons[index]); };
-            const button = layer.button(this.element, 19 + index * 37, 6, 34, 34, path, `${path}_down`, null, null, select);
+            const button = layer.button(this.element, 19 + index * 37, 6, 34, 34, path, `${path}_down`, null, null, select, () => { });
 
-            button.title = label;
+            layer.tooltip(this.element, button, label);
             button.tabIndex = 0;
             button.setAttribute("role", "button");
             button.setAttribute("aria-label", label);
@@ -54,7 +51,6 @@ export class NCMenuWnd {
                 if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
 
                 event.preventDefault();
-                layer.getManager().playButtonSound(true);
                 select();
             });
         });

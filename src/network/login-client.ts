@@ -36,20 +36,11 @@ export type GameServerInfo_T = {
 
 export type SessionKey_T = { loginOk1: number, loginOk2: number, playOk1: number, playOk2: number };
 
-const LOGIN_FAIL_REASONS: Record<number, string> = {
-    0x01: "System error.",
-    0x02: "Password does not match this account.",
-    0x03: "Account or password is incorrect.",
-    0x04: "Access failed.",
-    0x07: "Account is already in use."
-};
-
-const PLAY_FAIL_REASONS: Record<number, string> = {
-    0x01: "System error.",
-    0x02: "Account or password is incorrect.",
-    0x03: "Account or password is incorrect.",
-    0x04: "Access failed.",
-    0x0f: "Server is full."
+const LOGIN_FAIL_MESSAGES: Record<number, number[]> = { // NWindow 0x1006f1d0 OnAuthLoginFail switch, joined with "%s %s" / "%s %s %s"
+    1: [448], 2: [449, 450], 3: [449, 450], 4: [461, 462, 463], 5: [453, 454], 6: [461, 462, 463], 7: [455],
+    8: [461, 462, 463], 9: [461, 462, 463], 10: [461, 462, 463], 11: [461, 462, 463], 12: [456], 13: [461, 462, 463], 14: [461, 462, 463],
+    15: [1650], 16: [457], 17: [396], 18: [458, 459, 460], 19: [398], 20: [399], 21: [461], 22: [621],
+    30: [756], 31: [1243], 32: [1242], 33: [1340], 35: [1407]
 };
 
 export class LoginClient {
@@ -111,9 +102,15 @@ export class LoginClient {
         const opcode = packet.c() as LoginServerPacket_T;
 
         switch (opcode) {
-            case LoginServerPacket_T.LoginFail: { const reason = packet.c(); throw new Error(LOGIN_FAIL_REASONS[reason] || `Login failed (reason ${reason}).`); }
+            case LoginServerPacket_T.LoginFail: {
+                const reason = packet.c();
+
+                if (!LOGIN_FAIL_MESSAGES[reason]) throw new Error(`Unknown LoginFail reason ${reason}.`);
+
+                throw Object.assign(new Error(`LoginFail reason ${reason}.`), { systemMessageIds: LOGIN_FAIL_MESSAGES[reason] });
+            }
             case LoginServerPacket_T.AccountKicked: throw new Error(`Account was kicked (reason ${packet.d()}).`);
-            case LoginServerPacket_T.PlayFail: { const reason = packet.c(); throw new Error(PLAY_FAIL_REASONS[reason] || `Server login failed (reason ${reason}).`); }
+            case LoginServerPacket_T.PlayFail: throw new Error(`PlayFail reason ${packet.c()}.`); // UGameEngine::OnAuthServerSelectFail 0x1046d050 shows nothing
         }
 
         if (!opcodes.includes(opcode)) throw new Error(`Unexpected login packet 0x${opcode.toString(16)}, expected ${opcodes.map(op => `0x${op.toString(16)}`).join("/")}.`);

@@ -1,7 +1,7 @@
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import type { DecodeLibrary } from "@l2js/engine";
 
-export class LineagePlayerController implements ScriptHost_T {
+export class PlayerController implements ScriptHost_T {
     public readonly scriptClassId: string;
     public readonly scriptProperties = new Map<string, ScriptValue_T>();
     protected readonly scriptVM: UnScriptVM;
@@ -16,7 +16,7 @@ export class LineagePlayerController implements ScriptHost_T {
         this.scriptVM.call(this, "PostBeginPlay");
     }
 
-    public get underWaterLoopSound(): string {
+    public getUnderWaterLoopSound(): string {
         const value = this.scriptProperties.get("UnderWaterLoopSound");
 
         if (typeof value !== "string") throw new Error(`'${this.scriptClassId}.PostBeginPlay' did not load UnderWaterLoopSound.`);
@@ -43,4 +43,4 @@ export class LineagePlayerController implements ScriptHost_T {
     }
 }
 
-export default LineagePlayerController;
+export default PlayerController;

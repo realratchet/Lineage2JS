@@ -8,31 +8,31 @@ export enum TagState_T {
 }
 
 export abstract class UL2Float extends UAActor {
-    declare public readonly State: TagState_T;
-    declare public readonly FishType: number;
-    declare public readonly Gut: boolean;
-    declare public readonly WaterEffectTimer: number;
-    declare public readonly OldEffectLoc: FVector;
-    declare public readonly fEffectElapsedTime: number;
-    declare public readonly EffectType: number;
-    declare public readonly OrgLocation: FVector;
-    declare public readonly WaitAnimName: string;
-    declare public readonly BattleAnimName: string;
-    declare public readonly BattleWaitAnimName: string[];
+    declare public readonly state: TagState_T;
+    declare public readonly fishType: number;
+    declare public readonly gut: boolean;
+    declare public readonly waterEffectTimer: number;
+    declare public readonly oldEffectLocation: FVector;
+    declare public readonly effectElapsedTime: number;
+    declare public readonly effectType: number;
+    declare public readonly originalLocation: FVector;
+    declare public readonly waitAnimName: string;
+    declare public readonly battleAnimName: string;
+    declare public readonly battleWaitAnimName: string[];
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
-            "State": "State",
-            "FishType": "FishType",
-            "Gut": "Gut",
-            "WaterEffectTimer": "WaterEffectTimer",
-            "OldEffectLoc": "OldEffectLoc",
-            "fEffectElapsedTime": "fEffectElapsedTime",
-            "EffectType": "EffectType",
-            "OrgLocation": "OrgLocation",
-            "WaitAnimName": "WaitAnimName",
-            "BattleAnimName": "BattleAnimName",
-            "BattleWaitAnimName": "BattleWaitAnimName"
+            "State": "state",
+            "FishType": "fishType",
+            "Gut": "gut",
+            "WaterEffectTimer": "waterEffectTimer",
+            "OldEffectLoc": "oldEffectLocation",
+            "fEffectElapsedTime": "effectElapsedTime",
+            "EffectType": "effectType",
+            "OrgLocation": "originalLocation",
+            "WaitAnimName": "waitAnimName",
+            "BattleAnimName": "battleAnimName",
+            "BattleWaitAnimName": "battleWaitAnimName"
         });
     }
 }

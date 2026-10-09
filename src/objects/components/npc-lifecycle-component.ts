@@ -55,7 +55,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     public revive(): void {
         const parent = this.getParent();
 
-        if (this.isDying) this.getComponent<PawnMovementComponent>("pawnMovement").resetAnimationState();
+        if (this.isDying) this.getComponent<PawnMovementComponent>("pawnMovement").setRevived();
 
         this.isDying = false;
         this.deathAnimationFinishedHandler = null;

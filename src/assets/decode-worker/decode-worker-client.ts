@@ -106,7 +106,7 @@ export class DecodeWorkerClient {
         await this.mainThreadEngine.initialize();
     }
 
-    public get isDead(): boolean {
+    public isDead(): boolean {
         if (this.mainThreadEngine) return false;
 
         return this.slots.every(slot => slot.isDead);
@@ -246,7 +246,7 @@ export class DecodeWorkerClient {
     }
 
     public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
-        const bundleName = npcId === null ? null : getNpcBundleName(packageName);
+        const bundleName = npcId === null || !packageName ? null : getNpcBundleName(packageName);
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
         const includeAnimations = npcId === null || !this.npcAnimationSets.has(animationSet);
 

@@ -272,7 +272,7 @@ export class LitActorMesh extends GameMesh {
     protected lastStaticEnvNextIndex: number = -1;
     protected lastStaticEnvLerp: number = -1;
 
-    public get needsInitialLighting(): boolean {
+    public needsInitialLighting(): boolean {
         if (this.ambient?.hardwareLighting) return this.lastEnvVersion < 0;
 
         return !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
@@ -310,7 +310,7 @@ export class LitActorMesh extends GameMesh {
 
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
-        if (this.needsInitialLighting && !this.lightingGate) return;
+        if (this.needsInitialLighting() && !this.lightingGate) return;
 
         if (this.ambient?.hardwareLighting) {
             if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();

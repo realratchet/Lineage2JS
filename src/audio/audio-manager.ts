@@ -92,11 +92,11 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.setupUnlock();
     }
 
-    public get musicVolume(): number { return this.musicGainNode.gain.value; }
-    public set musicVolume(v: number) { this.musicGainNode.gain.value = v; }
+    public getMusicVolume(): number { return this.musicGainNode.gain.value; }
+    public setMusicVolume(v: number) { this.musicGainNode.gain.value = v; }
 
-    public get ambientVolume(): number { return this.ambientGainNode.gain.value; }
-    public set ambientVolume(v: number) {
+    public getAmbientVolume(): number { return this.ambientGainNode.gain.value; }
+    public setAmbientVolume(v: number) {
         this.ambientGainNode.gain.value = v;
         this.effectsGainNode.gain.value = v;
     }
@@ -325,7 +325,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.currentSource = undefined;
         this.currentGain = undefined;
 
-        if (typeof this.currentIndex === "string") this.currentIndex = undefined; // ALineagePlayerController::Tick 0x867ed2 clears the server music request.
+        if (typeof this.currentIndex === "string" && !this.currentIsLooped) this.currentIndex = undefined; // ALineagePlayerController::Tick 0x867ed2 clears the server music request.
 
         if (this.currentIndex === undefined) {
             this.playingIndex = undefined;
@@ -805,7 +805,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             isLooped: this.currentIsLooped,
             isFading: this.fadeEndTime !== undefined && this.lastTime < this.fadeEndTime,
             nextTrackTime: this.nextMusicTrackTime,
-            volume: this.musicVolume
+            volume: this.getMusicVolume()
         };
     }
 

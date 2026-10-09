@@ -27,7 +27,7 @@ export class NCTradeWnd {
     protected readonly items: TradeItem_T[][] = [[], [], []];
     protected readonly rowCounts = [0, 0, 0];
     protected readonly selectedItems: TradeItem_T[] = [null, null, null];
-    protected get selectedItem() { return this.selectedItems[0]; }
+    protected getSelectedItem() { return this.selectedItems[0]; }
     protected pressedIndex = -1;
     protected hoveredMode = -1;
     protected hoveredIndex = -1;
@@ -236,7 +236,7 @@ export class NCTradeWnd {
             if (mode === 0) {
                 const frame = this.layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_SELECTED);
 
-                frame.hidden = item !== this.selectedItem;
+                frame.hidden = item !== this.getSelectedItem();
             }
 
             list.content.appendChild(button);
@@ -283,7 +283,7 @@ export class NCTradeWnd {
         const buttons = this.lists[0].content.children;
 
         for (let index = 0; index < buttons.length; index++)
-            (buttons[index].lastElementChild as HTMLElement).hidden = this.items[0][index] !== this.selectedItem;
+            (buttons[index].lastElementChild as HTMLElement).hidden = this.items[0][index] !== this.getSelectedItem();
     }
 
     protected endDrag() {

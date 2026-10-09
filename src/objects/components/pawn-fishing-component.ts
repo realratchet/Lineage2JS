@@ -2,11 +2,10 @@ import { Matrix4, Quaternion, Vector3 } from "three";
 import { ObjectComponent } from "../../game/components";
 import Rotator, { getPawnRotation } from "../../utils/rotator";
 import ViewportWindowController, { ECALCSTEP_T } from "../../rendering/viewport-window-controller";
-import L2Float from "../l2-float";
+import FishingFloat from "../fishing-float";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type PhysicsManager from "../../physics/physics-manager";
-import type AssetManager from "../../assets/asset-manager";
 import type PawnEquipmentComponent from "./pawn-equipment-component";
 import type { DecodeLibrary } from "@l2js/engine";
 
@@ -28,7 +27,7 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
     protected readonly location = new Vector3();
     protected readonly rotation = new Rotator();
     protected library: DecodeLibrary = null;
-    protected float: L2Float = null;
+    protected float: FishingFloat = null;
     protected controller: ViewportWindowController = null;
     protected request = 0;
     protected fishType = 0;
@@ -40,7 +39,7 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
         super();
 
         this.renderManager = renderManager;
-        this.physicsManager = renderManager.manGame.getComponent("physics");
+        this.physicsManager = renderManager.getParent().getComponent("physics");
     }
 
     public async start(location: Vector3, fishType: number, isLocal: boolean, screenWidth: number): Promise<void> {
@@ -71,14 +70,14 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
         this.playAnimation("FishStartAnimName");
         this.renderManager.registerPawnFishing(this);
 
-        const library = await this.renderManager.manGame.getComponent<AssetManager>("asset").loadFishingLibrary();
+        const library = await this.renderManager.getParent().getComponent("asset").loadFishingLibrary();
 
         if (!this.active || request !== this.request) return;
 
         this.library = library;
     }
 
-    public getFloat(): L2Float { return this.float; }
+    public getFloat(): FishingFloat { return this.float; }
     public getController(): ViewportWindowController { return this.controller; }
     public getActionStage(): number { return this.actionStage; }
     public isActive(): boolean { return this.active; }
@@ -131,7 +130,7 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
 
             // Engine 1049794A compares channel-0 FName, not animation completion.
             if (name.toLowerCase() !== (pawn.getUnrealScriptProperty("FishStartAnimName") as string).toLowerCase()) {
-                this.float = new L2Float(this.renderManager, this.library, this.location, this.rotation, this.fishType, (start, end, target) => {
+                this.float = new FishingFloat(this.renderManager, this.library, this.location, this.rotation, this.fishType, (start, end, target) => {
                     const hit = this.physicsManager.physicsVolumeLineCheck(start, end, this.renderManager.player, true);
                     if (hit) target.copy(hit.location);
                 });

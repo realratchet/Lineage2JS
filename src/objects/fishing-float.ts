@@ -9,9 +9,7 @@ import { TagState_T } from "../assets/unreal/un-l2-float";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
 import type { DecodeLibrary } from "@l2js/engine";
 import type RenderManager from "../rendering/render-manager";
-import type AssetManager from "../assets/asset-manager";
 import type LocalSpaceSkeleton from "./local-space-skeleton";
-import type LitSkinnedMesh from "./lit-skinned-mesh";
 
 type WaterTrace_T = (start: Vector3, end: Vector3, hit: Vector3) => void;
 
@@ -22,27 +20,14 @@ const tmpTraceHit = new Vector3();
 const tmpDisplacement = new Vector3();
 const tmpEffectRotation = new Rotator();
 
-class FloatMeshComponent extends ActorMeshComponent {
-    public getMesh() { return this.mesh; }
-}
-
 class FloatAnimationComponent extends AnimationComponent {
-    public constructor(renderManager: RenderManager, mesh: LitSkinnedMesh) {
-        super(renderManager);
-
-        this.meshes = [mesh];
-        this.actorAnimations = (mesh as any).meshAnimations;
-        this.isAnimationsInit = true;
-        (mesh as any).hasStartedAnimation = true;
-    }
-
     public onDetach(): void {
         this.stop();
         this.renderManager.mixer.uncacheRoot(this.meshes[0]);
     }
 }
 
-export class L2Float extends GameObject {
+export class FishingFloat extends GameObject {
     public readonly scriptClassId = "engine.L2Float";
     public readonly scriptProperties = new Map<string, any>();
     public state = TagState_T.L2TAG_WAIT;
@@ -50,7 +35,7 @@ export class L2Float extends GameObject {
     public gut = false;
     protected readonly renderManager: RenderManager;
     protected readonly library: DecodeLibrary;
-    protected readonly meshComponent: FloatMeshComponent;
+    protected readonly meshComponent: ActorMeshComponent;
     protected readonly animation: FloatAnimationComponent;
     protected readonly nativeRotation: Rotator;
     protected readonly originalLocation = new Vector3();
@@ -84,9 +69,10 @@ export class L2Float extends GameObject {
         this.scriptProperties.set("Mesh", meshPath);
         this.scriptProperties.set("Physics", EPhysics_T.PHYS_Rotating);
         this.addComponent(new ActorOwnershipComponent());
-        this.meshComponent = this.addComponent(new FloatMeshComponent(library, renderManager));
+        this.meshComponent = this.addComponent(new ActorMeshComponent(library, renderManager));
         this.meshComponent.onUpdate();
-        this.animation = this.addComponent(new FloatAnimationComponent(renderManager, this.meshComponent.getMesh()));
+        this.animation = this.addComponent(new FloatAnimationComponent(renderManager));
+        this.animation.setMeshAnimations(this.meshComponent.getMesh());
         this.playAnimation(this.getCurAnimName(), 0.1, true);
     }
 
@@ -157,7 +143,7 @@ export class L2Float extends GameObject {
             this.traceWater(tmpTraceStart, tmpTraceEnd, tmpTraceHit);
             if (tmpTraceHit.z !== 0) tmpWaterPosition.copy(tmpTraceHit);
 
-            const asset = this.renderManager.manGame.getComponent<AssetManager>("asset");
+            const asset = this.renderManager.getParent().getComponent("asset");
             const effect = asset.createScriptObject(this.renderManager, this.library, "LineageEffect.e_u075_w");
             effect.position.copy(tmpWaterPosition);
 
@@ -171,7 +157,7 @@ export class L2Float extends GameObject {
                 emitter.setSizeScale(0.5);
                 emitter.setSpeedScale(this.state === TagState_T.L2TAG_WAIT ? 1 : 2);
             }
-            this.renderManager.addTransientEffect(effect, this as any);
+            this.renderManager.addTransientEffect(effect, this);
             this.oldEffectLocation.copy(tmpWaterPosition);
             this.waterEffectTimer = this.state === TagState_T.L2TAG_WAIT ? 1 : Math.fround(0.05);
         }
@@ -181,4 +167,4 @@ export class L2Float extends GameObject {
 
 }
 
-export default L2Float;
+export default FishingFloat;

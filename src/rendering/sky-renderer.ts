@@ -39,10 +39,10 @@ class CelestialMaterial extends MeshBasicMaterial {
 
 
 class Celestial extends Mesh {
-    public static readonly _geometry = new PlaneGeometry(-1, -1);
+    public static readonly planeGeometry =new PlaneGeometry(-1, -1);
 
     public constructor() {
-        super(Celestial._geometry, new CelestialMaterial());
+        super(Celestial.planeGeometry, new CelestialMaterial());
 
         this.frustumCulled = false;
         this.visible = false;
@@ -129,7 +129,7 @@ export default class SkyRenderer {
                 material.defines.USE_MASKING = "";
                 material.needsUpdate = true;
 
-                const mesh = new Mesh(Celestial._geometry, material);
+                const mesh = new Mesh(Celestial.planeGeometry, material);
                 mesh.frustumCulled = false;
                 mesh.visible = false;
                 this.celestialScene.add(mesh);

@@ -160,6 +160,7 @@ export class DecodeLibrary {
     public pickup: L2JS.Engine.IPickupDecodeInfo = null;
     public effectSpawnBoneIndex: number = null;
     public damageEffect: string = null;
+    public npcScriptClassId: string = null;
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public isSkyLevel = false;
     public readonly skyLevel: {

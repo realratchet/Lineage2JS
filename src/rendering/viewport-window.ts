@@ -4,7 +4,7 @@ import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 type ViewObjectState_T = { object: any, visible: boolean, renderOrder: number, groups: any[], index: any, indexData: any, values: Record<string, any>, buffers: Record<string, any>, vectors: Record<string, Vector3> };
 type ViewMaterialState_T = { material: THREE.Material, visible: boolean };
 
-const arrSectorProperties = ["lastZoneMask", "visibleLeaves", "visibleEmitterUuids", "visibilityCacheInitialized", "visibilityCacheFrustumCulling", "visibilityCacheTopLevelOnly", "visibilityCacheDistanceSq", "visibilityCacheEmitterDistanceSq", "visibilityCacheEnvVersion", "visibilityCacheTimeStep", "_lastLoggedZone", "_lastLoggedLeaf", "_lastLoggedStaticMeshLeaf"];
+const arrSectorProperties = ["lastZoneMask", "visibleLeaves", "visibleEmitterUuids", "visibilityCacheInitialized", "visibilityCacheFrustumCulling", "visibilityCacheTopLevelOnly", "visibilityCacheDistanceSq", "visibilityCacheEmitterDistanceSq", "visibilityCacheEnvVersion", "visibilityCacheTimeStep", "lastLoggedZone", "lastLoggedLeaf", "lastLoggedStaticMeshLeaf"];
 const arrBatchProperties = ["visibleGroupKey", "needsRelightPass"];
 const arrBatchBuffers = ["elemVisibility", "elemDistances", "elemRelight"];
 

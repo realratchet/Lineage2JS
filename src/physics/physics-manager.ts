@@ -90,7 +90,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (this.nextPhysicsTick <= currentTime)
             this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
 
-        if (playerPhysicsTicks > 0 && updatedPhysicsComponent || physicsTicks > 0 && (this.simEmitters.size > 0 || updatedPhysicsComponent))
+        if (playerPhysicsTicks > 0 && updatedPhysicsComponent || physicsTicks > 0 && (this.simEmitters.getSize() > 0 || updatedPhysicsComponent))
             manRender.needsUpdate = true;
     }
 
@@ -315,7 +315,7 @@ class EmitterSimulation {
     protected readonly emitters = new Set<any>();
     protected readonly actors = new Set<any>();
 
-    public get size(): number { return this.emitters.size + this.actors.size; }
+    public getSize(): number { return this.emitters.size + this.actors.size; }
     public getEmitters(): ReadonlySet<any> { return this.emitters; }
 
     public add(emitter: Object3D): void {

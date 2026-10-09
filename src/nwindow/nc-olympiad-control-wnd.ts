@@ -26,9 +26,7 @@ export class NCOlympiadControlWnd {
             if (event.button !== 0) return;
 
             event.preventDefault();
-            const x = layer.toUI(event.clientX) - this.element.offsetLeft, y = layer.toUI(event.clientY) - this.element.offsetTop;
-
-            layer.beginDrag(moveEvent => layer.place(this.element, layer.toUI(moveEvent.clientX) - x, layer.toUI(moveEvent.clientY) - y));
+            layer.dragWindow(this.element, event);
         });
         layer.button(this.element, 19, 5, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(611), () => { if (this.onStopObserving) this.onStopObserving(); });
         layer.button(this.element, 19, 29, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(1252), () => { if (this.onOtherGame) this.onOtherGame(); });

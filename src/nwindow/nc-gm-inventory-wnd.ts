@@ -51,7 +51,7 @@ export class NCGMInventoryWnd extends NCInventoryWnd {
         this.crystal.hidden = this.trash.hidden = true;
         if (visible) {
             this.hideBags();
-            this.bag.hidden = false;
+            this.getBag().hidden = false;
         } else {
             this.tooltip.hidden = true;
             this.endDrag();

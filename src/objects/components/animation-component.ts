@@ -58,6 +58,20 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
     return once;
 }
 
+function fadeOutAction(action: AnimationAction, duration: number): boolean { // AnimationAction.fadeOut always fades from full weight
+    const interpolant = (action as any)._weightInterpolant;
+    const weight = !action.enabled || !action.isScheduled() ? 0 : interpolant ? action.weight * interpolant.evaluate(action.getMixer().time)[0] : action.weight;
+
+    if (weight <= 0 || duration <= 0) {
+        action.stop();
+        return false;
+    }
+
+    (action as any)._scheduleFading(duration, weight, 0);
+
+    return true;
+}
+
 export class AnimationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "animation";
     protected readonly renderManager: RenderManager;
@@ -65,7 +79,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected meshes: Mesh[] = [];
     protected meshTextures = new Set<Texture>();
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
-    protected prevAnimations = new WeakMap<Mesh, AnimationAction>();
+    protected prevAnimations = new WeakMap<Mesh, AnimationAction[]>();
     protected actorAnimations: Record<string, AnimationClip> = {};
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
@@ -265,6 +279,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         throw new Error(`${this.getParent().type} has no '${name}' bone.`);
     }
 
+    public setMeshAnimations(mesh: LitSkinnedMesh): void {
+        this.meshes = [mesh];
+        this.actorAnimations = (mesh as any).meshAnimations;
+        this.isAnimationsInit = true;
+        (mesh as any).hasStartedAnimation = true;
+    }
+
     public setAnimations(animations: Record<string, AnimationClip>): void {
         this.stop();
         this.getComponent<any>("pawnMovement").resetAnimationState();
@@ -285,7 +306,9 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const fishing = state === "idle" ? this.findComponent<PawnFishingComponent>("pawnFishing") : null;
         const fishingAnimation = fishing && fishing.getIdleAnimationName();
 
-        this.play(fishingAnimation || this.basicActorAnimations[state], tweenTime, fishingAnimation ? this.getParent().getUnrealScriptProperty("NonAttackSpeedRate") as number : 1);
+        const isScaled = fishingAnimation || (state === "walking" || state === "running" || state === "swimming") && this.getParent().scriptClassId;
+
+        this.play(fishingAnimation || this.basicActorAnimations[state], tweenTime, isScaled ? this.getParent().getUnrealScriptProperty("NonAttackSpeedRate") as number : 1);
     }
 
     public isPlayingMovement(state: PawnMovementState_T): boolean {
@@ -389,7 +412,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             if ((mesh as any).isBoneAttachment) continue; // rides the bone it hangs off, its own skeleton is untouched by this clip
             if ((mesh as any).sharesSkeleton) continue; // skinned off the bodypart that owns the bone tree, one action drives both
 
-            const prevAct = this.prevAnimations.get(mesh) || null;
+            const prevActs = this.prevAnimations.get(mesh) || [];
             const currAct = this.currAnimations.get(mesh) || null;
             const meshAnimations = (mesh as any).meshAnimations as Record<string, AnimationClip>;
             const meshClip = (mesh as any).skeleton?.rootBoneSource
@@ -397,7 +420,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
                 : sourceClip;
 
             if (!meshClip) {
-                if (prevAct) prevAct.stop();
+                for (const action of prevActs) action.stop();
                 if (currAct) currAct.stop();
                 continue;
             }
@@ -407,6 +430,8 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             let nextAct = currAct && twin && currAct.getClip() === twin ? currAct : mixer.clipAction(clip, mesh);
 
             if (currAct === nextAct && tweenTime > 0 && (restart || nextAct.paused) && nextAct.isScheduled() && nextAct.enabled)
+                nextAct = mixer.clipAction(getTweenTwin(nextAct.getClip()), mesh);
+            else if (currAct !== nextAct && tweenTime > 0 && prevActs.includes(nextAct) && nextAct.isScheduled() && nextAct.enabled)
                 nextAct = mixer.clipAction(getTweenTwin(nextAct.getClip()), mesh);
 
             if (!notifyAction) notifyAction = nextAct;
@@ -430,13 +455,14 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
             this.currAnimations.set(mesh, nextAct);
 
-            if (prevAct) prevAct.stop();
+            const fadingActs = prevActs.filter(action => action !== nextAct && fadeOutAction(action, tweenTime));
+
             nextAct.reset();
 
-            if (currAct && currAct.isScheduled() && currAct.enabled) {
-                this.prevAnimations.set(mesh, currAct);
-                currAct.crossFadeTo(nextAct, tweenTime, false);
-            } else if (currAct) currAct.stop();
+            if (currAct && fadeOutAction(currAct, tweenTime)) fadingActs.push(currAct);
+            if (fadingActs.length > 0) nextAct.fadeIn(tweenTime);
+
+            this.prevAnimations.set(mesh, fadingActs);
 
             // Engine.dll PlayAnim 0x943c41 / UpdateAnimation 0x94a549: tween before frame zero.
             if (tweenTime > 0) this.holdFirstFrame(nextAct, timeScale);
@@ -468,7 +494,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.tweenTimeScales.clear();
 
         for (const mesh of this.meshes) {
-            if (this.prevAnimations.has(mesh)) this.prevAnimations.get(mesh).stop();
+            if (this.prevAnimations.has(mesh)) for (const action of this.prevAnimations.get(mesh)) action.stop();
             if (this.currAnimations.has(mesh)) this.currAnimations.get(mesh).stop();
         }
 
@@ -499,10 +525,7 @@ export class ExtraMeshAnimationComponent extends AnimationComponent {
 
         this.mixer = new AnimationMixer(mesh);
         this.mixer.addEventListener("finished", event => this.onAnimationFinished(event.action, false));
-        this.meshes = [mesh];
-        this.actorAnimations = (mesh as any).meshAnimations;
-        this.isAnimationsInit = true;
-        (mesh as any).hasStartedAnimation = true;
+        this.setMeshAnimations(mesh);
     }
 
     protected resolveOwnerAnimation(name: string): string {

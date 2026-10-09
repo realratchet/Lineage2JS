@@ -91,7 +91,7 @@ export class ZUpOrbitControls extends EventDispatcher {
         this.zoom0 = this.object.zoom;
 
         // the target DOM element for key events
-        this._domElementKeyEvents = null;
+        this.domElementKeyEvents = null;
         this.nativeLike = false;
 
         this.setNativeLikeControls = function (nativeLike: boolean) {
@@ -123,7 +123,7 @@ export class ZUpOrbitControls extends EventDispatcher {
         this.listenToKeyEvents = function (domElement: HTMLElement) {
 
             domElement.addEventListener("keydown", onKeyDown);
-            this._domElementKeyEvents = domElement;
+            this.domElementKeyEvents = domElement;
 
         };
 
@@ -309,9 +309,9 @@ export class ZUpOrbitControls extends EventDispatcher {
             scope.domElement.removeEventListener("pointerup", onPointerUp);
 
 
-            if (scope._domElementKeyEvents !== null) {
+            if (scope.domElementKeyEvents !== null) {
 
-                scope._domElementKeyEvents.removeEventListener("keydown", onKeyDown);
+                scope.domElementKeyEvents.removeEventListener("keydown", onKeyDown);
 
             }
 

@@ -103,7 +103,7 @@ export abstract class ATerrainInfo extends AInfo {
     declare protected readonly litDirectional: boolean;
     declare protected readonly disregardTerrainLighting: boolean;
     declare protected readonly randomYaw: boolean;
-    declare protected readonly bForceRender: boolean;
+    declare protected readonly isForcingRender: boolean;
     declare public renderCombinations: FTerrainRenderCombination[];
 
     public readonly isTerrainInfo = true;
@@ -194,7 +194,7 @@ export abstract class ATerrainInfo extends AInfo {
             "LitDirectional": "litDirectional",
             "DisregardTerrainLighting": "disregardTerrainLighting",
             "RandomYaw": "randomYaw",
-            "bForceRender": "bForceRender",
+            "bForceRender": "isForcingRender",
             "bDynamicLight": "hasDynamicLight",
             "ForcedRegion": "forcedRegion",
 

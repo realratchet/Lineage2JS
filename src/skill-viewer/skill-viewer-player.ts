@@ -4,6 +4,7 @@ import { WeaponType } from "@l2js/engine/un-pawn";
 import { hasSkillEffectPhase } from "@l2js/engine/skills/skill-visual-definition";
 import getSkillAnimation from "../skills/skill-animation";
 import type AnimationComponent from "../objects/components/animation-component";
+import type PawnAttackComponent from "../objects/components/pawn-attack-component";
 import type BaseActor from "../base-actor";
 import type { INpcDefinition, NpcSkillAttack_T } from "@l2js/engine/contracts/pawn";
 
@@ -96,9 +97,11 @@ export class PlayerSkillViewerStage extends SkillViewerStage {
     public clear(): void {
         this.stop();
 
-        for (const { npc, target } of this.entries)
+        for (const { npc, target } of this.entries) {
+            npc.getComponent<PawnAttackComponent>("pawnAttack").clear();
             for (const pawn of [npc, target])
                 for (const effect of [...pawn.getScriptChildren()]) this.renderManager.removeTransientEffect(effect);
+        }
     }
 }
 

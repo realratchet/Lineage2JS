@@ -27,6 +27,8 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         this.renderManager = renderManager;
     }
 
+    public getMesh(): LitSkinnedMesh { return this.mesh; }
+
     public onUpdate(): void {
         const parent = this.getParent();
         const properties = parent.scriptProperties;

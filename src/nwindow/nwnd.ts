@@ -12,6 +12,7 @@ export class NWnd {
     public isEnabled = true;
     public parent: NWnd = null;
     public manager: NWindowManager = null;
+    public windowName: string = null;
     public readonly children: NWnd[] = [];
 
     public constructor(x: number = 0, y: number = 0, width: number = 0, height: number = 0) {

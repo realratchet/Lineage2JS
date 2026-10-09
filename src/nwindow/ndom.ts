@@ -45,6 +45,7 @@ export class NDomLayer {
     protected readonly manager: NWindowManager;
     protected readonly atlas = new Map<string, AtlasEntry_T>();
     protected readonly cacheWrapUrls = new Map<string, string>();
+    protected readonly windowNames = new Map<HTMLElement, string>();
     protected activeWindow: HTMLElement = null;
     protected zOrder = 0;
     protected isTransparencyMode = false;
@@ -127,6 +128,22 @@ export class NDomLayer {
         window.addEventListener("pointerup", stop, true);
         window.addEventListener("pointercancel", stop, true);
         window.addEventListener("blur", stop);
+    }
+
+    public dragWindow(element: HTMLElement, event: MouseEvent, place: (x: number, y: number) => void = (x, y) => this.place(element, x, y)) {
+        const x = this.toUI(event.clientX) - element.offsetLeft, y = this.toUI(event.clientY) - element.offsetTop, startX = element.offsetLeft, startY = element.offsetTop;
+
+        this.beginDrag(moveEvent => place(this.manager.snapX(this.toUI(moveEvent.clientX) - x, element.offsetWidth), this.manager.snapY(this.toUI(moveEvent.clientY) - y, element.offsetHeight)), () => {
+            if (this.windowNames.has(element) && (element.offsetLeft !== startX || element.offsetTop !== startY)) this.manager.saveWindowPosition(this.windowNames.get(element), element.offsetLeft, element.offsetTop);
+        });
+    }
+
+    public restoreWindow(element: HTMLElement, name: string) {
+        const position = this.manager.loadWindowPosition(name, parseFloat(element.style.width), parseFloat(element.style.height));
+
+        this.windowNames.set(element, name);
+
+        if (position) this.place(element, position[0], position[1]);
     }
 
     public async loadTextures(paths: string[]) {

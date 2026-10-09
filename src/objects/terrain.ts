@@ -124,7 +124,7 @@ export class Terrain extends GameMesh implements ICollidable {
         if (heightmapY !== undefined) this.heightmapY = heightmapY;
     }
 
-    public get needsInitialLighting(): boolean {
+    public needsInitialLighting(): boolean {
         return !!this.lightingInfo && !this.staticLightingCache;
     }
 
@@ -132,7 +132,7 @@ export class Terrain extends GameMesh implements ICollidable {
 
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightingInfo) return;
-        if (this.needsInitialLighting && !this.lightingGate) return;
+        if (this.needsInitialLighting() && !this.lightingGate) return;
 
         const timeOfDay = env.getTimeOfDay();
         let shadowIndex = 0;

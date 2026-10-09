@@ -65,8 +65,7 @@ export class NCFishViewportWnd {
             if (event.button !== 0) return;
 
             event.preventDefault();
-            const x = layer.toUI(event.clientX) - this.element.offsetLeft, y = layer.toUI(event.clientY) - this.element.offsetTop;
-            layer.beginDrag(moveEvent => layer.place(this.element, layer.toUI(moveEvent.clientX) - x, layer.toUI(moveEvent.clientY) - y));
+            layer.dragWindow(this.element, event);
         });
     }
 

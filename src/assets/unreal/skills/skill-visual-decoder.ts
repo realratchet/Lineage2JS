@@ -47,7 +47,7 @@ type SkillVisualDecodeOps_T = {
 };
 
 export function validatePlayerSkillSource(id: number, level: number, operationType: number): void {
-    if (operationType !== 0 && operationType !== 1) throw new Error(`Player skill '${id}:${level}' operation type '${operationType}' is not supported.`);
+    if (operationType !== 0 && operationType !== 1 && operationType !== 3) throw new Error(`Player skill '${id}:${level}' operation type '${operationType}' is not supported.`);
 }
 
 function splitGroupedObjectPath(path: string): [string, string, string] {

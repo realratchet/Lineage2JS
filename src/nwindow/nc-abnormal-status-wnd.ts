@@ -11,6 +11,7 @@ type EffectItem_T = AbnormalStatus_T & { alpha: number, isFading: boolean, toolt
 
 const TEX_BACK = "L2UI.EtcWndBack.AbnormalBack";
 const TEX_DEBUFF = "L2UI_CH3.PlayerStatusWnd.debuff";
+const TEX_FRAME = "L2UI_CH3.FrameCtrl.smallbar";
 
 export class NCAbnormalStatusWnd extends NWnd {
     protected readonly grip: NCFrameCtrl;
@@ -27,7 +28,7 @@ export class NCAbnormalStatusWnd extends NWnd {
         this.grip = this.addChild(new NCFrameCtrl(0, 0, 12, 26));
     }
 
-    public getTextures(): string[] { return [TEX_BACK, TEX_DEBUFF, ...this.tooltip.getTextures()]; }
+    public getTextures(): string[] { return [TEX_BACK, TEX_DEBUFF, TEX_FRAME + "1", TEX_FRAME + "2", TEX_FRAME + "3", ...this.tooltip.getTextures()]; }
 
     public attach(manager: NWindowManager) {
         super.attach(manager);
@@ -155,6 +156,12 @@ export class NCAbnormalStatusWnd extends NWnd {
     }
 
     public onPaint(canvas: NWindowCanvas) {
+        const H = this.grip.height;
+
+        canvas.drawTile(0, 0, 12, 8, 0, 0, 12, 8, TEX_FRAME + "1");
+        canvas.drawTile(0, 8, 12, H - 16, 0, 0, 12, 8, TEX_FRAME + "2");
+        canvas.drawTile(0, H - 8, 12, 8, 0, 0, 12, 8, TEX_FRAME + "3");
+
         // NCAbnormalStatusWnd: NWindow RVA 0x10e560 layout, 0x10eef0 countdown and flashing.
         for (let i = 0; i < Math.min(this.effects.length, 30); i++) {
             const effect = this.effects[i];

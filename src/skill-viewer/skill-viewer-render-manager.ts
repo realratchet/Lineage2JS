@@ -78,7 +78,7 @@ export class SkillViewerRenderManager extends RenderManager {
         (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight);
         (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
 
-        this.physicsManager.setTriggerPosition(this.camera.position);
+        this.getPhysicsManager().setTriggerPosition(this.camera.position);
         this.updatePawnVisibility();
 
         for (const component of this.pawnRenderables) this.updateViewerLighting(component.getParent());
@@ -181,7 +181,7 @@ export class SkillViewerRenderManager extends RenderManager {
 
     public startTicking(_currentTime: number): void {
         this.scene.updateMatrixWorld(true);
-        this.physicsManager.registerSimulationObjects(this.scene);
+        this.getPhysicsManager().registerSimulationObjects(this.scene);
         this.isRendering = true;
         this.needsUpdate = true;
     }

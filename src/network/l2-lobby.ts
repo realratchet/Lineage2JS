@@ -16,6 +16,7 @@ const SPAWN_TRACE_HEIGHT = 60; // InsertSelectCharacterInfo traces down from Z+6
 const PREVIEW_ROW_OFFSET = 8; // SpawnDefaultCharacter 0x1042e450: preview pawn i = race*4 + class*2 + sex stands at Logongrp row 8+i.
 const PREVIEW_CLASS_IDS = [[0, 10], [18, 25], [31, 38], [44, 49], [53, 53]]; // Pawn table 0x1093cec8 base class ids per race: fighter, mystic.
 const RACE_EVENT_NAMES = ["HUMAN", "ELF", "DARKELF", "ORC", "DWARF"]; // NWindow 0x10262098 event-name tables.
+const RACE_MUSIC = ["CT_Human", "CT_Elf", "CT_Darkelf", "CT_Orc", "CT_Dwarf"]; // UL2ConsoleWnd::SetCurrentMakingRace 0x1042dba0
 const CLASS_EVENT_NAMES = ["KNIGHT", "WIZARD"];
 const SEX_EVENT_NAMES = ["MAN", "WOMAN"];
 
@@ -29,6 +30,7 @@ export class L2Lobby {
     protected spots: [number, number, number, number][] = [];
     protected pawns: BaseActor[] = [];
     protected readonly previewPawns = new Map<number, BaseActor>();
+    protected readonly pendingRestYaws = new Map<BaseActor, number>();
     protected createSelection: PawnCreateSelection_T = null;
     protected createStage = 0;
     protected selected = -1;
@@ -75,7 +77,7 @@ export class L2Lobby {
         if (!skyZone) throw new Error(`Lobby SkyZoneInfo is missing`);
 
         render.skyRenderer.setSkyZone(skyZone);
-        render.setHorizontalFov(50); // L2.4_20.trace call 104300: projection X = cot(25 degrees).
+        render.setHorizontalFov(50, 4 / 3); // L2.4_20.trace call 104300: projection X = cot(25 degrees); wider screens keep the 4:3 vertical FOV.
         this.matinee = new MatineePlayer(render.camera, scenes);
     }
 
@@ -87,6 +89,7 @@ export class L2Lobby {
         this.clearPawns();
         render.skyRenderer.setSkyZone(null);
         render.setHorizontalFov();
+        void render.audioManager.stopMusic();
         asset.unloadAlwaysLoaded(render, LOBBY_LEVEL, this.sector);
         asset.setStreaming(render, true);
         this.manGame.getComponent("input").setCameraLocked(false);
@@ -95,12 +98,16 @@ export class L2Lobby {
         this.matinee = null;
     }
 
-    public showLogin() { this.matinee.trigger("LogOn_Warp"); } // MoveCameraByState 0x1042e9e0: to-state 2 fires LogOn_Warp, 4 fires Char_Select_Warp.
+    public showLogin() {
+        this.matinee.trigger("LogOn_Warp"); // MoveCameraByState 0x1042e9e0: to-state 2 fires LogOn_Warp, 4 fires Char_Select_Warp.
+        void this.manGame.getComponent("render").audioManager.stopMusic(); // SetState 0x1042e1d0: state 2 plays S28_F, which this install doesn't ship.
+    }
 
     public async showSelect(characters: Appearance_T[]) {
         const render = this.manGame.getComponent("render");
         this.matinee.trigger("Char_Select_Warp");
         this.clearPawns();
+        void render.audioManager.playMusic("assets/music/nt_oren.ogg", true, true); // SetState 0x1042e1d0: state 4 plays table 0x109f1348[1] NT_Oren.
 
         const generation = this.generation;
 
@@ -125,16 +132,23 @@ export class L2Lobby {
 
         const previous = this.pawns[this.selected];
 
-        if (previous && previous.parent) previous.goTo(new Vector3(this.spots[this.selected][0], this.spots[this.selected][1], this.spots[this.selected][2]));
+        if (previous && previous.parent) {
+            previous.goTo(new Vector3(this.spots[this.selected][0], this.spots[this.selected][1], this.spots[this.selected][2]));
+            this.pendingRestYaws.set(previous, this.spots[this.selected][3]);
+        }
 
         this.selected = index;
 
         const pawn = this.pawns[index];
 
-        if (pawn && pawn.parent) pawn.goTo(new Vector3(this.spots[SELECTED_SPOT][0], this.spots[SELECTED_SPOT][1], this.spots[SELECTED_SPOT][2]));
+        if (pawn && pawn.parent) {
+            pawn.goTo(new Vector3(this.spots[SELECTED_SPOT][0], this.spots[SELECTED_SPOT][1], this.spots[SELECTED_SPOT][2]));
+            this.pendingRestYaws.delete(pawn);
+        }
     }
 
     public getPawn(index: number) { return this.pawns[index] || null; }
+    public getPawnIndex(actor: BaseActor) { return this.pawns.indexOf(actor); }
 
     public getPawnLabels(characters: { name: string, karma: number, deleteSeconds: number }[], width: number, height: number): LobbyPawnLabel_T[] {
         const camera = this.manGame.getComponent("render").camera;
@@ -162,6 +176,7 @@ export class L2Lobby {
         this.createSelection = null;
         this.createStage = 0;
         this.matinee.trigger("Char_Create_Warp");
+        void this.manGame.getComponent("render").audioManager.stopMusic(); // SetState 0x1042e1d0: 4 -> 3 plays S28_F, which this install doesn't ship.
     }
 
     protected getPreviewIndex(race: Race_T, isMystic: boolean, sex: number) { return race * 4 + (isMystic ? 1 : 0) * 2 + sex; }
@@ -200,6 +215,7 @@ export class L2Lobby {
         if (selection.step === "race") {
             this.triggerScene(race);
             this.createStage = 1;
+            void this.manGame.getComponent("render").audioManager.playMusic(`assets/music/${RACE_MUSIC[selection.race].toLowerCase()}.ogg`, true, true);
 
             for (const isMystic of selection.race === 4 ? [false] : [false, true])
                 for (const sex of [0, 1]) void this.spawnPreview(selection.race, isMystic, sex, 0, 0, 0);
@@ -264,6 +280,7 @@ export class L2Lobby {
         const render = this.manGame.getComponent("render");
 
         this.generation++;
+        this.pendingRestYaws.clear();
 
         for (const pawn of [...this.pawns, ...this.previewPawns.values()])
             if (pawn.parent) render.removePawn(pawn);
@@ -275,6 +292,13 @@ export class L2Lobby {
 
     public tick(deltaTime: number) {
         if (this.matinee && this.matinee.tick(deltaTime / 1000)) this.manGame.getComponent("render").needsUpdate = true;
+
+        for (const [pawn, yaw] of this.pendingRestYaws) {
+            if (pawn.isLocomoting()) continue;
+
+            this.pendingRestYaws.delete(pawn);
+            if (pawn.parent) pawn.resetRotationYaw(yaw);
+        }
     }
 }
 

@@ -1042,6 +1042,9 @@ export class DecodeEngine {
 
     protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean, equipment: L2JS.Engine.INpcEquipment | null): Promise<DecodeLibrary> {
         const npc = await this.resolveNpc(npcId);
+
+        if (!npc.mesh) return this.decodeMeshlessNpc(settings, npc);
+
         const [packageName] = splitObjectPath(npc.mesh);
         const cached = await this.getNpcBundle(settings, packageName);
         const bundle = cached.library;
@@ -1090,6 +1093,34 @@ export class DecodeEngine {
         library.pawnActors.push(info);
 
         if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
+
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+
+        return library;
+    }
+
+    protected async decodeMeshlessNpc(settings: LoadSettings_T, npc: INpcDefinition): Promise<DecodeLibrary> {
+        const [, cls] = await this.fetchScriptClass(npc.className);
+        const library = new DecodeLibrary();
+        const builder = new DecodeLibraryBuilder(library, settings);
+        const emitterClass = dumpObjectScriptProperties(cls).EmitterClass; // teleport_npc_sm PostBeginPlay spawns DynamicLoadObject(EmitterClass)
+
+        library.name = `${npc.id}_${npc.name}`;
+        library.npcScriptClassId = cls.name;
+        builder.pullScriptClasses([cls]);
+        await this.pullPawnEffects(library, builder, npc.className);
+        await this.pullScriptEffectTemplates(library, builder);
+        await this.pullPawnSounds(library, builder, npc.sounds);
+
+        if (typeof emitterClass === "string") await this.pullEffectTemplate(library, builder, emitterClass);
+
+        if (npc.enterEvent?.effect && npc.enterEvent.effect.toLowerCase() !== "none")
+            await this.pullEffectTemplate(library, builder, npc.enterEvent.effect);
+
+        if (npc.enterEvent?.sound && npc.enterEvent.sound.toLowerCase() !== "none")
+            library.sounds[npc.enterEvent.sound] = await this.pullSoundPath(builder, npc.enterEvent.sound);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
 
@@ -1387,6 +1418,7 @@ export class DecodeEngine {
             skillInfos,
             skillCastStyles: Object.fromEntries(tables.skills.map(row => [`${row.skill_id}:${row.skill_level}`, row.cast_style])),
             npcNames: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, row.name])),
+            npcTitles: Object.fromEntries(npcNames.datarows.filter((row: any) => row.description).map((row: any) => [row.id, row.description])),
             obsceneWords: obscene.datarows.map((row: any) => row.text),
             residences: Object.fromEntries(residences.datarows.slice().reverse().filter((row: any) => row.tag).map((row: any) => [row.id, row.castle_name])),
             recipes: recipes.datarows.map((row: any) => ({ id: row.id_mk, itemId: row.id_recipe, level: row.level, productId: row.id_item, count: row.count, mpCost: row.mp_cost, successRate: row.success_rate, materials: row.materials })),

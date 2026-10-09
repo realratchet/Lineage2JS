@@ -58,9 +58,7 @@ export class NCCommandInfoWnd {
             if (event.button !== 0) return;
 
             event.preventDefault();
-            const x = layer.toUI(event.clientX) - this.element.offsetLeft, y = layer.toUI(event.clientY) - this.element.offsetTop;
-
-            layer.beginDrag(moveEvent => layer.place(this.element, layer.toUI(moveEvent.clientX) - x, layer.toUI(moveEvent.clientY) - y));
+            layer.dragWindow(this.element, event);
         });
         this.chatView = layer.createWindow(12, 0, 336, 140, this.element);
         this.channelView = layer.createWindow(12, 0, 336, 140, this.element);

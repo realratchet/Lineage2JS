@@ -87,6 +87,11 @@ export class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
         super.onPhysicsAdded(manager);
 
         this.uiManager = manager.getParent().getComponent("ui");
+        this.uiPosition = this.uiManager.moverPosition;
+
+        const doorPosition = manager.getParent().getComponent("network").getDoorPosition(this.getParent());
+
+        if (doorPosition !== undefined) this.getParent().setPosition(doorPosition);
     }
 
     public onPhysicsRemoved(manager: PhysicsManager): void {

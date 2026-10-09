@@ -138,9 +138,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.renderManager = renderManager;
     }
 
-    protected get position(): Vector3 { return this.getParent().position; }
-    protected get rotation(): Euler { return this.getParent().rotation; }
-    protected get transformComponent(): TransformComponent { return this.getComponent("transform"); }
+    protected getPosition(): Vector3 { return this.getParent().position; }
+    protected getRotation(): Euler { return this.getParent().rotation; }
+    protected getTransformComponent(): TransformComponent { return this.getComponent("transform"); }
 
     public getPhysicsTickRate(): number { return this.tickRate; }
     public setPhysicsTickRate(tickRate: number): void { this.tickRate = tickRate; }
@@ -171,11 +171,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public getDesiredRotationYaw(): number { return this.desiredRotationYaw; }
     public getCollider(): RAPIER.Collider { return this.collider; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
-    public getBaseActor(): ICollidable | null { return this.transformComponent.getBase(); }
-    public getBasedActors(): ReadonlySet<ICollidable> { return this.transformComponent.getBasedActors(); }
-    public addBasedActor(actor: ICollidable) { this.transformComponent.addBasedActor(actor); }
-    public removeBasedActor(actor: ICollidable) { this.transformComponent.removeBasedActor(actor); }
-    public isInteractive(): boolean { return this.renderManager.isSectorCollisionReady(this.position); }
+    public getBaseActor(): ICollidable | null { return this.getTransformComponent().getBase(); }
+    public getBasedActors(): ReadonlySet<ICollidable> { return this.getTransformComponent().getBasedActors(); }
+    public addBasedActor(actor: ICollidable) { this.getTransformComponent().addBasedActor(actor); }
+    public removeBasedActor(actor: ICollidable) { this.getTransformComponent().removeBasedActor(actor); }
+    public isInteractive(): boolean { return this.renderManager.isSectorCollisionReady(this.getPosition()); }
     public getCollisionProfile(): ActorCollisionProfile_T {
         this.collisionProfile.collideActors = this.isInteractive();
         this.collisionProfile.collisionRadius = this.collisionRadius;
@@ -186,9 +186,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public getCollisionPrimitive(): CollisionPrimitive_T {
         // Caching avoids an n^2 getWorldPosition chain walk across pawn traces.
-        if (this.analyticalOrigin.equals(this.position)) return this.analyticalPrimitive;
+        if (this.analyticalOrigin.equals(this.getPosition())) return this.analyticalPrimitive;
 
-        this.analyticalOrigin.copy(this.position);
+        this.analyticalOrigin.copy(this.getPosition());
         this.getParent().getWorldPosition(this.analyticalCenter);
         this.analyticalCenter.z += this.collisionHeight;
         this.analyticalBounds.min.set(this.analyticalCenter.x - this.collisionRadius, this.analyticalCenter.y - this.collisionRadius, this.analyticalCenter.z - this.collisionHeight);
@@ -202,7 +202,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider {
         if (this.collider) return this.collider;
 
-        const rigidbodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(this.position.x, this.position.y, this.position.z + this.collisionHeight);
+        const rigidbodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(this.getPosition().x, this.getPosition().y, this.getPosition().z + this.collisionHeight);
         const colliderDesc = RAPIER.ColliderDesc.cylinder(this.collisionHeight, this.collisionRadius).setRotation(colliderRotation);
 
         this.rigidbody = physicsWorld.createRigidBody(rigidbodyDesc);
@@ -220,9 +220,18 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const parent = this.getParent();
         if (!(parent as any).isPlayer && !parent.findComponent("npcSimulation") && !parent.visible) {
             if (this.actorState.locomotion) {
-                this.position.copy(this.actorState.desired.position);
-                this.velocity.set(0, 0, 0);
-                this.actorState.locomotion = false;
+                const desired = this.actorState.desired, position = this.getPosition();
+
+                if (desired.actor) desired.actor.getWorldPosition(desired.position);
+
+                const distance = position.distanceTo(desired.position) - desired.offset;
+                const step = (this.physicsMode === "swimming" ? this.waterSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed) * deltaTime;
+
+                if (distance <= step) {
+                    position.lerp(desired.position, distance > 0 ? distance / (distance + desired.offset) : 0);
+                    this.velocity.set(0, 0, 0);
+                    this.actorState.locomotion = false;
+                } else position.lerp(desired.position, step / (distance + desired.offset));
             }
 
             this.checkAnimationState();
@@ -250,21 +259,21 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             this.tickPhysics(tick);
         }
 
-        this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + this.collisionHeight));
+        this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.getPosition().x, this.getPosition().y, this.getPosition().z + this.collisionHeight));
         this.checkAnimationState();
     }
 
     protected updateEnterRise(deltaTime: number): void {
         const targetZ = this.enterRiseTargetZ;
-        const nextZ = this.position.z + this.enterRiseVelocity * deltaTime;
+        const nextZ = this.getPosition().z + this.enterRiseVelocity * deltaTime;
 
         if ((this.enterRiseVelocity >= 0 && nextZ >= targetZ) || (this.enterRiseVelocity < 0 && nextZ <= targetZ)) {
-            this.position.z = targetZ;
+            this.getPosition().z = targetZ;
             this.enterRiseTargetZ = null;
             this.enterRiseVelocity = 0;
-        } else this.position.z = nextZ;
+        } else this.getPosition().z = nextZ;
 
-        if (this.rigidbody) this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + this.collisionHeight));
+        if (this.rigidbody) this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.getPosition().x, this.getPosition().y, this.getPosition().z + this.collisionHeight));
     }
 
     // UE ignores a blocking actor you spawned inside of until you are no longer intersecting it
@@ -290,25 +299,25 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public ignoreOverlappingActors(actors: Iterable<ICollidable>) {
         for (const actor of actors)
-            if (actor !== this.getParent() && this.isOverlapping(actor, this.position)) this.ignoredActors.add(actor);
+            if (actor !== this.getParent() && this.isOverlapping(actor, this.getPosition())) this.ignoredActors.add(actor);
     }
 
     public moveSmooth(movement: Vector3, ignoredActor?: ICollidable) {
         if (!this.isInteractive()) return;
 
-        const position = tmpPosition.copy(this.position);
+        const position = tmpPosition.copy(this.getPosition());
         const wasIgnored = ignoredActor && this.ignoredActors.has(ignoredActor);
 
         if (ignoredActor) this.ignoredActors.add(ignoredActor);
         this.moveWithWallResponse(position, movement);
         if (ignoredActor && !wasIgnored) this.ignoredActors.delete(ignoredActor);
 
-        this.position.copy(position);
+        this.getPosition().copy(position);
     }
 
     protected tickPhysics(deltaTime: number) {
         const desired = this.actorState.desired;
-        const position = tmpPosition.copy(this.position);
+        const position = tmpPosition.copy(this.getPosition());
 
         this.updateBaseMovement(position);
         this.updateIgnoredActors(position);
@@ -402,7 +411,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         this.physicsRotation(deltaTime);
 
-        this.position.copy(position);
+        this.getPosition().copy(position);
         this.updateBaseRelativePosition();
         this.waterVolume = this.getWaterVolume(position);
     }
@@ -423,7 +432,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected updateBaseMovement(position: Vector3) {
-        const transform = this.transformComponent;
+        const transform = this.getTransformComponent();
         const base = transform.getBase() as ICollidable & Object3D;
 
         if (!base) return;
@@ -453,16 +462,16 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const yaw = Math.atan2(2 * (tmpBaseDeltaQuaternion.w * tmpBaseDeltaQuaternion.z + tmpBaseDeltaQuaternion.x * tmpBaseDeltaQuaternion.y), 1 - 2 * (tmpBaseDeltaQuaternion.y * tmpBaseDeltaQuaternion.y + tmpBaseDeltaQuaternion.z * tmpBaseDeltaQuaternion.z));
 
         this.rotationYaw = (this.rotationYaw + Math.round(yaw * 32768 / Math.PI)) & 65535;
-        this.rotation.set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
         transform.updateBaseTransform(tmpBasePosition, tmpBaseQuaternion);
     }
 
     public setBase(actor: ICollidable | null, floor?: Vector3): void {
         if (floor) this.floor.copy(floor);
-        this.transformComponent.setBase(actor);
+        this.getTransformComponent().setBase(actor);
     }
 
-    protected updateBaseRelativePosition(): void { this.transformComponent.updateBaseRelativePosition(); }
+    protected updateBaseRelativePosition(): void { this.getTransformComponent().updateBaseRelativePosition(); }
 
     protected physWalking(position: Vector3, deltaTime: number, iterations: number = 0) {
         this.velocity.z = 0;
@@ -1031,7 +1040,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const deltaRate = (this.getParent() as any).isPlayer ? Math.round(PLAYER_YAW_RATE * deltaTime) : Math.trunc(YAW_RATE * deltaTime);
 
         this.rotationYaw = fixedTurn(this.rotationYaw, this.desiredRotationYaw, deltaRate);
-        this.rotation.set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
 
         if (this.rotationYaw === this.desiredRotationYaw) this.hasDesiredRotation = false;
     }
@@ -1076,9 +1085,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public goTo(position: Vector3) {
-        if (!this.isInteractive()) return;
-
-        console.log(`[actor] goTo from=(${this.position.x}, ${this.position.y}, ${this.position.z}) to=(${position.x}, ${position.y}, ${position.z})`);
+        console.log(`[actor] goTo from=(${this.getPosition().x}, ${this.getPosition().y}, ${this.getPosition().z}) to=(${position.x}, ${position.y}, ${position.z})`);
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
@@ -1089,8 +1096,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public goToActor(actor: Object3D, offset: number = 0) {
-        if (!this.isInteractive()) return;
-
         this.actorState.locomotion = true;
         actor.getWorldPosition(this.actorState.desired.position);
         this.actorState.desired.actor = actor;
@@ -1104,7 +1109,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (!this.isInteractive()) return;
 
         this.actorState.locomotion = true;
-        this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.position);
+        this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.getPosition());
         this.actorState.desired.actor = null;
         this.actorState.desired.swimToDepth = true;
         this.actorState.desired.offset = 0;
@@ -1135,7 +1140,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }
     public getSpeed(): number { return this.velocity.length(); }
     public isUnderwaterMovement(): boolean {
-        tmpWaterPosition.copy(this.position).addScaledVector(tmpUp, this.collisionHeight * 2);
+        tmpWaterPosition.copy(this.getPosition()).addScaledVector(tmpUp, this.collisionHeight * 2);
 
         return !!this.getWaterVolumeAt(tmpWaterPosition);
     }
@@ -1163,7 +1168,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.rotationYaw = this.desiredRotationYaw = yaw & 65535;
         this.hasDesiredRotation = false;
         this.keyboardRotationDirection = this.keyboardRotationYaw = null;
-        this.rotation.set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
     }
 
     public startRotating(direction: number, speed: number) {
@@ -1208,7 +1213,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.collisionHeight = collisionHeight;
 
         if (this.collider) this.collider.setShape(new RAPIER.Cylinder(collisionHeight, collisionRadius));
-        if (this.rigidbody) this.rigidbody.setTranslation(tmpBodyPosition.set(this.position.x, this.position.y, this.position.z + collisionHeight), true);
+        if (this.rigidbody) this.rigidbody.setTranslation(tmpBodyPosition.set(this.getPosition().x, this.getPosition().y, this.getPosition().z + collisionHeight), true);
 
         this.dispatchEvent(PAWN_COLLISION_SIZE_CHANGED_EVENT);
     }
@@ -1228,7 +1233,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public adjustLocation(position: Vector3, adjustToFloor: boolean = true) {
         this.adjustToFloor = adjustToFloor;
         this.setBase(null);
-        this.position.copy(position);
+        this.getPosition().copy(position);
         this.isGrounded = false;
         this.physicsMode = "falling";
         this.hasStartedPhysics = false;
@@ -1254,19 +1259,24 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public setDying(): void {
         this.actorState.state = "dying";
         this.keyboardRotationDirection = this.keyboardRotationYaw = null;
+        this.collisionProfile.blockPlayers = false;
         this.stopMoving();
+    }
+    public setRevived(): void {
+        this.actorState.reset();
+        this.collisionProfile.blockPlayers = true;
     }
     public resetAnimationState(): void { this.actorState.reset(); }
     public startEnterRise(mode: number): void {
         if (!mode) return;
 
-        const targetZ = this.position.z;
+        const targetZ = this.getPosition().z;
 
-        if (mode === 1) this.position.z -= this.collisionHeight * 2;
-        else if (mode === 2) this.position.z += this.collisionHeight * 2;
+        if (mode === 1) this.getPosition().z -= this.collisionHeight * 2;
+        else if (mode === 2) this.getPosition().z += this.collisionHeight * 2;
 
         this.enterRiseTargetZ = targetZ;
-        this.enterRiseVelocity = (targetZ - this.position.z) * ENTER_RISE_RATE;
+        this.enterRiseVelocity = (targetZ - this.getPosition().z) * ENTER_RISE_RATE;
     }
     public releaseCollider(): void {
         this.collider = null;

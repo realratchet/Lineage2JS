@@ -1,10 +1,11 @@
-import { Say2_T, ShortCutType_T, StatusUpdate_T, GaugeColor_T, Paperdoll_T, ItemType2_T, PartySpelledType_T } from "./game-packets";
+import * as GamePackets from "./game-packets";
 import { Vector3 } from "three";
 import NWindowManager from "../nwindow/nwindow-manager";
 import type NWindowCanvas from "../nwindow/nwindow-canvas";
 import type BaseActor from "../base-actor";
 import type RenderManager from "../rendering/render-manager";
 import Nameplate from "../rendering/nameplate";
+import ChatBalloon from "../rendering/chat-balloon";
 import LandmarkComponent from "../rendering/components/landmark-component";
 import NDomLayer, { NDOM_EDIT_TEXTURES } from "../nwindow/ndom";
 import NCPlayerStatusWnd from "../nwindow/nc-player-status-wnd";
@@ -78,22 +79,28 @@ import type { TargetStatus_T } from "../nwindow/nc-target-status-wnd";
 import type { LobbyPawnLabel_T } from "../nwindow/nc-lobby-wnd";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { GameServerInfo_T } from "./login-client";
-import type { Macro_T, CharSelectEntry_T, CharTemplate_T, ShortCut_T, UserInfo_T, InventoryItem_T, TradeItem_T, ShopItem_T, ShopPreviewList_T, WarehouseList_T, PackageTarget_T, PackageSendableList_T, PrivateStoreManageSell_T, PrivateStoreManageBuy_T, PrivateStoreSellList_T, PrivateStoreBuyList_T, MultiSellList_T, SkillEntry_T, AbnormalStatus_T, ClanInfo_T, HennaStatus_T, ClanMember_T, PetStatus_T, QuestState_T, ShowBoardPart_T, PartySpelled_T, RecipeBook_T, RecipeItemMakeInfo_T, RecipeShopManageList_T, RecipeShopSellList_T, RecipeShopItemInfo_T, HennaEquipList_T, HennaItemInfo_T, PartyMatchList_T, PartyMatchDetail_T, PartyRoomMember_T, EnchantSkill_T, EnchantSkillInfo_T, AquireSkillEntry_T, AquireSkillInfo_T, BuyListSeed_T, SellListProcure_T, GMViewSkillInfo_T, GMViewItemList_T, GMViewWarehouseWithdrawList_T, GMViewQuestList_T, GMViewCharacterInfo_T, GMViewPledgeInfo_T, OlympiadUserInfo_T, HeroEntry_T, CommandChannelInfo_T } from "./game-packets";
+import encodeCrest from "./crest-encoder";
 import NCTooltip from "../nwindow/nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
-export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, isTarget: boolean, isMouseTarget: boolean };
+export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isDead: boolean, isSitting: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
 
 const TEX_TARGET_BRACKET = "L2ui.NWindow.target";
 const TEX_MOUSE_TARGET_BRACKET = "L2ui.NWindow.normal"; // UCanvas::Init 0x7f0769, TargetRenderType 1
 const arrGaugeTextures = ["L2UI_CH3.Etc.Minibar_Magic", "L2UI_CH3.Etc.Minibar_Arrow", "L2UI_CH3.Etc.Minibar_water", "L2UI_CH3.Etc.Minibar_Food"];
 const arrGaugeBack = ["L2UI_CH3.Etc.Minibar_Back21", "L2UI_CH3.Etc.Minibar_Back22", "L2UI_CH3.Etc.Minibar_Back23"];
-const arrGaugeOrder = [GaugeColor_T.CYAN, GaugeColor_T.RED, GaugeColor_T.BLUE, GaugeColor_T.GREEN];
+const arrGaugeOrder = [GamePackets.GaugeColor_T.CYAN, GamePackets.GaugeColor_T.RED, GamePackets.GaugeColor_T.BLUE, GamePackets.GaugeColor_T.GREEN];
+const arrBalloonTextures = ["L2UI_ch3.ChatBack.balloon1_1", "L2UI_ch3.ChatBack.balloon1_2", "L2UI_ch3.ChatBack.balloon1_3", "L2UI_ch3.ChatBack.balloon1_4", "L2UI_ch3.ChatBack.balloon2_1", "L2UI_ch3.ChatBack.balloon2_2", "L2UI_ch3.ChatBack.balloon2_3", "L2UI_ch3.ChatBack.balloon2_4"];
+const arrChatStoreTypes = [GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE_MANAGE];
+const storeBalloons: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [500, 0xffeaa5f5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [499, 0xfffdfea5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [665, 0xffffbb33], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [1273, 0xfffc7575] }; // FDynamicActor::DrawChat 0x106185ef..0x1061889d: sysstring label, text colour.
 const equipmentSlots: Record<number, number> = { 1: 0, 8: 4, 64: 1, 128: 5, 256: 7, 512: 10, 1024: 6, 2048: 11, 4096: 12, 8192: 2, 16384: 5, 32768: 6, 65536: 3, 131072: 6 }; // NWindow 0x100744e0, primary cells for 16 / 15 / 17.
 const tmpNameplateAnchor = new Vector3();
+const tmpBalloonAnchor = new Vector3();
+const tmpBalloonUp = new Vector3();
 const tmpGaugeAnchor = new Vector3();
 const tmpGaugeDown = new Vector3();
 const tmpGaugePosition = new Vector3();
+const tmpDropPoint = new Vector3();
 
 function getNameColor(plate: Nameplate_T): number { // User::GetNameColor 0x10466690. The server nameColor alpha byte is forced opaque: L2J sends 0x00RRGGBB.
     if (plate.karma > 0) {
@@ -120,12 +127,12 @@ type SkillPointerDrag_T = { type: "skill" | "action", id: number, pointerId: num
 
 function getEquipmentSlot(bodyPart: number, objectId: number, paperdoll: number[]): number {
     if (bodyPart & 0x6) {
-        if (paperdoll[Paperdoll_T.PAPERDOLL_REAR] === objectId) return 8;
-        if (paperdoll[Paperdoll_T.PAPERDOLL_LEAR] === objectId) return 9;
+        if (paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_REAR] === objectId) return 8;
+        if (paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEAR] === objectId) return 9;
     }
     if (bodyPart & 0x30) {
-        if (paperdoll[Paperdoll_T.PAPERDOLL_RFINGER] === objectId) return 13;
-        if (paperdoll[Paperdoll_T.PAPERDOLL_LFINGER] === objectId) return 14;
+        if (paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RFINGER] === objectId) return 13;
+        if (paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LFINGER] === objectId) return 14;
     }
 
     return equipmentSlots[bodyPart] ?? -1;
@@ -201,7 +208,7 @@ export class NetworkUI {
     protected readonly savedWindowGroups: (NWnd | HTMLElement)[][] = [[], [], []];
     protected deliverWnd: NCDeliverWnd = null;
     protected selectDeliverWnd: NCSelectDeliverWnd = null;
-    protected inventory: InventoryItem_T[] = [];
+    protected inventory: GamePackets.InventoryItem_T[] = [];
     protected menuWnd: NCMenuWnd = null;
     protected mainWnd: NCMainWnd = null;
     protected skillWnd: NCSkillWnd = null;
@@ -212,19 +219,21 @@ export class NetworkUI {
     protected dialogBox: NCDialogBox = null;
     protected yesNoDialogBox: NCDialogBox = null;
     protected strings: GameStrings_T;
-    protected templates: CharTemplate_T[] = [];
+    protected templates: GamePackets.CharTemplate_T[] = [];
     protected characterNames: string[] = [];
-    protected statusInfo: UserInfo_T = null;
+    protected statusInfo: GamePackets.UserInfo_T = null;
     protected areHudWindowsAdded = false;
     protected screen: Screen_T = null;
     protected inputCtrl = false;
     protected inputShift = false;
     protected skillPointerDrag: SkillPointerDrag_T = null;
-    protected readonly gauges = new Map<GaugeColor_T, { remaining: number, maximum: number, startedAt: number }>();
+    protected readonly gauges = new Map<GamePackets.GaugeColor_T, { remaining: number, maximum: number, startedAt: number }>();
     protected readonly nameplates = new Map<BaseActor, Nameplate>();
+    protected readonly balloons = new Map<BaseActor, ChatBalloon>();
 
     protected readonly manRender: RenderManager;
     protected readonly isTransparencyMode: boolean;
+    protected readonly isEnterChatting: boolean;
 
     public constructor(network: NetworkManager, asset: AssetManager, render: RenderManager) {
         this.manNetwork = network;
@@ -251,6 +260,7 @@ export class NetworkUI {
         this.chatWnd.onCommand = (command, isShift) => network.execCommand(command, isShift);
         this.chatWnd.setSystemMsgWnd(asset.userConfig.game.systemMsgWnd);
         this.isTransparencyMode = asset.userConfig.game.transparencyMode;
+        this.isEnterChatting = localStorage.getItem("option:EnterChatting") === "true";
 
         for (const type of ["keydown", "keyup", "mousedown"])
             window.addEventListener(type, (event: KeyboardEvent | MouseEvent) => {
@@ -279,6 +289,15 @@ export class NetworkUI {
             event.preventDefault();
             this.chatWnd.focusInput();
         });
+        window.addEventListener("keydown", event => {
+            const target = event.target as HTMLElement;
+
+            if (this.isEnterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
+            if (this.chatWnd.isInputFocused() || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+            event.stopPropagation();
+            this.chatWnd.focusInput();
+        }, true);
         window.addEventListener("keydown", event => {
             if (this.screen !== "world" || this.windowGroup !== 0 || !event.altKey || event.code !== "KeyG" || !this.statusInfo || !(this.statusInfo.gmLevel > 0 && this.statusInfo.gmLevel < 7)) return;
 
@@ -327,7 +346,7 @@ export class NetworkUI {
     }
 
     public getStrings() { return this.strings; }
-    public setPetInfo(info: PetStatus_T) { this.petWnd.setInfo(info); this.summonedWnd.setInfo(info); this.petStatusWnd.setInfo(info); this.summonedStatusWnd.setInfo(info); }
+    public setPetInfo(info: GamePackets.PetStatus_T) { this.petWnd.setInfo(info); this.summonedWnd.setInfo(info); this.petStatusWnd.setInfo(info); this.summonedStatusWnd.setInfo(info); }
 
     public showPetStatus(statusType: number) {
         if (this.screen !== "world" && this.screen !== "loading") return;
@@ -336,9 +355,9 @@ export class NetworkUI {
         (statusType === 1 ? this.summonedStatusWnd : this.petStatusWnd).showStatus();
     }
 
-    public setPetStatusEffects(spelled: PartySpelled_T) {
-        if (spelled.type === PartySpelledType_T.PET) this.petStatusWnd.setEffects(spelled.effects);
-        else if (spelled.type === PartySpelledType_T.SUMMON) this.summonedStatusWnd.setEffects(spelled.effects);
+    public setPetStatusEffects(spelled: GamePackets.PartySpelled_T) {
+        if (spelled.type === GamePackets.PartySpelledType_T.PET) this.petStatusWnd.setEffects(spelled.effects);
+        else if (spelled.type === GamePackets.PartySpelledType_T.SUMMON) this.summonedStatusWnd.setEffects(spelled.effects);
     }
 
     public setSummonRemainTime(maximum: number, remaining: number) { this.summonedStatusWnd.setRemainTime(maximum, remaining); }
@@ -552,7 +571,13 @@ export class NetworkUI {
             }
             if (target && target.closest(".ndom-window")) return false;
 
-            return this.registerSkillDrop("item", objectId, this.nwindow.canvas.toUI(clientX), this.nwindow.canvas.toUI(clientY));
+            const x = this.nwindow.canvas.toUI(clientX), y = this.nwindow.canvas.toUI(clientY);
+
+            if (this.registerSkillDrop("item", objectId, x, y)) return true;
+            if (this.screen !== "world" || this.nwindow.findWindow(x, y) || !network.getParent().getComponent("input").traceScreenPoint(clientX, clientY, tmpDropPoint)) return false;
+
+            this.dropInventoryItem(item, tmpDropPoint);
+            return true;
         };
         this.recipeBookWnd = new NCRecipeBookWnd(this.layer);
         this.recipeBookWnd.onOpen = id => network.requestRecipeItemMakeInfo(id);
@@ -639,7 +664,7 @@ export class NetworkUI {
             if (mode === 1) network.dismissPartyRoom(detail.roomId);
             else network.withdrawPartyRoom(detail.roomId);
         };
-        this.partyRoomWnd.onChat = text => { if (!this.chatWnd.dispatchCommand(text, this.inputShift)) network.say(text, Say2_T.PARTYROOM_ALL); };
+        this.partyRoomWnd.onChat = text => { if (!this.chatWnd.dispatchCommand(text, this.inputShift)) network.say(text, GamePackets.Say2_T.PARTYROOM_ALL); };
         this.trainWnd = new NCTrainWnd(this.layer);
         this.trainWnd.onInfo = (id, level) => network.requestEnchantSkillInfo(id, level);
         this.trainWnd.onEnchant = (id, level) => network.enchantSkill(id, level);
@@ -719,7 +744,7 @@ export class NetworkUI {
         this.gmWnd = new NCGMWnd(this.layer);
         this.gmWnd.onView = (target, kind) => [this.gmDetailWnd, this.gmClanWnd, this.gmSkillWnd, this.gmQuestWnd, this.gmInventoryWnd, this.gmStoreWnd][kind - 1].toggle(target);
         this.gmWnd.onCommand = command => network.sendBypassBuildCmd(command);
-        this.gmWnd.onMessage = id => this.addSystemMessage(this.nwindow.getSystemMessage(id), 0xffb09b79);
+        this.gmWnd.onMessage = id => this.addSystemMessage(this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]);
         this.gmWnd.onInfo = text => this.dialogBox.show(text, DialogType_T.OK, null);
         this.gmWnd.onConfirm = (id, target, onReply) => this.dialogBox.show(this.formatSystemMessage(id, target), DialogType_T.OK_CANCEL, onReply);
         this.gmWnd.onServerTransfer = id => network.startGMServerTransfer(id);
@@ -741,7 +766,7 @@ export class NetworkUI {
         this.selectDeliverWnd.onConfirm = objectId => network.requestPackageSendableItemList(objectId);
         for (const wnd of [this.shopWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.manorShopWnd, this.gmStoreWnd]) {
             wnd.onHideTooltip = () => this.inventoryWnd.hideTooltip();
-            wnd.onTooltip = (item, button, isDetailed, context) => this.inventoryWnd.showTooltip({ maxCount: wnd === this.privateBuyWnd ? this.privateBuyWnd.getMaxCount(item) : 0, objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: wnd === this.privateBuyWnd ? this.privateBuyWnd.getTooltipCount(item) : item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY }, button, isDetailed, context, item.price);
+            wnd.onTooltip = (item, button, isDetailed, context) => this.inventoryWnd.showTooltip({ maxCount: wnd === this.privateBuyWnd ? this.privateBuyWnd.getMaxCount(item) : 0, objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: wnd === this.privateBuyWnd ? this.privateBuyWnd.getTooltipCount(item) : item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY }, button, isDetailed, context, item.price);
             wnd.onSelect = () => { if (this.dialogBox.isOpen() && !this.dialogBox.isYesNo()) this.dialogBox.hide(); };
             wnd.onHide = () => { if (this.dialogBox.owner === wnd.element || this.dialogBox.owner === wnd.getGrid(0) || this.dialogBox.owner === wnd.getGrid(1)) this.dialogBox.hide(); };
             if (wnd === this.manorShopWnd || wnd === this.gmStoreWnd) continue;
@@ -773,7 +798,7 @@ export class NetworkUI {
 
                         if (!selected || price <= 0) return;
                         selected.price = price;
-                        const reference = (selected as ShopItem_T & { referencePrice: number }).referencePrice;
+                        const reference = (selected as GamePackets.ShopItem_T & { referencePrice: number }).referencePrice;
 
                         if (reference > 0 && (price <= Math.trunc(reference / 5) || price >= (reference * 5 | 0))) {
                             this.dialogBox.show(this.nwindow.getSystemMessage(569), DialogType_T.OK_CANCEL, isOk => { if (isOk) quantity(); });
@@ -797,7 +822,7 @@ export class NetworkUI {
 
                             if (!current || count <= 0) return;
                             if (count > current.count) {
-                                this.addSystemMessage(this.nwindow.getSystemMessage(1036), 0xffdcdcdc);
+                                this.addSystemMessage(this.nwindow.getSystemMessage(1036), this.strings.systemMessageColors[1036]);
                                 network.playSystemMessageSound(1036);
                                 return;
                             }
@@ -812,7 +837,7 @@ export class NetworkUI {
 
                         if (!selected || price <= 0) return;
                         selected.price = price;
-                        const reference = (selected as ShopItem_T & { referencePrice: number }).referencePrice;
+                        const reference = (selected as GamePackets.ShopItem_T & { referencePrice: number }).referencePrice;
 
                         if (reference > 0 && (price <= Math.trunc(reference / 5) || price >= (reference * 5 | 0))) {
                             this.dialogBox.show(this.nwindow.getSystemMessage(569), DialogType_T.OK_CANCEL, isOk => { if (isOk) quantity(); });
@@ -920,7 +945,7 @@ export class NetworkUI {
         this.tradeWnd.onConfirm = isConfirmed => network.confirmTrade(isConfirmed);
         this.tradeWnd.onHideTooltip = () => this.inventoryWnd.hideTooltip();
         this.tradeWnd.onTooltip = (item, button, isDetailed) => {
-            this.inventoryWnd.showTooltip({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY }, button, isDetailed);
+            this.inventoryWnd.showTooltip({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY }, button, isDetailed);
         };
         this.tradeWnd.onSelect = () => { if (this.dialogBox.isOpen() && !this.dialogBox.isYesNo()) this.dialogBox.hide(); };
         this.tradeWnd.onOffer = (item, isDrop) => {
@@ -982,7 +1007,7 @@ export class NetworkUI {
         this.macroWnd.onSave = macro => network.makeMacro(macro);
         this.macroWnd.onUse = id => network.activateMacro(id);
         this.macroWnd.onDelete = macro => this.dialogBox.show(this.formatSystemMessage(828, macro.name), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.deleteMacro(macro.id); });
-        this.macroWnd.onError = id => { this.addSystemMessage(this.nwindow.getSystemMessage(id), 0xffb09b79); network.playSystemMessageSound(id); };
+        this.macroWnd.onError = id => { this.addSystemMessage(this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); network.playSystemMessageSound(id); };
         this.macroWnd.onHelp = () => { this.helpWnd.setVisible(!this.helpWnd.isVisible()); if (this.helpWnd.isVisible()) void this.loadHtmlFile(this.helpWnd, "help_macro.htm"); };
         this.macroWnd.onDrop = (id, x, y) => this.registerSkillDrop("macro", id, this.nwindow.canvas.toUI(x), this.nwindow.canvas.toUI(y));
         this.systemMenuWnd = new NCSystemMenuWnd(this.layer);
@@ -1002,12 +1027,15 @@ export class NetworkUI {
 
     protected getDOMWindows() { return [this.loginWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.npcItemHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.fishViewportWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.macroWnd, this.systemMenuWnd, this.messageWnd, this.dialogBox, this.yesNoDialogBox]; }
 
+    protected getSavedWindows(): [string, HTMLElement][] { return [["InventoryWnd", this.inventoryWnd.element], ["MainWnd", this.mainWnd.element], ["MenuWnd", this.menuWnd.element], ["SystemMenuWnd", this.systemMenuWnd.element], ["MapWnd", this.mapWnd.element], ["MacroWnd", this.macroWnd.element], ["CommunityWnd", this.communityWnd.element], ["PetWnd", this.petWnd.element], ["SummonedWnd", this.summonedWnd.element], ["PledgePowerWnd", this.pledgePowerWnd.element], ["NPCHtmlViewer", this.npcHtmlViewer.element], ["NPCItemHtmlViewer", this.npcItemHtmlViewer.element], ["HelpHtmlViewer", this.helpWnd.element], ["TradeWnd", this.tradeWnd.element], ["ShopWnd", this.shopWnd.element], ["PreviewShopWnd", this.previewShopWnd.element], ["ManorShopWnd", this.manorShopWnd.element], ["StoreWnd", this.storeWnd.element], ["DeliverWnd", this.deliverWnd.element], ["SelectDeliverWnd", this.selectDeliverWnd.element], ["PrivateShopWnd", this.privateShopWnd.element], ["PrivateBuyWnd", this.privateBuyWnd.element], ["VIPShopWnd", this.vipShopWnd.element], ["RecipeBookWnd", this.recipeBookWnd.element], ["RecipeManufactureWnd", this.recipeManufactureWnd.element], ["RecipeBuyManufactureWnd", this.recipeBuyManufactureWnd.element], ["RecipeTreeWnd", this.recipeTreeWnd.element], ["RecipeShopWnd", this.recipeShopWnd.element], ["RecipeBuyListWnd", this.recipeBuyListWnd.element], ["HennaListWnd", this.hennaListWnd.element], ["HennaInfoWnd", this.hennaInfoWnd.element], ["MatchWnd", this.matchWnd.element], ["PartyRoomWnd", this.partyRoomWnd.element], ["HeroTowerWnd", this.heroTowerWnd.element], ["TrainWnd", this.trainWnd.element], ["FishViewportWnd", this.fishViewportWnd.element], ["CommandInfoWnd", this.commandInfoWnd.element], ["OlympiadControlWnd", this.olympiadControlWnd.element], ["GMWnd", this.gmWnd.element], ["GMMagicSkillWnd", this.gmSkillWnd.element], ["GMInventoryWnd", this.gmInventoryWnd.element], ["GMStoreWnd", this.gmStoreWnd.element], ["GMQuestWnd", this.gmQuestWnd.element], ["GMDetailStatusWnd", this.gmDetailWnd.element], ["GMClanWnd", this.gmClanWnd.element]]; }
+
     protected placeScreens() {
         if (!this.loginWnd) return;
 
         const width = this.nwindow.canvas.width, height = this.nwindow.canvas.height;
 
         for (const wnd of this.getDOMWindows()) wnd.placeOnScreen(width, height);
+        for (const [name, element] of this.getSavedWindows()) this.layer.restoreWindow(element, name);
         this.manRender.radar.uiScale = this.nwindow.canvas.cssScale;
     }
 
@@ -1077,7 +1105,7 @@ export class NetworkUI {
         this.show("servers");
     }
 
-    public showCharacters(characters: CharSelectEntry_T[]) {
+    public showCharacters(characters: GamePackets.CharSelectEntry_T[]) {
         this.characterNames = characters.map(character => character.name);
         this.messageWnd.hide();
         this.lobbyWnd.setCharacters(characters.map(character => ({ name: character.name, level: character.level, className: this.nwindow.getClassName(character.activeClassId), curHp: character.curHp, maxHp: character.maxHp, curMp: character.curMp, maxMp: character.maxMp, sp: character.sp, exp: character.exp, karma: character.karma, deleteSeconds: character.deleteSeconds })));
@@ -1085,11 +1113,12 @@ export class NetworkUI {
     }
 
     public setSelectedCharacter(index: number) { this.lobbyWnd.setSelected(index); }
+    public pickCharacter(index: number) { this.lobbyWnd.pick(index); }
     public setPawnLabels(labels: LobbyPawnLabel_T[]) { this.lobbyWnd.setPawnLabels(labels); }
     public isLobbyVisible() { return this.screen === "lobby"; }
     public getScreenCanvas() { return this.nwindow.canvas; }
 
-    public showCreateCharacter(templates: CharTemplate_T[]) {
+    public showCreateCharacter(templates: GamePackets.CharTemplate_T[]) {
         this.templates = templates;
         this.pawnCreateWnd.setTemplates(templates);
         this.show("create");
@@ -1112,13 +1141,13 @@ export class NetworkUI {
 
         this.areHudWindowsAdded = true;
         this.petStatusWnd.onTargetAction = this.summonedStatusWnd.onTargetAction = (objectId, shift) => this.manNetwork.requestPetAction(objectId, shift);
-        void this.nwindow.canvas.loadTextures([TEX_TARGET_BRACKET, TEX_MOUSE_TARGET_BRACKET, ...arrGaugeTextures, ...arrGaugeBack]);
-        void this.nwindow.addWindow(this.playerStatusWnd);
-        void this.nwindow.addWindow(this.petStatusWnd);
-        void this.nwindow.addWindow(this.summonedStatusWnd);
-        void this.nwindow.addWindow(this.abnormalStatusWnd);
-        void this.nwindow.addWindow(this.targetStatusWnd);
-        void this.nwindow.addWindow(this.shortCutWnd);
+        void this.nwindow.canvas.loadTextures([TEX_TARGET_BRACKET, TEX_MOUSE_TARGET_BRACKET, ...arrGaugeTextures, ...arrGaugeBack, ...arrBalloonTextures]);
+        void this.nwindow.addWindow(this.playerStatusWnd, "PlayerStatusWnd");
+        void this.nwindow.addWindow(this.petStatusWnd, "PetStatusWnd");
+        void this.nwindow.addWindow(this.summonedStatusWnd, "SummonedStatusWnd");
+        void this.nwindow.addWindow(this.abnormalStatusWnd, "AbnormalStatusWnd");
+        void this.nwindow.addWindow(this.targetStatusWnd, "TargetStatusWnd");
+        void this.nwindow.addWindow(this.shortCutWnd, "ShortCutWnd");
         void this.nwindow.addWindow(this.chatWnd);
         void this.nwindow.addWindow(this.restartMenuWnd);
         for (let i = 0; i < 2; i++) {
@@ -1180,7 +1209,7 @@ export class NetworkUI {
         this.helpWnd.tick(deltaSeconds);
         this.loginServerWnd.serverInfo.viewer.tick(deltaSeconds);
     }
-    public setBoard(part: ShowBoardPart_T) {
+    public setBoard(part: GamePackets.ShowBoardPart_T) {
         if (part.show) void this.communityWnd.setBoard(part.actions, part.content);
         else this.communityWnd.hide();
     }
@@ -1193,6 +1222,13 @@ export class NetworkUI {
             nameplate.dispose();
             this.nameplates.delete(actor);
         }
+        for (const [actor, balloon] of this.balloons) {
+            balloon.visible = false;
+            if (actor.parent && this.screen === "world") continue;
+
+            balloon.dispose();
+            this.balloons.delete(actor);
+        }
         if (this.screen !== "world") return;
 
         const camera = this.manRender.camera, canvas = this.nwindow.canvas;
@@ -1203,7 +1239,8 @@ export class NetworkUI {
             const collisionHeight = plate.actor.getCollisionHeight();
 
             plate.actor.getWorldPosition(tmpNameplateAnchor);
-            tmpNameplateAnchor.z += collisionHeight * 2 - (plate.isDead ? 2 * collisionHeight * 0.65 : 0);
+            tmpNameplateAnchor.z += collisionHeight * 2 - (plate.isDead ? 2 * collisionHeight * 0.65 : plate.isSitting ? 2 * collisionHeight * 0.6 : 0); // FDynamicActor::Render 0x10621047..0x1062109c: posture 0 (sitting).
+            tmpBalloonAnchor.copy(tmpNameplateAnchor);
             tmpNameplateAnchor.project(camera);
 
             if (tmpNameplateAnchor.z < -1 || tmpNameplateAnchor.z >= 1 || Math.abs(tmpNameplateAnchor.x) > 1 || Math.abs(tmpNameplateAnchor.y) > 1) continue;
@@ -1224,10 +1261,35 @@ export class NetworkUI {
             nameplate.position.copy(tmpNameplateAnchor.unproject(camera));
             nameplate.scale.set(nameplate.width * scale, nameplate.height * scale, 1);
             nameplate.visible = true;
+
+            const store = plate.isSitting ? storeBalloons[plate.privateStoreType] : null, isChat = arrChatStoreTypes.includes(plate.privateStoreType);
+            const text = store ? (plate.storeMessage ? `${this.nwindow.getSysString(store[0])}\n${plate.storeMessage}` : this.nwindow.getSysString(store[0])) : isChat ? plate.chatMessage : null;
+
+            if (!text || !plate.isChatRange || !arrBalloonTextures.every(path => canvas.hasTexture(path))) continue;
+
+            tmpBalloonUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+            tmpBalloonAnchor.addScaledVector(tmpBalloonUp, Math.trunc(tmpBalloonAnchor.distanceTo(camera.position)) / 1000 * (plate.title ? 35 : 25)).project(camera); // FDynamicActor::DrawChat 0x106183c6..0x10618516: 35 with a title, else 25.
+
+            if (tmpBalloonAnchor.z < -1 || tmpBalloonAnchor.z >= 1 || Math.abs(tmpBalloonAnchor.x) > 1 || Math.abs(tmpBalloonAnchor.y) > 1) continue;
+
+            let balloon = this.balloons.get(plate.actor);
+
+            if (!balloon) {
+                balloon = new ChatBalloon();
+                this.balloons.set(plate.actor, balloon);
+                this.manRender.scene.add(balloon);
+            }
+
+            balloon.setText(canvas, text, isChat ? 0xffffffff : store[1], isChat);
+            tmpBalloonAnchor.x = Math.trunc((tmpBalloonAnchor.x + 1) * 0.5 * width) / width * 2 - 1;
+            tmpBalloonAnchor.y = 1 - Math.trunc((1 - tmpBalloonAnchor.y) * 0.5 * height) / height * 2;
+            balloon.position.copy(tmpBalloonAnchor.unproject(camera));
+            balloon.scale.set(balloon.width * scale, balloon.height * scale, 1);
+            balloon.visible = true;
         }
     }
 
-    public setupGauge(color: GaugeColor_T, remaining: number, maximum: number) {
+    public setupGauge(color: GamePackets.GaugeColor_T, remaining: number, maximum: number) {
         if (!arrGaugeTextures[color]) throw new Error(`Unknown gauge color '${color}'.`);
 
         if (remaining <= 0 || maximum <= 0) this.gauges.delete(color);
@@ -1284,7 +1346,7 @@ export class NetworkUI {
             canvas.drawTile(x + 97 - right.width, y - 1, right.width, 4, 0, 0, right.width, right.height, arrGaugeBack[2], 128);
             canvas.drawTile(x, y, fill, 2, 0, 0, texture.width, texture.height, arrGaugeTextures[color], 128);
 
-            if (color === GaugeColor_T.CYAN || color === GaugeColor_T.RED) {
+            if (color === GamePackets.GaugeColor_T.CYAN || color === GamePackets.GaugeColor_T.RED) {
                 tmpGaugeDown.multiplyScalar(distance * 3);
                 tmpGaugeAnchor.add(tmpGaugeDown);
             }
@@ -1368,9 +1430,9 @@ export class NetworkUI {
         this.targetStatusWnd.setTarget(null);
     }
 
-    public setAbnormalStatus(effects: AbnormalStatus_T[]) { this.abnormalStatusWnd.setEffects(effects); }
-    public setSecondaryAbnormalStatus(effects: AbnormalStatus_T[]) { this.abnormalStatusWnd.setSecondaryEffects(effects); }
-    public setShortBuff(effect: AbnormalStatus_T) {
+    public setAbnormalStatus(effects: GamePackets.AbnormalStatus_T[]) { this.abnormalStatusWnd.setEffects(effects); }
+    public setSecondaryAbnormalStatus(effects: GamePackets.AbnormalStatus_T[]) { this.abnormalStatusWnd.setSecondaryEffects(effects); }
+    public setShortBuff(effect: GamePackets.AbnormalStatus_T) {
         const skill = this.strings.skillInfos[`${effect.id}:${effect.level}`];
 
         this.abnormalStatusWnd.setShortEffect(skill && skill.name && skill.name.charCodeAt(0) !== 0 ? effect : null);
@@ -1409,7 +1471,7 @@ export class NetworkUI {
         this.nwindow.render();
     }
 
-    public setStatus(info: UserInfo_T) {
+    public setStatus(info: GamePackets.UserInfo_T) {
         this.statusInfo = info;
         this.trainWnd.setStatus(info);
         this.mainWnd.actionWnd.setClass(info.classId);
@@ -1423,13 +1485,16 @@ export class NetworkUI {
         this.setInventory(this.inventory);
     }
 
-    public toggleCharacterStatus() { this.mainWnd.setVisible(!this.mainWnd.isVisible()); }
+    public toggleCharacterStatus() {
+        this.mainWnd.setVisible(!this.mainWnd.isVisible());
+        this.nwindow.playPanelSound("charstat", this.mainWnd.isVisible());
+    }
     public toggleSkills() { this.toggleSkillTab("skills"); }
-    public setHenna(henna: HennaStatus_T) { this.mainWnd.detailStatusWnd.setHenna(henna); }
-    public setClan(clan: ClanInfo_T) { this.mainWnd.detailStatusWnd.setClan(clan); this.mainWnd.clanWnd.setClan(clan); }
+    public setHenna(henna: GamePackets.HennaStatus_T) { this.mainWnd.detailStatusWnd.setHenna(henna); }
+    public setClan(clan: GamePackets.ClanInfo_T) { this.mainWnd.detailStatusWnd.setClan(clan); this.mainWnd.clanWnd.setClan(clan); }
     public clearClanMembers() { this.mainWnd.clanWnd.clearMembers(); }
-    public addClanMember(member: ClanMember_T) { this.mainWnd.clanWnd.addMember(member); }
-    public updateClanMember(member: ClanMember_T) { this.mainWnd.clanWnd.updateMember(member); }
+    public addClanMember(member: GamePackets.ClanMember_T) { this.mainWnd.clanWnd.addMember(member); }
+    public updateClanMember(member: GamePackets.ClanMember_T) { this.mainWnd.clanWnd.updateMember(member); }
     public deleteClanMember(name: string) { this.mainWnd.clanWnd.deleteMember(name); }
     public setPledgePower(power: Uint8Array) { this.pledgePowerWnd.setPower(power); }
     public setPledgeStatus(objectId: number, clanId: number) { if (this.statusInfo && this.statusInfo.objectId === objectId) this.statusInfo.clanId = clanId; }
@@ -1444,14 +1509,16 @@ export class NetworkUI {
     public toggleSkillTab(tab: MainTab_T) {
         if (this.mainWnd.isVisible() && this.mainWnd.getSelectedTab() === tab) {
             this.mainWnd.setVisible(false);
+            this.nwindow.playPanelSound("charstat", false);
             return;
         }
 
         this.mainWnd.selectTab(tab);
         this.mainWnd.setVisible(true);
+        this.nwindow.playPanelSound("charstat", true);
     }
 
-    public setMacros(macros: Macro_T[]) { this.macroWnd.setMacros(macros); }
+    public setMacros(macros: GamePackets.Macro_T[]) { this.macroWnd.setMacros(macros); }
 
     protected setGroupWindowVisible(wnd: NWnd | HTMLElement, isVisible: boolean) {
         if (!(wnd instanceof HTMLElement)) { wnd.setVisible(isVisible); return; }
@@ -1503,7 +1570,7 @@ export class NetworkUI {
         }
     }
 
-    public setOlympiadUserInfo(info: OlympiadUserInfo_T) {
+    public setOlympiadUserInfo(info: GamePackets.OlympiadUserInfo_T) {
         const side = info.side << 24 >> 24;
 
         if (this.windowGroup === 2) {
@@ -1511,7 +1578,7 @@ export class NetworkUI {
         } else if (side === this.olympiadTargetWnd.getSide()) this.olympiadTargetWnd.setInfo(info);
     }
 
-    public setOlympiadEffects(objectId: number, effects: AbnormalStatus_T[]) {
+    public setOlympiadEffects(objectId: number, effects: GamePackets.AbnormalStatus_T[]) {
         const index = this.olympiadPlayerWnds.findIndex(wnd => wnd.getObjectId() === objectId);
 
         if (index < 0) return;
@@ -1541,9 +1608,9 @@ export class NetworkUI {
             } else if (wnd.getObjectId() === defenderId && isMiss) wnd.appendMessage(this.formatSystemMessage(42, attackerName));
         }
     }
-    public setGMPledgeInfo(info: GMViewPledgeInfo_T) { this.gmClanWnd.setInfo(info); }
+    public setGMPledgeInfo(info: GamePackets.GMViewPledgeInfo_T) { this.gmClanWnd.setInfo(info); }
 
-    public setGMCharacterInfo(info: GMViewCharacterInfo_T, clan: GMClanInfo_T, crest: CanvasImageSource) {
+    public setGMCharacterInfo(info: GamePackets.GMViewCharacterInfo_T, clan: GMClanInfo_T, crest: CanvasImageSource) {
         this.gmDetailClan = clan;
         this.gmDetailWnd.setClan(clan, crest);
         this.gmDetailWnd.setCharacterInfo(info);
@@ -1588,10 +1655,10 @@ export class NetworkUI {
         this.cacheCrests.set(crestId, canvas);
         return canvas;
     }
-    public setGMQuestList(info: GMViewQuestList_T) { void this.gmQuestWnd.setQuestList(info); }
-    public setGMSkillInfo(info: GMViewSkillInfo_T) { void this.gmSkillWnd.setSkillInfo(info); }
-    public setGMWarehouseInfo(info: GMViewWarehouseWithdrawList_T) { void this.gmStoreWnd.setWarehouseInfo(info); }
-    public setGMInventoryInfo(info: GMViewItemList_T) {
+    public setGMQuestList(info: GamePackets.GMViewQuestList_T) { void this.gmQuestWnd.setQuestList(info); }
+    public setGMSkillInfo(info: GamePackets.GMViewSkillInfo_T) { void this.gmSkillWnd.setSkillInfo(info); }
+    public setGMWarehouseInfo(info: GamePackets.GMViewWarehouseWithdrawList_T) { void this.gmStoreWnd.setWarehouseInfo(info); }
+    public setGMInventoryInfo(info: GamePackets.GMViewItemList_T) {
         let hasEar = false, hasRing = false;
         const entries = info.items.map(item => {
             let slot = -1;
@@ -1601,17 +1668,18 @@ export class NetworkUI {
                 else if (item.bodyPart & 0x30) { slot = hasRing ? 13 : 14; hasRing = true; }
                 else if (item.bodyPart !== 131072) slot = equipmentSlots[item.bodyPart] ?? -1;
             }
-            return { objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: item.customType1, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY };
+            return { objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: item.customType1, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY };
         });
 
         void this.gmInventoryWnd.setInventoryInfo(info, entries);
     }
-    public setSkills(skills: SkillEntry_T[]) { void this.skillWnd.setSkills(skills); }
-    public setQuestStates(states: QuestState_T[]) { void this.mainWnd.questWnd.setStates(states); }
+    public setSkills(skills: GamePackets.SkillEntry_T[]) { void this.skillWnd.setSkills(skills); }
+    public setQuestStates(states: GamePackets.QuestState_T[]) { void this.mainWnd.questWnd.setStates(states); }
     public clearQuestLocation() { this.mainWnd.questWnd.clearLocation(); }
 
     public toggleMap() {
         this.mapWnd.setVisible(!this.mapWnd.isVisible());
+        this.nwindow.playPanelSound("map", this.mapWnd.isVisible());
         if (this.mapWnd.isVisible()) {
             const position = this.manRender.player.position;
 
@@ -1619,9 +1687,7 @@ export class NetworkUI {
         }
     }
 
-    public showMap(_mapId: number) {
-        if (!this.mapWnd.isVisible()) this.toggleMap();
-    }
+    public showMap(_mapId: number) { this.toggleMap(); } // NWindow 0x1005bcf0: ShowMiniMap toggles the minimap window
 
 
     public chooseInventoryItem(itemId: number) { this.inventoryWnd.chooseItem(itemId); }
@@ -1638,18 +1704,18 @@ export class NetworkUI {
     }
 
     public clearMultiSell(listId: number) { this.vipShopWnd.clear(listId); }
-    public showMultiSell(list: MultiSellList_T) { void this.vipShopWnd.show(list); }
-    public showPrivateStoreBuy(list: PrivateStoreBuyList_T) { void this.privateBuyWnd.showBuyStore(list); }
-    public showPrivateStoreSell(list: PrivateStoreSellList_T) { void this.privateShopWnd.showStore(list); }
-    public showPrivateStoreManageSell(list: PrivateStoreManageSell_T) { void this.privateShopWnd.showManageStore(list); }
+    public showMultiSell(list: GamePackets.MultiSellList_T) { void this.vipShopWnd.show(list); }
+    public showPrivateStoreBuy(list: GamePackets.PrivateStoreBuyList_T) { void this.privateBuyWnd.showBuyStore(list); }
+    public showPrivateStoreSell(list: GamePackets.PrivateStoreSellList_T) { void this.privateShopWnd.showStore(list); }
+    public showPrivateStoreManageSell(list: GamePackets.PrivateStoreManageSell_T) { void this.privateShopWnd.showManageStore(list); }
     public setPrivateSellLimit(limit: number) { this.privateShopWnd.setLimit(limit); }
-    public showPrivateStoreManageBuy(list: PrivateStoreManageBuy_T) { void this.privateBuyWnd.showManageBuyStore(list); }
+    public showPrivateStoreManageBuy(list: GamePackets.PrivateStoreManageBuy_T) { void this.privateBuyWnd.showManageBuyStore(list); }
     public setPrivateBuyLimit(limit: number) { this.privateBuyWnd.setLimit(limit); }
-    public showRecipeBook(book: RecipeBook_T) {
+    public showRecipeBook(book: GamePackets.RecipeBook_T) {
         this.layer.place(this.recipeBookWnd.element, parseFloat(this.recipeManufactureWnd.element.style.left), parseFloat(this.recipeManufactureWnd.element.style.top));
         void this.recipeBookWnd.show(book);
     }
-    public showRecipeManufacture(state: RecipeItemMakeInfo_T) {
+    public showRecipeManufacture(state: GamePackets.RecipeItemMakeInfo_T) {
         const recipe = this.strings.recipes.find(recipe => recipe.id === state.recipeId);
 
         if (!recipe) return;
@@ -1658,12 +1724,12 @@ export class NetworkUI {
         void this.recipeManufactureWnd.show(recipe, state, this.inventory);
     }
     public setRecipeLimits(dwarf: number, common: number) { this.recipeBookWnd.setLimits(dwarf, common); }
-    public showRecipeShopManage(list: RecipeShopManageList_T) { void this.recipeShopWnd.show(list); }
-    public showRecipeShopSellList(list: RecipeShopSellList_T) {
+    public showRecipeShopManage(list: GamePackets.RecipeShopManageList_T) { void this.recipeShopWnd.show(list); }
+    public showRecipeShopSellList(list: GamePackets.RecipeShopSellList_T) {
         this.layer.place(this.recipeBuyListWnd.element, parseFloat(this.recipeBuyManufactureWnd.element.style.left), parseFloat(this.recipeBuyManufactureWnd.element.style.top));
         void this.recipeBuyListWnd.show(list);
     }
-    public showRecipeShopItemInfo(state: RecipeShopItemInfo_T) {
+    public showRecipeShopItemInfo(state: GamePackets.RecipeShopItemInfo_T) {
         const recipe = this.strings.recipes.find(recipe => recipe.id === state.recipeId);
 
         if (!recipe) return;
@@ -1676,15 +1742,15 @@ export class NetworkUI {
         this.matchWnd.resetFilters();
         if (this.partyRoomWnd.minimized.isVisible()) this.partyRoomWnd.minimized.restore();
     }
-    public showPartyMatchList(list: PartyMatchList_T) { this.matchWnd.show(list); }
-    public showPartyMatchDetail(detail: PartyMatchDetail_T) {
+    public showPartyMatchList(list: GamePackets.PartyMatchList_T) { this.matchWnd.show(list); }
+    public showPartyMatchDetail(detail: GamePackets.PartyMatchDetail_T) {
         this.matchWnd.setVisible(false);
         this.partyRoomWnd.show(detail);
     }
-    public setPartyRoomMembers(mode: number, members: PartyRoomMember_T[], isReset: boolean) {
+    public setPartyRoomMembers(mode: number, members: GamePackets.PartyRoomMember_T[], isReset: boolean) {
         if (!isReset) {
             const remaining = new Map(members.map(member => [member.objectId, member]));
-            const ordered: PartyRoomMember_T[] = [];
+            const ordered: GamePackets.PartyRoomMember_T[] = [];
 
             this.partyRoomWnd.table.getRows().forEach(row => {
                 const member = remaining.get(Number(row.id));
@@ -1696,36 +1762,36 @@ export class NetworkUI {
         this.partyRoomWnd.setMembers(mode, members, isReset);
     }
     public closePartyRoom() { this.partyRoomWnd.setVisible(false); this.partyRoomWnd.clearChat(); }
-    public showAquireSkillList(skills: AquireSkillEntry_T[], mode: number) { void this.trainWnd.showAquireList(skills, mode); }
-    public showAquireSkillInfo(info: AquireSkillInfo_T) { void this.trainWnd.showAquireInfo(info); }
+    public showAquireSkillList(skills: GamePackets.AquireSkillEntry_T[], mode: number) { void this.trainWnd.showAquireList(skills, mode); }
+    public showAquireSkillInfo(info: GamePackets.AquireSkillInfo_T) { void this.trainWnd.showAquireInfo(info); }
     public hideTrainWnd() { this.trainWnd.setVisible(false); }
-    public showManorShop(list: BuyListSeed_T | SellListProcure_T, isSell: boolean) { void this.manorShopWnd.showManor(isSell, list.adena, "manorId" in list ? list.manorId : list.listId, list.items); }
-    public showEnchantSkillList(skills: EnchantSkill_T[]) { void this.trainWnd.showEnchantList(skills); }
-    public showEnchantSkillInfo(info: EnchantSkillInfo_T) { void this.trainWnd.showEnchantInfo(info); }
-    public showHennaList(list: HennaEquipList_T, isRemove = false) {
+    public showManorShop(list: GamePackets.BuyListSeed_T | GamePackets.SellListProcure_T, isSell: boolean) { void this.manorShopWnd.showManor(isSell, list.adena, "manorId" in list ? list.manorId : list.listId, list.items); }
+    public showEnchantSkillList(skills: GamePackets.EnchantSkill_T[]) { void this.trainWnd.showEnchantList(skills); }
+    public showEnchantSkillInfo(info: GamePackets.EnchantSkillInfo_T) { void this.trainWnd.showEnchantInfo(info); }
+    public showHennaList(list: GamePackets.HennaEquipList_T, isRemove = false) {
         this.hennaInfoWnd.setVisible(false);
         this.layer.place(this.hennaListWnd.element, parseFloat(this.hennaInfoWnd.element.style.left), parseFloat(this.hennaInfoWnd.element.style.top));
         void this.hennaListWnd.show(list, isRemove);
     }
-    public showHennaInfo(info: HennaItemInfo_T, isRemove = false) {
+    public showHennaInfo(info: GamePackets.HennaItemInfo_T, isRemove = false) {
         this.hennaListWnd.setVisible(false);
         this.layer.place(this.hennaInfoWnd.element, parseFloat(this.hennaListWnd.element.style.left), parseFloat(this.hennaListWnd.element.style.top));
         this.hennaListWnd.clear();
         void this.hennaInfoWnd.show(info, isRemove);
     }
 
-    public showShop(isSell: boolean, money: number, items: ShopItem_T[]) { void this.shopWnd.show(isSell, money, items); }
-    public showWarehouse(isWithdraw: boolean, list: WarehouseList_T) {
+    public showShop(isSell: boolean, money: number, items: GamePackets.ShopItem_T[]) { void this.shopWnd.show(isSell, money, items); }
+    public showWarehouse(isWithdraw: boolean, list: GamePackets.WarehouseList_T) {
         this.npcHtmlViewer.setVisible(false);
         if (!isWithdraw) this.inventoryWnd.setVisible(false);
         void this.storeWnd.showWarehouse(isWithdraw, list);
     }
-    public showPackageTargets(targets: PackageTarget_T[]) { if (targets.length) this.selectDeliverWnd.show(targets); }
-    public showPackage(list: PackageSendableList_T) { if (list.items.length) void this.deliverWnd.showPackage(list); }
-    public showPreviewShop(list: ShopPreviewList_T) {
+    public showPackageTargets(targets: GamePackets.PackageTarget_T[]) { if (targets.length) this.selectDeliverWnd.show(targets); }
+    public showPackage(list: GamePackets.PackageSendableList_T) { if (list.items.length) void this.deliverWnd.showPackage(list); }
+    public showPreviewShop(list: GamePackets.ShopPreviewList_T) {
         void this.previewShopWnd.show(false, list.adena, list.items.map(item => ({ ...item, type1: item.type2, type2: -1, objectId: 0, count: 0, enchantLevel: 0, customType2: 0 })));
     }
-    public setTradeItems(mode: number, items: TradeItem_T[], recalculatedItemCount = items.length) { void this.tradeWnd.setItems(mode, [...items], recalculatedItemCount); }
+    public setTradeItems(mode: number, items: GamePackets.TradeItem_T[], recalculatedItemCount = items.length) { void this.tradeWnd.setItems(mode, [...items], recalculatedItemCount); }
     public recalculateTradeRows(mode: number, itemCount: number) { this.tradeWnd.recalculateRows(mode, itemCount); }
     public finishTrade() {
         this.tradeWnd.reset();
@@ -1734,10 +1800,25 @@ export class NetworkUI {
 
     public toggleSystemMenu() {
         this.systemMenuWnd.setVisible(!this.systemMenuWnd.isVisible());
+        this.nwindow.playPanelSound("system", this.systemMenuWnd.isVisible());
     }
 
     protected getInventoryItemName(item: InventoryEntry_T) { // NWindow 0x1001e470.
         return `${item.enchant > 0 && item.info.canShowEnchant ? `+${item.enchant}` : ""}${item.name}${item.info.addName ? `-${item.info.addName}` : ""}`;
+    }
+
+    protected dropInventoryItem(item: InventoryEntry_T, point: Vector3) {
+        const consumeType = item.info.consumeType;
+        const location = { x: point.x, y: point.y, z: point.z };
+
+        if (!(consumeType >= 1 && consumeType <= 3 && item.count > 1)) {
+            this.manNetwork.dropItem(item.objectId, 1, location);
+            return;
+        }
+
+        this.dialogBox.showQuantity(this.formatSystemMessage(71, this.getInventoryItemName(item)), item.count, consumeType, count => this.manNetwork.dropItem(item.objectId, count, location), id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null));
+        this.dialogBox.owner = this.inventoryWnd.getItemOwner(item);
+        this.manNetwork.playSystemMessageSound(71);
     }
 
     protected destroyInventoryItem(item: InventoryEntry_T) { // NWindow 0x10097bb1 / 0x10009741.
@@ -1777,7 +1858,7 @@ export class NetworkUI {
         if (getEquipmentSlot(item.bodyPart, item.objectId, paperdoll) !== item.slot) return false;
 
         let bodyPart = item.bodyPart;
-        const pair = bodyPart & 0x6 ? [Paperdoll_T.PAPERDOLL_REAR, Paperdoll_T.PAPERDOLL_LEAR] : bodyPart & 0x30 ? [Paperdoll_T.PAPERDOLL_RFINGER, Paperdoll_T.PAPERDOLL_LFINGER] : null;
+        const pair = bodyPart & 0x6 ? [GamePackets.Paperdoll_T.PAPERDOLL_REAR, GamePackets.Paperdoll_T.PAPERDOLL_LEAR] : bodyPart & 0x30 ? [GamePackets.Paperdoll_T.PAPERDOLL_RFINGER, GamePackets.Paperdoll_T.PAPERDOLL_LFINGER] : null;
 
         if (pair) {
             const slot = pair.find(slot => paperdoll[slot] === item.objectId);
@@ -1808,18 +1889,20 @@ export class NetworkUI {
     }
 
     public toggleInventory() {
+        this.nwindow.playPanelSound("inventory", !this.inventoryWnd.isVisible());
+
         if (this.inventoryWnd.isVisible()) this.inventoryWnd.setVisible(false);
         else this.manNetwork.requestItemList();
     }
 
-    public updateInventoryOrder(change: number, item: InventoryItem_T) {
-        this.inventoryWnd.updateOrder(change, item.objectId, item.isEquipped, item.type2 === ItemType2_T.TYPE2_QUEST, item.type2 === ItemType2_T.TYPE2_MONEY);
+    public updateInventoryOrder(change: number, item: GamePackets.InventoryItem_T) {
+        this.inventoryWnd.updateOrder(change, item.objectId, item.isEquipped, item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY);
     }
 
     public setInventoryOrderOwner(name: string, namespace: number) { this.inventoryWnd.setOrderOwner(name, namespace); }
     public saveInventoryOrder() { this.inventoryWnd.saveOrder(); }
 
-    public setInventory(items: InventoryItem_T[], showWindow: boolean = false, isFull: boolean = false) {
+    public setInventory(items: GamePackets.InventoryItem_T[], showWindow: boolean = false, isFull: boolean = false) {
         this.inventory = items;
         this.mainWnd.questWnd.setInventory(items);
         this.recipeManufactureWnd.setInventory(items);
@@ -1828,11 +1911,11 @@ export class NetworkUI {
 
         const paperdoll = this.statusInfo ? this.statusInfo.paperdollObjects : [];
 
-        void this.inventoryWnd.setItems(items.map(item => ({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: item.isEquipped ? getEquipmentSlot(item.bodyPart, item.objectId, paperdoll) : -1, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY })), isFull);
+        void this.inventoryWnd.setItems(items.map(item => ({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: item.isEquipped ? getEquipmentSlot(item.bodyPart, item.objectId, paperdoll) : -1, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY })), isFull);
     }
 
-    public setPetInventory(items: InventoryItem_T[], isFull: boolean = false) {
-        void this.petWnd.setItems(items.map(item => ({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isEquipped: item.isEquipped, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY })), isFull);
+    public setPetInventory(items: GamePackets.InventoryItem_T[], isFull: boolean = false) {
+        void this.petWnd.setItems(items.map(item => ({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isEquipped: item.isEquipped, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY })), isFull);
     }
 
     protected transferPetItem(item: InventoryEntry_T, isGiving: boolean) { // NWindow 0x100979d6 / 0x100de644, kinds 54/55.
@@ -1858,7 +1941,7 @@ export class NetworkUI {
         if (id > 0) this.dialogBox.owner = this.mainWnd.questWnd.element;
     }
 
-    protected clanAction(action: string, member: ClanMember_T) {
+    protected clanAction(action: string, member: GamePackets.ClanMember_T) {
         const network = this.manNetwork, dialog = this.dialogBox;
 
         switch (action) {
@@ -1943,7 +2026,7 @@ export class NetworkUI {
             case "setCrest":
             case "setInsignia":
                 dialog.show(this.nwindow.getSystemMessage(action === "setCrest" ? 211 : 1478), action === "setCrest" ? DialogType_T.OK : DialogType_T.OK_CANCEL, isOk => {
-                    if (isOk) dialog.showText(this.nwindow.getSystemMessage(208), path => { debugger; return true; }, "", 294);
+                    if (isOk) this.pickCrest(action === "setCrest");
                 });
                 break;
             case "penalty": network.userCommand(100); break;
@@ -1952,7 +2035,22 @@ export class NetworkUI {
         }
     }
 
-    protected clanError(id: number) { this.addSystemMessage(this.nwindow.getSystemMessage(id), 0xffb09b79); this.manNetwork.playSystemMessageSound(id); }
+    protected pickCrest(isSmall: boolean) { // NWindow 0x10080bf0 crest / 0x100809d0 insignia read the BMP path from sysmsg 208; a file picker replaces it.
+        const input = document.createElement("input");
+
+        input.type = "file";
+        input.accept = ".bmp";
+        input.onchange = async () => {
+            const data = encodeCrest(new Uint8Array(await input.files[0].arrayBuffer()), isSmall ? 16 : 64, isSmall ? 12 : 64);
+
+            if (!data) this.clanError(isSmall ? 211 : 1478);
+            else if (isSmall) this.manNetwork.setPledgeCrest(data);
+            else this.manNetwork.setPledgeLargeCrest(data);
+        };
+        input.click();
+    }
+
+    protected clanError(id: number) { this.addSystemMessage(this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); this.manNetwork.playSystemMessageSound(id); }
 
     protected isValidName(name: string) {
         const lower = name.replace(/[A-Z]/g, char => String.fromCharCode(char.charCodeAt(0) + 32));
@@ -1968,7 +2066,7 @@ export class NetworkUI {
             else if (name.length > 16) error = 80;
 
             if (error) {
-                this.addSystemMessage(this.nwindow.getSystemMessage(error), 0xffb09b79);
+                this.addSystemMessage(this.nwindow.getSystemMessage(error), this.strings.systemMessageColors[error]);
                 this.manNetwork.playSystemMessageSound(error);
                 if (error === 591) this.dialogBox.textEditor.setValue("");
                 this.dialogBox.textEditor.focus();
@@ -1985,34 +2083,34 @@ export class NetworkUI {
         const info = this.statusInfo;
 
         if (!info) return;
-        if (StatusUpdate_T.LEVEL in status) info.level = status[StatusUpdate_T.LEVEL];
-        if (StatusUpdate_T.EXP in status) info.exp = status[StatusUpdate_T.EXP];
-        if (StatusUpdate_T.CUR_HP in status) info.curHp = status[StatusUpdate_T.CUR_HP];
-        if (StatusUpdate_T.MAX_HP in status) info.maxHp = status[StatusUpdate_T.MAX_HP];
-        if (StatusUpdate_T.CUR_MP in status) info.curMp = status[StatusUpdate_T.CUR_MP];
-        if (StatusUpdate_T.MAX_MP in status) info.maxMp = status[StatusUpdate_T.MAX_MP];
-        if (StatusUpdate_T.CUR_CP in status) info.curCp = status[StatusUpdate_T.CUR_CP];
-        if (StatusUpdate_T.MAX_CP in status) info.maxCp = status[StatusUpdate_T.MAX_CP];
-        if (StatusUpdate_T.STR in status) info.str = status[StatusUpdate_T.STR];
-        if (StatusUpdate_T.DEX in status) info.dex = status[StatusUpdate_T.DEX];
-        if (StatusUpdate_T.CON in status) info.con = status[StatusUpdate_T.CON];
-        if (StatusUpdate_T.INT in status) info.int = status[StatusUpdate_T.INT];
-        if (StatusUpdate_T.WIT in status) info.wit = status[StatusUpdate_T.WIT];
-        if (StatusUpdate_T.MEN in status) info.men = status[StatusUpdate_T.MEN];
-        if (StatusUpdate_T.SP in status) info.sp = status[StatusUpdate_T.SP];
-        if (StatusUpdate_T.CUR_LOAD in status) info.curLoad = status[StatusUpdate_T.CUR_LOAD];
-        if (StatusUpdate_T.MAX_LOAD in status) info.maxLoad = status[StatusUpdate_T.MAX_LOAD];
-        if (StatusUpdate_T.P_ATK in status) info.pAtk = status[StatusUpdate_T.P_ATK];
-        if (StatusUpdate_T.ATK_SPD in status) info.atkSpd = status[StatusUpdate_T.ATK_SPD];
-        if (StatusUpdate_T.P_DEF in status) info.pDef = status[StatusUpdate_T.P_DEF];
-        if (StatusUpdate_T.EVASION in status) info.evasion = status[StatusUpdate_T.EVASION];
-        if (StatusUpdate_T.ACCURACY in status) info.accuracy = status[StatusUpdate_T.ACCURACY];
-        if (StatusUpdate_T.CRITICAL in status) info.critical = status[StatusUpdate_T.CRITICAL];
-        if (StatusUpdate_T.M_ATK in status) info.mAtk = status[StatusUpdate_T.M_ATK];
-        if (StatusUpdate_T.CAST_SPD in status) info.castSpd = status[StatusUpdate_T.CAST_SPD];
-        if (StatusUpdate_T.M_DEF in status) info.mDef = status[StatusUpdate_T.M_DEF];
-        if (StatusUpdate_T.PVP_FLAG in status) info.pvpFlag = status[StatusUpdate_T.PVP_FLAG];
-        if (StatusUpdate_T.KARMA in status) info.karma = status[StatusUpdate_T.KARMA];
+        if (GamePackets.StatusUpdate_T.LEVEL in status) info.level = status[GamePackets.StatusUpdate_T.LEVEL];
+        if (GamePackets.StatusUpdate_T.EXP in status) info.exp = status[GamePackets.StatusUpdate_T.EXP];
+        if (GamePackets.StatusUpdate_T.CUR_HP in status) info.curHp = status[GamePackets.StatusUpdate_T.CUR_HP];
+        if (GamePackets.StatusUpdate_T.MAX_HP in status) info.maxHp = status[GamePackets.StatusUpdate_T.MAX_HP];
+        if (GamePackets.StatusUpdate_T.CUR_MP in status) info.curMp = status[GamePackets.StatusUpdate_T.CUR_MP];
+        if (GamePackets.StatusUpdate_T.MAX_MP in status) info.maxMp = status[GamePackets.StatusUpdate_T.MAX_MP];
+        if (GamePackets.StatusUpdate_T.CUR_CP in status) info.curCp = status[GamePackets.StatusUpdate_T.CUR_CP];
+        if (GamePackets.StatusUpdate_T.MAX_CP in status) info.maxCp = status[GamePackets.StatusUpdate_T.MAX_CP];
+        if (GamePackets.StatusUpdate_T.STR in status) info.str = status[GamePackets.StatusUpdate_T.STR];
+        if (GamePackets.StatusUpdate_T.DEX in status) info.dex = status[GamePackets.StatusUpdate_T.DEX];
+        if (GamePackets.StatusUpdate_T.CON in status) info.con = status[GamePackets.StatusUpdate_T.CON];
+        if (GamePackets.StatusUpdate_T.INT in status) info.int = status[GamePackets.StatusUpdate_T.INT];
+        if (GamePackets.StatusUpdate_T.WIT in status) info.wit = status[GamePackets.StatusUpdate_T.WIT];
+        if (GamePackets.StatusUpdate_T.MEN in status) info.men = status[GamePackets.StatusUpdate_T.MEN];
+        if (GamePackets.StatusUpdate_T.SP in status) info.sp = status[GamePackets.StatusUpdate_T.SP];
+        if (GamePackets.StatusUpdate_T.CUR_LOAD in status) info.curLoad = status[GamePackets.StatusUpdate_T.CUR_LOAD];
+        if (GamePackets.StatusUpdate_T.MAX_LOAD in status) info.maxLoad = status[GamePackets.StatusUpdate_T.MAX_LOAD];
+        if (GamePackets.StatusUpdate_T.P_ATK in status) info.pAtk = status[GamePackets.StatusUpdate_T.P_ATK];
+        if (GamePackets.StatusUpdate_T.ATK_SPD in status) info.atkSpd = status[GamePackets.StatusUpdate_T.ATK_SPD];
+        if (GamePackets.StatusUpdate_T.P_DEF in status) info.pDef = status[GamePackets.StatusUpdate_T.P_DEF];
+        if (GamePackets.StatusUpdate_T.EVASION in status) info.evasion = status[GamePackets.StatusUpdate_T.EVASION];
+        if (GamePackets.StatusUpdate_T.ACCURACY in status) info.accuracy = status[GamePackets.StatusUpdate_T.ACCURACY];
+        if (GamePackets.StatusUpdate_T.CRITICAL in status) info.critical = status[GamePackets.StatusUpdate_T.CRITICAL];
+        if (GamePackets.StatusUpdate_T.M_ATK in status) info.mAtk = status[GamePackets.StatusUpdate_T.M_ATK];
+        if (GamePackets.StatusUpdate_T.CAST_SPD in status) info.castSpd = status[GamePackets.StatusUpdate_T.CAST_SPD];
+        if (GamePackets.StatusUpdate_T.M_DEF in status) info.mDef = status[GamePackets.StatusUpdate_T.M_DEF];
+        if (GamePackets.StatusUpdate_T.PVP_FLAG in status) info.pvpFlag = status[GamePackets.StatusUpdate_T.PVP_FLAG];
+        if (GamePackets.StatusUpdate_T.KARMA in status) info.karma = status[GamePackets.StatusUpdate_T.KARMA];
 
         this.playerStatusWnd.setStatus(info);
         this.mainWnd.detailStatusWnd.setStatus(info);
@@ -2036,14 +2134,14 @@ export class NetworkUI {
     public updateFishing(hp: number, time: number, goodUse: boolean, mode: number, animation: number, penalty: number) { this.fishViewportWnd.update(hp, time, goodUse, mode, animation, penalty); }
     public endFishing(isWin: boolean) { this.fishViewportWnd.end(isWin); }
 
-    public showHeroList(entries: HeroEntry_T[]) { this.heroTowerWnd.show(entries, this.statusInfo ? !!this.statusInfo.isHero : undefined); }
+    public showHeroList(entries: GamePackets.HeroEntry_T[]) { this.heroTowerWnd.show(entries, this.statusInfo ? !!this.statusInfo.isHero : undefined); }
     public openCommandChannel() { this.commandInfoWnd.open(); }
     public closeCommandChannel() { this.commandInfoWnd.closeChannel(); }
-    public setCommandChannelInfo(info: CommandChannelInfo_T) { this.commandInfoWnd.setInfo(info); }
+    public setCommandChannelInfo(info: GamePackets.CommandChannelInfo_T) { this.commandInfoWnd.setInfo(info); }
 
-    public addChat(name: string, text: string, type: Say2_T) {
-        if (type === Say2_T.PARTYROOM_ALL) this.partyRoomWnd.appendChat(`${name}: ${text}`);
-        else if (type === Say2_T.PARTYROOM_COMMANDER || type === Say2_T.CHANNEL_ALL) this.commandInfoWnd.addChat(name, text, type);
+    public addChat(name: string, text: string, type: GamePackets.Say2_T) {
+        if (type === GamePackets.Say2_T.PARTYROOM_ALL) this.partyRoomWnd.appendChat(`${name}: ${text}`);
+        else if (type === GamePackets.Say2_T.PARTYROOM_COMMANDER || type === GamePackets.Say2_T.CHANNEL_ALL) this.commandInfoWnd.addChat(name, text, type);
         else this.chatWnd.addCreatureSay(name, text, type);
     }
     public addSystemMessage(text: string, color: number) { this.chatWnd.addSystemMessage(text, color); }
@@ -2051,30 +2149,30 @@ export class NetworkUI {
     public clearShortCuts() { this.shortCutWnd.clearSlots(); }
     public removeShortCut(slot: number) { this.shortCutWnd.setSlot(Math.trunc(slot / 12), slot % 12, null); }
 
-    public setShortCut(shortcut: ShortCut_T, item: InventoryItem_T = null, isAutoSoulShot = false, macro: Macro_T = null) {
+    public setShortCut(shortcut: GamePackets.ShortCut_T, item: GamePackets.InventoryItem_T = null, isAutoSoulShot = false, macro: GamePackets.Macro_T = null) {
         const strings = this.strings;
         let entry: ShortcutEntry_T = null;
 
         switch (shortcut.type) {
-            case ShortCutType_T.TYPE_ITEM:
+            case GamePackets.ShortCutType_T.TYPE_ITEM:
                 if (item) entry = { icon: strings.itemIcons[item.itemId], label: strings.itemNames[item.itemId], tooltip: `${strings.itemNames[item.itemId]} (${item.count.toLocaleString("en-US")})`, isAutoSoulShot };
                 break;
-            case ShortCutType_T.TYPE_SKILL: {
+            case GamePackets.ShortCutType_T.TYPE_SKILL: {
                 const info = NCTooltip.shortcutSkill(strings, shortcut.id, shortcut.level);
 
                 entry = { icon: strings.skillInfos[`${shortcut.id}:${shortcut.level}`]?.icon || strings.skillIcons[shortcut.id], label: info.title, tooltip: info, skillKey: `${shortcut.id}:${shortcut.level}` };
                 break;
             }
-            case ShortCutType_T.TYPE_ACTION: {
+            case GamePackets.ShortCutType_T.TYPE_ACTION: {
                 const action = strings.actions[shortcut.id];
 
                 entry = { icon: action.icon, label: action.command, tooltip: action.command };
                 break;
             }
-            case ShortCutType_T.TYPE_MACRO:
+            case GamePackets.ShortCutType_T.TYPE_MACRO:
                 if (macro) entry = { icon: `L2UI.MacroWnd.Macro_Icon${macro.icon + 1}`, label: macro.name, tooltip: macro.name, acronym: macro.acronym };
                 break;
-            case ShortCutType_T.TYPE_RECIPE: {
+            case GamePackets.ShortCutType_T.TYPE_RECIPE: {
                 const recipe = strings.recipes.find(recipe => recipe.id === shortcut.id);
 
                 if (recipe) entry = { icon: strings.itemIcons[recipe.productId], label: strings.itemNames[recipe.itemId], tooltip: strings.itemNames[recipe.itemId] };

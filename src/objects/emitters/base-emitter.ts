@@ -1633,7 +1633,7 @@ export abstract class BaseEmitter extends Object3D {
             p.oldLocation.copy(settings.oldLocation);
             if (this.isSpriteEmitter) p.scale.set(1, 1, 1);
             else p.scale.copy(settings.scale);
-            p.setVelocity(settings.velocity);
+            p.velocity.copy(settings.velocity);
 
             let spin = 0;
 
@@ -1857,12 +1857,8 @@ class Particle extends Object3D {
 
     protected lastUpdate: number;
 
-    protected _velocity = new Vector3();
-    public get velocity(): Readonly<THREE.Vector3> { return this._velocity; }
-    public setVelocity(velocity: THREE.Vector3) { this._velocity.copy(velocity); }
-
-    protected _oldLocation = new Vector3();
-    public get oldLocation(): Readonly<THREE.Vector3> { return this._oldLocation; }
+    public velocity = new Vector3();
+    public oldLocation = new Vector3();
 
     protected acceleration = new Vector3();
     protected changesOverLifetime: ChangesOverTime_T;
@@ -1905,12 +1901,12 @@ class Particle extends Object3D {
         const dtSeconds = (currentTime - this.lastUpdate) / 1000;
         const tmp = new Vector3();
 
-        this._oldLocation.copy(this.position);
+        this.oldLocation.copy(this.position);
 
         tmp.copy(this.acceleration).multiplyScalar(0.5).multiplyScalar(dtSeconds ** 2);
         this.position.add(tmp);
 
-        tmp.copy(this._velocity).multiplyScalar(dtSeconds);
+        tmp.copy(this.velocity).multiplyScalar(dtSeconds);
         this.position.add(tmp);
 
         const timeAlive = currentTime - this.bornTime;
@@ -2007,7 +2003,7 @@ class Particle extends Object3D {
         this.initial.scale.copy(this.scale);
         this.initial.color.w = opacity;
 
-        this._oldLocation.copy(this.position);
+        this.oldLocation.copy(this.position);
 
         this.lastUpdate = now;
         this.isAlive = true;

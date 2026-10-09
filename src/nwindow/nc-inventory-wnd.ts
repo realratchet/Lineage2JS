@@ -67,7 +67,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected readonly crystal: HTMLDivElement;
     protected readonly equipment: HTMLDivElement;
     protected readonly arrBags: NDomScrollPane_T[] = [];
-    protected get bag() { return this.arrBags[Number(this.isQuest)]; }
+    protected getBag() { return this.arrBags[Number(this.isQuest)]; }
     protected readonly adena: HTMLCanvasElement;
     protected readonly count: HTMLCanvasElement;
     protected readonly weightBar: HTMLDivElement;
@@ -178,10 +178,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             if (event.button !== 0 || close.contains(event.target as Node) || minimize.contains(event.target as Node)) return;
 
             event.preventDefault();
-
-            const startX = layer.toUI(event.clientX) - this.element.offsetLeft, startY = layer.toUI(event.clientY) - this.element.offsetTop;
-
-            layer.beginDrag(e => this.place(layer.toUI(e.clientX) - startX, layer.toUI(e.clientY) - startY));
+            layer.dragWindow(this.element, event, (x, y) => this.place(x, y));
         });
         this.equipment = layer.createWindow(8, 31, 240, 122, this.element);
         [false, true].forEach(isQuest => {
@@ -196,8 +193,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             const select = () => {
                 this.hideBags();
                 this.isQuest = index === 1;
-                this.bag.hidden = false;
-                this.bag.focus();
+                this.getBag().hidden = false;
+                this.getBag().focus();
                 this.paintTabs();
             };
             const label = layer.getManager().getSysString(id);
@@ -327,7 +324,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         if (isVisible) {
             this.layer.place(this.folded, parseFloat(this.element.style.left), parseFloat(this.element.style.top));
             this.hideBags();
-            this.bag.hidden = false;
+            this.getBag().hidden = false;
             this.arrSavedOrder = this.orderKey ? JSON.parse(localStorage.getItem(this.orderKey) || "[]") : [];
             if (!Array.isArray(this.arrSavedOrder) || this.arrSavedOrder.some(id => !Number.isInteger(id) || id < -2147483648 || id > 2147483647)) throw new Error(`Invalid inventory order '${this.orderKey}'.`);
             this.isTrashVisible = true;
@@ -586,12 +583,12 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     }
 
     protected reorderItem(item: InventoryEntry_T, event: MouseEvent) { // NWindow 0x1009775a / 0x1001e790.
-        const rect = this.bag.getBoundingClientRect();
+        const rect = this.getBag().getBoundingClientRect();
         const x = this.layer.toUI(event.clientX - rect.left) - 1, y = this.layer.toUI(event.clientY - rect.top) - 1;
 
         if (x < 0 || y < 0 || x > 6 * 37 || y > 4 * 35) return;
 
-        const index = (Math.trunc(this.bag.getScroll() / 35) + Math.min(3, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37));
+        const index = (Math.trunc(this.getBag().getScroll() / 35) + Math.min(3, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37));
         const order = this.arrBagOrder[Number(this.isQuest)], source = order.indexOf(item.objectId);
 
         if (source < 0 || source === index) return;
@@ -604,7 +601,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected dropItem(item: InventoryEntry_T, event: MouseEvent) { // NCInvenItemWnd::OnLButtonUp 0x100976c0.
         const target = event.target as Element;
 
-        if (item.slot < 0 && !this.bag.hidden && this.containsPoint(this.bag, event)) {
+        if (item.slot < 0 && !this.getBag().hidden && this.containsPoint(this.getBag(), event)) {
             this.reorderItem(item, event);
             return;
         }
@@ -619,21 +616,21 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             return;
         }
 
-        if (item.slot >= 0 && (target === this.bag || this.bag.content.contains(target))) {
+        if (item.slot >= 0 && (target === this.getBag() || this.getBag().content.contains(target))) {
             if (!item.info.isArrowOrLure && this.onUnequip && this.onUnequip(item)) this.select(this.equipment, 0);
             return;
         }
 
         if (this.equipment.contains(target)) {
             if (item.slot < 0 && this.onEquip) this.onEquip(item.objectId);
-            this.select(this.bag.content, 0);
+            this.select(this.getBag().content, 0);
             return;
         }
 
         if (!this.onDropItem || !this.onDropItem(item.objectId, event.clientX, event.clientY, item)) return;
 
         this.select(this.equipment, 0);
-        this.select(this.bag.content, 0);
+        this.select(this.getBag().content, 0);
     }
 
     public getItemTitle(item: InventoryEntry_T, context = 0, isDetailed = false): [string, number][] { // 0x100301f0 / 0x1002f750 first line.

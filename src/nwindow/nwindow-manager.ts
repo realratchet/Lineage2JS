@@ -7,6 +7,15 @@ import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
 type TextInputHandler_T = { onTextInput(text: string): void, onTextSubmit(text: string, isShift: boolean): void, onTextBlur(): void };
 
+const SNAP_DISTANCE = 10;
+
+function snapToEdge(position: number, size: number, screen: number) { // NWindow 0x10037150 under GIsStickyWindow: windows stick to the screen edges within 10px.
+    if (Math.abs(position) < SNAP_DISTANCE) return 0;
+    if (Math.abs(position + size - screen) < SNAP_DISTANCE) return screen - size;
+
+    return position;
+}
+
 export class NWindowManager {
     public readonly canvas: NWindowCanvas;
     protected readonly windows: NWnd[] = [];
@@ -17,6 +26,8 @@ export class NWindowManager {
     protected pressed: NWnd = null;
     protected dragged: NWnd = null;
     protected dragOffsetX = 0;
+    protected dragStartX = 0;
+    protected dragStartY = 0;
     protected dragOffsetY = 0;
     protected isDirty = true;
     protected isReady = false;
@@ -86,12 +97,23 @@ export class NWindowManager {
     protected resize() {
         this.canvas.resize(window.innerWidth, window.innerHeight);
 
-        for (const wnd of this.windows) wnd.placeOnScreen(this.canvas.width, this.canvas.height);
+        for (const wnd of this.windows) this.placeWindow(wnd);
 
         this.invalidate();
     }
 
-    public async addWindow<T extends NWnd>(wnd: T): Promise<T> {
+    protected placeWindow(wnd: NWnd) {
+        wnd.placeOnScreen(this.canvas.width, this.canvas.height);
+
+        const position = wnd.windowName ? this.loadWindowPosition(wnd.windowName, wnd.width, wnd.height) : null;
+
+        if (position) {
+            wnd.x = position[0];
+            wnd.y = position[1];
+        }
+    }
+
+    public async addWindow<T extends NWnd>(wnd: T, windowName: string = null): Promise<T> {
         const textures = new Set<string>();
         const collect = (node: NWnd) => {
             for (const texture of node.getTextures()) textures.add(texture);
@@ -99,9 +121,10 @@ export class NWindowManager {
         };
 
         collect(wnd);
+        wnd.windowName = windowName;
         wnd.attach(this);
         this.windows.push(wnd);
-        wnd.placeOnScreen(this.canvas.width, this.canvas.height);
+        this.placeWindow(wnd);
 
         await this.canvas.loadTextures([...textures]);
 
@@ -155,14 +178,35 @@ export class NWindowManager {
 
     public playPickupSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("ItemSound.pickup"); } // 0x10074e60(3), sound table 0x10242368.
 
+    public playPanelSound(panel: "charstat" | "inventory" | "map" | "system", isOpen: boolean): void { void this.asset.getParent().getComponent("audio").playInterfaceSound(`InterfaceSound.${panel}_${isOpen ? "open" : "close"}_01`); } // 0x10074e60(11..18), sound table 0x10242368.
+
     public playTrashSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("itemsound.trash_basket"); } // 0x10074e60(4), sound table 0x10242368.
 
     public playWindowSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("itemsound.window_open"); } // 0x10074e60(5), sound table 0x10242368.
 
     public playWindowCloseSound(): void { void this.asset.getParent().getComponent("audio").playInterfaceSound("itemsound.window_close"); } // 0x10074e60(6), sound table 0x10242368.
 
+    public snapX(x: number, width: number) { return snapToEdge(x, width, this.canvas.width); }
+    public snapY(y: number, height: number) { return snapToEdge(y, height, this.canvas.height); }
+
+    public loadWindowPosition(name: string, width: number, height: number): [number, number] { // NWindow 0x10073480 reads posX/posY per window from WindowsInfo.ini.
+        const value = localStorage.getItem(`wnd:${name}`);
+
+        if (value === null) return null;
+
+        const [x, y] = JSON.parse(value);
+
+        if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`Invalid window position '${name}'.`);
+
+        return [Math.max(0, Math.min(this.canvas.width - width, x)), Math.max(0, Math.min(this.canvas.height - height, y))];
+    }
+
+    public saveWindowPosition(name: string, x: number, y: number) { localStorage.setItem(`wnd:${name}`, JSON.stringify([x, y])); } // NWindow 0x100732c0 writes posX/posY to WindowsInfo.ini.
+
     public beginDrag(wnd: NWnd, x: number, y: number) {
         this.dragged = wnd;
+        this.dragStartX = wnd.x;
+        this.dragStartY = wnd.y;
         this.dragOffsetX = x - wnd.x;
         this.dragOffsetY = y - wnd.y;
     }
@@ -226,8 +270,8 @@ export class NWindowManager {
 
         if (this.dragged) {
             if (type === "move") {
-                this.dragged.x = Math.max(0, Math.min(this.canvas.width - this.dragged.width, this.canvas.toUI(event.clientX) - this.dragOffsetX));
-                this.dragged.y = Math.max(0, Math.min(this.canvas.height - this.dragged.height, this.canvas.toUI(event.clientY) - this.dragOffsetY));
+                this.dragged.x = Math.max(0, Math.min(this.canvas.width - this.dragged.width, this.snapX(this.canvas.toUI(event.clientX) - this.dragOffsetX, this.dragged.width)));
+                this.dragged.y = Math.max(0, Math.min(this.canvas.height - this.dragged.height, this.snapY(this.canvas.toUI(event.clientY) - this.dragOffsetY, this.dragged.height)));
                 this.invalidate();
             } else if (type === "up") this.cancelMouse();
 
@@ -285,6 +329,7 @@ export class NWindowManager {
 
     protected cancelMouse() {
         if (this.pressed) this.pressed.onMouseCancel();
+        if (this.dragged && this.dragged.windowName && (this.dragged.x !== this.dragStartX || this.dragged.y !== this.dragStartY)) this.saveWindowPosition(this.dragged.windowName, this.dragged.x, this.dragged.y);
 
         this.dragged = null;
         this.pressed = null;

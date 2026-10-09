@@ -9,6 +9,23 @@ export function findSection(fileContents: string, sectionName: string): number {
     return indexOf + sectionHeader.length;
 }
 
+export function skipToNextToken(fileContents: string, offset: number): number {
+    while (offset < fileContents.length) {
+        if (fileContents[offset] === ';') {
+            const eol = fileContents.indexOf('\r\n', offset);
+            if (eol === -1) return fileContents.length;
+            offset = eol + 2;
+            continue;
+        }
+        if (/\s/.test(fileContents[offset])) {
+            offset++;
+            continue;
+        }
+        break;
+    }
+    return offset;
+}
+
 export function consumeNextValue(fileContents: string, startOffset: number): [string, string, number] {
     let offset = startOffset;
 

@@ -69,10 +69,7 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
 
     protected beginDrag(event: MouseEvent) {
         event.preventDefault();
-
-        const startX = this.layer.toUI(event.clientX) - this.element.offsetLeft, startY = this.layer.toUI(event.clientY) - this.element.offsetTop;
-
-        this.layer.beginDrag(moveEvent => this.layer.place(this.element, this.layer.toUI(moveEvent.clientX) - startX, this.layer.toUI(moveEvent.clientY) - startY));
+        this.layer.dragWindow(this.element, event);
     }
 
     public placeOnScreen(screenWidth: number, screenHeight: number) { this.layer.place(this.element, 0, Math.trunc(screenHeight * 0.5 - 252)); } // NCConsole 0x100608f4: SetWindowPos(0, int(H*0.5 - 252), 310, 401).

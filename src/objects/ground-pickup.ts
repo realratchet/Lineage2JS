@@ -13,7 +13,7 @@ const tmpHit = new Vector3();
 const tmpBounds = new Box3();
 const pickupProfile: ActorCollisionProfile_T = { collideActors: true, collideWorld: true, blockActors: true, blockPlayers: false, blockZeroExtent: true, blockNonZeroExtent: true, worldGeometry: false, useCylinderCollision: false, collisionRadius: 0, collisionHeight: 0 };
 
-export class L2Pickup extends Object3D {
+export class GroundPickup extends Object3D {
     public readonly objectId: number;
     public readonly itemId: number;
     public readonly count: number;
@@ -47,8 +47,13 @@ export class L2Pickup extends Object3D {
         }
 
         this.updateMatrixWorld(true);
-        for (const mesh of this.meshes) mesh.skeleton.update();
-        this.bounds.setFromObject(this).translate(tmpHit.copy(this.position).negate());
+        this.bounds.makeEmpty();
+
+        for (const mesh of this.meshes) {
+            mesh.skeleton.update();
+            mesh.geometry.computeBoundingBox();
+            this.bounds.union(tmpBounds.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrix));
+        }
     }
 
     public placeOnGround(): void {
@@ -92,4 +97,4 @@ export class L2Pickup extends Object3D {
     }
 }
 
-export default L2Pickup;
+export default GroundPickup;
