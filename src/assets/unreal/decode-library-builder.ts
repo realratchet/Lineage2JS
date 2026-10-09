@@ -244,6 +244,7 @@ export class DecodeLibraryBuilder {
         const sectorMatch = /^(\d+)_(\d+)$/.exec(sectorName);
 
         this.library.brightness = levelInfo.brightness;
+        this.library.levelInfo = levelInfo.getDecodeInfo(this.library);
         // Engine.dll MultiPointCheck 0x85f530..0x85f533: BSP hits return LevelInfo.
         this.library.levelInfoCollisionRadius = levelInfo.collisionRadius;
         this.library.name = level.url.map;
@@ -377,7 +378,12 @@ export class DecodeLibraryBuilder {
                 case "BlockingVolume": {
                     const volume = actor.loadSelf() as UBlockingVolume;
 
-                    if (!volume.isDeleteMe) this.library.blockingVolumes.push(volume.getDecodeInfo());
+                    if (!volume.isDeleteMe) {
+                        const volumeInfo = volume.getDecodeInfo();
+
+                        this.setScriptClass(volume, volumeInfo);
+                        this.library.blockingVolumes.push(volumeInfo);
+                    }
                     break;
                 }
                 case "MusicVolume": {
@@ -455,8 +461,11 @@ export class DecodeLibraryBuilder {
 
         if (!cls) return;
 
+        const owner = actor.propertyDict.get("Owner") as UAActor;
+
         info.scriptClassId = cls.name;
         info.scriptProperties = dumpObjectScriptProperties(actor);
+        info.ownerUuid = owner ? owner.uuid : null;
     }
 }
 

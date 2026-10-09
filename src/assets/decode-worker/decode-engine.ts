@@ -1151,7 +1151,9 @@ export class DecodeEngine {
         const skins = [row.drop_tex1 ?? row.drop_texture_1, row.drop_tex2 ?? row.drop_texture_2, row.drop_tex3 ?? row.drop_texture_3];
 
         library.name = `Item_${id}`;
-        library.pickup = { items: [], dropSound: row.drop_sound ?? row.item_sound };
+        library.pickup = { items: [], dropSound: row.drop_sound ?? row.item_sound, dropType: row.drop_type, dropAnimType: row.drop_anim_type };
+
+        let collisionRadius = Math.fround(row.drop_radius | 0), collisionHeight = Math.fround(row.drop_height | 0);
 
         // UGameEngine::OnSpawnItem 0x74c895..0x74c8c6: skins following the last mesh belong to that mesh.
         for (let i = 0; i < meshes.length; i++) {
@@ -1162,8 +1164,17 @@ export class DecodeEngine {
             const mesh = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), false);
             const itemSkins = skins.filter((skin, j) => skin && skin.toLowerCase() !== "none" && (i === j || !meshes[i + 1] || meshes[i + 1].toLowerCase() === "none"));
 
+            if (row.drop_type !== 0) collisionRadius = 5;
+            if (mesh.sk_unkArr11.length) {
+                collisionHeight = 0;
+                for (const value of mesh.sk_unkArr11) collisionHeight = Math.fround(collisionHeight + value);
+            }
+            if (row.drop_type === 1 || row.drop_type === 2) collisionHeight = Math.fround(collisionHeight * 0.25);
+            else if (row.drop_type === 3 || row.drop_type === 4) collisionHeight = Math.fround(collisionHeight * 0.5);
+            collisionHeight = Math.max(Math.fround(0.2), collisionHeight);
+
             library.scriptMeshes[path.toLowerCase()] = mesh;
-            library.pickup.items.push({ mesh: path, skins: itemSkins });
+            library.pickup.items.push({ mesh: path, skins: itemSkins, meshIndex: i, collisionRadius, collisionHeight });
 
             for (const skin of itemSkins) library.scriptMaterials[skin.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(skin));
         }

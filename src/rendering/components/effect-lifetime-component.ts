@@ -45,7 +45,7 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
 
         while (root.parent) root = root.parent;
 
-        if (root === this.renderManager.scene && !this.physicsManager.isEmitterEffectFinished(effect)) return false;
+        if (root === this.renderManager.scene && ((effect as any).isEmitterActor || !this.physicsManager.isEmitterEffectFinished(effect))) return false;
 
         this.renderManager.removeTransientEffect(effect);
 

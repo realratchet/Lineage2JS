@@ -3,6 +3,7 @@ import type { IBSPNodeDecodeInfo_T } from "./bsp/un-bsp-node";
 import type { IBoxDecodeInfo } from "./un-box";
 import type { IBSPLeafDecodeInfo_T } from "./un-leaf";
 import type { IBSPZoneDecodeInfo_T } from "./un-zone-properties";
+import type { IBaseZoneDecodeInfo } from "./un-zone-info";
 import type { IBSPSectionDecodeInfo_T } from "./model/un-model";
 import type { IBaseMaterialDecodeInfo, IMaterialModifier } from "./un-material";
 import type { ISkinnedMeshObjectDecodeInfo } from "./skeletal-mesh/un-skeletal-mesh";
@@ -56,6 +57,7 @@ export type IBaseObjectDecodeInfo = IBaseObjectOrInstanceDecodeInfo & {
     name?: string,
     scriptClassId?: string,
     scriptProperties?: Record<string, ScriptPropertyValue_T>,
+    ownerUuid?: string,
     position?: Vector3Arr,
     rotation?: EulerArr,
     quaternion?: QuaternionArr,
@@ -107,6 +109,7 @@ export class DecodeLibrary {
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
+    public levelInfo: IBaseZoneDecodeInfo;
     public levelInfoCollisionRadius: number;
     public bspRootOutside: boolean;
     public helpersZoneBounds = false;

@@ -195,6 +195,7 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
             );
 
             const source = geometry.index?.array as StaticMeshIndexArray_T;
+            batchObject.setCollisionActors(batch.actorColliders);
             if (source) {
                 const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
                 batchObject.batchIndices = target;

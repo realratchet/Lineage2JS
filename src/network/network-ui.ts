@@ -705,6 +705,7 @@ export class NetworkUI {
         this.gmStoreWnd = new NCGMStoreWnd(this.layer);
         this.gmQuestWnd = new NCGMQuestWnd(this.layer);
         this.fishViewportWnd = new NCFishViewportWnd(this.layer, (id, ...params) => this.formatSystemMessage(id, ...params));
+        this.manRender.setViewportSceneCanvas(this.fishViewportWnd.getViewportCanvas());
         this.heroTowerWnd = new NCHeroTowerWnd(this.layer);
         this.heroTowerWnd.onWriteWords = words => network.writeHeroWords(words);
         this.heroTowerWnd.onDiary = classId => network.bypass(`_diary?class=${classId}&page=1`);

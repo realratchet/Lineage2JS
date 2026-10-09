@@ -31,6 +31,7 @@ export type StaticMeshBatchInfo_T = {
     materials: string;
     actors: IStaticMeshActorDecodeInfo[];
     colliderIndices: Uint32Array | null;
+    actorColliders: { actor: IStaticMeshActorDecodeInfo; indices: Uint32Array }[];
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
     perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[];
     batchElements: BatchElement_T[];

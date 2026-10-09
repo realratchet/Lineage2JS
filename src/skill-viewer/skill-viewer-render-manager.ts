@@ -169,6 +169,7 @@ export class SkillViewerRenderManager extends RenderManager {
 
         this.renderer.autoClear = false;
         this.renderer.clear();
+        this.scene.traverseVisible(object => { if ((object as any).particlePool) (object as any).onRender(); });
         this.renderer.render(this.scene, this.camera);
 
         if (viewShakeActive) this.restoreViewShake();

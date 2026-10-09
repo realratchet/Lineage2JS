@@ -21,6 +21,7 @@ export class DisplayGammaPass {
             depthWrite: false,
             uniforms: {
                 tDiffuse: { value: null },
+                applyGamma: { value: true },
                 exponent: { value: 1.25 },
                 scale: { value: 1.2 },
                 offset: { value: (0.8 - 0.7) * 32768 / 65535 }
@@ -34,13 +35,14 @@ export class DisplayGammaPass {
             `,
             fragmentShader: `
                 uniform sampler2D tDiffuse;
+                uniform bool applyGamma;
                 uniform float exponent;
                 uniform float scale;
                 uniform float offset;
                 varying vec2 vUv;
                 void main() {
                     vec4 texel = texture2D(tDiffuse, vUv);
-                    gl_FragColor = vec4(clamp(scale * pow(texel.rgb, vec3(exponent)) + offset, 0.0, 1.0), texel.a);
+                    gl_FragColor = applyGamma ? vec4(clamp(scale * pow(texel.rgb, vec3(exponent)) + offset, 0.0, 1.0), texel.a) : texel;
                 }
             `
         });
@@ -58,8 +60,9 @@ export class DisplayGammaPass {
 
     public setSize(width: number, height: number) { this.target.setSize(width, height); }
 
-    public render(renderer: WebGLRenderer) {
-        this.material.uniforms.tDiffuse.value = this.target.texture;
+    public render(renderer: WebGLRenderer, texture: THREE.Texture = this.target.texture, applyGamma = true) {
+        this.material.uniforms.tDiffuse.value = texture;
+        this.material.uniforms.applyGamma.value = applyGamma;
 
         renderer.setRenderTarget(null);
         this.fsQuad.render(renderer);

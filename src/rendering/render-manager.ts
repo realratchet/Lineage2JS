@@ -68,6 +68,7 @@ const tmpL2EventPosition = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
+const tmpEmitterOrigin = new Vector3();
 const tmpViewMatrix = new Matrix4();
 const tmpViewSphere = new Sphere();
 const arrBSPGroups: Object3D[] = [];
@@ -258,9 +259,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly visualizer: Visualizer;
     public readonly radar = new Radar();
     protected viewportWindow: ViewportWindow = null;
+    protected viewportSceneCanvas: HTMLCanvasElement = null;
     protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
+    protected readonly arrViewportBatchEmitters: any[] = [];
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
@@ -1465,7 +1468,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const activeSector = this.getSector(bspCullingPosition);
 
         if (!auxiliary) {
-            this.physicsManager.setActiveSector(activeSector);
             this.physicsManager.setTriggerPosition(this.camera.position);
         }
         this.updateSectorRenderOrder(activeSector);
@@ -1506,6 +1508,16 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         this.updatePawnVisibility(frustum);
+        for (const emitter of this.physicsManager.getParticleEmitters()) {
+            let sector: SectorObject = null;
+            for (let parent = emitter.parent; parent; parent = parent.parent)
+                if (parent.isSectorObject) { sector = parent; break; }
+
+            emitter.parent.getWorldPosition(tmpEmitterOrigin);
+            const dx = tmpEmitterOrigin.x - camera.position.x, dy = tmpEmitterOrigin.y - camera.position.y;
+            const visible = (emitter.isActorAttachedEmitter || !!sector && sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) && Math.sqrt(dx * dx + dy * dy) < emitterCullDist;
+            emitter.setRenderVisible(visible && !this.manuallyHiddenEmitterUuids.has(emitter.uuid));
+        }
         return activeSector;
     }
 
@@ -1543,6 +1555,18 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const activeSector = this.updateViewVisibility(bspCullingCamera, this.frustum);
         this.updatePawnLighting();
 
+        for (const emitter of this.physicsManager.getParticleEmitters()) {
+            if (!emitter.pendingSounds.length) continue;
+
+            let sector: SectorObject = null;
+            for (let parent = emitter.parent; parent; parent = parent.parent)
+                if (parent.isSectorObject) { sector = parent; break; }
+
+            for (const sound of emitter.pendingSounds)
+                if (sound.dataUri || sector) this.audioManager.playOneShotSound(sound.dataUri || sector.getSoundUri(sound.soundName), sound.position, sound.volume, sound.pitch, sound.refDistance, sound.maxDistance);
+            emitter.pendingSounds.length = 0;
+        }
+
         this.scene.traverseVisible(child => {
             if ((child as any).isUpdatable) {
                 let sector: SectorObject | null = null;
@@ -1556,23 +1580,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
 
                 if ((child as any).particlePool) {
-                    if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
-
-                    const emitterUuid = (child as any).emitterActorUuid;
-                    const isVisible = (child as any).isActorAttachedEmitter || (!!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid));
-
-                    if (!isVisible) return;
-
                     const mesh = (child as any).instancedMesh;
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
-
-                    const pendingSounds = (child as any).pendingSounds;
-                    if (pendingSounds.length) {
-                        for (const snd of pendingSounds)
-                            if (snd.dataUri || sector) this.audioManager.playOneShotSound(snd.dataUri || sector.getSoundUri(snd.soundName), snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
-                        pendingSounds.length = 0;
-                    }
                 } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
                 else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment);
                 else (child as any).update(currentTime);
@@ -2040,12 +2050,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getViewportSceneTexture() { return this.viewportWindow ? this.viewportWindow.target.texture : null; }
+    public setViewportSceneCanvas(canvas: HTMLCanvasElement) { this.viewportSceneCanvas = canvas; }
 
     public clearViewportWindowParam() {
         if (!this.viewportWindow) return;
 
         this.viewportWindow.dispose();
         this.viewportWindow = null;
+        if (this.viewportSceneCanvas) this.viewportSceneCanvas.getContext("2d").clearRect(0, 0, this.viewportSceneCanvas.width, this.viewportSceneCanvas.height);
     }
 
     protected drawCameraSceneNode() {
@@ -2062,7 +2074,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.updateViewBillboards(viewport.camera);
             this.updateViewVisibility(viewport.camera, viewport.frustum, true);
             this.updatePawnLighting(false);
-            this.particleBatcher.root.visible = false;
+            this.particleBatcher.root.visible = true;
             this.visualizer.getGroup().visible = false;
             this.visualizer.getFogGroup().visible = false;
             this.visualizer.getEmitterLabelGroup().visible = false;
@@ -2070,7 +2082,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.scene.traverse(object => {
                 const node = object as any;
                 if (node.isNameplate) node.visible = false;
-                if (node.isInstancedSpriteMesh && node.isWorldBatchCandidate) node.material.visible = true;
                 if (node.isSectorObject) node.helpers.visible = false;
             });
 
@@ -2083,14 +2094,39 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.skyRenderer.render(renderer);
             GLOBAL_UNIFORMS.shadowActive.value = shadowActive;
             renderer.clearDepth();
+            this.arrViewportBatchEmitters.length = 0;
+            this.scene.traverseVisible(object => {
+                const emitter = object as any;
+                if (!emitter.particlePool) return;
+
+                emitter.onRender();
+                if (emitter.instancedMesh?.visible && emitter.instancedMesh.isWorldBatchCandidate) this.arrViewportBatchEmitters.push(emitter);
+            });
+            this.particleBatcher.update(this.arrViewportBatchEmitters, viewport.camera);
             renderer.render(this.scene, viewport.camera);
+            if (this.viewportSceneCanvas) {
+                const canvas = this.viewportSceneCanvas, ratio = renderer.getPixelRatio(), scale = Math.max(1, Math.floor(ratio));
+                const width = 252 * scale, height = 254 * scale;
+
+                if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+                renderer.setRenderTarget(null);
+                renderer.setViewport(0, 0, width / ratio, height / ratio);
+                this.displayGammaPass.render(renderer, viewport.target.texture, this.displayGammaEnabled);
+                const context = canvas.getContext("2d");
+                context.globalCompositeOperation = "copy";
+                context.drawImage(renderer.domElement, 0, renderer.domElement.height - height, width, height, 0, 0, width, height);
+            }
         } finally {
             try {
                 this._updateEnvironment(this.camera, false);
             } finally {
                 this.activeFogId = mainFogId;
                 this.lastRenderOrderSector = mainRenderOrderSector;
-                viewport.restore(renderer, this.scene);
+                try {
+                    this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
+                } finally {
+                    viewport.restore(renderer, this.scene);
+                }
             }
         }
     }
@@ -2237,6 +2273,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.autoClear = false;
 
         // Render World
+        this.scene.traverseVisible(object => { if ((object as any).particlePool) (object as any).onRender(); });
         this.renderer.render(this.scene, this.camera);
 
         this.waterEffects.underWaterEffect.renderCellophane(this.renderer);

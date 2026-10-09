@@ -186,7 +186,6 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
 
     protected clearActors(): void {
         if (this.float) this.renderManager.removeTransientEffect(this.float);
-        if (this.controller) this.renderManager.clearViewportWindowParam();
 
         this.float = null;
         this.controller = null;
@@ -208,6 +207,7 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
     public onDetach(): void {
         if (!this.active && this.endResult === null) return;
 
+        if (this.controller) this.renderManager.clearViewportWindowParam();
         this.clearActors();
         this.clearState();
     }

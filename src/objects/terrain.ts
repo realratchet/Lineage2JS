@@ -79,6 +79,7 @@ export class Terrain extends GameMesh implements ICollidable {
     public heightmapX: number = 0;
     public heightmapY: number = 0;
     public terrainSegmentUuid: string;
+    public terrainInfoUuid: string;
 
     public useShadowLerp: boolean = true;
     public lightingRevision: number = 0;

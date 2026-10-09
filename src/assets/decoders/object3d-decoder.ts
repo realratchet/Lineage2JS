@@ -23,6 +23,7 @@ import Rotator from "../../utils/rotator";
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
 import ActorOwnershipComponent from "../../objects/components/actor-ownership-component";
+import { ENetRole_T } from "../unreal/un-aactor";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArrayAttribute, IBaseObjectDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
@@ -128,6 +129,7 @@ class EmitterActor extends GameObject {
     public spawnSound: EmitterSpawnSound_T = null;
     public speedRate: number = 1;
     public readonly emitterRotation = new Quaternion();
+    public readonly globalOffset = new Vector3();
 
     protected emitterRotator: Rotator = null;
     protected readonly inverseInitialRotation = new Quaternion();
@@ -159,6 +161,70 @@ class EmitterActor extends GameObject {
         if (!Number.isFinite(speedRate)) throw new Error(`Emitter '${this.name}' has invalid SpeedRate '${speedRate}'.`);
 
         return speedRate;
+    }
+
+    protected sampleEmitterRanges(): void {
+        const range = this.scriptProperties.get("GlobalOffsetRange") as any;
+        const resetRange = this.scriptProperties.get("TimeTillResetRange") as any;
+
+        if (!range || !resetRange) throw new Error(`Emitter '${this.name}' has no parent ranges.`);
+        for (const value of [range.X, range.Y, range.Z, resetRange])
+            if (!value || !Number.isFinite(value.Min) || !Number.isFinite(value.Max)) throw new Error(`Emitter '${this.name}' has invalid parent ranges.`);
+
+        // Core.dll FRangeVector::GetRand 101101E0 samples Y before X and Z.
+        this.globalOffset.y = Math.fround(range.Y.Max + Math.random() * (range.Y.Min - range.Y.Max));
+        this.globalOffset.x = Math.fround(range.X.Max + Math.random() * (range.X.Min - range.X.Max));
+        this.globalOffset.z = Math.fround(range.Z.Max + Math.random() * (range.Z.Min - range.Z.Max));
+        this.scriptProperties.set("GlobalOffset", this.globalOffset.toArray());
+        this.scriptProperties.set("TimeTillReset", Math.fround(resetRange.Max + Math.random() * (resetRange.Min - resetRange.Max)));
+    }
+
+    public updateEmitters(currentTime: number, deltaTime: number): boolean {
+        const properties = this.scriptProperties;
+        const emitters = properties.get("Emitters") as unknown as BaseEmitter[];
+        const dt = Math.fround(deltaTime * this.getSpeedRate());
+        let noNormalChild = true, noEnabledChild = true, pendingInitialDelay = false;
+
+        if (!properties.get("Initialized")) {
+            this.sampleEmitterRanges();
+            properties.set("Initialized", 1);
+        } else this.globalOffset.fromArray(properties.get("GlobalOffset") as number[]);
+
+        for (const emitter of emitters) {
+            const branch = emitter.update(currentTime, deltaTime);
+
+            if (branch === "disabled") continue;
+            noEnabledChild = false;
+            if (branch === "delayed") pendingInitialDelay = true;
+            if (branch === "normal") noNormalChild = false;
+        }
+
+        // Engine.dll AEmitter::Tick 105D571D uses branch outcomes, not final particle counts.
+        if (noNormalChild && !noEnabledChild && emitters.length !== 0 && properties.get("AutoDestroy") && !pendingInitialDelay) {
+            if (properties.get("bStatic") || properties.get("bNoDelete")) return false;
+            if (properties.get("bDeleteMe")) return false;
+            if (properties.get("Role") !== ENetRole_T.ROLE_Authority && !properties.get("bNetTemporary")) return false;
+
+            properties.set("bDeleteMe", true);
+            return true;
+        }
+
+        if (noNormalChild && properties.get("AutoReset") && !properties.get("AutoDestroy")) {
+            const timeTillReset = properties.get("TimeTillReset") as number;
+
+            if (!Number.isFinite(timeTillReset)) throw new Error(`Emitter '${this.name}' has invalid TimeTillReset.`);
+
+            const remaining = Math.fround(timeTillReset - dt);
+
+            if (remaining > 0) properties.set("TimeTillReset", remaining);
+            else {
+                this.sampleEmitterRanges();
+                for (const emitter of emitters) emitter.reset();
+                properties.set("FirstSpawnParticle", false);
+            }
+        }
+
+        return false;
     }
 
     public adjustParticleLife(lifetime: number): void {
@@ -318,6 +384,7 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
             : info.rotating ? new RotatingObject({ ...props, rotating: info.rotating })
                 : new CollidingMesh(props);
 
+    object.actorUuid = info.uuid;
     object.material = canonicalizeStaticMeshMaterials(object.material);
 
     // if (info.name === "StaticMeshActor140")
@@ -462,6 +529,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
 
     sector.name = library.name;
     sector.brightness = library.brightness;
+    sector.levelInfo = library.levelInfo;
     sector.scriptVM = new UnScriptVM(library);
 
     if (library.sector) {
@@ -786,6 +854,7 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
 
     applySimpleProperties(library, terrain, info);
     terrain.terrainSegmentUuid = info.uuid;
+    terrain.terrainInfoUuid = terrainInfo.terrainInfoUuid;
 
     return terrain;
 }

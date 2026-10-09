@@ -33,6 +33,7 @@ export type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     meshRotOrigin: Vector3Arr;
     meshRotOriginQuaternion: QuaternionArr;
     boneSimulationType: number;
+    sk_unkArr11: number[];
     weaponLength?: number;
     dynamicHair?: IDynamicHairDecodeInfo;
     scaledGlow?: number;
@@ -612,7 +613,8 @@ export abstract class USkeletalMesh extends ULodMesh {
                 meshRotOrigin: this.meshRotOrigin.toArray(),
                 meshRotOriginQuaternion: this.meshRotOrigin.getQuaternionElements(),
                 boneSimulationType: this.boneSimulationType || 0,
-                weaponLength: this.sk_unkArr11.length ? this.sk_unkArr11.getElem(0) : 30 // SpawnNTransientEffect 0x7993dc: USkeletalMesh+0x150, default 30.
+                sk_unkArr11: Array.from(this.sk_unkArr11.iter()),
+                weaponLength: this.sk_unkArr11.getElemCount() ? this.sk_unkArr11.getElem(0) : 30 // SpawnNTransientEffect 0x7993dc: USkeletalMesh+0x150, default 30.
             } as ISkinnedMeshObjectDecodeInfo,
             geometry: geometryInfo,
             material: materialInfo

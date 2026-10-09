@@ -86,7 +86,7 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
 export function dumpObjectScriptProperties(object: UObject): Record<string, ScriptPropertyValue_T> {
     const properties: Record<string, ScriptPropertyValue_T> = {};
 
-    for (const name of Map.prototype.keys.call(object.propertyDict))
+    for (const name of object.propertyDict.keys())
         properties[name] = dumpPropertyValue(object.propertyDict.get(name));
 
     return properties;

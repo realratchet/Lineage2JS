@@ -106,6 +106,8 @@ export abstract class BaseEmitter extends Object3D {
     protected ignoreParticleColor: boolean = false;
     protected spinParticles: boolean;
     protected secondsBeforeInactive: number;
+    protected inactive: boolean = false;
+    protected inactiveTime: number = 0;
 
     protected isInstancedRendering: boolean = false;
     protected instancedMesh: InstancedSpriteMesh | null = null;
@@ -151,7 +153,7 @@ export abstract class BaseEmitter extends Object3D {
     protected spawnOnTriggerPPS: number;
     protected spawnOnTriggerRange: Range_T;
     protected autoResetTimeRange: Range_T;
-    protected timeTillReset: number;
+    protected timeTillReset: number = 0;
     protected isAutoDestroyed: boolean;
     protected isAutoReset: boolean;
     protected isTriggerDisabled: boolean;
@@ -302,8 +304,7 @@ export abstract class BaseEmitter extends Object3D {
         this.currentSpawnOnTrigger = Math.trunc(this.currentSpawnOnTrigger + randRange(this.spawnOnTriggerRange.min, this.spawnOnTriggerRange.max));
         if (this.currentSpawnOnTrigger) this.allParticlesDead = false;
     }
-    protected reset(): void {
-        if (this.isMeshEmitter) throw new Error(`Emitter '${this.name}' has an unimplemented MeshEmitter Reset override.`);
+    public reset(): void {
         if (!this.autoResetTimeRange || !Number.isFinite(this.autoResetTimeRange.min) || !Number.isFinite(this.autoResetTimeRange.max)) throw new Error(`Emitter '${this.name}' has invalid AutoResetTimeRange.`);
 
         // UParticleEmitter::Reset 0x89dfd0..0x89e060; visual flags mirror native ActiveParticles=0.
@@ -313,8 +314,8 @@ export abstract class BaseEmitter extends Object3D {
         this.activeCount = 0;
         this.allParticlesDead = false;
         this.warmedUp = false;
-        this.initialDelay = randRange(this.initialDelayRange.min, this.initialDelayRange.max);
-        this.timeTillReset = randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max);
+        this.initialDelay = Math.fround(randRange(this.initialDelayRange.min, this.initialDelayRange.max));
+        this.timeTillReset = Math.fround(randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max));
         if (this.parent) this.oldOwnerLocation.copy(this.parent.position);
         for (const particle of this.particles) particle.flags = 0;
         for (const particle of this.particlePool) particle.visible = false;
@@ -1519,8 +1520,25 @@ export abstract class BaseEmitter extends Object3D {
         return this.activeCount;
     }
 
-    public update(currentTime: number) {
-        if (currentTime === 0) return;
+    public onRender(): void { if (!this.isDisabled) this.inactive = false; }
+
+    public setRenderVisible(visible: boolean): void { this.visible = visible && !this.isDisabled; }
+
+    protected updateReset(deltaTime: number): void {
+        const properties = (this.parent as any).scriptProperties as Map<string, boolean>;
+        if (this.isAutoReset && properties?.get("AutoReset") !== true) {
+            const timeTillReset = Math.fround(this.timeTillReset - deltaTime);
+            if (timeTillReset > 0) { this.timeTillReset = timeTillReset; return; }
+
+            if (!this.autoResetTimeRange || !Number.isFinite(this.autoResetTimeRange.min) || !Number.isFinite(this.autoResetTimeRange.max)) throw new Error(`Emitter '${this.name}' has invalid AutoResetTimeRange.`);
+            // AEmitter::Tick 105D54C4 then UParticleEmitter::Reset 105CE03D sample the reset range twice.
+            this.timeTillReset = Math.fround(randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max));
+            this.reset();
+        } else if (this.isAutoDestroyed && properties?.get("AutoDestroy") !== true) this.isDisabled = true;
+    }
+
+    public update(currentTime: number, deltaTime?: number): "disabled" | "delayed" | "dead" | "normal" {
+        if (currentTime === 0) return "disabled";
 
         const owner = this.parent as any;
         if (owner && owner.updateEmitterRotation) owner.updateEmitterRotation(currentTime);
@@ -1531,27 +1549,29 @@ export abstract class BaseEmitter extends Object3D {
         // if (this.name !== "SpriteEmitter3" || this.parent.name !== "Emitter7") return;
 
         if (this.isDisabled)
-            return;
+            return "disabled";
 
         if (this.currentTime === undefined) {
             this.currentTime = currentTime;
-            this.initialDelay = randRange(this.initialDelayRange.min, this.initialDelayRange.max);
+            this.initialDelay = Math.fround(randRange(this.initialDelayRange.min, this.initialDelayRange.max));
 
-            return;
+            if (deltaTime === undefined) return "delayed";
         }
 
         // Engine.dll AEmitter::Tick 0x8a4f88 scales emitter delta after the ordinary actor tick.
-        const dt = clamp((currentTime - this.currentTime) / 1000, 0, 0.15) * (owner && owner.getSpeedRate ? owner.getSpeedRate() : 1);
+        const dt = Math.fround((deltaTime === undefined ? clamp((currentTime - this.currentTime) / 1000, 0, 0.15) : deltaTime) * (owner && owner.getSpeedRate ? owner.getSpeedRate() : 1));
 
         if (this.initialDelay > 0) {
-            this.initialDelay -= dt;
+            this.initialDelay = Math.fround(this.initialDelay - dt);
             this.currentTime = currentTime;
 
-            if (this.initialDelay > 0) return;
+            if (this.initialDelay > 0) return "delayed";
 
             this.initialDelay = 0;
         }
 
+
+        if (owner?.isEmitterActor) this.globalOffset.copy(owner.globalOffset);
 
         if (!this.warmedUp && this.parent && this.warmupGate) {
             this.oldOwnerLocation.copy(this.parent.position);
@@ -1562,18 +1582,21 @@ export abstract class BaseEmitter extends Object3D {
         }
 
         this.lastDeltaTime = dt;
-        this.updateParticles(dt);
-
-        // AEmitter::Tick 0x8a547c..0x8a5530: child AutoReset takes precedence; child AutoDestroy then disables only if parent AutoDestroy is clear.
-        if (this.allParticlesDead && this.isAutoDestroyed) {
-            const parentProperties = (owner as any)?.scriptProperties as Map<string, boolean>;
-            const parentAutoReset = parentProperties?.get("AutoReset") === true;
-            const parentAutoDestroy = parentProperties?.get("AutoDestroy") === true;
-
-            if (!parentAutoDestroy && !(this.isAutoReset && !parentAutoReset)) this.isDisabled = true;
+        if (this.allParticlesDead) {
+            this.updateReset(dt);
+            this.currentTime = currentTime;
+            return "dead";
         }
 
-        // freezeEmitterParticles only touches p.visible, not instancedMesh - every update() call implies "visible now"
+        this.inactiveTime = this.inactive ? Math.fround(this.inactiveTime + dt) : 0;
+        this.inactive = true;
+        if (this.secondsBeforeInactive > 0 && this.inactiveTime > this.secondsBeforeInactive) {
+            this.currentTime = currentTime;
+            return "normal";
+        }
+
+        this.updateParticles(dt);
+
         if (this.instancedMesh) this.instancedMesh.visible = true;
 
         // mirrors instanced-sprite-batcher's grouping test - whatever it rejects still has to fill its own mesh below
@@ -1582,7 +1605,7 @@ export abstract class BaseEmitter extends Object3D {
             this.instancedMesh.clearInstances();
             if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);
             this.currentTime = currentTime;
-            return;
+            return "normal";
         }
 
         this.particlePool.forEach((p, i) => {
@@ -1684,6 +1707,7 @@ export abstract class BaseEmitter extends Object3D {
         }
 
         this.currentTime = currentTime;
+        return "normal";
     }
 
     // public update(currentTime: number) {
@@ -1994,7 +2018,7 @@ class Particle extends Object3D {
     }
 }
 
-function randRange(min: number, max: number) { return Math.random() * (max - min) + min; }
+function randRange(min: number, max: number) { return max + Math.random() * (min - max); }
 
 function randVector(dst: THREE.Vector3, min: THREE.Vector3, max: THREE.Vector3) {
     dst.x = randRange(min.x, max.x);

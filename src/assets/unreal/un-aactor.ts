@@ -18,6 +18,14 @@ import type { UModel } from "./model/un-model";
 import type { Matrix4Arr, Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
+export enum ENetRole_T {
+    ROLE_None,
+    ROLE_DumbProxy,
+    ROLE_SimulatedProxy,
+    ROLE_AutonomousProxy,
+    ROLE_Authority
+}
+
 export type IActorCollisionDecodeInfo = {
     collideActors: boolean,
     collideWorld: boolean,

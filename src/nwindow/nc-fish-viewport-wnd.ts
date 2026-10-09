@@ -43,7 +43,8 @@ export class NCFishViewportWnd {
         layer.tile(this.element, 0, 20, 256, 256, 0, 0, 256, 256, TEX_BACK);
 
         this.viewport = document.createElement("canvas");
-        this.viewport.width = this.viewport.height = 256;
+        this.viewport.width = 252;
+        this.viewport.height = 254;
         this.viewport.className = "ndom-absolute";
         this.viewport.style.pointerEvents = "none";
         layer.place(this.viewport, 2, 20, 252, 254);

@@ -254,7 +254,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     for (const geo of actorGeometries) {
         totalVertices += geo.vertexCount;
         totalIndices += geo.indices ? geo.indices.length : 0;
-        if (geo.collider && blocksPawn(geo.collision)) totalColliderIndices += geo.collider.length;
+        if (geo.collider) totalColliderIndices += geo.collider.length;
         if (geo.colors) {
             hasColors = true;
             ColorArrayConstructor = geo.colors.constructor;
@@ -284,6 +284,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     let vertexOffset = 0;
     let indexOffset = 0;
     let colliderIndexOffset = 0;
+    const actorColliderIndices: Uint32Array[] = [];
     const mergedGroups: { start: number, count: number, materialIndex: number, actorIndex: number }[] = [];
 
     const tmpV = new Vector3();
@@ -345,7 +346,8 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             indexOffset += indices.length;
         }
 
-        if (mergedColliderIndices && collider && blocksPawn(collision)) {
+        if (mergedColliderIndices && collider) {
+            actorColliderIndices.push(mergedColliderIndices.subarray(colliderIndexOffset, colliderIndexOffset + collider.length));
             if (reverseWinding) {
                 for (let ci = 0; ci < collider.length; ci += 3) {
                     mergedColliderIndices[colliderIndexOffset + ci] = collider[ci] + vertexOffset;
@@ -358,7 +360,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
                 }
             }
             colliderIndexOffset += collider.length;
-        }
+        } else actorColliderIndices.push(null);
 
         if (lights) {
             hasAnyLights = true;
@@ -404,6 +406,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
         },
         mergedLights,
         mergedColliderIndices,
+        actorColliderIndices,
         perActorAmbient,
         mergedGroups,
         mergedIndices,
@@ -513,11 +516,13 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 attributes,
                 mergedLights,
                 mergedColliderIndices,
+                actorColliderIndices,
                 perActorAmbient,
                 mergedGroups,
                 mergedIndices,
                 totalIndices
             } = mergeBatchGeometriesData(actorGeometries);
+            const movementColliderIndices = blocksPawn(actorGeometries[0].collision) ? mergedColliderIndices : null;
 
             const batchUuid = generateUUID();
             const batchElements: BatchElement_T[] = actors.map((a, ai) => ({
@@ -576,7 +581,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
-                collisionIndex: mergedColliderIndices && mergedColliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, mergedColliderIndices) : null,
+                collisionIndex: movementColliderIndices && movementColliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, movementColliderIndices) : null,
                 groups: finalGroups
             } as IGeometryDecodeInfo;
             library.materials[batchUuid] = {
@@ -591,7 +596,8 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 geometry: batchUuid,
                 materials: batchUuid,
                 actors,
-                colliderIndices: mergedColliderIndices,
+                colliderIndices: movementColliderIndices,
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indices: actorColliderIndices[index] }] : []),
                 lights: mergedLights,
                 perActorAmbient,
                 batchElements

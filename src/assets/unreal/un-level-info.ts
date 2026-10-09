@@ -15,6 +15,8 @@ export abstract class ULevelInfo extends FZoneInfo implements IInfo {
         return {
             type: "Sector",
             uuid: this.uuid,
+            hasTerrain: this.hasTerrain,
+            terrains: Array.from(this.terrains ?? [], terrain => terrain ? terrain.loadSelf().uuid : null),
             name: this.objectName,
             bounds: {
                 isValid: false,

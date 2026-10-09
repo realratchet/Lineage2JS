@@ -4,7 +4,7 @@ import LitActorMesh, { MeshLight_T } from "./lit-actor";
 import { Box3, Quaternion, Vector3 } from "three";
 import buildTriangleIndex from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
-import type { IStaticMeshCollisionDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, StaticMeshBatchInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
 
 const tmpPosition = new Vector3();
@@ -13,6 +13,8 @@ const tmpScale = new Vector3();
 
 export class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
+    public actorUuid: string;
+    public readonly collisionActors: { actor: IStaticMeshActorDecodeInfo; primitive: CollisionPrimitive_T<"staticMesh"> }[] = [];
 
     protected colliderDesc: ColliderDesc;
     protected rigidbodyDesc: RigidBodyDesc;
@@ -46,6 +48,18 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         else this.isCollidable = false;
 
         this.addComponent(new ColliderComponent());
+    }
+
+    public setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"]): void {
+        const vertices = this.geometry.getAttribute("position").array as Float32Array;
+
+        this.collisionActors.length = 0;
+        for (const { actor, indices } of actors) {
+            const bounds = new Box3();
+            for (const index of indices) bounds.expandByPoint(tmpPosition.fromArray(vertices, index * 3));
+
+            this.collisionActors.push({ actor, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: null, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
+        }
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {

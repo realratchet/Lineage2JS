@@ -13,6 +13,7 @@ import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
 import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import type { ScriptHost_T } from "../ue-script/vm";
+import type RenderManager from "../rendering/render-manager";
 
 const arrMoverPawns: BaseActor[] = [];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
@@ -64,8 +65,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
         const manRender = this.manGame.getComponent("render");
 
-        this.simEmitters.setFrameTime(deltaTime);
-
         let playerPhysicsTicks = 0;
         let updatedPhysicsComponent = false;
 
@@ -83,7 +82,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
             updatedPhysicsComponent = this.updatePhysicsComponents(this.nextPhysicsTick, PhysicsManager.PHYSICS_INTERVAL_MS, PhysicsManager.PHYSICS_HZ) || updatedPhysicsComponent;
-            this.simEmitters.tick(this.nextPhysicsTick);
+            this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), manRender);
             if (stepsRapier) this.physicsWorld.step();
             this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
         }
@@ -99,7 +98,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return (this.physicsComponentsByName.get(componentName) || emptyPhysicsComponents) as ReadonlySet<T>;
     }
 
-    public setActiveSector(sector: SectorObject): void { this.simEmitters.setActiveSector(sector); }
+    public getParticleEmitters(): ReadonlySet<any> { return this.simEmitters.getEmitters(); }
     public setTriggerPosition(position: Vector3): void { this.triggerPosition.copy(position); }
 
     // emitters live under sector.zones, not staticMeshGroup - always walk the whole sector
@@ -196,7 +195,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.registerObjectComponents(terrain);
 
-            if ((object as any).particlePool) this.simEmitters.add(object);
+            if ((object as any).particlePool || (object as any).isEmitterActor) this.simEmitters.add(object);
             this.registerObjectComponents(object);
         });
 
@@ -313,31 +312,19 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 }
 
 class EmitterSimulation {
-    protected static readonly OFFSCREEN_HZ = 2;
-    protected static readonly OFFSCREEN_INTERVAL_MS = 1000 / EmitterSimulation.OFFSCREEN_HZ;
-    protected static readonly MIN_DESIRED_FRAME_RATE = 35;
-    protected static readonly AGGRESSIVE_LOD_FRAME_RATE = EmitterSimulation.MIN_DESIRED_FRAME_RATE - 5;
-    protected static readonly DROP_DETAIL_FRAME_TIME_MS = 1000 / EmitterSimulation.MIN_DESIRED_FRAME_RATE;
-    protected static readonly AGGRESSIVE_LOD_FRAME_TIME_MS = 1000 / EmitterSimulation.AGGRESSIVE_LOD_FRAME_RATE;
-    protected static readonly MAX_OFFSCREEN_UPDATES = 32;
-    protected static readonly DROP_DETAIL_OFFSCREEN_UPDATES = 8;
-    protected static readonly FROZEN_UPDATE_MATRIX_WORLD = function () { };
-
     protected readonly emitters = new Set<any>();
-    protected activeSector: SectorObject = null;
-    protected detailFrame = 0;
-    protected dropDetail = false;
-    protected aggressiveLod = false;
+    protected readonly actors = new Set<any>();
 
-    public get size(): number { return this.emitters.size; }
+    public get size(): number { return this.emitters.size + this.actors.size; }
+    public getEmitters(): ReadonlySet<any> { return this.emitters; }
 
-    public add(emitter: Object3D): void { this.emitters.add(emitter); }
-    public remove(emitter: Object3D): void { this.emitters.delete(emitter); }
-    public setActiveSector(sector: SectorObject): void { this.activeSector = sector; }
-
-    public setFrameTime(deltaTime: number): void {
-        this.dropDetail = deltaTime > EmitterSimulation.DROP_DETAIL_FRAME_TIME_MS;
-        this.aggressiveLod = deltaTime > EmitterSimulation.AGGRESSIVE_LOD_FRAME_TIME_MS;
+    public add(emitter: Object3D): void {
+        if ((emitter as any).isEmitterActor) this.actors.add(emitter);
+        else this.emitters.add(emitter);
+    }
+    public remove(emitter: Object3D): void {
+        this.emitters.delete(emitter);
+        this.actors.delete(emitter);
     }
 
     public static setWarmupGate(root: Object3D, allowed: boolean): void {
@@ -362,114 +349,15 @@ class EmitterSimulation {
         return hasEmitter && isFinished;
     }
 
-    public tick(currentTime: number): void {
-        this.detailFrame = (this.detailFrame + 1) % 6;
-
-        const offscreenUpdateLimit = this.aggressiveLod
-            ? 0
-            : this.dropDetail
-                ? EmitterSimulation.DROP_DETAIL_OFFSCREEN_UPDATES
-                : EmitterSimulation.MAX_OFFSCREEN_UPDATES;
-        let offscreenUpdates = 0;
-
-        for (const emitter of this.emitters) {
-            if (!EmitterSimulation.isHierarchyVisible(emitter)) continue;
-
-            let sector: SectorObject = null;
-            let parent = emitter.parent;
-
-            while (parent) {
-                if ((parent as any).isSectorObject) {
-                    sector = parent as SectorObject;
-                    break;
-                }
-
-                parent = parent.parent;
+    public tick(currentTime: number, deltaTime: number, renderManager?: RenderManager): void {
+        for (const actor of this.actors)
+            if (actor.updateEmitters(currentTime, deltaTime)) {
+                if (!renderManager) throw new Error(`Emitter '${actor.name}' destruction requires its render manager.`);
+                renderManager.removeTransientEffect(actor);
             }
 
-            const emitterUuid = emitter.emitterActorUuid;
-            const isVisible = emitter.isActorAttachedEmitter || (!!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid));
-            const isOffscreen = (sector && sector !== this.activeSector && !emitter.needsInitialLighting) || !isVisible;
-
-            if (isOffscreen) {
-                const wasOffscreen = !!emitter.isOffscreenThrottled;
-                const isMaintenanceDue = EmitterSimulation.shouldUpdateOffscreen(emitter, currentTime);
-
-                if (offscreenUpdates < offscreenUpdateLimit && isMaintenanceDue) {
-                    offscreenUpdates++;
-                    emitter.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-                    emitter.update(currentTime);
-                    EmitterSimulation.freezeParticles(emitter);
-                } else if (!wasOffscreen) EmitterSimulation.freezeParticles(emitter);
-
-                emitter.updateMatrixWorld = EmitterSimulation.FROZEN_UPDATE_MATRIX_WORLD;
-                continue;
-            }
-
-            const shouldUpdate = EmitterSimulation.shouldUpdateVisible(emitter, this.detailFrame, this.dropDetail, this.aggressiveLod);
-
-            emitter.isOffscreenThrottled = false;
-            emitter.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
-
-            if (shouldUpdate) emitter.update(currentTime);
-        }
-    }
-
-    protected static freezeParticles(emitter: any): void {
-        for (const particle of emitter.particlePool) {
-            particle.visible = false;
-            particle.updateMatrixWorld = EmitterSimulation.FROZEN_UPDATE_MATRIX_WORLD;
-        }
-
-        if (emitter.instancedMesh) emitter.instancedMesh.visible = false;
-    }
-
-    protected static getPhase(emitter: any): number {
-        if (emitter.detailPhase !== undefined) return emitter.detailPhase;
-
-        let hash = 2166136261;
-        for (let i = 0; i < emitter.uuid.length; i++) {
-            hash ^= emitter.uuid.charCodeAt(i);
-            hash = Math.imul(hash, 16777619);
-        }
-
-        return emitter.detailPhase = hash >>> 0;
-    }
-
-    protected static shouldUpdateOffscreen(emitter: any, currentTime: number): boolean {
-        if (!emitter.isOffscreenThrottled) {
-            emitter.isOffscreenThrottled = true;
-            emitter.offscreenSince = currentTime;
-            emitter.nextOffscreenUpdate = currentTime + EmitterSimulation.OFFSCREEN_INTERVAL_MS + EmitterSimulation.getPhase(emitter) % EmitterSimulation.OFFSCREEN_INTERVAL_MS;
-            return true;
-        }
-
-        const inactiveTimeout = emitter.secondsBeforeInactive ?? 0;
-        if (inactiveTimeout > 0 && currentTime - emitter.offscreenSince > inactiveTimeout * 1000)
-            return false;
-
-        if (currentTime < emitter.nextOffscreenUpdate) return false;
-
-        const missedIntervals = Math.floor((currentTime - emitter.nextOffscreenUpdate) / EmitterSimulation.OFFSCREEN_INTERVAL_MS) + 1;
-        emitter.nextOffscreenUpdate += missedIntervals * EmitterSimulation.OFFSCREEN_INTERVAL_MS;
-
-        return true;
-    }
-
-    protected static shouldUpdateVisible(emitter: any, detailFrame: number, dropDetail: boolean, aggressiveLod: boolean): boolean {
-        if (!dropDetail || !emitter.instancedMesh?.visible || emitter.isOffscreenThrottled) return true;
-
-        const phase = EmitterSimulation.getPhase(emitter) + detailFrame;
-
-        // UE2 drop-detail retains roughly 65% of the normal xEmitter budget.
-        return aggressiveLod ? (phase & 1) === 0 : phase % 3 !== 0;
-    }
-
-    protected static isHierarchyVisible(object: Object3D): boolean {
-        for (let current: Object3D = object; current; current = current.parent)
-            if (!current.visible) return false;
-
-        return true;
+        for (const emitter of this.emitters)
+            if (!this.actors.has(emitter.parent)) emitter.update(currentTime, deltaTime);
     }
 }
 export default PhysicsManager;

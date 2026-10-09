@@ -16,6 +16,8 @@ export type IZoneFogInfo = { start: number, end: number, color: ColorArr };
 export type IBaseZoneDecodeInfo = {
     type: "Sector" | "Zone" | "Sky",
     uuid: string,
+    hasTerrain: boolean,
+    terrains: string[],
     name?: string,
     bounds: IBoxDecodeInfo,
     children: IBaseObjectOrInstanceDecodeInfo[],
@@ -125,6 +127,8 @@ export abstract class FZoneInfo extends AInfo implements IInfo {
     public getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo {
         return {
             uuid: this.uuid,
+            hasTerrain: this.hasTerrain,
+            terrains: Array.from(this.terrains ?? [], terrain => terrain ? terrain.loadSelf().uuid : null),
             type: "Zone",
             name: this.objectName,
             bounds: { isValid: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
