@@ -1,7 +1,7 @@
 import L2Socket from "./l2-socket";
 import PacketReader from "./packet-reader";
 import PacketWriter from "./packet-writer";
-import { GameCrypt } from "./l2-crypt";
+import GameCrypt from "./l2-crypt";
 import * as GamePackets from "./game-packets";
 import type { SessionKey_T } from "./login-client";
 
@@ -133,7 +133,7 @@ export class GameClient {
     public setMemberPledgePower(objectId: number, privs: Uint8Array) {
         if (privs.length !== 32) throw new Error(`Invalid pledge power size ${privs.length}.`);
 
-        this.send(this.write(GamePackets.GameClientPacket_T.RequestPledgePower).d(objectId).d(3).b(privs));
+        this.send(this.write(GamePackets.GameClientPacket_T.RequestPledgePower).d(objectId).d(3).b(privs.subarray(0, 4)));
     }
     public requestStartPledgeWar(pledgeName: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestStartPledgeWar).S(pledgeName)); }
     public requestReplyStartPledgeWar(name: string, isAccepted: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestReplyStartPledgeWar).S(name).d(isAccepted ? 1 : 0)); }

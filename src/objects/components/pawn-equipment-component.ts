@@ -6,7 +6,7 @@ import ActorMeshComponent from "../../rendering/components/actor-mesh-component"
 import decodeObject3D from "../../assets/decoders/object3d-decoder";
 import type { IEmitterActorDecodeInfo, IEmitterDecodeInfo } from "@l2js/engine/contracts/emitter";
 import type RenderManager from "../../rendering/render-manager";
-import { ExtraMeshAnimationComponent } from "./animation-component";
+import { AnimationComponent, ExtraMeshAnimationComponent } from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
 
 class EquippedItem extends GameObject {
@@ -48,7 +48,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
         if (equipment) {
             for (const item of equipment.items) {
-                this.attachItem(item.mesh, item.skins, item.bone, item.extraMesh);
+                if (!this.attachItem(item.mesh, item.skins, item.bone, item.extraMesh)) continue;
                 if (item.enchantMesh) this.attachEnchantMesh(item.enchantMesh, item.bone);
                 if (item.enchantEffect) this.attachEnchantEffect(item.enchantEffect, typeof item.bone === "string" && item.bone.startsWith("Left") ? "LeftHandBone" : "RightHandBone");
             }
@@ -57,6 +57,14 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
     protected attachItem(mesh: string, skins: string[], bone: string | number, extraMesh = false): EquippedItem {
         const parent = this.getParent();
+        const boneName = typeof bone === "number" ? bone : parent.getUnrealScriptProperty(bone) as string;
+
+        // USubSkeletalMeshInstance::AttachedMeshRender 0x95ee0a..0x95ee1d skips absent direct-slot bones.
+        if (!extraMesh && ["RightHandBone", "LeftHandBone", "RightArmBone", "LeftArmBone"].includes(bone as string)) {
+            const meshes = this.getComponent<AnimationComponent>("animation").getMeshes();
+            if (meshes.length && meshes.every(mesh => (mesh as any).skeleton.matchRefBone(boneName) < 0)) return null;
+        }
+
         const item = new EquippedItem();
 
         item.scriptProperties.set("Mesh", mesh);
@@ -67,8 +75,6 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         const meshComponent = item.addComponent(new EquipmentMeshComponent(this.library, this.renderManager));
         meshComponent.onUpdate();
         const animation = extraMesh ? item.addComponent(new ExtraMeshAnimationComponent(this.renderManager, meshComponent.getMesh())) : null;
-
-        const boneName = typeof bone === "number" ? bone : parent.getUnrealScriptProperty(bone) as string;
 
         if (!parent.attachObjectToBone(item, boneName, false)) {
             disposeMaterials(item);
@@ -82,6 +88,8 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
     protected attachEnchantMesh(info: L2JS.Engine.IWeaponEnchantMesh, bone: string): void {
         const item = this.attachItem(info.mesh, [info.skin], bone);
+
+        if (!item) return;
 
         item.scriptProperties.set("bActorShadows", false);
         item.scale.fromArray(info.scale);

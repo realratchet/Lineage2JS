@@ -95,6 +95,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     }
 
     public cancel(): void {
+        this.placement.cancelCastingLights();
         for (const effect of this.castingEffects) // Engine.dll MagicStop 0x7b5410 destroys Pawn+0x52c (TriggerCasting) and Pawn+0x364 (NSkillProjectileActor) only.
             if (this.host.isAlive(effect)) this.host.removeEffect(effect);
         for (const projectile of this.preparedProjectiles)
@@ -123,6 +124,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
                 const projectile = this.notify("shot", currentTime, cast);
 
                 if (!projectile) this.notify("explosion", currentTime + skill.flyingTime * 1000, cast);
+                for (const sound of skill.sounds)
+                    if (sound.phase === "casting") this.host.playSkillSound(cast.caster, sound);
                 return true;
             }
             if (!skill.visual.transientRejected) throw new Error(`Native transient effect '${skill.name}' is not implemented.`);

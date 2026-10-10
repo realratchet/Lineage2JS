@@ -335,7 +335,15 @@ function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: n
 
         if (data.format && data.format !== "rgba") throw new Error(`UI texture '${info.name}' has unsupported data format '${data.format}'.`);
 
-        return { width: data.width, height: data.height, buffer: info.buffer.slice(0) };
+        const buffer = info.buffer.slice(0);
+
+        if (!info.isAlphaTexture && !info.isMasked) {
+            const pixels = new Uint8Array(buffer);
+
+            for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255;
+        }
+
+        return { width: data.width, height: data.height, buffer };
     }
 
     if (info.textureType !== "dds") throw new Error(`UI texture '${info.name}' has unsupported type '${info.textureType}'.`);
@@ -1385,10 +1393,10 @@ export class DecodeEngine {
         ]);
         const itemInfos: Record<number, ItemInfo_T> = {};
 
-        for (const row of items) itemInfos[row.id] = { templateClass: null, addName: row.add_name, description: row.description.replace(/\\n/g, "\n"), popup: row.popup, isRecipe: false, isArrowOrLure: false, crystallizable: false, canShowEnchant: true, equipSound: "", weight: 0, crystalType: 0, consumeType: 0, etcType: -1, weaponType: 0, pAtk: 0, mAtk: 0, speed: 0, soulshots: 0, spiritshots: 0, mpConsume: 0, shieldPDef: 0, shieldRate: 0, avoidModify: 0, armorType: 0, bodyPart: 0, pDef: 0, mDef: 0, mpBonus: 0 }; // NWindow 0x1006b130 turns the literal "\n" into line breaks.
+        for (const row of items) itemInfos[row.id] = { templateClass: null, addName: row.add_name, description: row.description.replace(/\\n/g, "\n"), popup: row.popup, isRecipe: false, isArrowOrLure: false, crystallizable: false, canShowEnchant: true, equipSound: "", equipmentIcons: [], weight: 0, crystalType: 0, consumeType: 0, etcType: -1, weaponType: 0, pAtk: 0, mAtk: 0, speed: 0, soulshots: 0, spiritshots: 0, mpConsume: 0, shieldPDef: 0, shieldRate: 0, avoidModify: 0, armorType: 0, bodyPart: 0, pDef: 0, mDef: 0, mpBonus: 0 }; // NWindow 0x1006b130 turns the literal "\n" into line breaks.
 
-        for (const row of weapons) Object.assign(itemInfos[row.id], { templateClass: "weapon", crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, weaponType: row.weapon_type, pAtk: row.patt, mAtk: row.matt, speed: row.speed, soulshots: row.SS_count, spiritshots: row.SPS_count, mpConsume: row.mp_consume, shieldPDef: row.shield_pdef, shieldRate: row.shield_rate, avoidModify: row.avoid_mod });
-        for (const row of armor) Object.assign(itemInfos[row.id], { templateClass: "armor", crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, armorType: row.armor_type, bodyPart: row.body_part, pDef: row.physical_defence, mDef: row.magical_defence, mpBonus: row.mp_bonus });
+        for (const row of weapons) Object.assign(itemInfos[row.id], { templateClass: "weapon", equipmentIcons: row.icon.slice(1), crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, weaponType: row.weapon_type, pAtk: row.patt, mAtk: row.matt, speed: row.speed, soulshots: row.SS_count, spiritshots: row.SPS_count, mpConsume: row.mp_consume, shieldPDef: row.shield_pdef, shieldRate: row.shield_rate, avoidModify: row.avoid_mod });
+        for (const row of armor) Object.assign(itemInfos[row.id], { templateClass: "armor", equipmentIcons: [row.icon_2, row.icon_3, row.icon_4, row.icon_5], crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, armorType: row.armor_type, bodyPart: row.body_part, pDef: row.physical_defence, mDef: row.magical_defence, mpBonus: row.mp_bonus });
         for (const row of etcItems) Object.assign(itemInfos[row.id], { templateClass: "etc", crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.grade, consumeType: row.stackable, etcType: row.family, canShowEnchant: row.family !== 7 && row.family !== 13 && row.family !== 14, isRecipe: row.family === 5, isArrowOrLure: row.family === 2 || row.family === 16 });
 
         const skillNames: Record<number, string> = {};
@@ -1408,7 +1416,22 @@ export class DecodeEngine {
         for (const row of tables.skills)
             if (!(row.skill_id in skillIcons)) skillIcons[row.skill_id] = row.icon_name;
 
+        const socialSounds: GameStrings_T["socialSounds"] = {};
+
+        for (const row of tables.sounds) {
+            if ((row.skill_id !== 20002 && row.skill_id !== 20004) || row.skill_level !== 1) continue;
+
+            const sounds = socialSounds[row.skill_id] = [];
+
+            for (let i = 1; i <= 3; i++) {
+                const sound = row[`spelleffect_sound_${i}`];
+
+                if (sound && sound.toLowerCase() !== "none") sounds.push({ sound, volume: row[`spelleffect_sound_vol_${i}`], radius: row[`spelleffect_sound_rad_${i}`] });
+            }
+        }
+
         return {
+            socialSounds,
             systemMessages: Object.fromEntries(messages.datarows.map((row: any) => [row.id, row.message])),
             systemMessageColors: Object.fromEntries(messages.datarows.map((row: any) => [row.id, ((row.UNK_1 & 0xff) << 24 | row.rgb[2] << 16 | row.rgb[1] << 8 | row.rgb[0]) >>> 0])), // NWindow 0x1005c274 uses the record's rgb + alpha bytes verbatim as an 0xAARRGGBB dword.
             systemMessageSounds: Object.fromEntries(messages.datarows.filter((row: any) => row.item_sound && row.item_sound.toLowerCase() !== "none").map((row: any) => [row.id, row.item_sound])),
@@ -1419,6 +1442,7 @@ export class DecodeEngine {
             skillCastStyles: Object.fromEntries(tables.skills.map(row => [`${row.skill_id}:${row.skill_level}`, row.cast_style])),
             npcNames: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, row.name])),
             npcTitles: Object.fromEntries(npcNames.datarows.filter((row: any) => row.description).map((row: any) => [row.id, row.description])),
+            npcTitleColors: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, (row.reserved << 24 | row.blue << 16 | row.green << 8 | row.red) >>> 0])), // Engine.dll 0x718eae: npcname colour is a verbatim four-byte dword.
             obsceneWords: obscene.datarows.map((row: any) => row.text),
             residences: Object.fromEntries(residences.datarows.slice().reverse().filter((row: any) => row.tag).map((row: any) => [row.id, row.castle_name])),
             recipes: recipes.datarows.map((row: any) => ({ id: row.id_mk, itemId: row.id_recipe, level: row.level, productId: row.id_item, count: row.count, mpCost: row.mp_cost, successRate: row.success_rate, materials: row.materials })),

@@ -156,6 +156,8 @@ export class NCAbnormalStatusWnd extends NWnd {
     }
 
     public onPaint(canvas: NWindowCanvas) {
+        if (this.height === 0) return;
+
         const H = this.grip.height;
 
         canvas.drawTile(0, 0, 12, 8, 0, 0, 12, 8, TEX_FRAME + "1");

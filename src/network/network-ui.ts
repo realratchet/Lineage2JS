@@ -1,10 +1,12 @@
 import * as GamePackets from "./game-packets";
+import type { GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
 import { Vector3 } from "three";
 import NWindowManager from "../nwindow/nwindow-manager";
 import type NWindowCanvas from "../nwindow/nwindow-canvas";
 import type BaseActor from "../base-actor";
 import type RenderManager from "../rendering/render-manager";
 import Nameplate from "../rendering/nameplate";
+import GroundItemLabel from "../rendering/ground-item-label";
 import ChatBalloon from "../rendering/chat-balloon";
 import LandmarkComponent from "../rendering/components/landmark-component";
 import NDomLayer, { NDOM_EDIT_TEXTURES } from "../nwindow/ndom";
@@ -83,7 +85,7 @@ import encodeCrest from "./crest-encoder";
 import NCTooltip from "../nwindow/nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
-export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isDead: boolean, isSitting: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
+export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isDead: boolean, isSitting: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
 
 const TEX_TARGET_BRACKET = "L2ui.NWindow.target";
 const TEX_MOUSE_TARGET_BRACKET = "L2ui.NWindow.normal"; // UCanvas::Init 0x7f0769, TargetRenderType 1
@@ -116,8 +118,8 @@ function getNameColor(plate: Nameplate_T): number { // User::GetNameColor 0x1046
     return 0xffffffff;
 }
 
-function getTitleColor(plate: Nameplate_T): number { // DrawTargetName 0x1051e6e5: NPC titles light green (summons light blue), player titles light cyan.
-    if (plate.isNpc) return plate.isSummon ? 0xff9cb3ec : 0xffa9ec9c;
+function getTitleColor(plate: Nameplate_T): number { // DrawTargetName 0x1051e746: nonzero NPC colour overrides green; summons blue, players cyan.
+    if (plate.isNpc) return plate.isSummon ? 0xff9cb3ec : plate.titleColor || 0xffa9ec9c;
 
     return 0xffa2f9ec;
 }
@@ -230,14 +232,13 @@ export class NetworkUI {
     protected readonly gauges = new Map<GamePackets.GaugeColor_T, { remaining: number, maximum: number, startedAt: number }>();
     protected readonly nameplates = new Map<BaseActor, Nameplate>();
     protected readonly balloons = new Map<BaseActor, ChatBalloon>();
+    protected pickupLabel: GroundItemLabel = null;
 
     protected readonly manRender: RenderManager;
-    protected readonly isTransparencyMode: boolean;
-    protected readonly isEnterChatting: boolean;
 
     public constructor(network: NetworkManager, asset: AssetManager, render: RenderManager) {
         this.manNetwork = network;
-        this.options = asset.userConfig;
+        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game } };
         this.manRender = render;
         this.nwindow = new NWindowManager(asset);
         this.layer = new NDomLayer(this.nwindow);
@@ -250,7 +251,7 @@ export class NetworkUI {
         this.shortCutWnd.onDrop = (page, slot, x, y) => this.macroWnd.dropCommand(`/${this.getStrings().commands[27]} ${page + 1} ${slot + 1}`, x * this.nwindow.canvas.cssScale, y * this.nwindow.canvas.cssScale);
         this.shortCutWnd.onDragMove = (x, y) => this.macroWnd.highlightCommand(x * this.nwindow.canvas.cssScale, y * this.nwindow.canvas.cssScale);
         this.shortCutWnd.onDrag = entry => {
-            document.documentElement.style.cursor = entry ? `url(${this.layer.getWrapUrl(entry.icon)}) 16 16, default` : "";
+            this.nwindow.setCursor(entry ? `url(${this.layer.getWrapUrl(entry.icon)}) 16 16, default` : "");
             document.documentElement.classList.toggle("ndom-item-drag", !!entry);
         };
         this.shortCutWnd.onAutoSoulShot = (page, slot) => network.toggleAutoSoulShot(page, slot);
@@ -259,8 +260,6 @@ export class NetworkUI {
         this.chatWnd.onBuildCommand = command => network.sendBypassBuildCmd(command);
         this.chatWnd.onCommand = (command, isShift) => network.execCommand(command, isShift);
         this.chatWnd.setSystemMsgWnd(asset.userConfig.game.systemMsgWnd);
-        this.isTransparencyMode = asset.userConfig.game.transparencyMode;
-        this.isEnterChatting = localStorage.getItem("option:EnterChatting") === "true";
 
         for (const type of ["keydown", "keyup", "mousedown"])
             window.addEventListener(type, (event: KeyboardEvent | MouseEvent) => {
@@ -292,7 +291,7 @@ export class NetworkUI {
         window.addEventListener("keydown", event => {
             const target = event.target as HTMLElement;
 
-            if (this.isEnterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
+            if (this.options.game.enterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
             if (this.chatWnd.isInputFocused() || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
             event.stopPropagation();
@@ -415,7 +414,7 @@ export class NetworkUI {
         }
         if (!drag.isDragging) {
             drag.isDragging = true;
-            document.documentElement.style.cursor = `url(${this.layer.getWrapUrl(drag.icon)}) 16 16, default`;
+            this.nwindow.setCursor(`url(${this.layer.getWrapUrl(drag.icon)}) 16 16, default`);
             document.documentElement.classList.add("ndom-item-drag");
         }
 
@@ -451,7 +450,7 @@ export class NetworkUI {
         if (this.skillPointerDrag.type === "skill") this.skillWnd.clearSelection();
         else if (this.mainWnd.element.contains(this.skillPointerDrag.button)) this.mainWnd.actionWnd.clearSelection();
         this.skillPointerDrag = null;
-        document.documentElement.style.cursor = "";
+        this.nwindow.setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
     }
 
@@ -1048,7 +1047,7 @@ export class NetworkUI {
         this.pawnCreateWnd.setVisible(screen === "create");
         this.loadingWnd.setVisible(screen === "loading");
         this.manRender.radar.isVisible = screen === "world";
-        this.layer.setTransparencyMode(screen === "world" && this.isTransparencyMode); // 0x10038e93: only children of the game console root take the flag.
+        this.layer.setTransparencyMode(screen === "world" && this.options.game.transparencyMode); // 0x10038e93: only children of the game console root take the flag.
 
         if (screen !== "world") this.hideWorld();
     }
@@ -1073,7 +1072,7 @@ export class NetworkUI {
     public showFriendInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(516, name), DialogType_T.YES_NO, onAnswer, true, 10000); }
 
     protected formatSystemMessage(id: number, ...params: string[]): string {
-        return this.nwindow.getSystemMessage(id).replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? match);
+        return this.nwindow.getSystemMessage(id).replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? "");
     }
 
     protected async showServerHelp(name: string) { await this.loginServerWnd.serverInfo.viewer.setHtml(await this.manNetwork.getParent().getComponent("asset").getL2Text(name)); }
@@ -1117,6 +1116,7 @@ export class NetworkUI {
     public setPawnLabels(labels: LobbyPawnLabel_T[]) { this.lobbyWnd.setPawnLabels(labels); }
     public isLobbyVisible() { return this.screen === "lobby"; }
     public getScreenCanvas() { return this.nwindow.canvas; }
+    public isMouseOver(x: number, y: number) { return this.nwindow.isMouseOver(x, y) || !!document.elementFromPoint(x, y)?.closest(".ndom-layer") || document.documentElement.classList.contains("nwindow-cursor"); }
 
     public showCreateCharacter(templates: GamePackets.CharTemplate_T[]) {
         this.templates = templates;
@@ -1131,8 +1131,9 @@ export class NetworkUI {
         this.manNetwork.createCharacter({ name, race: template.race, sex: selection.sex, classId, INT: template.INT, STR: template.STR, CON: template.CON, MEN: template.MEN, DEX: template.DEX, WIT: template.WIT, hairStyle: selection.hairStyle, hairColor: selection.hairColor, face: selection.face });
     }
 
-    public showLoading() {
+    public showLoading(isTeleport = false) {
         this.prepareWorld();
+        this.loadingWnd.setBlack(isTeleport);
         this.show("loading");
     }
 
@@ -1215,6 +1216,13 @@ export class NetworkUI {
     }
 
     public updateNameplates() { // FDynamicActor::Render anchor (cylinder top) and DrawTargetName 0x1051d780 layout, LargeFont, no crests or icons.
+        if (this.pickupLabel) {
+            this.pickupLabel.visible = false;
+            if (this.screen !== "world") {
+                this.pickupLabel.dispose();
+                this.pickupLabel = null;
+            }
+        }
         for (const [actor, nameplate] of this.nameplates) {
             nameplate.visible = false;
             if (actor.parent && this.screen === "world") continue;
@@ -1234,6 +1242,27 @@ export class NetworkUI {
         const camera = this.manRender.camera, canvas = this.nwindow.canvas;
         const width = canvas.width, height = canvas.height;
         const scale = 2 / (height * camera.projectionMatrix.elements[5]);
+
+        const pickup = this.manRender.getParent().getComponent("input").getMousePickup();
+        const itemName = pickup && this.strings.itemNames[pickup.itemId];
+
+        if (pickup && pickup.parent && pickup.visible && itemName) {
+            pickup.getNamePosition(tmpNameplateAnchor).project(camera);
+            if (tmpNameplateAnchor.z >= -1 && tmpNameplateAnchor.z < 1 && Math.abs(tmpNameplateAnchor.x) <= 1 && Math.abs(tmpNameplateAnchor.y) <= 1) {
+                if (!this.pickupLabel) {
+                    this.pickupLabel = new GroundItemLabel();
+                    this.manRender.scene.add(this.pickupLabel);
+                }
+                const label = this.pickupLabel;
+
+                label.setLabel(canvas, pickup.stackable ? `${itemName}(${pickup.count.toLocaleString("en-US")})` : itemName);
+                tmpNameplateAnchor.x = Math.trunc((tmpNameplateAnchor.x + 1) * 0.5 * width) / width * 2 - 1;
+                tmpNameplateAnchor.y = 1 - Math.trunc((1 - tmpNameplateAnchor.y) * 0.5 * height) / height * 2;
+                label.position.copy(tmpNameplateAnchor.unproject(camera));
+                label.scale.set(label.width * scale, label.height * scale, 1);
+                label.visible = true;
+            }
+        }
 
         for (const plate of this.manNetwork.getNameplates()) {
             const collisionHeight = plate.actor.getCollisionHeight();
@@ -1811,14 +1840,17 @@ export class NetworkUI {
         const consumeType = item.info.consumeType;
         const location = { x: point.x, y: point.y, z: point.z };
 
-        if (!(consumeType >= 1 && consumeType <= 3 && item.count > 1)) {
-            this.manNetwork.dropItem(item.objectId, 1, location);
-            return;
-        }
+        const castleGuardType = 8;
+        const isCastleGuard = item.info.templateClass === "etc" && item.info.etcType === castleGuardType;
+        const isQuantity = !isCastleGuard && consumeType >= 1 && consumeType <= 3 && item.count > 1;
+        const messageId = isCastleGuard ? 651 : isQuantity ? 71 : 400;
+        const text = this.formatSystemMessage(messageId, item.name);
 
-        this.dialogBox.showQuantity(this.formatSystemMessage(71, this.getInventoryItemName(item)), item.count, consumeType, count => this.manNetwork.dropItem(item.objectId, count, location), id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null));
+        if (isQuantity) this.dialogBox.showQuantity(text, item.count, consumeType, count => this.manNetwork.dropItem(item.objectId, count, location), id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null));
+        else this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) this.manNetwork.dropItem(item.objectId, 1, location); });
+
         this.dialogBox.owner = this.inventoryWnd.getItemOwner(item);
-        this.manNetwork.playSystemMessageSound(71);
+        this.manNetwork.playSystemMessageSound(messageId);
     }
 
     protected destroyInventoryItem(item: InventoryEntry_T) { // NWindow 0x10097bb1 / 0x10009741.
@@ -1896,10 +1928,56 @@ export class NetworkUI {
     }
 
     public updateInventoryOrder(change: number, item: GamePackets.InventoryItem_T) {
-        this.inventoryWnd.updateOrder(change, item.objectId, item.isEquipped, item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY);
+        this.inventoryWnd.updateOrder(change, item.objectId, item.isEquipped, item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST);
     }
 
     public setInventoryOrderOwner(name: string, namespace: number) { this.inventoryWnd.setOrderOwner(name, namespace); }
+    public setWindowOwner(owner: string) {
+        if (owner === this.nwindow.getWindowOwner()) return;
+
+        this.layer.cancelDrag();
+        this.nwindow.setWindowOwner(owner);
+        this.layer.resetWindowPositions();
+        this.placeScreens();
+        const value = localStorage.getItem(`option:${owner}`);
+
+        this.applyGameOptions(value === null ? {} : JSON.parse(value));
+    }
+
+    protected applyGameOptions(options: Partial<GameConfig_T>) {
+        if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error(`Invalid game options.`);
+
+        for (const [key, value] of Object.entries(options)) {
+            switch (key) {
+                case "systemMsgWnd":
+                case "transparencyMode":
+                case "enterChatting":
+                    if (typeof value !== "boolean") throw new Error(`Invalid game option '${key}'.`);
+                    break;
+                case "partyLooting":
+                    if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`Invalid game option '${key}'.`);
+                    break;
+                default: throw new Error(`Unknown game option '${key}'.`);
+            }
+        }
+
+        this.options.game = { ...this.manNetwork.getParent().getComponent("asset").userConfig.game, ...options };
+        this.chatWnd.setSystemMsgWnd(this.options.game.systemMsgWnd);
+        this.layer.setTransparencyMode(this.screen === "world" && this.options.game.transparencyMode);
+        this.nwindow.invalidate();
+    }
+
+    public setGameOptions(options: Partial<GameConfig_T>) {
+        const owner = this.nwindow.getWindowOwner();
+
+        if (owner === null) throw new Error(`Cannot save game options without a character.`);
+
+        this.applyGameOptions(options);
+        localStorage.setItem(`option:${owner}`, JSON.stringify(options));
+    }
+
+    public getGameOptions() { return { ...this.options.game }; }
+
     public saveInventoryOrder() { this.inventoryWnd.saveOrder(); }
 
     public setInventory(items: GamePackets.InventoryItem_T[], showWindow: boolean = false, isFull: boolean = false) {

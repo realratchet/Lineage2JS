@@ -286,12 +286,12 @@ export class NCMacroWnd {
                     if (isDragging) return;
 
                     isDragging = true;
-                    document.documentElement.style.cursor = `url(${this.layer.getWrapUrl(arrIcons[macro.icon])}) 16 16, default`;
+                    this.layer.getManager().setCursor(`url(${this.layer.getWrapUrl(arrIcons[macro.icon])}) 16 16, default`);
                     document.documentElement.classList.add("ndom-item-drag");
                 }, end => {
                     selected.hidden = true;
                     if (isDragging) {
-                        document.documentElement.style.cursor = "";
+                        this.layer.getManager().setCursor("");
                         document.documentElement.classList.remove("ndom-item-drag");
                     }
                     if (!(end instanceof MouseEvent) || end.type !== "mouseup" && end.type !== "pointerup" || this.element.hidden) return;

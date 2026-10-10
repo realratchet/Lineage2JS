@@ -142,7 +142,7 @@ export class NCTradeWnd {
 
             this.drag.icon = icon;
             this.drag.isDragging = true;
-            document.documentElement.style.cursor = `url(${layer.getWrapUrl(this.drag.icon)}) 16 16, default`;
+            this.layer.getManager().setCursor(`url(${layer.getWrapUrl(this.drag.icon)}) 16 16, default`);
             document.documentElement.classList.add("ndom-item-drag");
         }, true);
         window.addEventListener("mouseup", event => {
@@ -290,7 +290,7 @@ export class NCTradeWnd {
         if (!this.drag) return;
 
         this.drag = null;
-        document.documentElement.style.cursor = "";
+        this.layer.getManager().setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
     }
 }

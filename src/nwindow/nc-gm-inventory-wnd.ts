@@ -85,10 +85,10 @@ export class NCGMInventoryWnd extends NCInventoryWnd {
         this.layer.renderText(this.adena, text, 0xffdcdcdc);
         this.layer.place(this.adena, 199 - this.layer.measureText(text), 356);
     }
-    protected addItem(parent: HTMLElement, x: number, y: number, item: InventoryEntry_T) {
+    protected addItem(parent: HTMLElement, x: number, y: number, item: InventoryEntry_T, icon = item.icon, isSecondary = false) {
         if (item.slot >= 15) return;
 
-        super.addItem(parent, x, y, item);
+        super.addItem(parent, x, y, item, icon, isSecondary);
     }
     protected updateDragTargets(event: MouseEvent = null) {}
     protected dropItem(item: InventoryEntry_T, event: MouseEvent) {}

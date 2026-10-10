@@ -1,3 +1,5 @@
+import decodeCursors from "./decoders/cursor-decoder";
+import fetchAssetHandle from "./unreal/asset-handle";
 import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
@@ -186,6 +188,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected charGroups: ICharacterGroup[] = null;
     protected effectLibrary: DecodeLibrary = null;
     protected cubicLibrary: Promise<DecodeLibrary> = null;
+    protected arrCursors: string[] = [];
+    protected cursorLoad: Promise<void> = null;
     protected socialEffectLibrary: Promise<DecodeLibrary> = null;
     protected abnormalEffectLibrary: Promise<DecodeLibrary> = null;
     protected fishingLibrary: Promise<DecodeLibrary> = null;
@@ -254,7 +258,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.decodeWorker.getMusicInfo(),
             this.decodeWorker.decodeCharacter(this.loadSettings),
             playerControllerLoad,
-            playerControllerLoad.then(controller => this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS], [controller.getUnderWaterLoopSound()])),
+            playerControllerLoad.then(controller => this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b"], [controller.getUnderWaterLoopSound()])),
             this.decodeWorker.decodeSector("skylevel", {
                 ...this.loadSettings, isSkyLevel: true,
                 loadTerrain: true,
@@ -366,6 +370,23 @@ export class AssetManager implements IEngineComponent<GameManager> {
         (library as any).preferCompressedTextures = this.preferCompressedTextures;
 
         return library;
+    }
+
+    public async loadCursors() {
+        if (!this.cursorLoad) this.cursorLoad = this.decodeCursors();
+        await this.cursorLoad;
+    }
+
+    protected async decodeCursors() {
+        const handle = await fetchAssetHandle("assets/system/NWindow.dll");
+        const readable = await handle.getReadable();
+
+        this.arrCursors = decodeCursors(readable.buffer).map(cursor => `url("${URL.createObjectURL(new Blob([cursor.data], { type: "image/x-icon" }))}") ${cursor.x} ${cursor.y}, default`);
+    }
+
+    public getCursor(index: number) {
+        if (!this.arrCursors[index]) throw new Error(`Cursor ${index} is not loaded.`);
+        return this.arrCursors[index];
     }
 
     public loadSound(path: string): Promise<string> {

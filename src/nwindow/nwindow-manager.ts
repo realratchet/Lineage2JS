@@ -16,9 +16,18 @@ function snapToEdge(position: number, size: number, screen: number) { // NWindow
     return position;
 }
 
+function snapToWindow(position: number, size: number, otherPosition: number, otherSize: number) {
+    if (Math.abs(position - otherPosition - otherSize) < SNAP_DISTANCE) return otherPosition + otherSize;
+    if (Math.abs(position + size - otherPosition) < SNAP_DISTANCE) return otherPosition - size;
+
+    return null;
+}
+
 export class NWindowManager {
     public readonly canvas: NWindowCanvas;
     protected readonly windows: NWnd[] = [];
+    protected readonly windowPositions = new Map<NWnd, [number, number]>();
+    protected windowOwner: string = null;
     protected readonly textInput = document.createElement("input");
     protected textHandler: TextInputHandler_T = null;
     protected textOwner: NWnd = null;
@@ -88,8 +97,9 @@ export class NWindowManager {
     }
 
     protected async loadFonts() {
-        await Promise.all([this.canvas.loadFonts(), this.asset.loadSound("InterfaceSound.click_01"), this.asset.loadSound("ItemSound.click_failed")]);
+        await Promise.all([this.asset.loadCursors(), this.canvas.loadFonts(), this.asset.loadSound("InterfaceSound.click_01"), this.asset.loadSound("ItemSound.click_failed")]);
 
+        document.documentElement.style.setProperty("--game-cursor", this.getCursor(0));
         this.isReady = true;
         this.invalidate();
     }
@@ -104,6 +114,8 @@ export class NWindowManager {
 
     protected placeWindow(wnd: NWnd) {
         wnd.placeOnScreen(this.canvas.width, this.canvas.height);
+
+        if (!this.windowPositions.has(wnd)) this.windowPositions.set(wnd, [wnd.x, wnd.y]);
 
         const position = wnd.windowName ? this.loadWindowPosition(wnd.windowName, wnd.width, wnd.height) : null;
 
@@ -152,6 +164,7 @@ export class NWindowManager {
             }
 
             this.windows.splice(index, 1);
+            this.windowPositions.delete(wnd);
             wnd.detach();
         }
 
@@ -189,8 +202,27 @@ export class NWindowManager {
     public snapX(x: number, width: number) { return snapToEdge(x, width, this.canvas.width); }
     public snapY(y: number, height: number) { return snapToEdge(y, height, this.canvas.height); }
 
+    public snapWindow(x: number, y: number, width: number, height: number, owner: NWnd | HTMLElement): [number, number] {
+        // shortcut: edge snapping has no retained dock links; add them when porting connected-window movement.
+        let nextX = x, nextY = y;
+        const snap = (otherX: number, otherY: number, otherWidth: number, otherHeight: number) => {
+            if (Math.max(y, otherY) <= Math.min(y + height, otherY + otherHeight)) nextX = snapToWindow(x, width, otherX, otherWidth) ?? nextX;
+            if (Math.max(x, otherX) <= Math.min(x + width, otherX + otherWidth)) nextY = snapToWindow(y, height, otherY, otherHeight) ?? nextY;
+        };
+
+        for (const wnd of this.windows)
+            if (wnd !== owner && wnd.isVisible) snap(wnd.x, wnd.y, wnd.width, wnd.height);
+
+        for (const wnd of document.querySelectorAll<HTMLElement>(".ndom-layer > .ndom-window"))
+            if (wnd !== owner && wnd.getClientRects().length) snap(wnd.offsetLeft, wnd.offsetTop, wnd.offsetWidth, wnd.offsetHeight);
+
+        return [this.snapX(nextX, width), this.snapY(nextY, height)];
+    }
+
     public loadWindowPosition(name: string, width: number, height: number): [number, number] { // NWindow 0x10073480 reads posX/posY per window from WindowsInfo.ini.
-        const value = localStorage.getItem(`wnd:${name}`);
+        if (this.windowOwner === null) return null;
+
+        const value = localStorage.getItem(`wnd:${this.windowOwner}:${name}`);
 
         if (value === null) return null;
 
@@ -201,7 +233,25 @@ export class NWindowManager {
         return [Math.max(0, Math.min(this.canvas.width - width, x)), Math.max(0, Math.min(this.canvas.height - height, y))];
     }
 
-    public saveWindowPosition(name: string, x: number, y: number) { localStorage.setItem(`wnd:${name}`, JSON.stringify([x, y])); } // NWindow 0x100732c0 writes posX/posY to WindowsInfo.ini.
+    public saveWindowPosition(name: string, x: number, y: number) { if (this.windowOwner !== null) localStorage.setItem(`wnd:${this.windowOwner}:${name}`, JSON.stringify([x, y])); } // NWindow 0x100732c0 writes posX/posY to WindowsInfo.ini.
+
+    public getWindowOwner() { return this.windowOwner; }
+
+    public setWindowOwner(owner: string) {
+        if (owner === this.windowOwner) return;
+
+        this.cancelMouse();
+        this.windowOwner = owner;
+
+        for (const wnd of this.windows) {
+            if (!wnd.windowName) continue;
+
+            [wnd.x, wnd.y] = this.windowPositions.get(wnd);
+            this.placeWindow(wnd);
+        }
+
+        this.invalidate();
+    }
 
     public beginDrag(wnd: NWnd, x: number, y: number) {
         this.dragged = wnd;
@@ -259,6 +309,7 @@ export class NWindowManager {
     }
 
     public findClientWindow(event: MouseEvent): NWnd { return this.findWindow(this.canvas.toUI(event.clientX), this.canvas.toUI(event.clientY)); }
+    public isMouseOver(x: number, y: number) { return !!(this.pressed || this.dragged || this.findWindow(this.canvas.toUI(x), this.canvas.toUI(y))); }
 
     protected toLocal(wnd: NWnd, event: MouseEvent): NMouseEvent_T {
         return { x: this.canvas.toUI(event.clientX) - wnd.getScreenX(), y: this.canvas.toUI(event.clientY) - wnd.getScreenY(), button: event.button, shift: event.shiftKey, ctrl: event.ctrlKey, clickCount: event.detail, target: event.target };
@@ -266,12 +317,22 @@ export class NWindowManager {
 
     protected onMouse(event: MouseEvent, type: "down" | "up" | "move") {
         if (type === "move" && !(event.buttons & 1) && (this.dragged || this.pressed)) this.cancelMouse();
-        if (!this.dragged && !this.pressed && event.target instanceof Element && event.target.closest(".ndom-layer")) return;
+        if (!this.dragged && !this.pressed && event.target instanceof Element && event.target.closest(".ndom-layer")) {
+            if (this.hovered) {
+                this.hovered.onMouseLeave();
+                this.hovered = null;
+                this.invalidate();
+            }
+
+            return;
+        }
 
         if (this.dragged) {
             if (type === "move") {
-                this.dragged.x = Math.max(0, Math.min(this.canvas.width - this.dragged.width, this.snapX(this.canvas.toUI(event.clientX) - this.dragOffsetX, this.dragged.width)));
-                this.dragged.y = Math.max(0, Math.min(this.canvas.height - this.dragged.height, this.snapY(this.canvas.toUI(event.clientY) - this.dragOffsetY, this.dragged.height)));
+                const [x, y] = this.snapWindow(this.canvas.toUI(event.clientX) - this.dragOffsetX, this.canvas.toUI(event.clientY) - this.dragOffsetY, this.dragged.width, this.dragged.height, this.dragged);
+
+                this.dragged.x = Math.max(0, Math.min(this.canvas.width - this.dragged.width, x));
+                this.dragged.y = Math.max(0, Math.min(this.canvas.height - this.dragged.height, y));
                 this.invalidate();
             } else if (type === "up") this.cancelMouse();
 
@@ -370,6 +431,13 @@ export class NWindowManager {
 
     public isHovered(wnd: NWnd) { return this.hovered === wnd; }
     public isPressed(wnd: NWnd) { return this.pressed === wnd; }
+
+    public getCursor(index: number) { return this.asset.getCursor(index); }
+
+    public setCursor(cursor: string) {
+        document.documentElement.style.cursor = cursor;
+        document.documentElement.classList.toggle("nwindow-cursor", !!cursor);
+    }
 
     public render() {
         if (!this.isReady) return;

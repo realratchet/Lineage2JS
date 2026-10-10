@@ -1282,7 +1282,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     // USkeletalMeshInstance::Render, UnSkeletalMesh.cpp line 4908: zone ambient plus hardware lights.
-    protected updatePawnLighting(updateShadow = true): void {
+    protected updatePawnLighting(updateShadow = true, currentTime = 0): void {
         const sunAmbient = this.environment.getAmbientPlaneActorLightHalved(tmpPawnSunAmbient);
 
         for (const row of this.sectors.values())
@@ -1304,7 +1304,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         for (const pickup of this.pickups) {
-            if (updateShadow) pickup.placeOnGround();
+            if (updateShadow) pickup.update(currentTime);
             if (pickup.visible) this.updateActorLighting(pickup, sunAmbient);
         }
     }
@@ -1567,7 +1567,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const activeSector = this.updateViewVisibility(bspCullingCamera, this.frustum);
-        this.updatePawnLighting();
+        this.updatePawnLighting(true, currentTime);
 
         for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
             if (!emitter.pendingSounds.length) continue;

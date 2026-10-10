@@ -306,9 +306,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const fishing = state === "idle" ? this.findComponent<PawnFishingComponent>("pawnFishing") : null;
         const fishingAnimation = fishing && fishing.getIdleAnimationName();
 
+        this.play(fishingAnimation || this.basicActorAnimations[state], tweenTime, this.getMovementRate(state, fishingAnimation));
+    }
+
+    protected getMovementRate(state: PawnMovementState_T, fishingAnimation: string): number {
         const isScaled = fishingAnimation || (state === "walking" || state === "running" || state === "swimming") && this.getParent().scriptClassId;
 
-        this.play(fishingAnimation || this.basicActorAnimations[state], tweenTime, isScaled ? this.getParent().getUnrealScriptProperty("NonAttackSpeedRate") as number : 1);
+        return isScaled ? this.getParent().getUnrealScriptProperty("NonAttackSpeedRate") as number : 1;
     }
 
     public isPlayingMovement(state: PawnMovementState_T): boolean {
@@ -318,7 +322,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const fishingAnimation = fishing && fishing.getIdleAnimationName();
         const clip = fishingAnimation ? this.getAnimationClip(fishingAnimation) : this.actorAnimations[this.basicActorAnimations[state]];
 
-        return !!action && action.enabled && action.isScheduled() && (action.getClip() === clip || action.getClip() === cacheTweenTwins.get(clip));
+        return !!action && action.enabled && action.isScheduled() && (action.getClip() === clip || action.getClip() === cacheTweenTwins.get(clip)) && (this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale()) === this.getMovementRate(state, fishingAnimation);
     }
 
     public setDeathAnimationFromScript(): void {

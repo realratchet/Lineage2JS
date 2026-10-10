@@ -22,6 +22,7 @@ export class NCLoadingWnd { // NCLoadingWnd OnPaint 0x1009a7b0: the 1024x768 loa
     }
 
     public setVisible(isVisible: boolean) { this.element.hidden = !isVisible; }
+    public setBlack(isBlack: boolean) { this.image.hidden = isBlack; this.element.style.backgroundColor = isBlack ? "black" : ""; }
 }
 
 export default NCLoadingWnd;

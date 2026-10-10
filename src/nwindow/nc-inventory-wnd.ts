@@ -9,6 +9,7 @@ const TEX_TAB_SELECTED = "L2UI_CH3.InventoryWnd.Inventory_tab1";
 const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
 const TEX_OUTLINE_DOWN = "L2UI_CH3.InventoryWnd.Inventory_OutLine_down";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
+const TEX_DUAL = "L2UI.InventoryWnd.Icon_dualcap";
 const TEX_FRAME_LEFT = "L2UI_CH3.FrameCtrl.FrameBackLeft";
 const TEX_FRAME_MID = "L2UI_CH3.FrameCtrl.FrameBackMid";
 const TEX_FRAME_RIGHT = "L2UI_CH3.FrameCtrl.FrameBackRight";
@@ -29,7 +30,7 @@ const arrWeaponPAtk = [[0, 2, 3, 3, 4, 5], [0, 2, 4, 4, 5, 6], [0, 4, 6, 6, 8, 1
 const arrWeaponMAtk = [0, 2, 3, 3, 3, 4]; // 0x10074250: 0x10242790, 0x102427c0 and 0x102427f0 are identical.
 const arrDefenceBonus = [0, 1, 1, 1, 1, 1]; // 0x100742f0: 0x101af2a8.
 
-const SLOT_UNDERWEAR = 0x1, SLOT_EARS = 0x6, SLOT_NECK = 0x8, SLOT_FINGERS = 0x30, SLOT_HEAD = 0x40, SLOT_R_HAND = 0x80, SLOT_L_HAND = 0x100, SLOT_GLOVES = 0x200, SLOT_CHEST = 0x400, SLOT_LEGS = 0x800, SLOT_FEET = 0x1000, SLOT_BACK = 0x2000, SLOT_LR_HAND = 0x4000, SLOT_FULL_ARMOR = 0x8000, SLOT_HAIR = 0x10000;
+const SLOT_UNDERWEAR = 0x1, SLOT_EARS = 0x6, SLOT_NECK = 0x8, SLOT_FINGERS = 0x30, SLOT_HEAD = 0x40, SLOT_R_HAND = 0x80, SLOT_L_HAND = 0x100, SLOT_GLOVES = 0x200, SLOT_CHEST = 0x400, SLOT_LEGS = 0x800, SLOT_FEET = 0x1000, SLOT_BACK = 0x2000, SLOT_LR_HAND = 0x4000, SLOT_FULL_ARMOR = 0x8000, SLOT_HAIR = 0x10000, SLOT_ALLDRESS = 0x20000;
 
 export type InventoryEntry_T = { objectId: number, itemId: number, name: string, icon: string, count: number, enchant: number, itemClass: number, bodyPart: number, slot: number, isQuest: boolean, isMoney: boolean, info: ItemInfo_T, customType1?: number, customType2?: number, maxCount?: number };
 type ItemLine_T = { label: string, value: string, color?: number };
@@ -49,7 +50,7 @@ function getWeaponTable(weaponType: number, bodyPart: number) { // 0x100741b0 ju
 }
 
 export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 0x10099a60, OnPaint 0x10095870.
-    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, ...arrWeightBars, ...arrTooltipSlices, "L2UI.NWindow.Number", ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, TEX_DUAL, ...arrWeightBars, ...arrTooltipSlices, "L2UI.NWindow.Number", ...NDOM_SCROLL_TEXTURES]; }
 
     public readonly element: HTMLDivElement;
     public onUse: (item: InventoryEntry_T, isRight: boolean) => void = null;
@@ -237,7 +238,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
             this.drag.isDragging = true; // 0x10095472
             this.tooltip.hidden = true;
-            document.documentElement.style.cursor = `url(${layer.getWrapUrl(this.drag.item.icon)}) 16 16, default`; // 0x10039680
+            this.layer.getManager().setCursor(`url(${layer.getWrapUrl(this.drag.item.icon)}) 16 16, default`); // 0x10039680
             document.documentElement.classList.add("ndom-item-drag");
         }, true);
         window.addEventListener("mouseup", event => {
@@ -396,15 +397,15 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         }
     }
 
-    public updateOrder(change: number, objectId: number, isEquipped: boolean, isQuest: boolean, isMoney: boolean) { // NWindow 0x10098f50 / 0x10098610.
+    public updateOrder(change: number, objectId: number, isEquipped: boolean, isQuest: boolean) { // NWindow 0x10098f50 / 0x10098610.
         const tab = isQuest ? 1 : 0;
 
         this.arrBagOrder.forEach((order, index) => {
             const itemIndex = order.indexOf(objectId);
 
-            if (itemIndex >= 0 && (change === 3 || isEquipped || isMoney || index !== tab)) order.splice(itemIndex, 1);
+            if (itemIndex >= 0 && (change === 3 || isEquipped || index !== tab)) order.splice(itemIndex, 1);
         });
-        if (change === 3 || isEquipped || isMoney || this.arrBagOrder[tab].includes(objectId)) return;
+        if (change === 3 || isEquipped || this.arrBagOrder[tab].includes(objectId)) return;
 
         if (change === 2 && tab === 0) this.arrBagOrder[tab].unshift(objectId);
         else this.arrBagOrder[tab].push(objectId);
@@ -416,7 +417,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             this.arrBags.forEach(bag => bag.setScroll(0));
         }
         this.arrBagOrder.forEach((order, tab) => {
-            const bagItems = items.filter(item => item.slot < 0 && !item.isMoney && Number(item.isQuest) === tab);
+            const bagItems = items.filter(item => item.slot < 0 && Number(item.isQuest) === tab);
 
             if (isFull) order.length = 0;
             for (let i = order.length - 1; i >= 0; i--)
@@ -428,7 +429,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         if (isFull) this.restoreOrder();
         const symbols = this.layer.getManager().strings.symbols;
 
-        await this.layer.loadTextures([...new Set(items.flatMap(item => item.info.crystalType > 0 ? [item.icon, symbols[arrGradeSymbols[item.info.crystalType]]] : [item.icon]))]);
+        await this.layer.loadTextures([...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[arrGradeSymbols[item.info.crystalType]]] : [])]).filter(path => path && path.toLowerCase() !== "none"))]);
 
         if (this.items !== items) return;
 
@@ -455,15 +456,22 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         let money = 0;
 
         const cacheItems = new Map(this.items.map(item => [item.objectId, item]));
-        const arrItems = [...this.items.filter(item => item.slot >= 0 || item.isMoney), ...this.arrBagOrder.flat().map(objectId => cacheItems.get(objectId)!)];
+        const arrItems = [...this.items.filter(item => item.slot >= 0), ...this.arrBagOrder.flat().map(objectId => cacheItems.get(objectId)!)];
 
         for (const item of arrItems) {
-            if (item.isMoney) { money += item.count; continue; }
+            if (item.isMoney) money += item.count;
             if (!this.layer.hasTexture(item.icon)) continue;
 
             if (item.slot >= 0) {
-                // NCEquipItemWnd::OnPaint 0x1009414f..0x10094264.
-                this.addItem(this.equipment, [7, 46, 85, 130, 169][item.slot % 5] - 1, 6 + Math.trunc(item.slot / 5) * 38, item);
+                const arrSlots = item.bodyPart === SLOT_LR_HAND ? [5, 7] : item.bodyPart === SLOT_FULL_ARMOR ? [6, 11] : item.bodyPart === SLOT_ALLDRESS ? [6, 11, 10, 12] : [item.slot];
+                const arrIcons = arrSlots.length > 1 ? item.info.equipmentIcons : [];
+                let icon = arrIcons[0] && arrIcons[0].toLowerCase() !== "none" ? arrIcons[0] : null;
+
+                arrSlots.forEach((slot, index) => { // NCEquipItemWnd::OnPaint 0x1009433b..0x100946ac.
+                    if (icon && arrIcons[index] && arrIcons[index].toLowerCase() !== "none") icon = arrIcons[index];
+
+                    this.addItem(this.equipment, [7, 46, 85, 130, 169][slot % 5] - 1, 6 + Math.trunc(slot / 5) * 38, item, icon || item.icon, index > 0);
+                });
             } else {
                 // NCInvenItemWnd::OnPaint 0x1009528f..0x10095369.
                 const tab = Number(item.isQuest), index = arrCounts[tab]++;
@@ -485,7 +493,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.layer.place(this.adena, 199 - this.layer.measureText(text), 356);
     }
 
-    protected addItem(parent: HTMLElement, x: number, y: number, item: InventoryEntry_T) {
+    protected addItem(parent: HTMLElement, x: number, y: number, item: InventoryEntry_T, icon = item.icon, isSecondary = false) {
         const button = document.createElement("button");
 
         button.type = "button";
@@ -493,9 +501,12 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         button.dataset.objectId = String(item.objectId);
         button.setAttribute("aria-label", `${item.name}${item.count > 1 ? ` (${item.count.toLocaleString("en-US")})` : ""}`);
         this.layer.place(button, x, y, 34, 34);
-        this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, item.icon);
-        this.frames.set(item.objectId, [this.layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE_DOWN), this.layer.tile(button, 0, 0, 35, 35, 0, 0, 35, 35, TEX_OUTLINE)]);
-        this.paintFrame(item.objectId, this.selection.get(parent) === item.objectId);
+        this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, icon);
+        if (isSecondary) this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, TEX_DUAL);
+        else {
+            this.frames.set(item.objectId, [this.layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE_DOWN), this.layer.tile(button, 0, 0, 35, 35, 0, 0, 35, 35, TEX_OUTLINE)]);
+            this.paintFrame(item.objectId, this.selection.get(parent) === item.objectId);
+        }
 
         const choose = () => {
             if (item.itemId !== this.chooseItemId) return;
@@ -578,7 +589,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected endDrag() {
         this.updateDragTargets();
         this.drag = null;
-        document.documentElement.style.cursor = "";
+        this.layer.getManager().setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
     }
 

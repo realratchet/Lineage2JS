@@ -81,7 +81,7 @@ export class NCRecipeBookWnd {
             if (this.drag.isDragging) return;
 
             this.drag.isDragging = true;
-            document.documentElement.style.cursor = `url(${layer.getWrapUrl(layer.getManager().strings.itemIcons[this.drag.recipe.productId])}) 16 16, default`;
+            this.layer.getManager().setCursor(`url(${layer.getWrapUrl(layer.getManager().strings.itemIcons[this.drag.recipe.productId])}) 16 16, default`);
             document.documentElement.classList.add("ndom-item-drag");
         }, true);
         window.addEventListener("mouseup", event => {
@@ -175,7 +175,7 @@ export class NCRecipeBookWnd {
         this.drag = null;
         this.trashNormal.hidden = false;
         this.trashDrag.hidden = true;
-        document.documentElement.style.cursor = "";
+        this.layer.getManager().setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
     }
 }

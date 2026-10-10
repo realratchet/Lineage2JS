@@ -63,7 +63,7 @@ function getBoneRotation(host: SkillEffectHost_T, actor: SkillActor_T, bone: str
 export class SkillEffectPlacement {
     protected readonly host: SkillEffectHost_T;
     protected readonly trailers: { effect: SkillActor_T, host: SkillActor_T, sameRotation: boolean, relative: boolean, offset: Vector3Arr }[] = [];
-    protected readonly pawnLights: { actor: SkillActor_T, light: unknown }[] = [];
+    protected readonly pawnLights: { actor: SkillActor_T, light: unknown, isCasting: boolean }[] = [];
 
     public constructor(host: SkillEffectHost_T) { this.host = host; }
 
@@ -97,6 +97,17 @@ export class SkillEffectPlacement {
         for (const { actor, light } of this.pawnLights) this.host.removePawnLight(actor, light);
         this.pawnLights.length = 0;
         this.trailers.length = 0;
+    }
+
+    public cancelCastingLights(): void {
+        // Engine.dll MagicStop 0x7b554f..0x7b5587 removes FNPawnLight type2 only.
+        for (let i = this.pawnLights.length - 1; i >= 0; i--) {
+            const light = this.pawnLights[i];
+
+            if (!light.isCasting) continue;
+            this.host.removePawnLight(light.actor, light.light);
+            this.pawnLights.splice(i, 1);
+        }
     }
 
     public addTrailer(effect: SkillActor_T, host: SkillActor_T, offset: Vector3Arr, relative: boolean, sameRotation: boolean): void {
@@ -164,7 +175,7 @@ export class SkillEffectPlacement {
             if (info.attackSounds && effectHost.isActor) this.host.playAttackSounds(effectHost, info.attackSounds === "critical");
             // Engine.dll Action_Attack 0x8bde04..0x8bde4a: IsRendered and GL2KeepMinFrameRate precede the light.
             if (info.damageEffect === "associated") this.spawnAssociatedDamageEffect(caster, effectHost, addEffect);
-            this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime);
+            this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime, null, info.phase === "casting");
             return true;
         }
 
@@ -399,7 +410,7 @@ export class SkillEffectPlacement {
         this.host.setRotation(effect, effectRotation);
 
         addEffect(effect);
-        if (info.pawnLight) this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime, effect);
+        if (info.pawnLight) this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime, effect, info.phase === "casting");
         if (info.physics === "trailer") {
             const properties = effect.scriptProperties;
             // Engine.dll Explosion 0x78eb27..0x78eb46: PHYS_Trailer, bTrailerPrePivot set, bTrailerSameRotation cleared; follows its Owner.
@@ -621,7 +632,7 @@ export class SkillEffectPlacement {
         this.host.setRotation(effect, tmpRotation);
     }
 
-    protected addPawnLight(light: NativeSkillEffect_T["pawnLight"], caster: SkillActor_T, host: SkillActor_T, source: SkillActor_T, shotTime: number, effect: SkillActor_T = null): void {
+    protected addPawnLight(light: NativeSkillEffect_T["pawnLight"], caster: SkillActor_T, host: SkillActor_T, source: SkillActor_T, shotTime: number, effect: SkillActor_T = null, isCasting: boolean = false): void {
         // Engine.dll 0x78f6f0..0x78f6fb: Cast<APawn> rejects non-Pawn impact actors.
         if (!host.isActor) return;
         if (!effect && (!light.spot || !light.position || !light.rotation || light.target)) throw new Error("Pawn light without an effect requires a fixed spotlight transform.");
@@ -647,7 +658,7 @@ export class SkillEffectPlacement {
             FVector.subElements(tmpCasterPosition, tmpLightPosition, tmpLightDirection);
             FVector.normalElements(tmpLightDirection, tmpLightDirection);
         }
-        this.pawnLights.push({ actor: host, light: this.host.addPawnLight(host, light.spot && !light.target ? null : effect, light.color, light.radius, light.lifeTime === undefined ? shotTime : light.lifeTime, light.spot ? tmpLightPosition : null, light.spot ? tmpLightDirection : null, light.target ? tmpCasterPosition : null) });
+        this.pawnLights.push({ actor: host, isCasting, light: this.host.addPawnLight(host, light.spot && !light.target ? null : effect, light.color, light.radius, light.lifeTime === undefined ? shotTime : light.lifeTime, light.spot ? tmpLightPosition : null, light.spot ? tmpLightDirection : null, light.target ? tmpCasterPosition : null) });
     }
 }
 

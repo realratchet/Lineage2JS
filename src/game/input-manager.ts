@@ -7,6 +7,7 @@ import type RenderManager from "../rendering/render-manager";
 import type PhysicsManager from "../physics/physics-manager";
 import type { ICollidable } from "../objects/objects";
 import type BaseActor from "../base-actor";
+import type GroundPickup from "../objects/ground-pickup";
 import type { CollisionQuery_T } from "../physics/collision-world";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
@@ -71,6 +72,8 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected isMouseInViewport = false;
     protected mousePickDistance = 0;
     protected mouseTarget: BaseActor = null;
+    protected mouseCursor = 0;
+    protected mousePickup: GroundPickup = null;
     protected lastMouseTargetTime = -Infinity;
     protected isOrbitControls = true;
     protected isPrimaryMouseDown = false;
@@ -111,8 +114,8 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.controls.fps.addEventListener("unlock", this.onPointerControlsUnlocked.bind(this));
 
         viewport.addEventListener("mousedown", this.mouseDownHandler);
-        viewport.addEventListener("mousemove", this.mouseMoveHandler);
-        viewport.addEventListener("mouseleave", () => this.isMouseInViewport = false);
+        window.addEventListener("mousemove", this.mouseMoveHandler, true);
+        window.addEventListener("mouseout", event => { if (!event.relatedTarget) this.isMouseInViewport = false; });
         viewport.addEventListener("mouseup", this.mouseUpHandler);
         window.addEventListener("keydown", this.keyDownHandler);
         window.addEventListener("keyup", this.keyUpHandler);
@@ -467,6 +470,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public getMouseTarget(): BaseActor { return this.mouseTarget; }
+    public getMousePickup(): GroundPickup { return this.mousePickup; }
 
     public traceScreenPoint(clientX: number, clientY: number, target: Vector3): boolean {
         const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
@@ -490,21 +494,29 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.lastMouseTargetTime = now;
 
         let actor: BaseActor = null;
+        let pickup: GroundPickup = null;
+        let cursor = 0;
 
-        if (this.isMouseInViewport && this.isOrbitControls && !this.isCameraLocked) {
-            const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+        const network = this.manGame.getComponent("network");
+        const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
 
+        if (this.isMouseInViewport && this.isOrbitControls && !this.isCameraLocked && this.mousePosition.x >= bounds.left && this.mousePosition.x < bounds.right && this.mousePosition.y >= bounds.top && this.mousePosition.y < bounds.bottom && !network.isMouseOverUI(this.mousePosition.x, this.mousePosition.y)) {
             tmpScreenPosition.set((this.mousePosition.x - bounds.left) / bounds.width * 2 - 1, 1 - (this.mousePosition.y - bounds.top) / bounds.height * 2);
             this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
 
             const hit = this.traceMouse();
 
-            if (hit && (hit.actor as any)?.isActor && hit.actor !== this.renderManager.player as ICollidable) actor = hit.actor as any as BaseActor;
+            pickup = network.getPickup(this.raycaster, hit ? hit.distance : this.mousePickDistance);
+            if (!pickup && hit && (hit.actor as any)?.isActor && hit.actor !== this.renderManager.player as ICollidable) actor = hit.actor as any as BaseActor;
+            cursor = pickup ? 3 : network.getMouseCursor(actor);
         }
 
-        if (actor === this.mouseTarget) return;
+        if (actor === this.mouseTarget && pickup === this.mousePickup && cursor === this.mouseCursor) return;
 
         this.mouseTarget = actor;
+        this.mousePickup = pickup;
+        this.mouseCursor = cursor;
+        this.renderManager.renderer.domElement.style.cursor = cursor ? this.manGame.getComponent("asset").getCursor(cursor) : "";
         this.renderManager.needsUpdate = true;
     }
 

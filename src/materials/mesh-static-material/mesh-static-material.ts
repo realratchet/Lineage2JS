@@ -439,7 +439,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public setSway() {
         this.defines["USE_SWAY"] = "";
 
-        if (this.transparent && this.blending === NormalBlending) this.depthWrite = true;
+        if (this.transparent && this.blending === NormalBlending) this.depthWrite = false;
 
         this.needsUpdate = true;
 

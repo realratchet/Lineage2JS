@@ -76,6 +76,7 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
 
     public async show(html: string) {
         this.element.hidden = false;
+        this.layer.activate(this.element);
         await this.viewer.setHtml(html);
         this.setTitle(this.viewer.title || this.layer.getManager().getSysString(this.titleId));
     }

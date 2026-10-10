@@ -31,7 +31,7 @@ export class GameManager implements IEngineComponent<GameManager> {
 
         game.manAsset = new AssetManager(loadSettings, assets);
         game.manRender = new RenderManager(viewport);
-        game.manAudio = new AudioManager();
+        game.manAudio = game.manRender.audioManager;
         game.manPhysics = new PhysicsManager();
         game.manUI = new UIManager();
         game.manInput = new InputManager();

@@ -46,6 +46,8 @@ export class NDomLayer {
     protected readonly atlas = new Map<string, AtlasEntry_T>();
     protected readonly cacheWrapUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
+    protected readonly windowPositions = new Map<HTMLElement, [number, number]>();
+    protected stopDrag: () => void = null;
     protected activeWindow: HTMLElement = null;
     protected zOrder = 0;
     protected isTransparencyMode = false;
@@ -106,6 +108,8 @@ export class NDomLayer {
     public toUI(client: number) { return this.manager.canvas.toUI(client); }
 
     public beginDrag(onMove: (event: MouseEvent) => void, onStop: (event?: Event) => void = null) {
+        this.cancelDrag();
+
         const move = (event: MouseEvent) => {
             if (!(event.buttons & 1)) { stop(event); return; }
 
@@ -119,6 +123,7 @@ export class NDomLayer {
             window.removeEventListener("pointerup", stop, true);
             window.removeEventListener("pointercancel", stop, true);
             window.removeEventListener("blur", stop);
+            this.stopDrag = null;
 
             if (onStop) onStop(event);
         };
@@ -128,22 +133,35 @@ export class NDomLayer {
         window.addEventListener("pointerup", stop, true);
         window.addEventListener("pointercancel", stop, true);
         window.addEventListener("blur", stop);
+        this.stopDrag = stop;
     }
+
+    public cancelDrag() { if (this.stopDrag) this.stopDrag(); }
 
     public dragWindow(element: HTMLElement, event: MouseEvent, place: (x: number, y: number) => void = (x, y) => this.place(element, x, y)) {
         const x = this.toUI(event.clientX) - element.offsetLeft, y = this.toUI(event.clientY) - element.offsetTop, startX = element.offsetLeft, startY = element.offsetTop;
 
-        this.beginDrag(moveEvent => place(this.manager.snapX(this.toUI(moveEvent.clientX) - x, element.offsetWidth), this.manager.snapY(this.toUI(moveEvent.clientY) - y, element.offsetHeight)), () => {
+        this.beginDrag(moveEvent => {
+            const [nextX, nextY] = this.manager.snapWindow(this.toUI(moveEvent.clientX) - x, this.toUI(moveEvent.clientY) - y, element.offsetWidth, element.offsetHeight, element);
+
+            place(nextX, nextY);
+        }, () => {
             if (this.windowNames.has(element) && (element.offsetLeft !== startX || element.offsetTop !== startY)) this.manager.saveWindowPosition(this.windowNames.get(element), element.offsetLeft, element.offsetTop);
         });
     }
 
     public restoreWindow(element: HTMLElement, name: string) {
+        if (!this.windowPositions.has(element)) this.windowPositions.set(element, [parseFloat(element.style.left), parseFloat(element.style.top)]);
+
         const position = this.manager.loadWindowPosition(name, parseFloat(element.style.width), parseFloat(element.style.height));
 
         this.windowNames.set(element, name);
 
         if (position) this.place(element, position[0], position[1]);
+    }
+
+    public resetWindowPositions() {
+        for (const [element, position] of this.windowPositions) this.place(element, position[0], position[1]);
     }
 
     public async loadTextures(paths: string[]) {

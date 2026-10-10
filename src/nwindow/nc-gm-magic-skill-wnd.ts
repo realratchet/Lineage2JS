@@ -41,7 +41,7 @@ class NCGMSkillWnd extends NCSkillWnd {
                 if (this.dragButton !== button) return;
                 if (!this.isVisible() || !button.getClientRects().length) { this.cancelDrag(); return; }
 
-                document.documentElement.style.cursor = `url(${layer.getWrapUrl(button.dataset.icon)}) 16 16, default`;
+                this.layer.getManager().setCursor(`url(${layer.getWrapUrl(button.dataset.icon)}) 16 16, default`);
                 document.documentElement.classList.add("ndom-item-drag");
                 if (this.onDragMove) this.onDragMove(moveEvent);
                 moveEvent.preventDefault();
@@ -62,7 +62,7 @@ class NCGMSkillWnd extends NCSkillWnd {
         if (!this.dragButton) return;
 
         this.dragButton = null;
-        document.documentElement.style.cursor = "";
+        this.layer.getManager().setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
         if (this.onDragEnd) this.onDragEnd();
     }

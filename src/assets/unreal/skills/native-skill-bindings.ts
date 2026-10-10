@@ -374,6 +374,10 @@ const collisionBindings = new Map<string, NativeSkillBinding_T>([
     ["bossSpearStun", { effects: ["LineageEffect.s_u010_a", "LineageEffect.NSpear_sp", "LineageEffect.s_u505_c"], effectGroup: "bossSpearStun", soundPhases: ["casting", "shot", "explosion"], pending: "spear rendering, retail visual/timing and no-hit verification" }]
 ]);
 
+// Engine.dll SpawnNTransientEffect: IDs2037/2048 table0x79a9d2/0x79a9dd ->0x798eaa, class0xaafc38.
+for (const name of ["greater healing potion", "wolves' food"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u002_a"], soundPhases: ["casting"] });
+
 export function getNativeSkillBinding(name: string, id: number): NativeSkillBinding_T {
     const key = name.toLowerCase();
     const dispatch = nativeSkillDispatch.get(key);

@@ -41,6 +41,7 @@ const CHAT_PREFIXES = new Map<string, number>([["~", 0], ["～", 0], ["!", 1], [
 
 class NCResizeFrame extends NWnd { // NCResizeFrame 0xf007 (0x1005aab6): drag feeds OnResizeWnd; dragging up grows the window.
     protected readonly owner: NCChatWnd;
+    protected stopSizing: () => void = null;
 
     public constructor(owner: NCChatWnd, x: number, y: number, width: number, height: number) {
         super(x, y, width, height);
@@ -48,8 +49,21 @@ class NCResizeFrame extends NWnd { // NCResizeFrame 0xf007 (0x1005aab6): drag fe
         this.owner = owner;
     }
 
+    public onMouseMove(event: NMouseEvent_T) {
+        this.manager.setCursor(this.stopSizing || event.x >= 0 && event.x <= this.width && event.y >= 0 && event.y <= this.height ? this.manager.getCursor(5) : "");
+    }
+
+    public onMouseLeave() { if (!this.stopSizing) this.manager.setCursor(""); }
+    public onMouseCancel() {
+        if (this.stopSizing) this.stopSizing();
+        this.manager.setCursor("");
+    }
+
     public onMouseDown(event: NMouseEvent_T) {
         if (event.button !== 0) return;
+
+        this.onMouseCancel();
+        this.onMouseMove(event);
 
         let lastY = this.getScreenY() + event.y;
 
@@ -64,12 +78,16 @@ class NCResizeFrame extends NWnd { // NCResizeFrame 0xf007 (0x1005aab6): drag fe
         const onUp = () => {
             window.removeEventListener("mousemove", onMove, true);
             window.removeEventListener("mouseup", onUp, true);
-            window.removeEventListener("blur", onUp);
+            window.removeEventListener("blur", onCancel);
+            this.stopSizing = null;
+            if (!this.manager.isHovered(this)) this.manager.setCursor("");
         };
+        const onCancel = () => this.onMouseCancel();
 
+        this.stopSizing = onUp;
         window.addEventListener("mousemove", onMove, true);
         window.addEventListener("mouseup", onUp, true);
-        window.addEventListener("blur", onUp);
+        window.addEventListener("blur", onCancel);
     }
 }
 

@@ -225,13 +225,17 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                 if (desired.actor) desired.actor.getWorldPosition(desired.position);
 
                 const distance = position.distanceTo(desired.position) - desired.offset;
-                const step = (this.physicsMode === "swimming" ? this.waterSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed) * deltaTime;
+                const speed = this.physicsMode === "swimming" ? this.waterSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;
+                const step = speed * deltaTime;
 
                 if (distance <= step) {
                     position.lerp(desired.position, distance > 0 ? distance / (distance + desired.offset) : 0);
                     this.velocity.set(0, 0, 0);
                     this.actorState.locomotion = false;
-                } else position.lerp(desired.position, step / (distance + desired.offset));
+                } else {
+                    this.velocity.subVectors(desired.position, position).normalize().multiplyScalar(speed);
+                    position.lerp(desired.position, step / (distance + desired.offset));
+                }
             }
 
             this.checkAnimationState();

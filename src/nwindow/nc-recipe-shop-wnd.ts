@@ -103,7 +103,7 @@ export class NCRecipeShopWnd {
             if (this.drag.isDragging) return;
 
             this.drag.isDragging = true;
-            document.documentElement.style.cursor = `url(${layer.getWrapUrl(manager.strings.itemIcons[this.drag.item.recipe.productId])}) 16 16, default`;
+            this.layer.getManager().setCursor(`url(${layer.getWrapUrl(manager.strings.itemIcons[this.drag.item.recipe.productId])}) 16 16, default`);
             document.documentElement.classList.add("ndom-item-drag");
         }, true);
         window.addEventListener("mouseup", event => {
@@ -239,7 +239,7 @@ export class NCRecipeShopWnd {
         if (!this.drag) return;
 
         this.drag = null;
-        document.documentElement.style.cursor = "";
+        this.layer.getManager().setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
     }
 }

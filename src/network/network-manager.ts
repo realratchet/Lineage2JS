@@ -29,9 +29,9 @@ import type { RadarState_T } from "../rendering/radar";
 type NetObjectKind_T = "user" | "player" | "npc";
 type MacroRow_T = { command: GamePackets.Macro_T["commands"][number], duration: number, start: number, elapsed: number };
 type MacroExecution_T = { macro: GamePackets.Macro_T, active: boolean, current: number, rows: MacroRow_T[] };
-type NetSkill_T = { id: number, level: number, hitTime: number, associatedActors: BaseActor[], associatedObjectIds: number[] };
+type NetSkill_T = { id: number, level: number, hitTime: number, receivedTime: number, associatedActors: BaseActor[], associatedObjectIds: number[] };
 type PendingAttack_T = { hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T };
-type PendingSkill_T = { targetObjectId: number, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, associatedObjectIds: number[] };
+type PendingSkill_T = { targetObjectId: number, id: number, level: number, hitTime: number, receivedTime: number, position: GamePackets.Location_T, isTransient: boolean, associatedObjectIds: number[] };
 
 type NetObject_T = {
     objectId: number;
@@ -57,6 +57,7 @@ type NetObject_T = {
     pvpFlag: number;
     recommendations: number;
     nameColor: number;
+    titleColor: number;
     isSummon: boolean;
     isAttackable: boolean;
     isDead: boolean;
@@ -117,6 +118,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected login: LoginClient = null;
     protected lobby: L2Lobby = null;
     protected loginUrl: string = null;
+    protected gameServerUrl: string = null;
     protected game: GameClient = null;
     protected account: string = null;
     protected loginAccount: string = null;
@@ -193,6 +195,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected userId = 0;
     protected selectedSlot = -1;
     protected inWorld = false;
+    protected teleportGeneration = 0;
+    protected teleportInfoPending = false;
     protected isRunning = true;
     protected lastValidateAt = 0;
     protected wasMoving = false;
@@ -395,7 +399,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             game.onPacket = (opcode, packet) => { if (this.game === game) this.onPacket(opcode, packet); };
             game.onClose = (code, reason) => { if (this.game === game) void this.onDisconnected(`Game server closed the connection (${code}${reason ? ` ${reason}` : ""}).`); };
 
-            await game.connect(login.getGameServerUrl(server));
+            this.gameServerUrl = login.getGameServerUrl(server);
+            await game.connect(this.gameServerUrl);
         } catch (e) {
             if (this.login !== login || this.gmTransfer !== transfer) return;
             if (transfer) transfer.error = (e as Error).message;
@@ -601,7 +606,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
     }
 
-    public requestPickup(raycaster: Raycaster, maxDistance: number, isShift: boolean = false): boolean {
+    public getPickup(raycaster: Raycaster, maxDistance: number): GroundPickup {
         let nearest: GroundPickup = null;
 
         for (const pickup of this.pickups.values()) {
@@ -612,6 +617,36 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             nearest = pickup;
             maxDistance = distance;
         }
+
+        return nearest;
+    }
+
+    public isMouseOverUI(x: number, y: number) { return this.ui ? this.ui.isMouseOver(x, y) : false; }
+
+    public getMouseCursor(actor: BaseActor): number {
+        if (!this.inWorld) return 0;
+
+        const object = actor ? this.findObjectByActor(actor) : null;
+
+        if (actor && !object) return 0;
+        if (this.ui.getInputModifiers()[0]) return 1;
+        if (!object || object.objectId !== this.getTargetId()) return 0;
+
+        // shortcut: target relationship cursor overrides are not applied, add after tracing NWindow 0x1007d998..0x1007d9e1.
+        if (!object.isDead && object.isAttackable) return 1;
+        if (!object.isDead && object.kind === "npc") return 2;
+
+        switch (object.privateStoreType) {
+            case GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL:
+            case GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY:
+            case GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE:
+            case GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL: return 2;
+            default: return 0;
+        }
+    }
+
+    public requestPickup(raycaster: Raycaster, maxDistance: number, isShift: boolean = false): boolean {
+        const nearest = this.getPickup(raycaster, maxDistance);
 
         if (!nearest) return false;
 
@@ -864,6 +899,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.manorProcureCropDetail = null;
         this.ui.hideWorld();
         this.inWorld = false;
+        this.teleportGeneration++;
+        this.teleportInfoPending = false;
         this.userId = 0;
     }
 
@@ -1303,7 +1340,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingAttack: null, pendingSkill: null };
+        const object: NetObject_T = { objectId, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingAttack: null, pendingSkill: null };
 
         this.objects.set(objectId, object);
 
@@ -2383,6 +2420,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.isMounted = info.mountType !== 0;
         this.updateMountable();
         this.ui.setInventoryOrderOwner(info.name, this.inventoryOrderNamespace);
+        this.ui.setWindowOwner(JSON.stringify([this.gameServerUrl, info.objectId]));
         this.ui.setStatus(info);
         this.ui.setClan(this.clanInfo);
 
@@ -2394,6 +2432,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         if (isFirst) void this.finishLoading();
+        this.teleportInfoPending = false;
     }
 
     protected async finishLoading() {
@@ -2640,6 +2679,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.adjustPawnLocation(object, info);
             if (info.name) object.name = info.name;
             object.title = info.title || this.ui.getStrings().npcTitles[info.npcId] || "";
+            if (!info.name && info.npcId in this.ui.getStrings().npcTitleColors) object.titleColor = this.ui.getStrings().npcTitleColors[info.npcId];
             object.heading = info.heading;
             object.isRunning = info.isRunning;
             object.isInCombat = info.isInCombat;
@@ -2668,6 +2708,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const created = this.createObject(info.objectId, "npc", info);
 
         created.title = info.title || this.ui.getStrings().npcTitles[info.npcId] || "";
+        if (!info.name) created.titleColor = this.ui.getStrings().npcTitleColors[info.npcId] || 0;
         created.isSummon = info.isSummon;
         created.isAttackable = info.isAttackable;
 
@@ -2741,7 +2782,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected async onSpawnItem(packet: PacketReader, dropped: boolean) {
-        if (dropped) packet.d();
+        const ownerId = dropped ? packet.d() : 0;
 
         const objectId = packet.d(), itemId = packet.d();
         const position = setVector(new Vector3(), this.readLocation(packet));
@@ -2751,7 +2792,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const render = this.manGame.getComponent("render");
         const asset = this.manGame.getComponent("asset");
-        const pickup = new GroundPickup(render, objectId, itemId, count, stackable);
+        const owner = this.objects.get(ownerId);
+        const origin = owner && owner.actor ? owner.actor.getWorldPosition(new Vector3()) : null;
+        const pickup = new GroundPickup(render, objectId, itemId, count, stackable, dropped, origin);
 
         pickup.position.copy(position);
         pickup.quaternion.fromArray(getRotatorQuaternionElements(0, heading, 0));
@@ -2761,16 +2804,17 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (this.pickups.get(objectId) !== pickup) return;
 
+        const sound = library.pickup.dropSound, animation = library.pickup.dropAnimType;
+        const [dropSound, throwSound] = dropped ? await Promise.all([
+            sound && sound.toLowerCase() !== "none" ? asset.loadSound(sound) : null,
+            animation >= 1 && animation <= 3 ? asset.loadSound("ItemSound.Item_throw") : null
+        ]) : [null, null];
+
+        if (this.pickups.get(objectId) !== pickup) return;
+
         pickup.setMeshes(library);
+        pickup.setDropSounds(dropSound, throwSound);
         render.addPickup(pickup);
-
-        const sound = library.pickup.dropSound;
-
-        if (dropped && sound && sound.toLowerCase() !== "none") {
-            const uri = await asset.loadSound(sound);
-
-            if (this.pickups.get(objectId) === pickup) await this.manGame.getComponent("audio").playOneShotSound(uri, pickup.position, 1, 1, 50, 5000);
-        }
     }
 
     protected onGetItem(packet: PacketReader) {
@@ -2944,15 +2988,23 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected async finishTeleport() {
         const render = this.manGame.getComponent("render");
         const asset = this.manGame.getComponent("asset");
+        const generation = ++this.teleportGeneration;
 
         render.setZoneMusicEnabled(false);
-        this.ui.showLoading();
+        this.ui.showLoading(true);
 
-        while (this.inWorld && (!asset.isAreaLoaded(render, render.player.position) || this.npcSpawnCount > 0)) await new Promise(resolve => setTimeout(resolve, 100));
+        while (this.inWorld && generation === this.teleportGeneration && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
 
-        if (!this.inWorld) return;
+        if (!this.inWorld || generation !== this.teleportGeneration) return;
 
+        this.teleportInfoPending = true;
         this.game.appearing();
+
+        // Lisvus Appearing sends the destination known list before UserInfo.
+        while (this.inWorld && generation === this.teleportGeneration && (this.teleportInfoPending || this.npcSpawnCount > 0 || this.npcSpawnWaiters.length > 0)) await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (!this.inWorld || generation !== this.teleportGeneration) return;
+
         render.setZoneMusicEnabled(true);
         this.ui.showWorld();
     }
@@ -3050,6 +3102,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected onMagicSkillUse(packet: PacketReader) {
+        const receivedTime = performance.now();
         const caster = this.objects.get(packet.d());
         const targetObjectId = packet.d(), target = this.objects.get(targetObjectId);
         const id = packet.d(), level = packet.d(), hitTime = packet.d();
@@ -3070,15 +3123,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!caster.actor || !target || !target.actor) {
             if (!isTransient) this.stopSkill(caster.objectId);
-            caster.pendingSkill = { targetObjectId, id, level, hitTime: hitTime / 1000, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
+            caster.pendingSkill = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
             return;
         }
 
-        this.startServerSkill(caster, target, id, level, hitTime / 1000, position, isTransient);
+        this.startServerSkill(caster, target, id, level, hitTime / 1000, position, isTransient, receivedTime);
     }
 
-    protected startServerSkill(caster: NetObject_T, target: NetObject_T, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, associatedObjectIds: readonly number[] = []) {
-        const skill: NetSkill_T = { id, level, hitTime, associatedActors: [], associatedObjectIds: [...associatedObjectIds] }; // OnReceiveMagicSkillUse 0x7507f7..0x750831.
+    protected startServerSkill(caster: NetObject_T, target: NetObject_T, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
+        const skill: NetSkill_T = { id, level, hitTime, receivedTime, associatedActors: [], associatedObjectIds: [...associatedObjectIds] }; // OnReceiveMagicSkillUse 0x7507f7..0x750831.
 
         for (const objectId of skill.associatedObjectIds) {
             const object = this.objects.get(objectId);
@@ -3108,8 +3161,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!skill || !isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved || caster.actor !== actor) return;
 
+        // Asset loading consumes the server's cast time.
+        const hitTime = isTransient ? cast.hitTime : Math.max(0, cast.hitTime - (performance.now() - cast.receivedTime) / 1000);
+
+        if (!isTransient && cast.hitTime > 0 && hitTime === 0) return;
         if (isTransient && skill.visual.transientRejected) this.stopSkill(caster.objectId);
-        actor.getComponent<PawnAttackComponent>("pawnAttack").castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0);
+        actor.getComponent<PawnAttackComponent>("pawnAttack").castFromServer(target.actor, skill, hitTime, cast.associatedActors, cast.associatedActors.length > 0);
         if (target.actor) this.ui.notifyOlympiadSkill(caster.objectId, cast.id);
     }
 
@@ -3143,7 +3200,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             if (!caster.actor || !target?.actor) continue;
 
-            this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.associatedObjectIds);
+            this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
         }
     }
 
@@ -3353,7 +3410,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const actor = object.actor;
         const isNpc = object.kind === "npc";
 
-        if (actionId === 15 || (actionId === 16 && !isNpc)) { void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a"); return; } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
+        if (actionId === 15 || (actionId === 16 && !isNpc)) { void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a", actionId === 15 ? 20002 : 20004); return; } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
         const prefix = isNpc ? "NpcSocial" : "PcSocial";
         const index = isNpc ? actionId - 1 : actionId;
         const names = actor.getUnrealScriptProperty(`${prefix}AnimName`) as string[];
@@ -3368,7 +3425,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (equipment) equipment.hideForAnimation(animation, !!(actor.getUnrealScriptProperty(`${prefix}HideRightWeapon`) as number[])[index], !!(actor.getUnrealScriptProperty(`${prefix}HideLeftWeapon`) as number[])[index]);
     }
 
-    protected async spawnSocialEffect(actor: BaseActor, path: string) {
+    protected async spawnSocialEffect(actor: BaseActor, path: string, skillId: number) {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
         const library = await asset.loadSocialEffects();
 
@@ -3378,6 +3435,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         effect.position.copy(actor.position);
         render.addTransientEffect(effect, actor);
+
+        // Engine.dll SpawnNTransientEffect 0x79a7e1..0x79a8ee: level1 spell sounds at Pawn.Location.
+        for (const sound of this.ui.getStrings().socialSounds[skillId] || []) {
+            const uri = await asset.loadSound(sound.sound);
+
+            void this.manGame.getComponent("audio").playOneShotSound(uri, actor.position, sound.volume / 255, 1, sound.radius, sound.radius * 100);
+        }
     }
 
     protected async onPlaySound(packet: PacketReader) {
@@ -3522,6 +3586,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const type = packet.d() as GamePackets.Say2_T;
         const name = packet.S(), text = packet.S();
 
+        this.addChat(object, name, text, type);
+    }
+
+    protected addChat(object: NetObject_T, name: string, text: string, type: GamePackets.Say2_T) {
         if (object && object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE && type !== GamePackets.Say2_T.PETITION_PLAYER && type !== GamePackets.Say2_T.PETITION_GM) { // NCConsole 0x1005d5e9..0x1005d811
             object.chatMessage = text.length < 19 ? text : `${text.slice(0, 18)}...`;
             object.chatTime = performance.now();
@@ -3531,11 +3599,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected onNpcSay(packet: PacketReader) {
-        packet.d();
+        const object = this.objects.get(packet.d());
 
         const type = packet.d() as GamePackets.Say2_T, id = packet.d() - GamePackets.NPC_ID_OFFSET;
+        const text = packet.S();
 
-        this.ui.addChat(this.npcNames.get(id) || `npc#${id}`, packet.S(), type);
+        if (!text) return;
+
+        this.addChat(object, this.npcNames.get(id) || `npc#${id}`, text, type);
     }
 
     protected onSystemMessage(packet: PacketReader) {
@@ -3581,7 +3652,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const template = strings.systemMessages[messageId];
 
-        const text = template === undefined ? `SystemMessage ${messageId} ${params.join(" ")}` : template.replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? match);
+        const text = template === undefined ? `SystemMessage ${messageId} ${params.join(" ")}` : template.replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? "");
 
         return { id: messageId, text };
     }
@@ -4906,7 +4977,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             const storeMessages = object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ? this.privateStoreBuyMsgs : object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.recipeShopMessages : this.privateStoreSellMsgs;
 
-            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", isSummon: object.isSummon, isDead: object.isDead, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
+            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", isSummon: object.isSummon, isDead: object.isDead, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
         }
 
         return plates;

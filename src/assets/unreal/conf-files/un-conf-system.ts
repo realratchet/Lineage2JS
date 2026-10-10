@@ -15,7 +15,7 @@ export type ClippingRangeConfig_T = {
 };
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
-export type GameConfig_T = { systemMsgWnd: boolean; transparencyMode: boolean; partyLooting: number; };
+export type GameConfig_T = { systemMsgWnd: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; };
 export type UserConfig_T = { clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; };
 
 export class UConfigSystem extends BaseConfigFile {
@@ -41,7 +41,7 @@ export class UConfigSystem extends BaseConfigFile {
         gamma: 0.8
     };
 
-    public game: GameConfig_T = { systemMsgWnd: true, transparencyMode: true, partyLooting: 0 }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
+    public game: GameConfig_T = { systemMsgWnd: true, transparencyMode: true, partyLooting: 0, enterChatting: false }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
     public readonly definedGameKeys = new Set<keyof GameConfig_T>();
 
     public async load(): Promise<this> {
@@ -58,6 +58,7 @@ export class UConfigSystem extends BaseConfigFile {
                 case "systemmsgwnd": this.game.systemMsgWnd = value.toLowerCase() === "true"; this.definedGameKeys.add("systemMsgWnd"); break;
                 case "transparencymode": this.game.transparencyMode = value.toLowerCase() === "true"; this.definedGameKeys.add("transparencyMode"); break;
                 case "partylooting": this.game.partyLooting = parseInt(value, 10); this.definedGameKeys.add("partyLooting"); break;
+                case "enterchatting": this.game.enterChatting = value.toLowerCase() === "true"; this.definedGameKeys.add("enterChatting"); break;
             }
         });
 

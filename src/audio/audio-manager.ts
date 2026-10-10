@@ -368,9 +368,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.nextBuffer = await this.fetchRandomBuffer(index);
     }
 
-    protected async loadStream(path: string): Promise<AudioBuffer> {
+    protected async loadStream(path: string): Promise<AudioBuffer | null> {
         const res = await fetch(path);
 
+        if (res.status === 404) {
+            console.warn(`Audio '${path}': ${res.statusText}.`);
+            return null;
+        }
         if (!res.ok) throw new Error(`Audio '${path}': ${res.statusText}.`);
 
         const rawBuffer = await res.arrayBuffer();
@@ -388,7 +392,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         await this.ensureUnlocked();
         const buffer = await pending;
 
-        if (request !== this.voicePlayId) return;
+        if (request !== this.voicePlayId || !buffer) return;
         if (this.voiceSource) {
             this.voiceSource.stop();
             this.voiceSource.disconnect();

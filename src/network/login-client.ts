@@ -1,7 +1,9 @@
 import L2Socket from "./l2-socket";
 import PacketReader from "./packet-reader";
 import PacketWriter from "./packet-writer";
-import { L2Blowfish, LOGIN_STATIC_KEY, buildLoginCredentials, encryptRSANoPadding, openLoginPacket, sealLoginPacket, unscrambleModulus } from "./l2-crypt";
+import { L2Blowfish, LOGIN_STATIC_KEY, LOGIN_RSA_BLOCK_SIZE, buildLoginCredentials, encryptRSANoPadding, openLoginPacket, sealLoginPacket, unscrambleModulus } from "./l2-crypt";
+
+const LOGIN_PROTOCOL_REVISION = 0xc621;
 
 export enum LoginServerPacket_T {
     Init = 0x00,
@@ -131,14 +133,14 @@ export class LoginClient {
 
         const revision = init.d();
 
-        if (revision !== 0xc621) throw new Error(`Unsupported login protocol revision 0x${revision.toString(16)}.`);
+        if (revision !== LOGIN_PROTOCOL_REVISION) throw new Error(`Unsupported login protocol revision 0x${revision.toString(16)}.`);
 
-        const modulus = unscrambleModulus(init.b(128));
+        const modulus = unscrambleModulus(init.b(LOGIN_RSA_BLOCK_SIZE));
 
         this.send(new PacketWriter().c(LoginClientPacket_T.RequestAuthGG).d(this.sessionId).d(0).d(0).d(0).d(0));
         await this.expect(LoginServerPacket_T.GGAuth);
 
-        this.send(new PacketWriter().c(LoginClientPacket_T.RequestAuthLogin).b(encryptRSANoPadding(buildLoginCredentials(account, password), modulus)));
+        this.send(new PacketWriter().c(LoginClientPacket_T.RequestAuthLogin).b(await encryptRSANoPadding(buildLoginCredentials(account, password), modulus)));
 
         let [opcode, packet] = await this.expect(LoginServerPacket_T.LoginOk, LoginServerPacket_T.ServerList);
 

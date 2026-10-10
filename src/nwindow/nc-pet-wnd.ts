@@ -146,7 +146,7 @@ export class NCPetWnd {
 
             this.drag.isDragging = true;
             this.inventory.hideTooltip();
-            document.documentElement.style.cursor = `url(${layer.getWrapUrl(this.drag.item.icon)}) 16 16, default`;
+            this.layer.getManager().setCursor(`url(${layer.getWrapUrl(this.drag.item.icon)}) 16 16, default`);
             document.documentElement.classList.add("ndom-item-drag");
         }, true);
         window.addEventListener("mouseup", event => {
@@ -425,7 +425,7 @@ export class NCPetWnd {
         if (!this.drag) return;
 
         this.drag = null;
-        document.documentElement.style.cursor = "";
+        this.layer.getManager().setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
     }
 

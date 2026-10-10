@@ -77,7 +77,7 @@ export class L2Lobby {
         if (!skyZone) throw new Error(`Lobby SkyZoneInfo is missing`);
 
         render.skyRenderer.setSkyZone(skyZone);
-        render.setHorizontalFov(50, 4 / 3); // L2.4_20.trace call 104300: projection X = cot(25 degrees); wider screens keep the 4:3 vertical FOV.
+        render.setHorizontalFov(50);
         this.matinee = new MatineePlayer(render.camera, scenes);
     }
 
@@ -100,7 +100,7 @@ export class L2Lobby {
 
     public showLogin() {
         this.matinee.trigger("LogOn_Warp"); // MoveCameraByState 0x1042e9e0: to-state 2 fires LogOn_Warp, 4 fires Char_Select_Warp.
-        void this.manGame.getComponent("render").audioManager.stopMusic(); // SetState 0x1042e1d0: state 2 plays S28_F, which this install doesn't ship.
+        void this.manGame.getComponent("render").audioManager.playMusic("assets/music/s28_f.ogg", true, true); // SetState 0x1042e1d0: state 2 plays S28_F.
     }
 
     public async showSelect(characters: Appearance_T[]) {
@@ -176,7 +176,7 @@ export class L2Lobby {
         this.createSelection = null;
         this.createStage = 0;
         this.matinee.trigger("Char_Create_Warp");
-        void this.manGame.getComponent("render").audioManager.stopMusic(); // SetState 0x1042e1d0: 4 -> 3 plays S28_F, which this install doesn't ship.
+        void this.manGame.getComponent("render").audioManager.playMusic("assets/music/s28_f.ogg", true, true); // SetState 0x1042e1d0: 4 -> 3 plays S28_F.
     }
 
     protected getPreviewIndex(race: Race_T, isMystic: boolean, sex: number) { return race * 4 + (isMystic ? 1 : 0) * 2 + sex; }
