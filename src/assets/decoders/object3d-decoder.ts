@@ -18,13 +18,12 @@ import TerrainDecoration from "../../objects/terrain-decoration";
 import LocalSpaceSkeleton from "../../objects/local-space-skeleton";
 import BSPCollider from "../../objects/bsp-collider";
 import LitSkinnedMesh from "../../objects/lit-skinned-mesh";
-import UnScriptVM from "../../ue-script/vm";
+import UnScriptVM, { type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
 import ActorOwnershipComponent from "../../objects/components/actor-ownership-component";
 import { ENetRole_T } from "../unreal/un-aactor";
-import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArrayAttribute, IBaseObjectDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
@@ -530,6 +529,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.name = library.name;
     sector.brightness = library.brightness;
     sector.levelInfo = library.levelInfo;
+    sector.levelActorUuids = library.levelActorUuids;
     sector.scriptVM = new UnScriptVM(library);
 
     if (library.sector) {
@@ -551,8 +551,6 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.physicsVolumes = library.physicsVolumes;
     sector.ambientSounds = library.ambientSounds;
 
-    for (const volume of sector.physicsVolumes) sector.scriptVM.initializeHost(volume);
-
     for (const pawnInfo of library.pawnActors)
         sector.pawns.add(decodeObject3D(library, pawnInfo));
 
@@ -567,7 +565,8 @@ export function decodeSectorCore(library: DecodeLibrary) {
         const volume = new BSPCollider(info.nodes, info.rootOutside, info.collision.collisionRadius, info.collision);
 
         (volume as any).isVolume = true;
-        volume.name = info.name;
+        volume.actorUuid = info.uuid;
+        applySimpleProperties(library, volume, info);
         sector.add(volume);
     }
 
@@ -947,7 +946,7 @@ function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDe
     return clip;
 }
 
-function decodeAnimations(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo): Record<string, AnimationClip> {
+export function decodeAnimations(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo): Record<string, AnimationClip> {
     if (info.animationSet && cacheAnimationSets.has(info.animationSet))
         return cacheAnimationSets.get(info.animationSet)!;
 
@@ -1058,7 +1057,8 @@ export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObje
     mesh.tagOrigins = info.tagOrigins;
     mesh.position.copy(mesh.meshOrigin);
     mesh.quaternion.fromArray(info.meshRotOriginQuaternion);
-    mesh.scale.fromArray(info.meshScale);
+    mesh.meshScale.fromArray(info.meshScale);
+    mesh.scale.copy(mesh.meshScale);
 
     mesh.add(bones[0]);
     mesh.bind(skeleton);

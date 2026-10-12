@@ -462,6 +462,7 @@ class ScriptExecutor {
         const value = this.evalToken();
 
         switch (cast) {
+            case CastToken_T.FloatToInt: return Math.fround(Number(value)) | 0;
             case CastToken_T.ByteToInt:
             case CastToken_T.IntToByte: return Number(value) | 0;
             case CastToken_T.ByteToBool:
@@ -731,6 +732,24 @@ export class UnScriptVM {
     public invokeNative(self: ScriptHost_T, context: ScriptHost_T, index: number, name: string, args: ScriptArgument_T[]): ScriptValue_T {
         if (context.handlesUnrealNative && context.handlesUnrealNative(index, name))
             return context.callUnrealNative!({ index, name, args, self, context });
+
+        if (index === 303) {
+            const className = (args[0] as string).toLowerCase();
+            const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
+            const vm = script ? script.getVM() as UnScriptVM : this;
+            let classId = context.scriptClassId;
+
+            // UObject::execIsA (Core.dll 0x10137eb9..0x10137edd) compares class names up the superclass chain.
+            while (classId) {
+                const cls = vm.library.scriptClasses[classId];
+
+                if (!cls) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
+                if (cls.name.toLowerCase() === className) return true;
+                classId = cls.superClassId;
+            }
+
+            return false;
+        }
 
         if (UNativeRegistry.hasNativeFunc(index)) return UNativeRegistry.getNativeFunc(index)(...args) as ScriptValue_T;
         if (UNativeRegistry.hasNativeFunc(name)) return UNativeRegistry.getNativeFunc(name)(...args) as ScriptValue_T;

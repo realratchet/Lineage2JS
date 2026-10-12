@@ -1,6 +1,5 @@
-import type NDomLayer from "./ndom";
+import type { default as NDomLayer, NDomButton_T, NDomScrollPane_T } from "./ndom";
 import NCListCtrl, { getClassIcon, paintListColumn, paintListSelection, createClassTooltip } from "./nc-list-ctrl";
-import { type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import type { ClanInfo_T, ClanMember_T, UserInfo_T } from "../network/game-packets";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
@@ -28,6 +27,7 @@ export class NCClanWnd {
     protected rows: ClanRow_T[] = [];
     protected selectedIndex = -1;
     protected hoverIndex = -1;
+    protected isHeld = false;
     protected displayedCount = 0;
     protected ascending = [true, true, true, true];
     protected enabled = arrActions.map(() => true);
@@ -43,6 +43,7 @@ export class NCClanWnd {
         this.header = layer.createWindow(0, 0, 256, 62, this.element);
         this.list = layer.scrollPane(this.element, 8, 81, 240, 118, 17);
         this.list.content.style.width = "240px";
+        this.list.tabIndex = -1;
         this.list.setAttribute("role", "listbox");
         const setScroll = this.list.setScroll;
 
@@ -54,12 +55,23 @@ export class NCClanWnd {
         this.list.content.addEventListener("mousedown", event => {
             if (event.button !== 0) return;
 
-            this.selectedIndex = this.hitRow(event.clientY);
+            event.preventDefault();
+            this.selectedIndex = this.hitRow(event.clientX, event.clientY);
             this.hoverIndex = this.selectedIndex;
             this.paintRows();
+            this.list.focus();
+            layer.beginDrag(moveEvent => {
+                this.hoverIndex = this.hitRow(moveEvent.clientX, moveEvent.clientY);
+                this.showTooltip();
+            }, () => this.isHeld = false);
+            this.isHeld = true;
         });
-        this.list.content.addEventListener("mousemove", event => { this.hoverIndex = this.hitRow(event.clientY); this.showTooltip(); });
-        this.list.content.addEventListener("mouseleave", () => { this.hoverIndex = -1; this.hideTooltip(); });
+        this.list.content.addEventListener("mousemove", event => {
+            if (!(event.buttons & 1) || this.isHeld) this.hoverIndex = this.hitRow(event.clientX, event.clientY);
+            this.showTooltip();
+        });
+        this.list.content.addEventListener("mouseenter", () => this.showTooltip());
+        this.list.content.addEventListener("mouseleave", () => this.hideTooltip());
         this.list.content.addEventListener("contextmenu", event => event.preventDefault());
         let x = 8;
 
@@ -116,7 +128,10 @@ export class NCClanWnd {
 
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;
-        if (!isVisible) this.hideTooltip();
+        if (!isVisible) {
+            if (this.isHeld) this.layer.cancelDrag();
+            this.hideTooltip();
+        }
         if (isVisible) { this.refreshList(); this.updateEnabled(); }
     }
 
@@ -178,11 +193,12 @@ export class NCClanWnd {
         this.paintRows();
     }
 
-    protected hitRow(clientY: number) {
-        const y = this.layer.toUI(clientY - this.list.getBoundingClientRect().top);
+    protected hitRow(clientX: number, clientY: number) {
+        const rect = this.list.getBoundingClientRect();
+        const x = this.layer.toUI(clientX - rect.left), y = this.layer.toUI(clientY - rect.top);
         const row = Math.floor(y / 17) + this.list.getScroll() / 17;
 
-        return y >= 0 && y < 118 && row < this.displayedCount ? row : -1;
+        return x >= 0 && x <= 240 && y >= 0 && y <= 118 && row < this.displayedCount && this.rows[row] ? row : -1;
     }
 
     protected sort(column: number) {
@@ -246,7 +262,7 @@ export class NCClanWnd {
     protected showTooltip() {
         const row = this.rows[this.hoverIndex];
 
-        if (this.hoverIndex !== this.selectedIndex || !row || this.element.closest("[hidden]")) { this.hideTooltip(); return; }
+        if (this.hoverIndex !== this.selectedIndex || !row || !this.list.content.matches(":hover") || this.element.closest("[hidden]")) { this.hideTooltip(); return; }
         if (this.tooltipRow === row) return;
 
         this.hideTooltip();

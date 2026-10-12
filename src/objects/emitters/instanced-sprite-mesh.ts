@@ -1,5 +1,4 @@
-import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ZeroFactor } from "three";
-import * as THREE from "three";
+import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ZeroFactor, type Vector3, type Vector4, type Event } from "three";
 import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 
 // shared per-vertex quad data - only instance attributes differ per emitter
@@ -58,7 +57,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
             && material.blendDstAlpha === OneFactor;
     }
 
-    public setInstance(index: number, position: THREE.Vector3, scaleX: number, scaleY: number, spin: number, color: THREE.Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number, uvBlend: THREE.Vector3) {
+    public setInstance(index: number, position: Vector3, scaleX: number, scaleY: number, spin: number, color: Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number, uvBlend: Vector3) {
         this.positionAttr.setXYZ(index, position.x, position.y, position.z);
         this.scaleAttr.setXY(index, scaleX, scaleY);
         this.spinAttr.setX(index, spin);
@@ -102,7 +101,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
     raycast() { }
 }
 
-function onGeometryDispose(event: THREE.Event): void {
+function onGeometryDispose(event: Event): void {
     const geometry = event.target as InstancedBufferGeometry;
 
     // WebGLGeometries deletes every attached attribute; the shared quad outlives individual emitters.

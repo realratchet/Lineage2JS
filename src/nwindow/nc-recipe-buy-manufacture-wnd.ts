@@ -1,8 +1,7 @@
 import NCRecipeManufactureWnd from "./nc-recipe-manufacture-wnd";
 import type NDomLayer from "./ndom";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
-import { ItemType2_T } from "../network/game-packets";
-import type { InventoryItem_T, RecipeShopItemInfo_T } from "../network/game-packets";
+import { ItemType2_T, type InventoryItem_T, type RecipeShopItemInfo_T } from "../network/game-packets";
 
 export class NCRecipeBuyManufactureWnd extends NCRecipeManufactureWnd {
     public onShopCreate: (objectId: number, recipeId: number, price: number) => void = null;

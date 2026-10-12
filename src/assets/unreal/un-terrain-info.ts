@@ -11,7 +11,6 @@ import GMath from "./un-gmath";
 import FRotator from "./un-rotator";
 import FVector from "./un-vector";
 import { TextureMapAxis_T, UTerrainLayer } from "./un-terrain-layer";
-import FPlane from "./un-plane";
 import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "./dds/dxt-decode";
 import type { UDecoLayer } from "./un-deco-layer";
 import type { FTIntMap } from "./un-tint-map";
@@ -31,6 +30,24 @@ type TerrainInfoDecodeResult_T = { object: IBaseObjectDecodeInfo & { children: I
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 const cacheTextureRgba = new WeakMap<UTexture, Uint8Array>();
+
+function normalizeTerrainFace(normal: FVector): FVector {
+    const lengthSq = normal.x * normal.x + normal.y * normal.y + normal.z * normal.z;
+
+    if (lengthSq < 1e-8) return FVector.make();
+
+    // Core FVector::SafeNormal 0x1014FC9C retains the inverse for Z; X/Y reload its float32 store.
+    const inverse = 1 / Math.sqrt(lengthSq);
+    const scale = Math.fround(inverse);
+    return FVector.make(Math.fround(normal.x * scale), Math.fround(normal.y * scale), Math.fround(normal.z * inverse));
+}
+
+function getTerrainFaceNormal(a: FVector, b: FVector, c: FVector): FVector {
+    const bx = Math.fround(b.x - a.x), by = Math.fround(b.y - a.y), bz = b.z - a.z;
+    const cx = c.x - a.x, cy = c.y - a.y, cz = c.z - a.z;
+    const normal = FVector.make(Math.fround(by * cz - bz * cy), Math.fround(bz * cx - bx * cz), Math.fround(bx * cy - by * cx));
+    return normalizeTerrainFace(normalizeTerrainFace(normal));
+}
 
 function getTextureRgba(texture: UTexture): Uint8Array {
     if (cacheTextureRgba.has(texture)) return cacheTextureRgba.get(texture);
@@ -624,19 +641,23 @@ export abstract class ATerrainInfo extends AInfo {
 
         for (let y = startY; y < endY; y++) {
             for (let x = startX; x < endX; x++) {
-                vertices[this.getGlobalVertex(x, y)] = this.heightmapToWorld(FVector.make(x, y, this.getHeightmap(x, y)));
+                const vertex = this.heightmapToWorld(FVector.make(x, y, this.getHeightmap(x, y)));
+                vertex.x = Math.fround(vertex.x);
+                vertex.y = Math.fround(vertex.y);
+                vertex.z = Math.fround(vertex.z);
+                vertices[this.getGlobalVertex(x, y)] = vertex;
 
                 if (x > 0 && y > 0) {
                     const normIdx = this.getGlobalVertex(x - 1, y - 1);
                     const faceNormal = faceNormals[normIdx] = new FTerrainNormalPair();
-                    if (this.getEdgeTurnBitmapOrig(x - 1, y - 1)) {
+                    if (this.getEdgeTurnBitmap(x - 1, y - 1)) {
                         // 124, 423
-                        faceNormal.normal1 = FPlane.fromPoints(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x - 1, y)]).vector().normalized();
-                        faceNormal.normal2 = FPlane.fromPoints(vertices[this.getGlobalVertex(x - 1, y)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]).vector().normalized();
+                        faceNormal.normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x - 1, y)]);
+                        faceNormal.normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
                     } else {
                         // 123, 134
-                        faceNormal.normal1 = FPlane.fromPoints(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]).vector().normalized();
-                        faceNormal.normal2 = FPlane.fromPoints(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y)], vertices[this.getGlobalVertex(x - 1, y)]).vector().normalized();
+                        faceNormal.normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
+                        faceNormal.normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y)], vertices[this.getGlobalVertex(x - 1, y)]);
                     }
                 }
             }
@@ -687,8 +708,35 @@ export abstract class ATerrainInfo extends AInfo {
         // this.precomputeLayerWeights(); -- not used in seamless terrain
         // debugger;
         this.calcLayerTexCoords();
+        const bitmapCount = Math.trunc(this.heightmapX * this.heightmapY / 32);
+
+        if (this.quadVisibilityBitmap.getElemCount() !== bitmapCount) {
+            (this.quadVisibilityBitmap as any).array = new DataView(new ArrayBuffer(bitmapCount * 4));
+            this.quadVisibilityBitmap.getTypedArray().fill(-1);
+        }
+
+        if (this.edgeTurnBitmap.getElemCount() !== bitmapCount)
+            (this.edgeTurnBitmap as any).array = new DataView(new ArrayBuffer(bitmapCount * 4));
+
         // debugger;
         this.updateVertices(startX, startY, endX, endY);
+
+        // ATerrainInfo::PostLoad 0x106E4030 prepares both visibility roles before GenerateTriangles.
+        const visibility = (this.quadVisibilityBitmap as any).array as DataView;
+        const lastRow = Math.trunc(this.heightmapX / 32) * (this.heightmapY - 1);
+
+        for (let i = 0; i < bitmapCount; i++) {
+            let value = visibility.getInt32(i * 4, true);
+
+            if (i % 8 === 7) value |= 0x80000000;
+            if (i >= lastRow) value = -1;
+
+            visibility.setInt32(i * 4, value, true);
+        }
+
+        (this.quadVisibilityBitmapOrig as any).array = new DataView(this.quadVisibilityBitmap.getArrayBufferSlice());
+        (this.edgeTurnBitmapOrig as any).array = new DataView(this.edgeTurnBitmap.getArrayBufferSlice());
+
         // debugger;
         this.updateTriangles(startX, startY, endX, endY);
         // debugger;

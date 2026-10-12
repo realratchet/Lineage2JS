@@ -1,10 +1,8 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomScrollPane_T } from "./ndom";
+import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
-import { ItemType2_T } from "../network/game-packets";
-import type { InventoryItem_T } from "../network/game-packets";
+import { ItemType2_T, type InventoryItem_T } from "../network/game-packets";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe5_Back";
 const TEX_NODE = "L2UI.RecipeWnd.RecipeTreeIconBack";

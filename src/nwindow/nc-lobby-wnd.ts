@@ -186,8 +186,11 @@ export class NCComboBox { // NCComboBox OnCreate 0x100064d0, OnPaint 0x10005e40;
         if (!this.caption.hidden) this.layer.renderText(this.caption, this.items[index], TEXT_COLOR);
     }
 
+    public getSelected() { return this.selected; }
+
     public setOpen(isOpen: boolean) {
         this.list.hidden = !isOpen || this.items.length === 0;
+        this.element.style.zIndex = this.list.hidden ? "" : "1";
 
         if (this.list.hidden) window.removeEventListener("mousedown", this.onOutside, true);
         else window.addEventListener("mousedown", this.onOutside, true);

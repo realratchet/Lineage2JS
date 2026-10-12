@@ -1,5 +1,4 @@
-import NDomLayer, { NDOM_EDIT_TEXTURES } from "./ndom";
-import type { NDomEdit_T } from "./ndom";
+import NDomLayer, { NDOM_EDIT_TEXTURES, type NDomEdit_T } from "./ndom";
 import { NCComboBox } from "./nc-lobby-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { PartyMatchDetail_T } from "../network/game-packets";

@@ -1,5 +1,4 @@
-import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3 } from "three";
-import type { Matrix4 } from "three";
+import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3, type Matrix4 } from "three";
 
 // Forked from three OrbitControls for the mirrored horizontal projection.
 

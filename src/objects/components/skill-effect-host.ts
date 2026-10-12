@@ -13,8 +13,7 @@ import type SoundComponent from "../../audio/components/sound-component";
 import type EffectsComponent from "../../rendering/components/effects-component";
 import { NPawnLightComponent, type PawnLight_T } from "../../rendering/components/pawn-light-component";
 import type { NpcSkillSound_T } from "@l2js/engine/contracts/pawn";
-import type { ProjectileActor_T } from "../../physics/components/projectile-component";
-import NProjectileComponent from "../../physics/components/projectile-component";
+import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
 import type { ScriptHost_T } from "../../ue-script/vm";
 

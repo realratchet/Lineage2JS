@@ -1,6 +1,5 @@
 import NCListCtrl from "./nc-list-ctrl";
-import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomButton_T, NDomEdit_T, NDomScrollPane_T } from "./ndom";
+import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import type { TooltipInfo_T } from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import { Say2_T, type CommandChannelInfo_T } from "../network/game-packets";
@@ -111,7 +110,7 @@ export class NCCommandInfoWnd {
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;
-        if (!visible) this.input.input.blur();
+        if (!visible) { this.input.input.blur(); this.table.hide(); }
     }
     public getInfo() { return this.info; }
     public getChatLines() { return this.lines; }
@@ -156,6 +155,7 @@ export class NCCommandInfoWnd {
         this.updateButton.setEnabled(false);
     }
     public selectTab(index: number) {
+        if (index !== 1) this.table.hide();
         if (index === 1) this.update();
         this.selectedTab = index;
         this.channelView.hidden = index !== 1;

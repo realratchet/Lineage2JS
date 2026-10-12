@@ -1,4 +1,5 @@
 uniform vec3 diffuse;
+uniform vec3 texModifierColor;
 uniform float opacity;
 #ifdef USE_TERRAIN_DECORATION_FADE
     varying float vTerrainDecorationFade;
@@ -735,6 +736,8 @@ void main() {
     #endif
     
     #include <envmap_fragment>
+    outgoingLight *= texModifierColor;
+
     #include <opaque_fragment>
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

@@ -1,9 +1,8 @@
-import NWnd from "./nwnd";
+import NWnd, { type NMouseEvent_T } from "./nwnd";
 import NCButton from "./nc-button";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
 import type NCCoolTimeIcon from "./nc-cool-time-icon";
-import type { NMouseEvent_T } from "./nwnd";
 import type NWindowCanvas from "./nwindow-canvas";
 
 const TEXT_COLOR = 0xffdcdcdc;

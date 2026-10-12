@@ -1,6 +1,5 @@
-import { DoubleSide, Object3D, PerspectiveCamera, Scene, Vector3 } from "three";
+import { DoubleSide, Object3D, PerspectiveCamera, Scene, Vector3, type WebGLRenderer } from "three";
 import { ColorByte } from "../utils/color-byte";
-import type { WebGLRenderer } from "three";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 
 export type RadarState_T = { party: Vector3Like[], target: Vector3Like, markers: Vector3Like[] };

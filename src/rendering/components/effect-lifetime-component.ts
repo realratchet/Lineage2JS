@@ -48,7 +48,7 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
                 this.renderManager.removeTransientEffect(effect);
                 return true;
             }
-            if (owner && (properties.get("bSelfRotation") || !(effect as any).scriptBase)) { // Engine.dll physTrailer 0x8ce32e..0x8ce5ef.
+            if (owner && (properties.get("bSelfRotation") || !properties.get("Base"))) { // Engine.dll physTrailer 0x8ce32e..0x8ce5ef.
                 owner.getWorldPosition(effect.position);
                 if (properties.get("bRelativeTrail")) {
                     owner.getWorldQuaternion(tmpOwnerRotation);
@@ -61,7 +61,7 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
 
         while (root.parent) root = root.parent;
 
-        if (root === this.renderManager.scene && ((effect as any).isEmitterActor || !this.physicsManager.isEmitterEffectFinished(effect))) return false;
+        if (root === this.renderManager.scene && ((effect as any).isActor || (effect as any).isEmitterActor || !this.physicsManager.isEmitterEffectFinished(effect))) return false;
 
         this.renderManager.removeTransientEffect(effect);
 

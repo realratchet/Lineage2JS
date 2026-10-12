@@ -3,6 +3,7 @@ import type { USkeletalMesh, ISkinnedMeshObjectDecodeInfo } from "./skeletal-mes
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { Vector3Arr } from "./library-types";
 import type { SkillVisualDefinition_T } from "./skills/skill-visual-definition";
+import type { UClass } from "@l2js/core";
 
 export enum WeaponType {
     WT_HAND,
@@ -16,6 +17,7 @@ export enum WeaponType {
 }
 
 export type INpcDefinition = {
+    movementAnimationRate: number;
     id: number;
     name: string;
     className: string;
@@ -106,11 +108,15 @@ export type ICharacterArmorSelection = {
 export abstract class UPawn extends UAActor {
     declare protected mesh: USkeletalMesh;
     declare protected isUnlit: boolean;
+    declare public readonly effectSpawnBoneIndex: number;
+    declare public readonly damageEffect: UClass;
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
             "Mesh": "mesh",
-            "bUnlit": "isUnlit"
+            "bUnlit": "isUnlit",
+            "EffectSpawnBoneIdx": "effectSpawnBoneIndex",
+            "DamageEffect": "damageEffect"
         });
     }
 

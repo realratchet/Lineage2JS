@@ -6,6 +6,9 @@ import { ColliderComponent } from "../physics/components/physics-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { IBSPCollisionNodeDecodeInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
+import type { ScriptValue_T, default as UnScriptVM } from "../ue-script/vm";
+import type { ScriptObjectFactory_T } from "../game/script-component";
+import Volume from "./volume";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -19,6 +22,10 @@ type HullGeometry_T = { vertices: Float32Array, indices: Uint32Array };
 
 export class BSPCollider extends GameObject implements ICollidable {
     declare public readonly isCollidable: boolean;
+    public scriptClassId: string = null;
+    public scriptProperties: Map<string, ScriptValue_T> = null;
+    public actorUuid: string = null;
+    public scriptActor: Volume = null;
 
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
     protected readonly analyticalPrimitive: CollisionPrimitive_T<"bsp">;
@@ -26,6 +33,8 @@ export class BSPCollider extends GameObject implements ICollidable {
     protected rigidbody: RAPIER.RigidBody = null;
     protected readonly collisionRadius: number;
     protected readonly collisionProfile: ActorCollisionProfile_T;
+    protected scriptVM: UnScriptVM = null;
+    protected scriptObjectFactory: ScriptObjectFactory_T = null;
 
     public constructor(nodes: IBSPCollisionNodeDecodeInfo_T[], rootOutside: boolean, collisionRadius: number, collisionProfile: ActorCollisionProfile_T = null) {
         super();
@@ -58,6 +67,7 @@ export class BSPCollider extends GameObject implements ICollidable {
     }
 
     public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider {
+        if (this.scriptVM && !this.scriptActor) this.setScriptRuntime(this.scriptVM, this.scriptObjectFactory);
         if (this.colliders.length > 0) return this.colliders[0];
         if (this.colliderDescs.length === 0) throw new Error("BSP collision has no hulls.");
 
@@ -78,16 +88,25 @@ export class BSPCollider extends GameObject implements ICollidable {
     }
 
     public releaseCollider() {
+        if (this.scriptActor) this.scriptActor.release();
+        this.scriptActor = null;
         this.colliders.length = 0;
         this.rigidbody = null;
     }
 
     public getCollider(): RAPIER.Collider { return this.colliders[0]; }
     public getCollisionRadius(): number { return this.collisionRadius; }
-    public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
+    public getCollisionProfile(): ActorCollisionProfile_T { return this.scriptActor ? this.scriptActor.getCollisionProfile() : this.collisionProfile; }
     public getColliders(): RAPIER.Collider[] { return this.colliders; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
     public getCollisionPrimitive(): CollisionPrimitive_T { return this.analyticalPrimitive; }
+
+    public setScriptRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T): void {
+        this.scriptVM = vm;
+        this.scriptObjectFactory = objectFactory;
+        if (!this.scriptActor) this.scriptActor = new Volume(this);
+        this.scriptActor.setScriptRuntime(vm, objectFactory);
+    }
 }
 
 function buildHullGeometry(hull: CollisionHull_T, center: Vector3): HullGeometry_T {

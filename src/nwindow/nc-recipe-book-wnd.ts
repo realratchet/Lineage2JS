@@ -1,6 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomScrollPane_T } from "./ndom";
+import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeBook_T } from "../network/game-packets";
@@ -10,8 +9,6 @@ const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_TRASH = "L2UI_CH3.InventoryWnd.Inventory_trash";
 const TEX_TRASH_DRAG = "L2UI_CH3.InventoryWnd.Inventory_trash_Drag";
 
-type RecipeDrag_T = { recipe: RecipeInfo_T, isDragging: boolean };
-
 export class NCRecipeBookWnd {
     public static getTextures() { return [TEX_BACK, TEX_SELECTED, TEX_TRASH, TEX_TRASH_DRAG, ...NCFrameCtrl.getTextures(), ...NDOM_SCROLL_TEXTURES]; }
     public readonly element: HTMLDivElement;
@@ -20,6 +17,7 @@ export class NCRecipeBookWnd {
     public onDrop: (id: number, clientX: number, clientY: number) => void = null;
     public onTooltip: (recipe: RecipeInfo_T, button: HTMLElement, isDetailed: boolean) => void = null;
     public onHideTooltip: () => void = null;
+    public onHide: () => void = null;
     protected readonly list: NDomScrollPane_T;
     protected readonly caption: HTMLCanvasElement;
     protected readonly counter: HTMLCanvasElement;
@@ -31,17 +29,24 @@ export class NCRecipeBookWnd {
     protected isDwarven = true;
     protected dwarfLimit = 0;
     protected commonLimit = 0;
-    protected drag: RecipeDrag_T = null;
+    protected pressed = -1;
+    protected hoverIndex = -1;
+    protected isArmed = false;
+    protected isHeld = false;
+    protected isDragging = false;
     protected generation = 0;
 
     public constructor(protected readonly layer: NDomLayer) {
         this.element = layer.createWindow(0, 0, 256, 401);
+        this.element.tabIndex = -1;
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
         this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, "", false, () => this.setVisible(false));
         layer.text(this.element, layer.getManager().getSysString(649), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.counter = layer.text(this.element, "", 0xffb09b79, FontType_T.SMALL, 246, 33);
         this.list = layer.scrollPane(this.element, 9, 48, 239, 279, 35);
+        this.list.tabIndex = -1;
+        this.list.addEventListener("scroll", () => this.showRecipeTooltip());
         this.trash = layer.createWindow(208, 347, 34, 34, this.element);
         this.trashNormal = layer.tile(this.trash, 0, 0, 32, 32, 0, 0, 32, 32, TEX_TRASH);
         this.trashDrag = layer.tile(this.trash, 0, 0, 32, 32, 0, 0, 32, 32, TEX_TRASH_DRAG);
@@ -53,61 +58,75 @@ export class NCRecipeBookWnd {
 
             this.list.setScroll(this.list.getScroll() - delta * 35);
         }, true);
-        this.list.content.addEventListener("mousedown", event => {
-            if (event.button !== 0) return;
+        this.list.addEventListener("mousedown", event => {
+            if (event.button !== 0 && event.button !== 2) return;
+            if (event.target !== this.list && !this.list.content.contains(event.target as Node)) return;
 
             event.preventDefault();
-            const index = this.getIndex(event), recipe = this.recipes[index];
+            this.list.focus();
+            if (event.button !== 0) return;
 
-            if (!recipe) return;
-            if (event.detail === 2) {
+            layer.beginDrag(moveEvent => {
+                if (document.activeElement !== this.list) return;
+
+                this.moveRecipe(moveEvent);
+            }, stopEvent => {
+                this.isHeld = false;
+                const recipe = this.recipes[this.pressed], armed = this.isArmed;
+                const release = stopEvent instanceof MouseEvent && (stopEvent.type === "mouseup" || stopEvent.type === "pointerup") && stopEvent.button === 0 && document.activeElement === this.list;
+                const overTrash = release && this.isOverTrash(stopEvent);
+
                 this.endDrag();
-                this.selected = -1;
+                if (release) this.isArmed = false;
+                if (!release || !recipe || !this.isVisible()) return;
+                if (overTrash) { if (this.onDelete) this.onDelete(recipe); }
+                else if (armed && this.onDrop) this.onDrop(recipe.id, stopEvent.clientX, stopEvent.clientY);
+            });
+            this.isHeld = true;
+            this.pressed = this.getIndex(event);
+            const recipe = this.recipes[this.pressed];
+
+            if (event.detail === 2) {
+                this.selected = this.pressed = -1;
+                this.isArmed = false;
                 this.paintSelection();
-                if (this.onOpen) this.onOpen(recipe.id);
+                this.showRecipeTooltip();
+                if (recipe && this.onOpen) this.onOpen(recipe.id);
                 return;
             }
-            this.selected = index;
+            this.hoverIndex = this.pressed;
+            if (!recipe) { this.showRecipeTooltip(); return; }
+
+            this.selected = this.pressed;
+            this.isArmed = true;
             this.paintSelection();
-            this.drag = { recipe, isDragging: false };
-            if (this.onTooltip) this.onTooltip(recipe, this.list.content.children[index] as HTMLElement, true);
+            this.showRecipeTooltip();
         });
-        window.addEventListener("mousemove", event => {
-            if (!this.drag) return;
-            if (!(event.buttons & 1) || !this.isVisible()) { this.endDrag(); return; }
-
-            this.trashNormal.hidden = this.isOverTrash(event);
-            this.trashDrag.hidden = !this.trashNormal.hidden;
-            if (this.drag.isDragging) return;
-
-            this.drag.isDragging = true;
-            this.layer.getManager().setCursor(`url(${layer.getWrapUrl(layer.getManager().strings.itemIcons[this.drag.recipe.productId])}) 16 16, default`);
-            document.documentElement.classList.add("ndom-item-drag");
-        }, true);
-        window.addEventListener("mouseup", event => {
-            if (event.button !== 0 || !this.drag) return;
-
-            const recipe = this.drag.recipe, isOverTrash = this.isOverTrash(event);
-
-            this.endDrag();
-            if (!this.isVisible()) return;
-            if (isOverTrash) { if (this.onDelete) this.onDelete(recipe); }
-            else if (this.onDrop) this.onDrop(recipe.id, event.clientX, event.clientY);
-        }, true);
-        window.addEventListener("blur", () => this.endDrag());
-        window.addEventListener("pointercancel", () => this.endDrag());
+        this.list.addEventListener("mousemove", event => {
+            if (event.target !== this.list && !this.list.content.contains(event.target as Node)) {
+                if (this.onHideTooltip) this.onHideTooltip();
+                return;
+            }
+            if (!(event.buttons & 1) || (this.isHeld && document.activeElement === this.list)) this.moveRecipe(event);
+            else this.showRecipeTooltip();
+        });
+        this.list.addEventListener("mouseenter", () => this.showRecipeTooltip());
+        this.list.addEventListener("mouseleave", () => { if (this.onHideTooltip) this.onHideTooltip(); });
+        this.list.addEventListener("contextmenu", event => event.preventDefault());
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 558, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; if (!visible) { this.endDrag(); if (this.onHideTooltip) this.onHideTooltip(); } }
+    public setVisible(visible: boolean) { this.element.hidden = !visible; if (!visible) { this.endDrag(); if (this.onHideTooltip) this.onHideTooltip(); if (this.onHide) this.onHide(); } }
+    public getGrid() { return this.list; }
     public setLimits(dwarf: number, common: number) { this.dwarfLimit = dwarf; this.commonLimit = common; this.drawCounter(); }
     public async show(book: RecipeBook_T) {
         const strings = this.layer.getManager().strings;
 
         this.endDrag();
-        this.selected = -1;
+        this.selected = this.pressed = this.hoverIndex = -1;
         this.list.content.replaceChildren();
+        this.list.setScroll(0);
         if (this.onHideTooltip) this.onHideTooltip();
         this.isDwarven = book.isDwarven;
         this.recipes = [];
@@ -144,8 +163,6 @@ export class NCRecipeBookWnd {
             selected.dataset.selected = "";
             selected.hidden = index !== this.selected;
             this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, strings.itemIcons[recipe.productId]);
-            button.addEventListener("mouseenter", () => { if (this.onTooltip) this.onTooltip(recipe, button, index === this.selected); });
-            button.addEventListener("mouseleave", () => { if (this.onHideTooltip) this.onHideTooltip(); });
             this.list.content.appendChild(button);
         });
     }
@@ -171,12 +188,40 @@ export class NCRecipeBookWnd {
         return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
     }
     protected paintSelection() { Array.from(this.list.content.children).forEach((button, index) => { (button.querySelector("[data-selected]") as HTMLElement).hidden = index !== this.selected; }); }
+    protected moveRecipe(event: MouseEvent) {
+        this.hoverIndex = this.getIndex(event);
+        if (document.activeElement === this.list) {
+            const recipe = this.recipes[this.pressed];
+
+            if (this.isArmed && recipe) {
+                this.isDragging = true;
+                this.layer.getManager().setCursor(`url(${this.layer.getWrapUrl(this.layer.getManager().strings.itemIcons[recipe.productId])}) 16 16, default`);
+                document.documentElement.classList.add("ndom-item-drag");
+            }
+            this.trashNormal.hidden = this.isOverTrash(event);
+            this.trashDrag.hidden = !this.trashNormal.hidden;
+        }
+        this.showRecipeTooltip();
+    }
+    protected showRecipeTooltip() {
+        const recipe = this.recipes[this.hoverIndex], button = this.list.content.children[this.hoverIndex] as HTMLElement;
+        const hovered = this.list.querySelector(":scope > :hover");
+
+        if (!recipe || !button || !this.list.matches(":hover") || (hovered && hovered !== this.list.content) || !this.isVisible()) {
+            if (this.onHideTooltip) this.onHideTooltip();
+            return;
+        }
+        if (this.onTooltip) this.onTooltip(recipe, button, this.hoverIndex === this.selected);
+    }
     protected endDrag() {
-        this.drag = null;
+        if (this.isHeld) this.layer.cancelDrag();
+        if (this.isDragging) {
+            this.layer.getManager().setCursor("");
+            document.documentElement.classList.remove("ndom-item-drag");
+        }
+        this.isDragging = false;
         this.trashNormal.hidden = false;
         this.trashDrag.hidden = true;
-        this.layer.getManager().setCursor("");
-        document.documentElement.classList.remove("ndom-item-drag");
     }
 }
 

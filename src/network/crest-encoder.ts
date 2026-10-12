@@ -50,39 +50,82 @@ function encodeBlockDXT1(colors: Uint8Array, out: DataView, offset: number) {
     out.setUint32(offset + 4, indices >>> 0, true);
 }
 
+function prepareCrestBmp(file: Uint8Array) {
+    if (file.length < 0x4f6) throw new Error(`Truncated crest BMP`);
+
+    const data = new Uint8Array(0x536).fill(255), view = new DataView(data.buffer);
+
+    data.set(file.subarray(0, 0x4f6));
+    view.setUint32(2, 0x536, true);
+    view.setInt32(18, 16, true);
+    view.setInt32(22, 16, true);
+    view.setUint32(34, 256, true);
+
+    return data;
+}
+
+function importBmp8(file: Uint8Array) {
+    if (file.length < 54) throw new Error(`Truncated crest BMP header`);
+
+    const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
+    const width = view.getInt32(18, true), height = view.getInt32(22, true), offset = view.getUint32(10, true);
+
+    if (view.getUint16(0, true) !== 0x4d42 || width <= 0 || height <= 0 || (width & (width - 1)) || (height & (height - 1)) || view.getUint16(26, true) !== 1 || view.getUint16(28, true) !== 8 || view.getUint32(30, true) !== 0)
+        throw new Error(`Unsupported crest BMP format`);
+
+    const used = view.getInt32(46, true), count = used === 0 || used >= 256 ? 256 : Math.max(0, used), stride = (width + 3) & ~3;
+
+    if (file.length < 54 + count * 4 || file.length < offset + stride * height)
+        throw new Error(`Truncated crest BMP data`);
+
+    const arrPalette = new Uint32Array(256).fill(0xff000000), arrPixels = new Uint32Array(width * height);
+    let hasAlpha = false;
+
+    for (let i = 0; i < count; i++)
+        if (file[54 + i * 4 + 3]) hasAlpha = true;
+
+    for (let i = 0; i < count; i++)
+        arrPalette[i] = view.getUint32(54 + i * 4, true) & 0xffffff | (hasAlpha ? file[54 + i * 4 + 3] : 255) << 24;
+
+    for (let row = 0; row < height; row++)
+        for (let column = 0; column < width; column++)
+            arrPixels[(height - 1 - row) * width + column] = arrPalette[file[offset + row * stride + column]];
+
+    return { width, height, pixels: arrPixels };
+}
+
 export function encodeCrest(file: Uint8Array, width: number, height: number): Uint8Array {
+    if (file.length < 54) throw new Error(`Truncated crest BMP header`);
+
     const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
 
-    if (file.length < 54 || view.getUint16(0, true) !== 0x4d42 || view.getInt32(18, true) !== width || view.getInt32(22, true) !== height || view.getUint16(28, true) !== 8) return null; // NWindow 0x10080c5d / 0x10080f2d / 0x10080a39
+    if (view.getUint16(0, true) !== 0x4d42 || view.getInt32(18, true) !== width || view.getInt32(22, true) !== height || view.getUint16(28, true) > 8) return null; // NWindow 0x10080c5d / 0x10080f2d / 0x10080a39
     if (width < 64 && view.getUint32(2, true) > 0xC00) return null; // NWindow 0x10080c65
 
-    const pixels = view.getUint32(10, true), palette = 14 + view.getUint32(14, true), ddsHeight = width < 64 ? 16 : height;
-
-    if (pixels + width * height > file.length) return null;
-
-    const data = new Uint8Array(128 + width * ddsHeight / 2), out = new DataView(data.buffer);
+    const image = importBmp8(width < 64 ? prepareCrestBmp(file) : file);
+    const data = new Uint8Array(128 + image.width * image.height / 2), out = new DataView(data.buffer);
 
     out.setUint32(0, 0x20534444, true); // Engine MakeBMPToDXT1 0x1052010b
     out.setUint32(4, 0x7C, true);
     out.setUint32(8, 0x81007, true);
-    out.setUint32(12, ddsHeight, true);
-    out.setUint32(16, width, true);
-    out.setUint32(20, width * ddsHeight / 2, true);
+    out.setUint32(12, image.height, true);
+    out.setUint32(16, image.width, true);
+    out.setUint32(20, image.width * image.height / 2, true);
     out.setUint32(76, 0x20, true);
     out.setUint32(80, 4, true);
     out.setUint32(84, 0x31545844, true);
 
-    for (let by = 0; by < ddsHeight; by += 4)
-        for (let bx = 0; bx < width; bx += 4) {
+    for (let by = 0; by < image.height; by += 4)
+        for (let bx = 0; bx < image.width; bx += 4) {
             for (let i = 0; i < 16; i++) {
-                const row = ddsHeight - 1 - by - (i >> 2), index = row < height ? file[pixels + row * width + bx + (i & 3)] : 255; // NWindow 0x10080cb7 memsets the padding rows to 0xFF
+                const color = image.pixels[(by + (i >> 2)) * image.width + bx + (i & 3)];
 
-                tmpColors[i * 3] = file[palette + index * 4 + 2];
-                tmpColors[i * 3 + 1] = file[palette + index * 4 + 1];
-                tmpColors[i * 3 + 2] = file[palette + index * 4];
+                tmpColors[i * 3] = color >> 16 & 255;
+                tmpColors[i * 3 + 1] = color >> 8 & 255;
+                tmpColors[i * 3 + 2] = color & 255;
             }
 
-            encodeBlockDXT1(tmpColors, out, 128 + ((by >> 2) * (width >> 2) + (bx >> 2)) * 8);
+            encodeBlockDXT1(tmpColors, out, 128 + ((by >> 2) * (image.width >> 2) + (bx >> 2)) * 8);
         }
 
     return data;

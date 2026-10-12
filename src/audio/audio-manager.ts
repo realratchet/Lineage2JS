@@ -31,6 +31,7 @@ type AmbientChannel_T = {
 };
 
 type AmbientCandidate_T = { component: AmbientSoundComponent, priority: number };
+type VoiceRequest_T = { path: string, isStream: boolean, id: number };
 
 export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly musicFiles: Record<number, string[]> = {};
@@ -40,13 +41,21 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected musicGainNode: GainNode;
     protected ambientGainNode: GainNode;
     protected effectsGainNode: GainNode;
+    protected wavVoiceGainNode: GainNode;
+    protected oggVoiceGainNode: GainNode;
     protected unlocked = false;
     protected currentSource?: AudioBufferSourceNode;
     protected currentGain?: GainNode;
+    protected musicSources = new Map<AudioBufferSourceNode, GainNode>();
     protected currentIndex?: number | string;
     protected playingIndex?: number | string;
     protected voiceSource: AudioBufferSourceNode = null;
     protected voicePlayId = 0;
+    protected requestedVoice: VoiceRequest_T = null;
+    protected voiceGain: GainNode = null;
+    protected wavVoiceSources = new Set<AudioBufferSourceNode>();
+    protected oggVoiceSources = new Set<AudioBufferSourceNode>();
+    protected voiceIsStream = false;
     protected currentIsLooped = false;
     protected nextBuffer?: AudioBuffer;
     protected nextMusicTrackTime?: number;
@@ -89,17 +98,33 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.effectsGainNode.connect(this.masterGain);
         this.effectsGainNode.gain.value = 0.3;
 
+        this.wavVoiceGainNode = this.audioContext.createGain();
+        this.wavVoiceGainNode.connect(this.masterGain);
+        this.wavVoiceGainNode.gain.value = 0.3;
+
+        this.oggVoiceGainNode = this.audioContext.createGain();
+        this.oggVoiceGainNode.connect(this.masterGain);
+        this.oggVoiceGainNode.gain.value = 0.3;
+
         this.setupUnlock();
     }
 
     public getMusicVolume(): number { return this.musicGainNode.gain.value; }
     public setMusicVolume(v: number) { this.musicGainNode.gain.value = v; }
 
+    public getSoundVolume(): number { return this.effectsGainNode.gain.value; }
+    public setSoundVolume(v: number) { this.setAmbientVolume(v); }
+
     public getAmbientVolume(): number { return this.ambientGainNode.gain.value; }
     public setAmbientVolume(v: number) {
         this.ambientGainNode.gain.value = v;
         this.effectsGainNode.gain.value = v;
     }
+
+    public getWavVoiceVolume(): number { return this.wavVoiceGainNode.gain.value; }
+    public setWavVoiceVolume(v: number) { this.wavVoiceGainNode.gain.value = v; }
+    public getOggVoiceVolume(): number { return this.oggVoiceGainNode.gain.value; }
+    public setOggVoiceVolume(v: number) { this.oggVoiceGainNode.gain.value = v; }
 
     public setMusicInfo(musicAssets: Record<number, string[]>) {
         Object.assign(this.musicFiles, musicAssets);
@@ -151,7 +176,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         source.buffer = buffer;
         source.loop = true;
         source.connect(gain);
-        gain.connect(this.masterGain);
+        gain.connect(this.effectsGainNode);
         source.start(0);
 
         this.underwaterSource = source;
@@ -177,6 +202,8 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     public async playMusic(index: number | string, isLooped: boolean = false, isForced: boolean = false, currentTime?: number) {
+        if (this.getMusicVolume() === 0) return;
+
         const time = currentTime ?? this.lastTime;
 
         if (this.playingIndex === index && (this.currentSource || this.nextMusicTrackTime !== undefined)) {
@@ -241,7 +268,6 @@ export class AudioManager implements IEngineComponent<GameManager> {
             const source = this.currentSource;
             const gain = this.currentGain;
 
-            source.onended = null;
             this.currentSource = undefined;
             this.currentGain = undefined;
 
@@ -249,7 +275,6 @@ export class AudioManager implements IEngineComponent<GameManager> {
                 const now = this.audioContext.currentTime;
                 this.fadeEndTime = currentTime + 500;
 
-                // Force an anchor point for the ramp
                 gain.gain.setValueAtTime(gain.gain.value, now);
                 gain.gain.linearRampToValueAtTime(0, now + 0.5);
 
@@ -260,10 +285,6 @@ export class AudioManager implements IEngineComponent<GameManager> {
                     try { source.stop(); } catch { }
                 }
 
-                setTimeout(() => {
-                    try { source.disconnect(); } catch { }
-                    try { gain.disconnect(); } catch { }
-                }, 1000);
             } else {
                 try { source.stop(); } catch { }
                 try { source.disconnect(); } catch { }
@@ -281,21 +302,14 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.nextMusicPlayId = undefined;
         this.fadeEndTime = undefined;
 
-        if (this.currentSource) {
-            this.currentSource.onended = null;
-            try {
-                this.currentSource.stop();
-            } catch (e) {
-                // Ignore InvalidStateError if already stopped
-            }
-            this.currentSource.disconnect();
-            this.currentSource = undefined;
+        for (const [source, gain] of this.musicSources) {
+            source.stop();
+            source.disconnect();
+            gain.disconnect();
         }
-
-        if (this.currentGain) {
-            this.currentGain.disconnect();
-            this.currentGain = undefined;
-        }
+        this.musicSources.clear();
+        this.currentSource = undefined;
+        this.currentGain = undefined;
     }
 
     public letTrackFinish() {
@@ -313,7 +327,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
         gain.connect(this.musicGainNode);
         source.connect(gain);
 
-        source.onended = () => this.handleTrackEnd(this.lastTime);
+        this.musicSources.set(source, gain);
+        source.onended = () => {
+            source.disconnect();
+            gain.disconnect();
+            this.musicSources.delete(source);
+            if (this.currentSource === source) this.handleTrackEnd(this.lastTime);
+        };
         source.start(0);
 
         this.currentSource = source;
@@ -343,6 +363,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.prevTime = this.lastTime;
         this.lastTime = currentTime;
 
+        if (this.requestedVoice) {
+            const request = this.requestedVoice;
+
+            this.requestedVoice = null;
+            void this.playRequestedVoice(request.path, request.isStream, request.id);
+        }
+
         if (this.nextMusicTrackTime !== undefined && currentTime >= this.nextMusicTrackTime) {
             const playId = this.nextMusicPlayId;
             this.nextMusicTrackTime = undefined;
@@ -365,7 +392,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     protected async preloadNext(index: number | string) {
-        this.nextBuffer = await this.fetchRandomBuffer(index);
+        const playId = this.currentPlayId;
+        const buffer = await this.fetchRandomBuffer(index);
+
+        if (this.currentPlayId === playId && this.currentIndex === index) this.nextBuffer = buffer;
     }
 
     protected async loadStream(path: string): Promise<AudioBuffer | null> {
@@ -385,29 +415,76 @@ export class AudioManager implements IEngineComponent<GameManager> {
         return this.audioContext.decodeAudioData(binary.buffer);
     }
 
-    public async playVoice(path: string): Promise<void> {
-        const request = ++this.voicePlayId;
-        const pending = this.loadStream(path);
+    public async playVoice(path: string): Promise<void> { this.requestedVoice = { path, isStream: true, id: ++this.voicePlayId }; }
+    public async playInterfaceVoice(path: string): Promise<void> { this.requestedVoice = { path, isStream: false, id: ++this.voicePlayId }; }
+
+    public stopAllVoice(isStream: boolean) {
+        if (this.requestedVoice?.isStream === isStream) {
+            ++this.voicePlayId;
+            this.requestedVoice = null;
+        } else if (!this.requestedVoice && this.voiceIsStream === isStream) ++this.voicePlayId;
+
+        for (const source of isStream ? this.oggVoiceSources : this.wavVoiceSources) {
+            source.stop();
+            if (this.voiceSource === source) {
+                this.voiceSource = null;
+                this.voiceGain = null;
+            }
+        }
+    }
+
+    protected async playRequestedVoice(path: string, isStream: boolean, request: number): Promise<void> {
+        // ALineagePlayerController::Tick 0x10597BEA drops mode2 while OGG plays.
+        if (!isStream && this.oggVoiceSources.size) return;
+        const sources = isStream ? this.oggVoiceSources : this.wavVoiceSources;
+
+        this.voiceIsStream = isStream;
+
+        if (this.voiceSource) {
+            const now = this.audioContext.currentTime;
+
+            this.voiceGain.gain.setValueAtTime(this.voiceGain.gain.value, now);
+            this.voiceGain.gain.linearRampToValueAtTime(0, now + 1);
+            this.voiceSource.stop(now + 1);
+            this.voiceSource = null;
+            this.voiceGain = null;
+        }
+        const output = isStream ? this.oggVoiceGainNode : this.wavVoiceGainNode;
+
+        if (output.gain.value === 0) return;
+
+        const pending = isStream ? this.loadStream(path) : this.loadVoiceSound(path);
 
         await this.ensureUnlocked();
         const buffer = await pending;
 
         if (request !== this.voicePlayId || !buffer) return;
-        if (this.voiceSource) {
-            this.voiceSource.stop();
-            this.voiceSource.disconnect();
-        }
 
         const source = this.audioContext.createBufferSource();
+        const gain = this.audioContext.createGain();
 
         source.buffer = buffer;
-        source.connect(this.effectsGainNode);
+        source.connect(gain);
+        gain.connect(output);
         source.onended = () => {
             source.disconnect();
-            if (this.voiceSource === source) this.voiceSource = null;
+            gain.disconnect();
+            sources.delete(source);
+            if (this.voiceSource === source) {
+                this.voiceSource = null;
+                this.voiceGain = null;
+            }
         };
         this.voiceSource = source;
+        this.voiceGain = gain;
+        sources.add(source);
         source.start();
+    }
+
+    protected async loadVoiceSound(path: string): Promise<AudioBuffer> {
+        const uri = await this.gameManager.getComponent("asset").loadSound(path);
+
+        return this.loadAmbientBuffer(uri, "voice");
     }
 
     protected async fetchRandomBuffer(index: number | string): Promise<AudioBuffer | null> {

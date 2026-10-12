@@ -1,7 +1,6 @@
-import NWnd from "./nwnd";
+import NWnd, { type NMouseEvent_T } from "./nwnd";
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
-import type { NMouseEvent_T } from "./nwnd";
 
 export class NCFrameCtrl extends NWnd {
     public static getTextures(): string[] { return ["FrameBackLeft", "FrameBackMid", "FrameBackRight", "FrameCloseBtn", "FrameCloseOnBtn", "FrameMiniBtn", "FrameMiniOnBtn"].map(name => `L2UI_CH3.FrameCtrl.${name}`); }

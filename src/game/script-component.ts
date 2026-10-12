@@ -10,8 +10,8 @@ export type ScriptObjectFactory_T = (classId: string) => ScriptHost_T;
 export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & ScriptHost_T> extends ObjectComponent<TParent> {
     public readonly componentName = "script";
     public readonly updateOrder = -100;
-    protected readonly vm: UnScriptVM;
-    protected readonly objectFactory: ScriptObjectFactory_T;
+    protected vm: UnScriptVM;
+    protected objectFactory: ScriptObjectFactory_T;
     protected readonly classId: string;
     protected readonly properties = new Map<string, ScriptValue_T>();
     protected hasBegunPlay = false;
@@ -24,6 +24,11 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
         this.vm = vm;
         this.objectFactory = objectFactory;
         this.classId = classId;
+    }
+
+    public setRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T): void {
+        this.vm = vm;
+        this.objectFactory = objectFactory;
     }
 
     public onAttach(): void {
@@ -48,13 +53,13 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
 
     public onUpdate(_currentTime: number, deltaTime: number): void { this.tick(deltaTime); }
 
-    public destroy(): void {
+    public destroy(notify = true): void {
         if (this.isDestroyed) return;
 
         this.isDestroyed = true;
         this.isTicking = false;
 
-        if (this.hasBegunPlay && this.hasFunction("Destroyed")) this.call("Destroyed");
+        if (notify && this.hasBegunPlay && this.hasFunction("Destroyed")) this.call("Destroyed");
     }
 
     public call(name: string, args: ScriptValue_T[] = []): ScriptValue_T {

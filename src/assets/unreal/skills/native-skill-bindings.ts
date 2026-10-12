@@ -378,6 +378,16 @@ const collisionBindings = new Map<string, NativeSkillBinding_T>([
 for (const name of ["greater healing potion", "wolves' food"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u002_a"], soundPhases: ["casting"] });
 
+// Engine.dll ID2036: empty phase handlers; transient selector0x79a9d1 ->0x79a7e1 with edi=0.
+nativeSkillBindings.set("l2day blessed scroll of escape", { effects: [], soundPhases: [], rejectTransient: true });
+
+// SpawnNTransientEffect IDs60/337/4338 reach0x79a7e1 with edi=0; none spawns an effect or sound.
+for (const name of ["fake death", "arcane power", "life cubic for novice"])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
+
+// Engine.dll ID4616: Init0x79c74b, PreShot0x7a3de7, Shot0x7b0e38, Explosion0x791ade; transient0x79a7e1 has edi=0.
+nativeSkillBindings.set("fake petrificiation", { effects: [], soundPhases: [], rejectTransient: true });
+
 export function getNativeSkillBinding(name: string, id: number): NativeSkillBinding_T {
     const key = name.toLowerCase();
     const dispatch = nativeSkillDispatch.get(key);

@@ -163,7 +163,7 @@ export class SkillViewerRenderManager extends RenderManager {
     }
 
     public onEngineTick(currentTime: number, _deltaTime: number): void {
-        if (!this.isRenderingFrame) return;
+        if (!this.isRenderingFrame || document.hidden) return;
 
         const viewShakeActive = this.applyViewShake(currentTime);
 

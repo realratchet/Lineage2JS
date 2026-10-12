@@ -1,6 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import type NDomLayer from "./ndom";
-import type { NDomButton_T, NDomEdit_T } from "./ndom";
+import type { default as NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
 
 const TEX_BACK = "l2ui_ch3.siegewnd.siege_back31";
 const TEX_BUTTON = "sek.cbui91";

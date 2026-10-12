@@ -4,31 +4,37 @@ import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from 
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T } from "./physics/collision-world";
 import UnScriptVM, { ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
-import { GameObject } from "./game/components";
+import { GameObject, COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
 import { ColliderComponent } from "./physics/components/physics-component";
 import PawnMovementComponent, { PawnMovementState_T } from "./physics/components/pawn-movement-component";
-import AnimationComponent from "./objects/components/animation-component";
+import AnimationComponent, { MESH_SCALE_CHANGED_EVENT } from "./objects/components/animation-component";
 import TransformComponent from "./objects/components/transform-component";
 import ActorOwnershipComponent from "./objects/components/actor-ownership-component";
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
 import PawnAttackComponent, { type PawnAttackSelection_T, type PawnAttack_T } from "./objects/components/pawn-attack-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
-import { COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
 import { ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 const tmpUp = new Vector3(0, 0, 1);
+const tmpScriptLocation = new Vector3();
 export class BaseActor extends GameObject implements ICollidable {
     public readonly isActor = true;
     declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
     public effectSpawnBoneIndex: number = null;
     public charClassId = -1;
+    public ridePawn: BaseActor = null;
+    public scriptBase: BaseActor = null;
+    public npcMovementAnimationRate = 1;
+    public rideType = 0;
 
     protected renderManager: RenderManager;
     protected readonly movementComponent: PawnMovementComponent;
     protected scriptComponent: ScriptComponent<BaseActor> = null;
+    protected isPendingDelete = false;
+    protected isDeleted = false;
     public scriptClassId: string = null;
     public scriptProperties: Map<string, ScriptValue_T> = null;
 
@@ -47,6 +53,11 @@ export class BaseActor extends GameObject implements ICollidable {
     protected getAnimationComponent(): AnimationComponent { return this.getComponent("animation"); }
 
     public setScriptRuntime(vm: UnScriptVM, classId: string, objectFactory: ScriptObjectFactory_T): void {
+        if (this.scriptComponent && this.scriptClassId === classId) {
+            this.scriptComponent.setRuntime(vm, objectFactory);
+            return;
+        }
+
         const isOnVehicle = this.scriptComponent ? this.getStoredUnrealScriptProperty("bGetOnVehicle") : null;
 
         if (this.scriptComponent) this.removeComponent(this.scriptComponent);
@@ -69,12 +80,23 @@ export class BaseActor extends GameObject implements ICollidable {
         const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
 
         switch (name) {
-            case "location": return [this.position.x, this.position.y, this.position.z];
+            case "bpendingdelete": return this.isPendingDelete;
+            case "bdeleteme": return this.isDeleted;
+            case "base": return (this.scriptBase || this.getBaseActor()) as unknown as ScriptValue_T;
+            case "location":
+                this.getWorldPosition(tmpScriptLocation);
+                tmpScriptLocation.z += this.movementComponent.getCollisionHeight();
+                return tmpScriptLocation.toArray();
             case "velocity": return this.movementComponent.getVelocity().toArray();
             case "acceleration": return this.movementComponent.getAcceleration().toArray();
             case "collisionradius": return this.movementComponent.getCollisionRadius();
             case "collisionheight": return this.movementComponent.getCollisionHeight();
             case "biswalking": return this.movementComponent.isWalkingMovement();
+            case "rotation": {
+                const rotation = this.getStoredUnrealScriptProperty(id) as Vector3Arr;
+
+                return [rotation[0], this.movementComponent.getRotationYaw(), rotation[2]];
+            }
             case "physics": return ["none", "walking", "falling", "swimming", "flying"].indexOf(this.movementComponent.getPhysicsMode());
         }
 
@@ -98,24 +120,38 @@ export class BaseActor extends GameObject implements ICollidable {
         const field = id.slice(id.lastIndexOf(".") + 1);
 
         switch (field.toLowerCase()) {
-            case "location": this.position.fromArray(value as Vector3Arr); return;
+            case "location":
+                tmpScriptLocation.fromArray(value as Vector3Arr);
+                tmpScriptLocation.z -= this.movementComponent.getCollisionHeight();
+                if (this.parent) this.parent.worldToLocal(tmpScriptLocation);
+                this.position.copy(tmpScriptLocation);
+                this.renderManager.getPhysicsManager().updatePawnCollision(this);
+                return;
             case "velocity": this.movementComponent.setVelocity(value as Vector3Arr); return;
             case "acceleration": this.movementComponent.setAcceleration(value as Vector3Arr); return;
             case "collisionradius": this.movementComponent.setCollisionSize(Number(value), this.movementComponent.getCollisionHeight()); return;
             case "collisionheight": this.movementComponent.setCollisionSize(this.movementComponent.getCollisionRadius(), Number(value)); return;
             case "biswalking": this.movementComponent.setWalking(!!value); return;
             case "physics": this.movementComponent.setPhysicsMode(Number(value)); return;
+            case "level": {
+                this.renderManager.getPhysicsManager().setPawnLevel(this, value as any);
+                if (this.getStoredUnrealScriptProperty(id) !== value) this.setUnrealScriptProperty("Region", { Zone: value, iLeaf: -1, ZoneNumber: 0 });
+                break;
+            }
         }
 
         if (!this.scriptProperties) throw new Error(`${this.type} has no UnrealScript property storage.`);
 
+        let property = field;
+
         for (const key of this.scriptProperties.keys())
             if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === field.toLowerCase()) {
-                this.scriptProperties.set(key, value);
-                return;
+                property = key;
+                break;
             }
 
-        this.scriptProperties.set(field, value);
+        this.scriptProperties.set(property, value);
+        if (field.toLowerCase() === "drawscale" || field.toLowerCase() === "drawscale3d") this.dispatchComponentEvent(MESH_SCALE_CHANGED_EVENT);
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
@@ -197,9 +233,16 @@ export class BaseActor extends GameObject implements ICollidable {
 
     // materials stay - material-decoder hands those out of name-keyed shared caches
     public release(): void {
+        if (this.isPendingDelete) return;
+
+        this.isPendingDelete = true;
+        this.renderManager.getPhysicsManager().setPawnLevel(this, null);
         this.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
+        this.isDeleted = true;
         this.detachComponents();
     }
+
+    public isPendingKill(): boolean { return this.isDeleted; }
 
     public setIdleAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("idle", animationName); }
     public setWalkingAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("walking", animationName); }
@@ -208,7 +251,17 @@ export class BaseActor extends GameObject implements ICollidable {
     public setFallingAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("falling", animationName); }
     public setSwimmingAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("swimming", animationName); }
     public setSwimmingIdleAnimation(animationName: string): void { this.getAnimationComponent().setBasicAnimation("swimmingIdle", animationName); }
-    public playMovementAnimation(state: PawnMovementState_T): void { this.getAnimationComponent().playMovement(state); }
+    public playMovementAnimation(state: PawnMovementState_T): void {
+        this.getAnimationComponent().playMovement(state);
+
+        if (!this.ridePawn) return;
+
+        const field = state === "dying" ? "RiderDeathAnimName" : state === "idle" || state === "turning" || state === "swimmingIdle" ? "RiderWaitAnimName" : "RiderRunAnimName";
+        const animation = (this.ridePawn.getUnrealScriptProperty(field) as string[])[this.rideType];
+        const rate = state === "walking" || state === "running" ? this.ridePawn.getComponent<AnimationComponent>("animation").getMovementRate(state, null) : state === "idle" || state === "turning" || state === "swimmingIdle" ? this.ridePawn.getUnrealScriptProperty("NonAttackSpeedRate") as number : 1;
+
+        if (animation.toLowerCase() !== "none") this.ridePawn.playAnimation(animation, 0.1, rate);
+    }
     public setDeathAnimationFromScript(): void { this.getAnimationComponent().setDeathAnimationFromScript(); }
     public initAnimations(): void { this.getAnimationComponent().init(); }
 

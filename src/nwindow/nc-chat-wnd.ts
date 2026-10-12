@@ -1,10 +1,9 @@
-import NWnd from "./nwnd";
+import NWnd, { type NMouseEvent_T } from "./nwnd";
 import NCButton from "./nc-button";
 import NCEditBox from "./nc-edit-box";
 import NCTabControl from "./nc-tab-control";
 import NCChatListBox, { NCChatSystemMsgWnd } from "./nc-chat-list-box";
 import type NWindowCanvas from "./nwindow-canvas";
-import type { NMouseEvent_T } from "./nwnd";
 
 const TEX_BACK1 = "L2UI_CH3.ChatWnd.Chatting_Back1";
 const TEX_BACK2 = "L2UI_CH3.ChatWnd.Chatting_Back2";
@@ -25,7 +24,7 @@ const DEFAULT_COLOR = 0xffdcdcdc;
 
 type ChatListFilter_T = { types: number[], hasSystem: boolean };
 
-const TABS: [number, number][] = [[144, 0], [355, 8], [188, 3], [128, 4], [559, 9]]; // 0x1005b245..0x1005b2f1 tab sysstring labels; send type per tab from jump table 0x1005a338.
+const TABS: [number, number, string][] = [[144, 0, ""], [355, 8, "+"], [188, 3, "#"], [128, 4, "@"], [559, 9, "$"]]; // 0x1005b245..0x1005b2f1 tab sysstring labels; send type per tab from jump table 0x1005a338.
 
 const DEFAULT_LIST_FILTERS: ChatListFilter_T[] = [ // Per-list enable flags +0x250..+0x270 and system flag +0x244 are not decoded; these are the defaults per tab.
     { types: [0, 1, 2, 3, 4, 8, 9, 17], hasSystem: true },
@@ -94,6 +93,9 @@ class NCResizeFrame extends NWnd { // NCResizeFrame 0xf007 (0x1005aab6): drag fe
 export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 SetWindow(0, H - 187, 348, 187), bottom anchored.
     protected readonly lists: NCChatListBox[] = [];
     protected readonly systemPane: NCChatSystemMsgWnd;
+    protected oldChatting = true;
+    protected systemMsgWndDamage = true;
+    protected systemMsgWndExpendableItem = true;
     protected readonly tabControl: NCTabControl;
     protected readonly optionButton: NCButton;
     protected readonly messengerButton: NCButton;
@@ -139,6 +141,10 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
         this.y = screenHeight - this.height;
     }
 
+    public setOldChatting(isEnabled: boolean) { this.oldChatting = isEnabled; }
+
+    public setSystemMessageFilters(damage: boolean, expendableItem: boolean) { this.systemMsgWndDamage = damage; this.systemMsgWndExpendableItem = expendableItem; }
+
     public setSystemMsgWnd(isVisible: boolean) { this.systemPane.setVisible(isVisible); }
 
     public hitTest(x: number, y: number): NWnd { // The system pane hangs above the chat's own rect.
@@ -160,9 +166,9 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
         this.addChat(routed === 18 ? text : `${sender}: ${text}`, color, routed);
     }
 
-    public addSystemMessage(text: string, color: number) { this.addChat(text, color, 5); } // 0x1005c250 -> AddChat(text, record+0x14, 5, 0).
+    public addSystemMessage(text: string, color: number, group: number = 0) { this.addChat(text, color, 5, group); } // NWindow 0x10081af2 -> 0x1005c2b0 forwards record+0x10.
 
-    protected addChat(text: string, color: number, type: number) { // AddChat 0x10052f40, case table 0x10053920 / 0x100538f4; 11..16 and > 18 are dropped.
+    protected addChat(text: string, color: number, type: number, group: number = 0) { // AddChat 0x10052f40, case table 0x10053920 / 0x100538f4; 11..16 and > 18 are dropped.
         switch (type) {
             case 6: case 7: case 10: case 18:
                 for (const list of this.lists) list.addString(text, color);
@@ -171,7 +177,8 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
                 for (let i = 0; i < this.lists.length; i++)
                     if (DEFAULT_LIST_FILTERS[i].hasSystem) this.lists[i].addString(text, color);
 
-                this.systemPane.addString(text, color);
+                if (group !== 3 && group !== 7 || group === 3 && this.systemMsgWndDamage || group === 7 && this.systemMsgWndExpendableItem)
+                    this.systemPane.addString(text, color);
                 break;
             case 0: case 1: case 2: case 3: case 4: case 8: case 9: case 17:
                 for (let i = 0; i < this.lists.length; i++)
@@ -181,6 +188,12 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
     }
 
     protected selectTab(index: number) {
+        if (this.oldChatting) {
+            const text = this.editBox.text;
+
+            this.editBox.setText(TABS[index][2] + (["+", "＋", "#", "＃", "@", "＠", "$", "＄"].includes(text.charAt(0)) ? text.slice(1) : text));
+        }
+
         for (let i = 0; i < this.lists.length; i++)
             this.lists[i].setVisible(i === index);
     }
@@ -189,6 +202,7 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
         this.editBox.setText("");
 
         this.sendText(line, isShift);
+        if (line && this.oldChatting) this.editBox.setText(TABS[this.tabControl.selected][2]);
     }
 
     public dispatchCommand(line: string, isShift: boolean = false) {
@@ -212,7 +226,7 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
 
         const first = line.charAt(0);
         const hasPrefix = CHAT_PREFIXES.has(first);
-        const type = first === "＂" ? 2 : hasPrefix ? CHAT_PREFIXES.get(first) : TABS[this.tabControl.selected][1];
+        const type = first === "＂" ? 2 : hasPrefix ? CHAT_PREFIXES.get(first) : this.oldChatting ? 0 : TABS[this.tabControl.selected][1];
 
         if (type === 2) return this.sendTell(line);
 

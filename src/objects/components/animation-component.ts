@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, AnimationMixer, LoopOnce, LoopRepeat, Matrix4, Mesh, Skeleton, Texture, Vector3 } from "three";
+import { AnimationAction, AnimationClip, AnimationMixer, LoopOnce, LoopRepeat, Matrix4, Mesh, Skeleton, Texture, Vector3, Bone } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
@@ -13,23 +13,33 @@ import type PawnEquipmentComponent from "./pawn-equipment-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
+export const MESH_SCALE_CHANGED_EVENT = "meshScaleChanged";
 const MOVEMENT_TWEEN_TIME = 0.1;
 const IDLE_TWEEN_TIME = MOVEMENT_TWEEN_TIME * 2;
 const cacheOnceAnimations = new WeakMap<AnimationClip, AnimationClip>();
-const cacheTweenTwins = new WeakMap<AnimationClip, AnimationClip>();
+const cacheTweenTwins = new WeakMap<AnimationClip, AnimationClip[]>();
 
-function getTweenTwin(clip: AnimationClip): AnimationClip { // Same tracks under a second clip, so a restart gets its own action to cross-fade into.
-    let twin = cacheTweenTwins.get(clip);
+function getTweenTwin(clip: AnimationClip, mixer: AnimationMixer, mesh: Mesh): AnimationClip { // A restart cannot reset an action that is still fading.
+    let twins = cacheTweenTwins.get(clip);
 
-    if (twin) return twin;
+    if (!twins) {
+        twins = [clip];
+        cacheTweenTwins.set(clip, twins);
+    }
 
-    twin = new AnimationClip(clip.name, clip.duration, clip.tracks, clip.blendMode);
+    for (const twin of twins) {
+        const action = mixer.existingAction(twin, mesh);
+
+        if (twin !== clip && (!action || !action.enabled || !action.isScheduled())) return twin;
+    }
+
+    const twin = new AnimationClip(clip.name, clip.duration, clip.tracks, clip.blendMode);
 
     for (const key of Object.keys(clip))
         if (!(key in twin)) (twin as any)[key] = (clip as any)[key];
 
-    cacheTweenTwins.set(clip, twin);
-    cacheTweenTwins.set(twin, clip);
+    twins.push(twin);
+    cacheTweenTwins.set(twin, twins);
 
     return twin;
 }
@@ -84,10 +94,12 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
     protected animationTweenEndTime = 0;
+    protected readonly boneScalers = new Map<string, BoneScaler_T>();
     protected readonly tweenTimeScales = new Map<AnimationAction, number>();
     protected isAnimationsInit = false;
     protected readonly basicActorAnimations: BasicActorAnimations_T = {
         idle: null,
+        turning: null,
         walking: null,
         running: null,
         dying: null,
@@ -142,8 +154,9 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
-        if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT) {
+        if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) {
             this.placeMeshes();
+            if (type === MESH_SCALE_CHANGED_EVENT) this.renderManager.invalidatePawnLighting(this.getParent());
             return COMPONENT_EVENT_NOT_HANDLED;
         }
 
@@ -202,10 +215,39 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.mixer.time < this.animationTweenEndTime);
     }
 
+    public setBoneScale(name: string, scale: number): void {
+        const key = name.toLowerCase();
+        let scaler = this.boneScalers.get(key);
+
+        if (scale === 1) {
+            if (scaler) for (const [bone, original] of scaler.bones) bone.scale.copy(original);
+            this.boneScalers.delete(key);
+            return;
+        }
+
+        if (!scaler) this.boneScalers.set(key, scaler = { scale, bones: new Map() });
+        scaler.scale = scale;
+
+        for (const mesh of this.meshes) {
+            const skeleton = (mesh as LitSkinnedMesh).skeleton;
+            if (!skeleton) continue;
+            const index = skeleton.matchRefBone(name);
+            if (index < 0) continue;
+            const bone = skeleton.bones[index];
+            if (!scaler.bones.has(bone)) scaler.bones.set(bone, bone.scale.clone());
+            bone.scale.copy(scaler.bones.get(bone)).multiplyScalar(scale);
+        }
+    }
+
     public setMeshes(meshes: Mesh[]): void {
         const parent = this.getParent();
 
         this.stop();
+
+        for (const scaler of this.boneScalers.values()) {
+            for (const [bone, scale] of scaler.bones) bone.scale.copy(scale);
+            scaler.bones.clear();
+        }
 
         const textures = new Set<Texture>();
 
@@ -228,6 +270,8 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             parent.add(mesh);
         }
 
+        for (const [name, scaler] of this.boneScalers) this.setBoneScale(name, scaler.scale);
+
         this.placeMeshes();
         this.dispatchEvent(MESHES_CHANGED_EVENT, meshes);
         this.renderManager.invalidatePawnLighting(parent);
@@ -244,10 +288,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const parent = this.getParent();
         const collisionHeight = parent.getCollisionHeight();
         const drawScale = parent.scriptClassId ? parent.getUnrealScriptProperty("DrawScale") as number : 1;
+        const drawScale3D = parent.scriptClassId ? parent.getUnrealScriptProperty("DrawScale3D") as Vector3Arr : [1, 1, 1];
 
-        // USubSkeletalMeshInstance::MeshToWorld 0x946530 draws at Location - Origin * Scale * DrawScale; bindMatrix already cancels meshOrigin
-        for (const mesh of this.meshes as LitSkinnedMesh[])
-            mesh.position.z = mesh.meshOrigin.z + collisionHeight - mesh.meshOrigin.z * mesh.scale.z * drawScale;
+        // USubSkeletalMeshInstance::MeshToWorld 0x946885..0x9468d9 combines actor and mesh scale before rotation.
+        for (const mesh of this.meshes as LitSkinnedMesh[]) {
+            mesh.scale.fromArray(drawScale3D).multiply(mesh.meshScale).multiplyScalar(drawScale);
+            mesh.position.z = mesh.meshOrigin.z + collisionHeight - mesh.meshOrigin.z * mesh.scale.z;
+        }
     }
 
     public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 {
@@ -305,14 +352,40 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const tweenTime = state === "idle" || state === "swimmingIdle" ? IDLE_TWEEN_TIME : MOVEMENT_TWEEN_TIME;
         const fishing = state === "idle" ? this.findComponent<PawnFishingComponent>("pawnFishing") : null;
         const fishingAnimation = fishing && fishing.getIdleAnimationName();
+        const animation = fishingAnimation || this.getMovementAnimation(state);
 
-        this.play(fishingAnimation || this.basicActorAnimations[state], tweenTime, this.getMovementRate(state, fishingAnimation));
+        if (state === "turning" && animation.toLowerCase() === "none") return;
+
+        this.play(animation, tweenTime, this.getMovementRate(state, fishingAnimation));
     }
 
-    protected getMovementRate(state: PawnMovementState_T, fishingAnimation: string): number {
-        const isScaled = fishingAnimation || (state === "walking" || state === "running" || state === "swimming") && this.getParent().scriptClassId;
+    protected getMovementAnimation(state: PawnMovementState_T): string {
+        if (state !== "turning") return this.basicActorAnimations[state];
 
-        return isScaled ? this.getParent().getUnrealScriptProperty("NonAttackSpeedRate") as number : 1;
+        const parent = this.getParent();
+        const isRiding = parent.getUnrealScriptProperty("bRide");
+
+        return (parent.getUnrealScriptProperty(isRiding ? "RiderWaitAnimName" : "TurnAnimName") as string[])[parent.getUnrealScriptProperty(isRiding ? "CurRideType" : "CurWeaponType") as number];
+    }
+
+    public getMovementRate(state: PawnMovementState_T, fishingAnimation: string): number {
+        const parent = this.getParent();
+        const isScaled = fishingAnimation || (state === "idle" || state === "turning" || state === "swimmingIdle" || state === "walking" || state === "running" || state === "swimming") && parent.scriptClassId;
+        let rate = isScaled ? parent.getUnrealScriptProperty("NonAttackSpeedRate") as number : 1;
+
+        if ((state === "walking" || state === "running") && parent.scriptClassId) {
+            const rates = parent.getUnrealScriptProperty(state === "walking" ? "WalkAnimRate" : "RunAnimRate") as number[];
+            const weaponRate = rates[parent.getUnrealScriptProperty("CurWeaponType") as number];
+
+            if (weaponRate !== 0) rate *= weaponRate;
+            if (parent.getUnrealScriptProperty("bNpc") && parent.npcMovementAnimationRate !== 0) rate *= parent.npcMovementAnimationRate;
+
+            const groundSpeed = parent.getUnrealScriptProperty("GroundSpeed") as number;
+
+            if (parent.getUnrealScriptProperty("Environment") === 1 && groundSpeed > 0) rate *= (parent.getUnrealScriptProperty("WaterSpeed") as number) / groundSpeed;
+        }
+
+        return rate;
     }
 
     public isPlayingMovement(state: PawnMovementState_T): boolean {
@@ -320,9 +393,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         const fishing = state === "idle" ? this.findComponent<PawnFishingComponent>("pawnFishing") : null;
         const fishingAnimation = fishing && fishing.getIdleAnimationName();
-        const clip = fishingAnimation ? this.getAnimationClip(fishingAnimation) : this.actorAnimations[this.basicActorAnimations[state]];
+        const animation = this.getMovementAnimation(state);
 
-        return !!action && action.enabled && action.isScheduled() && (action.getClip() === clip || action.getClip() === cacheTweenTwins.get(clip)) && (this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale()) === this.getMovementRate(state, fishingAnimation);
+        if (state === "turning" && animation.toLowerCase() === "none") return true;
+
+        const clip = fishingAnimation ? this.getAnimationClip(fishingAnimation) : state === "turning" ? this.getAnimationClip(animation) : this.actorAnimations[animation];
+
+        return !!action && action.enabled && action.isScheduled() && (action.getClip() === clip || cacheTweenTwins.get(clip)?.includes(action.getClip())) && (this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale()) === this.getMovementRate(state, fishingAnimation);
     }
 
     public setDeathAnimationFromScript(): void {
@@ -430,13 +507,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             }
 
             const clip = loop ? meshClip : getOnceAnimation(meshClip);
-            const twin = cacheTweenTwins.get(clip);
-            let nextAct = currAct && twin && currAct.getClip() === twin ? currAct : mixer.clipAction(clip, mesh);
+            const twins = cacheTweenTwins.get(clip);
+            let nextAct = currAct && twins && twins.includes(currAct.getClip()) ? currAct : mixer.clipAction(clip, mesh);
 
             if (currAct === nextAct && tweenTime > 0 && (restart || nextAct.paused) && nextAct.isScheduled() && nextAct.enabled)
-                nextAct = mixer.clipAction(getTweenTwin(nextAct.getClip()), mesh);
+                nextAct = mixer.clipAction(getTweenTwin(nextAct.getClip(), mixer, mesh), mesh);
             else if (currAct !== nextAct && tweenTime > 0 && prevActs.includes(nextAct) && nextAct.isScheduled() && nextAct.enabled)
-                nextAct = mixer.clipAction(getTweenTwin(nextAct.getClip()), mesh);
+                nextAct = mixer.clipAction(getTweenTwin(nextAct.getClip(), mixer, mesh), mesh);
 
             if (!notifyAction) notifyAction = nextAct;
 
@@ -509,6 +586,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
     public release(): void {
         this.stop();
+        for (const name of this.boneScalers.keys()) this.setBoneScale(name, 1);
 
         for (const mesh of this.meshes) {
             this.mixer.uncacheRoot(mesh);
@@ -521,6 +599,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 }
 
+type BoneScaler_T = { scale: number, bones: Map<Bone, Vector3> };
 type BasicActorAnimations_T = Record<PawnMovementState_T, string>;
 
 export class ExtraMeshAnimationComponent extends AnimationComponent {

@@ -1,5 +1,6 @@
 import UVolume from "./un-volume";
 import FPlane from "./un-plane";
+import type { IBoxDecodeInfo } from "./un-box";
 import type { IActorCollisionDecodeInfo } from "./un-aactor";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 import type { IBSPCollisionNodeDecodeInfo_T } from "./model/un-model";
@@ -8,6 +9,7 @@ export type IBlockingVolumeDecodeInfo = IBaseObjectDecodeInfo & {
     type: "BlockingVolume",
     collision: IActorCollisionDecodeInfo,
     rootOutside: boolean,
+    bounds: IBoxDecodeInfo,
     nodes: IBSPCollisionNodeDecodeInfo_T[]
 };
 
@@ -27,7 +29,7 @@ export abstract class UBlockingVolume extends UVolume {
         const localToWorld = this.localToWorld();
         const matrixTA = localToWorld.transposeAdjoint();
         const tmpPlane = FPlane.make();
-        const worldNodes = this.getWorldBspInfo().nodes;
+        const worldBsp = this.getWorldBspInfo(), worldNodes = worldBsp.nodes;
         const nodes: IBSPCollisionNodeDecodeInfo_T[] = brush.getBspNodes().map((node: any, i: number) => {
             const info: IBSPCollisionNodeDecodeInfo_T = { plane: worldNodes[i].plane, children: [node.iFront, node.iBack], isCsg: worldNodes[i].isCsg };
 
@@ -67,18 +69,8 @@ export abstract class UBlockingVolume extends UVolume {
             uuid: this.uuid,
             type: "BlockingVolume",
             name: this.objectName,
-            collision: {
-                collideActors: this.isCollidingActors,
-                collideWorld: this.isCollidingWorld,
-                blockActors: this.isBlockingActors,
-                blockPlayers: this.isBlockingPlayers,
-                blockZeroExtent: this.isBlockingZeroExtentTraces,
-                blockNonZeroExtent: this.isBlockingNonZeroExtentTraces,
-                worldGeometry: this.isWorldGeometry,
-                useCylinderCollision: false,
-                collisionRadius: this.collisionRadius,
-                collisionHeight: this.collisionHeight
-            },
+            collision: this.getCollisionDecodeInfo(),
+            bounds: worldBsp.bounds,
             rootOutside: brush.getIsRootOutside(),
             nodes
         };

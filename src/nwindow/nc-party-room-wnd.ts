@@ -1,8 +1,7 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl from "./nc-list-ctrl";
 import NCMinimizedWnd from "./nc-minimized-wnd";
-import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomButton_T, NDomEdit_T, NDomScrollPane_T } from "./ndom";
+import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { PartyMatchDetail_T, PartyRoomMember_T } from "../network/game-packets";
 
@@ -34,7 +33,7 @@ export class NCPartyRoomWnd {
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 600, 411, 0, 0, 600, 411, TEX_BACK);
         this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true));
-        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.terminate(), null, () => this.minimized.minimize());
+        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.terminate(), null, () => { this.table.hide(); this.minimized.minimize(); });
         this.header = layer.createWindow(0, 20, 600, 82, this.element);
         this.table = new NCListCtrl(layer, this.element, 7, 123, 586, 172, [
             { width: 204, label: 393, numeric: false }, { width: 54, label: 391, numeric: true, isClass: true }, { width: 74, label: 392, numeric: true }, { width: 132, label: 1029, numeric: false }, { width: 121, label: 1031, numeric: false }
@@ -79,7 +78,7 @@ export class NCPartyRoomWnd {
         if (visible && this.minimized.isVisible()) this.minimized.restore(true);
         this.element.hidden = !visible;
         this.minimized.hide();
-        if (!visible) this.table.hideTooltip();
+        if (!visible) this.table.hide();
     }
     public show(detail: PartyMatchDetail_T) {
         this.detail = detail;

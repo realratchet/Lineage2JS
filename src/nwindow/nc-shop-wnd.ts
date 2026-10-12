@@ -1,6 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomScrollPane_T, NDomButton_T } from "./ndom";
+import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { ShopItem_T } from "../network/game-packets";
 
@@ -19,6 +18,7 @@ export class NCShopWnd {
     public onMove: (side: number, item: ShopItem_T, isPointer: boolean, isDrag: boolean) => void = null;
     public onConfirm: (isSell: boolean, items: ShopItem_T[]) => void = null;
     public onSelect: () => void = null;
+    public onFocusDialog: () => void = null;
     public onHide: () => void = null;
     public onClose: () => void = null;
     public onTooltip: (item: ShopItem_T, button: HTMLElement, isDetailed: boolean, context: number) => void = null;
@@ -27,6 +27,7 @@ export class NCShopWnd {
     protected readonly selected: ShopItem_T[] = [null, null];
     protected readonly pressed = [-1, -1];
     protected readonly hoveredIndices = [-1, -1];
+    protected readonly doubleClicked = [false, false];
     protected heldSide = -1;
     protected hoveredSide = -1;
     protected hoveredIndex = -1;
@@ -59,6 +60,7 @@ export class NCShopWnd {
             const list = layer.scrollPane(this.element, 9, y, 239, rows * 35 - 1, 35);
 
             list.tabIndex = -1;
+            list.style.outline = "none";
             this.lists.push(list);
             list.addEventListener("wheel", event => {
                 event.stopImmediatePropagation();
@@ -67,32 +69,43 @@ export class NCShopWnd {
                 list.setScroll(list.getScroll() - delta * 35);
             }, true);
             list.addEventListener("mousemove", event => {
-                if (list.content.contains(event.target as Node) || event.target === list && (list.children[1] as HTMLElement).hidden)
-                    this.hoverItem(side, this.getItemIndex(side, event));
+                if (list.content.contains(event.target as Node) || event.target === list)
+                    this.hoverItem(side, this.getItemIndex(side, event), event.buttons);
             });
-            list.content.addEventListener("mousedown", event => {
-                if (event.button !== 0) return;
+            list.addEventListener("mousedown", event => {
+                if (event.button !== 0 && event.button !== 2) return;
+                if (event.target !== list && !list.content.contains(event.target as Node)) return;
 
                 event.preventDefault();
+                list.focus();
+                if (event.button !== 0) return;
                 const index = this.getItemIndex(side, event), item = this.items[side][index];
 
                 this.pressed[side] = index;
                 this.heldSide = side;
-                if (!item) return;
                 if (event.detail === 2) {
+                    this.doubleClicked[side] = true;
                     this.endDrag();
-                    if (this.onMove) this.onMove(side, item, true, false);
+                    if (item && this.onMove) this.onMove(side, item, true, false);
                     return;
                 }
-                this.selected[side] = item;
                 this.hoveredIndices[side] = index;
                 this.hoveredSide = side;
                 this.hoveredIndex = index;
+                if (!item) {
+                    if (this.onHideTooltip) this.onHideTooltip();
+                    return;
+                }
+                this.selected[side] = item;
                 this.paintSelection(side);
-                this.drag = { side, item, isDragging: false };
-                if (this.onSelect) this.onSelect();
-                layer.getManager().playPickupSound();
+                if (this.doubleClicked[side]) this.doubleClicked[side] = false;
+                else {
+                    this.drag = { side, item, isDragging: false };
+                    if (this.onSelect) this.onSelect();
+                    layer.getManager().playPickupSound();
+                }
                 if (this.onTooltip) this.onTooltip(item, list.content.children[index] as HTMLElement, true, this.getTooltipContext(side));
+                if (this.onFocusDialog) this.onFocusDialog();
             });
         });
         layer.button(this.element, 112, 194, 15, 15, TEX_UP, TEX_UP, null, null, () => this.moveSelected(1));
@@ -103,9 +116,10 @@ export class NCShopWnd {
         this.cancelButton = layer.button(this.element, 131, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(141), () => this.setVisible(false));
         window.addEventListener("mousemove", event => {
             if (!(event.buttons & 1)) this.heldSide = -1;
-            if (this.heldSide >= 0) this.hoveredIndices[this.heldSide] = this.getItemIndex(this.heldSide, event);
+            if (this.heldSide >= 0 && document.activeElement === this.lists[this.heldSide]) this.hoveredIndices[this.heldSide] = this.getItemIndex(this.heldSide, event);
             if (!this.drag) return;
             if (!(event.buttons & 1) || !this.isVisible()) { this.endDrag(); return; }
+            if (document.activeElement !== this.lists[this.drag.side]) return;
             if (this.drag.isDragging) return;
 
             this.drag.isDragging = true;
@@ -116,11 +130,10 @@ export class NCShopWnd {
             if (event.button === 0) this.heldSide = -1;
             if (event.button !== 0 || !this.drag) return;
 
-            const drag = this.drag, target = document.elementFromPoint(event.clientX, event.clientY), list = this.lists[1 - drag.side];
+            const drag = this.drag;
 
             this.endDrag();
-            if (!this.isVisible() || !target || !(list.content.contains(target) || target === list && (list.children[1] as HTMLElement).hidden)) return;
-            if (this.onMove) this.onMove(drag.side, drag.item, true, true);
+            if (this.isVisible() && document.activeElement === this.lists[drag.side]) this.dropItem(drag.side, drag.item, event);
         }, true);
         window.addEventListener("blur", () => this.endDrag());
         window.addEventListener("pointercancel", () => this.endDrag());
@@ -167,7 +180,7 @@ export class NCShopWnd {
     }
 
     public transfer(side: number, item: ShopItem_T, count: number) {
-        const source = this.items[side], destination = this.items[1 - side];
+        const source = this.items[side], destination = this.getDestinationItems(side);
 
         if (!source.includes(item) || count <= 0) return;
 
@@ -193,11 +206,18 @@ export class NCShopWnd {
     }
 
     protected getTransferCount(item: ShopItem_T, count: number) { return this.isSell || this.isStore ? Math.min(count, item.count) : count; }
+    protected getDestinationItems(side: number) { return this.items[1 - side]; }
+    protected dropItem(side: number, item: ShopItem_T, event: MouseEvent) {
+        const target = document.elementFromPoint(event.clientX, event.clientY), list = this.lists[1 - side];
+
+        if (!target || !(list.content.contains(target) || target === list && (list.children[1] as HTMLElement).hidden)) return;
+        if (this.onMove) this.onMove(side, item, true, true);
+    }
     protected moveSelected(side: number) { const item = this.getPressedItem(side); if (item && this.onMove) this.onMove(side, item, false, false); }
     protected getLabelIds() { return this.isPreview ? [811, 812, 813] : [this.isSell ? 138 : 137, this.isSell ? 137 : 139, this.isSell ? 143 : 142]; }
     protected getTooltipContext(side: number) { return this.isStore ? 0 : this.isSell ? 8 : side ? 4 : 7; }
-    protected hoverItem(side: number, index: number) {
-        if (this.heldSide >= 0 && this.heldSide !== side) index = this.hoveredIndices[side];
+    protected hoverItem(side: number, index: number, buttons: number) {
+        if ((buttons & 1) && (this.heldSide !== side || document.activeElement !== this.lists[side])) index = this.hoveredIndices[side];
         else this.hoveredIndices[side] = index;
 
         if (this.hoveredSide === side && this.hoveredIndex === index) return;
@@ -260,7 +280,7 @@ export class NCShopWnd {
                 frame.hidden = item !== this.selected[side];
                 this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, strings.itemIcons[item.itemId]);
                 if (!this.isSell && !this.isPreview && !this.isStore && side === 0 && item.count > 0) this.layer.text(button, String(item.count), 0xffff0000, FontType_T.SMALL, 1, 1);
-                button.addEventListener("mouseenter", () => this.hoverItem(side, index));
+                button.addEventListener("mouseenter", event => this.hoverItem(side, index, event.buttons));
                 button.addEventListener("mouseleave", () => {
                     if (this.hoveredSide !== side) return;
 

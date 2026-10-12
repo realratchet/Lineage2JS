@@ -76,8 +76,8 @@ function op_div_vector_float(a: FVector, b: number) { return a.divideScalar(b); 
 function op_add_vector_vector(a: FVector, b: FVector) { return a.add(b); }
 function op_sub_vector_vector(a: FVector, b: FVector) { return a.sub(b); }
 
-function op_eq_vector_vector(a: FVector, b: FVector) { return a.equals(b); }
-function op_neq_vector_vector(a: FVector, b: FVector) { return a.nequals(b); }
+function op_eq_vector_vector(a: Vector3Arr, b: Vector3Arr) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
+function op_neq_vector_vector(a: Vector3Arr, b: Vector3Arr) { return !op_eq_vector_vector(a, b); }
 
 function op_dot_vector_vector(a: FVector, b: FVector) { return a.dot(b); }
 function op_cross_vector_vector(a: FVector, b: FVector) { return a.cross(b); }

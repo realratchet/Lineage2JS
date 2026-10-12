@@ -1,7 +1,5 @@
 import NCTooltip from "./nc-tooltip";
-import type NDomLayer from "./ndom";
-import { NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomButton_T, NDomScrollPane_T } from "./ndom";
+import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import type { SkillEntry_T } from "../network/game-packets";
 import type NCCoolTimeIcon from "./nc-cool-time-icon";
 
@@ -15,6 +13,7 @@ const TEX_SELECTED = "L2UI.NWindow.item_click";
 export class NCSkillWnd {
     public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
+    public onShow: () => void = null;
     public onUse: (id: number, ctrl: boolean, shift: boolean) => void = null;
     protected readonly layer: NDomLayer;
     protected readonly list: NDomScrollPane_T;
@@ -52,6 +51,15 @@ export class NCSkillWnd {
     }
 
     public isVisible() { return !this.element.hidden && !this.element.parentElement.hidden; }
+    public setVisible(visible: boolean) {
+        if (visible && !this.element.hidden) return;
+
+        this.pendingSkills = this.skills = [];
+        this.list.setScroll(0);
+        this.paintSkills();
+        if (visible && this.onShow) this.onShow();
+        this.element.hidden = !visible;
+    }
 
     public getMacroCommand(id: number) {
         const skill = this.skills.find(skill => skill.id === id);

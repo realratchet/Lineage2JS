@@ -1,6 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomScrollPane_T } from "./ndom";
+import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { InventoryItem_T, RecipeItemMakeInfo_T } from "../network/game-packets";
@@ -27,6 +26,9 @@ export class NCRecipeManufactureWnd {
     public onTree: (recipe: RecipeInfo_T) => void = null;
     public onTooltip: (material: RecipeMaterial_T, button: HTMLElement, isDetailed: boolean) => void = null;
     public onHideTooltip: () => void = null;
+    public onSelect: () => void = null;
+    public onFocusDialog: () => void = null;
+    public onHide: () => void = null;
     protected readonly header: HTMLDivElement;
     protected readonly result: HTMLDivElement;
     protected readonly mp: HTMLDivElement;
@@ -35,6 +37,8 @@ export class NCRecipeManufactureWnd {
     protected recipe: RecipeInfo_T = null;
     protected materials: RecipeMaterial_T[] = [];
     protected selected = -1;
+    protected hoverIndex = -1;
+    protected isHeld = false;
     protected generation = 0;
     protected isDwarven = true;
 
@@ -42,6 +46,7 @@ export class NCRecipeManufactureWnd {
         const manager = layer.getManager();
 
         this.element = layer.createWindow(0, 0, 256, 401);
+        this.element.tabIndex = -1;
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
         NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(663), false, () => this.setVisible(false));
@@ -58,23 +63,51 @@ export class NCRecipeManufactureWnd {
         this.inventoryCount = layer.text(this.element, "", 0xffb09b79, FontType_T.SMALL, separatorX + layer.measureText(" : "), 313);
         this.result = layer.createWindow(14, 329, 226, 39, this.element);
         this.list = layer.scrollPane(this.element, 10, 141, 238, 103, 35);
+        this.list.tabIndex = -1;
+        this.list.addEventListener("scroll", () => this.showMaterialTooltip());
         this.list.addEventListener("wheel", event => {
             event.stopImmediatePropagation();
             const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
 
             this.list.setScroll(this.list.getScroll() - delta * 35);
         }, true);
-        this.list.content.addEventListener("mousedown", event => {
-            if (event.button !== 0 || event.detail === 2) return;
+        this.list.addEventListener("mousedown", event => {
+            if (event.button !== 0 && event.button !== 2) return;
+            if (event.target !== this.list && !this.list.content.contains(event.target as Node)) return;
 
             event.preventDefault();
-            const button = (event.target as HTMLElement).closest("[data-material-index]") as HTMLElement;
+            this.list.focus();
+            if (event.buttons & 1) {
+                layer.beginDrag(moveEvent => {
+                    if (document.activeElement !== this.list) return;
 
-            if (!button) return;
-            this.selected = Number(button.dataset.materialIndex);
+                    this.hoverIndex = this.hitMaterial(moveEvent.clientX, moveEvent.clientY);
+                    this.showMaterialTooltip();
+                }, () => this.isHeld = false);
+                this.isHeld = true;
+            }
+            if (event.button !== 0 || event.detail === 2) return;
+
+            this.hoverIndex = this.hitMaterial(event.clientX, event.clientY);
+            if (this.hoverIndex < 0) { this.showMaterialTooltip(); return; }
+
+            this.selected = this.hoverIndex;
+            if (this.onSelect) this.onSelect();
             manager.playPickupSound();
-            if (this.onTooltip) this.onTooltip(this.materials[this.selected], button, true);
+            this.showMaterialTooltip();
+            if (this.onFocusDialog) this.onFocusDialog();
         });
+        this.list.addEventListener("mousemove", event => {
+            if (event.target !== this.list && !this.list.content.contains(event.target as Node)) {
+                if (this.onHideTooltip) this.onHideTooltip();
+                return;
+            }
+            if (!(event.buttons & 1) || (this.isHeld && document.activeElement === this.list)) this.hoverIndex = this.hitMaterial(event.clientX, event.clientY);
+            this.showMaterialTooltip();
+        });
+        this.list.addEventListener("mouseenter", () => this.showMaterialTooltip());
+        this.list.addEventListener("mouseleave", () => { if (this.onHideTooltip) this.onHideTooltip(); });
+        this.list.addEventListener("contextmenu", event => event.preventDefault());
         const outline = layer.tile(this.element, 205, 70, 36, 36, 0, 0, 34, 34, TEX_OUTLINE);
         const treeButton = layer.button(this.element, 206, 71, 32, 32, TEX_TREE, TEX_TREE_DOWN, null, null, () => { if (this.onTree) this.onTree(this.recipe); });
 
@@ -92,7 +125,15 @@ export class NCRecipeManufactureWnd {
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 558, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; if (!visible && this.onHideTooltip) this.onHideTooltip(); }
+    public setVisible(visible: boolean) {
+        this.element.hidden = !visible;
+        if (visible) return;
+
+        if (this.isHeld) this.layer.cancelDrag();
+        if (this.onHideTooltip) this.onHideTooltip();
+        if (this.onHide) this.onHide();
+    }
+    public getGrid() { return this.list; }
     protected close() { this.setVisible(false); this.layer.getManager().playWindowCloseSound(); }
     public setInventory(items: InventoryItem_T[]) {
         if (!this.recipe) return;
@@ -108,7 +149,7 @@ export class NCRecipeManufactureWnd {
 
         this.recipe = recipe;
         this.isDwarven = state.isDwarven;
-        this.selected = -1;
+        this.selected = this.hoverIndex = -1;
         this.header.replaceChildren();
         this.list.content.replaceChildren();
         this.result.replaceChildren();
@@ -160,10 +201,29 @@ export class NCRecipeManufactureWnd {
             this.layer.place(button, index % 6 * 37, Math.trunc(index / 6) * 35, 37, 35);
             this.layer.tile(button, 0, 0, 32, 32, 0, 0, 32, 32, strings.itemIcons[material.itemId]);
             if (material.count < material.required) this.layer.tile(button, 0, 0, 32, 32, 0, 0, 32, 32, TEX_SHORTAGE);
-            button.addEventListener("mouseenter", () => { if (this.onTooltip) this.onTooltip(material, button, true); });
-            button.addEventListener("mouseleave", () => { if (this.onHideTooltip) this.onHideTooltip(); });
             this.list.content.appendChild(button);
         });
+    }
+
+    protected hitMaterial(clientX: number, clientY: number) {
+        const rect = this.list.getBoundingClientRect();
+        const x = this.layer.toUI(clientX - rect.left), y = this.layer.toUI(clientY - rect.top);
+
+        if (x < 0 || x > 222 || y < 0 || y > 105) return -1;
+        const index = (Math.min(2, Math.floor(y / 35)) + this.list.getScroll() / 35) * 6 + Math.min(5, Math.floor(x / 37));
+
+        return index < this.materials.length ? index : -1;
+    }
+
+    protected showMaterialTooltip() {
+        const material = this.materials[this.hoverIndex], button = this.list.content.children[this.hoverIndex] as HTMLElement;
+        const hovered = this.list.querySelector(":scope > :hover");
+
+        if (!material || !button || !this.list.matches(":hover") || (hovered && hovered !== this.list.content) || this.element.closest("[hidden]")) {
+            if (this.onHideTooltip) this.onHideTooltip();
+            return;
+        }
+        if (this.onTooltip) this.onTooltip(material, button, true);
     }
 }
 

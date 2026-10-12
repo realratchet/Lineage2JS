@@ -1,9 +1,6 @@
 import NCStoreWnd from "./nc-store-wnd";
-import { WarehouseType_T } from "../network/game-packets";
-import type NDomLayer from "./ndom";
-import type { NDomButton_T } from "./ndom";
-import type { GMViewWarehouseWithdrawList_T } from "../network/game-packets";
-import type { ShopItem_T } from "../network/game-packets";
+import { WarehouseType_T, type GMViewWarehouseWithdrawList_T, type ShopItem_T } from "../network/game-packets";
+import type { default as NDomLayer, NDomButton_T } from "./ndom";
 
 export class NCGMStoreWnd extends NCStoreWnd {
     public onRequest: (targetName: string, kind: number) => void = null;

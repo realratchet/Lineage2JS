@@ -146,6 +146,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 diffuse: new Uniform(new Color(0xffffff)),
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
+                texModifierColor: new Uniform(new Vector3(1, 1, 1)),
                 terrainDecorationFadeRange: new Uniform(new Vector2()),
                 uv1Transform: new Uniform(new Matrix3()),
                 transformSpecular: new Uniform(null),
@@ -439,7 +440,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public setSway() {
         this.defines["USE_SWAY"] = "";
 
-        if (this.transparent && this.blending === NormalBlending) this.depthWrite = false;
+        if (this.transparent && this.blending === NormalBlending) this.depthWrite = true;
 
         this.needsUpdate = true;
 

@@ -33,27 +33,21 @@ export class SkillViewerGame extends GameManager {
         return await game.onInit();
     }
 
-    protected onHandleAnimationFrame(currentTime: number): void {
-        const deltaTime = currentTime - this.lastTick;
-
+    protected tick(currentTime: number): void {
         // one broken skill must not freeze the viewer, report it and keep ticking
         try {
-            this.onBeforeEngineTick(currentTime, deltaTime);
-            this.onEngineTick(currentTime, deltaTime);
-            this.onAfterEngineTick(currentTime, deltaTime);
+            super.tick(currentTime);
         } catch (e) {
             console.error(e);
             if (this.onFrameError) this.onFrameError(e as Error);
         }
 
-        this.lastTick = currentTime;
-
-        requestAnimationFrame(this.animationFrameCallback);
+        this.lastTick = Math.max(currentTime, this.lastTick);
     }
 }
 
 export async function runSkillViewer(isPlayer: boolean = false): Promise<void> {
-    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 83 }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
+    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 87 }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
 
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
 

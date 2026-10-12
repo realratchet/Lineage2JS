@@ -5,6 +5,10 @@ import type { Terrain } from "./terrain";
 import type { TerrainDecoration } from "./terrain-decoration";
 import { encompassesVolume } from "../physics/volume-bsp";
 import { GameObject } from "../game/components";
+import PhysicsVolume from "./physics-volume";
+import Actor from "./actor";
+import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
 import type UnScriptVM from "../ue-script/vm";
@@ -199,6 +203,7 @@ export class SectorObject extends GameObject {
     public readonly fogInfos: FogInfoObject[] = [];
 
     public levelInfo: IBaseZoneDecodeInfo;
+    public levelActorUuids: (string | null)[] = [];
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];
     public bspLeaves: BSPLeafData[];
@@ -213,6 +218,10 @@ export class SectorObject extends GameObject {
     public musicVolumes?: IMusicVolumeDecodeInfo[];
     public waterVolumes?: IWaterVolumeDecodeInfo[];
     public physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
+    public readonly physicsVolumeActors: PhysicsVolume[] = [];
+    public levelInfoActor: Actor = null;
+    public readonly zoneInfoActors: Actor[] = [];
+    protected physicsVolumeObjectFactory: ScriptObjectFactory_T = null;
     public ambientSounds?: IAmbientSoundObjectDecodeInfo[];
 
     public bspSections?: IBSPSectionDecodeInfo_T[];
@@ -250,6 +259,90 @@ export class SectorObject extends GameObject {
 
     protected lastLoggedZone: number | null = null;
     protected lastLoggedLeaf: number | null = null;
+
+    public setPhysicsVolumeScriptRuntime(objectFactory: ScriptObjectFactory_T): void {
+        this.physicsVolumeObjectFactory = objectFactory;
+        this.createZoneInfoActors();
+        for (const actor of new Set([this.levelInfoActor, ...this.zoneInfoActors])) actor.setScriptRuntime(this.scriptVM, objectFactory);
+        this.createPhysicsVolumeActors();
+        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, objectFactory);
+        const volume = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        if (volume) volume.setScriptRuntime(this.scriptVM, objectFactory);
+    }
+
+    public createZoneInfoActors(): void {
+        if (this.levelInfoActor) return;
+        if (!this.physicsVolumeObjectFactory) throw new Error(`Sector '${this.name}' has no zone script runtime.`);
+
+        const actors = new Map<string, Actor>();
+        function create(info: IBaseZoneDecodeInfo) {
+            if (actors.has(info.uuid)) return actors.get(info.uuid);
+            if (!info.scriptClassId || !info.scriptProperties) throw new Error(`Zone '${info.name}' has no decoded script data.`);
+
+            const actor = new Actor({ uuid: info.uuid, name: info.name, scriptClassId: info.scriptClassId, scriptProperties: info.scriptProperties });
+            actors.set(info.uuid, actor);
+            return actor;
+        }
+
+        this.levelInfoActor = create(this.levelInfo);
+        for (const zone of this.bspZones) this.zoneInfoActors.push(create(zone.zoneInfo));
+        for (const actor of actors.values()) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
+        if (this.levelInfo.physicsVolume) {
+            const volume = new PhysicsVolume(this.levelInfo.physicsVolume);
+            setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
+            setScriptObjectProperty(volume, "bNoDelete", true);
+            setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
+            volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+        } else if (this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume")) {
+            throw new Error(`Level '${this.levelInfo.name}' has an unresolved PhysicsVolume.`);
+        }
+        for (const actor of actors.values()) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+    }
+
+    public releaseZoneInfoActors(): void {
+        if (this.levelInfoActor) {
+            const volume = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+            if (volume) volume.release(false);
+            setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", null);
+        }
+
+        const actors = new Set(this.zoneInfoActors);
+        if (this.levelInfoActor) actors.add(this.levelInfoActor);
+        for (const actor of actors) actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        this.zoneInfoActors.length = 0;
+        this.levelInfoActor = null;
+    }
+
+    public getDefaultPhysicsVolume(): PhysicsVolume {
+        this.createZoneInfoActors();
+        const cached = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        if (cached) return cached;
+
+        const info: PhysicsVolumeDecodeInfo_T = { uuid: `${this.levelInfoActor.actorUuid}.DefaultPhysicsVolume`, type: "PhysicsVolume", name: "DefaultPhysicsVolume", objectPath: "Engine.DefaultPhysicsVolume", scriptClassId: "engine.DefaultPhysicsVolume", scriptProperties: {}, bsp: null };
+        this.scriptVM.initializeHost(info as any);
+        const volume = new PhysicsVolume(info);
+        setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
+        volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+        setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
+        setScriptObjectProperty(volume, "Priority", -1000000);
+        setScriptObjectProperty(volume, "bNoDelete", true);
+        return volume;
+    }
+
+    public createPhysicsVolumeActors(): void {
+        if (this.physicsVolumeActors.length || !this.physicsVolumes.length) return;
+        if (!this.physicsVolumeObjectFactory) throw new Error(`Sector '${this.name}' has no physics volume script runtime.`);
+
+        const cached = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        for (const info of this.physicsVolumes) this.physicsVolumeActors.push(cached && cached.actorUuid === info.uuid ? cached : new PhysicsVolume(info));
+        for (const actor of this.physicsVolumeActors) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
+        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+    }
+
+    public releasePhysicsVolumeActors(): void {
+        for (const actor of this.physicsVolumeActors) actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        this.physicsVolumeActors.length = 0;
+    }
 
     public setLights(lights: DynamicLight[]): this {
         for (const light of lights) {
@@ -354,6 +447,28 @@ export class SectorObject extends GameObject {
         const color = r || g || b ? new ColorByte(r >> 1, g >> 1, b >> 1) : null;
         this.cacheSectionZoneAmbient.set(sectionIndex, color);
         return color;
+    }
+
+    public pointRegion(position: THREE.Vector3) {
+        if (!this.levelInfoActor) throw new Error(`Sector '${this.name}' has no LevelInfo.`);
+        if (this.bspNodes.length === 0) return { Zone: this.levelInfoActor, iLeaf: -1, ZoneNumber: 0 };
+
+        const x = Math.fround(position.x), y = Math.fround(position.y), z = Math.fround(position.z);
+        let index = 0;
+
+        while (true) {
+            const node = this.bspNodes[index], plane = node.plane;
+            const side = y * plane.y + z * plane.z + x * plane.x - plane.w >= 0 ? 1 : 0;
+            const child = side ? node.front : node.back;
+
+            if (child >= 0) {
+                index = child;
+                continue;
+            }
+
+            const zone = this.bspZones.length ? node.zones[side] : 0;
+            return { Zone: this.zoneInfoActors[zone] || this.levelInfoActor, iLeaf: node.leaves[side], ZoneNumber: zone };
+        }
     }
 
     public findPositionZone(position: THREE.Vector3) {

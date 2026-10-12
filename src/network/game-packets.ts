@@ -565,7 +565,7 @@ export function readInventoryItem(packet: PacketReader): InventoryItem_T {
     return { type1: packet.h(), objectId: packet.d(), itemId: packet.d(), count: packet.d(), type2: packet.h(), customType1: packet.h(), isEquipped: packet.h() !== 0, bodyPart: packet.d(), enchantLevel: packet.h(), customType2: packet.h() };
 }
 
-export type Speeds_T = { runSpd: number, walkSpd: number, swimRunSpd: number, swimWalkSpd: number, moveMultiplier: number, attackSpeedMultiplier: number, collisionRadius: number, collisionHeight: number };
+export type Speeds_T = { runSpd: number, walkSpd: number, swimRunSpd: number, swimWalkSpd: number, airRunSpd?: number, airWalkSpd?: number, moveMultiplier: number, attackSpeedMultiplier: number, collisionRadius: number, collisionHeight: number };
 
 export type Appearance_T = { race: Race_T, sex: number, classId: number, hairStyle: number, hairColor: number, face: number, paperdoll: number[], enchantLevel: number };
 
@@ -593,9 +593,9 @@ export type CharSelected_T = Location_T & { name: string, charId: number, title:
 
 export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, abnormalState: number };
 
-export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, largeCrestId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, privateStoreType: PrivateStoreType_T, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
+export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, largeCrestId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
 
-export type CharInfo_T = CreatureInfo_T & Appearance_T & { clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, privateStoreType: PrivateStoreType_T, cubics: number[] };
+export type CharInfo_T = CreatureInfo_T & Appearance_T & { clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, cubics: number[] };
 
 export type NpcInfo_T = CreatureInfo_T & { npcId: number, isAttackable: boolean, rightHand: number, chest: number, leftHand: number, spawnType: number, isSummon: boolean };
 export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number };
@@ -623,7 +623,9 @@ function readSpeeds(packet: PacketReader, target: Speeds_T) {
     target.walkSpd = packet.d();
     target.swimRunSpd = packet.d();
     target.swimWalkSpd = packet.d();
-    packet.skip(16);
+    target.airRunSpd = packet.d();
+    target.airWalkSpd = packet.d();
+    packet.skip(8);
     target.moveMultiplier = packet.f();
     target.attackSpeedMultiplier = packet.f();
     target.collisionRadius = packet.f();
@@ -754,7 +756,8 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.recommendationsLeft = packet.h();
     info.recommendations = packet.h();
 
-    packet.skip(4 + 2);
+    info.mountNpcId = packet.d() - NPC_ID_OFFSET;
+    packet.skip(2);
     info.classId = packet.d();
     packet.d();
 
@@ -816,7 +819,8 @@ export function readCharInfo(packet: PacketReader): CharInfo_T {
 
     info.recommendations = packet.h();
 
-    packet.skip(4 + 4 + 4);
+    info.mountNpcId = packet.d() - NPC_ID_OFFSET;
+    packet.skip(4 + 4);
     info.enchantLevel = packet.c();
     packet.skip(1);
     info.largeCrestId = packet.d();
@@ -1273,8 +1277,11 @@ export function readFlyToLocation(packet: PacketReader): FlyToLocation_T {
     return { objectId, destination, origin, flyType };
 }
 
-export function readSpecialCamera(packet: PacketReader): SpecialCamera_T { // SetSpecialViewTarget 0x800048: a non-zero last field makes yaw/pitch relative to the target's Rotation.
-    return { objectId: packet.d(), distance: packet.d(), yaw: packet.d(), pitch: packet.d(), time: packet.d(), duration: packet.d(), turn: packet.d(), rise: packet.d(), wideScreen: packet.d(), isRelative: packet.d() !== 0 };
+export function readSpecialCamera(packet: PacketReader): SpecialCamera_T { // Engine 0x10419450..0x1041955a: signed degree conversion and positive-only flags.
+    const objectId = packet.d(), distance = packet.d(), yaw = Math.trunc((-packet.d() << 16) / 360), pitch = Math.trunc((-packet.d() << 16) / 360);
+    const time = packet.d(), duration = packet.d(), turn = Math.trunc((packet.d() << 16) / 360), rise = Math.trunc((packet.d() << 16) / 360);
+
+    return { objectId, distance, yaw, pitch, time, duration, turn, rise, wideScreen: packet.d() > 0 ? 1 : 0, isRelative: packet.d() > 0 };
 }
 
 export function readObservationMode(packet: PacketReader): ObservationMode_T {

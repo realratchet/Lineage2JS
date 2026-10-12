@@ -1,6 +1,5 @@
-import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
+import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
-import type { NDomButton_T, NDomScrollPane_T } from "./ndom";
 import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.Inventory_Back";
@@ -34,7 +33,7 @@ const SLOT_UNDERWEAR = 0x1, SLOT_EARS = 0x6, SLOT_NECK = 0x8, SLOT_FINGERS = 0x3
 
 export type InventoryEntry_T = { objectId: number, itemId: number, name: string, icon: string, count: number, enchant: number, itemClass: number, bodyPart: number, slot: number, isQuest: boolean, isMoney: boolean, info: ItemInfo_T, customType1?: number, customType2?: number, maxCount?: number };
 type ItemLine_T = { label: string, value: string, color?: number };
-type ItemDrag_T = { item: InventoryEntry_T, isDragging: boolean };
+type InventoryInput_T = { pressed: number, hovered: number, selected: number, isArmed: boolean, isDoubleClick: boolean, isReleaseBlocked: boolean };
 
 function getWeaponEnchant(enchant: number) { return enchant > 3 ? enchant * 2 - 3 : enchant; } // 0x1006b690
 function getArmorEnchant(enchant: number) { return enchant > 3 ? enchant * 3 - 6 : enchant; } // 0x1006b6a0
@@ -87,8 +86,9 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected readonly tooltip: HTMLDivElement;
     protected readonly selection = new Map<HTMLElement, number>();
     protected readonly frames = new Map<number, HTMLDivElement[]>();
-    protected drag: ItemDrag_T = null;
-    protected isDoubleClick = false;
+    protected readonly arrInput: InventoryInput_T[] = Array.from({ length: 3 }, () => ({ pressed: -1, hovered: -1, selected: -1, isArmed: false, isDoubleClick: false, isReleaseBlocked: false }));
+    protected heldSource = -1;
+    protected cursorSource = -1;
 
     public constructor(layer: NDomLayer) {
         this.layer = layer;
@@ -182,6 +182,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             layer.dragWindow(this.element, event, (x, y) => this.place(x, y));
         });
         this.equipment = layer.createWindow(8, 31, 240, 122, this.element);
+        this.equipment.tabIndex = -1;
         [false, true].forEach(isQuest => {
             const bag = layer.scrollPane(this.element, 9, 189, 236, 139, 35); // NCInvenItemWnd on NCScrollWnd, 6x4 grid of 37x35 cells.
 
@@ -230,24 +231,45 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.tooltip.classList.add("ndom-opaque", "ndom-tooltip");
         this.tooltip.hidden = true;
 
-        window.addEventListener("mousemove", event => {
-            if (!this.drag) return;
-            if (!(event.buttons & 1)) { this.endDrag(); return; }
-            if (this.drag.item.slot < 0) this.updateDragTargets(event);
-            if (this.drag.isDragging) return;
+        [this.arrBags[0], this.arrBags[1], this.equipment].forEach((pane, source) => {
+            pane.addEventListener("mousedown", event => {
+                if (!this.admitsInput(source, event.target as Node) || event.button !== 0 && event.button !== 2 || this.chooseItemId) return;
 
-            this.drag.isDragging = true; // 0x10095472
-            this.tooltip.hidden = true;
-            this.layer.getManager().setCursor(`url(${layer.getWrapUrl(this.drag.item.icon)}) 16 16, default`); // 0x10039680
-            document.documentElement.classList.add("ndom-item-drag");
+                event.preventDefault();
+                pane.focus();
+                this.pressItem(source, event);
+                if (event.button === 0) this.heldSource = source;
+            });
+            pane.addEventListener("mousemove", event => {
+                if (!this.admitsInput(source, event.target as Node)) { this.hideTooltip(); return; }
+                if (!(event.buttons & 1)) this.moveItem(source, event);
+                this.showInputTooltip(source);
+            });
+            pane.addEventListener("mouseenter", () => this.showInputTooltip(source));
+            pane.addEventListener("mouseleave", () => this.hideTooltip());
+            pane.addEventListener("contextmenu", event => event.preventDefault());
+        });
+        window.addEventListener("mousemove", event => {
+            const source = this.heldSource;
+
+            if (this.element.hidden || source < 0 || !(event.buttons & 1) || this.getInputPane(source).hidden || document.activeElement !== this.getInputPane(source)) return;
+
+            this.moveItem(source, event);
         }, true);
         window.addEventListener("mouseup", event => {
-            if (!this.drag || event.button !== 0) return;
+            if (event.button !== 0 || this.element.hidden) return;
 
-            const drag = this.drag;
+            const source = this.arrInput.findIndex((input, index) => !this.getInputPane(index).hidden && document.activeElement === this.getInputPane(index));
 
+            this.heldSource = -1;
             this.endDrag();
-            if (drag.isDragging) this.dropItem(drag.item, event);
+            if (source < 0) return;
+
+            const input = this.arrInput[source], item = this.getPressedItem(source);
+
+            if (item && input.isArmed && !input.isReleaseBlocked) this.dropItem(item, event);
+            if (source < 2 && item) input.isReleaseBlocked = false;
+            input.isArmed = false;
         }, true);
     }
 
@@ -414,7 +436,10 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     public async setItems(items: InventoryEntry_T[], isFull: boolean = false) {
         if (isFull) {
             this.selection.clear();
-            this.arrBags.forEach(bag => bag.setScroll(0));
+            this.arrBags.forEach((bag, source) => {
+                bag.setScroll(0);
+                this.arrInput[source].pressed = this.arrInput[source].hovered = -1;
+            });
         }
         this.arrBagOrder.forEach((order, tab) => {
             const bagItems = items.filter(item => item.slot < 0 && Number(item.isQuest) === tab);
@@ -514,37 +539,10 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             this.chooseItemId = 0;
             if (this.onChoose) this.onChoose(item.objectId);
         };
-        const use = (isRight = false) => { // 0x10094ed0 / 0x10094be0 -> NConsoleWnd::RequestUseItem 0x10066320.
-            if (this.onUse) this.onUse(item, isRight);
-            if (!isRight) this.select(parent, 0);
-            this.endDrag();
-        };
-
         button.addEventListener("mousedown", event => {
-            if (this.chooseItemId) {
-                if (event.button === 0) this.layer.getManager().playButtonSound(item.itemId === this.chooseItemId);
-                return;
-            }
-            if (event.button === 2) { use(true); return; }
-            if (event.button !== 0) return;
-
-            this.select(parent, item.objectId); // 0x10094e40
-            this.layer.getManager().playPickupSound();
-            this.showTooltip(item, button);
-
-            if (this.isDoubleClick) this.isDoubleClick = false;
-            else this.drag = { item, isDragging: false };
+            if (this.chooseItemId && event.button === 0) this.layer.getManager().playButtonSound(item.itemId === this.chooseItemId);
         });
         button.addEventListener("click", event => { if (event.button === 0 && this.chooseItemId) choose(); });
-        button.addEventListener("dblclick", event => {
-            if (event.button !== 0 || this.chooseItemId) return;
-
-            use();
-            this.isDoubleClick = true;
-        });
-        button.addEventListener("contextmenu", event => event.preventDefault());
-        button.addEventListener("mouseenter", () => this.showTooltip(item, button));
-        button.addEventListener("mouseleave", () => { this.tooltip.hidden = true; });
         button.addEventListener("keydown", event => {
             if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
 
@@ -552,9 +550,123 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             if (this.chooseItemId) {
                 this.layer.getManager().playButtonSound(item.itemId === this.chooseItemId);
                 choose();
-            } else use();
+            } else {
+                if (this.onUse) this.onUse(item, false);
+                this.select(parent, 0);
+            }
         });
         parent.appendChild(button);
+    }
+
+    protected getInputPane(source: number) { return source === 2 ? this.equipment : this.arrBags[source]; }
+    protected getInputParent(source: number) { return source === 2 ? this.equipment : this.arrBags[source].content; }
+    protected admitsInput(source: number, target: Node) { return source === 2 ? this.equipment.contains(target) : target === this.arrBags[source] || this.arrBags[source].content.contains(target); }
+
+    protected hitItem(source: number, event: MouseEvent) {
+        const rect = this.getInputPane(source).getBoundingClientRect();
+        const x = this.layer.toUI(event.clientX - rect.left), y = this.layer.toUI(event.clientY - rect.top);
+
+        if (source === 2) {
+            for (let i = 0; i < 15; i++) {
+                const left = [7, 46, 85, 130, 169][i % 5], top = 7 + Math.trunc(i / 5) * 38;
+
+                if (x >= left && x <= left + 32 && y >= top && y <= top + 32) return i;
+            }
+            return -1;
+        }
+        if (x < 1 || x > 223 || y < 1 || y > 141) return -1;
+
+        return (Math.trunc(this.arrBags[source].getScroll() / 35) + Math.min(3, Math.trunc((y - 1) / 35))) * 6 + Math.min(5, Math.trunc((x - 1) / 37));
+    }
+
+    protected getEquipSlot(item: InventoryEntry_T) { return item.bodyPart === SLOT_LR_HAND ? 5 : item.bodyPart === SLOT_FULL_ARMOR || item.bodyPart === SLOT_ALLDRESS ? 6 : item.slot; }
+    protected getInputItem(source: number, index: number) {
+        if (index < 0) return null;
+        if (source === 2) return this.items.find(item => item.slot >= 0 && this.getEquipSlot(item) === index);
+
+        const objectId = this.arrBagOrder[source][index];
+
+        return this.items.find(item => item.objectId === objectId && item.slot < 0 && Number(item.isQuest) === source);
+    }
+    protected getPressedItem(source: number) { return this.getInputItem(source, this.arrInput[source].pressed); }
+
+    protected pressItem(source: number, event: MouseEvent) {
+        const input = this.arrInput[source], parent = this.getInputParent(source);
+
+        input.pressed = this.hitItem(source, event);
+        const item = this.getPressedItem(source);
+
+        if (event.button === 2) {
+            if (item && this.onUse) this.onUse(item, true);
+            input.isArmed = false;
+            this.endDrag();
+            return;
+        }
+        if (event.detail === 2) {
+            input.isDoubleClick = true;
+            if (source < 2) input.isArmed = false;
+            if (item && this.onUse) this.onUse(item, false);
+            this.select(parent, 0);
+            if (source === 2) input.pressed = -1;
+            else input.isReleaseBlocked = true;
+            input.isArmed = false;
+            this.endDrag();
+            return;
+        }
+        input.hovered = input.pressed;
+        if (source === 2) {
+            const equipped = this.items.filter(entry => entry.slot >= 0);
+
+            input.selected = -1;
+            for (let i = 0; i < equipped.length; i++) {
+                const entry = equipped[i];
+
+                if (entry.bodyPart === SLOT_LR_HAND || entry.bodyPart === SLOT_FULL_ARMOR || entry.bodyPart === SLOT_ALLDRESS) this.select(parent, 0);
+                if (this.getEquipSlot(entry) !== input.pressed) continue;
+
+                this.select(parent, entry.objectId);
+                input.selected = i;
+                break;
+            }
+        } else {
+            if (!item) { this.showInputTooltip(source); return; }
+
+            this.select(parent, item.objectId);
+        }
+        if (input.isDoubleClick) input.isDoubleClick = false;
+        else {
+            input.isArmed = true;
+            this.layer.getManager().playPickupSound();
+        }
+        this.showInputTooltip(source);
+    }
+
+    protected moveItem(source: number, event: MouseEvent) {
+        const input = this.arrInput[source];
+
+        input.hovered = this.hitItem(source, event);
+        if (document.activeElement !== this.getInputPane(source)) return;
+
+        const item = source === 2 ? this.items.filter(entry => entry.slot >= 0)[input.selected] : this.getPressedItem(source);
+
+        if (input.isArmed && input.pressed >= 0 && item) {
+            this.cursorSource = source;
+            this.layer.getManager().setCursor(`url(${this.layer.getWrapUrl(item.icon)}) 16 16, default`);
+            document.documentElement.classList.add("ndom-item-drag");
+        }
+        this.updateDragTargets(event);
+    }
+
+    protected showInputTooltip(source: number) {
+        const pane = this.getInputPane(source), item = this.getInputItem(source, this.arrInput[source].hovered);
+
+        if (this.element.hidden || pane.hidden || !pane.matches(":hover") || !item) { this.hideTooltip(); return; }
+
+        const button = this.getInputParent(source).querySelector(`[data-object-id="${item.objectId}"]`) as HTMLElement;
+
+        if (!button) { this.hideTooltip(); return; }
+
+        this.showTooltip(item, button);
     }
 
     protected paintFrame(objectId: number, isSelected: boolean) { // NCInvenItemWnd::OnPaint 0x10095369: item_click when selected, else OutLine_down 34x34 under OutLine 35x35.
@@ -588,7 +700,9 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
     protected endDrag() {
         this.updateDragTargets();
-        this.drag = null;
+        if (this.cursorSource < 0) return;
+
+        this.cursorSource = -1;
         this.layer.getManager().setCursor("");
         document.documentElement.classList.remove("ndom-item-drag");
     }
@@ -805,8 +919,6 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     public hideTooltip() { this.tooltip.hidden = true; }
 
     public showTooltip(item: InventoryEntry_T, button: HTMLElement, isDetailed = this.selection.get(button.parentElement) === item.objectId, context = 0, price = 0, flags = 2) { // NCItemWnd 0x10020370: simple box 0x10032860, detailed box 0x10032560 once the item is selected.
-        if (this.drag && this.drag.isDragging) return;
-
         const layer = this.layer, lineHeight = layer.getManager().canvas.getLineHeight();
         const title = this.getItemTitle(item, context, isDetailed), titleWidth = this.measureRuns(isDetailed && context & 1 ? this.getItemTitle(item, context) : title);
         const lines = isDetailed ? this.getItemLines(item, context, price, false, flags) : [];

@@ -1,8 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES, NDOM_EDIT_TEXTURES } from "./ndom";
-import type { NDomScrollPane_T, NDomEdit_T } from "./ndom";
-import type NCInventoryWnd from "./nc-inventory-wnd";
-import type { InventoryEntry_T } from "./nc-inventory-wnd";
+import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
+import type { default as NCInventoryWnd, InventoryEntry_T } from "./nc-inventory-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { MultiSellList_T, MultiSellEntry_T, MultiSellProduct_T, MultiSellIngredient_T } from "../network/game-packets";
 
@@ -27,6 +25,7 @@ export class NCVIPShopWnd {
     protected catalogItems: InventoryEntry_T[] = [];
     protected listId = 0;
     protected selectedIndex = -1;
+    protected hoveredIndex = -1;
     protected generation = 0;
 
     public constructor(protected readonly layer: NDomLayer, protected readonly inventory: NCInventoryWnd) {
@@ -42,6 +41,7 @@ export class NCVIPShopWnd {
         this.catalog = layer.scrollPane(this.element, 9, 48, 240, 314, 35);
         this.products = layer.scrollPane(this.element, 262, 45, 244, 150, 15, true);
         this.ingredients = layer.scrollPane(this.element, 262, 217, 244, 150, 15, true);
+        this.products.addEventListener("scroll", () => this.updateProductVisibility());
         this.quantity = layer.edit(this.element, 165, 374, 63, 17, false, 0, true);
         layer.button(this.element, 307, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(140), () => {
             const entry = this.entries[this.selectedIndex];
@@ -59,15 +59,23 @@ export class NCVIPShopWnd {
             }, true);
             pane.addEventListener("mouseleave", () => this.inventory.hideTooltip());
         });
+        this.catalog.addEventListener("mousemove", event => {
+            if (this.catalog.content.contains(event.target as Node) || event.target === this.catalog)
+                this.hoverCatalog(event);
+        });
         this.catalog.content.addEventListener("mousedown", event => {
             if (event.button !== 0) return;
 
             event.preventDefault();
             if (this.onSelect) this.onSelect();
-            const rect = this.catalog.getBoundingClientRect(), x = layer.toUI(event.clientX - rect.left), y = layer.toUI(event.clientY - rect.top);
-            const index = x >= 0 && x <= 222 && y >= 0 && y <= 315 ? (this.catalog.getScroll() / 35 + Math.min(8, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37)) : -1;
+            const index = this.getCatalogIndex(event);
 
-            this.selectedIndex = index < this.catalogItems.length ? index : -1;
+            this.hoveredIndex = index;
+            layer.beginDrag(moveEvent => this.hoveredIndex = this.getCatalogIndex(moveEvent));
+
+            if (index < 0 || index >= this.catalogItems.length) return;
+
+            this.selectedIndex = index;
             this.catalog.content.querySelectorAll<HTMLElement>("[data-selected]").forEach((frame, i) => frame.hidden = i !== this.selectedIndex);
             const entry = this.entries[this.selectedIndex];
 
@@ -98,6 +106,7 @@ export class NCVIPShopWnd {
         this.catalogItems = [];
         this.listId = listId;
         this.selectedIndex = -1;
+        this.hoveredIndex = -1;
         this.catalog.content.replaceChildren();
         this.catalog.setContentHeight(0);
         this.products.content.replaceChildren();
@@ -117,6 +126,7 @@ export class NCVIPShopWnd {
         if (generation !== this.generation) return;
 
         this.catalog.content.replaceChildren();
+        this.hoveredIndex = -1;
         this.catalogItems = [];
         this.products.content.replaceChildren();
         this.ingredients.content.replaceChildren();
@@ -136,9 +146,22 @@ export class NCVIPShopWnd {
             frame.hidden = true;
             this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, strings.itemIcons[entry.products[0].itemId]);
             if (entry.products.length > 1) this.layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, TEX_PLUS);
-            button.addEventListener("mouseenter", () => this.inventory.showTooltip(item, button, index === this.selectedIndex));
+            button.addEventListener("mouseenter", event => this.hoverCatalog(event));
             button.addEventListener("mouseleave", () => this.inventory.hideTooltip());
         });
+    }
+    protected getCatalogIndex(event: MouseEvent) {
+        const rect = this.catalog.getBoundingClientRect(), x = this.layer.toUI(event.clientX - rect.left), y = this.layer.toUI(event.clientY - rect.top);
+
+        return x >= 0 && x <= 222 && y >= 0 && y <= 315 ? (this.catalog.getScroll() / 35 + Math.min(8, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37)) : -1;
+    }
+    protected hoverCatalog(event: MouseEvent) {
+        if (!(event.buttons & 1)) this.hoveredIndex = this.getCatalogIndex(event);
+
+        const item = this.catalogItems[this.hoveredIndex], button = this.catalog.content.children[this.hoveredIndex] as HTMLElement;
+
+        if (item) this.inventory.showTooltip(item, button, this.hoveredIndex === this.selectedIndex);
+        else this.inventory.hideTooltip();
     }
     protected getItem(item: MultiSellItem_T, count = item.count): InventoryEntry_T {
         const strings = this.layer.getManager().strings;
@@ -151,7 +174,10 @@ export class NCVIPShopWnd {
         const products = entry.products.slice(0, 50);
 
         for (let index = 0; index < products.length; index++) {
-            if (!products[index]) { debugger; throw new Error(`Unqualified MultiSell duplicate product slot ${index} for entry ${entry.entryId}.`); }
+            if (!products[index]) {
+                this.layer.tile(this.products.content, 10, 5 + 36 * index, 34, 34, 0, 0, 34, 34, TEX_ICONBOX);
+                continue;
+            }
 
             const item = this.getItem(products[index]);
 
@@ -173,8 +199,17 @@ export class NCVIPShopWnd {
         this.layer.tile(parent, x, y, 34, 34, 0, 0, 34, 34, TEX_ICONBOX);
         this.layer.tile(parent, x + 1, y + 1, 32, 32, 0, 0, 32, 32, item.icon);
     }
+    protected updateProductVisibility() {
+        const scroll = this.products.getScroll(), height = parseFloat(this.products.style.height);
+
+        this.products.content.querySelectorAll<HTMLElement>("[data-item-name]").forEach(name => {
+            const top = parseFloat(name.style.top) - scroll;
+
+            name.hidden = top > height || top + parseFloat(name.style.height) < 0; // NCVIPShopItemInfoWnd 0x100a1e00 includes both pane boundaries.
+        });
+    }
     protected paintName(pane: NDomScrollPane_T, item: InventoryEntry_T, index: number, width: number) {
-        const name = this.layer.createWindow(46, 10 + 36 * index, width, 14, pane.content);
+        const name = this.layer.createWindow(46, 10 + 36 * index + pane.getScroll(), width, 14, pane.content);
 
         name.style.overflow = "hidden";
         name.dataset.itemName = String(item.itemId);
@@ -188,11 +223,15 @@ export class NCVIPShopWnd {
         if (overflow > 0) {
             const dots = this.layer.measureText("..");
             let length = baseName.length - 1;
+            let prefixWidth = item.count;
 
-            while (length > 0 && baseWidth - this.layer.measureText(baseName.slice(0, length)) - dots <= overflow) length--;
-            reduction = baseWidth - this.layer.measureText(baseName.slice(0, length)) - dots;
-            if (reduction <= overflow) { debugger; throw new Error(`Unqualified MultiSell name tail overflow for item ${item.itemId}.`); }
-            text = baseName.slice(0, length) + "..";
+            while (length >= 0) {
+                prefixWidth = this.layer.measureText(baseName.slice(0, length));
+                if (baseWidth - prefixWidth - dots > overflow) break;
+                length--;
+            }
+            reduction = baseWidth - prefixWidth - dots;
+            text = length < 0 ? "." : baseName.slice(0, length) + ".."; // NCItemTooltip::Paint 0x1002ca1e: exhausted index -1 leaves one visible dot.
         }
         this.layer.text(name, text, 0xffdcdcdc, FontType_T.SMALL, 0, 0);
         if (extra) this.layer.text(name, extra, 0xffffd969, FontType_T.SMALL, baseWidth - reduction + 2, 0);

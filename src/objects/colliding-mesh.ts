@@ -6,6 +6,9 @@ import buildTriangleIndex from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
 import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, StaticMeshBatchInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
+import StaticMeshActor from "./static-mesh-actor";
+import type UnScriptVM from "../ue-script/vm";
+import type { ScriptObjectFactory_T } from "../game/script-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -14,7 +17,7 @@ const tmpScale = new Vector3();
 export class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
     public actorUuid: string;
-    public readonly collisionActors: { actor: IStaticMeshActorDecodeInfo; primitive: CollisionPrimitive_T<"staticMesh"> }[] = [];
+    public readonly collisionActors: { actor: IStaticMeshActorDecodeInfo; object: StaticMeshActor; primitive: CollisionPrimitive_T<"staticMesh">; firstTriangle: number; triangleCount: number }[] = [];
 
     protected colliderDesc: ColliderDesc;
     protected rigidbodyDesc: RigidBodyDesc;
@@ -33,6 +36,8 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     protected readonly localColliderBounds = new Box3();
     protected analyticalPrimitive: CollisionPrimitive_T = null;
     protected readonly basedActors = new Set<ICollidable>();
+    protected scriptVM: UnScriptVM = null;
+    protected scriptObjectFactory: ScriptObjectFactory_T = null;
 
     public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
         super(props);
@@ -52,14 +57,55 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
     public setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"]): void {
         const vertices = this.geometry.getAttribute("position").array as Float32Array;
+        let indexOffset = 0;
 
+        for (const record of this.collisionActors) if (record.object) record.object.release();
         this.collisionActors.length = 0;
         for (const { actor, indices } of actors) {
+            if (indices.length % 3) throw new Error(`Actor '${actor.name}' has incomplete collision triangles.`);
+            if (this.colliderIndices)
+                for (let i = 0; i < indices.length; i++)
+                    if (indices[i] !== this.colliderIndices[indexOffset + i]) throw new Error(`Actor '${actor.name}' collision triangles do not match '${this.name}'.`);
+
             const bounds = new Box3();
             for (const index of indices) bounds.expandByPoint(tmpPosition.fromArray(vertices, index * 3));
 
-            this.collisionActors.push({ actor, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: null, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
+            this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: null, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
+            indexOffset += indices.length;
         }
+
+        if (this.colliderIndices && indexOffset !== this.colliderIndices.length) throw new Error(`Actor collision triangles do not cover '${this.name}'.`);
+    }
+
+    public getCollisionActor(item: number): StaticMeshActor {
+        if (!this.collisionActors.length) return null;
+        if (!Number.isInteger(item) || item < 0) throw new Error(`Invalid collision triangle '${item}' in '${this.name}'.`);
+
+        let first = 0, last = this.collisionActors.length - 1;
+
+        while (first <= last) {
+            const index = (first + last) >>> 1, record = this.collisionActors[index];
+
+            if (item < record.firstTriangle) last = index - 1;
+            else if (item >= record.firstTriangle + record.triangleCount) first = index + 1;
+            else {
+                if (!record.object) {
+                    record.object = new StaticMeshActor(this, record.actor, record.primitive);
+                    if (this.scriptVM) record.object.setScriptRuntime(this.scriptVM, this.scriptObjectFactory);
+                }
+                return record.object;
+            }
+        }
+
+        throw new Error(`Collision triangle '${item}' has no actor in '${this.name}'.`);
+    }
+
+    public setScriptRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T): void {
+        this.scriptVM = vm;
+        this.scriptObjectFactory = objectFactory;
+
+        for (const record of this.collisionActors)
+            if (record.object) record.object.setScriptRuntime(vm, objectFactory);
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {
@@ -136,6 +182,10 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     }
 
     public releaseCollider() {
+        for (const record of this.collisionActors) {
+            if (record.object) record.object.release();
+            record.object = null;
+        }
         this.collider = null;
         this.rigidbody = null;
     }

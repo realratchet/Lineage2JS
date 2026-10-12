@@ -56,6 +56,7 @@ export class NCGMDetailStatusWnd {
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement = layer.root) {
         this.element = layer.createWindow(0, 100, 256, 355, parent);
         this.element.hidden = true;
+        this.element.tabIndex = -1;
         NCFrameCtrl.createDOM(layer, this.element, 256, "", false, () => this.setVisible(false));
         this.statusWnd = new NCGMDetailStatusPage(layer, this.element);
     }

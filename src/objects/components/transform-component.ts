@@ -6,6 +6,7 @@ import Rotator from "../../utils/rotator";
 import LocalSpaceSkeleton from "../local-space-skeleton";
 import { setScriptObjectProperty } from "./actor-ownership-component";
 import type AnimationComponent from "./animation-component";
+import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { ICollidable } from "../objects";
@@ -16,6 +17,7 @@ const tmpBasePosition = new Vector3();
 const tmpBaseQuaternion = new Quaternion();
 const tmpBaseInverseQuaternion = new Quaternion();
 const tmpBoneMatrix = new Matrix4();
+const tmpLocation = new Vector3();
 
 export class TransformComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "transform";
@@ -38,7 +40,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
 
         const call = data as ScriptNativeCall_T;
         const context = call.context as any;
-        const name = call.name.toLowerCase();
+        const name = call.index === 267 ? "setlocation" : call.index === 299 ? "setrotation" : call.name.toLowerCase();
 
         if (call.index === 298 || name === "setbase") {
             const base = call.args[0] as any;
@@ -56,6 +58,36 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         }
 
         switch (name) {
+            case "setlocation": {
+                if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot move '${this.getParent().type}'.`);
+
+                const location = tmpLocation.fromArray(call.args[0] as Vector3Arr);
+                return this.renderManager.getPhysicsManager().farMoveActor(this.getParent(), location);
+            }
+            case "setrotation": {
+                const parent = this.getParent();
+
+                if (context !== parent) throw new Error(`'${context.scriptClassId}' cannot rotate '${parent.type}'.`);
+                if (parent.getUnrealScriptProperty("bStatic") || !parent.getUnrealScriptProperty("bMovable")) return false;
+
+                const rotation = (call.args[0] as Vector3Arr).map(value => value | 0) as Vector3Arr;
+                const oldRotation = parent.getUnrealScriptProperty("Rotation") as Vector3Arr;
+
+                if (rotation.every((value, index) => value === oldRotation[index])) return true;
+                for (const actor of this.basedActors)
+                    if (!(actor as BaseActor).scriptBase) throw new Error(`SetRotation with unboned attachments is not implemented for '${parent.scriptClassId}'.`);
+                if (!parent.getCollisionProfile().useCylinderCollision) throw new Error(`SetRotation without cylinder collision is not implemented for '${parent.scriptClassId}'.`);
+                if (this.base && !parent.scriptBase && !this.base.getCollisionProfile?.().worldGeometry) throw new Error(`SetRotation relative to a moving base is not implemented for '${parent.scriptClassId}'.`);
+
+                // Engine.dll MoveActor 0x85b4f4..0x85b584: cylinder rotation skips collision/SetZone.
+                parent.setUnrealScriptProperty("Rotation", rotation);
+                this.getComponent<PawnMovementComponent>("pawnMovement").syncRotationYaw(rotation[1]);
+                tmpRotator.set(rotation[0], rotation[1], rotation[2]).toQuaternion(parent.quaternion);
+                parent.rotateZ(-Math.PI / 2);
+                parent.updateMatrixWorld(true);
+                this.renderManager.needsUpdate = true;
+                return true;
+            }
             case "getbonecoordswithboneindex": {
                 if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' bones.`);
 
@@ -111,6 +143,12 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
     public getBasePosition(): Vector3 { return this.basePosition; }
     public getBaseQuaternion(): Quaternion { return this.baseQuaternion; }
     public getBaseRelativePosition(): Vector3 { return this.baseRelativePosition; }
+
+    public beginTouch(other: BaseActor): void { beginTouch(this.getParent(), other); }
+
+    public endTouch(other: BaseActor, noNotifySelf = false): void { endTouch(this.getParent(), other, noNotifySelf); }
+
+    public releaseTouching(): void { releaseTouching(this.getParent()); }
 
     public setBase(actor: ICollidable | null): boolean {
         const parent = this.getParent();
@@ -222,6 +260,70 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         return false;
     }
 
+}
+
+export type TouchActor_T = ScriptHost_T & Pick<BaseActor, "getUnrealScriptProperty" | "getComponent" | "isPendingKill">;
+
+export function beginTouch(parent: TouchActor_T, other: TouchActor_T): void {
+    if (!other || other === parent) throw new Error(`Invalid touch actor '${other}'.`);
+
+    if (touchTo(parent, other)) touchTo(other, parent);
+}
+
+export function endTouch(parent: TouchActor_T, other: TouchActor_T, noNotifySelf = false): void {
+    if (!other || other === parent) throw new Error(`Invalid touch actor '${other}'.`);
+
+    const touching = parent.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[], otherTouching = other.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[];
+    if (!noNotifySelf && touching.includes(other) && !parent.isPendingKill()) {
+        const script = parent.getComponent<ScriptComponent>("script");
+
+        if (script.hasFunction("UnTouch")) script.call("UnTouch", [other]);
+    }
+
+    for (let i = touching.length - 1; i >= 0; i--)
+        if (touching[i] === other) touching.splice(i, 1);
+
+    if (!otherTouching.includes(parent)) return;
+
+    if (!other.isPendingKill()) {
+        const otherScript = other.getComponent<ScriptComponent>("script");
+
+        if (otherScript.hasFunction("UnTouch")) otherScript.call("UnTouch", [parent]);
+    }
+
+    for (let i = otherTouching.length - 1; i >= 0; i--)
+        if (otherTouching[i] === parent) otherTouching.splice(i, 1);
+}
+
+export function releaseTouching(parent: TouchActor_T): void {
+    if (!parent.scriptProperties) return;
+
+    const touching = parent.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[];
+
+    for (let i = 0; i < touching.length; i++) {
+        const other = touching[i];
+
+        if (!other || !(other.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[]).includes(parent)) continue;
+
+        endTouch(parent, other, true);
+        i--;
+    }
+}
+
+function touchTo(actor: TouchActor_T, other: TouchActor_T): boolean {
+    const touching = actor.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[];
+
+    if (touching.includes(other)) return true;
+
+    touching.push(other);
+
+    if (!actor.isPendingKill()) {
+        const script = actor.getComponent<ScriptComponent>("script");
+
+        if (script.hasFunction("Touch")) script.call("Touch", [other]);
+    }
+
+    return touching.includes(other);
 }
 
 export default TransformComponent;

@@ -1,10 +1,8 @@
-import NWnd from "./nwnd";
+import NWnd, { type NMouseEvent_T } from "./nwnd";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCTooltip from "./nc-tooltip";
-import { DigitFont_T } from "./nwindow-canvas";
-import type NWindowCanvas from "./nwindow-canvas";
+import { DigitFont_T, type default as NWindowCanvas } from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
-import type { NMouseEvent_T } from "./nwnd";
 import type { AbnormalStatus_T } from "../network/game-packets";
 
 type EffectItem_T = AbnormalStatus_T & { alpha: number, isFading: boolean, tooltipTime: number };

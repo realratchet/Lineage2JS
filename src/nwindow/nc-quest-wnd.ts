@@ -1,5 +1,4 @@
-import type NDomLayer from "./ndom";
-import { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
+import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import NCTooltip from "./nc-tooltip";
 import { ItemType2_T, type QuestState_T, type InventoryItem_T } from "../network/game-packets";
 import type { GameStrings_T, QuestInfo_T } from "../assets/decode-worker/decode-protocol";
@@ -46,6 +45,7 @@ export class NCQuestWnd {
         this.list.content.style.width = "226px";
         this.list.content.style.overflow = "hidden";
         this.list.setAttribute("role", "tree");
+        this.list.tabIndex = -1;
         layer.button(this.element, 91, 306, 77, 23, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", "L2UI_CH3.BUTTON.Btn1_normal", this.strings.sysStrings[385], () => {
             const selected = this.nodes.find(node => node.selected);
 
@@ -192,9 +192,11 @@ export class NCQuestWnd {
             button.addEventListener("mousedown", event => {
                 if (event.button !== 0 || event.detail === 2) return;
 
+                event.preventDefault();
                 siblings.forEach(sibling => sibling.selected = false);
                 this.current = node;
                 this.paint();
+                this.list.focus();
             });
             return this.paintDescription(node, x, y);
         }
@@ -213,6 +215,7 @@ export class NCQuestWnd {
         button.addEventListener("mousedown", event => {
             if (event.button !== 0 || event.detail === 2) return;
 
+            event.preventDefault();
             const rect = button.getBoundingClientRect();
 
             siblings.forEach(sibling => sibling.selected = false);
@@ -221,6 +224,7 @@ export class NCQuestWnd {
             if (layer.toUI(event.clientX - rect.left) === 0 && layer.toUI(event.clientY - rect.top) === 0) node.expanded = !node.expanded;
             this.current = node;
             this.paint();
+            this.list.focus();
         });
         const texture = node.kind === 1 ? node.expanded ? "QuestWndMinusBtn" : "QuestWndPlusBtn" : node.expanded ? "QuestWndUpBtn" : "QuestWndDownBtn";
 

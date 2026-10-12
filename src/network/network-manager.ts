@@ -1,30 +1,29 @@
 import { LoopOnce, Raycaster, Vector3 } from "three";
 import BaseActor from "../base-actor";
+import Player from "../player";
 import PawnAttackComponent, { type NAttackActionParam_T } from "../objects/components/pawn-attack-component";
 import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
 import { CHARACTER_FULL_ARMOR_SLOT, CHARACTER_ALLDRESS_SLOT } from "@l2js/engine/datafile/schema/armorgrp.schema";
-import LoginClient from "./login-client";
-import GameClient from "./game-client";
-import NetworkUI from "./network-ui";
+import LoginClient, { type SessionKey_T } from "./login-client";
+import GameClient, { type CharacterCreate_T } from "./game-client";
+import NetworkUI, { type Nameplate_T } from "./network-ui";
 import getCommandTokens from "./command-parser";
 import L2Lobby from "./l2-lobby";
 import GroundPickup from "../objects/ground-pickup";
+import type { SectorObject } from "../objects/zone-object";
 import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
 import * as GamePackets from "./game-packets";
 import PawnFishingComponent, { FishingType_T } from "../objects/components/pawn-fishing-component";
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component";
+import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
 import type PacketReader from "./packet-reader";
-import type { SessionKey_T } from "./login-client";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
-import type { CharacterCreate_T } from "./game-client";
 import type { IEngineComponent } from "../game/components";
-import type { Nameplate_T } from "./network-ui";
 import type GameManager from "../game/game-manager";
 import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
-import Radar from "../rendering/radar";
-import type { RadarState_T } from "../rendering/radar";
+import Radar, { type RadarState_T } from "../rendering/radar";
 
 type NetObjectKind_T = "user" | "player" | "npc";
 type MacroRow_T = { command: GamePackets.Macro_T["commands"][number], duration: number, start: number, elapsed: number };
@@ -35,6 +34,7 @@ type PendingSkill_T = { targetObjectId: number, id: number, level: number, hitTi
 
 type NetObject_T = {
     objectId: number;
+    npcId: number;
     selectedId: number;
     clanId: number;
     clanCrestId: number;
@@ -184,6 +184,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected etcStatus: { charges: number, weightPenalty: number, messageRefusal: number, dangerArea: number, expertisePenalty: number } = null;
     protected signsSky = 0;
     protected petStatusType = -1;
+    protected deletedPetId = 0;
     protected petInfo: GamePackets.PetStatus_T = { objectId: -1, npcId: -GamePackets.NPC_ID_OFFSET, name: "", x: 0, y: 0, z: 0, statusType: 0, curFood: 0, maxFood: 0, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, field42: 0, level: 0, exp: 0, minExp: 0, nextExp: 0, weight: 0, maxWeight: 0, pAtk: 0, pDef: 0, mAtk: 0, mDef: 0, accuracy: 0, evasion: 0, critical: 0, speed: 0, attackSpeed: 0, castSpeed: 0, field60: 0, isMountable: false, soulshotsUsed: 0, spiritshotsUsed: 0 };
     protected isMounted = false;
     protected npcSpawnCount = 0;
@@ -193,8 +194,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected readonly abnormalStatuses: GamePackets.AbnormalStatus_T[] = [];
     protected shortBuff: GamePackets.AbnormalStatus_T = null;
     protected userId = 0;
+    protected userInfo: GamePackets.UserInfo_T = null;
     protected selectedSlot = -1;
     protected inWorld = false;
+    protected worldLevel: SectorObject = null;
     protected teleportGeneration = 0;
     protected teleportInfoPending = false;
     protected isRunning = true;
@@ -232,9 +235,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected cropProcure: GamePackets.SellListProcure_T = null;
     protected readonly vehicles = new Map<number, NetVehicle_T>();
     protected readonly mounts = new Map<number, GamePackets.Ride_T>();
+    protected readonly riders = new Map<number, BaseActor>();
     protected observation: GamePackets.Location_T = null;
     protected specialCamera: GamePackets.SpecialCamera_T = null;
     protected cameraMode = 0;
+    protected questArrowDestination: GamePackets.Location_T = null;
+    protected readonly mapMarkers: GamePackets.Location_T[] = [];
     protected readonly radarMarkers: GamePackets.Location_T[] = [];
     protected readonly radarState: RadarState_T = { party: [], target: null, markers: this.radarMarkers };
     protected readonly partyPositions = new Map<number, GamePackets.Location_T>();
@@ -316,7 +322,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.ui = new NetworkUI(this, asset, render);
             this.lobby = new L2Lobby(this.manGame, (appearance, actor) => this.loadAppearance(appearance, actor));
 
-            this.ui.setStrings(await asset.getGameStrings());
+            await this.ui.setStrings(await asset.getGameStrings());
 
             void this.loadNpcNames();
             void asset.prefetchCharacterScripts();
@@ -334,6 +340,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         render.radar.setMeshes(await this.manGame.getComponent("asset").loadSkeletalMeshes("LineageDecos", Radar.getMeshNames()));
         render.radar.getState = () => this.getRadarState();
+        const asset = this.manGame.getComponent("asset"), library = await asset.loadQuestEffects();
+
+        render.questArrow.createEffect = path => asset.createScriptObject(render, library, path);
+        render.questArrow.canDraw = () => this.inWorld && !this.isObserving();
+        render.questArrow.getDestination = () => this.ui.isQuestArrowEnabled() ? this.questArrowDestination : null;
+        render.questArrow.onArrival = () => { this.questArrowDestination = null; this.radarMarkers.length = 0; this.mapMarkers.length = 0; this.ui.setMapMarkers(this.mapMarkers); };
     }
 
     protected getRadarState(): RadarState_T { // DrawRadarBack 0x7FE54A: party members by GetUser actor, else the PartyMemberPosition XY; target is Controller.SelectedActor.
@@ -727,6 +739,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected leaveWorld() {
         const render = this.manGame.getComponent("render");
 
+        for (const objectId of this.riders.keys()) this.endRide(objectId);
+
         render.clearViewportWindowParam();
         render.setZoneMusicEnabled(false);
 
@@ -737,10 +751,19 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         this.objects.clear();
+        if (this.worldLevel) {
+            const level = this.worldLevel;
+
+            render.player.setUnrealScriptProperty("Level", null);
+            render.setLevel(null);
+            this.worldLevel = null;
+            this.manGame.getComponent("asset").unloadAlwaysLoaded(render, `${level.index.x}_${level.index.y}`, level);
+        }
         this.doors.clear();
         this.doorPositions.clear();
         this.staticObjects.clear();
         this.appearances.clear();
+        this.userInfo = null;
         const cubics = render.player.findComponent<PawnCubicComponent>("pawnCubic");
 
         if (cubics) render.player.removeComponent(cubics);
@@ -773,6 +796,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.friends.clear();
         this.partyMembers.clear();
         this.partyPositions.clear();
+        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
         this.partyInvite = null;
         this.pledgeInvite = null;
         this.friendInvite = null;
@@ -804,6 +828,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.etcStatus = null;
         this.signsSky = 0;
         this.petStatusType = -1;
+        this.deletedPetId = 0;
         Object.assign(this.petInfo, { objectId: -1, name: "", field60: 0, isMountable: false });
         this.isMounted = false;
         this.ui.setMountable(false);
@@ -840,6 +865,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.observation = null;
         this.specialCamera = null;
         this.cameraMode = 0;
+        this.questArrowDestination = null;
+        this.manGame.getComponent("render").questArrow.reset();
+        this.mapMarkers.length = 0;
+        this.ui.setMapMarkers(this.mapMarkers);
         this.radarMarkers.length = 0;
         this.townMap = null;
         this.calculatorId = 0;
@@ -984,7 +1013,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.Die: this.onDie(packet); break;
             case GamePackets.GameServerPacket_T.Revive: this.onRevive(packet.d()); break;
             case GamePackets.GameServerPacket_T.Earthquake: void this.onEarthquake(packet); break;
-            case GamePackets.GameServerPacket_T.ChangeMoveType: this.onChangeMoveType(packet.d(), packet.d() !== 0); break;
+            case GamePackets.GameServerPacket_T.ChangeMoveType: this.onChangeMoveType(packet.d(), packet.d() !== 0, packet.d()); break;
             case GamePackets.GameServerPacket_T.ChangeWaitType: this.onChangeWaitType(packet); break;
             case GamePackets.GameServerPacket_T.ChairSit: this.onChairSit(packet); break;
             case GamePackets.GameServerPacket_T.AutoAttackStart: this.onCombatState(packet.d(), true); break;
@@ -1187,8 +1216,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     case GamePackets.GameServerExPacket_T.ExMailArrived: this.onMailArrived(packet); break;
                 }
                 break;
-            case GamePackets.GameServerPacket_T.SunRise: this.manGame.getComponent("render").getEnvironment().setTimeOfDay(6); break;
-            case GamePackets.GameServerPacket_T.SunSet: this.manGame.getComponent("render").getEnvironment().setTimeOfDay(0); break;
+            case GamePackets.GameServerPacket_T.SunRise: this.manGame.getComponent("render").getEnvironment().setTimeOfDay(7); break; // Engine 0x103f1660: OnReceiveServerTime(420).
+            case GamePackets.GameServerPacket_T.SunSet: this.manGame.getComponent("render").getEnvironment().setTimeOfDay(1); break; // Engine 0x103f1690: OnReceiveServerTime(60).
             case GamePackets.GameServerPacket_T.RestartResponse:
                 if (packet.d() !== 0) { // Engine 0x104283d9 / 0x10480f82.
                     this.ui.saveInventoryOrder();
@@ -1308,6 +1337,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.applyPartyMember(object);
         }
 
+        for (const [objectId, rider] of this.riders) {
+            if (rider !== actor) continue;
+
+            const mount = this.objects.get(objectId).actor;
+
+            mount.playMovementAnimation(mount.isLocomoting() ? "running" : "idle");
+        }
+
         if (!isEquipmentOnly && this.inWorld && actor === this.manGame.getComponent("render").player) void this.preloadSkills();
     }
 
@@ -1329,9 +1366,27 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected async enterWorld(entry: GamePackets.CharSelectEntry_T) {
         const render = this.manGame.getComponent("render");
+        const asset = this.manGame.getComponent("asset");
+        const generation = this.teleportGeneration;
+        const [x, y] = render.getSectorId(render.player.position);
+
+        asset.setStreaming(render, false);
+        const [level] = await Promise.all([asset.setAlwaysLoaded(render, `${x}_${y}`), asset.precacheCharacters()]);
+
+        if (generation !== this.teleportGeneration) {
+            asset.unloadAlwaysLoaded(render, `${x}_${y}`, level);
+            return;
+        }
+
+        this.worldLevel = level;
+        render.setLevel(level);
+        asset.setStreaming(render, true);
 
         await this.loadAppearance(entry, render.player);
 
+        if (generation !== this.teleportGeneration) return;
+
+        render.player.setUnrealScriptProperty("Level", level.levelInfoActor as any);
         this.userAppearanceLoad = null;
         this.skillListLoad = new Promise(resolve => this.resolveSkillList = resolve);
         this.game.enterWorld();
@@ -1340,7 +1395,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingAttack: null, pendingSkill: null };
+        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingAttack: null, pendingSkill: null };
 
         this.objects.set(objectId, object);
 
@@ -1349,8 +1404,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected applySpeeds(actor: BaseActor, speeds: GamePackets.Speeds_T, isRunning: boolean) {
         actor.setMovementSpeeds(speeds.runSpd * speeds.moveMultiplier, speeds.walkSpd * speeds.moveMultiplier, speeds.swimRunSpd * speeds.moveMultiplier);
+        if (speeds.airRunSpd !== undefined) actor.setAirSpeed((isRunning ? speeds.airRunSpd : speeds.airWalkSpd) * speeds.moveMultiplier);
         actor.setUnrealScriptProperty("AttackSpeedRate", speeds.attackSpeedMultiplier);
         actor.setUnrealScriptProperty("NonAttackSpeedRate", Math.fround(speeds.moveMultiplier)); // Engine 0x1047ab88: User+118 double to Pawn+5fc float.
+        actor.setUnrealScriptProperty("GroundSpeed", Math.fround((isRunning ? speeds.runSpd : speeds.walkSpd) * Math.fround(speeds.moveMultiplier)));
+        actor.setUnrealScriptProperty("WaterSpeed", Math.fround((isRunning ? speeds.swimRunSpd : speeds.swimWalkSpd) * Math.fround(speeds.moveMultiplier)));
         actor.setCollisionSize(speeds.collisionRadius, speeds.collisionHeight);
         actor.setWalking(!isRunning);
     }
@@ -1373,11 +1431,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         for (let i = 0, count = packet.h(); i < count; i++) {
             const change = packet.h();
             const item = GamePackets.readInventoryItem(packet);
-
-            const previous = this.inventory.get(item.objectId);
-            const sound = item.isEquipped && !(previous && previous.isEquipped) ? this.ui.getStrings().itemInfos[item.itemId].equipSound : "";
-
-            if (sound && sound.toLowerCase() !== "none") void this.manGame.getComponent("audio").playInterfaceSound(sound); // UGameEngine::OnEquipItemPlaySound 0x74ee20: grp equip_sound, no 3D.
 
             this.ui.updateInventoryOrder(change, item);
 
@@ -1932,6 +1985,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.partyMembers.set(member.objectId, member);
             this.applyPartyMember(member);
         }
+        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
     }
 
     protected onPartySmallWindowAdd(packet: PacketReader) {
@@ -1941,6 +1995,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.partyLootDistribution = lootDistribution;
         this.partyMembers.set(member.objectId, member);
         this.applyPartyMember(member);
+        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
     }
 
     protected onPartySmallWindowDeleteAll(packet: PacketReader) {
@@ -1951,6 +2006,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.partyEffects.clear();
         this.partyLeaderId = 0;
         this.partyLootDistribution = 0;
+        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
     }
 
     protected onPartySmallWindowDelete(packet: PacketReader) {
@@ -1960,6 +2016,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.partyMembers.delete(objectId);
         this.partyPositions.delete(objectId);
         this.partyEffects.delete(objectId);
+        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
     }
 
     protected onPartySmallWindowUpdate(packet: PacketReader) {
@@ -1967,6 +2024,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.partyMembers.set(member.objectId, member);
         this.applyPartyMember(member);
+        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
     }
 
     protected onAskJoinPledge(packet: PacketReader) {
@@ -2048,6 +2106,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             setVector(object.position, entry.position);
             if (object.actor && distanceXY(object.actor.position, object.position) > SNAP_DISTANCE) object.actor.teleportTo(object.position, true);
         }
+        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
     }
 
     protected readClanMember(packet: PacketReader): GamePackets.ClanMember_T {
@@ -2336,7 +2395,22 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     this.game.action(target.selectedId, this.manGame.getComponent("render").player.position, shift);
                 break;
             }
+            case 7: case 9: {
+                const target = this.objects.get(this.getTargetId());
+
+                if (target && target.kind !== "npc") {
+                    if (id === 7) this.inviteToParty(target.name, this.ui.getGameOptions().partyLooting);
+                    else this.oustPartyMember(target.name);
+                } else {
+                    const messageId = id === 7 ? 185 : 187;
+
+                    this.ui.addSystemMessage(this.ui.getStrings().systemMessages[messageId], 0xffb09b79);
+                }
+                break;
+            }
+            case 8: this.withdrawParty(); break;
             case 10: this.requestPrivateStoreManageSell(); break;
+            case 11: this.ui.openPartyMatch(); break;
             case 18: {
                 const item = this.petInfo ? this.getNearestItem(200, -1, this.petInfo.objectId) : null;
 
@@ -2344,6 +2418,35 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 break;
             }
             case 28: this.requestPrivateStoreManageBuy(); break;
+            case 40: {
+                const target = this.objects.get(this.getTargetId());
+
+                if (target && target.kind !== "npc") this.evaluate(target.objectId);
+                else {
+                    const messageId = target ? 144 : 242;
+
+                    this.ui.addSystemMessage(this.ui.getStrings().systemMessages[messageId], 0xffb09b79);
+                    this.playSystemMessageSound(messageId);
+                }
+                break;
+            }
+            case 50: {
+                const target = this.objects.get(this.getTargetId());
+
+                if (target && target.kind !== "npc") this.changePartyLeader(target.name);
+                else this.ui.addSystemMessage(this.ui.getStrings().systemMessages[1400], 0xffb09b79);
+                break;
+            }
+            case 56: {
+                const target = this.objects.get(this.getTargetId());
+
+                if (target && target.kind !== "npc") this.inviteToCommandChannel(target.name);
+                else {
+                    this.ui.addSystemMessage(this.ui.getStrings().systemMessages[50], 0xffb09b79);
+                    this.playSystemMessageSound(50);
+                }
+                break;
+            }
             default: {
                 const type = this.ui.getStrings().actions[id].type;
 
@@ -2363,11 +2466,30 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected onUserInfo(packet: PacketReader) {
         const info = GamePackets.readUserInfo(packet);
         const render = this.manGame.getComponent("render");
-        const player = render.player;
+        const player = this.riders.get(info.objectId) || render.player;
         const isFirst = !this.inWorld;
         let object = this.objects.get(info.objectId);
 
         info.isRunning = this.isRunning;
+
+        if (this.userInfo) {
+            const played = new Set<number>();
+
+            for (let slot = 0; slot < info.paperdollObjects.length; slot++) {
+                const previous = this.userInfo.paperdollObjects[slot], current = info.paperdollObjects[slot];
+                const objectId = current || previous;
+
+                if (previous === current || played.has(objectId)) continue;
+
+                played.add(objectId);
+                const itemId = current ? info.paperdoll[slot] : this.userInfo.paperdoll[slot];
+                const sound = this.ui.getStrings().itemInfos[itemId].equipSound;
+
+                if (sound && sound.toLowerCase() !== "none") void this.manGame.getComponent("audio").playInterfaceSound(sound); // Engine 0x10424468/0x10424549: UserInfo equipment transitions, outgoing sound on removal.
+            }
+        }
+
+        this.userInfo = info;
 
         if (!object) {
             object = this.createObject(info.objectId, "user", info);
@@ -2407,8 +2529,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.privateStoreType = info.privateStoreType;
 
         player.setUnrealScriptProperty("bNpc", false);
-        this.applySpeeds(player, info, this.isRunning);
-        player.setRotationYaw(info.heading);
+        if (!info.mountType || this.riders.has(info.objectId)) this.applySpeeds(object.actor, info, this.isRunning);
+        object.actor.setRotationYaw(info.heading);
 
         if (isFirst) {
             this.inWorld = true;
@@ -2430,6 +2552,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             object.appearanceKey = key;
             this.userAppearanceLoad = this.loadAppearance(info, player);
         }
+
+        this.setRide({ objectId: info.objectId, isMounted: info.mountType !== 0, mountType: info.mountType, npcId: info.mountNpcId });
 
         if (isFirst) void this.finishLoading();
         this.teleportInfoPending = false;
@@ -2468,6 +2592,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.adjustPawnLocation(object, info);
             object.name = info.name;
             object.title = info.title;
+            object.recommendations = info.recommendations;
             object.speeds = info;
             object.isRunning = info.isRunning;
             object.isInCombat = info.isInCombat;
@@ -2480,7 +2605,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.updateAbnormalState(object);
 
             if (object.actor) {
-                this.applySpeeds(object.actor, info, info.isRunning);
+                if (!info.mountType || this.riders.has(info.objectId)) this.applySpeeds(object.actor, info, info.isRunning);
                 object.actor.setRotationYaw(info.heading);
                 if (object.isDead) {
                     if (!wasDead) object.actor.playDeathAnimation(() => { });
@@ -2495,9 +2620,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             if (object.actor && key !== object.appearanceKey) {
                 object.appearanceKey = key;
-                void this.loadAppearance(info, object.actor);
+                void this.loadAppearance(info, this.riders.get(info.objectId) || object.actor);
             }
 
+            this.setRide({ objectId: info.objectId, isMounted: info.mountType !== 0, mountType: info.mountType, npcId: info.mountNpcId });
             return;
         }
 
@@ -2505,6 +2631,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         Object.assign(object, { clanId: info.clanId, clanCrestId: info.clanCrestId, allyId: info.allyId, allyCrestId: info.allyCrestId });
         object.appearanceKey = this.getAppearanceKey(info);
         this.applyPartyMember(object);
+        this.setRide({ objectId: info.objectId, isMounted: info.mountType !== 0, mountType: info.mountType, npcId: info.mountNpcId });
 
         void this.spawnPlayer(object, info);
     }
@@ -2530,6 +2657,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         render.addPawn(actor);
         this.attachActor(object, actor, info);
+        const ride = this.mounts.get(object.objectId);
+
+        if (ride) await this.enterRide(ride);
     }
 
     protected onNpcInfo(packet: PacketReader) {
@@ -2550,6 +2680,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected onPetInfo(packet: PacketReader) {
         const info = GamePackets.readPetInfo(packet);
+
+        if (info.objectId === this.deletedPetId) return;
 
         Object.assign(this.petInfo, info, { name: info.name || this.ui.getStrings().npcNames[info.npcId] });
         this.ui.setPetRenameAvailable(info.name.length === 0);
@@ -2637,6 +2769,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         Object.assign(this.petInfo, { statusType, objectId: -1, x: 0, y: 0, z: 0 });
         this.updateMountable();
         this.removeObject(objectId);
+        this.deletedPetId = objectId;
     }
 
     protected onSetSummonRemainTime(packet: PacketReader) {
@@ -2676,6 +2809,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (object) {
             const wasDead = object.isDead;
+            object.npcId = info.npcId;
             this.adjustPawnLocation(object, info);
             if (info.name) object.name = info.name;
             object.title = info.title || this.ui.getStrings().npcTitles[info.npcId] || "";
@@ -2766,7 +2900,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.actor = actor;
 
         actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
-        this.applySpeeds(actor, info, info.isRunning);
+        if (!(info as GamePackets.CharInfo_T).mountType) this.applySpeeds(actor, info, info.isRunning);
         this.setIdleAnimation(object);
         actor.setRotationYaw(object.heading);
 
@@ -2844,6 +2978,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected removeObject(objectId: number) {
         const wasTarget = objectId === this.getTargetId();
 
+        if (objectId === this.deletedPetId) this.deletedPetId = 0;
+
         if (this.petInfo.objectId === objectId) {
             Object.assign(this.petInfo, { objectId: -1, x: 0, y: 0, z: 0 });
             this.updateMountable();
@@ -2859,10 +2995,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (wasTarget) this.updateTarget();
 
-        this.partyMembers.delete(objectId);
-        this.partyPositions.delete(objectId);
         this.vehicles.delete(objectId);
         for (const vehicle of this.vehicles.values()) vehicle.riders.delete(objectId);
+        this.endRide(objectId);
         this.mounts.delete(objectId);
         this.privateStoreSellMsgs.delete(objectId);
         this.privateStoreBuyMsgs.delete(objectId);
@@ -3273,16 +3408,19 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (object.kind === "user") this.ui.hideDeath();
     }
 
-    protected onChangeMoveType(objectId: number, isRunning: boolean) {
+    protected onChangeMoveType(objectId: number, isRunning: boolean, environment: number) {
         const object = this.objects.get(objectId);
 
-        if (!object) return;
+        if (!object || object.isRunning === isRunning) return;
         object.isRunning = isRunning;
         if (object.kind === "user") {
             this.isRunning = isRunning;
             this.ui.setRunning(isRunning);
         }
-        if (object.actor) object.actor.setWalking(!isRunning);
+        if (object.actor) {
+            object.actor.setUnrealScriptProperty("Environment", environment);
+            this.applySpeeds(object.actor, object.speeds, isRunning);
+        }
     }
 
     protected onChairSit(packet: PacketReader) {
@@ -3292,7 +3430,19 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const object = this.objects.get(objectId);
 
-        if (object) object.chairStaticObjectId = staticObjectId;
+        if (!object) return;
+
+        object.chairStaticObjectId = staticObjectId;
+        object.waitType = GamePackets.WaitType_T.WT_SITTING;
+        this.setIdleAnimation(object, false);
+
+        const actor = object.actor;
+
+        if (!actor) return;
+
+        const animation = (actor.getUnrealScriptProperty("ChairSitAnimName") as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
+
+        if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnChairSitPacket 0x10481e38..0x10481e8e.
     }
 
     protected onStaticObject(packet: PacketReader) {
@@ -3325,21 +3475,29 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!actor) return;
 
+        if (actor.ridePawn) this.setActorAbnormalState(actor.ridePawn, object.abnormalState & 0x2000); // FNAbnormalStat Init/Update/destructor select the flagged rider at APawn+660.
+        this.setActorAbnormalState(actor, actor.ridePawn ? object.abnormalState & ~0x2000 : object.abnormalState);
+    }
+
+    protected setActorAbnormalState(actor: BaseActor, abnormalState: number): void {
         let component = actor.findComponent<PawnAbnormalComponent>("pawnAbnormal");
 
-        if (!object.abnormalState) {
+        if (!abnormalState) {
             if (component) actor.removeComponent(component);
             return;
         }
 
         if (!component) component = actor.addComponent(new PawnAbnormalComponent(this.manGame.getComponent("render")));
-        void component.setAbnormalState(object.abnormalState);
+        void component.setAbnormalState(abnormalState);
     }
 
     protected setIdleAnimation(object: NetObject_T, updatePose: boolean = true) {
         const actor = object.actor;
 
-        if (!actor || object.isDead) return;
+        if (!actor) return;
+
+        actor.getComponent<NpcLifecycleComponent>("npcLifecycle").setControllerState(object.chairStaticObjectId ? PStopType_T.STP_CHAIR_SIT : object.waitType, object.isInCombat);
+        if (object.isDead) return;
 
         actor.findComponent<PawnCubicComponent>("pawnCubic")?.setPosture(object.waitType === GamePackets.WaitType_T.WT_SITTING, object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH);
         const field = object.waitType === GamePackets.WaitType_T.WT_SITTING ? object.chairStaticObjectId ? "ChairWaitAnimName" : "SitWaitAnimName" : object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH ? "DeathWaitAnimName" : object.isInCombat ? "AtkWaitAnimName" : "WaitAnimName";
@@ -3377,6 +3535,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (actor) {
             actor.stopAttack();
             actor.stopMoving();
+            if (waitType === GamePackets.WaitType_T.WT_SITTING && object.kind === "user") actor.stopRotating();
             if (distanceXY(actor.position, object.position) > STOP_SNAP_DISTANCE) actor.teleportTo(object.position, true);
         }
 
@@ -3526,7 +3685,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected updateTarget() {
         const object = this.objects.get(this.getTargetId());
 
-        this.ui.setTarget(object ? { name: object.name, curHp: object.curHp, maxHp: object.maxHp, curMp: object.curMp, maxMp: object.maxMp, showHp: object.isSummon ? object.objectId === this.petInfo.objectId : object.maxHp > 0, showMp: object.kind !== "npc" && object.maxMp > 0, levelDifference: object.levelDifference } : null); // NCTargetStatusWnd paint 0x10113600: summons show HP + level colour only to their owner.
+        this.ui.setTarget(object ? { npcId: object.npcId, name: object.name, curHp: object.curHp, maxHp: object.maxHp, curMp: object.curMp, maxMp: object.maxMp, showHp: object.isSummon ? object.objectId === this.petInfo.objectId : object.maxHp > 0, showMp: object.kind !== "npc" && object.maxMp > 0, levelDifference: object.levelDifference } : null); // NCTargetStatusWnd paint 0x10113600: summons show HP + level colour only to their owner.
     }
 
     protected onStatusUpdate(packet: PacketReader) {
@@ -3612,7 +3771,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected onSystemMessage(packet: PacketReader) {
         const message = this.readSystemMessage(packet);
 
-        this.ui.addSystemMessage(message.text, this.ui.getStrings().systemMessageColors[message.id] ?? 0xffb09b79);
+        this.ui.addSystemMessage(message.text, this.ui.getStrings().systemMessageColors[message.id] ?? 0xffb09b79, this.ui.getStrings().systemMessageGroups[message.id] ?? 0);
         this.playSystemMessageSound(message.id);
     }
 
@@ -3621,14 +3780,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (message.id !== 0 && this.ui.getStrings().systemMessages[message.id] === undefined) throw new Error(`Unknown ConfirmDlg message ${message.id}.`);
 
-        this.playSystemMessageSound(message.id);
         this.ui.showConfirm(message.id, message.text, isOk => this.game.dlgAnswer(message.id, isOk));
     }
 
     public playSystemMessageSound(id: number) {
-        const sound = this.ui.getStrings().systemMessageSounds[id];
-
-        if (sound) void this.manGame.getComponent("audio").playInterfaceSound(sound);
+        this.ui.playSystemMessageSound(id);
     }
 
     protected readSystemMessage(packet: PacketReader) {
@@ -3818,6 +3974,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         void asset.precacheNpcBundle("LineageNPCs");
 
         if (lastUsed >= 0) this.previewCharacter(lastUsed);
+        void asset.precacheCharacters();
         if (isTransferList && this.gmTransfer === transfer && transfer.phase === 5) transfer.phase = 6;
     }
 
@@ -4095,7 +4252,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const player = this.manGame.getComponent("render").player;
 
         if (player.getUnrealScriptProperty("bGetOnVehicle")) {
-            this.ui.addSystemMessage(this.ui.getSystemMessage(179), this.ui.getStrings().systemMessageColors[179]);
+            this.ui.addSystemMessage(this.ui.getSystemMessage(179), 0xffdcdcdc);
             return;
         }
 
@@ -4233,24 +4390,102 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         });
     }
 
-    protected onRide(packet: PacketReader) {
-        const ride = GamePackets.readRide(packet);
+    protected onRide(packet: PacketReader) { this.setRide(GamePackets.readRide(packet)); }
 
+    protected setRide(ride: GamePackets.Ride_T): void {
         if (ride.objectId === this.userId) {
             this.isMounted = ride.isMounted;
             this.updateMountable();
         }
 
-        if (ride.isMounted) this.mounts.set(ride.objectId, ride);
-        else this.mounts.delete(ride.objectId);
+        const previous = this.mounts.get(ride.objectId);
 
-        this.withActor(ride.objectId, (actor, object) => {
-            if (ride.mountType === GamePackets.MountType_T.WYVERN) actor.setFlying(true);
-            else if (!ride.isMounted) {
-                actor.setFlying(false);
-                this.applySpeeds(actor, object.speeds, object.isRunning);
-            }
-        });
+        if (!ride.isMounted) {
+            this.mounts.delete(ride.objectId);
+            this.endRide(ride.objectId);
+            return;
+        }
+
+        if (previous && previous.mountType === ride.mountType && previous.npcId === ride.npcId) return;
+        if (ride.npcId <= 0) throw new Error(`Mounted pawn '${ride.objectId}' has no NPC class.`);
+
+        this.endRide(ride.objectId);
+        this.mounts.set(ride.objectId, ride);
+        void this.enterRide(ride);
+    }
+
+    protected async enterRide(ride: GamePackets.Ride_T): Promise<void> {
+        const object = this.objects.get(ride.objectId);
+
+        if (!object || !object.actor) return;
+
+        const render = this.manGame.getComponent("render"), physics = this.manGame.getComponent("physics");
+        const rider = object.actor;
+
+        await this.appearanceLoads.get(rider);
+        if (this.mounts.get(ride.objectId) !== ride || object.isRemoved) return;
+
+        const mount = await this.manGame.getComponent("asset").spawnNpc(render, ride.npcId, rider.position.clone(), null, false, object.kind === "user" ? new Player(render) : new BaseActor(render));
+
+        if (this.mounts.get(ride.objectId) !== ride || object.isRemoved) {
+            render.removePawn(mount);
+            return;
+        }
+
+        mount.teleportTo(rider.position, true);
+
+        if (!mount.attachObjectToBone(rider, "Bone15")) {
+            render.removePawn(mount);
+            throw new Error(`Mount '${ride.npcId}' cannot attach '${rider.name}' to Bone15.`);
+        }
+
+        // RiderEnter 0x105efd4d uses mesh Origin.Z; placeMeshes already adds CollisionHeight.
+        rider.position.set(0, 0, rider.getComponent<any>("animation").getMeshes()[0].meshOrigin.z - rider.getCollisionHeight());
+        rider.rotateZ(-Math.PI / 2);
+
+        rider.stopMoving();
+        physics.removePawn(rider);
+        rider.setUnrealScriptProperty("bRide", true);
+        rider.setUnrealScriptProperty("CurRideType", ride.mountType);
+        mount.ridePawn = rider;
+        mount.rideType = ride.mountType;
+        mount.name = object.name;
+        mount.setRotationYaw(object.heading);
+        mount.setFlying(ride.mountType === GamePackets.MountType_T.WYVERN);
+        this.riders.set(ride.objectId, rider);
+        object.actor = mount;
+        this.updateAbnormalState(object);
+        mount.getComponent<NpcLifecycleComponent>("npcLifecycle").setControllerState(object.waitType, object.isInCombat);
+        this.applySpeeds(mount, object.speeds, object.isRunning);
+        if (object.kind === "user") render.setPlayer(mount as Player);
+        mount.playMovementAnimation("idle");
+        if (object.destination) mount.goTo(object.destination);
+    }
+
+    protected endRide(objectId: number): void {
+        const rider = this.riders.get(objectId), object = this.objects.get(objectId);
+
+        if (!rider || !object) return;
+
+        const render = this.manGame.getComponent("render"), mount = object.actor;
+        const position = mount.position.clone(), heading = mount.getRotationYaw();
+
+        mount.stopMoving();
+        mount.detachBoneObject(rider);
+        mount.ridePawn = null;
+        rider.setUnrealScriptProperty("bRide", false);
+        rider.setUnrealScriptProperty("CurRideType", 0);
+        render.scene.add(rider);
+        object.actor = rider;
+        this.riders.delete(objectId);
+        this.updateAbnormalState(object);
+        this.manGame.getComponent("physics").addPawn(rider);
+        if (object.kind === "user") render.setPlayer(rider as Player);
+        render.removePawn(mount);
+        this.applySpeeds(rider, object.speeds, object.isRunning);
+        rider.teleportTo(position, true);
+        rider.setRotationYaw(heading);
+        this.setIdleAnimation(object);
     }
 
     protected onFlyToLocation(packet: PacketReader) {
@@ -4302,15 +4537,29 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const radar = GamePackets.readRadarControl(packet);
 
         switch (radar.action) {
-            case 0: this.radarMarkers.push({ x: radar.x, y: radar.y, z: radar.z }); break;
+            case 0:
+                this.questArrowDestination = { x: radar.x, y: radar.y, z: radar.z };
+                if (radar.type === 0 || radar.type === 2) this.radarMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
+                if (radar.type === 1 || radar.type === 2) this.mapMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
+                break;
             case 1: {
-                const index = this.radarMarkers.findIndex(marker => marker.x === radar.x && marker.y === radar.y && marker.z === radar.z);
+                if (radar.type === 0 || radar.type === 2) {
+                    const index = this.radarMarkers.findIndex(marker => marker.x === radar.x && marker.y === radar.y && marker.z === radar.z);
 
-                if (index >= 0) this.radarMarkers.splice(index, 1);
+                    if (index >= 0) this.radarMarkers.splice(index, 1);
+                }
+                if (radar.type === 1 || radar.type === 2)
+                    for (let i = 0; i < this.mapMarkers.length; i++) {
+                        const marker = this.mapMarkers[i];
+
+                        if (marker.x === radar.x && marker.y === radar.y && marker.z === radar.z) this.mapMarkers.splice(i, 1);
+                    }
             } break;
-            case 2: this.radarMarkers.length = 0; break;
+            case 2: this.questArrowDestination = null; this.radarMarkers.length = this.mapMarkers.length = 0; break;
             default: throw new Error(`Unknown RadarControl action '${radar.action}'.`);
         }
+
+        this.ui.setMapMarkers(this.mapMarkers);
     }
 
     protected onSSQStatus(packet: PacketReader) {
@@ -4329,6 +4578,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getMount(objectId: number) { return this.mounts.get(objectId) || null; }
     public isObserving() { return this.observation !== null; }
     public getSpecialCamera() { return this.specialCamera; }
+    public getUserId() { return this.userId; }
+    public getActor(objectId: number) { const object = this.objects.get(objectId); return object && !object.isRemoved ? object.actor : null; }
     public getCameraMode() { return this.cameraMode; }
     public getRadarMarkers(): readonly GamePackets.Location_T[] { return this.radarMarkers; }
     public getTownMap() { return this.townMap; }
@@ -4399,6 +4650,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getHennaEquipList() { return this.hennaEquipList; }
     public getHennaItemInfo() { return this.hennaItemInfo; }
     public getPartyMatchRooms() { return this.partyMatchRooms; }
+    public isInParty() { return this.partyMembers.size > 0; }
     public getPartyMatchPage() { return this.partyMatchPage; }
     public getPartyMatchDetail() { return this.partyMatchDetail; }
     public getPartyEffects(objectId: number) { return this.partyEffects.get(objectId); }
@@ -4856,6 +5108,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!name || packet.getRemaining()) throw new Error("Invalid ExAskJoinMPCC payload.");
 
         this.commandChannelInviter = name;
+        this.ui.showCommandChannelInvite(name, isAccepted => {
+            if (this.commandChannelInviter !== name) return;
+
+            this.answerCommandChannelInvite(isAccepted);
+        });
     }
 
     protected onOlympiadMode(packet: PacketReader) {
@@ -4959,6 +5216,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const mouseTarget = this.manGame.getComponent("input").getMouseTarget();
         const plates: Nameplate_T[] = [];
         const now = performance.now();
+        const clanId = this.objects.get(this.userId)?.clanId || 0;
 
         for (const object of this.objects.values()) {
             const actor = object.actor;
@@ -4977,7 +5235,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             const storeMessages = object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ? this.privateStoreBuyMsgs : object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.recipeShopMessages : this.privateStoreSellMsgs;
 
-            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", isSummon: object.isSummon, isDead: object.isDead, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
+            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", isSummon: object.isSummon, isAttackable: object.isAttackable, isSelf: object.objectId === this.userId, isPartyMember: this.partyMembers.has(object.objectId), isPledgeMember: clanId !== 0 && object.clanId === clanId, isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0, abnormalState: object.abnormalState, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
         }
 
         return plates;

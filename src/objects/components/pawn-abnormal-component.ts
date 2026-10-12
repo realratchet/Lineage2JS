@@ -4,8 +4,9 @@ import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type AnimationComponent from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
 
-type AbnormalStat_T = { state: number, effect: GameObject, time: number };
+type AbnormalStat_T = { state: number, effect: GameObject, time: number, scale: number };
 
 const ABNORMAL_EFFECTS: Record<number, string> = { 0x1: "LineageEffect.a_u001_a", 0x2: "LineageEffect.a_u000_a", 0x4: "LineageEffect.a_u001_a", 0x8: "LineageEffect.a_u001_a", 0x10: "LineageEffect.a_u001_a", 0x20: "LineageEffect.a_u008_a", 0x40: "LineageEffect.a_u002_a", 0x80: "LineageEffect.a_u004_a", 0x100: "LineageEffect.a_u005_a", 0x200: "LineageEffect.a_u006_a", 0x4000: "LineageEffect.a_u007_a" }; // FNAbnormalStat::Init 0x763b40 / Update 0x764970
 const PULSE_STATES = 0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20 | 0x4000;
@@ -23,6 +24,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     protected readonly stats: AbnormalStat_T[] = [];
     protected library: DecodeLibrary = null;
     protected abnormalState = 0;
+    protected bigHeadMaxSize: number = null;
 
     public constructor(renderManager: RenderManager) {
         super();
@@ -31,7 +33,20 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     }
 
     public async setAbnormalState(abnormalState: number): Promise<void> {
+        if (abnormalState & ~this.abnormalState & 0xc00) this.getParent().stopAttack();
+        if ((abnormalState ^ this.abnormalState) & 0x800) this.setOverlayColor(abnormalState & 0x800 ? 72 : 255, abnormalState & 0x800 ? 105 : 255, abnormalState & 0x800 ? 140 : 255);
+
         this.abnormalState = abnormalState;
+        const asset = this.renderManager.getParent().getComponent("asset");
+
+        if (abnormalState & 0x2000 && this.bigHeadMaxSize === null) {
+            const scales = await asset.loadBigHeadScales();
+            if (!this.isAttached()) return;
+            const mesh = this.getComponent<AnimationComponent>("animation").getMeshes()[0];
+
+            this.bigHeadMaxSize = mesh ? scales[mesh.name.split("_")[0].toLowerCase()] || 0 : 0;
+        }
+
         if (this.library) return;
 
         const library = await this.renderManager.getParent().getComponent("asset").loadAbnormalEffects();
@@ -40,8 +55,6 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     }
 
     public onUpdate(_currentTime: number, deltaTime: number): void {
-        if (!this.library) return;
-
         let added = this.abnormalState;
 
         for (let i = this.stats.length - 1; i >= 0; i--) { // APawn::UpdateAbnormalState 0x766772..0x766a66
@@ -53,23 +66,41 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             }
 
             if (stat.effect && stat.effect.parent) this.renderManager.removeTransientEffect(stat.effect);
+            if (stat.state === 0x2000) this.setHeadScale(1);
             this.stats.splice(i, 1);
         }
 
         for (let state = 1; state < 0x20000; state <<= 1) {
             if (!(added & state)) continue;
 
-            const stat: AbnormalStat_T = { state, effect: null, time: 0 };
+            if (!this.library && ABNORMAL_EFFECTS[state]) continue;
+
+            const stat: AbnormalStat_T = { state, effect: null, time: 0, scale: 1 };
 
             switch (state) {
                 case 0x40: case 0x80: case 0x100: case 0x200: this.spawnEffect(stat); break;
-                case 0x400: case 0x800: case 0x2000: case 0x8000: case 0x10000: debugger; break;
+                case 0x400: case 0x800: case 0x2000: break;
+                case 0x8000: case 0x10000: debugger; break;
             }
 
             this.stats.push(stat);
         }
 
         for (const stat of this.stats) {
+            if (stat.state === 0x2000) {
+                if (this.bigHeadMaxSize === null) continue;
+                const delta = Math.fround(deltaTime);
+
+                if (stat.scale < this.bigHeadMaxSize) {
+                    stat.scale = Math.fround(stat.scale + delta * stat.time * 3);
+                    this.setHeadScale(stat.scale);
+                }
+
+                stat.time = Math.fround(stat.time + delta);
+                stat.time = Math.fround(stat.time + delta);
+                continue;
+            }
+
             if (!(stat.state & PULSE_STATES)) continue;
 
             if (stat.time === 0 || stat.time > 3) {
@@ -115,7 +146,20 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
         }
     }
 
+    protected setHeadScale(scale: number): void {
+        this.getComponent<AnimationComponent>("animation").setBoneScale(this.getParent().getUnrealScriptProperty("HeadBone") as string, scale);
+    }
+
+    protected setOverlayColor(r: number, g: number, b: number): void {
+        const parent = this.getParent();
+
+        parent.getComponent<PawnRenderableComponent>("pawnRenderable").texModifierColor.set(r / 255, g / 255, b / 255);
+        if (parent.ridePawn) parent.ridePawn.getComponent<PawnRenderableComponent>("pawnRenderable").texModifierColor.set(r / 255, g / 255, b / 255);
+    }
+
     public onDetach(): void {
+        if (this.abnormalState & 0x800) this.setOverlayColor(255, 255, 255);
+        if (this.abnormalState & 0x2000) this.setHeadScale(1);
         for (const stat of this.stats)
             if (stat.effect && stat.effect.parent) this.renderManager.removeTransientEffect(stat.effect);
         this.stats.length = 0;

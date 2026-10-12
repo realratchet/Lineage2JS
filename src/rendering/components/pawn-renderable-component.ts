@@ -1,15 +1,18 @@
-import { Mesh, Sphere } from "three";
+import { Mesh, Sphere, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
-import { MESHES_CHANGED_EVENT } from "../../objects/components/animation-component";
+import { MESHES_CHANGED_EVENT, MESH_SCALE_CHANGED_EVENT } from "../../objects/components/animation-component";
 import { PAWN_COLLISION_SIZE_CHANGED_EVENT } from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
+import GLOBAL_UNIFORMS from "../../materials/global-uniforms";
 
 const tmpSphere = new Sphere();
+const tmpWhite = new Vector3(1, 1, 1);
 
 export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnRenderable";
     public isRendered: boolean = false;
+    public readonly texModifierColor = new Vector3(1, 1, 1);
     protected readonly renderManager: RenderManager;
     protected readonly localSphere = new Sphere();
     protected readonly worldSphere = new Sphere();
@@ -25,7 +28,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public onDetach(): void { this.renderManager.unregisterPawnRenderable(this); }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<unknown> {
-        if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT) this.updateLocalSphere();
+        if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) this.updateLocalSphere();
         else if (type === MESHES_CHANGED_EVENT) this.setMeshes(data as Mesh[]);
         else return COMPONENT_EVENT_NOT_HANDLED;
 
@@ -37,8 +40,26 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
         for (const mesh of meshes) {
             // FDynamicActor::Render 0x8eef4e sets Pawn.bRendered before mesh submission.
-            mesh.onBeforeRender = (_renderer, scene) => {
-                if (scene === this.renderManager.scene) this.isRendered = true;
+            mesh.onBeforeRender = (_renderer, scene, _camera, _geometry, material) => {
+                const uniforms = (material as any).uniforms;
+
+                if (uniforms && uniforms.texModifierColor && !uniforms.texModifierColor.value.equals(this.texModifierColor)) {
+                    uniforms.texModifierColor.value.copy(this.texModifierColor);
+                    (material as any).uniformsNeedUpdate = true;
+                }
+
+                if (scene === this.renderManager.scene) {
+                    this.isRendered = true;
+                    this.getParent().setUnrealScriptProperty("LastRenderTime", Math.fround(GLOBAL_UNIFORMS.globalTimeSeconds.value));
+                }
+            };
+            mesh.onAfterRender = (_renderer, _scene, _camera, _geometry, material) => {
+                const uniforms = (material as any).uniforms;
+
+                if (uniforms && uniforms.texModifierColor && !uniforms.texModifierColor.value.equals(tmpWhite)) {
+                    uniforms.texModifierColor.value.copy(tmpWhite);
+                    (material as any).uniformsNeedUpdate = true;
+                }
             };
         }
 

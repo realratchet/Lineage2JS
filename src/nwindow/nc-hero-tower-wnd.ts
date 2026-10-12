@@ -1,7 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl, { type ListRow_T, type ListColumn_T } from "./nc-list-ctrl";
-import type NDomLayer from "./ndom";
-import type { NDomEdit_T, NDomButton_T } from "./ndom";
+import type { default as NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
 import type { HeroEntry_T } from "../network/game-packets";
 
 const TEX_BACK = "L2UI_CH3.HeroTower.herotower1_back";
@@ -77,7 +76,10 @@ export class NCHeroTowerWnd {
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 300), Math.trunc(height * 0.5 - 163)); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; }
+    public setVisible(visible: boolean) {
+        this.element.hidden = !visible;
+        if (!visible) this.list.hide();
+    }
     public setCrestGetter(getter: (crestId: number, isAlly: boolean) => CanvasImageSource) { this.list.getCrest = getter; }
     public refreshCrests() { this.list.refreshCrests(); }
     public getList() { return this.list; }

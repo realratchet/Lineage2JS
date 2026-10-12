@@ -1,5 +1,4 @@
-import type NDomLayer from "./ndom";
-import type { NDomButton_T } from "./ndom";
+import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCSkillWnd from "./nc-skill-wnd";
 import NCActionWnd from "./nc-action-wnd";
@@ -60,6 +59,7 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;
         this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
+        this.skillWnd.setVisible(visible && this.selectedTab === "skills");
         this.clanWnd.setVisible(visible && this.selectedTab === "clan");
         if (visible && this.selectedTab === "quest") { // NCMainWnd Show 0x10064a1d / 0x1005f1a4 each show the selected page.
             this.questWnd.setVisible(true);
@@ -70,11 +70,13 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
 
     public selectTab(type: MainTab_T) {
         this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
+        if (type === "skills") this.skillWnd.setVisible(false);
         this.selectedTab = type;
         arrTabs.forEach((entry, index) => {
             const selected = entry.type === type;
 
             if (entry.type === "quest") this.questWnd.setVisible(selected);
+            else if (entry.type === "skills") this.skillWnd.setVisible(selected);
             else if (entry.type === "clan") this.clanWnd.setVisible(selected);
             else this.pages[entry.type].hidden = !selected;
             this.tabs[index].setTextures(selected ? `${entry.texture}On` : entry.texture, `${entry.texture}On`);

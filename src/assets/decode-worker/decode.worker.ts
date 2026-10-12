@@ -164,7 +164,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "listPlayerSkills": {
             try {
-                post({ type: "playerSkillsListed", requestId: msg.requestId, skills: await engine.listPlayerSkills() });
+                post({ type: "playerSkillsListed", requestId: msg.requestId, skills: await engine.listPlayerSkills(msg.includeAssetVariants) });
             } catch (e) {
                 console.error("[decode-worker] failed to list player skills:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });

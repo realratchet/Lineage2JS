@@ -2,8 +2,7 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl from "./nc-list-ctrl";
 import NCMinimizedWnd from "./nc-minimized-wnd";
 import { NCComboBox } from "./nc-lobby-wnd";
-import NDomLayer from "./ndom";
-import type { NDomButton_T } from "./ndom";
+import NDomLayer, { type NDomButton_T } from "./ndom";
 import type { PartyMatchList_T } from "../network/game-packets";
 
 const TEX_BACK = "L2UI_CH3.PartyMatchWnd.PartyMatch1_Back";
@@ -42,7 +41,7 @@ export class NCMatchWnd {
         this.element.dataset.window = "party-match";
         layer.tile(this.element, 0, 20, 600, 411, 0, 0, 600, 411, TEX_BACK);
         this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true));
-        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.setVisible(false), null, () => this.minimized.minimize());
+        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.setVisible(false), null, () => { this.table.hide(); this.minimized.minimize(); });
         [[1034, 80, 54], [1035, 260, 54]].forEach(([id, x, y]) => {
             const text = manager.getSysString(id);
 
@@ -79,7 +78,7 @@ export class NCMatchWnd {
         if (visible && this.minimized.isVisible()) this.minimized.restore(true);
         this.element.hidden = !visible;
         this.minimized.hide();
-        if (!visible) this.table.hideTooltip();
+        if (!visible) this.table.hide();
         else this.layer.activate(this.element);
     }
     public show(list: PartyMatchList_T) {

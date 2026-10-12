@@ -72,6 +72,7 @@ export class L2Lobby {
         const [sector, scenes] = await Promise.all([asset.setAlwaysLoaded(render, LOBBY_LEVEL, [x, y]), asset.decodeMatineeScenes(LOBBY_LEVEL)]);
 
         this.sector = sector;
+        render.setLevel(sector);
         const skyZone = (sector.zones.children as ZoneObject[]).find(zone => zone.isSkyZoneInfo);
 
         if (!skyZone) throw new Error(`Lobby SkyZoneInfo is missing`);
@@ -87,6 +88,7 @@ export class L2Lobby {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
 
         this.clearPawns();
+        render.setLevel(null);
         render.skyRenderer.setSkyZone(null);
         render.setHorizontalFov();
         void render.audioManager.stopMusic();

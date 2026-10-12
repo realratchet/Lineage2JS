@@ -1,5 +1,4 @@
-import { Vector3 } from "three";
-import type { PerspectiveCamera } from "three";
+import { Vector3, type PerspectiveCamera } from "three";
 import type { MatineeAction_T, MatineeScene_T } from "../../assets/decode-worker/decode-protocol";
 import type { Vector3Arr } from "@l2js/engine";
 import { sinRotator } from "@l2js/engine/utils/rotator";

@@ -21,9 +21,13 @@ export class GameManager implements IEngineComponent<GameManager> {
 
     protected lastTick: number = 0;
     protected readonly animationFrameCallback: FrameRequestCallback;
+    protected readonly visibilityCallback: () => void;
+    protected animationFrameHandle = 0;
+    protected backgroundWorker: Worker = null;
 
     protected constructor() {
         this.animationFrameCallback = this.onHandleAnimationFrame.bind(this);
+        this.visibilityCallback = this.onVisibilityChange.bind(this);
     }
 
     public static async initialize(viewport: HTMLViewportElement_T, assets: AssetList_T, loadSettings: LoadSettings_T): Promise<GameManager> {
@@ -62,7 +66,9 @@ export class GameManager implements IEngineComponent<GameManager> {
             comp.startTicking?.(this.lastTick);
 
         // ladies and gentlement, start your engines
-        this.onHandleAnimationFrame(this.lastTick);
+        this.tick(this.lastTick);
+        document.addEventListener("visibilitychange", this.visibilityCallback);
+        this.onVisibilityChange();
     }
 
     protected attach<T extends IEngineComponent<any>>(comp: T): T {
@@ -97,7 +103,8 @@ export class GameManager implements IEngineComponent<GameManager> {
     public onEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onEngineTick?.(currentTime, deltaTime); }
     public onAfterEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onAfterEngineTick?.(currentTime, deltaTime); }
 
-    protected onHandleAnimationFrame(currentTime: number): void {
+    protected tick(currentTime: number): void {
+        currentTime = Math.max(currentTime, this.lastTick);
         const deltaTime = currentTime - this.lastTick;
 
         this.onBeforeEngineTick(currentTime, deltaTime);
@@ -105,8 +112,31 @@ export class GameManager implements IEngineComponent<GameManager> {
         this.onAfterEngineTick(currentTime, deltaTime);
 
         this.lastTick = currentTime;
+    }
 
-        requestAnimationFrame(this.animationFrameCallback);
+    protected onHandleAnimationFrame(currentTime: number): void {
+        if (document.hidden) return;
+
+        this.tick(currentTime);
+        this.animationFrameHandle = requestAnimationFrame(this.animationFrameCallback);
+    }
+
+    protected onVisibilityChange(): void {
+        cancelAnimationFrame(this.animationFrameHandle);
+        if (this.backgroundWorker) {
+            this.backgroundWorker.terminate();
+            this.backgroundWorker = null;
+        }
+
+        if (document.hidden) {
+            const url = URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 1000 / 30);"], { type: "text/javascript" }));
+            const worker = this.backgroundWorker = new Worker(url);
+
+            URL.revokeObjectURL(url);
+            worker.onmessage = () => {
+                if (document.hidden && this.backgroundWorker === worker) this.tick(performance.now());
+            };
+        } else this.animationFrameHandle = requestAnimationFrame(this.animationFrameCallback);
     }
 }
 

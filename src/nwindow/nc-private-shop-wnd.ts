@@ -1,6 +1,5 @@
 import NCShopWnd from "./nc-shop-wnd";
-import type NDomLayer from "./ndom";
-import type { NDomButton_T, NDomCheckBox_T } from "./ndom";
+import type { default as NDomLayer, NDomButton_T, NDomCheckBox_T } from "./ndom";
 import type { ShopItem_T, PrivateStoreSellList_T, PrivateStoreSellItem_T, PrivateStoreManageSell_T } from "../network/game-packets";
 
 export class NCPrivateShopWnd extends NCShopWnd {

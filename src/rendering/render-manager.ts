@@ -1,4 +1,5 @@
 import "./ue2-conventions";
+import { EPhysics_T } from "../assets/unreal/un-aactor";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
 import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
@@ -37,6 +38,7 @@ import PawnRenderableComponent from "./components/pawn-renderable-component";
 import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
 import type AnimationComponent from "../objects/components/animation-component";
+import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import type { ScriptHost_T } from "../ue-script/vm";
 import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
 import NPawnLightComponent from "./components/pawn-light-component";
@@ -45,6 +47,7 @@ import type HairSimulationComponent from "../objects/components/hair-simulation-
 import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import Radar from "./radar";
+import QuestArrow from "./quest-arrow";
 import ViewportWindow from "./viewport-window";
 import type PawnFishingComponent from "../objects/components/pawn-fishing-component";
 
@@ -260,12 +263,18 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
     public readonly radar = new Radar();
+    public readonly questArrow = new QuestArrow(this);
     protected viewportWindow: ViewportWindow = null;
     protected viewportSceneCanvas: HTMLCanvasElement = null;
     protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly arrViewportBatchEmitters: any[] = [];
+    protected readonly arrVisibleNameplates: Object3D[] = [];
+    protected readonly arrNameplateWorldRoots: Object3D[] = [];
+    protected readonly arrNameplateDepthMaterials: THREE.Material[] = [];
+    protected readonly arrNameplateDepthColorWrites: boolean[] = [];
+    protected readonly nameplateDepthMaterials = new Set<THREE.Material>();
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
@@ -283,6 +292,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected activeFogId: string | null = null;
 
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
+    protected level: SectorObject = null;
     protected readonly arrLoadedSectors: SectorObject[] = [];
     protected readonly arrSceneSectors: SectorObject[] = [];
 
@@ -315,8 +325,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected manUI: UIManager = null;
     protected manInput: InputManager = null;
 
-    public readonly player = new Player(this);
-    public readonly waterEffects = this.player.getComponent<WaterEffectsComponent>("waterEffects");
+    public player = new Player(this);
+    public get waterEffects(): WaterEffectsComponent { return this.player.getComponent<WaterEffectsComponent>("waterEffects"); }
+
+    public setPlayer(player: Player): void {
+        this.waterEffects.underWaterEffect.removeFromParent();
+        this.player.deleteLandmark();
+        this.player = player;
+        this.scene.add(this.waterEffects.underWaterEffect);
+    }
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
     protected showColliders = false;
@@ -948,8 +965,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public getSectorId(position: THREE.Vector3): [number, number] {
         const sectorSize = 256 * 128;
-        const sectorX = Math.floor(position.x / sectorSize) + 20;
-        const sectorY = Math.floor(position.y / sectorSize) + 18;
+        // UGameEngine::GetSWMapXY 0x824ba0 truncates FVector components before map conversion.
+        const sectorX = Math.trunc(Math.trunc(Math.fround(position.x)) / sectorSize + 20);
+        const sectorY = Math.trunc(Math.trunc(Math.fround(position.y)) / sectorSize + 18);
 
         return [sectorX, sectorY];
     }
@@ -1068,6 +1086,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         );
     }
 
+    public getLevel(): SectorObject { return this.level; }
+    public setLevel(level: SectorObject): void { this.level = level; }
+
     public addPawn(pawn: BaseActor): void {
         this.scene.add(pawn);
         pawn.updateMatrixWorld(true);
@@ -1127,7 +1148,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
         });
 
-        (effect as Object3D & IObject).detachComponents();
+        if ((effect as any).isActor) (effect as BaseActor).release();
+        else (effect as Object3D & IObject).detachComponents();
 
         for (const geometry of this.transientGeometries.get(effect)) this.releaseGeometry(geometry);
         this.transientGeometries.delete(effect);
@@ -1141,9 +1163,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public retainMeshTextures(meshes: THREE.Mesh[], target: Set<THREE.Texture>): void {
         const textures = new Set<THREE.Texture>();
 
-        for (const mesh of meshes)
+        for (const mesh of meshes) {
             for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
                 if (material) collectMaterialTextures(material, textures, new WeakSet());
+            if ((mesh as any).skinMaterials)
+                for (const material of Object.values((mesh as any).skinMaterials) as THREE.Material[])
+                    collectMaterialTextures(material, textures, new WeakSet());
+        }
 
         for (const texture of textures) {
             if (target.has(texture)) continue;
@@ -1186,6 +1212,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public removePawn(pawn: BaseActor): void {
         if (!this.getPhysicsManager().removePawn(pawn)) return;
 
+        pawn.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
         arrPawnEffects.length = 0;
         for (const effect of pawn.getScriptChildren()) arrPawnEffects.push(effect);
         this.scene.traverse(object => {
@@ -1233,8 +1260,16 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const pawn = component.getParent();
             if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) {
                 const animation = pawn.findComponent<AnimationComponent>("animation");
+                const lifecycle = pawn.findComponent<NpcLifecycleComponent>("npcLifecycle");
+                const script = pawn.findComponent<ScriptComponent>("script");
+                const physics = pawn.getUnrealScriptProperty("Physics");
+
+                // AActor::Tick (0x8657f0): standalone stasis after five seconds without rendering.
+                // shortcut: culled scripted Tick only; extend before full Actor tick parity.
+                if (script && (!pawn.getUnrealScriptProperty("bStasis") || physics !== EPhysics_T.PHYS_None && physics !== EPhysics_T.PHYS_Rotating || currentTime / 1000 - (pawn.getUnrealScriptProperty("LastRenderTime") as number) <= 5 || (pawn.getUnrealScriptProperty("Level") as any).getUnrealScriptProperty("NetMode") !== 0)) script.onUpdate(currentTime, deltaTime / 1000);
 
                 if (animation) animation.onUpdate(currentTime, deltaTime / 1000);
+                if (lifecycle) lifecycle.onUpdate(currentTime, deltaTime / 1000);
                 continue;
             }
 
@@ -1996,7 +2031,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updatePawnPresentation(currentTime, deltaTime);
         for (const fishing of this.pawnFishing) fishing.tick(deltaTime / 1000);
 
-        this.getInputManager().updateFollowPlayer();
+        this.getInputManager().updateFollowPlayer(deltaTime);
         this.getInputManager().updateMouseTarget();
 
         this.audioManager.update(currentTime);
@@ -2146,7 +2181,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public onEngineTick(currentTime: number, _deltaTime: number): void {
-        if (!this.isRenderingFrame) return;
+        if (!this.isRenderingFrame || document.hidden) return;
 
         this.renderer.info.reset();
         this.drawCameraSceneNode();
@@ -2288,10 +2323,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         // Render World
         this.scene.traverseVisible(object => { if ((object as any).particlePool) (object as any).onRender(); });
-        this.renderer.render(this.scene, this.camera);
+        this.drawWorld();
 
         this.waterEffects.underWaterEffect.renderCellophane(this.renderer);
         this.renderer.getSize(tmpSize);
+        this.questArrow.draw();
         this.radar.render(this.renderer, this.camera, this.player.position, tmpSize.x, tmpSize.y);
 
         // // Apply Native Bloom (Sun/Glow) -> Screen
@@ -2304,11 +2340,71 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (viewShakeActive) this.restoreViewShake();
     }
 
+    protected drawWorld() {
+        const arrNames = this.arrVisibleNameplates, arrRoots = this.arrNameplateWorldRoots;
+        const arrMaterials = this.arrNameplateDepthMaterials, arrColorWrites = this.arrNameplateDepthColorWrites;
+        const materials = this.nameplateDepthMaterials;
+
+        arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
+        materials.clear();
+        this.scene.children.forEach(object => {
+            if (object.visible && (object as any).isNameplate && (object as Sprite).material.visible) arrNames.push(object);
+        });
+        if (!arrNames.length) {
+            this.renderer.render(this.scene, this.camera);
+            return;
+        }
+
+        try {
+            arrNames.forEach(object => object.visible = false);
+            this.renderer.render(this.scene, this.camera);
+            const saveMaterial = (material: THREE.Material) => {
+                if (!material || !material.visible || materials.has(material)) return;
+
+                materials.add(material);
+                arrMaterials.push(material);
+                arrColorWrites.push(material.colorWrite);
+                if (material.transparent || !material.depthWrite) material.visible = false;
+                else material.colorWrite = false;
+            };
+            this.scene.traverseVisible(object => {
+                const value = (object as any).material;
+                if (!value) return;
+
+                if (Array.isArray(value)) value.forEach(saveMaterial);
+                else saveMaterial(value);
+            });
+            this.renderer.clearDepth();
+            this.renderer.render(this.scene, this.camera);
+            arrMaterials.forEach((material, index) => {
+                material.colorWrite = arrColorWrites[index];
+                material.visible = true;
+            });
+            this.scene.children.forEach(object => {
+                if (!object.visible) return;
+
+                arrRoots.push(object);
+                object.visible = false;
+            });
+            arrNames.forEach(object => object.visible = true);
+            this.renderer.render(this.scene, this.camera);
+        } finally {
+            arrMaterials.forEach((material, index) => {
+                material.colorWrite = arrColorWrites[index];
+                material.visible = true;
+            });
+            arrRoots.forEach(object => object.visible = true);
+            arrNames.forEach(object => object.visible = true);
+            arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
+            materials.clear();
+        }
+    }
+
     public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
         if (!this.isRenderingFrame) return;
 
         this.manUI.endFrame();
-        this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
+        if (!document.hidden) this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
         this.isRenderingFrame = false;
     }
 
@@ -2609,6 +2705,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public disposeSector(sector: SectorObject) {
+        sector.releaseZoneInfoActors();
         const soundCache = (sector as any).decodeLibrary?.soundBlobCache as Map<string, { uri: string }>;
 
         if (soundCache) {

@@ -15,8 +15,9 @@ export type ClippingRangeConfig_T = {
 };
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
-export type GameConfig_T = { systemMsgWnd: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; };
-export type UserConfig_T = { clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; };
+export type GameConfig_T = { arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
+export type AudioConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
+export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; };
 
 export class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
@@ -41,11 +42,19 @@ export class UConfigSystem extends BaseConfigFile {
         gamma: 0.8
     };
 
-    public game: GameConfig_T = { systemMsgWnd: true, transparencyMode: true, partyLooting: 0, enterChatting: false }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
+    public audio: AudioConfig_T = { soundVolume: 0.8, musicVolume: 1, wavVoiceVolume: 0.6, oggVoiceVolume: 0.6 }; // ALAudio.dll Init 0x1000a1b4/0x1000a1e0/0x1000a20c/0x1000a238.
+
+    public game: GameConfig_T = { arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
     public readonly definedGameKeys = new Set<keyof GameConfig_T>();
+    public cameraViewHeightAdjust = 0;
 
     public async load(): Promise<this> {
         const fileContents = this.decodeConfig();
+
+        this.loadNumbers(fileContents, "Audio", this.audio, new Set<string>());
+
+        for (const [key, value] of Object.entries(this.audio))
+            if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`Invalid audio option '${key}'.`);
 
         this.loadNumbers(fileContents, "ClippingRange", this.clippingRange, this.definedClippingKeys);
 
@@ -55,11 +64,34 @@ export class UConfigSystem extends BaseConfigFile {
 
         this.loadSection(fileContents, "Game", (key, value) => {
             switch (key.toLowerCase()) {
+                case "arrowmode": this.game.arrowMode = value.toLowerCase() === "true"; this.definedGameKeys.add("arrowMode"); break;
+                case "showzonetitle": this.game.showZoneTitle = value.toLowerCase() === "true"; this.definedGameKeys.add("showZoneTitle"); break;
+                case "systemmsgwnddamage": this.game.systemMsgWndDamage = value.toLowerCase() === "true"; this.definedGameKeys.add("systemMsgWndDamage"); break;
+                case "systemmsgwndexpendableitem": this.game.systemMsgWndExpendableItem = value.toLowerCase() === "true"; this.definedGameKeys.add("systemMsgWndExpendableItem"); break;
                 case "systemmsgwnd": this.game.systemMsgWnd = value.toLowerCase() === "true"; this.definedGameKeys.add("systemMsgWnd"); break;
                 case "transparencymode": this.game.transparencyMode = value.toLowerCase() === "true"; this.definedGameKeys.add("transparencyMode"); break;
                 case "partylooting": this.game.partyLooting = parseInt(value, 10); this.definedGameKeys.add("partyLooting"); break;
+                case "oldchatting": this.game.oldChatting = value.toLowerCase() === "true"; this.definedGameKeys.add("oldChatting"); break;
                 case "enterchatting": this.game.enterChatting = value.toLowerCase() === "true"; this.definedGameKeys.add("enterChatting"); break;
+                case "myname": this.game.myName = value.toLowerCase() === "true"; this.definedGameKeys.add("myName"); break;
+                case "npcname": this.game.npcName = value.toLowerCase() === "true"; this.definedGameKeys.add("npcName"); break;
+                case "groupname": this.game.groupName = value.toLowerCase() === "true"; this.definedGameKeys.add("groupName"); break;
+                case "pledgemembername": this.game.pledgeMemberName = value.toLowerCase() === "true"; this.definedGameKeys.add("pledgeMemberName"); break;
+                case "partymembername": this.game.partyMemberName = value.toLowerCase() === "true"; this.definedGameKeys.add("partyMemberName"); break;
+                case "otherpcname": this.game.otherPCName = value.toLowerCase() === "true"; this.definedGameKeys.add("otherPCName"); break;
             }
+        });
+
+        return this;
+    }
+
+    public async loadCamera(): Promise<this> {
+        const fileContents = this.decodeConfig();
+
+        this.loadSection(fileContents, "Engine.LineagePlayerController", (key, value) => {
+            if (key.toLowerCase() !== "cameraviewheightadjust") return;
+            this.cameraViewHeightAdjust = Math.fround(Number(value));
+            if (!Number.isFinite(this.cameraViewHeightAdjust)) throw new Error(`Invalid camera view height '${value}'.`);
         });
 
         return this;
@@ -112,9 +144,10 @@ export class UConfigSystem extends BaseConfigFile {
 export async function getUserConfig(): Promise<UserConfig_T> {
     const defaults = new UConfigSystem("assets/system/l2.ini");
     const options = new UConfigSystem("assets/system/Option.ini");
+    const user = new UConfigSystem("assets/system/user.ini");
 
-    await Promise.all([defaults.decode(), options.decode()]);
-    await Promise.all([defaults.load(), options.load()]);
+    await Promise.all([defaults.decode(), options.decode(), user.decode()]);
+    await Promise.all([defaults.load(), options.load(), user.loadCamera()]);
 
     for (const key of options.definedClippingKeys)
         (defaults.clippingRange as any)[key] = (options.clippingRange as any)[key];
@@ -125,7 +158,10 @@ export async function getUserConfig(): Promise<UserConfig_T> {
     for (const key of options.definedGameKeys)
         (defaults.game as any)[key] = options.game[key];
 
-    return { clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game };
+    for (const key of ["arrowMode", "showZoneTitle", "myName", "npcName", "groupName", "pledgeMemberName", "partyMemberName", "otherPCName", "oldChatting", "systemMsgWndDamage", "systemMsgWndExpendableItem"] as const)
+        defaults.game[key] = options.game[key];
+
+    return { audio: options.audio, clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game, cameraViewHeightAdjust: user.cameraViewHeightAdjust };
 }
 
 export default UConfigSystem;

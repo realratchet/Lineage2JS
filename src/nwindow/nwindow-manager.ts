@@ -1,9 +1,9 @@
 import "../../style/nwindow.scss";
 import NWindowCanvas from "./nwindow-canvas";
-import type NWnd from "./nwnd";
-import type { NMouseEvent_T } from "./nwnd";
+import type { default as NWnd, NMouseEvent_T } from "./nwnd";
 import type AssetManager from "../assets/asset-manager";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
+import fetchAssetHandle from "../assets/unreal/asset-handle";
 
 type TextInputHandler_T = { onTextInput(text: string): void, onTextSubmit(text: string, isShift: boolean): void, onTextBlur(): void };
 
@@ -42,7 +42,7 @@ export class NWindowManager {
     protected isReady = false;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
-    public strings: GameStrings_T = { systemMessages: {}, systemMessageColors: {}, systemMessageSounds: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
+    public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
     public constructor(protected readonly asset: AssetManager) {
         this.canvas = new NWindowCanvas(asset);
@@ -102,6 +102,23 @@ export class NWindowManager {
         document.documentElement.style.setProperty("--game-cursor", this.getCursor(0));
         this.isReady = true;
         this.invalidate();
+    }
+
+    public async loadTrueFonts() {
+        const font = this.strings.trueFonts.zonetitle;
+
+        if (!font) return;
+
+        const file = font.file || (font.name.toLowerCase() === "tahoma" && font.weight === 700 && !font.italic ? "tahomabd.ttf" : "");
+
+        if (!file) throw new Error(`TrueFont '${font.name}' has no game font asset.`);
+
+        const handle = await fetchAssetHandle(`assets/system/${file}`);
+        const readable = await handle.getReadable();
+        const face = new FontFace("L2ZoneTitle", readable.buffer, { weight: String(font.weight), style: font.italic ? "italic" : "normal" });
+
+        await face.load();
+        document.fonts.add(face);
     }
 
     protected resize() {
@@ -184,6 +201,14 @@ export class NWindowManager {
     public getWindows() { return this.windows; }
 
     public invalidate() { this.isDirty = true; }
+
+    public playSystemMessageSound(id: number) {
+        const audio = this.asset.getParent().getComponent("audio");
+        const sound = this.strings.systemMessageSounds[id], voice = this.strings.systemMessageVoices[id];
+
+        if (sound) void audio.playInterfaceSound(sound);
+        if (voice) void audio.playInterfaceVoice(voice);
+    }
 
     public playButtonSound(isEnabled: boolean): void {
         void this.asset.getParent().getComponent("audio").playInterfaceSound(isEnabled ? "InterfaceSound.click_01" : "ItemSound.click_failed"); // NWindow.dll 0x10001230, sound table 0x10242368.
@@ -395,6 +420,22 @@ export class NWindowManager {
         this.dragged = null;
         this.pressed = null;
         this.invalidate();
+    }
+
+    public getZoneName(x: number, y: number, z: number): string { return this.getZoneNameInfo(x, y, z)?.name || ""; }
+
+    public getZoneNameInfo(x: number, y: number, z: number) { // Engine.dll 0x105984b3/0x1044c980: indexed sector mask, bottom < Z <= top.
+        const sectorX = Math.trunc((Math.trunc(x) + 360448) / 32768 + 9), sectorY = Math.trunc((Math.trunc(y) + 294912) / 32768 + 9);
+        const mask = this.strings.zoneNameMasks[`${sectorX}_${sectorY}`];
+
+        if (!mask) return null;
+
+        const pixelX = Math.trunc((x - (sectorX - 20) * 32768) * mask.width / 32768);
+        const pixelY = Math.trunc((y - (sectorY - 18) * 32768) * mask.height / 32768);
+        const color = mask.pixels[pixelY * mask.width + pixelX];
+        const row = this.strings.zoneNames.find(row => row.color === color && (color < 200 || row.sectorX === sectorX && row.sectorY === sectorY) && z > row.bottom && z <= row.top);
+
+        return row || null;
     }
 
     public getSysString(id: number): string { return this.strings.sysStrings[id] ?? ""; } // GL2GameData+0x9871c+id*12 in NWindow is the sysstring-e.dat table.

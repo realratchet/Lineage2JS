@@ -46,6 +46,7 @@ import FRange, { FRangeVector } from "./un-range";
 import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
+import UReachSpec from "./un-reach-spec";
 import FCoords from "./un-coords";
 import FQuaternion from "./un-quaternion";
 import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
@@ -277,6 +278,7 @@ export class UEnginePackage extends UPackage implements EnginePackage_T {
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainSector");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainPrimitive");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "ReachSpec");
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "LevelBase");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Level");
@@ -390,6 +392,7 @@ export class UNativePackage extends ANativePackage {
             case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
 
             case "PlayerStart": Constructor = UPlayerStart; break;
+            case "ReachSpec": Constructor = UReachSpec; break;
             case "Camera": Constructor = UCamera; break;
             case "Pawn": Constructor = UPawn; break;
 
@@ -534,6 +537,7 @@ export class UNativePackage extends ANativePackage {
 
         this.registerNativeClass("TerrainSector", "Object");
         this.registerNativeClass("TerrainPrimitive", "Primitive");
+        this.registerNativeClass("ReachSpec", "Object");
 
         this.registerNativeClass("LevelBase", "Object");
         this.registerNativeClass("Level", "LevelBase");

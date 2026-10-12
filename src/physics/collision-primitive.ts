@@ -670,84 +670,105 @@ function queryTriangles(primitive: Extract<CollisionPrimitive_T, { kind: "static
     return tmpBestHit;
 }
 
-function queryCylinder(primitive: Extract<CollisionPrimitive_T, { kind: "cylinder" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const dz = end.z - start.z;
-    const x = start.x - primitive.center.x;
-    const y = start.y - primitive.center.y;
-    const z = start.z - primitive.center.z;
-    const radius = primitive.radius + extent.x;
-    const halfHeight = primitive.halfHeight + extent.z;
-    const top = primitive.center.z + halfHeight;
-    const bottom = primitive.center.z - halfHeight;
+function queryCylinder(primitive: Extract<CollisionPrimitive_T, { kind: "cylinder" }>, start: Vector3, end: Vector3, extent: Vector3, maxTime: number): PrimitiveHit_T | null { // UPrimitive::LineCheck 0x1060abc0
+    const startX = Math.fround(start.x), startY = Math.fround(start.y), startZ = Math.fround(start.z);
+    const endX = Math.fround(end.x), endY = Math.fround(end.y), endZ = Math.fround(end.z);
+    const centerX = Math.fround(primitive.center.x), centerY = Math.fround(primitive.center.y), centerZ = Math.fround(primitive.center.z);
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const dz = endZ - startZ;
+    const x = startX - centerX;
+    const y = startY - centerY;
+    const radius = Math.fround(Math.fround(primitive.radius) + Math.fround(extent.x));
+    const radiusY = Math.fround(Math.fround(primitive.radius) + Math.fround(extent.y));
+    const halfHeight = Math.fround(Math.fround(primitive.halfHeight) + Math.fround(extent.z));
+    const top = Math.fround(centerZ + halfHeight);
+    const bottom = Math.fround(centerZ - halfHeight);
 
-    if (start.x > primitive.center.x + radius && end.x > primitive.center.x + radius) return null;
-    if (start.x < primitive.center.x - radius && end.x < primitive.center.x - radius) return null;
-    if (start.y > primitive.center.y + radius && end.y > primitive.center.y + radius) return null;
-    if (start.y < primitive.center.y - radius && end.y < primitive.center.y - radius) return null;
-    if (start.z > top && end.z > top) return null;
-    if (start.z < bottom && end.z < bottom) return null;
+    if (startX > centerX + radius && endX > centerX + radius) return null;
+    if (startX < centerX - radius && endX < centerX - radius) return null;
+    if (startY > centerY + radiusY && endY > centerY + radiusY) return null;
+    if (startY < centerY - radiusY && endY < centerY - radiusY) return null;
+    if (startZ > top && endZ > top) return null;
+    if (startZ < bottom && endZ < bottom) return null;
 
     let t0 = 0;
-    let t1 = maxTime;
+    let t1 = 1;
 
-    if (start.z > top && end.z < top) {
-        const time = (top - start.z) / dz;
+    if (startZ > top && endZ < top) {
+        const time = (top - startZ) / dz;
 
         if (time > t0) {
-            t0 = time;
+            t0 = Math.fround(time);
             tmpBestHit.normal.set(0, 0, 1);
         }
-    } else if (start.z < top && end.z > top) t1 = Math.min(t1, (top - start.z) / dz);
+    } else if (startZ < top && endZ > top) t1 = Math.min(t1, Math.fround((top - startZ) / dz));
 
-    if (start.z < bottom && end.z > bottom) {
-        const time = (bottom - start.z) / dz;
+    if (startZ < bottom && endZ > bottom) {
+        const time = (bottom - startZ) / dz;
 
         if (time > t0) {
-            t0 = time;
+            t0 = Math.fround(time);
             tmpBestHit.normal.set(0, 0, -1);
         }
-    } else if (start.z > bottom && end.z < bottom) t1 = Math.min(t1, (bottom - start.z) / dz);
+    } else if (startZ > bottom && endZ < bottom) t1 = Math.min(t1, Math.fround((bottom - startZ) / dz));
 
     if (t0 >= t1) return null;
 
-    const a = dx * dx + dy * dy;
-    const b = 2 * (x * dx + y * dy);
-    const c = x * x + y * y - radius * radius;
-    let discriminant = b * b - 4 * a * c;
+    const a = Math.fround(dx * dx + dy * dy);
+    const b = Math.fround(2 * (x * dx + y * dy));
+    const c = Math.fround(x * x + y * y - radius * radius);
+    let discriminant = Math.fround(b * b - 4 * a * c);
 
-    if (c < 1 && start.z > bottom && start.z < top) {
-        if (dx * x + dy * y >= -0.1) return null;
+    if (c < 1 && startZ > bottom && startZ < top) {
+        if (Math.fround(dx) * x + Math.fround(dy) * y >= Math.fround(-0.1)) return null;
 
-        tmpBestHit.normal.set(x, y, 0).normalize();
+        const nx = Math.fround(x), ny = Math.fround(y);
+        const lengthSq = nx * nx + ny * ny;
+
+        if (lengthSq < 1e-8) tmpBestHit.normal.set(0, 0, 0);
+        else {
+            const scale = Math.fround(1 / Math.sqrt(lengthSq));
+
+            tmpBestHit.normal.set(Math.fround(nx * scale), Math.fround(ny * scale), Math.fround((startZ - centerZ) * 0));
+        }
         tmpBestHit.time = 0;
-        tmpBestHit.item = -1;
+        tmpBestHit.item = 0;
 
         return tmpBestHit;
     }
 
     if (discriminant < 0) return null;
 
-    if (a < 0.00000001) {
+    if (a <= 9.99999905104687e-9) {
         if (c > 0) return null;
     } else {
-        discriminant = Math.sqrt(discriminant);
+        discriminant = Math.fround(Math.sqrt(discriminant));
 
-        t1 = Math.min(t1, (discriminant - b) * 0.5 / a);
+        const inverse = Math.fround(0.5 / a);
+        t1 = Math.min(t1, Math.fround((discriminant - b) * inverse));
 
-        const time = -(discriminant + b) * 0.5 / a;
+        const time = -(discriminant + b) * inverse;
 
         if (time > t0) {
-            t0 = time;
-            tmpBestHit.normal.set(x + dx * t0, y + dy * t0, 0).normalize();
+            t0 = Math.fround(time);
+            const nx = Math.fround(Math.fround(Math.fround(dx) * t0 + startX) - centerX);
+            const ny = Math.fround(Math.fround(Math.fround(dy) * t0 + startY) - centerY);
+            const lengthSq = nx * nx + ny * ny;
+            const scale = lengthSq < 1e-8 ? 1 : 1 / Math.sqrt(lengthSq);
+
+            tmpBestHit.normal.set(Math.fround(nx * scale), Math.fround(ny * scale), 0);
         }
 
         if (t0 >= t1) return null;
     }
 
-    tmpBestHit.time = Math.max(0, Math.min(maxTime, t0 - 0.001));
-    tmpBestHit.item = -1;
+    const time = Math.max(0, Math.min(1, Math.fround(t0 - Math.fround(0.001))));
+
+    if (time > maxTime) return null;
+
+    tmpBestHit.time = time;
+    tmpBestHit.item = 0;
 
     return tmpBestHit;
 }

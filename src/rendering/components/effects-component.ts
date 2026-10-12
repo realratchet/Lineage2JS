@@ -179,12 +179,14 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             if ((object as any).isObject3D) {
                 const actor = object as unknown as Object3D;
                 const context = call.context as any;
-                const location = call.args[3];
+                const location = call.args[3] ?? (context.getUnrealScriptProperty ? context.getUnrealScriptProperty("Location") : null);
                 const rotation = call.args[4];
 
                 if (Array.isArray(location)) actor.position.fromArray(location as Vector3Arr);
                 else if (context.isObject3D) context.getWorldPosition(actor.position);
                 else this.getParent().getWorldPosition(actor.position);
+
+                if ((actor as any).isActor) (actor as BaseActor).setUnrealScriptProperty("Location", actor.position.toArray());
 
                 if (Array.isArray(rotation)) {
                     const [pitch, yaw, roll] = rotation as Vector3Arr;

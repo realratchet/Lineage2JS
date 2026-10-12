@@ -10,6 +10,7 @@ import type { ITextureDecodeInfo, MapData_T, IAnimatedSpriteDecodeInfo } from "@
 import { buildTransformStage } from "../../materials/mesh-static-material/transform-stage";
 
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
+const cacheTextureData = new WeakMap<THREE.Texture, MapData_T>();
 type WeakCacheEntry_T<T extends object> = { deref(): T | undefined };
 const WeakRefConstructor = (globalThis as any).WeakRef;
 
@@ -162,6 +163,7 @@ function fetchTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData
 
     const data = (info as any).materialType !== "empty" ? _decodeTexture(library, info) : emptyMapData;
 
+    cacheTextureData.set(data.texture, data);
     cacheTextures.set(info, data);
     if (name) setWeakCacheValue(cacheTexturesByName, name, data);
 

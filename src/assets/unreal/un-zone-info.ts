@@ -3,9 +3,10 @@ import AInfo from "./un-info";
 import FColor from "./un-color";
 import type { FVector } from "./un-vector";
 import type { ATerrainInfo } from "./un-terrain-info";
-import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo } from "./decode-library";
+import type { DecodeLibrary, IBaseObjectDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "./decode-library";
 import type { ColorArr, Vector2Arr, Vector3Arr } from "./library-types";
 import type { IBoxDecodeInfo } from "./un-box";
+import type { PhysicsVolumeDecodeInfo_T } from "./un-physics-volume";
 
 export type IInfo = { getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo; };
 export type IZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Zone" };
@@ -13,7 +14,8 @@ export type ISkyZoneDecodeInfo = IBaseZoneDecodeInfo & { type: "Sky" };
 export type ISectorDecodeInfo = IBaseZoneDecodeInfo & { type: "Sector" };
 export type IZoneFogInfo = { start: number, end: number, color: ColorArr };
 
-export type IBaseZoneDecodeInfo = {
+export type IBaseZoneDecodeInfo = Pick<IBaseObjectDecodeInfo, "scriptClassId" | "scriptProperties" | "ownerUuid"> & {
+    physicsVolume?: PhysicsVolumeDecodeInfo_T,
     type: "Sector" | "Zone" | "Sky",
     uuid: string,
     hasTerrain: boolean,

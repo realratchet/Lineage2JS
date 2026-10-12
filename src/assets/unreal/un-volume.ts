@@ -1,6 +1,8 @@
 import UBrush from "./un-brush";
+import type { IActorCollisionDecodeInfo } from "./un-aactor";
 import FPlane from "./un-plane";
 import type { Vector4Arr, Matrix4Arr } from "./library-types";
+import type { IBoxDecodeInfo } from "./un-box";
 
 export type IMusicVolumeBspNode = {
     plane: Vector4Arr;
@@ -10,6 +12,7 @@ export type IMusicVolumeBspNode = {
 };
 
 export type IVolumeBspDecodeInfo = {
+    bounds: IBoxDecodeInfo;
     isRootOutside: boolean;
     worldToLocal: Matrix4Arr;
     nodes: IMusicVolumeBspNode[];
@@ -22,6 +25,21 @@ export abstract class UVolume extends UBrush {
         return Object.assign({}, super.getPropertyMap(), {
             "LocationPriority": "locationPriority"
         })
+    }
+
+    public getCollisionDecodeInfo(): IActorCollisionDecodeInfo {
+        return {
+            collideActors: this.isCollidingActors,
+            collideWorld: this.isCollidingWorld,
+            blockActors: this.isBlockingActors,
+            blockPlayers: this.isBlockingPlayers,
+            blockZeroExtent: this.isBlockingZeroExtentTraces,
+            blockNonZeroExtent: this.isBlockingNonZeroExtentTraces,
+            worldGeometry: this.isWorldGeometry,
+            useCylinderCollision: false,
+            collisionRadius: this.collisionRadius,
+            collisionHeight: this.collisionHeight
+        };
     }
 
     protected getWorldBspInfo(): IVolumeBspDecodeInfo {
@@ -38,6 +56,7 @@ export abstract class UVolume extends UBrush {
         }));
 
         return {
+            bounds: brush.getCollisionBoundingBox(this).getDecodeInfo(),
             isRootOutside: brush.getIsRootOutside(),
             worldToLocal: localToWorld.toArray(),
             nodes

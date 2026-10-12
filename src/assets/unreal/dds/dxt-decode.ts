@@ -1,5 +1,5 @@
 import type { DecodeLibrary } from "../decode-library";
-import type { ITextureDecodeInfo, IDataTextureDecodeInfo } from "../un-texture";
+import type { ITextureDecodeInfo, IDataTextureDecodeInfo, IAnimatedSpriteDecodeInfo } from "../un-texture";
 
 /**
  * Software DXT/S3TC decompression. Kept free of three.js (and DOM) imports so the
@@ -277,13 +277,19 @@ export function convertDDSTextureInfo(info: ITextureDecodeInfo): boolean {
 }
 
 export function convertDDSMaterialsToRGBA(library: DecodeLibrary) {
-    for (const info of Object.values(library.materials)) {
-        if (!info || (info as ITextureDecodeInfo).textureType !== "dds") continue;
+    for (const [id, info] of Object.entries(library.materials)) {
+        if (!info || info.materialType !== "sprite" && (info as ITextureDecodeInfo).textureType !== "dds") continue;
 
-        try {
-            convertDDSTextureInfo(info as ITextureDecodeInfo);
-        } catch (e) {
-            console.warn(`[DXT] Failed to convert texture '${(info as any).name}' to RGBA:`, e);
+        const textures = info.materialType === "sprite" ? (info as IAnimatedSpriteDecodeInfo).sprites.map(texture => Object.assign({}, texture)) : [Object.assign({}, info) as ITextureDecodeInfo];
+
+        library.materials[id] = info.materialType === "sprite" ? Object.assign({}, info, { sprites: textures }) : textures[0];
+
+        for (const texture of textures) {
+            try {
+                convertDDSTextureInfo(texture);
+            } catch (e) {
+                console.warn(`[DXT] Failed to convert texture '${texture.name}' to RGBA:`, e);
+            }
         }
     }
 }

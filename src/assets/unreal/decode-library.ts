@@ -1,3 +1,4 @@
+import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
 import type { StaticMeshBatchManifest_T } from "./static-mesh-batch";
 import type { IBSPNodeDecodeInfo_T } from "./bsp/un-bsp-node";
 import type { IBoxDecodeInfo } from "./un-box";
@@ -132,6 +133,9 @@ export class DecodeLibrary {
     // flat (not leaf-indexed like leafActors) - emitters register at a single origin point
     // (un-emitter.ts), so gating on leaf membership on top of the zone mask double-gates them
     public readonly allEmitterActors: IBaseObjectOrInstanceDecodeInfo[] = [];
+    public readonly levelActorUuids: (string | null)[] = [];
+    public readonly staticMeshCollisionActors: Pick<IStaticMeshActorDecodeInfo, "uuid" | "name" | "position" | "collisionBounds" | "collision">[] = [];
+    public readonly volumeCollisionActors: Pick<IStaticMeshActorDecodeInfo, "uuid" | "name" | "position" | "collisionBounds" | "collision">[] = [];
     // pawns (players, mobs/NPCs) move freely across sector boundaries, unlike StaticMeshActor
     // (leaf-baked at decode time) - no decode-time leaf/zone export, see RenderManager.updatePawnVisibility
     public readonly pawnActors: ISkinnedMeshObjectDecodeInfo[] = [];

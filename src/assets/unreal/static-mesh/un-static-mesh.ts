@@ -481,6 +481,14 @@ export abstract class UStaticMesh extends UPrimitive {
         };
     }
 
+    public getCollisionBoundingBox(owner: UAActor): FBox {
+        if (owner.isUsingCylinderCollision) return super.getCollisionBoundingBox(owner);
+
+        const bounds = this.boundingBox.transformBy(owner.localToWorld());
+
+        return this.collisionModel ? bounds.addBox(this.collisionModel.loadSelf().getCollisionBoundingBox(owner)) : bounds;
+    }
+
     public getRenderBoundingBox(owner?: UAActor): FBox {
         return this.boundingBox;
     }

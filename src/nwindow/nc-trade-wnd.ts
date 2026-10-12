@@ -1,6 +1,5 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
-import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomScrollPane_T } from "./ndom";
+import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { TradeItem_T } from "../network/game-packets";
 
@@ -19,6 +18,7 @@ export class NCTradeWnd {
     public onConfirm: (isConfirmed: boolean) => void = null;
     public onOffer: (item: TradeItem_T, isDrop: boolean) => void = null;
     public onSelect: () => void = null;
+    public onFocusDialog: () => void = null;
     public onTooltip: (item: TradeItem_T, button: HTMLElement, isDetailed: boolean) => void = null;
     public onHideTooltip: () => void = null;
     protected readonly layer: NDomLayer;
@@ -32,6 +32,7 @@ export class NCTradeWnd {
     protected hoveredMode = -1;
     protected hoveredIndex = -1;
     protected readonly hoveredIndices = [-1, -1, -1];
+    protected readonly doubleClicked = [false, false, false];
     protected heldMode = -1;
     protected drag: TradeDrag_T = null;
 
@@ -76,41 +77,48 @@ export class NCTradeWnd {
             list.style.outline = "none";
             this.lists.push(list);
             list.addEventListener("mousemove", event => {
-                if (list.content.contains(event.target as Node) || event.target === list && (list.children[1] as HTMLElement).hidden)
-                    this.hoverItem(mode, this.getItemIndex(mode, event));
+                if (list.content.contains(event.target as Node) || event.target === list)
+                    this.hoverItem(mode, this.getItemIndex(mode, event), event.buttons);
             });
-            list.content.addEventListener("mousedown", event => {
-                if (event.button !== 0) return;
+            list.addEventListener("mousedown", event => {
+                if (event.button !== 0 && event.button !== 2) return;
+                if (event.target !== list && !list.content.contains(event.target as Node)) return;
 
                 event.preventDefault();
                 list.focus();
+                if (event.button !== 0) return;
                 this.heldMode = mode;
                 const index = this.getItemIndex(mode, event);
 
                 if (mode === 0) this.pressedIndex = index;
                 if (event.detail === 2) { // NCTradeItemWnd::OnLButtonDblClk 0x1011a250 replaces the second button-down.
+                    this.doubleClicked[mode] = true;
                     this.endDrag();
                     if (mode === 0 && index >= 0 && index < this.items[mode].length && this.onOffer) this.onOffer(this.items[mode][index], true);
                     return;
                 }
-                if (index < 0 || index >= this.items[mode].length) return;
-
-                const item = this.items[mode][index];
-                this.selectedItems[mode] = item;
                 this.hoveredIndices[mode] = index;
                 this.hoveredMode = mode;
                 this.hoveredIndex = index;
-
-                if (mode === 0) {
-                    this.paintSelection();
-                    this.drag = { item, icon: layer.getManager().strings.itemIcons[item.itemId], isDragging: false };
+                if (index < 0 || index >= this.items[mode].length) {
+                    if (this.onHideTooltip) this.onHideTooltip();
+                    return;
                 }
 
-                if (this.onSelect) this.onSelect();
-                layer.getManager().playPickupSound();
+                const item = this.items[mode][index];
+                this.selectedItems[mode] = item;
+
+                if (mode === 0) this.paintSelection();
+                if (this.doubleClicked[mode]) this.doubleClicked[mode] = false;
+                else {
+                    if (mode === 0) this.drag = { item, icon: layer.getManager().strings.itemIcons[item.itemId], isDragging: false };
+                    if (this.onSelect) this.onSelect();
+                    layer.getManager().playPickupSound();
+                }
                 const button = list.content.children[index] as HTMLElement;
 
                 if (this.onTooltip) this.onTooltip(item, button, true);
+                if (this.onFocusDialog) this.onFocusDialog();
             });
         });
         this.names.push(layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 184), layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 278));
@@ -128,9 +136,11 @@ export class NCTradeWnd {
         });
         window.addEventListener("mousemove", event => {
             if (!(event.buttons & 1)) this.heldMode = -1;
-            if (this.heldMode >= 0) this.hoveredIndices[this.heldMode] = this.getItemIndex(this.heldMode, event);
+            if (this.heldMode >= 0 && document.activeElement === this.lists[this.heldMode]) this.hoveredIndices[this.heldMode] = this.getItemIndex(this.heldMode, event);
             if (!this.drag) return;
             if (!(event.buttons & 1) || !this.isVisible()) { this.endDrag(); return; }
+            if (document.activeElement !== this.lists[0]) return;
+
             const item = this.items[0][this.pressedIndex];
 
             if (!item) return;
@@ -151,12 +161,12 @@ export class NCTradeWnd {
             this.heldMode = -1;
             if (!this.drag) return;
 
-            const item = this.items[0][this.pressedIndex];
+            const item = this.items[0][this.pressedIndex], focused = document.activeElement === this.lists[0];
 
             this.endDrag();
             const list = this.lists[1], target = document.elementFromPoint(event.clientX, event.clientY);
 
-            if (!item || !this.isVisible() || !target || !(list.content.contains(target) || target === list && (list.children[1] as HTMLElement).hidden)) return;
+            if (!focused || !item || !this.isVisible() || !target || !(list.content.contains(target) || target === list && (list.children[1] as HTMLElement).hidden)) return;
 
             if (this.onOffer) this.onOffer(item, true);
         }, true);
@@ -240,7 +250,7 @@ export class NCTradeWnd {
             }
 
             list.content.appendChild(button);
-            button.addEventListener("mouseenter", () => this.hoverItem(mode, index));
+            button.addEventListener("mouseenter", event => this.hoverItem(mode, index, event.buttons));
             button.addEventListener("mouseleave", () => {
                 if (this.hoveredMode !== mode) return;
 
@@ -265,8 +275,8 @@ export class NCTradeWnd {
         return (list.getScroll() / 35 + Math.min(rows - 1, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37));
     }
 
-    protected hoverItem(mode: number, index: number) {
-        if (this.heldMode >= 0 && this.heldMode !== mode) index = this.hoveredIndices[mode];
+    protected hoverItem(mode: number, index: number, buttons: number) {
+        if ((buttons & 1) && (this.heldMode !== mode || document.activeElement !== this.lists[mode])) index = this.hoveredIndices[mode];
         else this.hoveredIndices[mode] = index;
 
         if (this.hoveredMode === mode && this.hoveredIndex === index) return;

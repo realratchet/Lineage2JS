@@ -1,7 +1,6 @@
-import NWnd from "./nwnd";
+import NWnd, { type NMouseEvent_T } from "./nwnd";
 import NCButton, { NCBUTTON_NO_OVER } from "./nc-button";
 import type NWindowCanvas from "./nwindow-canvas";
-import type { NMouseEvent_T } from "./nwnd";
 
 const TEX_TOP = "L2UI_CH3.ScrollBar.SliderBarTop";
 const TEX_CENTER = "L2UI_CH3.ScrollBar.SliderBarCenter";

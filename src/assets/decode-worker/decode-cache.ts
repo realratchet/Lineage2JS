@@ -147,6 +147,8 @@ async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: U
 }
 
 export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> {
+    if (!isCacheEnabled(settings)) return;
+
     let dir: FileSystemDirectoryHandle;
 
     try {
@@ -155,17 +157,10 @@ export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> 
         return; // no cache directory yet
     }
 
-    const currentVersion = `.v${getCacheVersion(settings)}.`;
-    const enabled = isCacheEnabled(settings);
     const doomed: string[] = [];
 
     for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
         if (handle.kind !== "file") continue;
-
-        if (!enabled || !name.includes(currentVersion)) {
-            doomed.push(name);
-            continue;
-        }
 
         try {
             const file = await (handle as FileSystemFileHandle).getFile();
@@ -179,7 +174,7 @@ export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> 
     }
 
     if (doomed.length > 0)
-        console.log(`[decode-cache] ${enabled ? "swept" : "cleared"} ${doomed.length} cache entries`);
+        console.log(`[decode-cache] swept ${doomed.length} cache entries`);
 }
 
 // Blob URLs are scoped to the thread owning the library, minted on first read so loading never pays for unplayed sounds.

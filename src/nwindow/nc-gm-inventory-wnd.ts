@@ -1,7 +1,6 @@
-import NCInventoryWnd from "./nc-inventory-wnd";
+import NCInventoryWnd, { type InventoryEntry_T } from "./nc-inventory-wnd";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import type NDomLayer from "./ndom";
-import type { InventoryEntry_T } from "./nc-inventory-wnd";
 import type { GMViewItemList_T } from "../network/game-packets";
 
 export class NCGMInventoryWnd extends NCInventoryWnd {

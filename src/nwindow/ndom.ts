@@ -461,11 +461,21 @@ export class NDomLayer {
             this.setTile(thumbCenter, 15, Math.max(0, thumbLen - 16), 0, 0, 15, 8, "L2UI_CH3.ScrollBar.SliderBarCenter");
             this.place(thumbBottom, 0, thumbLen - 8);
         };
-        const pushButton = (button: HTMLElement, direction: number) => button.addEventListener("mousedown", event => {
-            if (event.button !== 0) return;
+        const pushButton = (button: HTMLElement, direction: number) => {
+            button.tabIndex = -1;
+            button.addEventListener("mousedown", event => {
+                if (event.button !== 0 && event.button !== 2) return;
 
-            element.setScroll(scroll + direction * step);
-        });
+                event.preventDefault();
+                button.focus();
+                if (event.detail === 2) event.stopImmediatePropagation();
+            }, true);
+            button.addEventListener("mousedown", event => {
+                if (event.button !== 0) return;
+
+                element.setScroll(scroll + direction * step);
+            });
+        };
 
         element.style.overflow = "hidden";
         element.content = content;
@@ -478,6 +488,7 @@ export class NDomLayer {
             } else scroll = Math.max(0, isClamped ? Math.min(Math.ceil(position / step), Math.ceil(contentHeight / step) - viewRows) * step : Math.ceil(position / step) * step);
             content.style.top = `${-scroll}px`;
             update();
+            element.dispatchEvent(new Event("scroll"));
         };
         element.setScroll = setScroll;
         element.setContentHeight = (height, preserveScroll = false) => {
@@ -490,10 +501,13 @@ export class NDomLayer {
         pushButton(this.button(element, w - 15, 0, 15, 15, "L2UI_CH3.ScrollBar.ScrollBarUpBtn", "L2UI_CH3.ScrollBar.ScrollBarUpOnBtn", "L2UI_CH3.ScrollBar.ScrollBarUpBtn"), -1);
         pushButton(this.button(element, w - 15, h - 15, 15, 15, "L2UI_CH3.ScrollBar.ScrollBarDownBtn", "L2UI_CH3.ScrollBar.ScrollBarDownOnBtn", "L2UI_CH3.ScrollBar.ScrollBarDownBtn"), 1);
         this.tile(thumb, 0, 0, 15, 8, 0, 0, 15, 8, "L2UI_CH3.ScrollBar.SliderBarTop");
+        thumb.tabIndex = -1;
         thumb.addEventListener("mousedown", event => {
-            if (event.button !== 0) return;
+            if (event.button !== 0 && event.button !== 2) return;
 
             event.preventDefault();
+            thumb.focus();
+            if (event.button !== 0 || event.detail === 2) return;
 
             const startY = this.toUI(event.clientY), startPos = thumb.offsetTop - 15;
 
@@ -506,7 +520,7 @@ export class NDomLayer {
 
                 if (position === thumb.offsetTop - 15) return;
 
-                element.setScroll(isPixel ? Math.ceil(position * Math.max(0, contentHeight - h) / travel / step) * step : Math.trunc(position * (Math.ceil(contentHeight / step) - viewRows) / travel) * step, !isPixel);
+                element.setScroll(isPixel ? Math.ceil(Math.trunc(position * Math.max(0, contentHeight - h) / travel) / step) * step : Math.trunc(position * (Math.ceil(contentHeight / step) - viewRows) / travel) * step, !isPixel);
                 this.place(thumb, w - 15, 15 + position);
             });
         });

@@ -514,14 +514,17 @@ function decodeChunk(kind: number, byteLength: number, buffer: ArrayBuffer, offs
     return new Constructor(buffer, offset, byteLength / bytesPerElement);
 }
 
-function createDecoder(buffer: ArrayBuffer, metadataOffset: number, entries: LibraryChunkEntry_T[]): LibraryDecoder {
+function createDecoder(buffer: ArrayBuffer, metadataOffset: number, entries: LibraryChunkEntry_T[], copyChunks: boolean = false): LibraryDecoder {
+    const chunkOffset = copyChunks && entries.length ? entries[0].offset : 0;
+    const chunks = copyChunks ? buffer.slice(chunkOffset) : buffer;
+
     return new LibraryDecoder(buffer, metadataOffset, (index, kind, byteLength) => {
         const entry = entries[index];
 
-        if (!entry || entry.length !== byteLength || entry.offset + entry.length > buffer.byteLength)
+        if (!entry || entry.length !== byteLength || entry.offset < chunkOffset || entry.offset + entry.length > buffer.byteLength)
             throw new Error(`Corrupt decode-cache chunk '${index}'`);
 
-        return decodeChunk(kind, byteLength, buffer, entry.offset);
+        return decodeChunk(kind, byteLength, chunks, entry.offset - chunkOffset);
     });
 }
 
@@ -543,10 +546,10 @@ export function deserializeLibrary(buffer: ArrayBuffer): any {
     return decoder.result();
 }
 
-export async function deserializeLibraryAsync(buffer: ArrayBuffer): Promise<any> {
+export async function deserializeLibraryAsync(buffer: ArrayBuffer, copyChunks: boolean = false): Promise<any> {
     const { chunkCount } = readHeader(buffer);
     const entries = readEntries(buffer, chunkCount);
-    const decoder = createDecoder(buffer, HEADER_SIZE + chunkCount * CHUNK_ENTRY_SIZE, entries);
+    const decoder = createDecoder(buffer, HEADER_SIZE + chunkCount * CHUNK_ENTRY_SIZE, entries, copyChunks);
 
     while (true) {
         const deadline = performance.now() + DECODE_FRAME_MS;

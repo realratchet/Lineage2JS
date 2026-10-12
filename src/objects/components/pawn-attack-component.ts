@@ -1,8 +1,7 @@
 import { Object3D, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent, type IObject } from "../../game/components";
-import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
+import SoundComponent, { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
 import { getPawnRotation } from "../../utils/rotator";
-import SoundComponent from "../../audio/components/sound-component";
 import SkillVisualEffect, { type SkillCast_T } from "@l2js/engine/skills/skill-visual-effect";
 import { getSkillHitTimeOffset, getSkillPreviewListTarget } from "@l2js/engine/skills/skill-visual-definition";
 import SkillEffectHost from "./skill-effect-host";
@@ -252,7 +251,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         let attack = this.attacks[index];
 
         if (!attack) throw new Error(`NPC attack '${this.selection}' does not exist.`);
-        if (this.isServerAction && attack.skill) attack = { ...attack, skill: { ...attack.skill, hitTime: this.serverHitTime, previewTarget: undefined } };
+        // Engine.dll OnReceiveMagicSkillUse0x750822 passes packet hit time minus0.5 to SetMagicInfo's animation duration.
+        if (this.isServerAction && attack.skill) attack = { ...attack, skill: { ...attack.skill, hitTime: this.serverHitTime - 0.5, previewTarget: undefined } };
 
         const rangeTarget = attack.skill?.previewTarget === "self" ? parent : target;
 
@@ -307,6 +307,14 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
             if (this.bow) parent.playAnimation(attack.animation, 0.2 / rate, rate, false, true); // BowAttackProcess 0x8c6b9f..0x8c6bcd.
             else parent.playAnimation(attack.animation, 0.1 / rate, rate * 1.1, false, true); // SwordAttackProcess 0x8c75f6..0x8c762b.
+
+            if (!this.bow && parent.ridePawn) {
+                const rider = parent.ridePawn;
+                const animation = (rider.getUnrealScriptProperty("RiderAtkAnimName") as string[])[parent.rideType];
+
+                if (animation.toLowerCase() !== "none") rider.playAnimation(animation, 0.1 / rate, rate * 1.1, false, true);
+            }
+
             this.initAttackShots(parent);
             if (this.bow) this.initBowAttack();
         }

@@ -21,6 +21,7 @@ export type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
     type: "StaticMeshActor",
     instance: IStaticMeshInstanceDecodeInfo,
     bounds: IBoxDecodeInfo,
+    collisionBounds: IBoxDecodeInfo,
     scaledGlow: number,
     isSunAffected?: boolean,
     dontBatch?: boolean,
@@ -139,6 +140,21 @@ export abstract class UStaticMeshActor extends UAActor {
             // "HideTime": "_hideTime",
             // "bExactProjectileCollision": "_bExactProjectileCollision",
         });
+    }
+
+    public getCollisionDecodeInfo(): IActorCollisionDecodeInfo {
+        return {
+            collideActors: this.isCollidingActors ?? true,
+            collideWorld: this.isCollidingWorld ?? true,
+            blockActors: this.isBlockingActors ?? true,
+            blockPlayers: this.isBlockingPlayers ?? true,
+            blockZeroExtent: this.isBlockingZeroExtentTraces ?? true,
+            blockNonZeroExtent: this.isBlockingNonZeroExtentTraces ?? true,
+            worldGeometry: this.isWorldGeometry ?? true,
+            useCylinderCollision: !!this.isUsingCylinderCollision,
+            collisionRadius: this.collisionRadius,
+            collisionHeight: this.collisionHeight
+        };
     }
 
     protected getActorDecodeInfo(): Partial<IStaticMeshActorDecodeInfo> { return {}; }
@@ -281,18 +297,8 @@ export abstract class UStaticMeshActor extends UAActor {
                 min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
                 max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
             },
-            collision: {
-                collideActors: this.isCollidingActors ?? true,
-                collideWorld: this.isCollidingWorld ?? true,
-                blockActors: this.isBlockingActors ?? true,
-                blockPlayers: this.isBlockingPlayers ?? true,
-                blockZeroExtent: this.isBlockingZeroExtentTraces ?? true,
-                blockNonZeroExtent: this.isBlockingNonZeroExtentTraces ?? true,
-                worldGeometry: this.isWorldGeometry ?? true,
-                useCylinderCollision: !!this.isUsingCylinderCollision,
-                collisionRadius: this.collisionRadius,
-                collisionHeight: this.collisionHeight
-            },
+            collisionBounds: (this.mesh as UStaticMesh).getCollisionBoundingBox(this).getDecodeInfo(),
+            collision: this.getCollisionDecodeInfo(),
             ...this.getActorDecodeInfo()
         } as IStaticMeshActorDecodeInfo;
 

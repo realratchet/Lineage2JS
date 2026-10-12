@@ -127,24 +127,32 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         layout.runs.forEach(run => text(run.x, run.y, run.color, run.text));
     }
 
+    public createDOM(layer: NDomLayer, parent: HTMLElement, anchorX: number, anchorY: number, info: string | TooltipInfo_T, topOffset = 32) {
+        const layout = this.layout(layer.getManager().canvas, info);
+        const parentRect = parent.getBoundingClientRect();
+        const x = Math.max(0, Math.min(anchorX, layer.getManager().canvas.width - layout.width));
+        let y = anchorY - layout.height;
+
+        if (y < 0) y = anchorY + topOffset;
+        const tooltip = layer.createWindow(x - layer.toUI(parentRect.left), y - layer.toUI(parentRect.top), layout.width, layout.height, parent);
+        tooltip.classList.add("ndom-opaque", "ndom-tooltip");
+        tooltip.setAttribute("role", "tooltip");
+        tooltip.setAttribute("aria-label", typeof info === "string" ? info : [info.title, ...info.lines.map(line => `${line.label} ${line.value}`), info.description].join("\n"));
+        tooltip.style.zIndex = "2147483647";
+        tooltip.style.pointerEvents = "none";
+        this.draw(layout, (x, y, w, h, texture) => layer.tile(tooltip, x, y, w, h, 0, 0, 8, 8, texture), (x, y, color, text) => layer.text(tooltip, text, color, undefined, x, y));
+
+        return tooltip;
+    }
+
     public bind(layer: NDomLayer, parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T) {
         let tooltip: HTMLDivElement = null;
         const hide = () => { if (tooltip) { tooltip.remove(); tooltip = null; } };
         const show = () => {
             hide();
-            const layout = this.layout(layer.getManager().canvas, info);
-            const rect = button.getBoundingClientRect(), parentRect = parent.getBoundingClientRect();
-            const x = Math.max(0, Math.min(layer.toUI(rect.left), layer.getManager().canvas.width - layout.width));
-            let y = layer.toUI(rect.top) - layout.height;
+            const rect = button.getBoundingClientRect();
 
-            if (y < 0) y = layer.toUI(rect.top) + 32;
-            tooltip = layer.createWindow(x - layer.toUI(parentRect.left), y - layer.toUI(parentRect.top), layout.width, layout.height, parent);
-            tooltip.classList.add("ndom-opaque", "ndom-tooltip");
-            tooltip.setAttribute("role", "tooltip");
-            tooltip.setAttribute("aria-label", typeof info === "string" ? info : [info.title, ...info.lines.map(line => `${line.label} ${line.value}`), info.description].join("\n"));
-            tooltip.style.zIndex = "2147483647";
-            tooltip.style.pointerEvents = "none";
-            this.draw(layout, (x, y, w, h, texture) => layer.tile(tooltip, x, y, w, h, 0, 0, 8, 8, texture), (x, y, color, text) => layer.text(tooltip, text, color, undefined, x, y));
+            tooltip = this.createDOM(layer, parent, layer.toUI(rect.left), layer.toUI(rect.top), info);
         };
 
         button.addEventListener("mouseenter", show);

@@ -12,6 +12,7 @@ import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
+import type NpcLifecycleComponent from "../../objects/components/npc-lifecycle-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
@@ -129,6 +130,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected readonly ignoredActors = new Set<ICollidable>();
     protected readonly collisionQuery: CollisionQuery_T = { location: null, delta: null, extent: null, sourceIsPlayer: false };
     protected readonly actorState = new ActorState();
+    protected oldRotationYaw = 0;
     protected enterRiseTargetZ: number = null;
     protected enterRiseVelocity = 0;
 
@@ -212,20 +214,22 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected updatePhysics(currentTime: number, deltaTime: number) {
+        if (this.physicsMode === "none") return;
+
         if (this.enterRiseTargetZ !== null) {
             this.updateEnterRise(deltaTime);
             return;
         }
 
         const parent = this.getParent();
-        if (!(parent as any).isPlayer && !parent.findComponent("npcSimulation") && !parent.visible) {
+        if (this.hasStartedPhysics && !(parent as any).isPlayer && !parent.findComponent("npcSimulation") && !parent.visible && !this.isDying() && !parent.findComponent<NpcLifecycleComponent>("npcLifecycle")?.hasDeathActions()) {
             if (this.actorState.locomotion) {
                 const desired = this.actorState.desired, position = this.getPosition();
 
                 if (desired.actor) desired.actor.getWorldPosition(desired.position);
 
                 const distance = position.distanceTo(desired.position) - desired.offset;
-                const speed = this.physicsMode === "swimming" ? this.waterSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;
+                const speed = this.physicsMode === "swimming" ? this.waterSpeed : this.physicsMode === "flying" ? this.airSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;
                 const step = speed * deltaTime;
 
                 if (distance <= step) {
@@ -238,7 +242,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                 }
             }
 
-            this.checkAnimationState();
+            this.checkAnimationState(deltaTime);
+            this.renderManager.getPhysicsManager().updatePawnCollision(parent);
             return;
         }
 
@@ -247,7 +252,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.collisionProfile.collideActors = isInteractive;
 
         if (!this.rigidbody || !isInteractive) {
-            this.checkAnimationState();
+            this.checkAnimationState(deltaTime);
             return;
         }
 
@@ -264,7 +269,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         }
 
         this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.getPosition().x, this.getPosition().y, this.getPosition().z + this.collisionHeight));
-        this.checkAnimationState();
+        this.checkAnimationState(deltaTime);
     }
 
     protected updateEnterRise(deltaTime: number): void {
@@ -277,6 +282,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             this.enterRiseVelocity = 0;
         } else this.getPosition().z = nextZ;
 
+        this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
         if (this.rigidbody) this.rigidbody.setNextKinematicTranslation(tmpBodyPosition.set(this.getPosition().x, this.getPosition().y, this.getPosition().z + this.collisionHeight));
     }
 
@@ -306,6 +312,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             if (actor !== this.getParent() && this.isOverlapping(actor, this.getPosition())) this.ignoredActors.add(actor);
     }
 
+    public removeIgnoredActor(actor: ICollidable): void { this.ignoredActors.delete(actor); }
+
     public moveSmooth(movement: Vector3, ignoredActor?: ICollidable) {
         if (!this.isInteractive()) return;
 
@@ -317,6 +325,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (ignoredActor && !wasIgnored) this.ignoredActors.delete(ignoredActor);
 
         this.getPosition().copy(position);
+        this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
     }
 
     protected tickPhysics(deltaTime: number) {
@@ -370,12 +379,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (desired.actor) {
             desired.actor.getWorldPosition(desired.position);
-            desired.swimToDepth = !!this.getWaterVolumeAt(desired.position);
         }
 
         const distanceX = desired.position.x - position.x;
         const distanceY = desired.position.y - position.y;
-        const isThreeDimensional = this.physicsMode === "flying" || this.physicsMode === "swimming" && desired.swimToDepth;
+        const isThreeDimensional = this.physicsMode === "flying" || this.physicsMode === "swimming";
         const distanceZ = isThreeDimensional ? desired.position.z - position.z : 0;
         const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ);
         const maxSpeed = this.physicsMode === "swimming" ? this.waterSpeed : this.physicsMode === "flying" ? this.airSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;
@@ -416,6 +424,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.physicsRotation(deltaTime);
 
         this.getPosition().copy(position);
+        this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
         this.updateBaseRelativePosition();
         this.waterVolume = this.getWaterVolume(position);
     }
@@ -428,7 +437,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         const dx = this.actorState.desired.position.x - position.x;
         const dy = this.actorState.desired.position.y - position.y;
-        const dz = this.physicsMode === "flying" || this.physicsMode === "swimming" && this.actorState.desired.swimToDepth ? this.actorState.desired.position.z - position.z : 0;
+        const dz = this.physicsMode === "flying" || this.physicsMode === "swimming" ? this.actorState.desired.position.z - position.z : 0;
         const distance = Math.sqrt(dx * dx + dy * dy + dz * dz) - this.actorState.desired.offset;
         const speed = Math.min(maxSpeed, Math.max(0, distance / deltaTime));
 
@@ -797,7 +806,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (!hit) {
             const outZ = position.z;
 
-            position.z = Math.min(tmpSwimStart.z, position.z);
+            this.moveSwept(position, tmpDown.set(0, 0, Math.min(0, tmpSwimStart.z - position.z)));
             remainingTime = deltaTime * Math.min(1, Math.abs(position.z - outZ) / tmpMovement.length());
             tmpMovement.copy(position).sub(tmpSwimStart);
 
@@ -978,6 +987,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         position.copy(bodyPosition).addScaledVector(tmpUp, -this.collisionHeight);
 
+        if (position === this.getPosition()) this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
+
         return hit;
     }
 
@@ -1072,15 +1083,22 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.hasDesiredRotation = true;
     }
 
-    protected checkAnimationState() {
+    protected checkAnimationState(deltaTime: number) {
+        // APawn::UpdateMovementAnimation 0x8bbfdf..0x8bc0f2; OldRotYaw writer 0x8bc5ed.
+        const yawChange = this.rotationYaw - this.oldRotationYaw;
+        const isTurning = Math.abs(deltaTime === 0 ? yawChange : yawChange / (deltaTime * 1000)) > 1;
+
+        this.oldRotationYaw = this.rotationYaw;
+
         if (this.actorState.state === "dying") return;
+        if (this.getParent().scriptClassId && this.getParent().getUnrealScriptProperty("bUpdateMovementAnim")) return;
 
         const action = this.getParent().getAnimationAction();
 
         if (!this.actorState.locomotion && (action && action.loop === LoopOnce || this.findComponent<PawnAttackComponent>("pawnAttack")?.isAttacking())) return;
 
         const isMoving = this.velocity.lengthSq() > 0;
-        const state: PawnMovementState_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : "idle";
+        const state: PawnMovementState_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : isTurning && this.getParent().scriptClassId ? "turning" : "idle";
 
         if (state === this.actorState.state && this.getComponent<AnimationComponent>("animation").isPlayingMovement(state)) return;
 
@@ -1093,7 +1111,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
-        this.actorState.desired.swimToDepth = !!this.getWaterVolumeAt(position);
         this.actorState.desired.offset = 0;
         this.actorState.desired.faceMovement = true;
         this.actorState.desired.faceTarget = null;
@@ -1103,7 +1120,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.locomotion = true;
         actor.getWorldPosition(this.actorState.desired.position);
         this.actorState.desired.actor = actor;
-        this.actorState.desired.swimToDepth = !!this.getWaterVolumeAt(this.actorState.desired.position);
         this.actorState.desired.offset = offset;
         this.actorState.desired.faceMovement = true;
         this.actorState.desired.faceTarget = null;
@@ -1115,7 +1131,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.getPosition());
         this.actorState.desired.actor = null;
-        this.actorState.desired.swimToDepth = true;
         this.actorState.desired.offset = 0;
         this.actorState.desired.faceMovement = faceMovement;
     }
@@ -1202,6 +1217,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public getRotationYaw(): number { return this.rotationYaw; }
+    public syncRotationYaw(yaw: number): void { this.rotationYaw = yaw | 0; }
 
     public setAirSpeed(airSpeed: number) {
         if (!Number.isFinite(airSpeed) || airSpeed < 0) throw new Error(`Invalid pawn AirSpeed '${airSpeed}'.`);
@@ -1217,9 +1233,20 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.collisionHeight = collisionHeight;
 
         if (this.collider) this.collider.setShape(new RAPIER.Cylinder(collisionHeight, collisionRadius));
-        if (this.rigidbody) this.rigidbody.setTranslation(tmpBodyPosition.set(this.getPosition().x, this.getPosition().y, this.getPosition().z + collisionHeight), true);
+        this.syncCollisionLocation();
 
         this.dispatchEvent(PAWN_COLLISION_SIZE_CHANGED_EVENT);
+    }
+
+    public syncCollisionLocation(): void {
+        this.analyticalOrigin.set(NaN, NaN, NaN);
+        const primitive = this.getCollisionPrimitive();
+        this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
+
+        if (!this.rigidbody) return;
+
+        this.rigidbody.setTranslation(primitive.center, true);
+        this.rigidbody.setNextKinematicTranslation(primitive.center);
     }
 
     public teleportTo(position: Vector3, adjustToFloor: boolean = false) {
@@ -1230,21 +1257,23 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.locomotion = false;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
-        this.actorState.desired.swimToDepth = false;
         this.adjustLocation(position, adjustToFloor);
     }
 
     public adjustLocation(position: Vector3, adjustToFloor: boolean = true) {
-        this.adjustToFloor = adjustToFloor;
+        const isFlying = this.physicsMode === "flying";
+
+        this.adjustToFloor = adjustToFloor && !isFlying;
         this.setBase(null);
         this.getPosition().copy(position);
         this.isGrounded = false;
-        this.physicsMode = "falling";
-        this.hasStartedPhysics = false;
+        if (!isFlying) {
+            this.physicsMode = "falling";
+            this.hasStartedPhysics = false;
+        }
         this.dispatchEvent(PAWN_TELEPORTED_EVENT);
 
-        if (this.rigidbody)
-            this.rigidbody.setTranslation(tmpBodyPosition.set(position.x, position.y, position.z + this.collisionHeight), true);
+        this.syncCollisionLocation();
     }
     public getVelocity(): Vector3 { return this.velocity; }
     public getGroundSpeed(): number { return this.groundSpeed; }
@@ -1294,7 +1323,6 @@ class ActorState {
     public readonly desired: DesiredState_T = {
         position: new Vector3(),
         actor: null,
-        swimToDepth: false,
         offset: 0,
         faceMovement: true,
         faceTarget: null
@@ -1309,14 +1337,13 @@ class ActorState {
 export type DesiredState_T = {
     position: Vector3;
     actor: Object3D | null;
-    swimToDepth: boolean;
     offset: number;
     faceMovement: boolean;
     faceTarget: Object3D | null;
 };
 
 export type PhysicsMode_T = "none" | "walking" | "falling" | "swimming" | "flying";
-export type PawnMovementState_T = "idle" | "walking" | "running" | "dying" | "falling" | "swimming" | "swimmingIdle";
+export type PawnMovementState_T = "idle" | "turning" | "walking" | "running" | "dying" | "falling" | "swimming" | "swimmingIdle";
 
 function signedYaw(yaw: number): number { return ((yaw + 32767) & 65535) - 32767; }
 

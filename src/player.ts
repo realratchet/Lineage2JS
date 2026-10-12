@@ -1,16 +1,12 @@
-import { Mesh, Vector3 } from "three";
+import { Vector3 } from "three";
 import BaseActor from "./base-actor";
 import WaterEffectsComponent from "./physics/components/water-effects-component";
 import type RenderManager from "./rendering/render-manager";
 import LandmarkComponent from "./rendering/components/landmark-component";
 
-const tmpCameraTarget = new Vector3();
-
 export class Player extends BaseActor {
     public readonly isPlayer = true;
     public readonly type = "Player";
-
-    protected cameraTargetHeight: number = 0;
 
     public constructor(renderManager: RenderManager) {
         super(renderManager);
@@ -20,15 +16,11 @@ export class Player extends BaseActor {
         this.addComponent(new LandmarkComponent(renderManager, classPath => renderManager.getParent().getComponent("asset").createLandmarkEffect(classPath)));
     }
 
-    public setMeshes(meshes: Mesh[]) {
-        super.setMeshes(meshes);
-
-        this.getBoneWorldPosition("bip01_spine1", tmpCameraTarget);
-        this.cameraTargetHeight = tmpCameraTarget.z - this.position.z;
-    }
-
     public getCameraTargetPosition(target: Vector3): Vector3 {
-        return target.copy(this.position).setZ(this.position.z + this.cameraTargetHeight);
+        this.getWorldPosition(target);
+        // CalcBehindView 0x807ceb..0x807d1b uses ViewTarget.Location + CameraViewHeightAdjust.
+        target.z += this.getCollisionHeight() + this.renderManager.getParent().getComponent("asset").userConfig.cameraViewHeightAdjust;
+        return target;
     }
 
     public addLandmark(position: Vector3, normal: Vector3): void { this.getComponent<LandmarkComponent>("landmark").addLandmark(position, normal); }

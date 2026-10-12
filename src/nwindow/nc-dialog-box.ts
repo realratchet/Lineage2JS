@@ -114,7 +114,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
             this.layer.place(this.element, Math.trunc(screenWidth * 0.5 - 128), Math.trunc(screenHeight * 0.5 - 54));
     }
 
-    public show(text: string, type: DialogType_T, onResult: (isOk: boolean, value?: string) => void, cancelOnReplace = true, timerDuration = 0) {
+    public show(text: string, type: DialogType_T, onResult: (isOk: boolean, value?: string) => void, cancelOnReplace = true, timerDuration = 0, messageId = 0) {
         const manager = this.layer.getManager();
 
         if (this.isOpen()) {
@@ -155,9 +155,10 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
             default: throw new Error(`Unknown dialog type '${type}'.`);
         }
 
+        this.element.hidden = false;
+        if (messageId) manager.playSystemMessageSound(messageId); // NCGaraDialogBox::Show 0x100095c0 submits item_sound, then sys_msg_ref.
         this.renderText(text.split("\\n").join("\r\n"));
         this.placeOnScreen(this.screenWidth, this.screenHeight);
-        this.element.hidden = false;
         this.element.focus();
         this.timer.hidden = timerDuration === 0;
         this.timerDuration = timerDuration;
@@ -177,7 +178,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         }
     }
 
-    public showQuantity(text: string, allCount: number, consumeType: number, onResult: (count: number, value?: string) => void, onError: (messageId: number) => void, isOverride = false) {
+    public showQuantity(text: string, allCount: number, consumeType: number, onResult: (count: number, value?: string) => void, onError: (messageId: number) => void, isOverride = false, messageId = 0) {
         this.show(text, DialogType_T.OK_CANCEL, (isOk, value) => {
             if (!isOk) return;
 
@@ -187,7 +188,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
             if (!isOverride && consumeType === 2 && count > 1000000) { onError(1338); return; }
 
             onResult(count, value);
-        });
+        }, true, 0, messageId);
         this.isQuantity = true;
         this.quantityAllCount = allCount;
         this.element.style.width = "364px";
@@ -198,8 +199,8 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         this.quantityEditor.focus();
     }
 
-    public showText(text: string, onResult: (value: string) => boolean, value = "", widthLimit = 0) {
-        this.show(text, DialogType_T.OK_CANCEL, null);
+    public showText(text: string, onResult: (value: string) => boolean, value = "", widthLimit = 0, messageId = 0) {
+        this.show(text, DialogType_T.OK_CANCEL, null, true, 0, messageId);
         this.onTextResult = onResult;
         this.textEditor.hidden = false;
         this.textEditor.setWidthLimit(widthLimit);
@@ -219,6 +220,11 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
 
     public isOpen() { return !this.element.hidden; }
     public isYesNo() { return this.type === DialogType_T.YES_NO; }
+    public focus() {
+        this.element.focus();
+        if (!this.quantityEditor.hidden) this.quantityEditor.focus();
+        else if (!this.textEditor.hidden) this.textEditor.focus();
+    }
 
     protected advanceTimer(elapsed: number) { // NCProgressBar::Paint 0x10007120; timer message 501 takes the dialog's No callback without sound.
         this.timerElapsed = Math.min(this.timerDuration, this.timerElapsed + elapsed);

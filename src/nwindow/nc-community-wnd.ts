@@ -1,5 +1,4 @@
-import type NDomLayer from "./ndom";
-import type { NDomButton_T } from "./ndom";
+import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import CBBSHtmlViewer from "./cbbs-html-viewer";
 import { FontType_T } from "./nwindow-canvas";

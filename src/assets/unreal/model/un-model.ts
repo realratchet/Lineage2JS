@@ -15,6 +15,7 @@ import FVector from "../un-vector";
 import FBox, { type IBoxDecodeInfo } from "../un-box";
 import { DoubleSide, type Side } from "three";
 import type { ULevelInfo } from "../un-level-info";
+import type { UAActor } from "../un-aactor";
 import type { FPlane } from "../un-plane";
 import type { FMatrix } from "../un-matrix";
 import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "../decode-library";
@@ -42,6 +43,7 @@ export type IBSPSectionDecodeInfo_T = {
 
 export type IBSPCollisionNodeDecodeInfo_T = { plane: Vector4Arr, children: [number, number], isCsg: boolean, collision?: IBSPNodeCollisionInfo_T };
 export type IBSPCollisionModelDecodeInfo = {
+    bounds: IBoxDecodeInfo;
     rootOutside: boolean;
     nodes: IBSPCollisionNodeDecodeInfo_T[];
 };
@@ -149,6 +151,7 @@ export abstract class UModel extends UPrimitive {
     public getLevelInfo() { return this.levelInfo; }
     public getBspNodes() { return this.bspNodes; }
     public getIsRootOutside() { return this.isRootOutside; }
+    public getCollisionBoundingBox(owner?: UAActor): FBox { return owner ? this.boundingBox.transformBy(owner.localToWorld()) : this.boundingBox; }
     public getLeafHull(node: FBSPNode): IBSPNodeCollisionInfo_T {
         const hullIndexList = (this.leafHulls.getTypedArray() as Int32Array).slice(node.iCollisionBound);
         let hullPlanesCount = 0;
@@ -379,7 +382,7 @@ export abstract class UModel extends UPrimitive {
             return info;
         });
 
-        return { rootOutside: this.isRootOutside, nodes };
+        return { bounds: this.boundingBox.getDecodeInfo(), rootOutside: this.isRootOutside, nodes };
     }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder, uLevelInfo: ULevelInfo): ModelDecodeResult_T {

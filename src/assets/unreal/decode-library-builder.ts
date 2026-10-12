@@ -4,6 +4,8 @@ import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
 import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
 import type { HeightMapInfo_T, UTerrainSector, ITerrainSegmentDecodeInfo } from "./un-terrain-sector";
 import type UPhysicsVolume from "./un-physics-volume";
+import type UVolume from "./un-volume";
+import UPrimitive from "./un-primitive";
 import type { UMaterial } from "./un-material";
 import type { FStaticLightmapTexture } from "./model/un-multilightmap-texture";
 import type { UStaticMesh, IStaticMeshObjectDecodeInfo } from "./static-mesh/un-static-mesh";
@@ -37,6 +39,7 @@ export type LoadSettings_T = {
     loadEmitterList?: { name: string, emitters?: string[] }[],
     loadAudio?: boolean,
     textures: "auto" | "rgba" | "compressed",
+    rgbaTextures?: boolean,
     helpersZoneBounds?: boolean,
     isSkyLevel?: boolean,
     decodeWorkerPoolSize?: number,
@@ -240,11 +243,20 @@ export class DecodeLibraryBuilder {
         const levelInfo = level.levelInfo.loadSelf();
         const batching = this.settings.batching ?? { terrain: true, staticMeshes: true };
 
+        for (const actor of level.getActors())
+            this.library.levelActorUuids.push(actor ? actor.uuid : null);
+
         // sectorName is the caller's own key, not level.url.map (stale on some packages, e.g. 23_17)
         const sectorMatch = /^(\d+)_(\d+)$/.exec(sectorName);
 
         this.library.brightness = levelInfo.brightness;
         this.library.levelInfo = levelInfo.getDecodeInfo(this.library);
+        this.setScriptClass(levelInfo, this.library.levelInfo);
+        const physicsVolume = levelInfo.physicsVolume ? levelInfo.physicsVolume.loadSelf() : null;
+        if (physicsVolume) {
+            this.library.levelInfo.physicsVolume = physicsVolume.getDecodeInfo(this.library);
+            this.setScriptClass(physicsVolume, this.library.levelInfo.physicsVolume);
+        }
         // Engine.dll MultiPointCheck 0x85f530..0x85f533: BSP hits return LevelInfo.
         this.library.levelInfoCollisionRadius = levelInfo.collisionRadius;
         this.library.name = level.url.map;
@@ -259,8 +271,16 @@ export class DecodeLibraryBuilder {
         const model = level.getModel().setLevelInfo(levelInfo).loadSelf();
 
         this.pullModel(model, levelInfo, this.settings.loadBaseModel !== false);
+        const zoneActors = new Set<FZoneInfo>([levelInfo]);
+
+        for (let i = 0; i < this.library.bspZones.length; i++) {
+            const actor = model.getZoneActor(i).loadSelf();
+            this.setScriptClass(actor, this.library.bspZones[i].zoneInfo);
+            zoneActors.add(actor);
+        }
+
         this.pullActors(level);
-        this.pullScriptDumps(level.getActors(), level.getAmbientActors());
+        this.pullScriptDumps(level.getActors(), level.getAmbientActors(), zoneActors, physicsVolume ? [physicsVolume] : []);
     }
 
     public pullScriptClasses(classes: Iterable<UClass>): void {
@@ -284,6 +304,7 @@ export class DecodeLibraryBuilder {
 
             if ((actor as any).isPhysicsVolume) {
                 const volume = actor.loadSelf() as UPhysicsVolume;
+                this.pullVolumeCollisionActor(volume);
                 const volumeInfo = volume.getDecodeInfo(this.library);
 
                 this.setScriptClass(volume, volumeInfo);
@@ -356,14 +377,19 @@ export class DecodeLibraryBuilder {
                 case "StaticMeshActor":
                 case "Mover":
                 case "MovableStaticMeshActor": {
+                    const staticMeshActor = actor.loadSelf() as UStaticMeshActor;
+
+                    if (!staticMeshActor.isDeleteMe && staticMeshActor.isCollidingActors && staticMeshActor.mesh) {
+                        const mesh = staticMeshActor.mesh.loadSelf() as UStaticMesh;
+                        this.library.staticMeshCollisionActors.push({ uuid: actor.uuid, name: actor.objectName, position: staticMeshActor.location.getElements(), collisionBounds: mesh.getCollisionBoundingBox(staticMeshActor).getDecodeInfo(), collision: staticMeshActor.getCollisionDecodeInfo() });
+                    }
+
                     if (this.settings.loadStaticModels === false) break;
 
                     const staticMeshList = this.settings.loadStaticModelList;
 
                     if (staticMeshList && staticMeshList.length && !staticMeshList.some(i => typeof i === "number" ? i === actor.exportIndex + 1 : i === actor.objectName))
                         break;
-
-                    const staticMeshActor = actor.loadSelf() as UStaticMeshActor;
 
                     if (!staticMeshActor.isDeleteMe) this.pullStaticMeshActor(staticMeshActor);
                     break;
@@ -377,6 +403,7 @@ export class DecodeLibraryBuilder {
                 }
                 case "BlockingVolume": {
                     const volume = actor.loadSelf() as UBlockingVolume;
+                    this.pullVolumeCollisionActor(volume);
 
                     if (!volume.isDeleteMe) {
                         const volumeInfo = volume.getDecodeInfo();
@@ -387,9 +414,10 @@ export class DecodeLibraryBuilder {
                     break;
                 }
                 case "MusicVolume": {
-                    if (this.settings.loadAudio === false) break;
-
                     const music = actor.loadSelf() as UMusicVolume;
+                    this.pullVolumeCollisionActor(music);
+
+                    if (this.settings.loadAudio === false) break;
                     const musicInfo = music.getDecodeInfo(this.library);
 
                     this.library.audioList.push(musicInfo);
@@ -407,6 +435,13 @@ export class DecodeLibraryBuilder {
                 }
             }
         }
+    }
+
+    protected pullVolumeCollisionActor(volume: UVolume): void {
+        if (volume.isDeleteMe || !volume.isCollidingActors) return;
+
+        const bounds = volume.brush ? volume.brush.loadSelf().getCollisionBoundingBox(volume) : UPrimitive.getCylinderCollisionBoundingBox(volume);
+        this.library.volumeCollisionActors.push({ uuid: volume.uuid, name: volume.objectName, position: volume.location.getElements(), collisionBounds: bounds.getDecodeInfo(), collision: volume.getCollisionDecodeInfo() });
     }
 
     public pullStaticMeshActor(actor: UStaticMeshActor): void {
@@ -456,7 +491,7 @@ export class DecodeLibraryBuilder {
         zoneInfo.children.push(result.object);
     }
 
-    protected setScriptClass(actor: UObject, info: IBaseObjectDecodeInfo): void {
+    protected setScriptClass(actor: UObject, info: Pick<IBaseObjectDecodeInfo, "scriptClassId" | "scriptProperties" | "ownerUuid">): void {
         const cls = (actor.constructor as any).hostClass as UClass;
 
         if (!cls) return;

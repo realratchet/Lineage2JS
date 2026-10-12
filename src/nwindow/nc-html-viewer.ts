@@ -654,7 +654,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     }
 
     protected addTextRun(block: HtmlBlock_T, align: number, segments: HtmlSegment_T[], link: HtmlLink_T) { // Text element 0x1003cc90: line pitch is glyph height + 6; adjacent runs continue on the same line (0x1003bc77).
-        if (!block.paragraph || block.paragraphAlign !== align) {
+        if (!block.paragraph || block.paragraphAlign !== align || align === 1) { // NWindow 0x1003bbcf..0x1003bc88: centered text runs do not share a line.
             const paragraph = document.createElement("div");
 
             paragraph.style.textAlign = ALIGN_CSS[align];

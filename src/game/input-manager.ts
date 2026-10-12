@@ -9,6 +9,7 @@ import type { ICollidable } from "../objects/objects";
 import type BaseActor from "../base-actor";
 import type GroundPickup from "../objects/ground-pickup";
 import type { CollisionQuery_T } from "../physics/collision-world";
+import SpecialView from "../rendering/camera/special-view";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
 const MOUSE_TARGET_INTERVAL_MS = 50;
@@ -80,6 +81,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected hasMouseDragged = false;
     protected followPlayer = false;
     protected isCameraLocked = false;
+    protected readonly specialView = new SpecialView(this);
     protected shiftTimeDown = 0;
     protected activeSector = 0;
     protected readonly keyDownHandler: (event: KeyboardEvent) => void;
@@ -128,6 +130,8 @@ export class InputManager implements IEngineComponent<GameManager> {
     public isFollowingPlayer(): boolean { return this.followPlayer; }
 
     public setCameraLocked(isLocked: boolean): void {
+        if (isLocked) this.specialView.reset();
+
         this.isCameraLocked = isLocked;
         this.controls.orbit.enabled = !isLocked;
 
@@ -152,7 +156,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public updateCamera(): void {
-        if (this.isOrbitControls) return;
+        if (this.isOrbitControls || this.specialView.isActive()) return;
 
         let forwardVelocity = 0, sidewaysVelocity = 0;
         const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2)) : 1);
@@ -171,7 +175,14 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.renderManager.camera.position.add(cameraVelocity);
     }
 
-    public updateFollowPlayer(): void {
+    public updateFollowPlayer(deltaTime: number): void {
+        if (this.isCameraLocked) return;
+
+        if (this.specialView.update(this.manGame.getComponent("network"), deltaTime / 1000)) {
+            this.renderManager.updateCameraMatrices();
+            return;
+        }
+
         if (!this.isOrbitControls || !this.followPlayer) return;
 
         const renderManager = this.renderManager;
@@ -234,6 +245,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         const renderManager = this.renderManager;
         const target = event.target as HTMLElement;
 
+        if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
         if (this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
@@ -346,6 +358,9 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected onHandleKeyUp(event: KeyboardEvent): void {
         switch (event.key.toLowerCase()) {
             case "c":
+                const target = event.target as HTMLElement;
+
+                if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
                 if (this.isOrbitControls) this.controls.fps.lock();
                 else this.controls.fps.unlock();
                 break;

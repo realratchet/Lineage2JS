@@ -1,6 +1,5 @@
 import { CanvasTexture, DoubleSide, NearestFilter, NoColorSpace, Sprite, SpriteMaterial } from "three";
-import { FontType_T } from "../nwindow/nwindow-canvas";
-import type NWindowCanvas from "../nwindow/nwindow-canvas";
+import { FontType_T, type default as NWindowCanvas } from "../nwindow/nwindow-canvas";
 
 export class Nameplate extends Sprite {
     protected readonly canvas = document.createElement("canvas");

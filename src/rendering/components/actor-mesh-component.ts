@@ -1,7 +1,6 @@
 import { Matrix4, Object3D, Texture } from "three";
-import { ObjectComponent } from "../../game/components";
+import { ObjectComponent, type IObject } from "../../game/components";
 import { decodeSkinnedMesh } from "../../assets/decoders/object3d-decoder";
-import type { IObject } from "../../game/components";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type LitSkinnedMesh from "../../objects/lit-skinned-mesh";

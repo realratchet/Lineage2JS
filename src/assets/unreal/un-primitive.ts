@@ -49,6 +49,18 @@ export abstract class UPrimitive extends UObject {
         };
     }
 
+    public getCollisionBoundingBox(owner?: UAActor): FBox {
+        return owner ? UPrimitive.getCylinderCollisionBoundingBox(owner) : this.boundingBox;
+    }
+
+    public static getCylinderCollisionBoundingBox(owner: UAActor): FBox {
+        const radius = Math.fround(owner.collisionRadius + 1), height = owner.collisionHeight + 1, location = owner.location;
+        const min = FVector.make(Math.fround(location.x - radius), Math.fround(location.y - radius), Math.fround(location.z - height));
+        const max = FVector.make(Math.fround(location.x + radius), Math.fround(location.y + radius), Math.fround(location.z + height));
+
+        return FBox.make(min, max, 1);
+    }
+
     public getRenderBoundingBox(owner?: UAActor): FBox {
         if (owner) {
             const extents = FVector.make(owner.collisionRadius + 1, owner.collisionRadius + 1, owner.collisionHeight + 1);

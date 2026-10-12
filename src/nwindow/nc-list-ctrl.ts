@@ -1,5 +1,4 @@
-import type NDomLayer from "./ndom";
-import { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
+import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 
 const TEX_LIST = "L2UI_CH3.ListCtrl.";
@@ -68,6 +67,7 @@ export class NCListCtrl {
     protected ascending: boolean[];
     protected tooltip: HTMLDivElement = null;
     protected tooltipRow: ListRow_T = null;
+    protected isHeld = false;
 
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement, x: number, y: number, protected readonly width: number, protected readonly height: number, protected readonly columns: ListColumn_T[], protected readonly rowHeight: number = 17, protected readonly visibleRows: number = Math.ceil((height - 19) / rowHeight)) {
         this.strings = layer.getManager().strings;
@@ -75,6 +75,7 @@ export class NCListCtrl {
         this.element = layer.createWindow(x, y, width, height, parent);
         this.list = layer.scrollPane(this.element, 0, 19, width, height - 19, rowHeight, false, visibleRows);
         this.list.content.style.width = `${width}px`;
+        this.list.tabIndex = -1;
         this.list.setAttribute("role", "listbox");
         const setScroll = this.list.setScroll;
 
@@ -83,19 +84,36 @@ export class NCListCtrl {
             this.list.content.style.top = "0px";
             this.paintRows();
         };
-        this.list.content.addEventListener("mousedown", event => {
+        this.list.addEventListener("mousedown", event => {
+            if (event.button !== 0 && event.button !== 2) return;
+            if (event.target !== this.list && !this.list.content.contains(event.target as Node)) return;
+
+            event.preventDefault();
+            this.list.focus();
             if (event.button !== 0) return;
 
-            this.selectedIndex = this.hoverIndex = this.hitRow(event.clientY);
+            this.selectedIndex = this.hoverIndex = this.hitRow(event.clientX, event.clientY);
             this.paintRows();
+            layer.beginDrag(moveEvent => {
+                if (document.activeElement !== this.list) return;
+
+                this.hoverIndex = this.hitRow(moveEvent.clientX, moveEvent.clientY);
+                this.showTooltip();
+            }, () => this.isHeld = false);
+            this.isHeld = true;
             const row = this.getSelectedRow();
 
             if (this.onSelection) this.onSelection(row);
             if (event.detail === 2 && row && this.onDoubleClick) this.onDoubleClick(row);
         });
-        this.list.content.addEventListener("mousemove", event => { this.hoverIndex = this.hitRow(event.clientY); this.showTooltip(); });
-        this.list.content.addEventListener("mouseleave", () => { this.hoverIndex = -1; this.hideTooltip(); });
-        this.list.content.addEventListener("contextmenu", event => event.preventDefault());
+        this.list.addEventListener("mousemove", event => {
+            if (event.target !== this.list && !this.list.content.contains(event.target as Node)) { this.hideTooltip(); return; }
+            if (!(event.buttons & 1) || (this.isHeld && document.activeElement === this.list)) this.hoverIndex = this.hitRow(event.clientX, event.clientY);
+            this.showTooltip();
+        });
+        this.list.addEventListener("mouseenter", () => this.showTooltip());
+        this.list.addEventListener("mouseleave", () => this.hideTooltip());
+        this.list.addEventListener("contextmenu", event => event.preventDefault());
         let columnX = 0;
 
         columns.forEach((column, index) => {
@@ -131,6 +149,10 @@ export class NCListCtrl {
     public getRows() { return this.rows; }
     public getScroll() { return this.list.getScroll(); }
     public setScroll(position: number) { this.list.setScroll(position); }
+    public hide() {
+        if (this.isHeld) this.layer.cancelDrag();
+        this.hideTooltip();
+    }
     public hideTooltip() {
         if (this.tooltip) this.tooltip.remove();
         this.tooltip = null;
@@ -152,11 +174,12 @@ export class NCListCtrl {
         this.paintRows();
     }
 
-    protected hitRow(clientY: number) {
-        const y = this.layer.toUI(clientY - this.list.getBoundingClientRect().top);
-        const index = Math.floor(y / this.rowHeight) + this.list.getScroll() / this.rowHeight;
+    protected hitRow(clientX: number, clientY: number) {
+        const rect = this.list.getBoundingClientRect();
+        const x = this.layer.toUI(clientX - rect.left), y = this.layer.toUI(clientY - rect.top);
+        const slot = Math.floor(y / this.rowHeight), index = slot + this.list.getScroll() / this.rowHeight;
 
-        return y >= 0 && y < Math.min(this.height - 19, this.visibleRows * this.rowHeight) && index < this.rows.length ? index : -1;
+        return x >= 0 && x <= this.width && y >= 0 && y <= this.height - 19 && slot < this.visibleRows && index < this.rows.length ? index : -1;
     }
 
     protected sort(column: number) {
@@ -209,7 +232,9 @@ export class NCListCtrl {
     protected showTooltip() {
         const row = this.rows[this.hoverIndex];
 
-        if (this.hoverIndex !== this.selectedIndex || !row || row.classId === undefined || this.element.closest("[hidden]")) { this.hideTooltip(); return; }
+        const hovered = this.list.querySelector(":scope > :hover");
+
+        if (this.hoverIndex !== this.selectedIndex || !row || row.classId === undefined || !this.list.matches(":hover") || (hovered && hovered !== this.list.content) || this.element.closest("[hidden]")) { this.hideTooltip(); return; }
         if (this.tooltipRow === row) return;
 
         this.hideTooltip();

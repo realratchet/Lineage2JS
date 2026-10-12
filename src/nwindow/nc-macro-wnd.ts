@@ -1,6 +1,5 @@
 import getCommandTokens from "../network/command-parser";
-import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES } from "./ndom";
-import type { NDomEdit_T } from "./ndom";
+import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import { FontType_T } from "./nwindow-canvas";
 import type { Macro_T, MacroCommand_T } from "../network/game-packets";
