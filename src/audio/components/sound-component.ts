@@ -7,6 +7,7 @@ import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { INpcEnterEvent, NpcSkillSound_T } from "@l2js/engine/contracts/pawn";
+import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
 
 export const ANIMATION_NOTIFY_EVENT = "animationNotify";
 export const NPC_ENTER_EVENT = "npcEnter";
@@ -61,10 +62,11 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         if (damageSound) this.play(damageSound, damage.volume / 255, 1, damage.radius, damage.radius * 100, true, `Pawn '${actor.name}' damage`, tmpPosition);
     }
 
-    public playSkillSound(info: NpcSkillSound_T, actor: BaseActor = this.getParent()): void {
+    public playSkillSound(info: NpcSkillSound_T, actor: BaseActor = this.getParent(), assets: DecodeLibrary = this.library): void {
         if (info.charClassId !== undefined && info.charClassId !== this.getParent().charClassId) return;
 
-        const soundName = this.library.sounds[info.sound];
+        const library = assets || this.library;
+        const soundName = library.sounds[info.sound];
 
         if (!soundName) throw new Error(`Skill sound '${info.sound}' failed to decode.`);
 
@@ -72,7 +74,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         actor.getWorldPosition(tmpPosition);
         tmpPosition.z += actor.getCollisionHeight();
         // Engine.dll APawn::PlaySkillSound 0x797e55: volume / 255, table radius, pitch 1.
-        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition);
+        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition, library);
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
@@ -90,6 +92,18 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         if (!info) return COMPONENT_EVENT_NOT_HANDLED;
 
         switch (info.type) {
+            case "native":
+                if (info.className.toLowerCase() !== "animnotify_attackitem") return COMPONENT_EVENT_NOT_HANDLED;
+                if (!this.getParent().getComponent<PawnAttackComponent>("pawnAttack").isPhysicalAttacking()) return;
+
+                const item = this.library.pawnEquipment?.attackSound;
+                const itemSound = item?.sounds.length ? item.sounds[Math.floor(Math.random() * item.sounds.length)] : null;
+                const set = itemSound ? item : this.library.pawnSounds?.attack;
+                const sound = itemSound || (set?.sounds.length ? set.sounds[Math.floor(Math.random() * set.sounds.length)] : null);
+
+                // Engine.dll AnimNotify_AttackItem 0x94c1ca..0x94c212: item volume/255 at Pawn.Location.
+                if (sound) this.play(sound, set.volume / 255, 1, set.radius, set.radius * 100, true, `Pawn '${this.getParent().name}' attack item`);
+                return;
             case "sound": this.playAnimationSound(info); return;
             case "swimSound": this.playSwimSound(info); return;
             default: return COMPONENT_EVENT_NOT_HANDLED;
@@ -168,10 +182,10 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, volume, pitch, radius, radius * 100, attenuate, `UnrealScript ${call.name}`);
     }
 
-    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null): void {
-        if (!this.library) throw new Error(`${source} has no decode library.`);
+    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null, library: DecodeLibrary = this.library): void {
+        if (!library) throw new Error(`${source} has no decode library.`);
 
-        const sound = this.library.soundBlobCache.get(soundName);
+        const sound = library.soundBlobCache.get(soundName);
 
         if (!sound?.uri) throw new Error(`${source} has no decoded sound '${soundName}'.`);
 

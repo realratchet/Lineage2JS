@@ -6,7 +6,7 @@ import type BaseActor from "../base-actor";
 import { setScriptObjectProperty } from "./components/actor-ownership-component";
 import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./components/transform-component";
 
-type ActorInfo_T = { uuid: string; name: string; scriptClassId: string; scriptProperties: Record<string, ScriptValue_T> };
+type ActorInfo_T = { uuid: string; name: string; scriptClassId: string; scriptProperties: Record<string, ScriptValue_T>; sharedScriptProperties?: Record<string, ScriptValue_T> };
 
 export class Actor extends GameObject {
     public readonly actorUuid: string;
@@ -21,7 +21,7 @@ export class Actor extends GameObject {
         this.name = info.name;
         this.actorUuid = info.uuid;
         this.scriptClassId = info.scriptClassId;
-        this.scriptProperties = new Map(Object.entries(structuredClone(info.scriptProperties)));
+        this.scriptProperties = new Map(Object.entries(structuredClone(info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties)));
         // UGameEngine::LoadMap (0x831cbf..0x831cd3) clears serialized Touching.
         setScriptObjectProperty(this, "Touching", []);
     }

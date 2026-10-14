@@ -148,7 +148,8 @@ export class DecodeLibrary {
     public readonly physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
     public readonly blockingVolumes: IBlockingVolumeDecodeInfo[] = [];
     public readonly ambientSounds: IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
-    public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
+    public sourceLibrary: DecodeLibrary = null;
+    public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly sounds: Record<string, string> = {};
     public pawnSounds: L2JS.Engine.IPawnSoundsDecodeInfo = null;
     public readonly scriptClasses: Record<string, IScriptClassDecodeInfo> = {};

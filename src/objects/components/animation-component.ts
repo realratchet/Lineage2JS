@@ -10,6 +10,7 @@ import type LocalSpaceSkeleton from "../local-space-skeleton";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type PawnFishingComponent from "./pawn-fishing-component";
 import type PawnEquipmentComponent from "./pawn-equipment-component";
+import type NpcLifecycleComponent from "./npc-lifecycle-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
@@ -439,14 +440,15 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
     public init(): void {
         this.isAnimationsInit = true;
-        this.play(this.basicActorAnimations.idle, IDLE_TWEEN_TIME);
+        if (this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.isDead()) this.playDeath();
+        else this.play(this.basicActorAnimations.idle, IDLE_TWEEN_TIME);
     }
 
     public playEnter(animationName: string): void {
         if (animationName && animationName.toLowerCase() !== "none") this.play(animationName, MOVEMENT_TWEEN_TIME, 1, false, true);
     }
 
-    public playDeath(): void { this.play(this.basicActorAnimations.dying, MOVEMENT_TWEEN_TIME, 1, false, true); }
+    public playDeath(animationName: string = this.basicActorAnimations.dying, tweenTime: number = MOVEMENT_TWEEN_TIME, loop: boolean = false): void { this.play(animationName, tweenTime, 1, loop, true, true); }
 
     public onAnimationFinished(action: AnimationAction, isDying: boolean): boolean {
         if (action !== this.animationNotifyAction) return false;
@@ -476,8 +478,9 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         return this.isAnimating() && action.loop === LoopOnce && action.getClip().name.toLowerCase() === animationName.toLowerCase();
     }
 
-    public play(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME, rate: number = 1, loop: boolean = true, restart: boolean = false): void {
+    public play(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME, rate: number = 1, loop: boolean = true, restart: boolean = false, isDeathAnimation: boolean = false): void {
         if (!this.isAnimationsInit) return;
+        if (!isDeathAnimation && this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.isDead()) return;
 
         const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
 
@@ -536,9 +539,10 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
             this.currAnimations.set(mesh, nextAct);
 
-            const fadingActs = prevActs.filter(action => action !== nextAct && fadeOutAction(action, tweenTime));
-
             nextAct.reset();
+            nextAct.play();
+
+            const fadingActs = prevActs.filter(action => action !== nextAct && fadeOutAction(action, tweenTime));
 
             if (currAct && fadeOutAction(currAct, tweenTime)) fadingActs.push(currAct);
             if (fadingActs.length > 0) nextAct.fadeIn(tweenTime);
@@ -547,7 +551,6 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
             // Engine.dll PlayAnim 0x943c41 / UpdateAnimation 0x94a549: tween before frame zero.
             if (tweenTime > 0) this.holdFirstFrame(nextAct, timeScale);
-            nextAct.play();
             didBegin = true;
         }
 

@@ -2,8 +2,19 @@ import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampTo
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { TextureClampMode_T, DataTextureFormats_T, IDataTextureDecodeInfo, ITextureDecodeInfo, MapData_T } from "@l2js/engine/contracts/texture";
+import { releaseSharedTextureBuffer, restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
 import WetWaterTexture from "../../materials/wet-water-texture";
 import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
+
+type TextureSource_T = { key: string, info: ITextureDecodeInfo };
+
+const cacheTextureSources = new WeakMap<THREE.Texture, TextureSource_T>();
+
+export function retainSharedTextureBuffer(texture: THREE.Texture): void {
+    const source = cacheTextureSources.get(texture);
+
+    if (source) source.info.buffer = restoreSharedTextureBuffer(source.key, source.info.buffer);
+}
 
 function getClamping(mode: TextureClampMode_T): THREE.Wrapping {
     return mode === "clamp" ? ClampToEdgeWrapping : RepeatWrapping;
@@ -169,6 +180,14 @@ export function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo):
         case "g16": texture = decodeG16(info); break;
         case "float": texture = decodeFloat(info); break;
         default: throw new Error(`Unsupported texture format: ${info.textureType}`);
+    }
+
+    if (info.buffer) {
+        const key = (info as any).sharedTextureKey || (info.name ? `${info.name.toLowerCase()}:${info.textureType}:${info.buffer.byteLength}` : null);
+        const source = { key, info };
+
+        if (key) cacheTextureSources.set(texture, source);
+        texture.addEventListener("dispose", () => releaseSharedTextureBuffer(source.info.buffer));
     }
 
     texture.wrapS = info.wrapS ? getClamping(info.wrapS) : RepeatWrapping;

@@ -1,9 +1,10 @@
 import DynamicLight from "./dynamic-light";
-import { BufferGeometry, Material, Sphere, SkinnedMesh, Vector3 } from "three";
+import { BufferGeometry, Material, Matrix4, Sphere, SkinnedMesh, Vector3 } from "three";
 import { ColorByte } from "../utils/color-byte";
 import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { PawnLight_T } from "../rendering/components/pawn-light-component";
 import type MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
+import type LocalSpaceSkeleton from "./local-space-skeleton";
 
 const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];
@@ -27,6 +28,11 @@ export class LitSkinnedMesh extends SkinnedMesh {
         super(geometry, material);
 
         (this as any).isLitSkinnedMesh = true;
+    }
+
+    public bind(skeleton: LocalSpaceSkeleton, bindMatrix?: Matrix4): void {
+        super.bind(skeleton, bindMatrix);
+        skeleton.addGeometry(this.geometry);
     }
 
     public updateActorLighting(zoneInfo: any, lights: DynamicLight[], sunAmbient: ColorByte, pawnLights: readonly PawnLight_T[] = arrEmptyPawnLights, sphere: Sphere = null) {

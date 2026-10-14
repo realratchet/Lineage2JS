@@ -1,10 +1,10 @@
+import DecodeLibrary from "@l2js/engine/decode-library";
 import decodeCursors from "./decoders/cursor-decoder";
 import UConfigBigHead from "./unreal/conf-files/un-conf-bighead";
 import fetchAssetHandle from "./unreal/asset-handle";
 import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
-import type { DecodeLibrary } from "@l2js/engine";
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { IScriptFieldDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine/contracts/script";
@@ -169,8 +169,30 @@ function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {
     }
 }
 
+type CachedLibrary_T = Promise<DecodeLibrary> | WeakRef<DecodeLibrary>;
+
+async function loadCachedLibrary(cache: Map<string, CachedLibrary_T>, key: string, decode: () => Promise<DecodeLibrary>): Promise<DecodeLibrary> {
+    const cached = cache.get(key);
+    const library = cached && "deref" in cached ? cached.deref() : null;
+
+    if (library) return library;
+
+    const request = cached && !("deref" in cached) ? cached : decode();
+
+    cache.set(key, request);
+    try {
+        const library = await request;
+
+        cache.set(key, new WeakRef(library));
+        return library;
+    } catch (error) {
+        if (cache.get(key) === request) cache.delete(key);
+        throw error;
+    }
+}
+
 function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
-    const library = Object.assign(Object.create(Object.getPrototypeOf(source)), source, { npcSkillAttacks: source.npcSkillAttacks.slice(), soundBlobCache: new Map() });
+    const library = Object.assign(Object.create(Object.getPrototypeOf(source)), source, { sourceLibrary: source, npcSkillAttacks: source.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })), soundBlobCache: new Map() });
 
     for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         library[key] = Object.assign({}, source[key]);
@@ -183,7 +205,7 @@ function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
     }
 
     for (const [name, sound] of source.soundBlobCache)
-        library.soundBlobCache.set(name, { uri: null, data: sound.data, mimeType: sound.mimeType });
+        library.soundBlobCache.set(name, { uri: null, data: sound.data, mimeType: sound.mimeType, assetName: sound.assetName });
 
     refreshSoundBlobUris(library);
     return library;
@@ -221,9 +243,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly cacheSounds = new Map<string, Promise<string>>();
     protected readonly characterLoads = new WeakMap<BaseActor, number>();
     protected readonly pawnSkillRequests = new WeakMap<BaseActor, number>();
-    protected readonly cachePawnSkills = new WeakMap<DecodeLibrary, Map<string, Promise<NpcSkillAttack_T>>>();
-    protected readonly cacheNpcLibraries = new Map<string, Promise<DecodeLibrary>>();
-    protected readonly cacheCharacterLibraries = new Map<string, Promise<DecodeLibrary>>();
+    protected readonly cacheSkillVisuals = new Map<string, Promise<DecodeLibrary>>();
+    protected readonly cacheNpcLibraries = new Map<string, CachedLibrary_T>();
+    protected readonly cacheCharacterLibraries = new Map<string, CachedLibrary_T>();
     protected readonly cacheCharacterScripts = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheNpcs = new Map<string | number, Promise<INpcDefinition>>();
     protected readonly cacheScriptLocalizations = new Map<string, Promise<LocalizationProperty_T[]>>();
@@ -241,8 +263,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
     public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
-        this.decodeWorkerPoolSize = loadSettings.decodeWorkerPoolSize ?? 3;
-        this.maxConcurrentDecodes = Math.max(this.decodeWorkerPoolSize, 1);
+        this.decodeWorkerPoolSize = Math.min(loadSettings.decodeWorkerPoolSize ?? 3, new URLSearchParams(location.search).has("login") ? 2 : Infinity);
+        this.maxConcurrentDecodes = 2;
 
         for (const path of Object.keys(assetList.supported)) {
             if (!path.endsWith(".unr")) continue;
@@ -276,13 +298,17 @@ export class AssetManager implements IEngineComponent<GameManager> {
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
+        const isLogin = new URLSearchParams(location.search).has("login");
+
+        if (isLogin) setPawnComponents(manRender, new DecodeLibrary(), manRender.player);
+
         const playerControllerLoad = this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [PLAYER_CONTROLLER_CLASS]).then(library => new PlayerController(library));
         const [clientConfig, charGroups, envInfo, musicInfo, characterLibrary, playerController, effectLibrary, skyLibrary] = await Promise.all([
             this.decodeWorker.getClientConfig(),
             this.decodeWorker.getCharGroups(),
             this.decodeWorker.decodeEnv(),
             this.decodeWorker.getMusicInfo(),
-            this.decodeWorker.decodeCharacter(this.loadSettings),
+            isLogin ? null : this.decodeWorker.decodeCharacter(this.loadSettings),
             playerControllerLoad,
             playerControllerLoad.then(controller => this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b"], [controller.getUnderWaterLoopSound()])),
             this.decodeWorker.decodeSector("skylevel", {
@@ -313,7 +339,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         this.effectLibrary = effectLibrary;
 
-        await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
+        if (characterLibrary) await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
         manRender.waterEffects.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
 
@@ -498,9 +524,6 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const previousAttack = player.findComponent<PawnAttackComponent>("pawnAttack");
 
         if (previousAttack) player.removeComponent(previousAttack);
-        const previousEquipment = player.findComponent<PawnEquipmentComponent>("pawnEquipment");
-
-        if (previousEquipment) player.removeComponent(previousEquipment);
 
         if (!animations) throw new Error(`'${characterLibrary.name}' animations failed to decode.`);
 
@@ -541,6 +564,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
         }
 
         if (characterLibrary.pawnEquipment) applyCharacterEquipment(renderManager, characterLibrary, player, animations);
+        else {
+            const equipment = player.findComponent<PawnEquipmentComponent>("pawnEquipment");
+
+            if (equipment) player.removeComponent(equipment);
+        }
         player.effectSpawnBoneIndex = characterLibrary.effectSpawnBoneIndex;
         player.initAnimations();
         player.addComponent(new PawnAttackComponent(renderManager, player.getAnimationNames(), [], characterLibrary.npcBow));
@@ -566,7 +594,6 @@ export class AssetManager implements IEngineComponent<GameManager> {
         mergePawnLibrary(pawnLibrary, library);
         pawnLibrary.pawnEquipment = library.pawnEquipment;
         pawnLibrary.npcBow = library.npcBow;
-        actor.removeComponent(actor.getComponent<PawnEquipmentComponent>("pawnEquipment"));
         applyCharacterEquipment(renderManager, pawnLibrary, actor, Object.fromEntries(actor.getAnimationNames().map(name => [name, null as THREE.AnimationClip])));
         actor.getComponent<PawnAttackComponent>("pawnAttack").setWeapon(pawnLibrary.npcBow);
         renderManager.queueShaderCompile(actor);
@@ -584,9 +611,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected async getCharacterLibrary(charIndex: number, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: L2JS.Engine.ICharacterEquipment = null): Promise<DecodeLibrary> {
         const key = JSON.stringify([charIndex, faceVariant, hairVariant, hairColour, armor.chest, armor.legs, armor.gloves, armor.boots, equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.enchantLevel], this.loadSettings.rgbaTextures !== false]);
 
-        if (!this.cacheCharacterLibraries.has(key)) this.cacheCharacterLibraries.set(key, this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor, equipment));
-
-        return copyPawnLibrary(await this.cacheCharacterLibraries.get(key));
+        return copyPawnLibrary(await loadCachedLibrary(this.cacheCharacterLibraries, key, () => this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor, equipment)));
     }
 
     protected async getCharacterScript(classPath: string): Promise<DecodeLibrary> {
@@ -620,9 +645,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const request = this.pawnSkillRequests.get(actor);
         const existing = pawnLibrary.npcSkillAttacks.find(skill => skill.id === id && skill.level === level) || (actor.getUnrealScriptProperty("bNpc") ? pawnLibrary.npcSkillAttacks.find(skill => skill.id === id) : null);
 
-        if (existing) return existing;
+        if (existing?.visual) return existing;
 
-        const skill = await this.getPawnSkill(actor, pawnLibrary, id, level);
+        const skill = await this.getPawnSkill(actor, pawnLibrary, id, level, true);
         const canceled = !isTransient && request !== this.pawnSkillRequests.get(actor) || pawnLibrary !== this.pawnLibraries.get(actor);
 
         return canceled ? null : skill;
@@ -636,35 +661,50 @@ export class AssetManager implements IEngineComponent<GameManager> {
         await this.getPawnSkill(actor, pawnLibrary, id, level);
     }
 
-    protected getPawnSkill(actor: BaseActor, pawnLibrary: DecodeLibrary, id: number, level: number): Promise<NpcSkillAttack_T> {
-        let loads = this.cachePawnSkills.get(pawnLibrary);
+    public getPawnSkillRecord(actor: BaseActor, id: number, level: number): NpcSkillAttack_T {
+        const pawnLibrary = this.pawnLibraries.get(actor);
 
-        if (!loads) this.cachePawnSkills.set(pawnLibrary, loads = new Map());
+        if (!pawnLibrary) throw new Error(`Pawn '${actor.name}' has not loaded.`);
 
-        const key = `${id}:${level}`;
+        const existing = pawnLibrary.npcSkillAttacks.find(skill => skill.id === id && skill.level === level) || (actor.getUnrealScriptProperty("bNpc") ? pawnLibrary.npcSkillAttacks.find(skill => skill.id === id) : null);
 
-        if (!loads.has(key)) loads.set(key, this.mergePawnSkill(actor, pawnLibrary, id, level));
+        if (existing) return Object.assign({}, existing);
 
-        return loads.get(key);
+        const record = this.gameStrings.skillRecords[`${id}:${level}`];
+
+        if (!record) throw new Error(`Skill '${id}:${level}' has no cast record.`);
+
+        return Object.assign({}, record, { sounds: record.sounds.slice() });
     }
 
-    protected async mergePawnSkill(actor: BaseActor, pawnLibrary: DecodeLibrary, id: number, level: number): Promise<NpcSkillAttack_T> {
-        const library = await this.decodeWorker.decodeSkill(this.loadSettings, id, level);
+    protected async getPawnSkill(actor: BaseActor, pawnLibrary: DecodeLibrary, id: number, level: number, urgent: boolean = false): Promise<NpcSkillAttack_T> {
+        if (!this.gameStrings) await this.getGameStrings();
 
-        if (pawnLibrary !== this.pawnLibraries.get(actor) || !actor.parent) {
-            for (const sound of library.soundBlobCache.values())
-                revokeSoundUri(sound);
-            this.cachePawnSkills.get(pawnLibrary).delete(`${id}:${level}`);
-            return null;
+        const skill = await this.getSkillVisual(this.getPawnSkillRecord(actor, id, level), urgent);
+
+        if (pawnLibrary === this.pawnLibraries.get(actor) && actor.parent) {
+            const existing = pawnLibrary.npcSkillAttacks.find(entry => entry.id === skill.id && entry.level === skill.level);
+
+            if (existing) Object.assign(existing, skill);
+            else pawnLibrary.npcSkillAttacks.push(skill);
+            actor.getComponent<PawnAttackComponent>("pawnAttack").addSkill(skill);
         }
 
-        const skill = library.npcSkillAttacks[0];
-
-        mergePawnLibrary(pawnLibrary, library);
-        pawnLibrary.npcSkillAttacks.push(skill);
-        actor.getComponent<ScriptComponent>("script").getVM().loadFunctions();
-        actor.getComponent<PawnAttackComponent>("pawnAttack").addSkill(skill);
         return skill;
+    }
+
+    protected async getSkillVisual(record: NpcSkillAttack_T, urgent: boolean): Promise<NpcSkillAttack_T> {
+        const { id, level } = record;
+        const key = record.visualEffect.toLowerCase() === "none" ? JSON.stringify([id, record.name]) : record.visualEffect.toLowerCase();
+
+        if (urgent || !this.cacheSkillVisuals.has(key)) this.cacheSkillVisuals.set(key, this.decodeWorker.decodeSkill(this.loadSettings, id, level, urgent, Object.assign({}, record, { visual: null, assets: undefined })));
+
+        const library = await this.cacheSkillVisuals.get(key), prepared = library.npcSkillAttacks[0];
+
+        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (library as any).preferCompressedTextures = this.preferCompressedTextures;
+
+        return Object.assign(record, { visual: prepared.visual, flyingTime: prepared.flyingTime, sounds: record.sounds.filter(sound => !!library.sounds[sound.sound]), assets: library });
     }
 
     public stopPlayerSkill(renderManager: RenderManager): void {
@@ -676,9 +716,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
         actor.findComponent<PawnAttackComponent>("pawnAttack")?.stop();
     }
 
-    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: L2JS.Engine.INpcEquipment | null = null) {
+    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: L2JS.Engine.INpcEquipment | null = null, preloadSkills: boolean = true) {
         const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
-        const libraryPromise = npcId === null ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment) : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment);
+        const libraryPromise = npcId === null ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment) : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, preloadSkills);
         const [library, localization] = await Promise.all([libraryPromise, localizationPromise]);
 
         library.anisotropy = this.glCapabilities.getMaxAnisotropy();
@@ -759,23 +799,23 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return this.cacheScriptLocalizations.get(scriptClassPath);
     }
 
-    protected async getNpcLibrary(packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: L2JS.Engine.INpcEquipment | null): Promise<DecodeLibrary> {
+    protected async getNpcLibrary(packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: L2JS.Engine.INpcEquipment | null, preloadSkills: boolean = true): Promise<DecodeLibrary> {
         const key = `${npcId}:${JSON.stringify(equipment)}`;
 
-        if (!this.cacheNpcLibraries.has(key)) {
-            const request = this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment);
+        const library = await loadCachedLibrary(this.cacheNpcLibraries, key, async () => {
+            const library = await this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment);
 
-            this.cacheNpcLibraries.set(key, request);
-            request.catch(() => this.cacheNpcLibraries.delete(key));
-        }
+            return library;
+        });
 
-        const library = await this.cacheNpcLibraries.get(key);
+        if (preloadSkills)
+            for (let i = 0; i < library.npcSkillAttacks.length; i++) library.npcSkillAttacks[i] = await this.getSkillVisual(library.npcSkillAttacks[i], false);
 
-        return Object.assign(Object.create(Object.getPrototypeOf(library)), library, { npcSkillAttacks: library.npcSkillAttacks.slice() }); // skill merges push per actor, the rest is shared read-only
+        return Object.assign(Object.create(Object.getPrototypeOf(library)), library, { sourceLibrary: library, npcSkillAttacks: library.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })) });
     }
 
     protected resolveNpc(selector: string | number): Promise<INpcDefinition> {
-        if (!this.cacheNpcs.has(selector)) this.cacheNpcs.set(selector, this.decodeWorker.resolveNpc(selector));
+        if (!this.cacheNpcs.has(selector)) this.cacheNpcs.set(selector, this.decodeWorker.resolveNpc(selector, this.loadSettings));
 
         return this.cacheNpcs.get(selector);
     }
@@ -838,7 +878,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return effect;
     }
 
-    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager)): Promise<BaseActor> {
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true): Promise<BaseActor> {
         const npc = await this.resolveNpc(selector);
         const index = npc.mesh.indexOf(".");
 
@@ -853,7 +893,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         let library;
 
         try {
-            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null, equipment);
+            library = await this.loadSkeletalActor(renderManager, npc.mesh.slice(0, index), npc.mesh.slice(index + 1), "Wait", actor, npc.className, npc.textures, npc.id, npc.enterEvent ? npc.enterEvent.animation : null, equipment, preloadSkills);
         } catch (e) {
             throw new Error(`NPC '${npc.id}' (${npc.name}) failed to load mesh '${npc.mesh}' as '${npc.className}': ${(e as Error).message}`);
         }
@@ -884,11 +924,16 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public listNpcs(): Promise<INpcDefinition[]> {
-        return this.decodeWorker.listNpcs();
+        return this.decodeWorker.listNpcs(this.loadSettings);
     }
 
     public listPlayerSkills(includeAssetVariants: boolean = false): Promise<PlayerSkillInfo_T[]> { return this.decodeWorker.listPlayerSkills(includeAssetVariants); }
-    public getGameStrings(): Promise<GameStrings_T> { return this.decodeWorker.getGameStrings(); }
+    protected gameStrings: GameStrings_T = null;
+    public async getGameStrings(): Promise<GameStrings_T> {
+        if (!this.gameStrings) this.gameStrings = await this.decodeWorker.getGameStrings();
+
+        return this.gameStrings;
+    }
     public decodeUITextures(paths: string[]): Promise<UITexture_T[]> { return this.decodeWorker.decodeUITextures(this.loadSettings, paths); }
     public decodeMatineeScenes(levelName: string): Promise<MatineeScene_T[]> { return this.decodeWorker.decodeMatineeScenes(levelName); }
 
@@ -911,6 +956,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected async precacheCharacterAssets(): Promise<void> {
         await this.decodeWorker.precacheCharacters(this.loadSettings);
 
+        if (new URLSearchParams(location.search).has("login")) return;
+
         for (const group of this.charGroups) {
             const library = await this.getCharacterLibrary(group.index);
             const classPath = `LineageWarrior.${this.getClassName(group.index)}`;
@@ -919,8 +966,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             await Promise.all([this.getCharacterScript(classPath), this.getScriptLocalization(classPath)]);
         }
 
-        for (const skill of await this.listPlayerSkills(true))
-            await this.decodeWorker.decodeSkill(this.loadSettings, skill.id, skill.level);
+
     }
 
     public async getCharGroups(): Promise<ICharacterGroup[]> { return this.charGroups; }
@@ -1192,7 +1238,10 @@ function applyCharacterEquipment(renderManager: RenderManager, library: DecodeLi
     actor.setIdleAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("WaitAnimName") as string[])[weapon]));
     actor.setWalkingAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("WalkAnimName") as string[])[weapon]));
     actor.setRunningAnimation(findAnimation(animations, (actor.getUnrealScriptProperty("RunAnimName") as string[])[weapon]));
-    actor.addComponent(new PawnEquipmentComponent(library, renderManager));
+    const equipment = actor.findComponent<PawnEquipmentComponent>("pawnEquipment");
+
+    if (equipment) equipment.setLibrary(library);
+    else actor.addComponent(new PawnEquipmentComponent(library, renderManager));
 }
 
 function findAnimation(animations: Record<string, THREE.AnimationClip>, declared: string): string {
@@ -1237,11 +1286,20 @@ function shareSkeletons(bodyparts: THREE.SkinnedMesh[]) {
 
     if (!host) throw new Error(`Character has no bodypart carrying a head bone to share its skeleton from.`);
 
+    const hosts = [host];
+
     for (const part of bodyparts) {
-        if (part === host || !isSameBindPose(host, part)) continue;
+        if (part === host) continue;
+
+        const source = hosts.find(mesh => isSameBindPose(mesh, part));
+
+        if (!source) {
+            if (part.skeleton.bones.some(bone => isHeadBone(bone.name))) hosts.push(part);
+            continue;
+        }
 
         part.remove(part.skeleton.bones[0]);
-        part.bind(host.skeleton, part.bindMatrix);
+        part.bind(source.skeleton, part.bindMatrix);
 
         (part as any).sharesSkeleton = true;
     }

@@ -217,7 +217,10 @@ export class SkillEffectPlacement {
             targetHeight = tmpPosition2[2] + this.host.getCollisionHeight(target) - (hasMesh ? tmpPosition[2] : this.host.getCollisionHeight(target));
         }
 
-        const effect = info.viewShake ? null : damageOnly ? this.host.createDamageEffect(effectHost) : this.host.createEffect(caster, info.effectClass);
+        const effect = info.viewShake ? null : damageOnly ? this.host.createDamageEffect(effectHost) : this.host.createEffect(caster, info.effectClass, skill.assets);
+
+        if (info.phase === "casting" && skill.visualTimeScale > 0 && skill.visualTimeScale < 1 && (effect as any).isEmitterActor)
+            effect.scriptProperties.set("SpeedRate", (effect as any).getSpeedRate() / skill.visualTimeScale);
         if (damageOnly && effect === null) return true;
         const effectRotation = tmpRotation2;
         if (effect) this.host.getRotation(effect, effectRotation);
@@ -493,7 +496,11 @@ export class SkillEffectPlacement {
     public spawnSerialized(action: NpcSkillEffectAction_T, skill: NpcSkillAttack_T, caster: SkillActor_T, source: SkillActor_T, target: SkillActor_T, shotTime: number, initializeProjectile: boolean, onProjectile: (actor: SkillActor_T) => void): SkillActor_T {
         // Engine.dll LocateEffect 0x795ffa..0x796037 rejects a null selected host.
         if (action.spawnOnTarget && !target) return null;
-        const effect = this.host.createEffect(caster, action.effectClass);
+        const effect = this.host.createEffect(caster, action.effectClass, skill.assets);
+
+        if (action.phase === "casting" && skill.visualTimeScale > 0 && skill.visualTimeScale < 1 && (effect as any).isEmitterActor)
+            effect.scriptProperties.set("SpeedRate", (effect as any).getSpeedRate() / skill.visualTimeScale);
+
         // Engine.dll TriggerCasting 0x7969a2..0x7969e3; transient casting does not adjust lifetime.
         if (action.phase === "casting" && skill.castStyle !== 0 && shotTime > 0) {
             const fixed = effect.scriptProperties.get("FixedLifeTime") as number;
@@ -514,7 +521,7 @@ export class SkillEffectPlacement {
         }
 
         // Engine.dll USkillAction_LocateEffect::Notify 0x796643 / 0x79666a: delay emission after spawning the actor.
-        const delay = action.spawnDelay < 0 ? skill.hitTime + action.spawnDelay : action.spawnDelay;
+        const delay = (action.spawnDelay < 0 ? skill.hitTime + action.spawnDelay : action.spawnDelay) * (skill.visualTimeScale ?? 1);
         if (delay > 0) this.host.setParticleDelay(effect, delay);
         // Engine.dll LocateEffect 0x79603d..0x796053: target effects and non-pawns do not use CastingEffectScale.
         let sizeScale = !action.spawnOnTarget && hostIsPawn ? getPawnCastingEffectScale(attachHost) : 1;

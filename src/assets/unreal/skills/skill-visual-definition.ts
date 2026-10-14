@@ -33,16 +33,20 @@ export function createSkillVisualDefinition(actions: NpcSkillEffectAction_T[] | 
 }
 
 export function getSkillHitTimeOffset(skill: NpcSkillAttack_T): number {
-    const hasVisual = skill.visual.actions !== null;
+    const hasVisual = skill.visual ? skill.visual.actions !== null : skill.visualEffect.toLowerCase() !== "none";
 
     return hasVisual && skill.flyingTime >= 0.15 ? skill.flyingTime : skill.castStyle === 3 ? 0 : !hasVisual && [2, 5, 8, 10].includes(skill.castStyle) ? 0.4 : 0.15;
 }
 
 export function hasSkillEffectPhase(skill: NpcSkillAttack_T, phase: NpcSkillEffectPhase_T): boolean {
+    if (!skill.visual) return false;
+
     return (skill.visual.actions || skill.visual.effects).some(effect => effect.phase === phase);
 }
 
 export function getSkillPreviewListTarget(skill: NpcSkillAttack_T): "selected" | "primary" | null {
+    if (!skill.visual) return null;
+
     if (skill.previewTarget === "self" && skill.visual.actions?.some(action => action.onMultiTarget)) return "selected";
     if (skill.visual.associatedActors || skill.visual.effects.some(effect => effect.phase === "shot" && effect.pawnLightOnly && effect.associatedActors)) return "primary";
     return null;

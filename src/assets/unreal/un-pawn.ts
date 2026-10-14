@@ -42,6 +42,8 @@ export type NpcSkillAttack_T = {
     flyingTime: number;
     visualEffect: string;
     visual: SkillVisualDefinition_T;
+    visualTimeScale?: number;
+    assets?: import("./decode-library").DecodeLibrary;
     passive?: boolean;
     previewTarget?: "self";
     sounds: NpcSkillSound_T[];

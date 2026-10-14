@@ -42,6 +42,8 @@ type NetObject_T = {
     allyCrestId: number;
     kind: NetObjectKind_T;
     actor: BaseActor;
+    actorReady: Promise<BaseActor>;
+    resolveActor: (actor: BaseActor) => void;
     isRemoved: boolean;
     position: Vector3;
     destination: Vector3;
@@ -91,7 +93,7 @@ const CHAT_BALLOON_TIME = 6000; // NCConsole 0x1005f070: 1 s timer, the balloon 
 const STOP_SNAP_DISTANCE = 32;
 const GAME_TIME_SCALE = 1 / 6; // GameTimeController: one in-game day lasts four real hours.
 const NETWORK_BOW_RANGE = 2000;
-const NPC_SPAWN_CONCURRENCY = 2;
+const NPC_SPAWN_CONCURRENCY = 8;
 const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 4165, 4166]);
 
 const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
@@ -325,10 +327,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             await this.ui.setStrings(await asset.getGameStrings());
 
             void this.loadNpcNames();
-            void asset.prefetchCharacterScripts();
             void this.loadRadar();
 
-            await Promise.all([this.ui.createScreens(), this.lobby.enter(this.ui.getStrings().logonSpots)]);
+            await Promise.all([this.ui.createScreens(), this.lobby.enter(this.ui.getStrings().logonSpots), asset.precacheCharacters()]);
         } else await this.lobby.enter(this.ui.getStrings().logonSpots);
 
         this.lobby.showLogin();
@@ -746,6 +747,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         for (const object of this.objects.values()) {
             object.isRemoved = true;
+            object.resolveActor(null);
 
             if (object.actor && object.kind !== "user") render.removePawn(object.actor);
         }
@@ -1345,7 +1347,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             mount.playMovementAnimation(mount.isLocomoting() ? "running" : "idle");
         }
 
-        if (!isEquipmentOnly && this.inWorld && actor === this.manGame.getComponent("render").player) void this.preloadSkills();
+
     }
 
     protected onCharSelected(packet: PacketReader) {
@@ -1371,7 +1373,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const [x, y] = render.getSectorId(render.player.position);
 
         asset.setStreaming(render, false);
-        const [level] = await Promise.all([asset.setAlwaysLoaded(render, `${x}_${y}`), asset.precacheCharacters()]);
+        const level = await asset.setAlwaysLoaded(render, `${x}_${y}`);
 
         if (generation !== this.teleportGeneration) {
             asset.unloadAlwaysLoaded(render, `${x}_${y}`, level);
@@ -1395,9 +1397,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingAttack: null, pendingSkill: null };
+        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, actorReady: null, resolveActor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingAttack: null, pendingSkill: null };
 
+        object.actorReady = new Promise(resolve => object.resolveActor = resolve);
         this.objects.set(objectId, object);
+        this.flushPendingSkills(objectId);
 
         return object;
     }
@@ -1794,13 +1798,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected async preloadSkills() {
         const asset = this.manGame.getComponent("asset"), player = this.manGame.getComponent("render").player;
 
-        await Promise.all([...this.skills.values()].filter(skill => !skill.isPassive).map(async skill => {
-            try {
-                await asset.preloadPawnSkill(player, skill.id, skill.level);
-            } catch (e) {
-                console.error(`[network] skill '${skill.id}:${skill.level}' failed to preload:`, e);
-            }
-        }));
+        for (const skill of this.skills.values()) {
+            if (skill.isPassive) continue;
+
+            await asset.preloadPawnSkill(player, skill.id, skill.level);
+        }
     }
 
     protected onAquireSkillList(packet: PacketReader) {
@@ -2494,6 +2496,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object) {
             object = this.createObject(info.objectId, "user", info);
             object.actor = player;
+            object.resolveActor(player);
             object.appearanceKey = this.getAppearanceKey(this.characters[this.selectedSlot]);
         }
 
@@ -2646,6 +2649,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         try {
             await this.loadAppearance(info, actor);
         } catch (e) {
+            actor.release();
+            object.resolveActor(null);
             console.error(`[network] player '${info.name}' failed to load:`, e);
             return;
         }
@@ -2863,8 +2868,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.npcSpawnCount++;
 
         try {
-            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, info.spawnType === 2);
+            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, info.spawnType === 2, false);
         } catch (e) {
+            object.resolveActor(null);
             this.npcSpawnCount--;
             this.npcSpawnWaiters.shift()?.();
             debugger;
@@ -2910,6 +2916,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (object.destination) actor.goTo(object.destination);
         if (object.isDead) actor.playDeathAnimation(() => { });
         if (object.objectId === this.getTargetId()) this.updateTarget();
+        object.resolveActor(actor);
         this.flushPendingAttacks();
         this.flushPendingSkills();
         this.flushSkillTargets(object.objectId);
@@ -3014,6 +3021,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object || object.kind === "user") return;
 
         object.isRemoved = true;
+        object.resolveActor(null);
         this.objects.delete(objectId);
         this.appearances.delete(objectId);
 
@@ -3256,7 +3264,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (caster.actor === this.manGame.getComponent("render").player && !caster.isDead && (target ? target.actor : this.doors.has(targetObjectId)) && this.ui.getStrings().skillInfos[`${id}:${level}`])
             this.notifyMacroSkill(id, hitTime);
 
-        if (!caster.actor || !target || !target.actor) {
+        if (!caster.actor || !target) {
             if (!isTransient) this.stopSkill(caster.objectId);
             caster.pendingSkill = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
             return;
@@ -3289,19 +3297,28 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected async castSkill(caster: NetObject_T, target: NetObject_T, cast: NetSkill_T, isTransient: boolean) {
         const actor = caster.actor;
 
-        await this.waitNextTick(); // UGameEngine::OnEquipItem 0x7456d0 queues ChangeItemAction ahead of pending pawn actions.
-        await this.appearanceLoads.get(actor);
+        const asset = this.manGame.getComponent("asset");
+        const skill = asset.getPawnSkillRecord(actor, cast.id, cast.level);
+        const attack = actor.getComponent<PawnAttackComponent>("pawnAttack");
+        const visual = skill.visual;
 
-        const skill = await this.manGame.getComponent("asset").loadPawnSkill(actor, cast.id, cast.level, isTransient);
+        if (!target.actor) skill.visual = null;
 
-        if (!skill || !isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved || caster.actor !== actor) return;
+        if (!isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved) return;
 
-        // Asset loading consumes the server's cast time.
-        const hitTime = isTransient ? cast.hitTime : Math.max(0, cast.hitTime - (performance.now() - cast.receivedTime) / 1000);
+        attack.castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (performance.now() - cast.receivedTime) / 1000);
 
-        if (!isTransient && cast.hitTime > 0 && hitTime === 0) return;
-        if (isTransient && skill.visual.transientRejected) this.stopSkill(caster.objectId);
-        actor.getComponent<PawnAttackComponent>("pawnAttack").castFromServer(target.actor, skill, hitTime, cast.associatedActors, cast.associatedActors.length > 0);
+        if (!skill.visual) {
+            const [loaded, targetActor] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), target.actor || target.actorReady]);
+
+            if (!loaded || !targetActor || !isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved || caster.actor !== actor) return;
+
+            if (isTransient && loaded.visual.transientRejected) this.stopSkill(caster.objectId);
+
+            Object.assign(skill, { visual: loaded.visual, flyingTime: loaded.flyingTime, sounds: loaded.sounds, assets: loaded.assets });
+            attack.setSkillTargets(cast.id, cast.associatedActors, target.actor);
+            attack.attachSkillVisual(skill, target.actor, cast.hitTime, cast.associatedActors, (performance.now() - cast.receivedTime) / 1000);
+        }
         if (target.actor) this.ui.notifyOlympiadSkill(caster.objectId, cast.id);
     }
 
@@ -3333,7 +3350,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             const target = this.objects.get(pending.targetObjectId);
 
-            if (!caster.actor || !target?.actor) continue;
+            if (!caster.actor || !target) continue;
 
             this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
         }
@@ -3970,11 +3987,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         await this.lobby.showSelect(characters);
         if (this.game !== game || this.characters !== characters) return;
 
-        void asset.precacheNpcBundle("LineageMonsters"); // after the lobby pawns, opening the bundles held two workers for seconds
-        void asset.precacheNpcBundle("LineageNPCs");
-
         if (lastUsed >= 0) this.previewCharacter(lastUsed);
-        void asset.precacheCharacters();
         if (isTransferList && this.gmTransfer === transfer && transfer.phase === 5) transfer.phase = 6;
     }
 
@@ -4425,7 +4438,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         await this.appearanceLoads.get(rider);
         if (this.mounts.get(ride.objectId) !== ride || object.isRemoved) return;
 
-        const mount = await this.manGame.getComponent("asset").spawnNpc(render, ride.npcId, rider.position.clone(), null, false, object.kind === "user" ? new Player(render) : new BaseActor(render));
+        const mount = await this.manGame.getComponent("asset").spawnNpc(render, ride.npcId, rider.position.clone(), null, false, object.kind === "user" ? new Player(render) : new BaseActor(render), false);
 
         if (this.mounts.get(ride.objectId) !== ride || object.isRemoved) {
             render.removePawn(mount);

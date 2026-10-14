@@ -29,7 +29,7 @@ export type SkillProjectile_T = {
 };
 
 export type SkillEffectHost_T = {
-    createEffect(caster: SkillActor_T, classId: string): SkillActor_T;
+    createEffect(caster: SkillActor_T, classId: string, assets?: import("../decode-library").DecodeLibrary): SkillActor_T;
     addEffect(effect: SkillActor_T, owner: SkillActor_T | null): void;
     removeEffect(effect: SkillActor_T): void;
     isAlive(actor: SkillActor_T): boolean;
@@ -59,7 +59,7 @@ export type SkillEffectHost_T = {
     isRendered(actor: SkillActor_T): boolean;
     isLowDetail(): boolean;
     playAttackSounds(actor: SkillActor_T, critical?: boolean): void;
-    playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T): void;
+    playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T, assets?: import("../decode-library").DecodeLibrary): void;
     addViewShakeState(duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, amplitude: Vector3Arr, velocity: Vector3Arr, position: Vector3Arr, origin: Vector3Arr, strength: number, range: number, type?: "damage" | "upDown"): void;
     triggerL2Event(name: string, position: Vector3Arr, radius: number): void;
     addPawnLight(actor: SkillActor_T, owner: SkillActor_T | null, color: readonly number[], radius: number, lifeTime: number, position: Vector3Arr, direction: Vector3Arr, target: Vector3Arr): unknown;

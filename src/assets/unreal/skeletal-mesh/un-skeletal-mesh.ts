@@ -1,3 +1,4 @@
+import computePointNormals from "../../decoders/point-normals";
 import { BufferValue, type APackage, type UExport, FArray, FArrayLazy, FIndexArray, FPrimitiveArray, FPrimitiveArrayLazy, Constructable_T } from "@l2js/core";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
@@ -458,6 +459,7 @@ export abstract class USkeletalMesh extends ULodMesh {
         const geometryInfo: IGeometryDecodeInfo = {
             attributes: {
                 positions,
+                normals: computePointNormals(positions, indices),
                 skinIndex: bones,
                 skinWeight: weights,
                 uvs
@@ -466,6 +468,8 @@ export abstract class USkeletalMesh extends ULodMesh {
             indices,
             bounds: this.decodeBoundsInfo()
         };
+
+        (geometryInfo as any).assetName = `${this.name}:${maxBoneInfluences}`;
 
         if (bones2) geometryInfo.attributes.skinIndex2 = bones2;
         if (weights2) geometryInfo.attributes.skinWeight2 = weights2;

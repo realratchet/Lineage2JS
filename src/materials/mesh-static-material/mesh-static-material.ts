@@ -75,7 +75,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         }
 
         if (parameters.isCubeMap) {
-            if (name !== "shSpecular" && name !== "shMaterial2") throw new Error(`Cubemap is unsupported in ${name}.`);
+            if (name !== "shDiffuse" && name !== "shSpecular" && name !== "shMaterial2") throw new Error(`Cubemap is unsupported in ${name}.`);
 
             defines[`USE_CUBE_MAP_${defName}`] = "";
             uniforms[`${name}Cube`] = new Uniform(parameters.uniforms.map.texture);

@@ -597,7 +597,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = false;
-        query.ignorePawns = false;
+        query.ignorePawns = !query.sourceIsPlayer;
         query.zeroExtent = false;
 
         return this.physicsManager.singleLineCheck(query);
@@ -980,7 +980,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = true;
-        query.ignorePawns = false;
+        query.ignorePawns = !query.sourceIsPlayer;
         query.zeroExtent = false;
 
         const hit = this.physicsManager.moveActor(query);
@@ -1006,7 +1006,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = false;
-        query.ignorePawns = ignorePawns;
+        query.ignorePawns = !query.sourceIsPlayer || ignorePawns;
         query.zeroExtent = false;
 
         return this.physicsManager.singleLineCheck(query);
@@ -1029,7 +1029,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
         query.ignoreBases = false;
-        query.ignorePawns = ignorePawns;
+        query.ignorePawns = !query.sourceIsPlayer || ignorePawns;
         query.zeroExtent = false;
 
         hit = this.physicsManager.singleLineCheck(query);
@@ -1226,8 +1226,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public setCollisionSize(collisionRadius: number, collisionHeight: number) {
-        if (!Number.isFinite(collisionRadius) || collisionRadius <= 0) throw new Error(`Invalid pawn CollisionRadius '${collisionRadius}'.`);
-        if (!Number.isFinite(collisionHeight) || collisionHeight <= 0) throw new Error(`Invalid pawn CollisionHeight '${collisionHeight}'.`);
+        if (!Number.isFinite(collisionRadius) || collisionRadius < 0) throw new Error(`Invalid pawn CollisionRadius '${collisionRadius}'.`);
+        if (!Number.isFinite(collisionHeight) || collisionHeight < 0) throw new Error(`Invalid pawn CollisionHeight '${collisionHeight}'.`);
 
         this.collisionRadius = collisionRadius;
         this.collisionHeight = collisionHeight;

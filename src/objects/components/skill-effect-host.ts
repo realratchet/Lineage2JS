@@ -12,10 +12,14 @@ import type PawnMovementComponent from "../../physics/components/pawn-movement-c
 import type SoundComponent from "../../audio/components/sound-component";
 import type EffectsComponent from "../../rendering/components/effects-component";
 import { NPawnLightComponent, type PawnLight_T } from "../../rendering/components/pawn-light-component";
+import type { DecodeLibrary } from "@l2js/engine";
 import type { NpcSkillSound_T } from "@l2js/engine/contracts/pawn";
 import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
-import type { ScriptHost_T } from "../../ue-script/vm";
+import UnScriptVM, { type ScriptHost_T } from "../../ue-script/vm";
+
+const cacheSkillVMs = new WeakMap<DecodeLibrary, UnScriptVM>();
+const cacheEffectLibraries = new WeakMap<object, DecodeLibrary>();
 
 const tmpPosition = new Vector3();
 const tmpDirection = new Vector3();
@@ -42,8 +46,16 @@ export class SkillEffectHost implements SkillEffectHost_T {
         this.removeEffectCallback = removeEffect;
     }
 
-    public createEffect(caster: SkillActor_T, classId: string): SkillActor_T {
-        const effect = this.actor(caster).getComponent<ScriptComponent>("script").createObject(classId) as any;
+    public createEffect(caster: SkillActor_T, classId: string, assets: DecodeLibrary = null): SkillActor_T {
+        if (assets && !cacheSkillVMs.has(assets)) cacheSkillVMs.set(assets, new UnScriptVM(assets));
+
+        const vm = assets ? cacheSkillVMs.get(assets) : null;
+        const effect = assets ? this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, assets, classId, vm) : this.actor(caster).getComponent<ScriptComponent>("script").createObject(classId) as any;
+
+        if (vm) {
+            vm.initializeHost(effect);
+            cacheEffectLibraries.set(effect, assets);
+        }
 
         if (!effect.isObject3D) throw new Error(`Skill effect '${classId}' is not an actor.`);
         return effect;
@@ -54,7 +66,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
     public isAlive(actor: SkillActor_T): boolean { return !!this.object(actor).parent; }
 
     public isA(actor: SkillActor_T, classId: string, caster: SkillActor_T): boolean {
-        const classes = (this.script(caster).getVM() as any).library.scriptClasses;
+        const classes = (cacheEffectLibraries.get(actor) || (this.script(caster).getVM() as any).library).scriptClasses;
 
         for (let cls = classes[actor.scriptClassId]; cls; cls = classes[cls.superClassId])
             if (cls.id.toLowerCase() === classId.toLowerCase()) return true;
@@ -208,8 +220,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     public isLowDetail(): boolean { return this.renderManager.keepMinFrameRate; }
     public playAttackSounds(actor: SkillActor_T, critical: boolean = false): void { this.actor(actor).getComponent<SoundComponent>("sound").playAttackSounds(critical); }
 
-    public playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T): void {
-        this.actor(actor).getComponent<SoundComponent>("sound").playSkillSound(sound, target ? this.actor(target) : undefined);
+    public playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T, assets: DecodeLibrary = null): void {
+        this.actor(actor).getComponent<SoundComponent>("sound").playSkillSound(sound, target ? this.actor(target) : undefined, assets);
     }
 
     public addViewShakeState(duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, amplitude: Vector3Arr, velocity: Vector3Arr, position: Vector3Arr, origin: Vector3Arr, strength: number, range: number, type?: "damage" | "upDown"): void {

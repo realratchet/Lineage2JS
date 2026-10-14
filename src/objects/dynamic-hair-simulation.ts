@@ -76,6 +76,8 @@ type CollisionSphere_T = {
     radius: number;
 };
 
+type WorldMatrixCache_T = { frame: number, entries: WeakMap<Object3D, { frame: number, matrix: Matrix4 }> };
+
 const topologies = new Map<number, Topology_T>([
     [2, { prefix: "hair", first: 2, count: 12, rows: 3, columns: 4, pinned: [0, 4, 8], endpoints: [3, 7, 11], shearSprings: false, bendSprings: false, fixedYaw: true }],
     [5, { prefix: "hair", first: 14, count: 3, rows: 1, columns: 3, pinned: [0], endpoints: [2], shearSprings: false, bendSprings: false, fixedYaw: true }],
@@ -86,23 +88,38 @@ const topologies = new Map<number, Topology_T>([
 
 function normalizeBoneName(name: string): string { return name.replaceAll(" ", "_").toLowerCase(); }
 
-function getObjectWorldMatrix(object: Object3D, target: Matrix4): Matrix4 {
+function getObjectWorldMatrix(object: Object3D, target: Matrix4, cache: WorldMatrixCache_T = null): Matrix4 {
     arrParents.length = 0;
+    target.identity();
 
     while (object) {
+        const cached = cache?.entries.get(object);
+
+        if (cached && cached.frame === cache.frame) {
+            target.copy(cached.matrix);
+            break;
+        }
+
         arrParents.push(object);
         object = object.parent;
     }
-
-    target.identity();
 
     for (let i = arrParents.length - 1; i >= 0; i--) {
         const parent = arrParents[i];
 
         parent.updateMatrix();
         target.multiply(parent.matrix);
+
+        if (cache) {
+            let cached = cache.entries.get(parent);
+
+            if (!cached) cache.entries.set(parent, cached = { frame: -1, matrix: new Matrix4() });
+            cached.matrix.copy(target);
+            cached.frame = cache.frame;
+        }
     }
 
+    arrParents.length = 0;
     return target;
 }
 
@@ -129,6 +146,7 @@ function makeParticles(count: number): Particle_T[] {
 export class DynamicHairSimulation {
     public readonly mesh: SkinnedMesh;
     public readonly info: IDynamicHairDecodeInfo;
+    protected readonly cacheWorldMatrices: WorldMatrixCache_T = { frame: 0, entries: new WeakMap() };
 
     protected topology: Topology_T = null;
     protected bones: Bone[] = null;
@@ -172,6 +190,7 @@ export class DynamicHairSimulation {
     }
 
     public initialize(parts: SkinnedMesh[]): void {
+        this.cacheWorldMatrices.frame++;
         const topology = topologies.get(this.info.type);
 
         if (!topology) throw new Error(`Skeletal mesh '${this.mesh.name}' uses unsupported bone simulation '${this.info.type}'.`);
@@ -235,6 +254,7 @@ export class DynamicHairSimulation {
     public update(deltaTime: number, animationName: string, animationFrame: number, attackState: number, attackEffectFrame: number, attackEndEffectFrame: number, isMoving: boolean, isRunning: boolean, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
         if (!this.bones || deltaTime < 0 || !Number.isFinite(deltaTime)) throw new Error(`Invalid dynamic hair delta '${deltaTime}'.`);
 
+        this.cacheWorldMatrices.frame++;
         this.updateAction(animationName, animationFrame, attackState, attackEffectFrame, attackEndEffectFrame, isDying, isBowRunning, isSpecialAttack);
         this.attackForceCount = 0;
         this.frameDelta = deltaTime;
@@ -295,7 +315,7 @@ export class DynamicHairSimulation {
 
     protected updateBonePose(): void {
         for (let i = 0, len = this.bones.length; i < len; i++) {
-            getObjectWorldMatrix(this.bones[i], tmpMatrix).decompose(this.bonePositions[i], this.boneQuaternions[i], tmpScale);
+            getObjectWorldMatrix(this.bones[i], tmpMatrix, this.cacheWorldMatrices).decompose(this.bonePositions[i], this.boneQuaternions[i], tmpScale);
         }
     }
 
@@ -334,16 +354,16 @@ export class DynamicHairSimulation {
     }
 
     protected resetMotion(): void {
-        getObjectWorldMatrix(this.bones[0].parent, this.previousSimulationMatrix);
+        getObjectWorldMatrix(this.bones[0].parent, this.previousSimulationMatrix, this.cacheWorldMatrices);
         this.previousSimulationPosition.setFromMatrixPosition(this.previousSimulationMatrix);
-        getObjectWorldMatrix(this.headBone, tmpMatrix);
+        getObjectWorldMatrix(this.headBone, tmpMatrix, this.cacheWorldMatrices);
         this.previousHeadPosition.setFromMatrixPosition(tmpMatrix);
         this.headMovement.set(0, 0, 0);
         this.userForceScale = 0;
     }
 
     protected updateMotion(deltaTime: number, isMoving: boolean): void {
-        getObjectWorldMatrix(this.bones[0].parent, tmpMatrix);
+        getObjectWorldMatrix(this.bones[0].parent, tmpMatrix, this.cacheWorldMatrices);
         tmpPoint.setFromMatrixPosition(tmpMatrix);
         tmpDeltaMatrix.multiplyMatrices(tmpMatrix, tmpParentMatrix.copy(this.previousSimulationMatrix).invert());
 
@@ -358,7 +378,7 @@ export class DynamicHairSimulation {
         this.previousSimulationMatrix.copy(tmpMatrix);
         this.previousSimulationPosition.copy(tmpPoint);
 
-        getObjectWorldMatrix(this.headBone, tmpMatrix);
+        getObjectWorldMatrix(this.headBone, tmpMatrix, this.cacheWorldMatrices);
         tmpPoint.setFromMatrixPosition(tmpMatrix);
         this.headMovement.subVectors(tmpPoint, this.previousHeadPosition);
         this.previousHeadPosition.copy(tmpPoint);
@@ -501,7 +521,7 @@ export class DynamicHairSimulation {
 
     protected updateCollisionObjects(isRunning: boolean = false): void {
         for (const plane of this.planes) {
-            getObjectWorldMatrix(plane.bone, tmpMatrix);
+            getObjectWorldMatrix(plane.bone, tmpMatrix, this.cacheWorldMatrices);
             tmpNormal.set(0, 1, 0).transformDirection(tmpMatrix);
             const distance = this.info.type === 2 && isRunning ? SELECTOR2_RUN_PLANE_DISTANCE : plane.distance;
 
@@ -512,7 +532,7 @@ export class DynamicHairSimulation {
         }
 
         for (const sphere of this.spheres) {
-            getObjectWorldMatrix(sphere.bone, tmpMatrix);
+            getObjectWorldMatrix(sphere.bone, tmpMatrix, this.cacheWorldMatrices);
             sphere.center.copy(sphere.offset).applyMatrix4(tmpMatrix);
         }
     }

@@ -1,5 +1,6 @@
 import { ClampToEdgeWrapping, Color, LinearFilter, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, OrthographicCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, Vector2, Vector3, WebGLRenderTarget } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
+import type PawnMesh from "./pawn-mesh";
 
 const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
 const SHADOW_RANGE = PROJECTOR_CLIPPING_RANGE * 2048;
@@ -43,6 +44,7 @@ const arrSwappedMaterials: (Material | Material[])[] = [];
 const arrHiddenAttachments: Object3D[] = [];
 const arrCasting: Object3D[] = [];
 const arrTraverse: Object3D[] = [];
+const arrPawnMeshes: PawnMesh[] = [];
 
 // NDC -> texture space, folded into the projector matrix
 const matBias = new Matrix4().set(
@@ -159,6 +161,7 @@ export class ShadowProjector {
         arrSwappedObjects.length = 0;
         arrSwappedMaterials.length = 0;
         arrHiddenAttachments.length = 0;
+        arrPawnMeshes.length = 0;
 
         for (const caster of arrCasting)
             swapMaterials(caster, this.silhouette);
@@ -189,6 +192,7 @@ export class ShadowProjector {
                 arrSwappedObjects[i].material = arrSwappedMaterials[i];
 
             for (const attachment of arrHiddenAttachments) attachment.visible = true;
+            for (const mesh of arrPawnMeshes) mesh.setEnabled(true);
         }
 
         (GLOBAL_UNIFORMS.shadowMatrix.value as Matrix4)
@@ -217,6 +221,11 @@ function swapMaterials(root: Object3D, material: Material): void {
         const mesh = object as Mesh;
 
         if (!object.visible) continue;
+        if ((object as PawnMesh).isPawnMesh) {
+            arrPawnMeshes.push(object as PawnMesh);
+            (object as PawnMesh).setEnabled(false);
+            continue;
+        }
 
         // FShadowSceneNode::FilterAttachment 0x93dad0 tests bActorShadows, not the owner's flag.
         const castsShadows = (object as any).scriptProperties?.get("bActorShadows");

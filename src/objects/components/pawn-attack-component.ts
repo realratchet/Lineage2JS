@@ -134,6 +134,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public isAttacking(): boolean { return this.currentAttack !== null; }
+    public isPhysicalAttacking(): boolean { return this.currentAttack !== null && !this.currentAttack.skill; }
 
     public addSkill(skill: NpcSkillAttack_T): number {
         const animation = skill.animation || null;
@@ -251,22 +252,24 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         let attack = this.attacks[index];
 
         if (!attack) throw new Error(`NPC attack '${this.selection}' does not exist.`);
-        // Engine.dll OnReceiveMagicSkillUse0x750822 passes packet hit time minus0.5 to SetMagicInfo's animation duration.
-        if (this.isServerAction && attack.skill) attack = { ...attack, skill: { ...attack.skill, hitTime: this.serverHitTime - 0.5, previewTarget: undefined } };
+        // Engine.dll SetMagicInfo 0x79b469/0x79b47b stores full packet time; InitSkillProcess 0x798aff reads it.
+        if (this.isServerAction && attack.skill) attack = { ...attack, skill: { ...attack.skill, hitTime: this.serverHitTime, previewTarget: undefined } };
 
         const rangeTarget = attack.skill?.previewTarget === "self" ? parent : target;
 
-        parent.getWorldPosition(tmpNpcPosition);
-        rangeTarget.getWorldPosition(tmpTargetPosition);
+        if (!this.isServerAction) {
+            parent.getWorldPosition(tmpNpcPosition);
+            rangeTarget.getWorldPosition(tmpTargetPosition);
 
-        const range = attack.skill ? attack.skill.castRange : this.bow?.attackRange;
-        const attackRange = parent.getCollisionRadius() + target.getCollisionRadius() + (range === undefined ? ATTACK_RANGE_PADDING : Math.max(0, range));
-        const dx = tmpTargetPosition.x - tmpNpcPosition.x;
-        const dy = tmpTargetPosition.y - tmpNpcPosition.y;
+            const range = attack.skill ? attack.skill.castRange : this.bow?.attackRange;
+            const attackRange = parent.getCollisionRadius() + target.getCollisionRadius() + (range === undefined ? ATTACK_RANGE_PADDING : Math.max(0, range));
+            const dx = tmpTargetPosition.x - tmpNpcPosition.x;
+            const dy = tmpTargetPosition.y - tmpNpcPosition.y;
 
-        if (!this.isServerAction && dx * dx + dy * dy - attackRange * attackRange > 1e-5) {
-            if (!parent.isLocomoting()) parent.goToActor(rangeTarget, attackRange);
-            return;
+            if (dx * dx + dy * dy - attackRange * attackRange > 1e-5) {
+                if (!parent.isLocomoting()) parent.goToActor(rangeTarget, attackRange);
+                return;
+            }
         }
 
         parent.stopMoving();
@@ -344,6 +347,19 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         // Engine.dll SetSkillAnim 0x7977ca..0x797825: mobskillanimgrp replaces only the NPC's final slot.
         if (attack.animation) names[Math.max(0, names.length - 1)] = attack.animation;
         if (names.length === 0) return;
+        if (this.isServerAction && this.serverHitTime <= 0.5) {
+            const name = names.slice().reverse().find(name => animation.getAnimationClip(name));
+
+            names.length = 0;
+            if (!name) return;
+
+            names.push(name);
+            times.push(animation.getAnimationClip(name).duration);
+            this.skillAnimationRate = 1;
+            this.skillTweenTime = 0;
+            this.skillShotTime = 0;
+            return;
+        }
 
         let totalTime = 0;
         let notifyTime = 0;
@@ -439,28 +455,70 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.isServerAction = true;
     }
 
-    public castFromServer(target: BaseActor, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly BaseActor[], targetExcepted: boolean): void {
+    public castFromServer(target: BaseActor, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly BaseActor[], targetExcepted: boolean, elapsed: number = 0): void {
         if (!Number.isFinite(hitTime) || hitTime < 0) throw new Error(`Invalid server cast time '${hitTime}'.`);
 
-        this.attack(target, this.addSkill(skill), [], associatedActors, targetExcepted);
+        this.attack(target, this.addSkill(skill), [], associatedActors, targetExcepted, true);
         if (skill.castStyle === 0) return;
-        this.serverHitTime = hitTime;
+        this.serverHitTime = Math.max(0, hitTime - elapsed);
         this.isServerAction = true;
     }
 
-    public setSkillTargets(skillId: number, actors: readonly BaseActor[]): void {
+    public attachSkillVisual(skill: NpcSkillAttack_T, target: BaseActor, hitTime: number, associatedActors: readonly BaseActor[], elapsed: number): void {
+        const remaining = Math.max(0, hitTime - elapsed);
+        const cast: SkillCast_T = { skill, caster: this.getParent(), target, associatedActors, locList: [], targetExcepted: associatedActors.length > 0, stageShot: 1, stagePreShot: 0, finalShot: true, shotTime: remaining, firstShotTime: remaining };
+
+        if (skill.castStyle === 0) {
+            this.transientSkillEffects.start(cast, this.lastTime);
+            return;
+        }
+        const current = this.currentAttack?.skill;
+        const pending = this.selection !== "random" ? this.attacks[this.selection]?.skill : null;
+
+        if (this.isActive && !current && pending && pending.id === skill.id && pending.level === skill.level) {
+            Object.assign(pending, { visual: skill.visual, flyingTime: skill.flyingTime, sounds: skill.sounds, assets: skill.assets });
+            return;
+        }
+
+        if (current && current.id === skill.id && current.level === skill.level) Object.assign(current, { visual: skill.visual, flyingTime: skill.flyingTime, sounds: skill.sounds, assets: skill.assets, visualTimeScale: hitTime > 0 ? remaining / hitTime : 0 });
+        skill.visualTimeScale = hitTime > 0 ? remaining / hitTime : 0;
+
+        if (remaining > 0 && this.isActive && current && current.id === skill.id && current.level === skill.level && !this.shotTriggered) {
+            this.skillEffects.start({ ...cast, stageShot: 0, finalShot: false }, this.lastTime);
+            return;
+        }
+
+        if (current && current.id === skill.id && current.level === skill.level) this.shotTriggered = true;
+
+        if (skill.visual.effects.some(effect => effect.phase === "preshot")) {
+            this.transientSkillEffects.notify("preshot", this.lastTime, { ...cast, stagePreShot: 1 });
+            this.transientSkillEffects.notify("preshot", this.lastTime, { ...cast, stagePreShot: 2 });
+        }
+
+        const projectile = this.transientSkillEffects.notify("shot", this.lastTime, cast);
+
+        if (!projectile) this.transientSkillEffects.notify("explosion", this.lastTime, cast);
+    }
+
+    public setSkillTargets(skillId: number, actors: readonly BaseActor[], target: BaseActor = undefined): void {
+        this.skillEffects.setSkillTargets(skillId, actors);
+        this.transientSkillEffects.setSkillTargets(skillId, actors);
         const attack = this.currentAttack || (this.selection !== "random" ? this.attacks[this.selection] : null);
 
         if (!this.isActive || !attack || !attack.skill || attack.skill.id !== skillId) return;
 
+        if (target !== undefined) {
+            this.requestedTarget = this.target = target;
+            this.getParent().faceActor(target === this.getParent() ? null : target);
+        }
         this.requestedAssociatedActors = actors;
         this.associatedActors.length = 0;
         this.associatedActors.push(...actors);
         this.targetExcepted = actors.length > 0; // AddAssociatedActorNotify 0x79821a..0x798239.
     }
 
-    public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void {
-        if (!target) throw new Error("NPC attack has no target.");
+    public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false, isServerAction: boolean = false): void {
+        if (!target && (!isServerAction || selection === "random" || !this.attacks[selection]?.skill)) throw new Error("NPC attack has no target.");
         if (this.attacks.length === 0) throw new Error(`${this.getParent().name || "NPC"} has no attacks.`);
         if (selection !== "random" && !this.attacks[selection]) throw new Error(`NPC attack '${selection}' does not exist.`);
         if (!Array.isArray(locList) || locList.some(location => !Array.isArray(location) || location.length !== 3 || !location.every(Number.isFinite))) throw new Error(`NPC skill locations must be XYZ triples of finite numbers.`);
@@ -472,6 +530,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         const skill = selection === "random" ? null : this.attacks[selection].skill;
 
         if (skill && skill.castStyle === 0) {
+            if (!skill.visual) return;
             const cast: SkillCast_T = { skill, caster: parent, target, associatedActors: associatedActors || [], locList, targetExcepted, stageShot: 0, stagePreShot: 0, finalShot: false, shotTime: 0, firstShotTime: 0 };
 
             if (!this.transientSkillEffects.start(cast, this.lastTime)) this.finish();
@@ -479,7 +538,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         }
 
         this.stop();
-        this.isServerAction = false;
+        this.isServerAction = isServerAction;
         this.requestedTarget = target;
         this.requestedAssociatedActors = associatedActors && associatedActors.slice();
         // Server supplies bTargetExcepted; Engine.dll AddAssociatedActorNotify 0x798239 sets Pawn+0x500.
@@ -501,6 +560,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public stop(): void {
+        this.skillEffects.clearSkillTargets();
+        this.transientSkillEffects.clearSkillTargets();
         if (!this.isActive && !this.currentAttack) return;
 
         this.skillEffects.cancel();

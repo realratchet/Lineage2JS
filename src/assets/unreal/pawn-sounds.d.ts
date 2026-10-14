@@ -6,6 +6,7 @@ declare namespace L2JS.Engine {
     }
 
     interface IPawnSoundsDecodeInfo {
+        attack?: IPawnSoundSetDecodeInfo;
         defense: IPawnSoundSetDecodeInfo;
         damage: IPawnSoundSetDecodeInfo & { random: number };
         item: IPawnSoundSetDecodeInfo | null;

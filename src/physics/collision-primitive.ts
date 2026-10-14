@@ -18,6 +18,8 @@ const tmpPointExtent = new Vector3();
 const tmpLocalStart = new Vector3();
 const tmpLocalEnd = new Vector3();
 const tmpLocalExtent = new Vector3();
+const tmpIndexBounds = new Box3();
+const cacheTriangleBounds = new WeakMap<CollisionTriangleIndex_T, Float32Array>();
 const tmpMatrix = new Matrix4();
 const tmpNormalMatrix = new Matrix3();
 const tmpModelNormalMatrix = new Matrix3();
@@ -40,6 +42,7 @@ let staticWorldEnd: Vector3 = null;
 let staticWorldExtent: Vector3 = null;
 let staticBestTime = 1;
 let staticBestItem = -1;
+let staticTriangleBounds: Float32Array = null;
 let bspModel: CollisionModel_T = null;
 let bspMatrix: Matrix4 = null;
 let bspPlaneX = 0;
@@ -194,14 +197,6 @@ function lineTriangleSide(point: Vector3, next: Vector3, normal: Vector3): boole
 function sweptTriangle(start: Vector3, end: Vector3, extent: Vector3, a: Vector3, b: Vector3, c: Vector3, item: number, maxTime: number): PrimitiveHit_T | null {
     if (extent.x === 0 && extent.y === 0 && extent.z === 0) return lineTriangle(start, end, a, b, c, item, maxTime);
 
-    tmpD.copy(b).sub(c);
-    tmpE.copy(a).sub(c);
-    tmpN.crossVectors(tmpD, tmpE);
-
-    if (tmpN.lengthSq() < 1e-12) return null;
-
-    tmpN.normalize();
-    tmpN2.copy(tmpN);
     resetClip(maxTime, item);
 
     const minX = Math.min(a.x, b.x, c.x), minY = Math.min(a.y, b.y, c.y), minZ = Math.min(a.z, b.z, c.z);
@@ -213,6 +208,15 @@ function sweptTriangle(start: Vector3, end: Vector3, extent: Vector3, a: Vector3
     if (!clipLine(0, 1, 0, maxY, -1, start, end, extent)) return null;
     if (!clipLine(0, 0, -1, -minZ, -1, start, end, extent)) return null;
     if (!clipLine(0, 0, 1, maxZ, -1, start, end, extent)) return null;
+
+    tmpD.copy(b).sub(c);
+    tmpE.copy(a).sub(c);
+    tmpN.crossVectors(tmpD, tmpE);
+
+    if (tmpN.lengthSq() < 1e-12) return null;
+
+    tmpN.normalize();
+    tmpN2.copy(tmpN);
 
     const constant = tmpN2.dot(a);
 
@@ -231,6 +235,8 @@ function sweptTriangle(start: Vector3, end: Vector3, extent: Vector3, a: Vector3
 }
 
 function terrainSide(point: Vector3, next: Vector3, normal: Vector3, intersection: Vector3, extent: number, winding: number): boolean {
+    if (extent === 0) return ((next.x - point.x) * (intersection.y - point.y) - (next.y - point.y) * (intersection.x - point.x)) * winding >= 0;
+
     tmpD.copy(next).sub(point);
     tmpE.crossVectors(tmpD, normal);
 
@@ -318,10 +324,10 @@ function walkGridCells(startX: number, startY: number, endX: number, endY: numbe
     const stepX = Math.sign(toX - fromX), stepY = Math.sign(toY - fromY);
     const rateX = stepX !== 0 ? 1 / Math.abs(toX - fromX) : Infinity;
     const rateY = stepY !== 0 ? 1 / Math.abs(toY - fromY) : Infinity;
-    const lastX = Math.floor(toX), lastY = Math.floor(toY);
+    const lastX = Math.min(maxCellX + padX, Math.floor(toX)), lastY = Math.min(maxCellY + padY, Math.floor(toY));
     const maxSteps = (maxCellX - minCellX + 2 * padX) + (maxCellY - minCellY + 2 * padY) + 8;
 
-    let cellX = Math.floor(fromX), cellY = Math.floor(fromY);
+    let cellX = Math.min(maxCellX + padX, Math.floor(fromX)), cellY = Math.min(maxCellY + padY, Math.floor(fromY));
     let nextX = stepX > 0 ? (cellX + 1 - fromX) * rateX : stepX < 0 ? (fromX - cellX) * rateX : Infinity;
     let nextY = stepY > 0 ? (cellY + 1 - fromY) * rateY : stepY < 0 ? (fromY - cellY) * rateY : Infinity;
 
@@ -542,6 +548,25 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     staticWorldExtent = extent;
     staticBestTime = maxTime;
     staticBestItem = -1;
+    staticTriangleBounds = cacheTriangleBounds.get(primitive.index);
+
+    if (!staticTriangleBounds) {
+        const vertices = primitive.vertices, indices = primitive.indices;
+        staticTriangleBounds = new Float32Array(indices.length * 2);
+
+        for (let i = 0; i < indices.length; i += 3) {
+            const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
+
+            for (let axis = 0; axis < 3; axis++) {
+                staticTriangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+                staticTriangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+            }
+        }
+
+        cacheTriangleBounds.set(primitive.index, staticTriangleBounds);
+    }
+
+    sweptBounds(staticStart, staticEnd, staticExtent, tmpIndexBounds);
 
     walkIndexCells(primitive.index, visitStaticIndexCell);
 
@@ -563,6 +588,11 @@ function visitStaticIndexCell(x: number, y: number) {
         if (index.marks[triangle] === index.queryTag) continue;
 
         index.marks[triangle] = index.queryTag;
+
+        const offset = triangle * 6, bounds = staticTriangleBounds;
+        if (bounds[offset] > tmpIndexBounds.max.x || bounds[offset + 3] < tmpIndexBounds.min.x
+            || bounds[offset + 1] > tmpIndexBounds.max.y || bounds[offset + 4] < tmpIndexBounds.min.y
+            || bounds[offset + 2] > tmpIndexBounds.max.z || bounds[offset + 5] < tmpIndexBounds.min.z) continue;
 
         const hit = staticTriangle(triangle);
 

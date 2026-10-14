@@ -5,6 +5,7 @@ import { PAWN_COLLISION_SIZE_CHANGED_EVENT } from "../../physics/components/pawn
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
 import GLOBAL_UNIFORMS from "../../materials/global-uniforms";
+import PawnMesh, { createPawnMeshes } from "../../objects/pawn-mesh";
 
 const tmpSphere = new Sphere();
 const tmpWhite = new Vector3(1, 1, 1);
@@ -17,6 +18,8 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     protected readonly localSphere = new Sphere();
     protected readonly worldSphere = new Sphere();
     protected meshes: Mesh[] = [];
+    protected batches: PawnMesh[] = [];
+    protected lastRenderTime = -Infinity;
 
     public constructor(renderManager: RenderManager) {
         super();
@@ -25,7 +28,18 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     }
 
     public onAttach(): void { this.renderManager.registerPawnRenderable(this); }
-    public onDetach(): void { this.renderManager.unregisterPawnRenderable(this); }
+    public onDetach(): void {
+        this.releaseBatches();
+        this.renderManager.unregisterPawnRenderable(this);
+    }
+
+    protected releaseBatches(): void {
+        for (const batch of this.batches) {
+            batch.release();
+            this.renderManager.releaseGeometry(batch.geometry);
+        }
+        this.batches.length = 0;
+    }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<unknown> {
         if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) this.updateLocalSphere();
@@ -36,11 +50,27 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     }
 
     protected setMeshes(meshes: Mesh[]): void {
-        this.meshes = meshes;
+        const geometries = this.batches.map(batch => batch.geometry);
 
-        for (const mesh of meshes) {
+        for (const geometry of geometries) this.renderManager.retainGeometry(geometry);
+        try {
+            this.releaseBatches();
+            this.meshes = meshes;
+            this.lastRenderTime = -Infinity;
+            this.batches = createPawnMeshes(meshes, this.renderManager.renderer);
+
+            for (const batch of this.batches) {
+                this.getParent().add(batch);
+                this.renderManager.retainGeometry(batch.geometry);
+            }
+        } finally {
+            for (const geometry of geometries) this.renderManager.releaseGeometry(geometry);
+        }
+
+        for (const mesh of [...meshes, ...this.batches]) {
             // FDynamicActor::Render 0x8eef4e sets Pawn.bRendered before mesh submission.
             mesh.onBeforeRender = (_renderer, scene, _camera, _geometry, material) => {
+                if ((mesh as PawnMesh).isPawnMesh) (mesh as PawnMesh).updateBatch(_camera);
                 const uniforms = (material as any).uniforms;
 
                 if (uniforms && uniforms.texModifierColor && !uniforms.texModifierColor.value.equals(this.texModifierColor)) {
@@ -50,7 +80,12 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
                 if (scene === this.renderManager.scene) {
                     this.isRendered = true;
-                    this.getParent().setUnrealScriptProperty("LastRenderTime", Math.fround(GLOBAL_UNIFORMS.globalTimeSeconds.value));
+                    const time = Math.fround(GLOBAL_UNIFORMS.globalTimeSeconds.value);
+
+                    if (this.lastRenderTime !== time) {
+                        this.getParent().setUnrealScriptProperty("LastRenderTime", time);
+                        this.lastRenderTime = time;
+                    }
                 }
             };
             mesh.onAfterRender = (_renderer, _scene, _camera, _geometry, material) => {

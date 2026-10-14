@@ -22,6 +22,7 @@ export type BatchLightEntry_T = {
     flags: Uint8Array;
     vertexRangeStart?: number;
     vertexRangeEnd?: number;
+    flagsOffset?: number;
 };
 
 export type StaticMeshBatchInfo_T = {
@@ -31,8 +32,10 @@ export type StaticMeshBatchInfo_T = {
     materials: string;
     actors: IStaticMeshActorDecodeInfo[];
     colliderIndices: Uint32Array | null;
-    actorColliders: { actor: IStaticMeshActorDecodeInfo; indices: Uint32Array }[];
+    actorColliderIndices: Uint32Array | null;
+    actorColliders: { actor: IStaticMeshActorDecodeInfo; indexCount: number }[];
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
+    staticLighting?: { offsets: Uint32Array, indices: Uint16Array | Uint32Array, lights: string[], glow: Float32Array };
     perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[];
     batchElements: BatchElement_T[];
 };

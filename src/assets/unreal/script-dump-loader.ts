@@ -50,6 +50,8 @@ export type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
 
 export type ScriptPropertyValue_T = number | boolean | string | null | ScriptPropertyValue_T[] | { [key: string]: ScriptPropertyValue_T };
 
+const cacheFunctions = new WeakMap<UFunction, IScriptFunctionDecodeInfo>();
+
 function getOwnerId(id: string): string {
     const index = id.lastIndexOf(".");
 
@@ -217,9 +219,11 @@ function dumpFields(script: UStruct): IScriptFieldDecodeInfo[] {
 function dumpFunction(fn: UFunction): IScriptFunctionDecodeInfo {
     fn = fn.loadSelf();
 
+    if (cacheFunctions.has(fn)) return cacheFunctions.get(fn)!;
+
     const id = getObjectId(fn);
 
-    return {
+    const info: IScriptFunctionDecodeInfo = {
         id,
         owner: getOwnerId(id),
         name: fn.objectName,
@@ -230,6 +234,9 @@ function dumpFunction(fn: UFunction): IScriptFunctionDecodeInfo {
         fields: dumpFields(fn),
         program: dumpProgram(fn)
     };
+
+    cacheFunctions.set(fn, info);
+    return info;
 }
 
 function dumpState(state: UState): IScriptStateDecodeInfo {

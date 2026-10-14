@@ -17,8 +17,8 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
 
     public setEnterEventEnabled(enabled: boolean): void { this.isEnterEventEnabled = enabled; }
 
-    public async resolveNpc(selector: string | number): Promise<INpcDefinition> {
-        const npc = await super.resolveNpc(selector);
+    public async resolveNpc(selector: string | number, settings: LoadSettings_T): Promise<INpcDefinition> {
+        const npc = await super.resolveNpc(selector, settings);
 
         return this.isEnterEventEnabled ? npc : Object.assign({}, npc, { enterEvent: null });
     }

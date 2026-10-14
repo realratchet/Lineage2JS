@@ -1,6 +1,20 @@
 uniform vec3 diffuse;
 uniform vec3 texModifierColor;
 uniform float opacity;
+#ifdef USE_PAWN_MATERIALS
+    flat varying int vPawnPart;
+    varying vec2 vPawnSpecularUv;
+    varying vec2 vPawnWorldSpecularUv;
+    struct PawnMaterialData {
+        vec4 color;
+        vec4 maps;
+        vec4 parameters;
+        int operation;
+        int envMode;
+        bool visible;
+    };
+    uniform PawnMaterialData pawnMaterials[NUM_PAWN_PARTS];
+#endif
 #ifdef USE_TERRAIN_DECORATION_FADE
     varying float vTerrainDecorationFade;
 #endif
@@ -40,6 +54,11 @@ uniform float opacity;
         float phase;
         int fadeType;
     };
+#endif
+
+#ifdef USE_CUBE_MAP_DIFFUSE
+    uniform samplerCube shDiffuseCube;
+    uniform mat3 shDiffuseCubeTransform;
 #endif
 
 #ifdef USE_CUBE_MAP_SPECULAR
@@ -535,6 +554,25 @@ void main() {
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
 
+    #ifdef USE_PAWN_MATERIALS
+        PawnMaterialData part = pawnMaterials[vPawnPart];
+        if (!part.visible || part.parameters.w == 0.0 && !gl_FrontFacing || part.parameters.w == 1.0 && gl_FrontFacing) discard;
+        vec4 texelDiffuse = samplePawnTexture(int(part.maps.x), vUv);
+        diffuseColor = part.color;
+        diffuseColor.rgb *= texelDiffuse.rgb;
+        if (part.parameters.y > 0.0) diffuseColor.a *= texelDiffuse.a;
+        if (part.maps.w >= 0.0) diffuseColor.a *= samplePawnTexture(int(part.maps.w), vUv).a;
+        if (diffuseColor.a < part.parameters.x) discard;
+        vec3 outgoingLight = vLitColor * 2.0 * diffuseColor.rgb;
+        if (part.parameters.z > 0.0) {
+            vec2 uvSpecular = part.envMode == 1 ? vPawnWorldSpecularUv : vPawnSpecularUv;
+            vec3 specularColor = samplePawnTexture(int(part.maps.y), uvSpecular).rgb;
+            float mask = part.maps.z < 0.0 ? 1.0 : samplePawnTexture(int(part.maps.z), vUv).a;
+            if (part.operation == 2) { outgoingLight = mix(outgoingLight, specularColor, mask); diffuseColor.a = mask; }
+            else if (part.operation == 1) outgoingLight *= specularColor * 2.0;
+            else outgoingLight += mask * specularColor;
+        }
+    #else
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
     
     // #include <map_fragment>
@@ -543,7 +581,17 @@ void main() {
         #ifdef USE_FADE_DIFFUSE
             diffuseColor.rgb *= getFadeColor(shDiffuse.fadeColors);
         #endif
-        #ifdef USE_MAP_DIFFUSE
+        #ifdef USE_CUBE_MAP_DIFFUSE
+            vec3 diffuseMapDirection = vReflect;
+            #ifdef USE_ENVMAP_CAMERA
+                diffuseMapDirection = (viewMatrix * vec4(diffuseMapDirection, 0.0)).xyz * vec3(-1.0, 1.0, -1.0);
+            #endif
+            vec4 texelDiffuse = textureCube(shDiffuseCube, shDiffuseCubeTransform * diffuseMapDirection);
+            diffuseColor.rgb *= texelDiffuse.rgb;
+            #ifdef USE_MASKING
+                diffuseColor.a *= texelDiffuse.a;
+            #endif
+        #elif defined(USE_MAP_DIFFUSE)
             vec4 texelDiffuse = texture2D(shDiffuse.map.texture, UV_DIFFUSE);
             // texelDiffuse = mapTexelToLinear(texelDiffuse);
             diffuseColor.rgb *= texelDiffuse.rgb;
@@ -726,6 +774,7 @@ void main() {
         #endif
     #endif
 
+    #endif
     #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
         if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
             vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;

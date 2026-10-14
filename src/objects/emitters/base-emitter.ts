@@ -107,6 +107,7 @@ export abstract class BaseEmitter extends Object3D {
     protected spinParticles: boolean;
     protected secondsBeforeInactive: number;
     protected inactive: boolean = false;
+    protected childrenNeedMatrixUpdate: boolean = false;
     protected inactiveTime: number = 0;
 
     protected isInstancedRendering: boolean = false;
@@ -1520,6 +1521,16 @@ export abstract class BaseEmitter extends Object3D {
         return this.activeCount;
     }
 
+    public updateMatrixWorld(force?: boolean): void {
+        if (!this.visible && (this as any).emitterActorUuid && !(this as any).isActorAttachedEmitter) {
+            this.updateWorldMatrix(false, false, force);
+            this.childrenNeedMatrixUpdate = true;
+            return;
+        }
+        super.updateMatrixWorld(force || this.childrenNeedMatrixUpdate);
+        this.childrenNeedMatrixUpdate = false;
+    }
+
     public onRender(): void { if (!this.isDisabled) this.inactive = false; }
 
     public setRenderVisible(visible: boolean): void { this.visible = visible && !this.isDisabled; }
@@ -1596,6 +1607,11 @@ export abstract class BaseEmitter extends Object3D {
         }
 
         this.updateParticles(dt);
+
+        if (!this.visible && (this as any).emitterActorUuid && !(this as any).isActorAttachedEmitter) {
+            this.currentTime = currentTime;
+            return "normal";
+        }
 
         if (this.instancedMesh) this.instancedMesh.visible = true;
 

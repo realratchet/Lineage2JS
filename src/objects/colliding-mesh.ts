@@ -55,17 +55,15 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         this.addComponent(new ColliderComponent());
     }
 
-    public setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"]): void {
+    public setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"], source: Uint32Array): void {
         const vertices = this.geometry.getAttribute("position").array as Float32Array;
         let indexOffset = 0;
 
         for (const record of this.collisionActors) if (record.object) record.object.release();
         this.collisionActors.length = 0;
-        for (const { actor, indices } of actors) {
-            if (indices.length % 3) throw new Error(`Actor '${actor.name}' has incomplete collision triangles.`);
-            if (this.colliderIndices)
-                for (let i = 0; i < indices.length; i++)
-                    if (indices[i] !== this.colliderIndices[indexOffset + i]) throw new Error(`Actor '${actor.name}' collision triangles do not match '${this.name}'.`);
+        for (const { actor, indexCount } of actors) {
+            if (!Number.isSafeInteger(indexCount) || indexCount <= 0 || indexCount % 3 || !source || indexOffset + indexCount > source.length) throw new Error(`Actor '${actor.name}' has invalid collision triangles.`);
+            const indices = source.subarray(indexOffset, indexOffset + indexCount);
 
             const bounds = new Box3();
             for (const index of indices) bounds.expandByPoint(tmpPosition.fromArray(vertices, index * 3));
@@ -74,7 +72,8 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             indexOffset += indices.length;
         }
 
-        if (this.colliderIndices && indexOffset !== this.colliderIndices.length) throw new Error(`Actor collision triangles do not cover '${this.name}'.`);
+        if (source && indexOffset !== source.length) throw new Error(`Actor collision triangles do not cover '${this.name}'.`);
+        if (this.colliderIndices && (this.colliderIndices !== source || indexOffset !== this.colliderIndices.length)) throw new Error(`Actor collision triangles do not cover '${this.name}'.`);
     }
 
     public getCollisionActor(item: number): StaticMeshActor {

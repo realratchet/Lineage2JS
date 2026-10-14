@@ -33,6 +33,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
 
     public onDetach(): void { this.release(); }
     public hasDeathActions(): boolean { return !!this.deathSkyAnimation || this.isDeathFalling; }
+    public isDead(): boolean { return this.isDying; }
 
     public onUpdate(_currentTime: number, _deltaTime: number): void {
         if (!this.deathSkyAnimation && !this.isDeathFalling) return;
@@ -49,7 +50,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         if (this.isDeathFalling && parent.getBaseActor()) {
             const animation = (parent.getUnrealScriptProperty("NpcSocialAnimName") as string[])[0];
 
-            if (animation.toLowerCase() !== "none") parent.playAnimation(animation, 0.1, 1, false, true);
+            if (animation.toLowerCase() !== "none") this.getComponent<AnimationComponent>("animation").playDeath(animation);
             movement.setPhysicsMode(EPhysics_T.PHYS_Flying);
             this.isDeathFalling = false;
         }
@@ -74,7 +75,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         if (parent.ridePawn) {
             const animation = this.getComponent<ScriptComponent<BaseActor>>("script").call("GetDeathWaitAnimName") as string;
 
-            if (animation.toLowerCase() !== "none") parent.playAnimation(animation, 0.2);
+            if (animation.toLowerCase() !== "none") this.getComponent<AnimationComponent>("animation").playDeath(animation, 0.2, true);
         }
 
         if (handler) handler(parent);

@@ -6,16 +6,16 @@ import type { IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 export class AmbientSoundComponent extends ObjectComponent<SectorObject> {
     public readonly componentName = "ambientSound";
     public readonly info: IAmbientSoundObjectDecodeInfo;
-    public readonly dataUri: string;
     protected readonly audioManager: AudioManager;
 
-    public constructor(audioManager: AudioManager, info: IAmbientSoundObjectDecodeInfo, dataUri: string) {
+    public constructor(audioManager: AudioManager, info: IAmbientSoundObjectDecodeInfo) {
         super();
 
         this.audioManager = audioManager;
         this.info = info;
-        this.dataUri = dataUri;
     }
+
+    public get dataUri(): string { return this.getParent().getSoundUri(this.info.soundName); }
 
     public onAttach(): void { this.audioManager.registerAmbientSound(this); }
     public onDetach(): void { this.audioManager.unregisterAmbientSound(this); }

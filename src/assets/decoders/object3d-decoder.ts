@@ -2,6 +2,7 @@ import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, B
 import decodeMaterial, { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
+import computePointNormals from "./point-normals";
 import Terrain from "../../objects/terrain";
 import CollidingMesh from "../../objects/colliding-mesh";
 import SpriteEmitter from "../../objects/emitters/sprite-emitter";
@@ -37,9 +38,10 @@ import type { ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
 import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T } from "@l2js/engine/contracts/zone";
 
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
+const cacheGeometriesByName = new Map<string, WeakRef<THREE.BufferGeometry>>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
 
-const tmpNormalA = new Vector3(), tmpNormalB = new Vector3(), tmpNormalC = new Vector3();
+
 
 function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): IndexTypedArrayAttribute {
     switch (IndexArrayConstructor) {
@@ -51,7 +53,17 @@ function getAttributeForTypedArray(IndexArrayConstructor: IndexTypedArray): Inde
 }
 
 function fetchGeometry(info: IGeometryDecodeInfo) {
-    if (cacheGeometries.has(info)) return cacheGeometries.get(info);
+    const name = (info as any).assetName as string;
+
+    const cached = name ? cacheGeometriesByName.get(name)?.deref() : null;
+
+    if (cached) return cached;
+    if (cacheGeometries.has(info)) {
+        const geometry = cacheGeometries.get(info);
+
+        if (name) cacheGeometriesByName.set(name, new WeakRef(geometry));
+        return geometry;
+    }
 
     const arrUvs = info.attributes.uvs instanceof Array ? info.attributes.uvs : [info.attributes.uvs];
     const geometry = new BufferGeometry();
@@ -97,6 +109,12 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     }
 
     cacheGeometries.set(info, geometry);
+    if (name) {
+        cacheGeometriesByName.set(name, new WeakRef(geometry));
+        geometry.addEventListener("dispose", () => {
+            if (cacheGeometriesByName.get(name)?.deref() === geometry) cacheGeometriesByName.delete(name);
+        });
+    }
 
     return geometry;
 }
@@ -181,6 +199,7 @@ class EmitterActor extends GameObject {
     public updateEmitters(currentTime: number, deltaTime: number): boolean {
         const properties = this.scriptProperties;
         const emitters = properties.get("Emitters") as unknown as BaseEmitter[];
+
         const dt = Math.fround(deltaTime * this.getSpeedRate());
         let noNormalChild = true, noEnabledChild = true, pendingInitialDelay = false;
 
@@ -875,6 +894,8 @@ function decodeTerrainDecoration(library: DecodeLibrary, info: ITerrainDecoratio
 function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
     const bone = new Bone();
 
+    // Bone poses use quaternions; Euler synchronization is unused.
+    bone.quaternion._onChange(() => { });
     bone.name = info.name;
 
     if (info.position) bone.position.fromArray(info.position);
@@ -973,40 +994,6 @@ function prepareSkinnedMaterials(materials: THREE.Material | THREE.Material[], e
     }
 }
 
-function computePointNormals(geometry: BufferGeometry) { // per point, not per wedge: area-weighted over every face at the position (cruma_inside VB, call 3369562, matches exactly)
-    const positions = geometry.getAttribute("position").array, index = geometry.getIndex().array;
-    const arrPoints = new Uint32Array(positions.length / 3), cachePoints = new Map<string, number>();
-    const pointNormals = new Float32Array(positions.length), normals = new Float32Array(positions.length);
-
-    for (let i = 0; i < arrPoints.length; i++) {
-        const key = `${positions[i * 3]},${positions[i * 3 + 1]},${positions[i * 3 + 2]}`;
-
-        if (!cachePoints.has(key)) cachePoints.set(key, i);
-
-        arrPoints[i] = cachePoints.get(key);
-    }
-
-    for (let i = 0; i < index.length; i += 3) {
-        tmpNormalA.fromArray(positions, index[i] * 3);
-        tmpNormalB.fromArray(positions, index[i + 1] * 3).sub(tmpNormalA);
-        tmpNormalC.fromArray(positions, index[i + 2] * 3).sub(tmpNormalA);
-        tmpNormalB.cross(tmpNormalC);
-
-        for (let k = 0; k < 3; k++) {
-            const point = arrPoints[index[i + k]] * 3;
-
-            pointNormals[point] += tmpNormalB.x;
-            pointNormals[point + 1] += tmpNormalB.y;
-            pointNormals[point + 2] += tmpNormalB.z;
-        }
-    }
-
-    // wedges keep UE's winding, which ue2-conventions.ts undoes by flipping X in clip space
-    for (let i = 0; i < arrPoints.length; i++)
-        tmpNormalA.fromArray(pointNormals, arrPoints[i] * 3).normalize().negate().toArray(normals, i * 3);
-
-    geometry.setAttribute("normal", new BufferAttribute(normals, 3));
-}
 
 export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObjectDecodeInfo, skins: string[] = null) {
     const geometry = fetchGeometry(library.geometries[info.geometry]);
@@ -1033,7 +1020,7 @@ export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObje
     }
 
     // LodMesh wire data is points + wedges only, UE builds vertex normals at load (UnMesh.cpp)
-    if (!geometry.getAttribute("normal")) computePointNormals(geometry);
+    if (!geometry.getAttribute("normal")) geometry.setAttribute("normal", new BufferAttribute(computePointNormals(geometry.getAttribute("position").array as Float32Array, geometry.getIndex().array), 3));
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const extendedBoneInfluences = geometry.getAttribute("skinWeight2") !== undefined;

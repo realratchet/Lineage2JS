@@ -407,6 +407,7 @@ export class Terrain extends GameMesh implements ICollidable {
     }
 
     public getCollisionPrimitive(): CollisionPrimitive_T {
+        this.updateWorldMatrix(true, false);
         this.analyticalBounds.setFromArray(this.analyticalPrimitive.vertices).applyMatrix4(this.matrixWorld);
 
         return this.analyticalPrimitive;

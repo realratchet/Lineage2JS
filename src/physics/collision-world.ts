@@ -32,10 +32,11 @@ const tmpEncroachmentBounds = new Box3();
 const tmpOverlapCenter = new Vector3();
 const tmpOverlapExtent = new Vector3();
 const CELL_SIZE = 1024;
+const PAWN_CELL_SIZE = 64;
 const MAX_QUERY_CELLS = 4096;
 const MAX_ENTRY_CELLS = 16384;
 const ACTORBOX_EPSILON = Math.fround(4.2);
-const DYNAMIC_CELL_MARGIN = 256; // Covers a ground-speed pawn's substep travel between dynamic re-grids.
+const DYNAMIC_CELL_MARGIN = 256; // Non-pawn movers retain a margin between dynamic re-grids.
 // ULevel::MoveActor (0x85b3b0) extends the test by 2 units and subtracts them back off the result
 const MOVE_ACTOR_EXTENSION = 2;
 const COMPARISON_TIME_EPSILON = 0.001;
@@ -115,6 +116,8 @@ export type CollisionStats_T = {
     registeredUnsupportedPointCheck: number;
 };
 
+type CollisionCells_T = Map<number, Map<number, Map<number, AnalyticalEntry_T[]>>>;
+
 type AnalyticalEntry_T = {
     actor: ICollidable;
     primitive: CollisionPrimitive_T;
@@ -125,6 +128,9 @@ type AnalyticalEntry_T = {
     active: boolean;
     cells: { x: number, y: number, z: number, entries: AnalyticalEntry_T[] }[];
     cellRange: number[];
+    grid: CollisionCells_T;
+    cellSize: number;
+    margin: number;
 };
 
 const defaultProfile: ActorCollisionProfile_T = {
@@ -153,7 +159,8 @@ export class CollisionWorld {
     protected readonly analyticalEntries: AnalyticalEntry_T[] = [];
     protected readonly dynamicEntries: AnalyticalEntry_T[] = [];
     protected readonly largeEntries: AnalyticalEntry_T[] = [];
-    protected readonly cells = new Map<number, Map<number, Map<number, AnalyticalEntry_T[]>>>();
+    protected readonly cells: CollisionCells_T = new Map();
+    protected readonly pawnCells: CollisionCells_T = new Map();
     protected readonly arrShapes: { x: number, y: number, z: number, shape: RAPIER.Shape }[] = [];
     protected readonly arrCheckResults: CheckResult_T[] = [];
     protected readonly arrRayResults: RayCheckResult_T[] = [];
@@ -273,7 +280,8 @@ export class CollisionWorld {
             }
         }
 
-        const entry: AnalyticalEntry_T = { actor: object, primitive, bounds, order: this.nextOrder++, queryMark: 0, dynamic, active: true, cells: [], cellRange: [] };
+        const pawn = primitive.kind === "cylinder" && object.getCollisionProfile().isPawn;
+        const entry: AnalyticalEntry_T = { actor: object, primitive, bounds, order: this.nextOrder++, queryMark: 0, dynamic, active: true, cells: [], cellRange: [], grid: pawn ? this.pawnCells : this.cells, cellSize: pawn ? PAWN_CELL_SIZE : CELL_SIZE, margin: pawn ? 0 : dynamic ? DYNAMIC_CELL_MARGIN : 0 };
 
         this.entriesByActor.set(object, entry);
         this.analyticalEntries.push(entry);
@@ -284,32 +292,28 @@ export class CollisionWorld {
 
         if (dynamic) this.dynamicEntries.push(entry);
 
-        this.insertEntry(entry, dynamic ? DYNAMIC_CELL_MARGIN : 0);
+        this.insertEntry(entry, entry.margin);
     }
 
-    public unregister(colliders: RAPIER.Collider[]) {
-        for (const collider of colliders) {
-            if (!collider) continue;
+    public unregister(actor: ICollidable, colliders: RAPIER.Collider[]) {
+        const entry = this.entriesByActor.get(actor);
 
-            const actor = this.colliderOwners.get(collider.handle);
-            const entry = actor ? this.entriesByActor.get(actor) : null;
+        if (entry) {
+            entry.active = false;
+            this.entriesByActor.delete(actor);
 
-            if (entry) {
-                entry.active = false;
-                this.entriesByActor.delete(actor);
+            if (!entry.primitive.supportsZeroExtent) this.stats.registeredUnsupportedZeroExtent--;
+            if (!entry.primitive.supportsNonZeroExtent) this.stats.registeredUnsupportedNonZeroExtent--;
+            if (!entry.primitive.supportsPointCheck) this.stats.registeredUnsupportedPointCheck--;
 
-                if (!entry.primitive.supportsZeroExtent) this.stats.registeredUnsupportedZeroExtent--;
-                if (!entry.primitive.supportsNonZeroExtent) this.stats.registeredUnsupportedNonZeroExtent--;
-                if (!entry.primitive.supportsPointCheck) this.stats.registeredUnsupportedPointCheck--;
+            this.removeFromCells(entry);
+            removeEntry(this.analyticalEntries, entry);
+            removeEntry(this.dynamicEntries, entry);
+            removeEntry(this.largeEntries, entry);
+        } else if (actor && this.unsupportedActors.delete(actor)) this.stats.registeredUnsupported = Math.max(0, this.stats.registeredUnsupported - 1);
 
-                this.removeFromCells(entry);
-                removeEntry(this.analyticalEntries, entry);
-                removeEntry(this.dynamicEntries, entry);
-                removeEntry(this.largeEntries, entry);
-            } else if (actor && this.unsupportedActors.delete(actor)) this.stats.registeredUnsupported = Math.max(0, this.stats.registeredUnsupported - 1);
-
-            this.colliderOwners.delete(collider.handle);
-        }
+        for (const collider of colliders)
+            if (collider) this.colliderOwners.delete(collider.handle);
     }
 
     // One dynamic re-grid per frame replaces roughly 180 full actor scans.
@@ -326,11 +330,11 @@ export class CollisionWorld {
             entry.primitive = entry.actor.getCollisionPrimitive();
             entry.bounds = entry.primitive.bounds;
 
-            if (this.isInCellRange(entry, DYNAMIC_CELL_MARGIN)) continue;
+            if (this.isInCellRange(entry, entry.margin)) continue;
 
             this.removeFromCells(entry);
             removeEntry(this.largeEntries, entry);
-            this.insertEntry(entry, DYNAMIC_CELL_MARGIN);
+            this.insertEntry(entry, entry.margin);
         }
     }
 
@@ -350,7 +354,7 @@ export class CollisionWorld {
         if (!entry.primitive) throw new Error(`Collision actor '${actor.name}' has no analytical primitive.`);
         entry.bounds = entry.primitive.bounds;
         entry.active = true;
-        this.insertEntry(entry, entry.dynamic ? DYNAMIC_CELL_MARGIN : 0);
+        this.insertEntry(entry, entry.margin);
     }
 
     public moveActor(query: CollisionQuery_T): CheckResult_T | null {
@@ -518,6 +522,17 @@ export class CollisionWorld {
     public updatePawnCollision(pawn: BaseActor): void {
         const level = this.pawnLevels.get(pawn);
         if (level) this.updateLevelPawn(pawn, level);
+
+        const entry = this.entriesByActor.get(pawn);
+        if (!entry || !entry.active || entry.grid !== this.pawnCells) return;
+
+        entry.primitive = pawn.getCollisionPrimitive();
+        entry.bounds = entry.primitive.bounds;
+        if (this.isInCellRange(entry, entry.margin)) return;
+
+        this.removeFromCells(entry);
+        removeEntry(this.largeEntries, entry);
+        this.insertEntry(entry, entry.margin);
     }
 
     public removePawnCollision(pawn: BaseActor): void {
@@ -953,37 +968,37 @@ export class CollisionWorld {
         const end = tmpEnd.copy(query.location).add(testDelta);
         const extent = zeroExtent ? zeroExtentVector : query.extent;
         const bounds = sweptBounds(query.location, end, extent, tmpSweepBounds);
-        const minX = Math.floor(bounds.min.x / CELL_SIZE), minY = Math.floor(bounds.min.y / CELL_SIZE), minZ = Math.floor(bounds.min.z / CELL_SIZE);
-        const maxX = Math.floor(bounds.max.x / CELL_SIZE), maxY = Math.floor(bounds.max.y / CELL_SIZE), maxZ = Math.floor(bounds.max.z / CELL_SIZE);
-        const cellCount = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
-
         this.beginAnalyticalQuery(query, query.location, end, extent, testDistance, zeroExtent);
 
-        if (cellCount > MAX_QUERY_CELLS) {
-            for (const entry of this.analyticalEntries) this.testAnalyticalEntry(entry);
-        } else {
-            for (let x = minX; x <= maxX; x++) {
-                const cellsY = this.cells.get(x);
+        for (let i = 0; i < (query.ignorePawns ? 1 : 2); i++) {
+            const grid = i === 0 ? this.cells : this.pawnCells, cellSize = i === 0 ? CELL_SIZE : PAWN_CELL_SIZE;
+            const minX = Math.floor(bounds.min.x / cellSize), minY = Math.floor(bounds.min.y / cellSize), minZ = Math.floor(bounds.min.z / cellSize);
+            const maxX = Math.floor(bounds.max.x / cellSize), maxY = Math.floor(bounds.max.y / cellSize), maxZ = Math.floor(bounds.max.z / cellSize);
+            const cellCount = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
 
-                if (!cellsY) continue;
+            if (cellCount > MAX_QUERY_CELLS) {
+                for (const entry of this.analyticalEntries)
+                    if (entry.grid === grid) this.testAnalyticalEntry(entry);
+            } else {
+                for (let x = minX; x <= maxX; x++) {
+                    const cellsY = grid.get(x);
+                    if (!cellsY) continue;
 
-                for (let y = minY; y <= maxY; y++) {
-                    const cellsZ = cellsY.get(y);
+                    for (let y = minY; y <= maxY; y++) {
+                        const cellsZ = cellsY.get(y);
+                        if (!cellsZ) continue;
 
-                    if (!cellsZ) continue;
+                        for (let z = minZ; z <= maxZ; z++) {
+                            const cell = cellsZ.get(z);
+                            if (!cell) continue;
 
-                    for (let z = minZ; z <= maxZ; z++) {
-                        const cell = cellsZ.get(z);
-
-                        if (!cell) continue;
-
-                        for (const entry of cell) this.testAnalyticalEntry(entry);
+                            for (const entry of cell) this.testAnalyticalEntry(entry);
+                        }
                     }
                 }
             }
-
-            for (const entry of this.largeEntries) this.testAnalyticalEntry(entry);
         }
+        for (const entry of this.largeEntries) this.testAnalyticalEntry(entry);
 
         if (this.analyticalUnsupported) this.stats.unsupportedQueries++;
         if (!this.analyticalBestActor) return null;
@@ -1025,16 +1040,14 @@ export class CollisionWorld {
 
         entry.queryMark = this.queryMark;
 
-        if (this.shouldIgnoreActor(entry.actor, this.analyticalQuery)) return;
-
-        if (!this.shouldBlockActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent)) return;
-
         if (entry.dynamic) {
             entry.primitive = entry.actor.getCollisionPrimitive();
             entry.bounds = entry.primitive.bounds;
         }
 
         if (!sweptIntersectsBox(this.analyticalStart, this.analyticalEnd, this.analyticalExtent, entry.bounds)) return;
+        if (this.shouldIgnoreActor(entry.actor, this.analyticalQuery)) return;
+        if (!this.shouldBlockActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent)) return;
 
         this.stats.analyticalCandidates++;
 
@@ -1097,29 +1110,29 @@ export class CollisionWorld {
             if (index >= 0) info.entries.splice(index, 1);
             if (info.entries.length > 0) continue;
 
-            const cellsY = this.cells.get(info.x);
+            const cellsY = entry.grid.get(info.x);
             const cellsZ = cellsY.get(info.y);
 
             cellsZ.delete(info.z);
             if (cellsZ.size === 0) cellsY.delete(info.y);
-            if (cellsY.size === 0) this.cells.delete(info.x);
+            if (cellsY.size === 0) entry.grid.delete(info.x);
         }
 
         entry.cells.length = 0;
     }
 
     protected isInCellRange(entry: AnalyticalEntry_T, margin: number): boolean {
-        const bounds = entry.bounds, range = entry.cellRange;
+        const bounds = entry.bounds, range = entry.cellRange, cellSize = entry.cellSize;
 
         return range.length === 6
-            && range[0] === Math.floor((bounds.min.x - margin) / CELL_SIZE) && range[1] === Math.floor((bounds.min.y - margin) / CELL_SIZE) && range[2] === Math.floor((bounds.min.z - margin) / CELL_SIZE)
-            && range[3] === Math.floor((bounds.max.x + margin) / CELL_SIZE) && range[4] === Math.floor((bounds.max.y + margin) / CELL_SIZE) && range[5] === Math.floor((bounds.max.z + margin) / CELL_SIZE);
+            && range[0] === Math.floor((bounds.min.x - margin) / cellSize) && range[1] === Math.floor((bounds.min.y - margin) / cellSize) && range[2] === Math.floor((bounds.min.z - margin) / cellSize)
+            && range[3] === Math.floor((bounds.max.x + margin) / cellSize) && range[4] === Math.floor((bounds.max.y + margin) / cellSize) && range[5] === Math.floor((bounds.max.z + margin) / cellSize);
     }
 
     protected insertEntry(entry: AnalyticalEntry_T, margin: number) {
-        const bounds = entry.bounds;
-        const minX = Math.floor((bounds.min.x - margin) / CELL_SIZE), minY = Math.floor((bounds.min.y - margin) / CELL_SIZE), minZ = Math.floor((bounds.min.z - margin) / CELL_SIZE);
-        const maxX = Math.floor((bounds.max.x + margin) / CELL_SIZE), maxY = Math.floor((bounds.max.y + margin) / CELL_SIZE), maxZ = Math.floor((bounds.max.z + margin) / CELL_SIZE);
+        const bounds = entry.bounds, cellSize = entry.cellSize, grid = entry.grid;
+        const minX = Math.floor((bounds.min.x - margin) / cellSize), minY = Math.floor((bounds.min.y - margin) / cellSize), minZ = Math.floor((bounds.min.z - margin) / cellSize);
+        const maxX = Math.floor((bounds.max.x + margin) / cellSize), maxY = Math.floor((bounds.max.y + margin) / cellSize), maxZ = Math.floor((bounds.max.z + margin) / cellSize);
 
         entry.cellRange.length = 0;
         entry.cellRange.push(minX, minY, minZ, maxX, maxY, maxZ);
@@ -1132,11 +1145,11 @@ export class CollisionWorld {
         }
 
         for (let x = minX; x <= maxX; x++) {
-            let cellsY = this.cells.get(x);
+            let cellsY = grid.get(x);
 
             if (!cellsY) {
                 cellsY = new Map();
-                this.cells.set(x, cellsY);
+                grid.set(x, cellsY);
             }
 
             for (let y = minY; y <= maxY; y++) {
@@ -1254,6 +1267,8 @@ export class CollisionWorld {
         actor = (actor as any).scriptActor || actor;
         if (actor === source) return true;
         if (query.ignoredActors && query.ignoredActors.has(actor)) return true;
+
+        if (!query.ignorePawns && !query.ignoreBases) return false;
 
         const profile = actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile;
 

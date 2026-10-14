@@ -13,7 +13,6 @@ const frozenUpdateMatrixWorld = function () { };
 const tmpOldPosition = new Vector3();
 const tmpOldQuaternion = new Quaternion();
 const tmpOldInverseQuaternion = new Quaternion();
-const tmpActorPosition = new Vector3();
 const tmpActorLocalPosition = new Vector3();
 const tmpActorTargetPosition = new Vector3();
 const tmpEncroachMovement = new Vector3();
@@ -130,9 +129,7 @@ export class MovableObject extends CollidingMesh {
                 continue;
             }
 
-            tmpActorPosition.copy(actor.position);
-            actor.moveActor(tmpActorPosition, tmpEncroachBack.copy(tmpEncroachMovement).negate());
-            actor.position.copy(tmpActorPosition);
+            actor.moveActor(actor.position, tmpEncroachBack.copy(tmpEncroachMovement).negate());
         }
 
         return false;

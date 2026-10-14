@@ -1,4 +1,4 @@
-import { Mesh } from "three";
+import { Mesh, Texture } from "three";
 import { GameObject, ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type { DecodeLibrary } from "@l2js/engine";
@@ -30,7 +30,7 @@ function disposeMaterials(item: EquippedItem): void {
 
 export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnEquipment";
-    protected readonly library: DecodeLibrary;
+    protected library: DecodeLibrary;
     protected readonly renderManager: RenderManager;
     protected readonly items: { object: GameObject; bone: string | number; mesh?: LitSkinnedMesh; animation?: ExtraMeshAnimationComponent }[] = [];
     protected hiddenAnimation: string = null;
@@ -53,6 +53,26 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
                 if (item.enchantEffect) this.attachEnchantEffect(item.enchantEffect, typeof item.bone === "string" && item.bone.startsWith("Left") ? "LeftHandBone" : "RightHandBone");
             }
         } else if (bow) this.attachItem(bow.weaponMesh, bow.weaponSkins, "LeftHandBone");
+    }
+
+    public setLibrary(library: DecodeLibrary): void {
+        const meshes = this.items.filter(item => item.mesh).map(item => item.mesh);
+        const textures = new Set<Texture>();
+
+        for (const mesh of meshes) this.renderManager.retainGeometry(mesh.geometry);
+        this.renderManager.retainMeshTextures(meshes, textures);
+        try {
+            this.onDetach();
+            this.library = library;
+            this.hiddenAnimation = null;
+            this.onAttach();
+        } catch (error) {
+            this.onDetach();
+            throw error;
+        } finally {
+            for (const mesh of meshes) this.renderManager.releaseGeometry(mesh.geometry);
+            this.renderManager.releaseTextures(textures);
+        }
     }
 
     protected attachItem(mesh: string, skins: string[], bone: string | number, extraMesh = false): EquippedItem {

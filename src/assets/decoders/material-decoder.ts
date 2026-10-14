@@ -1,5 +1,6 @@
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import _decodeTexture from "./texture-decoder";
+import { restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
 import { Color, CompressedCubeTexture, CubeTexture, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
 import type { DecodeLibrary } from "@l2js/engine";
@@ -47,7 +48,7 @@ function serializeMaterialValue(value: any, seen: WeakSet<object>): any {
     if (value.isVector3) return [value.x, value.y, value.z];
     if (value.isVector4) return [value.x, value.y, value.z, value.w];
     if (value.isMatrix3 || value.isMatrix4) return value.elements;
-    if (ArrayBuffer.isView(value)) return `${value.constructor.name}:${value.byteLength}`;
+    if (ArrayBuffer.isView(value)) return [value.constructor.name, Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength))];
     if (seen.has(value)) return null;
 
     seen.add(value);
@@ -63,7 +64,7 @@ function serializeMaterialValue(value: any, seen: WeakSet<object>): any {
     return result;
 }
 
-function getCanonicalStaticMaterialKey(material: any): string {
+export function getCanonicalStaticMaterialKey(material: any): string {
     const uniforms: Record<string, any> = {};
 
     Object.keys(material.uniforms || {}).sort().forEach(name => {
@@ -77,6 +78,7 @@ function getCanonicalStaticMaterialKey(material: any): string {
         uniforms,
         sprites: serializeMaterialValue(material.sprites, new WeakSet()),
         vertexColors: material.vertexColors,
+        visible: material.visible,
         side: material.side,
         transparent: material.transparent,
         depthWrite: material.depthWrite,
@@ -153,7 +155,9 @@ function fetchTexture(library: DecodeLibrary, info: ITextureDecodeInfo): MapData
         return emptyMapData;
     }
 
-    const name = info?.name;
+    if ((info as any).sharedTextureKey) info.buffer = restoreSharedTextureBuffer((info as any).sharedTextureKey, info.buffer);
+
+    const name = info?.name ? `${info.name}:${info.textureType}:${info.buffer?.byteLength ?? 0}` : undefined;
     const namedTexture = name ? getWeakCacheValue(cacheTexturesByName, name) : undefined;
 
     if (namedTexture) return namedTexture;

@@ -511,7 +511,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         const skills = this.addSection("Player Skills");
         const skill = { id: 1012 };
         this.addText(skills, "Skill ID", String(skill.id), value => skill.id = Number(value)).type = "number";
-        const weapon = this.addSelect(skills, "Weapon animation (preview)", Object.fromEntries(Object.entries(WeaponType).filter(([, value]) => typeof value === "number").map(([name, value]) => [name, String(value)])), String(render.player.getUnrealScriptProperty("CurWeaponType")), () => {});
+        const weapon = this.addSelect(skills, "Weapon animation (preview)", Object.fromEntries(Object.entries(WeaponType).filter(([, value]) => typeof value === "number").map(([name, value]) => [name, String(value)])), String(render.player.scriptClassId ? render.player.getUnrealScriptProperty("CurWeaponType") : 0), () => {});
         const target = this.addSelect(skills, "Target", { Self: "self", "Spawned NPC": "npc" }, "self", () => {});
         this.addButton(skills, "Cast", () => {
             const targetActor = target.value === "npc" ? this.spawnedNpc : render.player;

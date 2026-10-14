@@ -42,7 +42,7 @@ export class NWindowManager {
     protected isReady = false;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
-    public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
+    public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillRecords: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
     public constructor(protected readonly asset: AssetManager) {
         this.canvas = new NWindowCanvas(asset);

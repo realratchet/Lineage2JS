@@ -1,6 +1,7 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
 import buildTriangleIndex from "../../physics/triangle-index";
+import { buildStaticLightIndices } from "./static-lighting";
 import type { DecodeLibrary, Vector3Arr, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "@l2js/engine";
 import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
 import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, IMaterialInstancedDecodeInfo, ILightInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
@@ -205,28 +206,37 @@ function mergeMeshLightFlags(
     totalVertices: number,
     vertexCounts: number[],
     flagArrays: Uint8Array[]
-): { flags: Uint8Array, rangeStart: number, rangeEnd: number } {
-    const bytesNeeded = Math.ceil(totalVertices / 8);
-    const result = new Uint8Array(bytesNeeded);
+): { flags: Uint8Array, rangeStart: number, rangeEnd: number, flagsOffset: number } {
     let globalVertex = 0;
     let rangeStart = totalVertices;
     let rangeEnd = 0;
+
+    for (let ai = 0; ai < vertexCounts.length; ai++) {
+        if (flagArrays[ai]) {
+            rangeStart = Math.min(rangeStart, globalVertex);
+            rangeEnd = globalVertex + vertexCounts[ai];
+        }
+        globalVertex += vertexCounts[ai];
+    }
+
+    if (rangeStart > rangeEnd) { rangeStart = 0; rangeEnd = 0; }
+
+    const flagsOffset = rangeStart >> 3;
+    const result = new Uint8Array(Math.ceil(rangeEnd / 8) - flagsOffset);
+    globalVertex = 0;
 
     for (let ai = 0; ai < vertexCounts.length; ai++) {
         const actorVertexCount = vertexCounts[ai];
         const actorFlags = flagArrays[ai];
 
         if (actorFlags) {
-            rangeStart = Math.min(rangeStart, globalVertex);
-            rangeEnd = Math.max(rangeEnd, globalVertex + actorVertexCount);
-
             for (let vi = 0; vi < actorVertexCount; vi++) {
                 const srcByte = Math.floor(vi / 8);
                 const srcBit = vi % 8;
 
                 if (srcByte < actorFlags.length && (actorFlags[srcByte] & (1 << srcBit))) {
                     const dstVertex = globalVertex + vi;
-                    const dstByte = Math.floor(dstVertex / 8);
+                    const dstByte = Math.floor(dstVertex / 8) - flagsOffset;
                     const dstBit = dstVertex % 8;
                     result[dstByte] |= (1 << dstBit);
                 }
@@ -235,9 +245,7 @@ function mergeMeshLightFlags(
         globalVertex += actorVertexCount;
     }
 
-    if (rangeStart > rangeEnd) { rangeStart = 0; rangeEnd = 0; } // no actor referenced this light
-
-    return { flags: result, rangeStart, rangeEnd };
+    return { flags: result, rangeStart, rangeEnd, flagsOffset };
 }
 
 function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]) {
@@ -385,12 +393,12 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     if (hasAnyLights) {
         mergedLights = {
             scene: Array.from(mergedSceneLights.entries()).map(([light, flagArrays]) => {
-                const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
-                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
+                const { flags, rangeStart, rangeEnd, flagsOffset } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
+                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd, flagsOffset };
             }),
             environment: Array.from(mergedEnvLights.values()).map(({ light, flags: flagArrays }) => {
-                const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
-                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
+                const { flags, rangeStart, rangeEnd, flagsOffset } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
+                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd, flagsOffset };
             })
         };
     }
@@ -469,10 +477,58 @@ function mortonKey(position: number[] | undefined): number {
     return key;
 }
 
+function equalScriptProperties(a: any, b: any): boolean {
+    if (Object.is(a, b)) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) !== Array.isArray(b) || (Array.isArray(a) && a.length !== b.length)) return false;
+
+    const keys = Object.keys(a);
+
+    return keys.length === Object.keys(b).length && keys.every(key => Object.prototype.hasOwnProperty.call(b, key) && equalScriptProperties(a[key], b[key]));
+}
+
+export function shareBatchScriptProperties(manifest: StaticMeshBatchManifest_T): void {
+    const classes = new Map<string, IStaticMeshActorDecodeInfo[]>();
+
+    for (const batch of manifest.batches) {
+        for (const actor of batch.actors) {
+            if (!actor.scriptProperties || actor.sharedScriptProperties) continue;
+
+            let actors = classes.get(actor.scriptClassId);
+
+            if (!actors) classes.set(actor.scriptClassId, actors = []);
+            actors.push(actor);
+        }
+    }
+
+    for (const actors of classes.values()) {
+        if (actors.length < 2) continue;
+
+        const shared = { ...actors[0].scriptProperties };
+
+        for (let i = 1; i < actors.length; i++) {
+            const properties = actors[i].scriptProperties;
+
+            for (const key of Object.keys(shared))
+                if (!Object.prototype.hasOwnProperty.call(properties, key) || !equalScriptProperties(shared[key], properties[key])) delete shared[key];
+        }
+
+        if (!Object.keys(shared).length) continue;
+
+        for (const actor of actors) {
+            const properties = { ...actor.scriptProperties };
+
+            for (const key of Object.keys(shared)) delete properties[key];
+            actor.sharedScriptProperties = shared;
+            actor.scriptProperties = properties;
+        }
+    }
+}
+
 export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManifest_T {
     const manifest: StaticMeshBatchManifest_T = { batches: [], unbatchable: [] };
 
     (library as any).staticMeshBatches = manifest;
+    const staticLights = new Set(library.lightActors.filter(light => !light.dynamic && !light.isSunlightColor && light.type !== "Sunlight").map(light => light.name));
 
     // per-actor leaf lists, collected before rewriteLeafActors replaces the
     // entries with batch-level ones
@@ -590,6 +646,17 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 materials: materialUuids
             } as IMaterialGroupDecodeInfo;
 
+            let staticLighting: StaticMeshBatchInfo_T["staticLighting"];
+            const vertexCount = attributes.positions.length / 3;
+            const arrStaticLights = mergedLights ? mergedLights.scene.filter(light => staticLights.has(light.light)) : [];
+
+            if (vertexCount >= 100000 && arrStaticLights.length >= 128) {
+                const glow = new Float32Array(vertexCount);
+
+                for (const actor of perActorAmbient) glow.fill(actor.scaledGlow, actor.startVertex, actor.startVertex + actor.count);
+                staticLighting = { ...buildStaticLightIndices(arrStaticLights, vertexCount), lights: arrStaticLights.map(light => light.light), glow };
+            }
+
             manifest.batches.push({
                 uuid: batchUuid,
                 name: `Batch_${actors.length}_${actors[0].name}`,
@@ -597,8 +664,10 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 materials: batchUuid,
                 actors,
                 colliderIndices: movementColliderIndices,
-                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indices: actorColliderIndices[index] }] : []),
+                actorColliderIndices: mergedColliderIndices,
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length }] : []),
                 lights: mergedLights,
+                staticLighting,
                 perActorAmbient,
                 batchElements
             });
@@ -609,6 +678,8 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
             manifest.unbatchable.push(...actors);
         }
     });
+
+    shareBatchScriptProperties(manifest);
 
     return manifest;
 }

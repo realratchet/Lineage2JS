@@ -1,11 +1,12 @@
-import { serializeLibrary, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
+import { serializeLibrary, serializeLibraryBlob, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import { openAssetCatalog, storeAssetCatalog } from "./asset-catalog";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
 const CACHE_TTL_MS = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-function isCacheEnabled(settings: LoadSettings_T): boolean {
+export function isCacheEnabled(settings: LoadSettings_T): boolean {
     return !!globalThis.isSecureContext && !!navigator.storage?.getDirectory && (settings.cache === false ? false : settings.cache?.enabled ?? true);
 }
 
@@ -14,7 +15,7 @@ function getCacheVersion(settings: LoadSettings_T): number {
 }
 
 function hashSettings(settings: LoadSettings_T): string {
-    const json = JSON.stringify({ ...settings, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: undefined, decodeWorkerPoolSize: undefined });
+    const json = JSON.stringify({ ...settings, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)
@@ -24,7 +25,7 @@ function hashSettings(settings: LoadSettings_T): string {
 }
 
 function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
-    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}.bin`;
+    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${sectorName === "npc_runtime" ? ".a1" : ""}.bin`;
 }
 
 async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
@@ -46,7 +47,7 @@ async function getCachedFile(sectorName: string, settings: LoadSettings_T): Prom
             return null;
         }
 
-        if (!isSerializedLibrary(await file.slice(0, 5).arrayBuffer())) {
+        if (sectorName !== "npc_runtime" && !isSerializedLibrary(await file.slice(0, 5).arrayBuffer())) {
             try { await dir.removeEntry(handle.name); } catch (e) { }
             return null;
         }
@@ -83,8 +84,13 @@ export async function openCachedLibrary(sectorName: string, settings: LoadSettin
     if (!file) return null;
 
     try {
-        return await openLibraryFile(file);
+        return sectorName === "npc_runtime" ? await openAssetCatalog(file) : await openLibraryFile(file);
     } catch (e) {
+        if (sectorName === "npc_runtime") {
+            const dir = await getCacheDir(false);
+
+            await dir.removeEntry(cacheFileName(sectorName, settings));
+        }
         console.warn(`[decode-cache] failed to open cached sector '${sectorName}', re-decoding:`, e);
         return null;
     }
@@ -111,14 +117,21 @@ export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T,
     void writeCacheFileSafe(cacheFileName(sectorName, settings), sectorName, bytes);
 }
 
-export async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any): Promise<number> {
+export async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any, seekable: SeekableLibrary_T = null): Promise<number> {
     if (!isCacheEnabled(settings)) return 0;
 
-    const bytes = serializeLibrary(library);
+    if (sectorName === "npc_runtime") {
+        const dir = await getCacheDir(true);
+        const handle = await dir.getFileHandle(cacheFileName(sectorName, settings), { create: true });
 
-    await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes);
+        return storeAssetCatalog(handle, library.entries, seekable);
+    }
 
-    return bytes.length;
+    const bytes = serializeLibraryBlob(library, seekable);
+
+    await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
+
+    return bytes.size;
 }
 
 export async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
@@ -127,15 +140,31 @@ export async function storeCachedLibraryBufferDurable(sectorName: string, settin
     await writeCacheFile(cacheFileName(sectorName, settings), sectorName, new Uint8Array(buffer));
 }
 
-async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array): Promise<void> {
+async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array | Blob, seekable: SeekableLibrary_T = null): Promise<void> {
     const dir = await getCacheDir(true);
+    const temporaryName = `${fileName}.tmp`;
+
+    if (seekable) {
+        const temporary = await dir.getFileHandle(temporaryName, { create: true });
+        const writable = await temporary.createWritable();
+
+        await writable.write(bytes);
+        await writable.close();
+        if (typeof (temporary as any).move === "function") {
+            await (temporary as any).move(fileName);
+            return;
+        }
+        bytes = await temporary.getFile();
+    }
+
     const handle = await dir.getFileHandle(fileName, { create: true });
     const writable = await handle.createWritable();
 
     await writable.write(bytes);
     await writable.close();
+    if (seekable) await dir.removeEntry(temporaryName);
 
-    console.log(`[decode-cache] cached sector '${sectorName}' (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
+    console.log(`[decode-cache] cached sector '${sectorName}' (${((bytes instanceof Blob ? bytes.size : bytes.length) / 1024 / 1024).toFixed(1)} MB)`);
 }
 
 async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: Uint8Array): Promise<void> {
@@ -179,7 +208,7 @@ export async function sweepDecodeCache(settings: LoadSettings_T): Promise<void> 
 
 // Blob URLs are scoped to the thread owning the library, minted on first read so loading never pays for unplayed sounds.
 export function refreshSoundBlobUris(library: any): void {
-    const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array, mimeType: string }>;
+    const soundCache = library.soundBlobCache as Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string }>;
 
     if (!soundCache) return;
 

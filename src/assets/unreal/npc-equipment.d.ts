@@ -25,6 +25,7 @@ declare namespace L2JS.Engine {
     }
 
     interface IPawnEquipmentDecodeInfo {
+        attackSound?: IPawnSoundSetDecodeInfo | null;
         weaponType: number;
         items: { mesh: string; skins: string[]; bone: string | number; extraMesh?: boolean; enchantMesh?: IWeaponEnchantMesh; enchantEffect?: IWeaponEnchantEffect }[];
     }

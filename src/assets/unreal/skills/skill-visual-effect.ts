@@ -43,6 +43,7 @@ type SkillPhase_T = {
     primaryAssociated: boolean;
     soundWithoutEffect: boolean;
     lastEffect: SkillActor_T;
+    associatedUpdate?: boolean;
 };
 
 export class SkillVisualEffect implements SkillScriptHost_T {
@@ -50,9 +51,11 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     public readonly scriptProperties = new Map<string, any>();
     protected readonly placement: SkillEffectPlacement;
     protected readonly pendingEffects: SkillPhase_T[] = [];
-    protected readonly pendingSounds: { dueTime: number, sound: NpcSkillSound_T, pawn: SkillActor_T }[] = [];
+    protected readonly pendingSounds: { dueTime: number, sound: NpcSkillSound_T, pawn: SkillActor_T, assets: NpcSkillAttack_T["assets"] }[] = [];
     protected readonly preparedProjectiles: SkillActor_T[] = [];
     protected readonly castingEffects: SkillActor_T[] = [];
+    protected readonly associatedActions: { frame: SkillPhase_T, action: NpcSkillEffectAction_T, actors: readonly SkillActor_T[] }[] = [];
+    protected readonly projectileCasts = new Map<SkillActor_T, SkillCast_T>();
     protected frame: SkillPhase_T = null;
     protected lastTime = 0;
 
@@ -76,7 +79,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
             if (pending.dueTime > currentTime) continue;
             this.pendingSounds.splice(i, 1);
-            this.host.playSkillSound(pending.pawn, pending.sound);
+            this.host.playSkillSound(pending.pawn, pending.sound, undefined, pending.assets);
         }
     }
 
@@ -85,6 +88,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     public finish(): void {
         this.pendingEffects.length = 0;
         this.pendingSounds.length = 0;
+        this.clearSkillTargets();
     }
 
     public clear(): void {
@@ -95,6 +99,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     }
 
     public cancel(): void {
+        this.clearSkillTargets();
         this.placement.cancelCastingLights();
         for (const effect of this.castingEffects) // Engine.dll MagicStop 0x7b5410 destroys Pawn+0x52c (TriggerCasting) and Pawn+0x364 (NSkillProjectileActor) only.
             if (this.host.isAlive(effect)) this.host.removeEffect(effect);
@@ -110,10 +115,13 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     public start(cast: SkillCast_T, currentTime: number): boolean {
         const skill = cast.skill;
 
+        this.clearSkillTargets();
+        if (!skill.visual) return false;
+
         if (skill.visual.soulshot) {
             this.placement.spawnSoulShot(skill, cast.caster);
             for (const sound of skill.sounds)
-                if (sound.phase === "casting") this.host.playSkillSound(cast.caster, sound);
+                if (sound.phase === "casting") this.host.playSkillSound(cast.caster, sound, undefined, skill.assets);
             return true;
         }
 
@@ -125,7 +133,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
                 if (!projectile) this.notify("explosion", currentTime + skill.flyingTime * 1000, cast);
                 for (const sound of skill.sounds)
-                    if (sound.phase === "casting") this.host.playSkillSound(cast.caster, sound);
+                    if (sound.phase === "casting") this.host.playSkillSound(cast.caster, sound, undefined, skill.assets);
                 return true;
             }
             if (!skill.visual.transientRejected) throw new Error(`Native transient effect '${skill.name}' is not implemented.`);
@@ -137,9 +145,42 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     }
 
     public notify(phase: NpcSkillEffectPhase_T, phaseTime: number, cast: SkillCast_T, source: SkillActor_T = cast.caster, target: SkillActor_T = cast.target, hitActor: boolean = !!target, associatedActors: readonly SkillActor_T[] = cast.associatedActors, impactActor: SkillActor_T = hitActor ? target : null): boolean {
+        if (!cast.skill.visual) return false;
         if (cast.skill.previewTarget === "self") target = cast.caster;
 
         return this.execute({ phase, dueTime: phaseTime, cast, source, target, hitActor, associatedActors, impactActor, actions: [], effects: [], first: 0, end: 0, projectileExplosion: false, effectSpawned: false, targeted: false, primaryAssociated: false, soundWithoutEffect: false, lastEffect: null });
+    }
+
+    public setSkillTargets(skillId: number, actors: readonly SkillActor_T[]): void {
+        const previous = this.frame;
+
+        try {
+            for (const cast of this.projectileCasts.values()) {
+                if (cast.skill.id !== skillId) continue;
+                cast.associatedActors = actors.slice();
+                cast.targetExcepted = actors.length > 0;
+            }
+            for (const pending of this.pendingEffects) {
+                if (pending.cast.skill.id !== skillId) continue;
+                pending.associatedActors = actors.slice();
+                pending.cast = { ...pending.cast, associatedActors: pending.associatedActors, targetExcepted: actors.length > 0 };
+            }
+            for (const entry of this.associatedActions) {
+                if (entry.frame.cast.skill.id !== skillId) continue;
+
+                const targets = actors.filter(actor => !entry.actors.includes(actor));
+
+                if (!targets.length) continue;
+                entry.actors = [...entry.actors, ...targets];
+                this.frame = { ...entry.frame, associatedActors: targets, actions: [entry.action], first: 0, associatedUpdate: true };
+                this.notifyAction();
+            }
+        } finally { this.frame = previous; }
+    }
+
+    public clearSkillTargets(): void {
+        this.associatedActions.length = 0;
+        this.projectileCasts.clear();
     }
 
     protected execute(frame: SkillPhase_T): boolean {
@@ -218,14 +259,19 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             // Engine.dll Shot 0x796b6c..0x796b88 / Explosion 0x795e41..0x795e6d.
             const multiTarget = phase === "shot" ? !target || action.onMultiTarget && associatedActors.length > 0 : phase === "explosion" && action.onMultiTarget && associatedActors.length > 0;
 
+            if (!frame.associatedUpdate && action.onMultiTarget && (phase === "shot" || phase === "explosion"))
+                this.associatedActions.push({ frame: { ...frame, cast: { ...cast } }, action, actors: multiTarget ? associatedActors.slice() : [target] });
+
             for (const destination of multiTarget ? associatedActors : [target]) {
                 frame.lastEffect = this.placement.spawnSerialized(action, skill, caster, source, destination, cast.shotTime, !multiTarget, actor => {
-                    const targets = associatedActors.slice();
+                    const projectileCast = { ...cast, associatedActors: associatedActors.slice() };
 
                     actor.scriptProperties.set("SkillID", skill.id);
                     actor.scriptProperties.set("Physics", EPhysics_T.PHYS_NProjectile);
+                    this.projectileCasts.set(actor, projectileCast);
                     this.host.initProjectile(actor, caster, destination, projectile => {
-                        this.notify("explosion", this.lastTime, cast, projectile, destination, !!destination, targets);
+                        this.projectileCasts.delete(actor);
+                        this.notify("explosion", this.lastTime, projectileCast, projectile, destination, !!destination, projectileCast.associatedActors);
                     });
                 });
                 if (frame.lastEffect && phase === "casting" && cast.shotTime > 0) this.castingEffects.push(frame.lastEffect); // Engine.dll TriggerCasting 0x7969ea.
@@ -314,9 +360,11 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         if (flight.acceleration !== undefined) properties.set("AccSpeed", flight.acceleration);
         if (phase !== "preshot") properties.set("Physics", EPhysics_T.PHYS_NProjectile);
         // Engine.dll Explosion 0x7913ae/0x7913d8 reads the projectile's retained list.
-        const targets = frame.associatedActors.slice();
+        const projectileCast = { ...cast, associatedActors: frame.associatedActors.slice() };
+        this.projectileCasts.set(actor, projectileCast);
         const projectile = this.host.initProjectile(actor, caster, destination, (projectile, hitActor, impactActor) => {
-            this.notify("explosion", this.lastTime, cast, projectile, destination, hitActor, targets, impactActor);
+            this.projectileCasts.delete(actor);
+            this.notify("explosion", this.lastTime, projectileCast, projectile, destination, hitActor, projectileCast.associatedActors, impactActor);
         }, flight.path, flight.speed, flight.acceleration);
 
         if (flight.interpolation !== undefined || flight.hermite) {
@@ -342,7 +390,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             // Engine.dll 0x795e94..0x795ebe / 0x796a11 / 0x796ca8.
             if (phase === "explosion" && (!target?.isActor || !frame.lastEffect)) return;
             for (const sound of skill.sounds)
-                if (sound.phase === phase) this.host.playSkillSound(caster, sound, phase === "explosion" ? target : caster);
+                if (sound.phase === phase) this.host.playSkillSound(caster, sound, phase === "explosion" ? target : caster, skill.assets);
             return;
         }
         // Engine.dll 0x7b0e26..0x7b0e33.
@@ -355,8 +403,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         if (skill.visual.soundPhases.includes(phase))
             for (const sound of skill.sounds) {
                 if (sound.phase !== phase) continue;
-                if (frame.dueTime > this.lastTime) this.pendingSounds.push({ dueTime: frame.dueTime, sound, pawn: soundPawn });
-                else this.host.playSkillSound(soundPawn, sound);
+                if (frame.dueTime > this.lastTime) this.pendingSounds.push({ dueTime: frame.dueTime, sound, pawn: soundPawn, assets: skill.assets });
+                else this.host.playSkillSound(soundPawn, sound, undefined, skill.assets);
             }
     }
 }

@@ -1,7 +1,10 @@
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
-import type { ICharacterArmorSelection, ICharacterGroup, INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { ICharacterArmorSelection, ICharacterGroup, INpcDefinition, NpcSkillAttack_T } from "@l2js/engine/contracts/pawn";
 
 import type { TrueFont_T } from "../unreal/conf-files/un-conf-ttfont-info";
+
+export type ForgetSharedTexturesMessage_T = { type: "forgetSharedTextures"; keys: string[] };
+export type ConfirmSharedTexturesMessage_T = { type: "confirmSharedTextures"; keys: string[] };
 
 export type InitMessage_T = { type: "init"; };
 
@@ -15,7 +18,7 @@ export type DecodeMessage_T = {
 export type PrecacheMessage_T = { type: "precache"; requestId: number; sectorName: string; settings: LoadSettings_T; };
 export type FreeMessage_T = { type: "free"; sectorName: string; };
 export type DecodeEnvMessage_T = { type: "decodeEnv"; requestId: number; };
-export type DecodeSkillMessage_T = { type: "decodeSkill"; requestId: number; settings: LoadSettings_T; id: number; level: number; };
+export type DecodeSkillMessage_T = { type: "decodeSkill"; requestId: number; settings: LoadSettings_T; id: number; level: number; urgent?: boolean; record?: NpcSkillAttack_T; };
 export type DecodeItemMessage_T = { type: "decodeItem"; requestId: number; settings: LoadSettings_T; id: number; };
 export type MatineeAction_T = { action: string; duration: number; pathStyle: "linear" | "bezier"; startControlPoint: [number, number, number]; endControlPoint: [number, number, number]; constantPathVelocity: boolean; pathVelocity: number; location: [number, number, number]; rotation: [number, number, number]; };
 export type MatineeScene_T = { tag: string; actions: MatineeAction_T[]; };
@@ -27,7 +30,7 @@ export type RecipeInfo_T = { id: number; itemId: number; level: number; productI
 export type HennaInfo_T = { dyeItemId: number; name: string; icon: string; addName: string; description: string; };
 export type ZoneName_T = { id: number; color: number; sectorX: number; sectorY: number; top: number; bottom: number; name: string; };
 export type ZoneNameMask_T = { width: number; height: number; pixels: Uint8Array; };
-export type GameStrings_T = { trueFonts: Record<string, TrueFont_T>; zoneNames: ZoneName_T[]; zoneNameMasks: Record<string, ZoneNameMask_T>; socialSounds: Record<number, { sound: string; volume: number; radius: number; }[]>; systemMessages: Record<number, string>; systemMessageColors: Record<number, number>; systemMessageGroups: Record<number, number>; systemMessageSounds: Record<number, string>; systemMessageVoices: Record<number, string>; sysStrings: Record<number, string>; serverNames: Record<number, string>; npcNames: Record<number, string>; npcPassiveSkills: Record<number, number[]>; npcTitles: Record<number, string>; npcTitleColors: Record<number, number>; obsceneWords: string[]; residences: Record<number, string>; quests: QuestInfo_T[]; recipes: RecipeInfo_T[]; hennas: Record<number, HennaInfo_T>; skillIcons: Record<number, string>; skillCastStyles: Record<string, number>; skillInfos: Record<string, SkillInfo_T>; actions: Record<number, { name: string, icon: string, type: number, category: number, allowedNpcIds: number[], command: string, macroCommand: string, requiresMount: boolean }>; logonSpots: [number, number, number, number][]; classNames: Record<number, string>; skillNames: Record<number, string>; skillCommands: Record<string, number>; commands: Record<number, string>; itemNames: Record<number, string>; itemIcons: Record<number, string>; itemInfos: Record<number, ItemInfo_T>; symbols: Record<string, string>; };
+export type GameStrings_T = { trueFonts: Record<string, TrueFont_T>; zoneNames: ZoneName_T[]; zoneNameMasks: Record<string, ZoneNameMask_T>; socialSounds: Record<number, { sound: string; volume: number; radius: number; }[]>; systemMessages: Record<number, string>; systemMessageColors: Record<number, number>; systemMessageGroups: Record<number, number>; systemMessageSounds: Record<number, string>; systemMessageVoices: Record<number, string>; sysStrings: Record<number, string>; serverNames: Record<number, string>; npcNames: Record<number, string>; npcPassiveSkills: Record<number, number[]>; npcTitles: Record<number, string>; npcTitleColors: Record<number, number>; obsceneWords: string[]; residences: Record<number, string>; quests: QuestInfo_T[]; recipes: RecipeInfo_T[]; hennas: Record<number, HennaInfo_T>; skillIcons: Record<number, string>; skillCastStyles: Record<string, number>; skillRecords: Record<string, NpcSkillAttack_T>; skillInfos: Record<string, SkillInfo_T>; actions: Record<number, { name: string, icon: string, type: number, category: number, allowedNpcIds: number[], command: string, macroCommand: string, requiresMount: boolean }>; logonSpots: [number, number, number, number][]; classNames: Record<number, string>; skillNames: Record<number, string>; skillCommands: Record<string, number>; commands: Record<number, string>; itemNames: Record<number, string>; itemIcons: Record<number, string>; itemInfos: Record<number, ItemInfo_T>; symbols: Record<string, string>; };
 export type PlayerSkillInfo_T = { id: number; level: number; name: string; animationCategory: string; hitTime: number; castRange: number; previewTarget?: "self"; };
 
 export type DecodeCharacterEquipmentMessage_T = { type: "decodeCharacterEquipment"; requestId: number; settings: LoadSettings_T; charIndex: number; hairVariant: number; equipment: L2JS.Engine.ICharacterEquipment; };
@@ -68,8 +71,8 @@ export type DecodeEffectTemplatesMessage_T = {
 };
 
 export type CharGroupsMessage_T = { type: "charGroups"; requestId: number; };
-export type ResolveNpcMessage_T = { type: "resolveNpc"; requestId: number; selector: string | number; };
-export type ListNpcsMessage_T = { type: "listNpcs"; requestId: number; };
+export type ResolveNpcMessage_T = { type: "resolveNpc"; requestId: number; selector: string | number; settings: LoadSettings_T; };
+export type ListNpcsMessage_T = { type: "listNpcs"; requestId: number; settings: LoadSettings_T; };
 export type ListPlayerSkillsMessage_T = { type: "listPlayerSkills"; requestId: number; includeAssetVariants?: boolean; };
 export type GameStringsMessage_T = { type: "gameStrings"; requestId: number; };
 export type MatineeScenesMessage_T = { type: "matineeScenes"; requestId: number; levelName: string; };
@@ -93,6 +96,9 @@ export type MemoryStatsMessage_T = { type: "memoryStats"; requestId: number; }
 export type WorkerMemoryStats_T = { buffers: number; packages: number; };
 
 export type MainToWorkerMessage_T =
+    | { type: "promoteSkill"; requestId: number; }
+    | ForgetSharedTexturesMessage_T
+    | ConfirmSharedTexturesMessage_T
     | InitMessage_T
     | DecodeMessage_T
     | PrecacheMessage_T
@@ -121,7 +127,7 @@ export type MainToWorkerMessage_T =
 
 export type ReadyMessage_T = { type: "ready"; }
 export type InitErrorMessage_T = { type: "initError"; message: string; }
-export type DecodedMessage_T = { type: "decoded"; requestId: number; buffer: ArrayBuffer; }
+export type DecodedMessage_T = { type: "decoded"; requestId: number; buffer?: ArrayBuffer; library?: import("@l2js/engine").DecodeLibrary; }
 export type PrecacheResult_T = { cached: boolean, bytes: number };
 export type PrecachedMessage_T = { type: "precached"; requestId: number; result: PrecacheResult_T; };
 

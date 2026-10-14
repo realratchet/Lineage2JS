@@ -59,7 +59,7 @@ import * as NEnv from "./un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor, { FL2RotatorTime } from "./static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "./un-fog-info";
-import { fetchAssetHandle } from "./asset-handle";
+import { fetchAssetHandle, fetchPackageSource } from "./asset-handle";
 import UPawn from "./un-pawn";
 import UL2Float from "./un-l2-float";
 import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
@@ -129,6 +129,13 @@ export type CoreStructsReturnType_T<T extends CoreStructs_T> =
 
 export class UPackage extends APackage {
     protected async readArrayBuffer() {
+        const source = await fetchPackageSource(this.path);
+
+        if (source) {
+            this.handle.source = source;
+            return new ArrayBuffer(0);
+        }
+
         const response = await fetchAssetHandle(this.path);
         const readable = await response.getReadable();
 

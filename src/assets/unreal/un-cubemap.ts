@@ -18,7 +18,7 @@ export abstract class UCubemap extends UTexture {
             throw new Error(`Cubemap '${this.uuid}' has ${faces.length} faces.`);
 
         return {
-            name: this.uuid,
+            name: this.name,
             materialType: "cubemap",
             // FStaticCubemap::GetFace returns NULL for an absent face (UnTex.cpp:2135).
             faces: Array.from({ length: 6 }, (_, index) => faces[index] ? builder.pullMaterial(faces[index]) : null)

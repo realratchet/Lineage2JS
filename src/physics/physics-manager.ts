@@ -339,8 +339,10 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public registerCollider(object: ICollidable): void {
         if (!object.isCollidable) return;
 
-        const collider = object.createCollider(this.physicsWorld);
-        const colliders = object.getColliders ? object.getColliders() : [collider];
+        const primitive = object.getCollisionPrimitive ? object.getCollisionPrimitive() : null;
+        const needsCollider = this.collisionWorld.usesRapier() || !primitive || primitive.kind === "cylinder" || (object as any).isMovableObject || (object as any).isRotatingObject;
+        const collider = needsCollider ? object.createCollider(this.physicsWorld) : null;
+        const colliders = needsCollider ? object.getColliders ? object.getColliders() : [collider] : [];
 
         this.collisionWorld.register(object, colliders);
     }
@@ -374,7 +376,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const colliders = object.getColliders ? object.getColliders() : [collider];
         const rigidbody = object.getRigidbody();
 
-        this.collisionWorld.unregister(colliders);
+        this.collisionWorld.unregister(object, colliders);
 
         for (const movement of this.getPhysicsComponents<PawnMovementComponent>("pawnMovement"))
             movement.removeIgnoredActor(object);

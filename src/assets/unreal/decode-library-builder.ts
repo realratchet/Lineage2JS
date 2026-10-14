@@ -67,6 +67,8 @@ export class DecodeLibraryBuilder {
         this.settings = settings;
     }
 
+    public getSettings() { return this.settings; }
+
     public isLoadingExtendedBoneInfluences() { return this.settings.loadExtendedBoneInfluences !== false; }
 
     public pullMaterial(material: UMaterial): string {
@@ -121,7 +123,7 @@ export class DecodeLibraryBuilder {
         return result.object;
     }
 
-    public pullSound(sound: USound): { uri: string, data: Uint8Array, mimeType: string } | null {
+    public pullSound(sound: USound): { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } | null {
         if (!sound) return null;
 
         sound = sound.loadSelf();
@@ -139,7 +141,7 @@ export class DecodeLibraryBuilder {
         const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
 
         // Blob URLs are minted by refreshSoundBlobUris on the thread that owns the library.
-        soundEntry = { uri: null, data: audioData, mimeType };
+        soundEntry = { uri: null, data: audioData, mimeType, assetName: sound.name };
         this.library.soundBlobCache.set(soundKey, soundEntry);
 
         return soundEntry;

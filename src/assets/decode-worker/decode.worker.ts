@@ -8,7 +8,6 @@ if (typeof ctx.location.reload !== "function") {
     ctx.location.reload = () => { };
 }
 
-const DECODE_PACKAGE_IDLE_MS = 30000;
 const DECODE_PACKAGE_SWEEP_MS = 5000;
 const engine = new DecodeEngine();
 
@@ -30,9 +29,9 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decode": {
             try {
-                const { buffer } = await engine.decodeSectorBinary(msg.sectorName, msg.settings);
+                const { library, buffers } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings);
 
-                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+                post({ type: "decoded", requestId: msg.requestId, library }, buffers);
             } catch (e) {
                 console.error(`[decode-worker] failed to decode sector '${msg.sectorName}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -117,7 +116,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "resolveNpc": {
             try {
-                post({ type: "npcResolved", requestId: msg.requestId, npc: await engine.resolveNpc(msg.selector) });
+                post({ type: "npcResolved", requestId: msg.requestId, npc: await engine.resolveNpc(msg.selector, msg.settings) });
             } catch (e) {
                 console.error(`[decode-worker] failed to resolve NPC '${msg.selector}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -126,7 +125,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "listNpcs": {
             try {
-                post({ type: "npcsListed", requestId: msg.requestId, npcs: await engine.listNpcs() });
+                post({ type: "npcsListed", requestId: msg.requestId, npcs: await engine.listNpcs(msg.settings) });
             } catch (e) {
                 console.error("[decode-worker] failed to list NPCs:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -173,9 +172,9 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decodeSkeletalMesh": {
             try {
-                const buffer = await engine.decodeSkeletalMeshBinary(msg.settings, msg.packageName, msg.meshName, msg.scriptClassPath, msg.texturePaths, msg.npcId, msg.includeAnimations, msg.equipment);
+                const library = await engine.decodeSkeletalMeshTransfer(msg.settings, msg.packageName, msg.meshName, msg.scriptClassPath, msg.texturePaths, msg.npcId, msg.includeAnimations, msg.equipment);
 
-                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+                post({ type: "decoded", requestId: msg.requestId, library });
             } catch (e) {
                 console.error(`[decode-worker] failed to decode skeletal mesh '${msg.packageName}.${msg.meshName}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -206,9 +205,9 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decodeSkill": {
             try {
-                const buffer = await engine.decodeSkillBinary(msg.settings, msg.id, msg.level);
+                const library = await engine.decodeSkillTransfer(msg.settings, msg.id, msg.level, msg.urgent, msg.record);
 
-                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+                post({ type: "decoded", requestId: msg.requestId, library });
             } catch (e) {
                 console.error(`[decode-worker] failed to decode skill '${msg.id}:${msg.level}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -262,7 +261,28 @@ const arrMessages: MainToWorkerMessage_T[] = [];
 let isProcessingMessages = false;
 
 function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
-    arrMessages.push(event.data);
+    const message = event.data;
+
+    if (message.type === "promoteSkill") {
+        const index = arrMessages.findIndex(entry => entry.type === "decodeSkill" && entry.requestId === message.requestId);
+
+        if (index >= 0) {
+            const skill = arrMessages.splice(index, 1)[0] as Extract<MainToWorkerMessage_T, { type: "decodeSkill" }>;
+            skill.urgent = true;
+            arrMessages.unshift(skill);
+        }
+        return;
+    }
+    if (message.type === "forgetSharedTextures") {
+        engine.forgetSharedTextures(message.keys);
+        return;
+    }
+    if (message.type === "confirmSharedTextures") {
+        engine.confirmSharedTextures(message.keys);
+        return;
+    }
+    if (message.type === "decodeCharacterEquipment" || message.type === "decodeCharacter" || message.type === "decodeSkill" && message.urgent) arrMessages.unshift(message);
+    else arrMessages.push(message);
     void processMessages();
 }
 
@@ -279,4 +299,15 @@ async function processMessages(): Promise<void> {
 
 ctx.onmessage = onMessage;
 
-setInterval(() => { if (!isProcessingMessages) engine.releaseDecodePackages(DECODE_PACKAGE_IDLE_MS); }, DECODE_PACKAGE_SWEEP_MS);
+setInterval(async () => {
+    if (isProcessingMessages) return;
+
+    isProcessingMessages = true;
+    try {
+        await engine.flushStoredAssets();
+        engine.releaseDecodePackages(0);
+    } finally {
+        isProcessingMessages = false;
+        void processMessages();
+    }
+}, DECODE_PACKAGE_SWEEP_MS);

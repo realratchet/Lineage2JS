@@ -2,7 +2,7 @@ import "./ue2-conventions";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
-import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import Player from "../player";
@@ -17,12 +17,14 @@ import EnvInfo from "./env-info";
 import AudioManager from "../audio/audio-manager";
 import type AssetManager from "../assets/asset-manager";
 import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
+import { retainSharedTextureBuffer } from "../assets/decoders/texture-decoder";
 import InstancedSpriteBatcher from "../objects/emitters/instanced-sprite-batcher";
 import type MovableObject from "../objects/movable-object";
 import DisplayGammaPass from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
 import type PhysicsManager from "../physics/physics-manager";
 import LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import SkeletalAnimationMixer from "../objects/skeletal-animation-mixer";
 import type GroundPickup from "../objects/ground-pickup";
 import ShadowProjector from "../objects/shadow-projector";
 import type DynamicLight from "../objects/dynamic-light";
@@ -85,7 +87,7 @@ const tmpColorByte_3 = new ColorByte();
 const tmpColorByte_4 = new ColorByte();
 const tmpColorByte_5 = new ColorByte();
 
-const DEFAULT_FAR = 100_000_000;
+const DEFAULT_FAR = 65536; // Core.dll FAR_CLIPPING_PLANE 0x101cff8c.
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 
@@ -133,6 +135,17 @@ type SectorWarmup_T = {
 };
 
 const frozenUpdateMatrixWorld = function () { };
+
+function updateEmitterRenderState(scene: Object3D, emitters: ReadonlySet<any>): void {
+    for (const emitter of emitters)
+        for (let node = emitter; node; node = node.parent) {
+            if (!node.visible) break;
+            if (node === scene) {
+                emitter.onRender();
+                break;
+            }
+        }
+}
 
 function unfreezeAncestors(node: THREE.Object3D): void {
     for (let n = node.parent; n; n = n.parent)
@@ -249,7 +262,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
     public keepMinFrameRate: boolean = false; // GL2KeepMinFrameRate; preview uses full detail without adaptive throttling.
-    public readonly mixer = new AnimationMixer(this.scene);
+    public readonly mixer = new SkeletalAnimationMixer(this.scene);
     public readonly skyRenderer = new SkyRenderer();
 
     protected uGlowPass: UGlowPass;
@@ -270,11 +283,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly arrViewportBatchEmitters: any[] = [];
-    protected readonly arrVisibleNameplates: Object3D[] = [];
-    protected readonly arrNameplateWorldRoots: Object3D[] = [];
-    protected readonly arrNameplateDepthMaterials: THREE.Material[] = [];
-    protected readonly arrNameplateDepthColorWrites: boolean[] = [];
-    protected readonly nameplateDepthMaterials = new Set<THREE.Material>();
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
@@ -298,7 +306,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     protected readonly pendingSectorWarmups: SectorWarmup_T[] = [];
     protected static readonly TEXTURE_WARMUP_FRAME_MS = 2;
-    protected static readonly MATERIAL_RESTORES_PER_FRAME = 8;
     protected readonly pendingShaderCompiles = new Set<THREE.Object3D>();
 
     // deferred shader link/compile error reporting, see processShaderDiagnostics
@@ -371,6 +378,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         });
 
         this.renderer.outputColorSpace = LinearSRGBColorSpace;
+        this.renderer.setOpaqueSort((a, b) => {
+            const programA = this.renderer.properties.get(a.material).currentProgram?.id ?? -1;
+            const programB = this.renderer.properties.get(b.material).currentProgram?.id ?? -1;
+
+            return a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || programA - programB || a.material.id - b.material.id || a.materialVariant - b.materialVariant || a.z - b.z || a.id - b.id;
+        });
         this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
@@ -1234,8 +1247,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.deferredMixerOperations.length = 0;
     }
 
-    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true): Promise<BaseActor> {
-        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering);
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true): Promise<BaseActor> {
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering, undefined, preloadSkills);
     }
 
     public listNpcs(): Promise<INpcDefinition[]> {
@@ -1633,7 +1646,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
                 } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting?.()) return;
-                else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment);
+                else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment, this.renderer);
                 else (child as any).update(currentTime);
             }
 
@@ -2322,7 +2335,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.autoClear = false;
 
         // Render World
-        this.scene.traverseVisible(object => { if ((object as any).particlePool) (object as any).onRender(); });
+        updateEmitterRenderState(this.scene, this.getPhysicsManager().getParticleEmitters());
         this.drawWorld();
 
         this.waterEffects.underWaterEffect.renderCellophane(this.renderer);
@@ -2340,65 +2353,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (viewShakeActive) this.restoreViewShake();
     }
 
-    protected drawWorld() {
-        const arrNames = this.arrVisibleNameplates, arrRoots = this.arrNameplateWorldRoots;
-        const arrMaterials = this.arrNameplateDepthMaterials, arrColorWrites = this.arrNameplateDepthColorWrites;
-        const materials = this.nameplateDepthMaterials;
-
-        arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
-        materials.clear();
-        this.scene.children.forEach(object => {
-            if (object.visible && (object as any).isNameplate && (object as Sprite).material.visible) arrNames.push(object);
-        });
-        if (!arrNames.length) {
-            this.renderer.render(this.scene, this.camera);
-            return;
-        }
-
-        try {
-            arrNames.forEach(object => object.visible = false);
-            this.renderer.render(this.scene, this.camera);
-            const saveMaterial = (material: THREE.Material) => {
-                if (!material || !material.visible || materials.has(material)) return;
-
-                materials.add(material);
-                arrMaterials.push(material);
-                arrColorWrites.push(material.colorWrite);
-                if (material.transparent || !material.depthWrite) material.visible = false;
-                else material.colorWrite = false;
-            };
-            this.scene.traverseVisible(object => {
-                const value = (object as any).material;
-                if (!value) return;
-
-                if (Array.isArray(value)) value.forEach(saveMaterial);
-                else saveMaterial(value);
-            });
-            this.renderer.clearDepth();
-            this.renderer.render(this.scene, this.camera);
-            arrMaterials.forEach((material, index) => {
-                material.colorWrite = arrColorWrites[index];
-                material.visible = true;
-            });
-            this.scene.children.forEach(object => {
-                if (!object.visible) return;
-
-                arrRoots.push(object);
-                object.visible = false;
-            });
-            arrNames.forEach(object => object.visible = true);
-            this.renderer.render(this.scene, this.camera);
-        } finally {
-            arrMaterials.forEach((material, index) => {
-                material.colorWrite = arrColorWrites[index];
-                material.visible = true;
-            });
-            arrRoots.forEach(object => object.visible = true);
-            arrNames.forEach(object => object.visible = true);
-            arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
-            materials.clear();
-        }
-    }
+    protected drawWorld() { this.renderer.render(this.scene, this.camera); }
 
     public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
         if (!this.isRenderingFrame) return;
@@ -2469,7 +2424,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (sector.ambientSounds && sector.getComponents("ambientSound").length === 0)
             for (const info of sector.ambientSounds)
-                sector.addComponent(new AmbientSoundComponent(this.audioManager, info, sector.getSoundUri(info.soundName)));
+                sector.addComponent(new AmbientSoundComponent(this.audioManager, info));
 
         retainSectorResources(sector, sector);
         this.pawnLightingStates = new WeakMap();
@@ -2552,9 +2507,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!job) return;
 
         const deadline = performance.now() + RenderManager.TEXTURE_WARMUP_FRAME_MS;
-        let restoredMaterials = 0;
-
-        while (job.materialQueue.length > 0 && restoredMaterials < RenderManager.MATERIAL_RESTORES_PER_FRAME) {
+        while (job.materialQueue.length > 0) {
             const bindingIndex = visibleOnly ? findVisibleMaterialBinding(job.materialQueue, cacheVisibleMaterials) : job.materialQueue.length - 1;
             if (bindingIndex < 0) return;
 
@@ -2575,15 +2528,17 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if (binding.materialIndex < 0) binding.object.material = binding.material;
             else (binding.object.material as THREE.Material[])[binding.materialIndex] = binding.material;
 
-            restoredMaterials++;
             if (performance.now() >= deadline) return;
         }
 
         if (job.materialQueue.length > 0) return;
 
-        if (job.lightingQueue.length > 0) {
-            job.lightingQueue.pop().lightingGate = true;
-            return;
+        while (job.lightingQueue.length > 0) {
+            const object = job.lightingQueue.pop();
+
+            object.lightingGate = true;
+            if (object.needsInitialLighting()) object.update(job.sector, this.environment, this.renderer);
+            if (performance.now() >= deadline) return;
         }
 
         this.pendingSectorWarmups.splice(jobIndex, 1);
@@ -2796,6 +2751,7 @@ function addResizeListeners(manager: RenderManager) {
 const resourceRefs = new Map<Disposable_T, number>();
 
 function retainResource(resource: Disposable_T): void {
+    if ((resource as any).isTexture && !resourceRefs.has(resource)) retainSharedTextureBuffer(resource as THREE.Texture);
     resourceRefs.set(resource, (resourceRefs.get(resource) ?? 0) + 1);
 }
 
@@ -2878,7 +2834,7 @@ function releaseSectorResources(sector: SectorObject) {
 
 // procedural maps nest several levels deep (uniforms.shDiffuse.value.map.texture), needs a real walk
 function collectTexturesDeep(value: any, textures: Set<THREE.Texture>, seen: WeakSet<object>): void {
-    if (!value || typeof value !== "object") return;
+    if (!value || typeof value !== "object" || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return;
     if (value.isTexture) { textures.add(value); return; }
     if (seen.has(value)) return;
 
@@ -2900,6 +2856,7 @@ function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEm
     const materialQueue: SectorMaterialBinding_T[] = [];
     const lightingQueue: any[] = [];
     const fallbackCache = new Map<string, MeshBasicMaterial>();
+    const cacheMaterialTextures = new Map<THREE.Material, THREE.Texture[]>();
 
     root.traverse(child => {
         if ("computeLighting" in child) lightingQueue.push(child);
@@ -2923,11 +2880,16 @@ function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEm
             const material = materials[i];
             if (!material) continue;
 
-            const textures = new Set<THREE.Texture>();
-            collectMaterialTextures(material, textures, new WeakSet());
-            if (textures.size === 0) continue;
+            let textures = cacheMaterialTextures.get(material);
 
-            materialTextures[i] = Array.from(textures);
+            if (!textures) {
+                const collected = new Set<THREE.Texture>();
+                collectMaterialTextures(material, collected, new WeakSet());
+                cacheMaterialTextures.set(material, textures = Array.from(collected));
+            }
+            if (textures.length === 0) continue;
+
+            materialTextures[i] = textures.slice();
         }
 
         if (!materialTextures.some(Boolean)) return;

@@ -1310,7 +1310,11 @@ export class NetworkUI {
             }
         }
 
-        for (const plate of this.manNetwork.getNameplates()) {
+        const plates = this.manNetwork.getNameplates(), player = this.manRender.player;
+        if (plates.length > 24) plates.sort((a, b) => a.actor.position.distanceToSquared(player.position) - b.actor.position.distanceToSquared(player.position));
+        let nameCount = 0;
+
+        for (const plate of plates) {
             const collisionHeight = plate.actor.getCollisionHeight();
             const mesh = plate.actor.getComponent<any>("animation").getMeshes()[0];
             const meshScale = mesh ? mesh.scale.x : 1;
@@ -1338,23 +1342,30 @@ export class NetworkUI {
             if (tmpNameplateAnchor.z < -1 || tmpNameplateAnchor.z >= 1 || Math.abs(tmpNameplateAnchor.x) > 1 || Math.abs(tmpNameplateAnchor.y) > 1) continue;
 
             const sx = Math.trunc((tmpNameplateAnchor.x + 1) * 0.5 * width), sy = Math.trunc((1 - tmpNameplateAnchor.y) * 0.5 * height);
-            let nameplate = this.nameplates.get(plate.actor);
-
-            if (!nameplate) {
-                nameplate = new Nameplate();
-                this.nameplates.set(plate.actor, nameplate);
-                this.manRender.scene.add(nameplate);
-            }
-            const bracket = plate.isTarget ? TEX_TARGET_BRACKET : plate.isMouseTarget ? TEX_MOUSE_TARGET_BRACKET : null;
-
-            nameplate.update(canvas, plate.name, plate.title, getNameColor(plate), getTitleColor(plate), bracket && canvas.hasTexture(bracket) ? bracket : null);
-            tmpNameplateAnchor.x = sx / width * 2 - 1;
-            tmpNameplateAnchor.y = 1 - sy / height * 2;
-            nameplate.position.copy(tmpNameplateAnchor.unproject(camera));
-            nameplate.scale.set(nameplate.width * scale, nameplate.height * scale, 1);
             const game = this.options.game;
+            const priority = plate.isTarget || plate.isMouseTarget || plate.isSelf;
+            const showName = plate.isTarget || plate.isMouseTarget || (plate.isNpc ? !plate.isAttackable || game.npcName : plate.isSelf ? game.myName : game.groupName && (plate.isPartyMember && game.partyMemberName || plate.isPledgeMember && game.pledgeMemberName || !plate.isPartyMember && !plate.isPledgeMember && game.otherPCName)); // UCanvas::DrawTargetName 0x7eda0f..0x7edac6, 0x7ee49b..0x7ee4b2.
 
-            nameplate.visible = plate.isTarget || plate.isMouseTarget || (plate.isNpc ? !plate.isAttackable || game.npcName : plate.isSelf ? game.myName : game.groupName && (plate.isPartyMember && game.partyMemberName || plate.isPledgeMember && game.pledgeMemberName || !plate.isPartyMember && !plate.isPledgeMember && game.otherPCName)); // UCanvas::DrawTargetName 0x7eda0f..0x7edac6, 0x7ee49b..0x7ee4b2.
+            if (showName && (priority || nameCount < 24)) {
+                if (!priority) nameCount++;
+                let nameplate = this.nameplates.get(plate.actor);
+
+                if (!nameplate) {
+                    nameplate = new Nameplate();
+                    nameplate.material.depthWrite = true; // L2.elf_hair.trace 6001532/7000816: alpha > 0, ZWrite on.
+                    nameplate.material.alphaTest = 1 / 255;
+                    this.nameplates.set(plate.actor, nameplate);
+                    this.manRender.scene.add(nameplate);
+                }
+                const bracket = plate.isTarget ? TEX_TARGET_BRACKET : plate.isMouseTarget ? TEX_MOUSE_TARGET_BRACKET : null;
+
+                nameplate.update(canvas, plate.name, plate.title, getNameColor(plate), getTitleColor(plate), bracket && canvas.hasTexture(bracket) ? bracket : null);
+                tmpNameplateAnchor.x = sx / width * 2 - 1;
+                tmpNameplateAnchor.y = 1 - sy / height * 2;
+                nameplate.position.copy(tmpNameplateAnchor.unproject(camera));
+                nameplate.scale.set(nameplate.width * scale, nameplate.height * scale, 1);
+                nameplate.visible = true;
+            }
 
             const store = plate.isSitting ? storeBalloons[plate.privateStoreType] : null, isChat = arrChatStoreTypes.includes(plate.privateStoreType);
             const text = store ? (plate.storeMessage ? `${this.nwindow.getSysString(store[0])}\n${plate.storeMessage}` : this.nwindow.getSysString(store[0])) : isChat ? plate.chatMessage : null;

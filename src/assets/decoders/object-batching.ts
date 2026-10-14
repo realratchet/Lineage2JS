@@ -1,3 +1,4 @@
+import { batchStaticMeshTextures } from "./static-mesh-texture-batching";
 import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import Terrain from "../../objects/terrain";
@@ -179,7 +180,7 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
                 || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
             // The merged light matrix has always been identity (see mergeBatchGeometriesData)
             const lightInfo: MeshLight_T | null = batch.lights
-                ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment }
+                ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment, staticLighting: batch.staticLighting }
                 : null;
 
             const batchObject = createBatchObject(
@@ -195,7 +196,8 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
             );
 
             const source = geometry.index?.array as StaticMeshIndexArray_T;
-            batchObject.setCollisionActors(batch.actorColliders);
+            batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
+            batchStaticMeshTextures(batchObject, source);
             if (source) {
                 const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
                 batchObject.batchIndices = target;

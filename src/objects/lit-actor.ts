@@ -1,7 +1,8 @@
 
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
-import { BufferAttribute, Matrix4, Vector3 } from "three";
+import { BufferAttribute, Matrix4, Vector3, WebGLRenderer } from "three";
+import { computeStaticLighting } from "../rendering/static-lighting";
 import type { L2Environment } from "../rendering/l2-env";
 import { ColorByte } from "../utils/color-byte";
 import MeshStaticMaterial, { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
@@ -17,19 +18,19 @@ const arrHardwareLights: DynamicLight[] = [];
 
 const affectedVertexCache = new WeakMap<Uint8Array, Uint32Array>();
 
-function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart: number = 0, rangeEnd: number = vertexCount): Uint32Array {
+function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart: number = 0, rangeEnd: number = vertexCount, flagsOffset: number = 0): Uint32Array {
     let indices = affectedVertexCache.get(flags);
 
     if (!indices) {
         let count = 0;
 
         for (let vi = rangeStart; vi < rangeEnd; vi++)
-            if (flags[vi >> 3] & (1 << (vi & 7))) count++;
+            if (flags[(vi >> 3) - flagsOffset] & (1 << (vi & 7))) count++;
 
         indices = new Uint32Array(count);
 
         for (let vi = rangeStart, k = 0; vi < rangeEnd; vi++)
-            if (flags[vi >> 3] & (1 << (vi & 7))) indices[k++] = vi;
+            if (flags[(vi >> 3) - flagsOffset] & (1 << (vi & 7))) indices[k++] = vi;
 
         affectedVertexCache.set(flags, indices);
     }
@@ -37,7 +38,7 @@ function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart:
     return indices;
 }
 
-type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, instance?: DynamicLight };
+type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
 
 export class LitActorMesh extends GameMesh {
     public readonly isUpdatable: boolean = true;
@@ -46,6 +47,7 @@ export class LitActorMesh extends GameMesh {
     protected scaledGlow: number;
     protected isSunAffected: boolean;
     protected staticLightingCache?: Uint8ClampedArray;
+    protected lightingRenderer?: WebGLRenderer;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
     protected readonly arrHardwareMaterials: MeshStaticMaterial[] = [];
 
@@ -185,10 +187,10 @@ export class LitActorMesh extends GameMesh {
         const glowPerVertex = perActorAmbient ? this.getPerVertexGlow(perActorAmbient, vertexArrayLen) : null;
         const uniformGlow = this.scaledGlow;
 
-        for (const { instance: light, flags, vertexRangeStart, vertexRangeEnd } of lights) {
+        for (const { instance: light, flags, vertexRangeStart, vertexRangeEnd, flagsOffset } of lights) {
             if (!light) continue;
 
-            const indices = getAffectedVertices(flags, vertexArrayLen, vertexRangeStart, vertexRangeEnd);
+            const indices = getAffectedVertices(flags, vertexArrayLen, vertexRangeStart, vertexRangeEnd, flagsOffset);
             const col = color || light.color;
 
             for (let k = 0, len = indices.length; k < len; k++) {
@@ -308,7 +310,8 @@ export class LitActorMesh extends GameMesh {
         return sets;
     }
 
-    public update(sector: SectorObject, env: L2Environment) {
+    public update(sector: SectorObject, env: L2Environment, renderer?: WebGLRenderer) {
+        if (renderer) this.lightingRenderer = renderer;
         if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
         if (this.needsInitialLighting() && !this.lightingGate) return;
 
@@ -436,7 +439,15 @@ export class LitActorMesh extends GameMesh {
                 this.staticLightingCache.fill(0);
             }
 
-            if (this.lightInfo) this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
+            if (this.lightInfo) {
+                const prepared = this.lightInfo.staticLighting;
+                const useGPU = this.isBatch && this.lightingRenderer && prepared;
+
+                if (useGPU && (prepared.lights.length !== staticScene.length || prepared.lights.some((name, index) => name !== staticScene[index].light))) throw new Error(`Static light order changed for '${this.name}'.`);
+                const computed = useGPU && computeStaticLighting(this.lightingRenderer, this.geometry, this.lightInfo.matrix, staticScene, prepared.glow, this.staticLightingCache, prepared);
+
+                if (!computed) this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
+            }
 
             // if (staticEnv.length > 0)
             //     debugger;
@@ -505,8 +516,9 @@ export class LitActorMesh extends GameMesh {
 
 export type MeshLight_T = {
     matrix: Matrix4,
-    scene: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number }[],
-    environment: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number }[]
+    staticLighting?: { offsets: Uint32Array, indices: Uint16Array | Uint32Array, lights: string[], glow: Float32Array },
+    scene: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number }[],
+    environment: { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number }[]
 }
 
 export default LitActorMesh;
