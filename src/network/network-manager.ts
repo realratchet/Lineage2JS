@@ -624,12 +624,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         let nearest: GroundPickup = null;
 
         for (const pickup of this.pickups.values()) {
-            const distance = pickup.getPickDistance(raycaster);
+            for (let part = pickup; part; part = part.getNextPickup()) {
+                const distance = part.getPickDistance(raycaster);
 
-            if (distance >= maxDistance) continue;
+                if (distance >= maxDistance) continue;
 
-            nearest = pickup;
-            maxDistance = distance;
+                nearest = part;
+                maxDistance = distance;
+            }
         }
 
         return nearest;

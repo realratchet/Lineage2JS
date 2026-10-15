@@ -2,7 +2,7 @@ import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import { appendGlobalUniforms, getLocalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide, Texture } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
 import type DynamicLight from "../../objects/dynamic-light";
@@ -112,6 +112,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
+    public arrLightmaps: Texture[] = [];
     protected spriteEntries: [string, SpriteParam_T][] = [];
     protected proceduralMaps: any[] = [];
 
@@ -373,7 +374,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         if (this.transparent) this.defines["NO_SHADOW_RECEIVE"] = "";
     }
 
-    public setLightmap(lightmap: MapData_T) {
+    public setLightmap(lightmaps: MapData_T[]) {
+        this.arrLightmaps = lightmaps.map(lightmap => lightmap.texture);
+        const lightmap = lightmaps[0];
         this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
@@ -382,6 +385,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.needsUpdate = true;
 
         return this;
+    }
+
+    public updateLightmap(time: number) {
+        if (!this.arrLightmaps.length) return;
+
+        // BSP draw 0x8fb824..0x8fb840 truncates hour * count * float(1/24), then takes the remainder.
+        const index = Math.trunc(time * this.arrLightmaps.length * Math.fround(1 / 24)) % this.arrLightmaps.length;
+        this.uniforms.lightMap.value = this.arrLightmaps[index];
     }
 
     public disableDirectionalAmbient() {
@@ -562,6 +573,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         Object.assign(this.uniforms, proceduralUniforms);
         appendGlobalUniforms(this.uniforms);
         this.sprites = source.sprites;
+        this.arrLightmaps = source.arrLightmaps;
         this.spriteEntries = source.spriteEntries;
         this.proceduralMaps = getProceduralMaps(this.uniforms);
         this.isUpdatable = source.isUpdatable;

@@ -4,6 +4,7 @@ import type { FVector } from "./un-vector";
 import type { Vector3Arr, QuaternionArr } from "./library-types";
 
 export type IMoverDecodeInfo = {
+    damageGrade: number,
     initialState: string,
     keyNum: number,
     keyPositions: Vector3Arr[],
@@ -34,6 +35,7 @@ export enum EMoverEncroachType_T {
 // Likely for doors and stuff
 export abstract class UMover extends UStaticMeshActor {
     public readonly careUnread: boolean = false;
+    protected DamageGrade = 0;
 
     declare protected moverGlideType: EMoverGlideType_T;
     declare protected keyNum: number;
@@ -52,6 +54,7 @@ export abstract class UMover extends UStaticMeshActor {
 
     protected getPropertyMap() {
         return Object.assign({}, super.getPropertyMap(), {
+            "DamageGrade": "DamageGrade",
             "MoverGlideType": "moverGlideType",
             "KeyNum": "keyNum",
             "NumKeys": "numKeys",
@@ -93,6 +96,7 @@ export abstract class UMover extends UStaticMeshActor {
         return {
             dontBatch: true,
             mover: {
+                damageGrade: this.DamageGrade,
                 initialState: this.initialState,
                 keyNum: this.keyNum,
                 keyPositions,

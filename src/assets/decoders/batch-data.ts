@@ -219,15 +219,6 @@ function prepareActorGeometriesData(
     return { actorGeometries, materialUuids };
 }
 
-function blocksPawn(collision: any): boolean {
-    if (!collision) return true;
-    if (!collision.blockNonZeroExtent) return false;
-    if (collision.worldGeometry) return true;
-    if (!collision.collideActors) return false;
-
-    return collision.blockPlayers;
-}
-
 // rangeStart/rangeEnd bound the actors that actually reference this light, so
 // getAffectedVertices (lit-actor.ts) can skip scanning the rest of the batch
 function mergeMeshLightFlags(
@@ -606,7 +597,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 mergedIndices,
                 totalIndices
             } = mergeBatchGeometriesData(actorGeometries);
-            const movementColliderIndices = blocksPawn(actorGeometries[0].collision) ? mergedColliderIndices : null;
+            const colliderIndices = actorGeometries[0].collision.collideActors ? mergedColliderIndices : null;
 
             const batchUuid = generateUUID();
             const batchElements: BatchElement_T[] = actors.map((a, ai) => ({
@@ -665,7 +656,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
-                collisionIndex: movementColliderIndices && movementColliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, movementColliderIndices) : null,
+                collisionIndex: colliderIndices && colliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, colliderIndices) : null,
                 groups: finalGroups
             } as IGeometryDecodeInfo;
             library.materials[batchUuid] = {
@@ -691,7 +682,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 geometry: batchUuid,
                 materials: batchUuid,
                 actors,
-                colliderIndices: movementColliderIndices,
+                colliderIndices,
                 actorColliderIndices: mergedColliderIndices,
                 actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length }] : []),
                 lights: mergedLights,

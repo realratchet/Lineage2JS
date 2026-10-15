@@ -1,5 +1,6 @@
 import { AnimationAction, AnimationClip, Mesh, Object3D, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
+import { EDrawType_T, EPhysics_T } from "./assets/unreal/un-aactor";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T } from "./physics/collision-world";
@@ -19,6 +20,7 @@ import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
 const tmpUp = new Vector3(0, 0, 1);
 const tmpScriptLocation = new Vector3();
+const arrVehicleClass: ScriptValue_T[] = ["Vehicle"];
 export class BaseActor extends GameObject implements ICollidable {
     public readonly isActor = true;
     declare public readonly isCollidable: boolean;
@@ -59,6 +61,8 @@ export class BaseActor extends GameObject implements ICollidable {
         }
 
         const isOnVehicle = this.scriptComponent ? this.getStoredUnrealScriptProperty("bGetOnVehicle") : null;
+        const loadingResourceRef = this.scriptComponent ? this.getStoredUnrealScriptProperty("LoadingResourceRef") : null;
+        const createdResource = this.scriptComponent ? this.getStoredUnrealScriptProperty("bCreatedResource") : null;
 
         if (this.scriptComponent) this.removeComponent(this.scriptComponent);
 
@@ -69,6 +73,8 @@ export class BaseActor extends GameObject implements ICollidable {
         this.scriptProperties = component.getProperties();
         this.addComponent(component);
         if (isOnVehicle !== null) this.setUnrealScriptProperty("bGetOnVehicle", isOnVehicle);
+        if (loadingResourceRef !== null) this.setUnrealScriptProperty("LoadingResourceRef", loadingResourceRef);
+        if (createdResource !== null) this.setUnrealScriptProperty("bCreatedResource", createdResource);
         this.setCollisionSize(this.getStoredUnrealScriptProperty("CollisionRadius") as number, this.getStoredUnrealScriptProperty("CollisionHeight") as number);
     }
 
@@ -193,6 +199,28 @@ export class BaseActor extends GameObject implements ICollidable {
     public moveSmooth(movement: Vector3, ignoredActor?: ICollidable): void { this.movementComponent.moveSmooth(movement, ignoredActor); }
     public moveActor(position: Vector3, movement: Vector3): CheckResult_T | null { return this.movementComponent.moveActor(position, movement); }
     public isInteractive(): boolean { return this.movementComponent.isInteractive(); }
+
+    public checkLoadingResource(includeZero = true): boolean {
+        if (!this.scriptComponent || !this.renderManager.manGame.getComponent("network").isInWorld()) return false;
+        if (this.ridePawn || this.getUnrealScriptProperty("RidePawn") || this.getUnrealScriptProperty("bRide") || this.getUnrealScriptProperty("DrawType") === EDrawType_T.DT_Custom) return false;
+        // FNActorResourceLoader::CheckLoadingResource 0x769050..0x769190; browser world runs normal network-client mode.
+        const count = this.getUnrealScriptProperty("LoadingResourceRef") as number;
+        if (Number.isInteger(count) && count < 0) return false;
+        if (this.scriptComponent.getVM().invokeNative(this, this, 303, "IsA", arrVehicleClass)) return false;
+        if (!Number.isInteger(count)) throw new Error(`Pawn '${this.name}' has no loading-resource counter.`);
+
+        return includeZero ? count >= 0 : count > 0;
+    }
+
+    public isInStasis(currentTime: number): boolean {
+        if (!this.getUnrealScriptProperty("bStasis")) return false;
+
+        const physics = this.getUnrealScriptProperty("Physics");
+        if (physics !== EPhysics_T.PHYS_None && physics !== EPhysics_T.PHYS_Rotating) return false;
+
+        // AActor::Tick 0x86580f..0x865886.
+        return currentTime / 1000 - (this.getUnrealScriptProperty("LastRenderTime") as number) > 5 && (this.getUnrealScriptProperty("Level") as GameObject).getUnrealScriptProperty("NetMode") === 0;
+    }
 
     public updatePresentation(currentTime: number, deltaTime: number) {
         this.updateComponents(currentTime, deltaTime);

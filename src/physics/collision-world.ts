@@ -60,6 +60,7 @@ export type CollisionQuery_T = {
     ignorePawns?: boolean;
     onlyWorldGeometry?: boolean;
     zeroExtent?: boolean;
+    traceWorld?: boolean;
 };
 
 export type CollisionOverlapQuery_T = {
@@ -188,6 +189,7 @@ export class CollisionWorld {
     protected analyticalUnsupported = false;
     protected rapierQuery: CollisionQuery_T = null;
     protected rapierZeroExtent = false;
+    protected rapierQueryError: Error = null;
     protected checkResultIndex = 0;
     protected rayResultIndex = 0;
     protected readonly stats: CollisionStats_T = {
@@ -215,11 +217,27 @@ export class CollisionWorld {
     protected readonly rapierFilter: (collider: RAPIER.Collider) => boolean;
 
     protected filterRapierCollider(collider: RAPIER.Collider): boolean {
-        const actor = this.colliderOwners.get(collider.handle);
+        if (this.rapierQueryError) return false;
 
-        if (actor && this.shouldIgnoreActor(actor, this.rapierQuery)) return false;
+        try {
+            const actor = this.colliderOwners.get(collider.handle);
 
-        return !actor || this.shouldBlockActor(actor, this.rapierQuery, this.rapierZeroExtent);
+            if (actor && this.shouldIgnoreActor(actor, this.rapierQuery)) return false;
+
+            return !actor || this.shouldBlockActor(actor, this.rapierQuery, this.rapierZeroExtent);
+        } catch (error) {
+            // Rapier swallows exceptions raised by query predicates.
+            this.rapierQueryError = error;
+            return false;
+        }
+    }
+
+    protected checkRapierQueryError(): void {
+        if (!this.rapierQueryError) return;
+
+        const error = this.rapierQueryError;
+        this.rapierQueryError = null;
+        throw error;
     }
 
     public constructor(world: RAPIER.World, backend: CollisionBackend_T = "ue") {
@@ -368,6 +386,7 @@ export class CollisionWorld {
 
     // ULevel::SingleLineCheck is a plain trace; only MoveActor extends and backs the result off
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null {
+        if (query.traceWorld && (query.sourceActor || query.sourceCollider || query.sourceBody)) throw new Error(`World traces require a null source.`);
         return this.sweepQuery(query, 0);
     }
 
@@ -849,10 +868,12 @@ export class CollisionWorld {
 
         this.rapierQuery = query;
         this.rapierZeroExtent = true;
+        this.rapierQueryError = null;
         this.ray.origin = query.location;
         this.ray.dir = direction;
 
         const hit = this.world.castRayAndGetNormal(this.ray, maxDistance, false, undefined, undefined, query.sourceCollider, query.sourceBody, this.rapierFilter);
+        this.checkRapierQueryError();
 
         this.stats.rapierQueries++;
         this.stats.rapierTime += performance.now() - start;
@@ -897,8 +918,10 @@ export class CollisionWorld {
 
         this.rapierQuery = query;
         this.rapierZeroExtent = false;
+        this.rapierQueryError = null;
 
         const collider = this.world.intersectionWithShape(query.location, identityRotation, this.getShape(query.extent, false), undefined, undefined, query.sourceCollider, query.sourceBody, this.rapierFilter);
+        this.checkRapierQueryError();
 
         this.stats.rapierQueries++;
         this.stats.rapierTime += performance.now() - start;
@@ -946,8 +969,10 @@ export class CollisionWorld {
     protected rapierLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
         this.rapierQuery = query;
         this.rapierZeroExtent = zeroExtent;
+        this.rapierQueryError = null;
 
         const hit = this.world.castShape(query.location, identityRotation, testDelta, this.getShape(query.extent, zeroExtent), 1, undefined, undefined, query.sourceCollider, query.sourceBody, this.rapierFilter);
+        this.checkRapierQueryError();
 
         if (!hit) return null;
 
@@ -1242,7 +1267,20 @@ export class CollisionWorld {
     protected shouldBlockActor(actor: ICollidable, query: CollisionQuery_T, zeroExtent: boolean): boolean {
         const target = actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile;
 
+        if ((actor as any).isStaticMeshActor && !target.collideActors) return false;
         if (zeroExtent ? !target.blockZeroExtent : !target.blockNonZeroExtent) return false;
+
+        if (query.traceWorld) {
+            // Null-source TRACE_World: AActor 0x7cf0f1, APawn 0x8afb34, AMover 0x60ddc0.
+            if (target.isPawn) return !!getTraceProperty(actor as ScriptHost_T, "bAsTreatWorld");
+            if ((actor as any).isMovableObject) {
+                const grade = (actor as any).damageGrade;
+
+                if (!Number.isInteger(grade)) throw new Error(`Invalid mover DamageGrade '${grade}'.`);
+                return grade !== 6;
+            }
+            return target.worldGeometry;
+        }
 
         if (query.onlyWorldGeometry) return target.worldGeometry;
 
@@ -1268,9 +1306,17 @@ export class CollisionWorld {
         if (actor === source) return true;
         if (query.ignoredActors && query.ignoredActors.has(actor)) return true;
 
-        if (!query.ignorePawns && !query.ignoreBases) return false;
-
         const profile = actor.getCollisionProfile ? actor.getCollisionProfile() || defaultProfile : defaultProfile;
+
+        if (profile.isPawn) {
+            const controller = getTraceProperty(actor as ScriptHost_T, "Controller");
+            if (typeof controller === "string") throw new Error(`Unresolved pawn Controller '${controller}'.`);
+
+            // APawn::ShouldTrace 0x8afa60..0x8afad1; ordinary traces omit the 0x10000 exception.
+            if (controller && getTraceProperty(controller, "bDead")) return true;
+            if (source && (controller === source || getTraceProperty(source, "CanIngnoreCollision") && getTraceProperty(actor as ScriptHost_T, "CanBeIngnoredCollision"))) return true;
+            if ((actor as BaseActor).checkLoadingResource()) return true;
+        }
 
         if (query.ignorePawns && profile.isPawn) return true;
         if (!query.ignoreBases || !source) return false;
@@ -1342,8 +1388,15 @@ function isJoinedTo(actor: ScriptHost_T, other: ScriptHost_T): boolean {
 
 function encroachmentOverlap(source: ScriptHost_T, sourceProfile: ActorCollisionProfile_T, location: Vector3, actor: ScriptHost_T, profile: ActorCollisionProfile_T, primitive: CollisionPrimitive_T, center: Vector3, usePrimitive: boolean): boolean {
     if (!profile.collideActors || !profile.blockNonZeroExtent || !tmpEncroachmentBounds.intersectsBox(primitive.bounds)) return false;
-    // APawn::ShouldTrace (0x8afaad): CanIngnoreCollision / CanBeIngnoredCollision.
-    if (profile.isPawn && getTraceProperty(source, "CanIngnoreCollision") && getTraceProperty(actor, "CanBeIngnoredCollision")) return false;
+    if (profile.isPawn) {
+        const controller = getTraceProperty(actor, "Controller");
+        if (typeof controller === "string") throw new Error(`Unresolved pawn Controller '${controller}'.`);
+
+        // APawn::ShouldTrace 0x8afa60..0x8afabe; encroachment flags 0x9f exclude bDead controllers.
+        if (controller === source || controller && getTraceProperty(controller, "bDead")) return false;
+        if (getTraceProperty(source, "CanIngnoreCollision") && getTraceProperty(actor, "CanBeIngnoredCollision")) return false;
+        if ((actor as BaseActor).checkLoadingResource()) return false;
+    }
     if (isJoinedTo(actor, source) || isJoinedTo(source, actor)) return false;
     if (getTraceProperty(actor, "bOnlyAffectPawns") && !sourceProfile.isPawn) return false;
 

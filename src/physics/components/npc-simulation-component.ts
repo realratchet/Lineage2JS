@@ -26,7 +26,7 @@ export class NpcSimulationComponent extends PhysicsComponent<BaseActor> {
             return true;
         }
 
-        if (!pawn.isInteractive() || currentTime < this.nextTurn) return false;
+        if (!pawn.isInteractive() || pawn.isInStasis(currentTime) || currentTime < this.nextTurn) return false;
 
         this.nextTurn = currentTime + NpcSimulationComponent.TURN_INTERVAL;
 

@@ -21,6 +21,7 @@ const tmpExtent = new Vector3();
 
 export class MovableObject extends CollidingMesh {
     public readonly isMovableObject: boolean = true;
+    public readonly damageGrade: number;
     public readonly hitActorNormal: Vector3;
 
     protected readonly mover: IMoverDecodeInfo;
@@ -35,6 +36,7 @@ export class MovableObject extends CollidingMesh {
         super(props);
 
         this.mover = props.mover;
+        this.damageGrade = props.mover.damageGrade;
         this.hitActorNormal = new Vector3().fromArray(props.mover.hitActorNormal);
         this.keyPositions = props.mover.keyPositions.map(v => new Vector3().fromArray(v));
         this.keyQuaternions = props.mover.keyQuaternions.map(v => new Quaternion().fromArray(v));

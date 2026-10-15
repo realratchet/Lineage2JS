@@ -206,7 +206,7 @@ export class LitActorMesh extends GameMesh {
             if (!light) continue;
 
             const indices = getAffectedVertices(flags, vertexArrayLen, vertexRangeStart, vertexRangeEnd, flagsOffset);
-            const col = color || light.color;
+            const col = color || light.bakedColor;
 
             for (let k = 0, len = indices.length; k < len; k++) {
                 const vi = indices[k];

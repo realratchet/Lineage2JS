@@ -431,6 +431,15 @@ export class Terrain extends GameMesh implements ICollidable {
             this.geometry.computeVertexNormals();
         }
 
+        this.geometry.computeBoundingBox();
+        this.geometry.boundingSphere = null;
+        this.bounds.copy(this.geometry.boundingBox);
+        if (this.batchGeometry) {
+            this.bounds.translate(this.position);
+            this.batchGeometry.boundingBox = null;
+            this.batchGeometry.boundingSphere = null;
+        }
+
         const arrIndices = this.geometry.index.array;
         const indices = arrIndices instanceof Uint32Array ? arrIndices : new Uint32Array(arrIndices);
 

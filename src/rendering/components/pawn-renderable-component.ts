@@ -33,6 +33,15 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         this.renderManager.unregisterPawnRenderable(this);
     }
 
+    public createSkin(): void {
+        const pawn = this.getParent();
+        if (!this.meshes.length || !pawn.findComponent("script") || pawn.getUnrealScriptProperty("bCreatedResource")) return;
+
+        // APawn::CreateSkin 0x8b56e4..0x8b57aa; decoded meshes precede this render preparation phase.
+        if (pawn.getUnrealScriptProperty("LoadingResourceRef") === 0) pawn.setUnrealScriptProperty("LoadingResourceRef", -1);
+        pawn.setUnrealScriptProperty("bCreatedResource", true);
+    }
+
     protected releaseBatches(): void {
         for (const batch of this.batches) {
             batch.release();

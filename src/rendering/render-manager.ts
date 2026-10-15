@@ -1,5 +1,4 @@
 import "./ue2-conventions";
-import { EPhysics_T } from "../assets/unreal/un-aactor";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
 import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
@@ -67,7 +66,6 @@ const arrLightingObjects: THREE.Object3D[] = [];
 const arrPawnEffects: Object3D[] = [];
 const tmpShadowDirection = new Vector3(0, 0, -1);
 const arrShadowCasters: THREE.Object3D[] = [];
-const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, sized to the pawn collision cylinder
 const tmpViewShakePosition = new Vector3();
 const tmpViewShakeQuaternion = new Quaternion();
 const tmpViewShakeDirection = new Vector3();
@@ -112,6 +110,7 @@ const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
 type PawnLightingState_T = {
     position: Vector3,
     lightingPosition: Vector3,
+    lightingRadius: number,
     sector: SectorObject | null,
     lightingSector: SectorObject | null,
     leafIndex: number | null,
@@ -1202,8 +1201,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public addPickup(pickup: GroundPickup): void {
-        this.pickups.add(pickup);
-        this.scene.add(pickup);
+        for (let part = pickup; part; part = part.getNextPickup()) {
+            this.pickups.add(part);
+            this.scene.add(part);
+        }
     }
 
     public removePickup(pickup: GroundPickup): void {
@@ -1280,16 +1281,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
             if (pawn !== this.player && !pawn.isInteractive()) continue;
+            if (pawn.isInStasis(currentTime)) continue;
 
             if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) {
                 const animation = pawn.findComponent<AnimationComponent>("animation");
                 const lifecycle = pawn.findComponent<NpcLifecycleComponent>("npcLifecycle");
                 const script = pawn.findComponent<ScriptComponent>("script");
-                const physics = pawn.getUnrealScriptProperty("Physics");
 
-                // AActor::Tick (0x8657f0): standalone stasis after five seconds without rendering.
-                // shortcut: culled scripted Tick only; extend before full Actor tick parity.
-                if (script && (!pawn.getUnrealScriptProperty("bStasis") || physics !== EPhysics_T.PHYS_None && physics !== EPhysics_T.PHYS_Rotating || currentTime / 1000 - (pawn.getUnrealScriptProperty("LastRenderTime") as number) <= 5 || (pawn.getUnrealScriptProperty("Level") as any).getUnrealScriptProperty("NetMode") !== 0)) script.onUpdate(currentTime, deltaTime / 1000);
+                if (script) script.onUpdate(currentTime, deltaTime / 1000);
 
                 if (animation) animation.onUpdate(currentTime, deltaTime / 1000);
                 if (lifecycle) lifecycle.onUpdate(currentTime, deltaTime / 1000);
@@ -1322,7 +1321,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 continue;
             }
 
-            pawn.visible = state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere()));
+            pawn.visible = state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            if (pawn.visible) component.createSkin();
         }
 
         this.sectors.forEach(row => row.forEach(sector => {
@@ -1409,6 +1409,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         state = {
             position: new Vector3(NaN, NaN, NaN),
             lightingPosition: new Vector3(NaN, NaN, NaN),
+            lightingRadius: -1,
             sector: null,
             lightingSector: null,
             leafIndex: null,
@@ -1453,9 +1454,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!sector) return;
 
         const zoneInfo = state.zoneIndex === null ? null : sector.bspZones[state.zoneIndex]?.zoneInfo;
+        const sphere = (actor as BaseActor).isActor ? (actor as BaseActor).getRenderSphere() : null;
+        const center = sphere ? sphere.center : state.position;
+        const radius = sphere ? sphere.radius : 24;
         const isSpecialLit = (actor as BaseActor).isActor && !!(actor as BaseActor).getUnrealScriptProperty("bSpecialLit");
         const specialLitChanged = state.lightingSpecialLit !== isSpecialLit;
-        const moved = state.lightingPosition.distanceToSquared(state.position) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
+        const moved = state.lightingPosition.distanceToSquared(center) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
+        const boundsChanged = state.lightingRadius !== radius;
         const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
         const envVersion = this.environment.getEnvVersion();
         const ambientChanged = state.envVersion !== envVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
@@ -1467,8 +1472,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         for (const light of state.lights)
             relevantLightUpdated = relevantLightUpdated || light.needsUpdate;
 
-        if (moved || locationChanged || specialLitChanged) {
-            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected, state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights, isSpecialLit);
+        if (moved || boundsChanged || locationChanged || specialLitChanged) {
+            sector.getRelevantLights(center, radius, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected, state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights, isSpecialLit);
             relevantLightsChanged = state.lights.length !== arrPawnLights.length;
 
             for (let i = 0, len = arrPawnLights.length; i < len; i++) {
@@ -1479,16 +1484,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
             state.lights.length = 0;
             state.lights.push(...arrPawnLights);
 
-            state.lightingPosition.copy(state.position);
+            state.lightingPosition.copy(center);
+            state.lightingRadius = radius;
             state.lightingSector = sector;
             state.lightingLeafIndex = state.leafIndex;
             state.lightingZoneIndex = state.zoneIndex;
             state.lightingSpecialLit = isSpecialLit;
         }
 
-        if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
-
-        const sphere = (actor as BaseActor).isActor ? (actor as BaseActor).getRenderSphere() : null;
+        if (!moved && !boundsChanged && !locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
 
         if (pawnLights) pawnLights.updateLighting(sphere);
 
@@ -2014,11 +2018,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent(), animation = pawn.findComponent<AnimationComponent>("animation");
-            if (animation) animation.setSimulationEnabled(pawn === this.player || pawn.isInteractive());
+            if (animation) animation.setSimulationEnabled((pawn === this.player || pawn.isInteractive()) && !pawn.isInStasis(currentTime));
         }
 
         for (const simulation of this.hairSimulations)
-            if (simulation.getParent().isInteractive()) simulation.restorePose();
+            if (simulation.getParent().isInteractive() && !simulation.getParent().isInStasis(currentTime)) simulation.restorePose();
 
         this.isUpdatingMixer = true;
         try {
@@ -2029,7 +2033,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         for (const simulation of this.hairSimulations)
-            if (simulation.getParent().isInteractive()) simulation.update(deltaTime / 1000);
+            if (simulation.getParent().isInteractive() && !simulation.getParent().isInStasis(currentTime)) simulation.update(deltaTime / 1000);
 
         const timeScale = this.environment.getTimeScale();
 
@@ -2896,6 +2900,7 @@ function collectMaterialTextures(material: THREE.Material, textures: Set<THREE.T
 
     if ((material as any).uniforms) collectTexturesDeep((material as any).uniforms, textures, seen);
     if ((material as any).sprites) collectTexturesDeep((material as any).sprites, textures, seen);
+    if ((material as any).arrLightmaps) collectTexturesDeep((material as any).arrLightmaps, textures, seen);
 }
 
 function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean): SectorWarmup_T {

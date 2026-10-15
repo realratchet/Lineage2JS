@@ -656,7 +656,7 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IMaterialTerrainSegm
 
 function decodeLightmapped(library: DecodeLibrary, info: MaterialContracts.ILightmappedDecodeInfo) {
     return (decodeMaterial(library, library.materials[info["material"]]) as MeshStaticMaterial)
-        .setLightmap(fetchTexture(library, library.materials[info["lightmap"]] as ITextureDecodeInfo));
+        .setLightmap(info.lightmaps.map(uuid => fetchTexture(library, library.materials[uuid] as ITextureDecodeInfo)));
 }
 
 function applyModAmbient(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: MaterialContracts.ILightAmbientMaterialModifier) {

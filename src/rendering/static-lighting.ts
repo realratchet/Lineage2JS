@@ -24,9 +24,9 @@ export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferG
         table[i * 12 + 3] = light.lightRadius;
         light.lightDirection.toArray(table, i * 12 + 4);
         table[i * 12 + 7] = light.cone;
-        table[i * 12 + 8] = light.color.r;
-        table[i * 12 + 9] = light.color.g;
-        table[i * 12 + 10] = light.color.b;
+        table[i * 12 + 8] = light.bakedColor.r;
+        table[i * 12 + 9] = light.bakedColor.g;
+        table[i * 12 + 10] = light.bakedColor.b;
         table[i * 12 + 11] = light.lightEffect;
     }
 

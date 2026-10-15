@@ -1161,10 +1161,12 @@ export class SectorObject extends GameObject {
             });
             let visibleMeshCount = 0;
             let bspAmbientColor: ColorByte | null = null;
+            let bspLightmapColor: ColorByte | null = null;
             if (environment) {
                 bspAmbientColor = environment.getAmbientPlaneBSPLightHalved(tmpColorByte);
                 const sunColor = environment.getBaseColorPlaneBSPSunLightScaled(tmpColorByte2);
                 bspAmbientColor.set(bspAmbientColor.r + sunColor.r, bspAmbientColor.g + sunColor.g, bspAmbientColor.b + sunColor.b, bspAmbientColor.a);
+                bspLightmapColor = environment.getAmbientPlaneBSPLight(tmpColorByte2);
             }
 
             let outdoorCount = 0, indoorCount = 0;
@@ -1192,14 +1194,22 @@ export class SectorObject extends GameObject {
                         const sectionZoneAmbient = isOutdoor ? null : this.getSectionZoneAmbient(sectionIndex);
 
                         const applyAmbient = (m: any) => {
+                            if (m.updateLightmap) m.updateLightmap(isOutdoor && environment ? environment.getTimeOfDay() : 0);
                             if (m?.uniforms?.ambient?.value?.color) {
-                                if (isOutdoor && bspAmbientColor && !hasLightmap(m)) {
+                                if (isOutdoor && bspLightmapColor && hasLightmap(m) && !sectionInfo.isUnlit) {
+                                    bspLightmapColor.toFloats(m.uniforms.ambient.value.color);
+                                    if (m.defines.USE_BSP_AMBIENT === undefined) {
+                                        m.defines.USE_BSP_AMBIENT = "";
+                                        m.defines.USE_AMBIENT = "";
+                                        m.needsUpdate = true;
+                                    }
+                                } else if (isOutdoor && bspAmbientColor && !hasLightmap(m)) {
                                     bspAmbientColor.toFloats(m.uniforms.ambient.value.color);
                                     if (m.defines && m.defines.USE_AMBIENT === undefined) {
                                         m.defines.USE_AMBIENT = "";
                                         m.needsUpdate = true;
                                     }
-                                } else if (sectionZoneAmbient) {
+                                } else if (sectionZoneAmbient && !hasLightmap(m)) {
                                     sectionZoneAmbient.toFloats(m.uniforms.ambient.value.color);
                                     if (m.defines && m.defines.USE_AMBIENT === undefined) {
                                         m.defines.USE_AMBIENT = "";

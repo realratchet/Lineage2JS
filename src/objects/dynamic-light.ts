@@ -168,6 +168,7 @@ export class DynamicLight extends Object3D {
 
     public alpha: number = 1;
     public color: ColorByte = new ColorByte(255, 255, 255);
+    public readonly bakedColor = new Color(0, 0, 0);
     protected readonly hardwareColor = new Color(0, 0, 0);
     public lightDirection: Vector3 = new Vector3(0, 0, 0);
     public lightPosition: Vector3 = new Vector3(0, 0, 0);
@@ -302,6 +303,9 @@ export class DynamicLight extends Object3D {
         if (brightness !== 255) this.color.multiplyByte(brightness);
 
         this.color.multiplyScalar(Math.min(1, Math.max(0, intensity * levelBrightness)));
+
+        if (this.isSunlightColor) this.bakedColor.setRGB(this.color.r, this.color.g, this.color.b);
+        else this.colorHSV.toColorPlane(this.bakedColor).multiplyScalar(brightness * intensity * levelBrightness);
 
 
         if (this.lightEffect === LE_SUNLIGHT) {

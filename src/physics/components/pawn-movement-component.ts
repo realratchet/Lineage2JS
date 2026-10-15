@@ -12,7 +12,6 @@ import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
-import type NpcLifecycleComponent from "../../objects/components/npc-lifecycle-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
@@ -221,32 +220,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             return;
         }
 
-        const parent = this.getParent();
-        if (this.hasStartedPhysics && !(parent as any).isPlayer && !parent.findComponent("npcSimulation") && !parent.visible && !this.isDying() && !parent.findComponent<NpcLifecycleComponent>("npcLifecycle")?.hasDeathActions()) {
-            if (this.actorState.locomotion) {
-                const desired = this.actorState.desired, position = this.getPosition();
-
-                if (desired.actor) desired.actor.getWorldPosition(desired.position);
-
-                const distance = position.distanceTo(desired.position) - desired.offset;
-                const speed = this.physicsMode === "swimming" ? this.waterSpeed : this.physicsMode === "flying" ? this.airSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;
-                const step = speed * deltaTime;
-
-                if (distance <= step) {
-                    position.lerp(desired.position, distance > 0 ? distance / (distance + desired.offset) : 0);
-                    this.velocity.set(0, 0, 0);
-                    this.actorState.locomotion = false;
-                } else {
-                    this.velocity.subVectors(desired.position, position).normalize().multiplyScalar(speed);
-                    position.lerp(desired.position, step / (distance + desired.offset));
-                }
-            }
-
-            this.checkAnimationState(deltaTime);
-            this.renderManager.getPhysicsManager().updatePawnCollision(parent);
-            return;
-        }
-
         const isInteractive = this.isInteractive();
 
         this.collisionProfile.collideActors = isInteractive;
@@ -337,17 +310,22 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (this.adjustToFloor) {
             this.adjustToFloor = false;
 
-            // UGameEngine::AdjustPawnLocation 0x7426ac: expand the floor trace by 30, up to 30 attempts.
-            for (let i = 0; i < 30; i++) {
+            // UGameEngine::AdjustPawnLocation 0x7426ac..0x7427c7.
+            let hit: CheckResult_T = null;
+            let i = 0;
+            for (; i < 30; i++) {
                 const start = tmpFloorPosition.copy(position).addScaledVector(tmpUp, 20 + i * 30);
                 const delta = tmpMovement.set(0, 0, -50 - this.collisionHeight - i * 60);
-                const hit = this.findFloor(start, delta, true); // trace flags 0x86 at 0x7426fe: movers and level geometry, no TRACE_Pawns
+                hit = this.castShape(start, delta, true);
 
-                if (!hit) continue;
-
-                position.z = start.z + delta.z * hit.time + FLOOR_DISTANCE;
-                break;
+                if (hit && hit.location.z !== 0) break;
             }
+
+            if (i === 30) tmpFloorPosition.copy(position);
+            else tmpFloorPosition.copy(hit.location);
+            if (hit && hit.time * 12 < 1.9) tmpFloorPosition.z += FLOOR_DISTANCE - hit.time * 12;
+            this.physicsManager.farMoveActor(this.getParent(), tmpFloorPosition);
+            position.copy(this.getPosition());
         }
 
         const waterVolume = this.getWaterVolume(position);

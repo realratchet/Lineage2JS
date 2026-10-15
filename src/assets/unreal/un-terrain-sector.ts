@@ -316,8 +316,8 @@ export abstract class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: this.boundingBox.min.sub(center).getElements() as Vector3Arr,
-                    max: this.boundingBox.max.sub(center).getElements() as Vector3Arr
+                    min: trueBoundingBox.min.sub(center).getElements() as Vector3Arr,
+                    max: trueBoundingBox.max.sub(center).getElements() as Vector3Arr
                 } : null
             }
         };

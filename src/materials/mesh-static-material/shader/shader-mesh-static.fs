@@ -703,7 +703,7 @@ void main() {
         #endif
     #endif
 
-    #ifdef USE_AMBIENT
+    #if defined(USE_AMBIENT) && !defined(USE_BSP_AMBIENT)
         reflectedLight.indirectDiffuse += ambient.brightness * ambient.color * 2.0;
     #endif
 
@@ -765,6 +765,10 @@ void main() {
     #endif
 
     vec3 outgoingLight = reflectedLight.indirectDiffuse + reflectedLight.directDiffuse;
+
+    #ifdef USE_BSP_AMBIENT
+        outgoingLight = clamp(outgoingLight, 0.0, 1.0) * ambient.color * 2.0;
+    #endif
 
     #if defined(USE_SPECULAR) && !defined(USE_SELF_ILLUMINATION)
         #ifdef USE_MODULATE_SPECULAR_2X

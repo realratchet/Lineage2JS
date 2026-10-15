@@ -379,7 +379,7 @@ export abstract class UModel extends UPrimitive {
             bspRootOutside: this.isRootOutside, bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
         });
 
-        this.multiLightmaps.map((lm: FMultiLightmapTexture) => builder.pullStaticLightmap(lm.textures[0].staticLightmap));
+        this.multiLightmaps.forEach((lm: FMultiLightmapTexture) => lm.textures.forEach(texture => builder.pullStaticLightmap(texture.staticLightmap)));
 
         result.leafActors.length = result.bspLeaves.length;
         result.nodeToSection.length = this.bspNodes.length;
@@ -604,6 +604,7 @@ export abstract class UModel extends UPrimitive {
                     materialType: "lightmapped",
                     material: material,
                     lightmap: lightmap,
+                    lightmaps: this.multiLightmaps[sectionData.lightmapTextureIndex].textures.map(texture => texture.staticLightmap.uuid),
                 } as IBaseMaterialDecodeInfo]);
             } else {
                 finalMaterialUuid = material;
