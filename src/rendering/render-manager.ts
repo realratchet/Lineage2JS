@@ -83,6 +83,7 @@ const arrBSPIntersections: THREE.Intersection[] = [];
 // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
 const CLIPPING_RANGE_SCALE = 2048;
 const tmpColorByte = new ColorByte();
+const tmpHardwareSun = { color: new Color(), attenuation: new Vector2(), cone: 0 };
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte();
 const tmpColorByte_4 = new ColorByte();
@@ -1625,6 +1626,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
         const activeSector = this.updateViewVisibility(bspCullingCamera, this.frustum);
+        const sunLight = activeSector?.getSunLight();
+
+        if (sunLight && activeSector.brightness > 0) {
+            sunLight.getHardwareLight(this.camera.position, 0, tmpHardwareSun);
+            (GLOBAL_UNIFORMS.staticMeshHardwareSunColor.value as Vector3).set(tmpHardwareSun.color.r, tmpHardwareSun.color.g, tmpHardwareSun.color.b).divideScalar(activeSector.brightness); // per-level Brightness comes back from the hardwareSun attribute
+            (GLOBAL_UNIFORMS.staticMeshHardwareSunDirection.value as Vector3).copy(sunLight.lightDirection);
+        }
+
         this.updatePawnLighting(true, currentTime);
 
         for (const emitter of this.getPhysicsManager().getParticleEmitters()) {

@@ -449,6 +449,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public setLit() {
         this.defines["USE_LIT_ATTRIBUTES"] = "";
+        (this.defaultAttributeValues as any).hardwareSun = [0];
 
         this.needsUpdate = true;
 

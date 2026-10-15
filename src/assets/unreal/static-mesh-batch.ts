@@ -25,6 +25,8 @@ export type BatchLightEntry_T = {
     flagsOffset?: number;
 };
 
+export type BatchHardwareLighting_T = { sphere: [number, number, number, number], permeatingLights: string[], isSpecialLit: boolean };
+
 export type StaticMeshBatchInfo_T = {
     uuid: string;
     name: string;
@@ -36,7 +38,7 @@ export type StaticMeshBatchInfo_T = {
     actorColliders: { actor: IStaticMeshActorDecodeInfo; indexCount: number }[];
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
     staticLighting?: { offsets: Uint32Array, indices: Uint16Array | Uint32Array, lights: string[], glow: Float32Array };
-    perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[];
+    perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean, hardware: BatchHardwareLighting_T | null }[];
     batchElements: BatchElement_T[];
 };
 

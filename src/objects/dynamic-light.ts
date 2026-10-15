@@ -215,6 +215,16 @@ export class DynamicLight extends Object3D {
         if (!Number.isFinite(target.attenuation.x) || !Number.isFinite(target.attenuation.y)) throw new Error(`Invalid hardware light attenuation for '${this.name}'.`);
     }
 
+    public sampleHardwareIntensity(hardware: HardwareLight_T, samplePosition: Vector3, sampleNormal: Vector3): number { // CPU twin of actorLightIntensity's isHardwareLight branch (actor_light.glsl)
+        const delta = tmpVec3_1.subVectors(this.lightPosition, samplePosition);
+        const distance = delta.length();
+
+        if (distance >= this.lightRadius || distance === 0) return 0;
+        if (hardware.cone >= 0 && -delta.dot(this.lightDirection) <= hardware.cone * distance) return 0;
+
+        return 2 * Math.max(delta.dot(sampleNormal) / distance, 0) / (hardware.attenuation.x + hardware.attenuation.y * distance);
+    }
+
     public update(envManager: L2Environment, levelBrightness: number) {
         const timeSeconds = performance.now() / 1000;
 

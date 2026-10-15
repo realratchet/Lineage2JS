@@ -27,6 +27,7 @@ const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
 const arrLightSortKeys = new Float64Array(8);
 const arrLightNodes: number[] = [];
+const arrLightCandidates: number[] = [];
 const tmpLightCenter = new Vector3();
 const tmpLightExtent = new Vector3();
 const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
@@ -37,6 +38,29 @@ const MAX_RECURSION_DEPTH = 4;
 
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
 type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number; transparent: number };
+
+function considerLight(light: DynamicLight, position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, isSpecialLit: boolean) {
+    if (light.isSpecialLit !== isSpecialLit) return;
+    if (light.isSunlight && !allowSunlight) return;
+
+    const key = light.getSortKey(position, radius);
+
+    if (key <= 0) return;
+    if (target.length === maxLights && key <= arrLightSortKeys[maxLights - 1]) return;
+
+    let index = Math.min(target.length, maxLights - 1);
+
+    while (index > 0 && arrLightSortKeys[index - 1] < key) {
+        target[index] = target[index - 1];
+        arrLightSortKeys[index] = arrLightSortKeys[index - 1];
+        index--;
+    }
+
+    target[index] = light;
+    arrLightSortKeys[index] = key;
+
+    if (target.length > maxLights) target.length = maxLights;
+}
 
 function getTransparentLookup(object: any, transparentMaterials: Set<number>): Uint8Array {
     let lookup = object.transparentLookup as Uint8Array;
@@ -237,6 +261,8 @@ export class SectorObject extends GameObject {
     public visibleLeaves: Set<number> = new Set();
     public readonly lights: Record<string, DynamicLight> = {};
     public readonly lightList: DynamicLight[] = [];
+    protected readonly cacheLightIndicesByName = new Map<string, number[]>();
+    protected readonly arrSunAndDynamicLightIndices: number[] = [];
     public readonly retainedResources = new Set<{ dispose(): void }>();
 
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
@@ -349,8 +375,14 @@ export class SectorObject extends GameObject {
 
     public setLights(lights: DynamicLight[]): this {
         for (const light of lights) {
+            const index = this.lightList.length;
+
             this.lights[light.name] = light;
             this.lightList.push(light);
+
+            if (light.isSunlight || light.isDynamic) this.arrSunAndDynamicLightIndices.push(index);
+            if (this.cacheLightIndicesByName.has(light.name)) this.cacheLightIndicesByName.get(light.name)!.push(index);
+            else this.cacheLightIndicesByName.set(light.name, [index]);
         }
 
         return this;
@@ -399,33 +431,35 @@ export class SectorObject extends GameObject {
         return target;
     }
 
+    public getSunLight(): DynamicLight | null {
+        for (const index of this.arrSunAndDynamicLightIndices)
+            if (this.lightList[index].lightMethod === "Sunlight") return this.lightList[index];
+
+        return null;
+    }
+
     // GetRelevantLights, UnRenderVisibility.cpp line 439: Consider only contains zone-relevant lights.
     public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, permeatingLights: string[] = null, isSpecialLit: boolean = false): DynamicLight[] {
         target.length = 0;
 
-        for (const light of this.lightList) {
-            if (light.isSpecialLit !== isSpecialLit) continue;
-            if (light.isSunlight && !allowSunlight) continue;
-            if (permeatingLights && !light.isSunlight && !light.isDynamic && !permeatingLights.includes(light.name)) continue;
+        if (!permeatingLights) {
+            for (const light of this.lightList) considerLight(light, position, radius, target, maxLights, allowSunlight, isSpecialLit);
 
-            const key = light.getSortKey(position, radius);
-
-            if (key <= 0) continue;
-            if (target.length === maxLights && key <= arrLightSortKeys[maxLights - 1]) continue;
-
-            let index = Math.min(target.length, maxLights - 1);
-
-            while (index > 0 && arrLightSortKeys[index - 1] < key) {
-                target[index] = target[index - 1];
-                arrLightSortKeys[index] = arrLightSortKeys[index - 1];
-                index--;
-            }
-
-            target[index] = light;
-            arrLightSortKeys[index] = key;
-
-            if (target.length > maxLights) target.length = maxLights;
+            return target;
         }
+
+        arrLightCandidates.length = 0; // Consider = leaf permeating lights only, never the zone list (sub_919BA0 0x919de0..0x919fe4)
+        for (const index of this.arrSunAndDynamicLightIndices) arrLightCandidates.push(index);
+        for (const name of permeatingLights) {
+            const indices = this.cacheLightIndicesByName.get(name);
+
+            if (indices) for (const index of indices) arrLightCandidates.push(index);
+        }
+
+        arrLightCandidates.sort((a, b) => a - b);
+
+        for (let i = 0, len = arrLightCandidates.length; i < len; i++)
+            if (i === 0 || arrLightCandidates[i] !== arrLightCandidates[i - 1]) considerLight(this.lightList[arrLightCandidates[i]], position, radius, target, maxLights, allowSunlight, isSpecialLit);
 
         return target;
     }

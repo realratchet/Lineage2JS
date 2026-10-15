@@ -60,7 +60,7 @@ function createBatchObject(
         collision: actors[0].collision,
         scaledGlow: actors[0].scaledGlow,
         isSunAffected: actors.some(a => a.isSunAffected ?? true),
-        ambient: actors[0].ambient
+        ambient: actors[0].ambient && { glow: actors[0].ambient.glow, vector: actors[0].ambient.vector, isUnlit: actors[0].ambient.isUnlit } // hardware-lit elements are baked per element (LitActorMesh.computeHardwareLighting)
     });
 
     mergedObject.material = canonicalizeStaticMeshMaterials(mergedObject.material);

@@ -1,12 +1,13 @@
 
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
-import { Box3, BufferAttribute, Matrix4, Vector3, WebGLRenderer } from "three";
+import { Box3, BufferAttribute, Color, Matrix4, Vector2, Vector3, WebGLRenderer } from "three";
 import { computeStaticLighting } from "../rendering/static-lighting";
 import type { L2Environment } from "../rendering/l2-env";
 import { ColorByte } from "../utils/color-byte";
 import MeshStaticMaterial, { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
 import { GameMesh } from "../game/components";
+import type { BatchHardwareLighting_T } from "../assets/unreal/static-mesh-batch";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -15,6 +16,8 @@ const tmpHardwareCenter = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpEnvColor = new ColorByte();
 const arrHardwareLights: DynamicLight[] = [];
+const arrBakedLights: DynamicLight[] = [];
+const arrBakedHardwareLights = Array.from({ length: NUM_ACTOR_LIGHTS }, () => ({ color: new Color(), attenuation: new Vector2(), cone: 0 }));
 const arrPermeatingLights: string[] = [];
 const tmpHardwareBox = new Box3();
 
@@ -139,6 +142,8 @@ export class LitActorMesh extends GameMesh {
         for (const actor of perActorAmbient)
             if (actor.isSunAffected)
                 arrSunAffected.fill(255, actor.startVertex, actor.startVertex + actor.count);
+
+        if (perActorAmbient.some(actor => actor.hardware)) this.geometry.setAttribute("hardwareSun", new BufferAttribute(new Float32Array(arrSunAffected.length), 1));
     }
 
     protected perVertexGlow?: Float32Array;
@@ -229,27 +234,34 @@ export class LitActorMesh extends GameMesh {
 
     protected computeHardwareLighting(sector: SectorObject, target: Uint8ClampedArray) {
         const attrPositions = this.geometry.getAttribute("position");
-        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, scaledGlow: number, isSunAffected: boolean, ambient: typeof this.ambient }[] | undefined;
+        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: typeof this.ambient, hardware: BatchHardwareLighting_T | null }[] | undefined;
 
         if (perActorAmbient) {
-            for (let ei = 0; ei < perActorAmbient.length; ei++) {
-                const actor = perActorAmbient[ei];
-                if (!actor.ambient?.hardwareLighting) continue;
+            const attrHardwareSun = this.geometry.getAttribute("hardwareSun");
 
-                const elem = this.batchElements![ei];
-                const min = elem.boundsMin, max = elem.boundsMax;
-                const dx = max[0] - min[0], dy = max[1] - min[1], dz = max[2] - min[2];
+            if (!attrHardwareSun) return;
 
-                tmpHardwareCenter.set((min[0] + max[0]) * 0.5, (min[1] + max[1]) * 0.5, (min[2] + max[2]) * 0.5);
-                this.computeHardwareLightingRange(sector, target, actor.startVertex, actor.count, actor.scaledGlow, actor.isSunAffected, Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.5);
+            const arrHardwareSun = attrHardwareSun.array as Float32Array;
+
+            for (const actor of perActorAmbient) {
+                if (!actor.hardware || actor.ambient.isUnlit) continue;
+
+                const [x, y, z, radius] = actor.hardware.sphere;
+
+                tmpHardwareCenter.set(x, y, z);
+                const isSunLit = this.computeHardwareLightingRange(sector, target, actor.startVertex, actor.count, radius, actor.isSunAffected, actor.hardware.isSpecialLit, actor.hardware.permeatingLights);
+
+                arrHardwareSun.fill(isSunLit ? sector.brightness : 0, actor.startVertex, actor.startVertex + actor.count); // the sun's hardwareColor carries its own level's Brightness
             }
+
+            attrHardwareSun.needsUpdate = true;
         } else if (this.ambient?.hardwareLighting) {
             if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
 
             tmpHardwareCenter.copy(this.geometry.boundingSphere!.center).applyMatrix4(this.matrixWorld);
             const radius = this.geometry.boundingSphere!.radius * this.matrixWorld.getMaxScaleOnAxis();
 
-            this.computeHardwareLightingRange(sector, target, 0, attrPositions.count, this.scaledGlow, this.isSunAffected, radius);
+            this.computeHardwareLightingRange(sector, target, 0, attrPositions.count, radius, this.isSunAffected, this.isSpecialLit, this.getPermeatingLights(sector));
         }
     }
 
@@ -261,30 +273,51 @@ export class LitActorMesh extends GameMesh {
         return sector.getPermeatingLights(tmpHardwareBox, arrPermeatingLights, this.forcedRegionTag, this.forcedRegion);
     }
 
-    protected computeHardwareLightingRange(sector: SectorObject, target: Uint8ClampedArray, startVertex: number, count: number, scaledGlow: number, isSunAffected: boolean, radius: number) {
-        sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, isSunAffected, this.getPermeatingLights(sector), this.isSpecialLit);
+    protected computeHardwareLightingRange(sector: SectorObject, target: Uint8ClampedArray, startVertex: number, count: number, radius: number, isSunAffected: boolean, isSpecialLit: boolean, permeatingLights: string[]): boolean { // the sun stays per vertex in the shader (hardwareSun)
+        sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, isSunAffected, permeatingLights, isSpecialLit);
+
+        let isSunLit = false;
+
+        arrBakedLights.length = 0;
+
+        for (const light of arrHardwareLights) {
+            if (light.isSunlight && light.lightMethod === "Sunlight") {
+                isSunLit = true;
+                continue;
+            }
+
+            if (light.isDynamic || light.isTimeBased || light.isSunlight) throw new Error(`Light '${light.name}' cannot be baked into '${this.name}'.`);
+
+            light.getHardwareLight(tmpHardwareCenter, radius, arrBakedHardwareLights[arrBakedLights.length]);
+            arrBakedLights.push(light);
+        }
+
+        if (arrBakedLights.length === 0) return isSunLit;
 
         const attrPositions = this.geometry.getAttribute("position");
         const attrNormals = this.geometry.getAttribute("normal");
 
-        for (const light of arrHardwareLights) {
-            if (light.isDynamic || light.isTimeBased) continue;
+        for (let vi = startVertex, end = startVertex + count; vi < end; vi++) {
+            tmpVertex.fromBufferAttribute(attrPositions, vi).applyMatrix4(this.matrixWorld);
+            tmpNormal.fromBufferAttribute(attrNormals, vi).transformDirection(this.matrixWorld);
 
-            const col = light.color;
+            let r = 0, g = 0, b = 0;
 
-            for (let vi = startVertex, end = startVertex + count; vi < end; vi++) {
-                tmpVertex.fromBufferAttribute(attrPositions, vi).applyMatrix4(this.matrixWorld);
-                tmpNormal.fromBufferAttribute(attrNormals, vi).transformDirection(this.matrixWorld);
+            for (let i = 0; i < arrBakedLights.length; i++) {
+                const hardware = arrBakedHardwareLights[i];
+                const intensity = arrBakedLights[i].sampleHardwareIntensity(hardware, tmpVertex, tmpNormal) * 0.5;
 
-                const intensity = scaledGlow * 0.5 * this.sampleIntensity(light, tmpVertex, tmpNormal);
-
-                if (intensity > 0) {
-                    target[vi * 3] += Math.floor(col.r * intensity);
-                    target[vi * 3 + 1] += Math.floor(col.g * intensity);
-                    target[vi * 3 + 2] += Math.floor(col.b * intensity);
-                }
+                r += hardware.color.r * intensity;
+                g += hardware.color.g * intensity;
+                b += hardware.color.b * intensity;
             }
+
+            target[vi * 3] += Math.round(r * 255);
+            target[vi * 3 + 1] += Math.round(g * 255);
+            target[vi * 3 + 2] += Math.round(b * 255);
         }
+
+        return isSunLit;
     }
 
     protected lastEnvVersion: number = -1;

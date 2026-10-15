@@ -10,6 +10,7 @@ import type { UTexture } from "../un-texture";
 import type { UStaticMeshInstance, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "./un-static-mesh-instance";
 import type { USound } from "../un-sound";
 import type { FLeaf } from "../un-leaf";
+import { LightEffect_T, LightType_T, type ULight } from "../un-light";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { IBaseObjectDecodeInfo } from "../decode-library";
 import type { Vector3Arr } from "../library-types";
@@ -65,6 +66,22 @@ export abstract class FAccessory extends UObject {
 
 function getSwayPhase(uuid: string): number {
     return cyrb53(uuid) / Number.MAX_SAFE_INTEGER * Math.PI * 2;
+}
+
+function isAnimatedHardwareLight(light: ULight): boolean {
+    if (light.effect === LightEffect_T.LE_Sunlight) return !(light as any).isMovableSunLight;
+    if (light.isDynamic || light.isSunlightColor) return true;
+
+    switch (light.type) {
+        case LightType_T.LT_Pulse:
+        case LightType_T.LT_Blink:
+        case LightType_T.LT_Flicker:
+        case LightType_T.LT_Strobe:
+        case LightType_T.LT_SubtlePulse:
+        case LightType_T.LT_TexturePaletteLoop:
+            return true;
+        default: return false;
+    }
 }
 
 export abstract class UStaticMeshActor extends UAActor {
@@ -286,6 +303,9 @@ export abstract class UStaticMeshActor extends UAActor {
             ? { rotator: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll], rate: [this.rotationRate.pitch, this.rotationRate.yaw, this.rotationRate.roll] } as IRotatingDecodeInfo
             : undefined;
 
+        const permeatingLeaves = this.physics === EPhysics_T.PHYS_None && (ambient?.hardwareLighting || this.isAgitDefaultStaticMesh) ? baseModel.boxLeafIndices(predictedBox, this.forcedRegionTag, this.forcedRegion) : null;
+        const isLiveHardwareLit = !!ambient?.hardwareLighting && (!permeatingLeaves || permeatingLeaves.some(index => baseModel.getLeafPermeatingLights(index).some(isAnimatedHardwareLight)));
+
         const actorInfo = {
             uuid: this.uuid,
             type: "StaticMeshActor",
@@ -296,10 +316,10 @@ export abstract class UStaticMeshActor extends UAActor {
             forcedRegion: this.forcedRegion,
             isSunAffected: this.isUnlit ? false : this.isSunAffected,
             isSpecialLit: this.isSpecialLit,
-            permeatingLights: this.physics === EPhysics_T.PHYS_None && (ambient?.hardwareLighting || this.isAgitDefaultStaticMesh) ? Array.from(new Set(baseModel.boxLeafIndices(predictedBox, this.forcedRegionTag, this.forcedRegion).flatMap(index => library.bspLeaves[index].permeatingLights))) : undefined,
+            permeatingLights: permeatingLeaves ? Array.from(new Set(permeatingLeaves.flatMap(index => library.bspLeaves[index].permeatingLights))) : undefined,
             ambient,
             rotating,
-            dontBatch: !!this.dontBatch || !!rotating || !!ambient?.hardwareLighting || !!this.isAgitDefaultStaticMesh,
+            dontBatch: !!this.dontBatch || !!rotating || isLiveHardwareLit || !!this.isAgitDefaultStaticMesh,
             agit: this.isAgitDefaultStaticMesh ? { id: this.agitID, index: this.accessoryIndex, accessories: Array.from(this.accessoryTypeList || [], accessory => ({ depth: accessory.Depth, mesh: builder.pullStaticMesh(accessory.Mesh, null) })) } : undefined,
             isRangeIgnored: !!this.isRangeIgnored,
             scale: this.scale?.multiplyScalar(this.drawScale).getElements() || [1, 1, 1],

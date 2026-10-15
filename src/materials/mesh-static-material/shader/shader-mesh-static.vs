@@ -350,7 +350,10 @@
 #ifdef USE_LIT_ATTRIBUTES
     attribute vec3 lighting;
     attribute float sunAffected;
+    attribute float hardwareSun;
     uniform vec3 staticMeshSunAmbient;
+    uniform vec3 staticMeshHardwareSunColor;
+    uniform vec3 staticMeshHardwareSunDirection;
 #endif
 
 #ifdef USE_ACTOR_LIGHTS
@@ -467,7 +470,11 @@ void main() {
     #endif
     
     #ifdef USE_LIT_ATTRIBUTES
-        vLitColor = clamp(lighting + staticMeshSunAmbient * sunAffected, 0.0, 1.0);
+        vec3 hardwareSunLight = vec3(0.0);
+
+        if (hardwareSun > 0.0) hardwareSunLight = staticMeshHardwareSunColor * hardwareSun * max(-dot(staticMeshHardwareSunDirection, normalize(mat3(modelMatrix) * normal)), 0.0); // sun SetLight term of baked hardware-lit actors, LE_Sunlight 0x903da8
+
+        vLitColor = clamp(lighting + staticMeshSunAmbient * sunAffected + hardwareSunLight, 0.0, 1.0);
     #endif
 
     #ifdef USE_UV

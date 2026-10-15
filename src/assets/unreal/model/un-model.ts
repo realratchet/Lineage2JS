@@ -16,6 +16,7 @@ import FBox, { type IBoxDecodeInfo } from "../un-box";
 import { DoubleSide, type Side } from "three";
 import type { ULevelInfo } from "../un-level-info";
 import type { UAActor } from "../un-aactor";
+import type { ULight } from "../un-light";
 import type { FPlane } from "../un-plane";
 import type { FMatrix } from "../un-matrix";
 import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "../decode-library";
@@ -303,6 +304,16 @@ export abstract class UModel extends UPrimitive {
 
     public boxLeaves(box: FBox, forcedRegionTag: string = "None", forcedRegion: number = 0): FLeaf[] {
         return this.boxLeafIndices(box, forcedRegionTag, forcedRegion).map(i => this.leaves[i]);
+    }
+
+    public getLeafPermeatingLights(leafIndex: number): ULight[] {
+        const leaf = this.leaves[leafIndex], lights: ULight[] = [];
+
+        if (leaf.iPermeating >= 0)
+            for (let i = leaf.iPermeating; this.lights[i]; i++)
+                lights.push((this.lights[i] as ULight).loadSelf());
+
+        return lights;
     }
 
     public boxLeafIndices(box: FBox, forcedRegionTag: string = "None", forcedRegion: number = 0): number[] {
