@@ -252,7 +252,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected dice: GamePackets.Dice_T = null;
     protected monRace: GamePackets.MonRaceInfo_T = null;
     protected readonly ssqStatus = new Map<number, GamePackets.SSQStatus_T>();
-    protected clanHallDecoration: GamePackets.ClanHallDecoration_T = null;
+    protected readonly clanHallDecoration = new Map<number, GamePackets.ClanHallDecoration_T>();
     protected siegeInfo: GamePackets.SiegeInfo_T = null;
     protected siegeAttackers: GamePackets.SiegeClanList_T = null;
     protected siegeDefenders: GamePackets.SiegeClanList_T = null;
@@ -878,7 +878,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.dice = null;
         this.monRace = null;
         this.ssqStatus.clear();
-        this.clanHallDecoration = null;
+        this.clanHallDecoration.clear();
         this.siegeInfo = null;
         this.siegeAttackers = null;
         this.siegeDefenders = null;
@@ -1137,7 +1137,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.Dice: this.dice = GamePackets.readDice(packet); break;
             case GamePackets.GameServerPacket_T.MonRaceInfo: this.monRace = GamePackets.readMonRaceInfo(packet); break;
             case GamePackets.GameServerPacket_T.SSQStatus: this.onSSQStatus(packet); break;
-            case GamePackets.GameServerPacket_T.ClanHallDecoration: this.clanHallDecoration = GamePackets.readClanHallDecoration(packet); break;
+            case GamePackets.GameServerPacket_T.ClanHallDecoration: {
+                const info = GamePackets.readClanHallDecoration(packet);
+                this.clanHallDecoration.set(info.clanHallId, info);
+                this.manGame.getComponent("render").updateClanHallDecorations();
+                break;
+            }
             case GamePackets.GameServerPacket_T.SiegeInfo: this.siegeInfo = GamePackets.readSiegeInfo(packet); break;
             case GamePackets.GameServerPacket_T.SiegeAttackerList: this.siegeAttackers = GamePackets.readSiegeClanList(packet, false); break;
             case GamePackets.GameServerPacket_T.SiegeDefenderList: this.siegeDefenders = GamePackets.readSiegeClanList(packet, true); break;
@@ -2463,7 +2468,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public requestItemList() { if (this.inWorld) this.game.requestItemList(); }
     public useItem(objectId: number) { if (this.inWorld) this.game.useItem(objectId, this.ui.getInputModifiers()[0]); }
-    public chooseInventoryItem(objectId: number) { if (this.inWorld && this.inventory.has(objectId)) this.game.requestEnchantItem(objectId); }
+    public chooseInventoryItem(objectId: number) { if (this.inWorld && (objectId === -1 || this.inventory.has(objectId))) this.game.requestEnchantItem(objectId); }
 
     protected onUserInfo(packet: PacketReader) {
         const info = GamePackets.readUserInfo(packet);
@@ -2523,7 +2528,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.pvpFlag = info.pvpFlag;
         object.recommendations = info.recommendations;
         object.nameColor = info.nameColor;
-        object.isDead = info.isAlikeDead;
         object.isInCombat = info.isInCombat;
         object.speeds = info;
         object.cubics = info.cubics;
@@ -2868,7 +2872,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.npcSpawnCount++;
 
         try {
-            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, info.spawnType === 2, false);
+            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, info.spawnType === 2, false, [info.collisionRadius, info.collisionHeight]);
         } catch (e) {
             object.resolveActor(null);
             this.npcSpawnCount--;
@@ -3248,18 +3252,18 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const receivedTime = performance.now();
         const caster = this.objects.get(packet.d());
         const targetObjectId = packet.d(), target = this.objects.get(targetObjectId);
-        const id = packet.d(), level = packet.d(), hitTime = packet.d();
+        const id = packet.d(), level = packet.d(), hitTime = Math.max(0, packet.d());
 
         const reuseDelay = packet.d();
         const position = this.readLocation(packet);
 
         packet.d();
 
-        if (caster && caster.objectId === this.userId && hitTime >= 0) this.ui.setSkillCoolTime(id, level, Math.trunc(reuseDelay / 1000), Math.trunc(reuseDelay / 1000)); // OnReceiveMagicSkillUse 0x7505a2 / 0x750690.
+        if (caster && caster.objectId === this.userId) this.ui.setSkillCoolTime(id, level, Math.trunc(reuseDelay / 1000), Math.trunc(reuseDelay / 1000)); // OnReceiveMagicSkillUse 0x7505a2 / 0x750690.
 
         const isTransient = CUBIC_SKILLS.has(id) || this.ui.getStrings().skillCastStyles[`${id}:${level}`] === 0;
 
-        if (!caster || hitTime < 0) return;
+        if (!caster) return;
 
         if (caster.actor === this.manGame.getComponent("render").player && !caster.isDead && (target ? target.actor : this.doors.has(targetObjectId)) && this.ui.getStrings().skillInfos[`${id}:${level}`])
             this.notifyMacroSkill(id, hitTime);
@@ -4579,6 +4583,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const status = GamePackets.readSSQStatus(packet);
 
         this.ssqStatus.set(status.page, status);
+        this.ui.showSSQStatus(status);
     }
 
     protected onGameGuardQuery(packet: PacketReader) {
@@ -4601,7 +4606,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getDice() { return this.dice; }
     public getMonRace() { return this.monRace; }
     public getSSQStatus(page: number) { return this.ssqStatus.get(page) || null; }
-    public getClanHallDecoration() { return this.clanHallDecoration; }
+    public getClanHallDecoration(clanHallId: number) { return this.clanHallDecoration.get(clanHallId) || null; }
     public getSiegeInfo() { return this.siegeInfo; }
     public getSiegeAttackers() { return this.siegeAttackers; }
     public getSiegeDefenders() { return this.siegeDefenders; }

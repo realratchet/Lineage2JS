@@ -120,6 +120,13 @@ export class InputManager implements IEngineComponent<GameManager> {
         window.addEventListener("mouseout", event => { if (!event.relatedTarget) this.isMouseInViewport = false; });
         viewport.addEventListener("mouseup", this.mouseUpHandler);
         window.addEventListener("keydown", this.keyDownHandler);
+        window.addEventListener("keydown", event => {
+            if (event.code !== "Backquote" || !event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            this.manGame.getComponent("ui").toggleDebugView();
+        }, true);
         window.addEventListener("keyup", this.keyUpHandler);
 
         return this;
@@ -144,6 +151,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         renderManager.player.getCameraTargetPosition(this.controls.orbit.target);
         renderManager.camera.position.set(-Math.cos(yaw) * FOLLOW_CAMERA_DISTANCE, -Math.sin(yaw) * FOLLOW_CAMERA_DISTANCE, FOLLOW_CAMERA_HEIGHT).add(this.controls.orbit.target);
+        this.controls.orbit.unclippedDistance = 0;
         this.controls.orbit.update();
         this.setFollowPlayer(true);
         renderManager.updateCameraMatrices();

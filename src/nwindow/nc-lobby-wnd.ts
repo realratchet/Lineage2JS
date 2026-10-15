@@ -403,7 +403,7 @@ export class NCLobbyWnd { // NCLobbyWnd OnCreate 0x1009cff0, OnPaint 0x1009c7e0:
         if (this.onSelect) this.onSelect(index);
     }
 
-    protected gameStart() { // 0x1009b8e0
+    public gameStart() { // 0x1009b8e0
         if (this.selected < 0 || isPendingDelete(this.characters[this.selected])) return;
         if (this.onStart) this.onStart(this.selected);
     }

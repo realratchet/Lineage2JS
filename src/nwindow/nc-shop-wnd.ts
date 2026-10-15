@@ -242,7 +242,9 @@ export class NCShopWnd {
 
         if (x < 0 || x > 222 || y < 0 || y > (side ? 3 : 4) * 35) return -1;
 
-        return (list.getScroll() / 35 + Math.min((side ? 3 : 4) - 1, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37));
+        const index = (list.getScroll() / 35 + Math.min((side ? 3 : 4) - 1, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37));
+
+        return index < list.content.children.length ? index : -1;
     }
     protected paintSelection(side: number) {
         this.lists[side].content.querySelectorAll<HTMLElement>("[data-selected]").forEach((frame, index) => frame.hidden = this.items[side][index] !== this.selected[side]);

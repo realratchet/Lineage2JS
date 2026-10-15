@@ -79,6 +79,7 @@ export class NCAuthWnd { // NCAuthWnd: 256x108, OnCreate 0x1009f230, paint 0x100
     }
 
     public getAccount() { return this.accountEdit.getValue(); }
+    public clearPassword() { this.passwordEdit.setValue(""); }
 
     protected login() { // OnLogin 0x1009e3d0 (mode 0).
         const account = this.accountEdit.getValue(), password = this.passwordEdit.getValue();

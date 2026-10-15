@@ -1,6 +1,7 @@
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
+import { ItemType2_T } from "../network/game-packets";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.Inventory_Back";
 const TEX_TAB = "L2UI_CH3.InventoryWnd.Inventory_tab2";
@@ -364,6 +365,13 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             this.chooseItemId = 0;
             this.tooltip.hidden = true;
         }
+    }
+
+    public getEnchantItems() {
+        const cacheItems = new Map(this.items.map(item => [item.objectId, item]));
+        const equipment = this.items.filter(item => item.slot >= 0).sort((a, b) => a.slot - b.slot);
+
+        return [...equipment, ...this.arrBagOrder[0].map(objectId => cacheItems.get(objectId)!)].filter(item => item.itemClass === ItemType2_T.TYPE2_WEAPON || item.itemClass === ItemType2_T.TYPE2_SHIELD_ARMOR || item.itemClass === ItemType2_T.TYPE2_ACCESSORY);
     }
 
     public chooseItem(itemId: number) {

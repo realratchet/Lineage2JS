@@ -393,12 +393,12 @@ export class NDomLayer {
             onSelect();
             this.manager.playWindowSound();
         };
-        const tab = this.button(parent, x, y, w, h, normal, label ? normal : selected, label ? normal === selected ? normal : `${normal}_over` : selected, label, null, isDown => { if (isDown) select(); });
+        const tab = this.button(parent, x, y, w, h, normal, label ? normal : selected, label ? normal === selected || !this.hasTexture(`${normal}_over`) ? normal : `${normal}_over` : selected, label, null, isDown => { if (isDown) select(); });
         const setTextures = tab.setTextures, setEnabled = tab.setEnabled;
 
         tab.setTextures = (normal, down) => {
             isSelected = normal === selected;
-            setTextures(normal, label ? normal : down, label ? normal === selected ? normal : `${normal}_over` : down);
+            setTextures(normal, label ? normal : down, label ? normal === selected || !this.hasTexture(`${normal}_over`) ? normal : `${normal}_over` : down);
         };
         tab.setEnabled = value => { isEnabled = value; setEnabled(value); };
         tab.tabIndex = 0;

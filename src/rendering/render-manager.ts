@@ -20,6 +20,7 @@ import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
 import { retainSharedTextureBuffer } from "../assets/decoders/texture-decoder";
 import InstancedSpriteBatcher from "../objects/emitters/instanced-sprite-batcher";
 import type MovableObject from "../objects/movable-object";
+import type AgitStaticMeshActor from "../objects/agit-static-mesh-actor";
 import DisplayGammaPass from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
 import type PhysicsManager from "../physics/physics-manager";
@@ -114,6 +115,7 @@ type PawnLightingState_T = {
     lightingSector: SectorObject | null,
     leafIndex: number | null,
     lightingLeafIndex: number | null,
+    lightingSpecialLit: boolean,
     zoneIndex: number | null,
     lightingZoneIndex: number | null,
     envVersion: number,
@@ -1247,8 +1249,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.deferredMixerOperations.length = 0;
     }
 
-    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true): Promise<BaseActor> {
-        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering, undefined, preloadSkills);
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering, undefined, preloadSkills, collisionSize);
     }
 
     public listNpcs(): Promise<INpcDefinition[]> {
@@ -1271,6 +1273,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
+            if (pawn !== this.player && !pawn.isInteractive()) continue;
+
             if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) {
                 const animation = pawn.findComponent<AnimationComponent>("animation");
                 const lifecycle = pawn.findComponent<NpcLifecycleComponent>("npcLifecycle");
@@ -1307,7 +1311,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const pawn = component.getParent();
             const state = this.resolvePawnLocation(pawn);
 
-            if (!state.sector || state.leafIndex === null) {
+            if (!state.sector || !state.sector.staticMeshGroup || state.leafIndex === null) {
                 pawn.visible = false;
                 continue;
             }
@@ -1319,7 +1323,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (const pawn of sector.pawns.children) {
                 const state = this.resolvePawnLocation(pawn);
 
-                if (!state.sector) {
+                if (!state.sector || !state.sector.staticMeshGroup) {
                     pawn.visible = false;
                     continue;
                 }
@@ -1403,6 +1407,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             lightingSector: null,
             leafIndex: null,
             lightingLeafIndex: null,
+            lightingSpecialLit: false,
             zoneIndex: null,
             lightingZoneIndex: null,
             envVersion: -1,
@@ -1423,10 +1428,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         actor.getWorldPosition(tmpPawnWorldPos);
 
-        if (state.position.equals(tmpPawnWorldPos) && state.sector) return state;
+        const sector = this.getSector(tmpPawnWorldPos);
+
+        if (state.position.equals(tmpPawnWorldPos) && state.sector === sector) return state;
 
         state.position.copy(tmpPawnWorldPos);
-        state.sector = this.getSector(tmpPawnWorldPos);
+        state.sector = sector;
         state.leafIndex = state.sector ? state.sector.findPositionLeaf(tmpPawnWorldPos) : null;
         state.zoneIndex = state.sector ? state.sector.findPositionZone(tmpPawnWorldPos) : null;
 
@@ -1440,6 +1447,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!sector) return;
 
         const zoneInfo = state.zoneIndex === null ? null : sector.bspZones[state.zoneIndex]?.zoneInfo;
+        const isSpecialLit = (actor as BaseActor).isActor && !!(actor as BaseActor).getUnrealScriptProperty("bSpecialLit");
+        const specialLitChanged = state.lightingSpecialLit !== isSpecialLit;
         const moved = state.lightingPosition.distanceToSquared(state.position) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
         const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
         const envVersion = this.environment.getEnvVersion();
@@ -1452,8 +1461,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         for (const light of state.lights)
             relevantLightUpdated = relevantLightUpdated || light.needsUpdate;
 
-        if (moved || locationChanged) {
-            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected, state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights);
+        if (moved || locationChanged || specialLitChanged) {
+            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected, state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights, isSpecialLit);
             relevantLightsChanged = state.lights.length !== arrPawnLights.length;
 
             for (let i = 0, len = arrPawnLights.length; i < len; i++) {
@@ -1468,6 +1477,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             state.lightingSector = sector;
             state.lightingLeafIndex = state.leafIndex;
             state.lightingZoneIndex = state.zoneIndex;
+            state.lightingSpecialLit = isSpecialLit;
         }
 
         if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
@@ -1988,7 +1998,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.processShaderDiagnostics();
         this.viewShakeDelta = deltaTime / 1000;
 
-        for (const simulation of this.hairSimulations) simulation.restorePose();
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent(), animation = pawn.findComponent<AnimationComponent>("animation");
+            if (animation) animation.setSimulationEnabled(pawn === this.player || pawn.isInteractive());
+        }
+
+        for (const simulation of this.hairSimulations)
+            if (simulation.getParent().isInteractive()) simulation.restorePose();
 
         this.isUpdatingMixer = true;
         try {
@@ -1998,7 +2014,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.runDeferredMixerOperations();
         }
 
-        for (const simulation of this.hairSimulations) simulation.update(deltaTime / 1000);
+        for (const simulation of this.hairSimulations)
+            if (simulation.getParent().isInteractive()) simulation.update(deltaTime / 1000);
 
         const timeScale = this.environment.getTimeScale();
 
@@ -2408,6 +2425,17 @@ export class RenderManager implements IEngineComponent<GameManager> {
         return null;
     }
 
+    public updateClanHallDecorations(root: THREE.Object3D = this.objectGroup) {
+        const network = this.manGame.getComponent("network");
+
+        root.traverse(object => {
+            if (!(object as AgitStaticMeshActor).isAgitStaticMeshActor) return;
+
+            const actor = object as AgitStaticMeshActor, info = network.getClanHallDecoration(actor.agit.id), index = actor.agit.index;
+            actor.setAgitStatus(info && index > 0 && index < 32 && index <= info.status.length ? info.status[index - 1] : null);
+        });
+    }
+
     public addSector(sector: SectorObject) {
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
@@ -2426,6 +2454,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (const info of sector.ambientSounds)
                 sector.addComponent(new AmbientSoundComponent(this.audioManager, info));
 
+        this.updateClanHallDecorations(sector);
         retainSectorResources(sector, sector);
         this.pawnLightingStates = new WeakMap();
         this.lastRenderOrderSector = null;
@@ -2610,6 +2639,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
+        this.updateClanHallDecorations(sector.staticMeshGroup);
         retainSectorResources(sector, sector.staticMeshGroup);
 
         sector.worldBounds.setFromObject(sector);
@@ -2785,6 +2815,7 @@ function collectSectorResources(root: THREE.Object3D, target: Set<Disposable_T>)
         if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
 
         if (mesh.geometry) target.add(mesh.geometry);
+        if ((child as AgitStaticMeshActor).isAgitStaticMeshActor) target.add((child as AgitStaticMeshActor).emptyGeometry);
 
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
 

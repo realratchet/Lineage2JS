@@ -7,13 +7,13 @@ import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un
 const TEX_BACK = "L2UI_ch3.OptionWnd.option1_back";
 const TEX_AUDIO_BACK = "L2UI_ch3.OptionWnd.option2_back";
 const TEX_TAB_BACK = "L2UI_ch3.SSQWnd.ssq_back";
-const TEX_TAB = "L2UI_ch3.TabButton.normal_tab";
-const TEX_TAB_ON = "L2UI_ch3.TabButton.normal_tab_on";
+const TEX_TAB = "L2UI_ch3.TabButton.normal_tab_on";
+const TEX_TAB_SELECTED = "L2UI_ch3.TabButton.normal_tab";
 const TEX_BUTTON = "L2UI_CH3.Button.Btn1_normal";
 const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_normalOn";
 
 export class NCOptionWnd {
-    public static getTextures() { return [TEX_BACK, TEX_AUDIO_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_ON, TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_AUDIO_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
     public readonly element: HTMLDivElement;
     public getOptions: () => GameConfig_T = null;
     public onApply: (options: GameConfig_T) => void = null;
@@ -52,22 +52,12 @@ export class NCOptionWnd {
         NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(146), false, () => this.setVisible(false));
         // shortcut: Video controls are pending; enable the tab with its native settings.
         [206, 207, 208].forEach((id, index) => {
-            const texture = index === 2 ? TEX_TAB_ON : TEX_TAB;
-            const tab = layer.button(this.element, 12 + index * 74, 25, 74, 23, texture, texture, texture, manager.getSysString(id));
+            const tab = layer.tab(this.element, 12 + index * 74, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(id), null, () => this.selectTab(index));
 
-            tab.setAttribute("role", "tab");
-            tab.setAttribute("aria-label", manager.getSysString(id));
             tab.setAttribute("aria-selected", String(index === 2));
             tab.setAttribute("aria-disabled", String(index === 0));
             tab.setEnabled(index !== 0);
             tab.tabIndex = index === 0 ? -1 : 0;
-            tab.addEventListener("click", () => { if (index !== 0) this.selectTab(index); });
-            tab.addEventListener("keydown", event => {
-                if (index === 0 || event.repeat || event.key !== " " && event.key !== "Enter") return;
-
-                event.preventDefault();
-                this.selectTab(index);
-            });
             this.tabs.push(tab);
         });
         const game = this.game = layer.createWindow(0, 48, 256, 400, this.element);
@@ -109,7 +99,7 @@ export class NCOptionWnd {
         this.enterChatting = layer.checkbox(game, 25, 200, 100, 12, manager.getSysString(442));
         this.oldChatting = layer.checkbox(game, 135, 200, 100, 12, manager.getSysString(566));
         this.transparencyMode = layer.checkbox(game, 164, 15, 100, 12, manager.getSysString(927));
-        this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(1197));
+        this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(1197), () => this.updateSystemMessageControls());
         this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(357));
         this.systemMsgWndExpendableItem = layer.checkbox(game, 120, 344, 130, 12, manager.getSysString(796));
         [...this.nameChecks, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem].forEach(checkbox => {
@@ -120,6 +110,7 @@ export class NCOptionWnd {
                 event.preventDefault();
                 checkbox.setChecked(!checkbox.getChecked());
                 if (checkbox === this.nameChecks[2]) this.updateNameControls();
+                if (checkbox === this.systemMsgWnd) this.updateSystemMessageControls();
             });
         });
         const lootLabel = manager.getSysString(486);
@@ -180,6 +171,7 @@ export class NCOptionWnd {
             this.systemMsgWnd.setChecked(options.systemMsgWnd);
             this.systemMsgWndDamage.setChecked(options.systemMsgWndDamage);
             this.systemMsgWndExpendableItem.setChecked(options.systemMsgWndExpendableItem);
+            this.updateSystemMessageControls();
             this.lootType = options.partyLooting;
             this.partyLooting.setSelected(this.lootType);
             const audio = this.getAudioOptions();
@@ -225,9 +217,7 @@ export class NCOptionWnd {
         this.partyLooting.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
         this.tabs.forEach((tab, i) => {
-            const texture = i === index ? TEX_TAB_ON : TEX_TAB;
-
-            tab.setTextures(texture, texture, texture);
+            tab.setTextures(i === index ? TEX_TAB_SELECTED : TEX_TAB, TEX_TAB_SELECTED);
             tab.setAttribute("aria-selected", String(i === index));
         });
         this.layer.setTile(this.background, 256, 432, 0, 0, 256, 432, index === 1 ? TEX_AUDIO_BACK : TEX_BACK);
@@ -237,6 +227,17 @@ export class NCOptionWnd {
         const enabled = this.nameChecks[2].getChecked();
 
         this.nameChecks.slice(3).forEach(checkbox => {
+            checkbox.setAttribute("aria-disabled", String(!enabled));
+            checkbox.style.pointerEvents = enabled ? "" : "none";
+            checkbox.style.opacity = enabled ? "" : "0.5";
+            checkbox.tabIndex = enabled ? 0 : -1;
+        });
+    }
+
+    protected updateSystemMessageControls() {
+        const enabled = this.systemMsgWnd.getChecked();
+
+        [this.systemMsgWndDamage, this.systemMsgWndExpendableItem].forEach(checkbox => {
             checkbox.setAttribute("aria-disabled", String(!enabled));
             checkbox.style.pointerEvents = enabled ? "" : "none";
             checkbox.style.opacity = enabled ? "" : "0.5";

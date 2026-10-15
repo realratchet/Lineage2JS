@@ -852,8 +852,8 @@ export abstract class BaseEmitter extends Object3D {
         particle.scale.copy(particle.startSize);
         const currentAccel = tmpCurrentAcceleration.copy(this.coordinateSystem === "spray" ? particle.acceleration : this.acceleration);
         if (this.coordinateSystem === "independent") {
-            this.parent.updateMatrixWorld();
-            tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
+            this.updateWorldMatrix(true, false);
+            tmpWorldToLocal.copy(this.matrixWorld).invert();
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAccel.applyMatrix4(tmpWorldRotation);
         }
@@ -1188,8 +1188,8 @@ export abstract class BaseEmitter extends Object3D {
 
         if (coordinateSystem === "independent") {
             // Independent acceleration is emitter-wide, not per-particle.
-            this.parent.updateMatrixWorld();
-            tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
+            this.updateWorldMatrix(true, false);
+            tmpWorldToLocal.copy(this.matrixWorld).invert();
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAcceleration.applyMatrix4(tmpWorldRotation);
         }
@@ -1553,6 +1553,9 @@ export abstract class BaseEmitter extends Object3D {
 
         const owner = this.parent as any;
         if (owner && owner.updateEmitterRotation) owner.updateEmitterRotation(currentTime);
+
+        // USpriteEmitter::RenderParticles 0x106ac0e8 uses the identity transform outside PTCS_Relative.
+        if (this.coordinateSystem === "independent" && owner) owner.getWorldQuaternion(this.quaternion).invert();
 
         // Engine.dll 0x8a3630 / 0x97a438..0x97a491: Relative particles draw with the emitter's current rotation.
         if (this.coordinateSystem === "relative" && owner?.emitterRotation) this.quaternion.copy(owner.emitterRotation);

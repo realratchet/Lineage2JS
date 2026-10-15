@@ -3,10 +3,12 @@ import { Color, MathUtils } from "three";
 import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
 import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
+import { hsvToColorPlane } from "../objects/dynamic-light";
 
 // const tmpColor_1 = new Color();
 // const tmpColor_2 = new Color();
 // const tmpColor_3 = new Color();
+const tmpSunColor = new Color();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 
@@ -123,8 +125,13 @@ export class L2Environment {
 
     public getNormalizedTime() { return this.getTimeOfDay() / 24; }
 
-    public getBaseColorPlaneActorSunLight(target: ColorByte): ColorByte {
-        return getColorByteFromHSV(this.getTimeOfDay(), this.getEnvColor().light.actor, target, false);
+    public getBaseColorPlaneActorSunLight(target: Color): Color {
+        const [curr, next, fraction] = pickArrayIndices(this.getTimeOfDay(), this.getEnvColor().light.actor);
+        if (curr === next) return target.setRGB(0, 0, 0);
+
+        hsvToColorPlane(curr.hue, curr.saturation, target);
+        hsvToColorPlane(next.hue, next.saturation, tmpSunColor);
+        return target.lerp(tmpSunColor, fraction);
     }
 
     public getBaseColorPlaneStaticMeshSunLight(target: ColorByte): ColorByte {

@@ -14,6 +14,8 @@ const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
 const tmpScale = new Vector3();
 
+export type CollidingMeshProps_T = { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, isSpecialLit?: boolean, forcedRegionTag?: string, forcedRegion?: number, permeatingLights?: string[], ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T };
+
 export class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
     public actorUuid: string;
@@ -39,7 +41,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     protected scriptVM: UnScriptVM = null;
     protected scriptObjectFactory: ScriptObjectFactory_T = null;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T }) {
+    public constructor(props: CollidingMeshProps_T) {
         super(props);
 
         (this as any).isStaticMeshActor = true;

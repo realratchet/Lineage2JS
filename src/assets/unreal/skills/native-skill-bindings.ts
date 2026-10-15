@@ -374,9 +374,13 @@ const collisionBindings = new Map<string, NativeSkillBinding_T>([
     ["bossSpearStun", { effects: ["LineageEffect.s_u010_a", "LineageEffect.NSpear_sp", "LineageEffect.s_u505_c"], effectGroup: "bossSpearStun", soundPhases: ["casting", "shot", "explosion"], pending: "spear rendering, retail visual/timing and no-hit verification" }]
 ]);
 
-// Engine.dll SpawnNTransientEffect: IDs2037/2048 table0x79a9d2/0x79a9dd ->0x798eaa, class0xaafc38.
-for (const name of ["greater healing potion", "wolves' food"])
+// Engine.dll SpawnNTransientEffect: IDs2032/2037/2038/2048 ->0x798eaa, class0xaafc38.
+for (const name of ["healing potion", "greater healing potion", "quick healing potion", "wolves' food"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u002_a"], soundPhases: ["casting"] });
+
+// Engine.dll SpawnNTransientEffect: IDs2031/2136 ->0x798e71, class0xaafc70.
+for (const name of ["lesser healing potion", "rice cake"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u001_a"], soundPhases: ["casting"] });
 
 // Engine.dll ID2036: empty phase handlers; transient selector0x79a9d1 ->0x79a7e1 with edi=0.
 nativeSkillBindings.set("l2day blessed scroll of escape", { effects: [], soundPhases: [], rejectTransient: true });

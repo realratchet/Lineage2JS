@@ -11,6 +11,7 @@ function copyPrevious(state: BindingState_T, target: Float64Array, offset: numbe
 }
 
 export class SkeletalAnimationMixer extends AnimationMixer {
+    protected readonly suspendedRoots = new WeakMap<Object3D, number>();
     protected readonly rootStates = new WeakMap<Object3D, RootState_T>();
     protected readonly actionStates = new WeakMap<AnimationAction, ActionState_T>();
     protected readonly bindingStates = new WeakMap<object, BindingState_T>();
@@ -19,6 +20,29 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     protected bindingVersion: number = 0;
     protected cachedBindingVersion: number = -1;
     protected frame: number = 0;
+
+    public setRootEnabled(root: Object3D, enabled: boolean): void {
+        const suspendedAt = this.suspendedRoots.get(root);
+
+        if (!enabled) {
+            if (suspendedAt === undefined) this.suspendedRoots.set(root, this.time);
+            return;
+        }
+        if (suspendedAt === undefined) return;
+
+        const elapsed = this.time - suspendedAt;
+
+        for (const action of (this as any)._actions) {
+            if (action.getRoot() !== root) continue;
+            if (action._startTime !== null) action._startTime += elapsed;
+            for (const interpolant of [action._weightInterpolant, action._timeScaleInterpolant]) {
+                if (!interpolant) continue;
+                interpolant.parameterPositions[0] += elapsed;
+                interpolant.parameterPositions[1] += elapsed;
+            }
+        }
+        this.suspendedRoots.delete(root);
+    }
 
     protected _lendBinding(binding: any): void {
         (AnimationMixer.prototype as any)._lendBinding.call(this, binding);
@@ -109,7 +133,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         for (let i = 0; i < count; i++) {
             const action = actions[i];
-            if (!action.enabled) continue;
+            if (!action.enabled || this.suspendedRoots.has(action.getRoot())) continue;
             if (!fast || action.loop !== LoopRepeat || action.repetitions !== Infinity) { fast = false; break; }
             const state = this.getActionState(action), root = state.root;
             if (root.frame !== frame) { root.frame = frame; root.count = 0; }
@@ -119,7 +143,6 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         if (!fast) {
             this.resetBindings();
-            return super.update(deltaTime);
         }
 
         deltaTime *= this.timeScale;
@@ -127,7 +150,8 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         for (let i = 0; i < count; i++) {
             const action = actions[i], state = action.enabled ? this.getActionState(action) : null;
-            if (!state || !state.channels || state.root.count !== 1) { action._update(time, deltaTime, direction, accuIndex); continue; }
+            if (this.suspendedRoots.has(action.getRoot())) continue;
+            if (!fast || !state || !state.channels || state.root.count !== 1) { action._update(time, deltaTime, direction, accuIndex); continue; }
             const clipTime = action._updateTime(deltaTime * action._updateTimeScale(time));
             action._updateWeight(time);
             const weight1 = clipTime / action.getClip().duration, weight0 = 1 - weight1;
@@ -147,6 +171,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         const states = this.getBindingStates();
         for (let i = 0; i < mixer._nActiveBindings; i++) {
             const binding = mixer._bindings[i], state = states[i];
+            if (this.suspendedRoots.has(binding.binding.rootNode)) continue;
             if (!state || state.frame !== frame) {
                 if (state && state.wasFast) {
                     copyPrevious(state, binding.buffer, (2 - accuIndex) * binding.valueSize, binding.valueSize);

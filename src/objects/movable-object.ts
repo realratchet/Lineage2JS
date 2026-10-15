@@ -31,7 +31,7 @@ export class MovableObject extends CollidingMesh {
     protected stateStart: number = 0;
     protected transformAlpha: number = 0;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, mover: IMoverDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, isSpecialLit?: boolean, forcedRegionTag?: string, forcedRegion?: number, ambient?: { glow: number, vector: number[], isUnlit: boolean }, mover: IMoverDecodeInfo }) {
         super(props);
 
         this.mover = props.mover;
@@ -147,6 +147,8 @@ export class MovableObject extends CollidingMesh {
         this.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
     }
 
+    public isServerControlled(): boolean { return (this as any).scriptProperties?.get("L2ServerObjectRealID") > 0; }
+
     public setPosition(alpha: number): void {
         if (this.keyPositions.length < 2) return;
 
@@ -163,6 +165,7 @@ export class MovableObject extends CollidingMesh {
     }
 
     public tryTrigger(currentTime: number, triggerPosition: Vector3): number | null {
+        if (this.isServerControlled()) return null;
         if (this.mover.initialState !== "BumpOpenTimed" || this.keyPositions.length < 2 || this.state !== "closed") return null;
         if (!this.isTriggered(triggerPosition)) return null;
 
@@ -179,6 +182,8 @@ export class MovableObject extends CollidingMesh {
     }
 
     public updateMover(currentTime: number, actors?: BaseActor[]): number {
+        if (this.isServerControlled()) return -1;
+
         const moveTime = Math.max(this.mover.moveTime * 1000, 5);
         let transitions = 0;
 

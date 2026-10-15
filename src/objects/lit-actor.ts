@@ -1,7 +1,7 @@
 
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
-import { BufferAttribute, Matrix4, Vector3, WebGLRenderer } from "three";
+import { Box3, BufferAttribute, Matrix4, Vector3, WebGLRenderer } from "three";
 import { computeStaticLighting } from "../rendering/static-lighting";
 import type { L2Environment } from "../rendering/l2-env";
 import { ColorByte } from "../utils/color-byte";
@@ -15,6 +15,8 @@ const tmpHardwareCenter = new Vector3();
 const tmpColorByte = new ColorByte();
 const tmpEnvColor = new ColorByte();
 const arrHardwareLights: DynamicLight[] = [];
+const arrPermeatingLights: string[] = [];
+const tmpHardwareBox = new Box3();
 
 const affectedVertexCache = new WeakMap<Uint8Array, Uint32Array>();
 
@@ -46,6 +48,10 @@ export class LitActorMesh extends GameMesh {
     protected lightInfo?: MeshLight_T;
     protected scaledGlow: number;
     protected isSunAffected: boolean;
+    protected readonly isSpecialLit: boolean;
+    protected readonly permeatingLights?: string[];
+    protected readonly forcedRegionTag: string;
+    protected readonly forcedRegion: number;
     protected staticLightingCache?: Uint8ClampedArray;
     protected lightingRenderer?: WebGLRenderer;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
@@ -74,12 +80,16 @@ export class LitActorMesh extends GameMesh {
     public needsRelightPass?: boolean; // set by zone-object.ts when a batch element's visibility flips
     protected vertexToElement?: Uint32Array;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight_T, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean } }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo?: MeshLight_T, scaledGlow: number, isSunAffected?: boolean, isSpecialLit?: boolean, permeatingLights?: string[], forcedRegionTag?: string, forcedRegion?: number, ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean } }) {
         super(props.geometry, props.materials);
 
         this.lightInfo = props.lightInfo;
         this.scaledGlow = props.scaledGlow ?? 1.0;
         this.isSunAffected = props.isSunAffected ?? true;
+        this.isSpecialLit = props.isSpecialLit ?? false;
+        this.permeatingLights = props.permeatingLights;
+        this.forcedRegionTag = props.forcedRegionTag ?? "None";
+        this.forcedRegion = props.forcedRegion ?? 0;
         this.ambient = props.ambient;
 
         if (this.ambient?.hardwareLighting) {
@@ -243,8 +253,16 @@ export class LitActorMesh extends GameMesh {
         }
     }
 
+    protected getPermeatingLights(sector: SectorObject): string[] {
+        if (this.permeatingLights) return this.permeatingLights;
+        if (!this.geometry.boundingBox) this.geometry.computeBoundingBox();
+
+        tmpHardwareBox.copy(this.geometry.boundingBox).applyMatrix4(this.matrixWorld);
+        return sector.getPermeatingLights(tmpHardwareBox, arrPermeatingLights, this.forcedRegionTag, this.forcedRegion);
+    }
+
     protected computeHardwareLightingRange(sector: SectorObject, target: Uint8ClampedArray, startVertex: number, count: number, scaledGlow: number, isSunAffected: boolean, radius: number) {
-        sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, isSunAffected);
+        sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, isSunAffected, this.getPermeatingLights(sector), this.isSpecialLit);
 
         const attrPositions = this.geometry.getAttribute("position");
         const attrNormals = this.geometry.getAttribute("normal");
@@ -325,7 +343,7 @@ export class LitActorMesh extends GameMesh {
                 tmpColorByte.set(127, 127, 127);
                 arrHardwareLights.length = 0;
             } else {
-                sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, this.isSunAffected);
+                sector.getRelevantLights(tmpHardwareCenter, radius, arrHardwareLights, NUM_ACTOR_LIGHTS, this.isSunAffected, this.getPermeatingLights(sector), this.isSpecialLit);
 
                 if (this.isSunAffected) env.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
                 else tmpColorByte.set(this.ambient.vector[0] + this.ambient.glow, this.ambient.vector[1] + this.ambient.glow, this.ambient.vector[2] + this.ambient.glow).shr(1);

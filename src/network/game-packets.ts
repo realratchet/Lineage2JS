@@ -1,4 +1,4 @@
-import type PacketReader from "./packet-reader";
+import PacketReader from "./packet-reader";
 
 export const PROTOCOL_REVISION = 660;
 export const NPC_ID_OFFSET = 1000000;
@@ -1230,11 +1230,11 @@ export type MonRaceInfo_T = { unknown1: number, unknown2: number, runners: MonRa
 export type Dice_T = Location_T & { objectId: number, itemId: number, number: number };
 export type SSQCabalScore_T = { stoneScore: number, festivalScore: number, totalScore: number, percent: number };
 export type SSQRecord_T = { cycle: number, periodMessageId: number, periodEndMessageId: number, playerCabal: number, playerSeal: number, stoneContribution: number, ancientAdena: number, dusk: SSQCabalScore_T, dawn: SSQCabalScore_T };
-export type SSQFestival_T = { id: number, levelScore: number, duskScore: number, duskMembers: string[], dawnScore: number, dawnMembers: string[] };
+export type SSQFestival_T = { groupId: number, id: number, levelScore: number, duskScore: number, duskMembers: string[], dawnScore: number, dawnMembers: string[] };
 export type SSQSealStatus_T = { id: number, owner: number, duskPercent: number, dawnPercent: number };
 export type SSQSealPrediction_T = { id: number, cabal: number, messageId: number, unknown: number };
-export type SSQStatus_T = { page: 1, period: number, record: SSQRecord_T } | { page: 2, period: number, unknown: number, festivals: SSQFestival_T[] } | { page: 3, period: number, retainLimit: number, claimLimit: number, seals: SSQSealStatus_T[] } | { page: 4, period: number, predictedWinner: number, predictions: SSQSealPrediction_T[] };
-export type ClanHallDecoration_T = { clanHallId: number, restoreHp: number, restoreMp: number[], restoreExp: number, teleport: number, unknown: number, curtains: number, itemCreate: number, support: number[], frontPlatform: number, itemCreate2: number, trailer: number[] };
+export type SSQStatus_T = { page: 1, period: number, record: SSQRecord_T } | { page: 2, period: number, groups: number[], festivals: SSQFestival_T[] } | { page: 3, period: number, retainLimit: number, claimLimit: number, seals: SSQSealStatus_T[] } | { page: 4, period: number, predictedWinner: number, predictions: SSQSealPrediction_T[] };
+export type ClanHallDecoration_T = { clanHallId: number, status: Uint8Array, restoreHp: number, restoreMp: number[], restoreExp: number, teleport: number, unknown: number, curtains: number, itemCreate: number, support: number[], frontPlatform: number, itemCreate2: number, trailer: number[] };
 export type SiegeInfo_T = { castleId: number, ownerPrivileges: number, ownerId: number, ownerName: string, ownerLeaderName: string, ownerAllyId: number, ownerAllyName: string, serverTime: number, siegeTime: number, choices: number };
 export type SiegeClan_T = { clanId: number, name: string, leaderName: string, crestId: number, signedTime: number, type: number, allyId: number, allyName: string, allyLeaderName: string, allyCrestId: number };
 export type SiegeClanList_T = { castleId: number, unknown: number[], totalCount: number, clans: SiegeClan_T[] };
@@ -1342,20 +1342,25 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
             return { page: 1, period, record: { cycle, periodMessageId, periodEndMessageId, playerCabal, playerSeal, stoneContribution, ancientAdena, dusk, dawn } };
         }
         case 2: {
-            const unknown = packet.h(), count = packet.c();
+            const groupCount = packet.c(), groups: number[] = [], festivals: SSQFestival_T[] = [];
 
-            if (count > packet.getRemaining() / 15) throw new Error(`Invalid SSQStatus festival count '${count}'.`);
+            if (groupCount > packet.getRemaining() / 2) throw new Error(`Invalid SSQStatus festival group count '${groupCount}'.`);
 
-            const festivals: SSQFestival_T[] = [];
+            for (let group = 0; group < groupCount; group++) {
+                const groupId = packet.c(), count = packet.c();
 
-            for (let i = 0; i < count; i++) {
-                const id = packet.c(), levelScore = packet.d(), duskScore = packet.d(), duskMembers = readSSQMembers(packet);
-                const dawnScore = packet.d(), dawnMembers = readSSQMembers(packet);
+                if (count > packet.getRemaining() / 15) throw new Error(`Invalid SSQStatus festival count '${count}'.`);
 
-                festivals.push({ id, levelScore, duskScore, duskMembers, dawnScore, dawnMembers });
+                groups.push(groupId);
+                for (let i = 0; i < count; i++) {
+                    const id = packet.c(), levelScore = packet.d(), duskScore = packet.d(), duskMembers = readSSQMembers(packet);
+                    const dawnScore = packet.d(), dawnMembers = readSSQMembers(packet);
+
+                    festivals.push({ groupId, id, levelScore, duskScore, duskMembers, dawnScore, dawnMembers });
+                }
             }
 
-            return { page: 2, period, unknown, festivals };
+            return { page: 2, period, groups, festivals };
         }
         case 3: {
             const retainLimit = packet.c(), claimLimit = packet.c(), count = packet.c();
@@ -1384,7 +1389,8 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
 }
 
 export function readClanHallDecoration(packet: PacketReader): ClanHallDecoration_T {
-    return { clanHallId: packet.d(), restoreHp: packet.c(), restoreMp: [packet.c(), packet.c()], restoreExp: packet.c(), teleport: packet.c(), unknown: packet.c(), curtains: packet.c(), itemCreate: packet.c(), support: [packet.c(), packet.c()], frontPlatform: packet.c(), itemCreate2: packet.c(), trailer: [packet.d(), packet.d()] };
+    const clanHallId = packet.d(), status = packet.b(20), fields = new PacketReader(status);
+    return { clanHallId, status, restoreHp: fields.c(), restoreMp: [fields.c(), fields.c()], restoreExp: fields.c(), teleport: fields.c(), unknown: fields.c(), curtains: fields.c(), itemCreate: fields.c(), support: [fields.c(), fields.c()], frontPlatform: fields.c(), itemCreate2: fields.c(), trailer: [fields.d(), fields.d()] };
 }
 
 export function readSiegeInfo(packet: PacketReader): SiegeInfo_T {

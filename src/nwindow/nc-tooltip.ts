@@ -169,8 +169,10 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         const x = Math.max(-screenX, Math.min(anchorX, canvas.width - screenX - layout.width));
         const y = screenY + anchorY - layout.height < 0 ? anchorY + topOffset : anchorY - layout.height;
 
-        canvas.setOrigin(screenX, screenY);
-        this.draw(layout, (tx, ty, w, h, texture) => canvas.drawTile(x + tx, y + ty, w, h, 0, 0, 8, 8, texture), (tx, ty, color, value) => canvas.drawText(x + tx, y + ty, color, value));
+        wnd.manager.arrTooltipPaint.push(() => {
+            canvas.setOrigin(screenX, screenY);
+            this.draw(layout, (tx, ty, w, h, texture) => canvas.drawTile(x + tx, y + ty, w, h, 0, 0, 8, 8, texture), (tx, ty, color, value) => canvas.drawText(x + tx, y + ty, color, value));
+        });
     }
 }
 

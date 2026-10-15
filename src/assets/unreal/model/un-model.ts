@@ -276,74 +276,51 @@ export abstract class UModel extends UPrimitive {
 
         iNodes[0] = iNode;
 
-        const min = Math.min(Math.min(extent.x, extent.y), extent.z);
-        const max = Math.max(Math.max(extent.x, extent.y), extent.z);
+        while (index >= 0) {
+            iNode = iNodes[index--];
 
-        if (min * 2 > max) {
-            const pushOut = extent.length();
-            while (index >= 0) {
-                iNode = iNodes[index--];
+            const node = this.bspNodes[iNode];
+            const pushOut = boxPushOut(node.plane, extent);
+            const distance = node.plane.dot(origin);
 
-                const node = this.bspNodes[iNode];
-                const distance = node.plane.dot(origin);
-
-                if (distance < pushOut) {
-                    if (node.iBack !== -1)
-                        iNodes[++index] = node.iBack;
-                    else if (node.iLeaf[0] !== -1)
-                        outLeaves.push(node.iLeaf[0]);
-                }
-
-                if (-distance < pushOut) {
-                    if (node.iFront !== -1)
-                        iNodes[++index] = node.iFront;
-                    else if (node.iLeaf[1] !== -1)
-                        outLeaves.push(node.iLeaf[1]);
-                }
+            if (distance < pushOut) {
+                if (node.iBack !== -1)
+                    iNodes[++index] = node.iBack;
+                else if (node.iLeaf[0] !== -1)
+                    outLeaves.push(node.iLeaf[0]);
             }
-        } else {
-            while (index >= 0) {
-                iNode = iNodes[index--];
 
-                const node = this.bspNodes[iNode];
-                const pushOut = boxPushOut(node.plane, extent);
-                const distance = node.plane.dot(origin);
-
-                if (distance < pushOut) {
-                    if (node.iBack !== -1)
-                        iNodes[++index] = node.iBack;
-                    else if (node.iLeaf[0] !== -1)
-                        outLeaves.push(node.iLeaf[0]);
-                }
-
-                if (-distance < pushOut) {
-                    if (node.iFront !== -1)
-                        iNodes[++index] = node.iFront;
-                    else if (node.iLeaf[1] !== -1)
-                        outLeaves.push(node.iLeaf[1]);
-                }
+            if (-distance < pushOut) {
+                if (node.iFront !== -1)
+                    iNodes[++index] = node.iFront;
+                else if (node.iLeaf[1] !== -1)
+                    outLeaves.push(node.iLeaf[1]);
             }
         }
 
         return outLeaves;
     }
 
-    public boxLeaves(box: FBox): FLeaf[] {
-        if (this.bspNodes.length === 0) return [];
-
-        const origin = box.getCenter();
-        const extent = box.getExtents();
-
-        return this.boxLeavesRecursive(0, origin, extent).map(i => this.leaves[i]);
+    public boxLeaves(box: FBox, forcedRegionTag: string = "None", forcedRegion: number = 0): FLeaf[] {
+        return this.boxLeafIndices(box, forcedRegionTag, forcedRegion).map(i => this.leaves[i]);
     }
 
-    public boxLeafIndices(box: FBox): number[] {
+    public boxLeafIndices(box: FBox, forcedRegionTag: string = "None", forcedRegion: number = 0): number[] {
         if (this.bspNodes.length === 0) return [];
 
         const origin = box.getCenter();
         const extent = box.getExtents();
 
-        return this.boxLeavesRecursive(0, origin, extent);
+        const indices = this.boxLeavesRecursive(0, origin, extent), tag = forcedRegionTag.toLowerCase();
+        if (tag === "none" && forcedRegion === 0) return indices;
+
+        return indices.filter(index => {
+            const zone = this.leaves[index].iZone;
+            if (tag === "none") return zone === forcedRegion;
+
+            const actor = this.zones[zone].zoneActor;
+            return actor && actor.loadSelf().zoneTag.toLowerCase() === tag;
+        });
     }
 
     public isCsg(node: FBSPNode): boolean {

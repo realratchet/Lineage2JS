@@ -55,13 +55,23 @@ export class NPawnLightComponent extends ObjectComponent<BaseActor> {
 
             // D3DDrv SetPawnLight RVA 0x1c9f3..0x1cac4 fits reciprocal attenuation over the lighting sphere.
             const distance = sphere.center.distanceTo(light.position);
-            const near = Math.max(0, distance - sphere.radius) + 1;
-            const far = Math.min(light.radius, distance + sphere.radius) - 1;
+            if (distance >= light.radius + sphere.radius) {
+                light.attenuation.set(1, 0);
+                continue;
+            }
+
+            const start = Math.max(0, distance - sphere.radius), end = Math.min(light.radius, distance + sphere.radius);
+            const inset = Math.min(1, (end - start) / 2);
+            // A one-ULP overlap can round the midpoint onto the zero-falloff radius.
+            const near = start + inset < light.radius ? start + inset : start;
+            const far = end - start <= 2 ? near : end - inset;
             const nearIntensity = 1 / lightFalloff(near, light.radius);
             const farIntensity = 1 / lightFalloff(far, light.radius);
-            const constant = Math.max(0, nearIntensity - (farIntensity - nearIntensity) / (far - near) * near);
+            const alpha = near / light.radius;
+            const slope = far === near ? 12 * alpha * (1 - alpha) * nearIntensity * nearIntensity / light.radius : (farIntensity - nearIntensity) / (far - near);
+            const constant = Math.max(0, nearIntensity - slope * near);
 
-            light.attenuation.set(constant, (nearIntensity - constant) / near);
+            light.attenuation.set(constant, near === 0 ? slope : (nearIntensity - constant) / near);
             if (!Number.isFinite(light.attenuation.x) || !Number.isFinite(light.attenuation.y)) throw new Error(`Invalid pawn light attenuation for '${this.getParent().name}'.`);
         }
     }
@@ -73,7 +83,7 @@ function lightFalloff(distance: number, radius: number): number {
 
     const alpha = distance / radius;
 
-    return (2 * alpha * alpha * alpha - 3 * alpha * alpha + 1) * 2;
+    return 2 * (1 - alpha) * (1 - alpha) * (1 + 2 * alpha);
 }
 
 export default NPawnLightComponent;

@@ -214,7 +214,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected updatePhysics(currentTime: number, deltaTime: number) {
-        if (this.physicsMode === "none") return;
+        if (this.physicsMode === "none" || !this.isInteractive()) return;
 
         if (this.enterRiseTargetZ !== null) {
             this.updateEnterRise(deltaTime);

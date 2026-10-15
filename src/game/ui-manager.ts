@@ -9,6 +9,7 @@ import type { PawnAttackSelection_T } from "../objects/components/pawn-attack-co
 import type GameManager from "./game-manager";
 import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import { WeaponType } from "../assets/unreal/un-pawn";
+import type NDomLayer from "../nwindow/ndom";
 
 type DebugTab = "controls" | "environment" | "bsp" | "statistics" | VisualizerMode.Fogs | VisualizerMode.Audio | VisualizerMode.Emitters;
 type GraphSeries_T = { label: string, color: string, values: number[] };
@@ -29,6 +30,7 @@ export class UIManager implements IEngineComponent<GameManager> {
 
     protected manGame: GameManager;
     protected readonly stats = new (Stats as any)(0);
+    protected statsWindow: HTMLElement = this.stats.dom;
     protected readonly debugView = document.createElement("aside");
     protected readonly debugTabs = new Map<DebugTab, { button: HTMLButtonElement, panel: HTMLElement }>();
     protected activeTab: DebugTab = "controls";
@@ -91,6 +93,37 @@ export class UIManager implements IEngineComponent<GameManager> {
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
     public getParent(): GameManager { return this.manGame; }
+
+    public getStatsWindow() { return this.statsWindow; }
+
+    public async createStatsWindow(layer: NDomLayer) {
+        const grip = "L2UI_CH3.FrameCtrl.smallbar", back = "L2UI_CH3.SmallWnd.Smallwindow2_back";
+
+        await layer.loadTextures([grip + "1", grip + "2", grip + "3", back + "1", back + "2", "L2UI_CH3.PlayerStatusWnd.ps_sizecontrol1"]);
+
+        const element = layer.createWindow(0, 84, 104, 64), handle = layer.createWindow(0, 0, 12, 64, element);
+
+        element.classList.add("debug-stats", "ndom-opaque");
+        element.setAttribute("role", "region");
+        element.setAttribute("aria-label", "Rendering statistics");
+        layer.tile(handle, 0, 0, 12, 8, 0, 0, 12, 8, grip + "1");
+        layer.tile(handle, 0, 8, 12, 48, 0, 0, 12, 8, grip + "2");
+        layer.tile(handle, 0, 56, 12, 8, 0, 0, 12, 8, grip + "3");
+        layer.tile(element, 12, 0, 16, 64, 0, 0, 16, 76, back + "1");
+        layer.tile(element, 28, 0, 72, 64, 0, 0, 16, 76, back + "2");
+        layer.tile(element, 100, 0, 4, 64, 0, 0, 4, 76, "L2UI_CH3.PlayerStatusWnd.ps_sizecontrol1");
+        handle.addEventListener("mousedown", event => {
+            if (event.button !== 0) return;
+
+            event.preventDefault();
+            layer.dragWindow(element, event);
+        });
+        element.style.display = this.statsWindow.style.display;
+        this.stats.dom.classList.remove("debug-stats");
+        this.stats.dom.style.cssText = "position:absolute;left:18px;top:8px;cursor:pointer";
+        element.appendChild(this.stats.dom);
+        this.statsWindow = element;
+    }
 
     public async onInit(): Promise<this> {
         this.addRenderControls();
@@ -270,7 +303,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.statisticsElement = document.createElement("pre");
         this.statisticsElement.className = "debug-info";
         panel.append(this.statisticsCanvas, this.statisticsElement);
-        this.addCheckbox(panel, "Show FPS overlay", true, value => this.stats.dom.style.display = value ? "block" : "none");
+        this.addCheckbox(panel, "Show FPS overlay", true, value => this.statsWindow.style.display = value ? "block" : "none");
     }
 
     protected async pollWorkerMemory(): Promise<void> {

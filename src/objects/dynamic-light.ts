@@ -6,7 +6,6 @@ import ColorByte from "../utils/color-byte";
 
 const tmpVec3_1 = new Vector3();
 const tmpColorByte_1 = new ColorByte();
-const tmpHardwareColorByte = new ColorByte();
 
 type HardwareLight_T = { color: Color, attenuation: Vector2, cone: number };
 
@@ -82,6 +81,30 @@ const LE_CYLINDER = 17;
 const LE_SUNLIGHT = 19;
 const LE_QUADRATIC_NON_INCIDENCE = 20;
 
+export function hsvToColorPlane(hue: number, saturationByte: number, target: Color): Color {
+    const h = hue & 0xff, saturation = (saturationByte & 0xff) / 255;
+    let r: number, g: number, b: number;
+
+    if (h < 86) {
+        r = (85 - h) / 85;
+        g = h / 85;
+        b = 0;
+    } else if (h < 171) {
+        r = 0;
+        g = (170 - h) / 85;
+        b = (h - 85) / 85;
+    } else {
+        r = (h - 170) / 85;
+        g = 0;
+        b = (255 - h) / 84;
+    }
+
+    // FGetHSV 0x106f3c00 returns an FPlane; FDynamicLight::Update supplies brightness255.
+    const lightness = 1.4 / (Math.sqrt(1.4) + 0.01) * 0.7;
+
+    return target.setRGB(((1 - r) * saturation + r) * lightness, ((1 - g) * saturation + g) * lightness, ((1 - b) * saturation + b) * lightness);
+}
+
 export class ColorHSV {
     public readonly hue: number;
     public readonly saturation: number;
@@ -97,11 +120,16 @@ export class ColorHSV {
         const [r, g, b] = hsvToRgb(this.hue, this.saturation, 255);
         return target.set(r, g, b);
     }
+
+    public toColorPlane(target: Color): Color {
+        return hsvToColorPlane(this.hue, this.saturation, target);
+    }
 }
 
 type DynamicLightConstructor_T = {
     lightMethod: "Light" | "Sunlight";
     isDynamic: boolean;
+    isSpecialLit?: boolean;
     colorHSV: ColorHSV;
     cone: number;
     isDirectional: boolean;
@@ -116,6 +144,7 @@ type DynamicLightConstructor_T = {
 export class DynamicLight extends Object3D {
     public readonly lightMethod: "Light" | "Sunlight";
     public readonly isDynamic: boolean;
+    public readonly isSpecialLit: boolean;
     public readonly colorHSV: ColorHSV;
     public readonly cone: number;
     public readonly isDirectional: boolean;
@@ -154,6 +183,7 @@ export class DynamicLight extends Object3D {
         this.colorHSV = props.colorHSV;
         this.cone = props.cone;
         this.isDirectional = props.isDirectional;
+        this.isSpecialLit = props.isSpecialLit ?? false;
         this.lightEffect = props.lightEffect;
         this.lightType = props.lightType;
         this.radius = props.radius;
@@ -249,11 +279,11 @@ export class DynamicLight extends Object3D {
         }
 
         // FDynamicLight::Update 0x907554/0x907571 uses the actor base plane and brightness; FGetHSV 0x9c3c13 uses 1.4/255.
-        if (this.isSunlightColor) envManager.getBaseColorPlaneActorSunLight(tmpHardwareColorByte);
-        else tmpHardwareColorByte.setFromHSV(this.colorHSV.hue, this.colorHSV.saturation, 255);
+        if (this.isSunlightColor) {
+            envManager.getBaseColorPlaneActorSunLight(this.hardwareColor);
+        } else this.colorHSV.toColorPlane(this.hardwareColor);
 
         const hardwareBrightness = this.isSunlightColor ? envManager.getBrightnessActorSunLight() : this.colorHSV.value;
-        tmpHardwareColorByte.toFloats(this.hardwareColor);
         // D3DDrv SetLight RVA 0x1c381 divides color by 2; 0x1c40e/0x1c5e8 then apply 7/8 or 1/2.
         this.hardwareColor.multiplyScalar(hardwareBrightness / 255 * intensity * levelBrightness * (this.isSunlight ? 7 / 16 : 1 / 4));
 

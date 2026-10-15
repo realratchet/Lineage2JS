@@ -15,7 +15,7 @@ export class SwayingObject extends RotatingObject {
     protected readonly phase: [number, number, number];
     protected readonly attached: AttachedActor_T[] = [];
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, swaying: ISwayingDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, isSpecialLit?: boolean, forcedRegionTag?: string, forcedRegion?: number, ambient?: { glow: number, vector: number[], isUnlit: boolean }, swaying: ISwayingDecodeInfo }) {
         super({ ...props, rotating: { rotator: props.swaying.orgRotator, rate: [0, 0, 0] } });
 
         this.swaying = props.swaying;

@@ -1,7 +1,8 @@
-import { Object3D, Vector3 } from "three";
+import { Matrix4, Object3D, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent, type IObject } from "../../game/components";
 import SoundComponent, { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
-import { getPawnRotation } from "../../utils/rotator";
+import Rotator, { getPawnRotation } from "../../utils/rotator";
+import type ActorMeshComponent from "../../rendering/components/actor-mesh-component";
 import SkillVisualEffect, { type SkillCast_T } from "@l2js/engine/skills/skill-visual-effect";
 import { getSkillHitTimeOffset, getSkillPreviewListTarget } from "@l2js/engine/skills/skill-visual-definition";
 import SkillEffectHost from "./skill-effect-host";
@@ -20,6 +21,9 @@ const tmpNpcPosition = new Vector3();
 const tmpTargetPosition = new Vector3();
 const tmpEffectPosition = new Vector3();
 const tmpAttackDirection = new Vector3();
+const tmpArrowWorld = new Matrix4();
+const tmpArrowRelative = new Matrix4();
+const tmpArrowRotation = new Rotator();
 
 export type PawnAttack_T = {
     label: string;
@@ -456,7 +460,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public castFromServer(target: BaseActor, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly BaseActor[], targetExcepted: boolean, elapsed: number = 0): void {
-        if (!Number.isFinite(hitTime) || hitTime < 0) throw new Error(`Invalid server cast time '${hitTime}'.`);
+        if (!Number.isFinite(hitTime)) throw new Error(`Invalid server cast time '${hitTime}'.`);
 
         this.attack(target, this.addSkill(skill), [], associatedActors, targetExcepted, true);
         if (skill.castStyle === 0) return;
@@ -662,7 +666,35 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             arrow.scale.x *= scale;
             const projectile = arrow.addComponent(new NProjectileComponent(this.renderManager, parent, target, (_arrow, hitActor, impactActor) => {
                 // Engine.dll ANProjectile::processHitWall 0x78d5b0: physical impact sounds/light are deferred until arrival.
-                if (hitActor && impactActor === target) this.actionAttack(target, param);
+                if (!hitActor || impactActor !== target || param?.isMiss) return false;
+
+                this.actionAttack(target, param);
+                // APawn::AttackedNotify 0x105ee8c5..0x105eeed1; physical BowAttackProcess uses ActionID 2.
+                properties.set("LifeSpan", !param?.isSpirit && param?.isShieldDefense ? 0.1 : 16);
+                const mesh = arrow.getComponent<ActorMeshComponent>("actorMesh").getMesh();
+
+                tmpAttackDirection.set(1, 0, 0).applyQuaternion(arrow.quaternion);
+                tmpEffectPosition.copy(mesh.meshOrigin).multiplyScalar(properties.get("CollisionHeight") * properties.get("DrawScale") * properties.get("DrawScale3D")[0] * 1.3).multiply(tmpAttackDirection);
+                arrow.position.sub(tmpEffectPosition);
+                arrow.updateWorldMatrix(true, false);
+                tmpArrowWorld.copy(arrow.matrixWorld);
+
+                if (param?.isSpirit || !param?.isShieldDefense) {
+                    if (!target.attachObjectToBone(arrow, target.getUnrealScriptProperty("EffectSpawnBoneIdx") as number)) throw new Error(`Pawn '${target.name}' cannot attach its hit arrow.`);
+
+                    arrow.parent.updateWorldMatrix(true, false);
+                    tmpArrowRelative.copy(arrow.parent.matrixWorld).invert().multiply(tmpArrowWorld);
+                    tmpArrowRelative.decompose(arrow.position, arrow.quaternion, arrow.scale);
+                    arrow.position.toArray(properties.get("RelativeLocation"));
+                    tmpArrowRotation.setFromRotationMatrix(tmpArrowRelative);
+                    properties.set("RelativeRotation", [tmpArrowRotation.pitch, tmpArrowRotation.yaw, tmpArrowRotation.roll]);
+                    target.gainScriptChild(arrow);
+                }
+
+                const index = this.attackEffects.indexOf(arrow);
+
+                if (index >= 0) this.attackEffects.splice(index, 1);
+                return true;
             }));
 
             this.addAttackEffect(arrow);

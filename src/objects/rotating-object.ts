@@ -13,7 +13,7 @@ export class RotatingObject extends CollidingMesh {
     protected readonly rateYaw: number;
     protected readonly rateRoll: number;
 
-    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, ambient?: { glow: number, vector: number[], isUnlit: boolean }, rotating: IRotatingDecodeInfo }) {
+    public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, isSpecialLit?: boolean, forcedRegionTag?: string, forcedRegion?: number, ambient?: { glow: number, vector: number[], isUnlit: boolean }, rotating: IRotatingDecodeInfo }) {
         super(props);
 
         this.rotator = new Rotator(...props.rotating.rotator);

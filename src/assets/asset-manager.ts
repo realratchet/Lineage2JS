@@ -281,7 +281,21 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public isAreaLoaded(renderManager: RenderManager, position: THREE.Vector3): boolean {
         const sector = renderManager.getSector(position);
 
-        return !!sector && !!sector.staticMeshGroup && renderManager.isSectorWarm(sector);
+        if (!sector || !sector.staticMeshGroup || !renderManager.isSectorWarm(sector)) return false;
+
+        const [sx, sy] = renderManager.getSectorId(position), ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
+
+        for (let x = sx - ring; x <= sx + ring; x++) {
+            for (let y = sy - ring; y <= sy + ring; y++) {
+                if ((x === sx && y === sy) || !this.hasSector(`${x}_${y}`) || sectorDistance(position, x, y) > this.renderDistance) continue;
+
+                const neighbour = renderManager.getSectorByCoords(x, y);
+
+                if (!neighbour || !neighbour.staticMeshGroup || !renderManager.isSectorWarm(neighbour)) return false;
+            }
+        }
+
+        return true;
     }
 
     public async onInit(): Promise<this> {
@@ -592,6 +606,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         }
 
         mergePawnLibrary(pawnLibrary, library);
+        actor.getComponent<ScriptComponent>("script").getVM().loadFunctions();
         pawnLibrary.pawnEquipment = library.pawnEquipment;
         pawnLibrary.npcBow = library.npcBow;
         applyCharacterEquipment(renderManager, pawnLibrary, actor, Object.fromEntries(actor.getAnimationNames().map(name => [name, null as THREE.AnimationClip])));
@@ -878,7 +893,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return effect;
     }
 
-    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true): Promise<BaseActor> {
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
         const npc = await this.resolveNpc(selector);
         const index = npc.mesh.indexOf(".");
 
@@ -912,6 +927,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         }
 
         try {
+            if (collisionSize) actor.setCollisionSize(collisionSize[0], collisionSize[1]);
             renderManager.addPawn(actor);
 
             if (isEntering && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);

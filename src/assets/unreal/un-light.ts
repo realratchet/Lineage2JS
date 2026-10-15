@@ -7,6 +7,7 @@ import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
 export type ILightDecodeInfo = IBaseObjectDecodeInfo & {
     type: "Light",
     dynamic: boolean,
+    isSpecialLit: boolean,
     hsv: [number, number, number],
     radius: number,
     directional: boolean,
@@ -154,6 +155,7 @@ export abstract class ULight extends UAActor {
             type: "Light",
             hsv: [this.hue, this.saturation, this.brightness],
             dynamic: this.isDynamic,
+            isSpecialLit: this.isSpecialLit,
             cone: this.cone,
             lightType: this.type.valueOf(),
             lightEffect: this.effect.valueOf(),

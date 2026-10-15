@@ -257,4 +257,8 @@ for (const id of [369])
 for (const id of [2099, 2100, 4235])
     nativeSkillHandlers.set(id, "devastatedRecall");
 
+// Engine.dll IDs4342..4360: Init0x79c74b, PreShot0x7a3de7, Shot0x7b0e38, Explosion0x791ade.
+for (let id = 4342; id <= 4360; id++)
+    nativeSkillHandlers.set(id, "empty");
+
 export default nativeSkillHandlers;

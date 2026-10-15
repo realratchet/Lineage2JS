@@ -95,6 +95,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
     protected animationTweenEndTime = 0;
+    protected simulationSuspendedAt: number = null;
     protected readonly boneScalers = new Map<string, BoneScaler_T>();
     protected readonly tweenTimeScales = new Map<AnimationAction, number>();
     protected isAnimationsInit = false;
@@ -152,6 +153,16 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
             if (crossed) this.dispatchEvent(ANIMATION_NOTIFY_EVENT, notify);
         }
+    }
+
+    public setSimulationEnabled(enabled: boolean): void {
+        if (enabled === (this.simulationSuspendedAt === null)) return;
+
+        for (const mesh of this.meshes) (this.mixer as any).setRootEnabled(mesh, enabled);
+        if (enabled) {
+            if (this.tweenTimeScales.size > 0) this.animationTweenEndTime += this.mixer.time - this.simulationSuspendedAt;
+            this.simulationSuspendedAt = null;
+        } else this.simulationSuspendedAt = this.mixer.time;
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
@@ -243,6 +254,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public setMeshes(meshes: Mesh[]): void {
         const parent = this.getParent();
 
+        this.setSimulationEnabled(true);
         this.stop();
 
         for (const scaler of this.boneScalers.values()) {
@@ -294,7 +306,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         // USubSkeletalMeshInstance::MeshToWorld 0x946885..0x9468d9 combines actor and mesh scale before rotation.
         for (const mesh of this.meshes as LitSkinnedMesh[]) {
             mesh.scale.fromArray(drawScale3D).multiply(mesh.meshScale).multiplyScalar(drawScale);
-            mesh.position.z = mesh.meshOrigin.z + collisionHeight - mesh.meshOrigin.z * mesh.scale.z;
+            mesh.position.z = collisionHeight;
         }
     }
 
@@ -484,9 +496,11 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
         const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
 
-        if (!resolvedName) throw new Error(`'${animationName}' is not available.`);
+        if (!resolvedName) return; // USkeletalMeshInstance::PlayAnim 0x10673a68 returns false for missing sequences.
 
         const sourceClip = this.actorAnimations[resolvedName];
+        const suspended = this.simulationSuspendedAt !== null;
+        if (suspended) this.setSimulationEnabled(true);
         const mixer = this.mixer;
         const tweenEndTime = mixer.time + Math.max(0, tweenTime);
         let notifyAction: AnimationAction = null;
@@ -567,6 +581,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
         if (didBegin && script?.hasFunction("AnimBegin")) script.call("AnimBegin", [resolvedName]);
+        if (suspended) this.setSimulationEnabled(false);
     }
 
     protected holdFirstFrame(action: AnimationAction, timeScale: number): void { // startAt() would drop the action's weight until the tween ends, blending the skeleton toward its bind pose.
@@ -588,6 +603,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     public release(): void {
+        this.setSimulationEnabled(true);
         this.stop();
         for (const name of this.boneScalers.keys()) this.setBoneScale(name, 1);
 

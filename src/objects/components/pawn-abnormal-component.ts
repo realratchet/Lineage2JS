@@ -137,10 +137,16 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
                 if (scale > 1) setSizeScale(effect, scale);
                 break;
             }
-            case 0x2: case 0x40: case 0x80: case 0x100:
-                if (parent.attachObjectToBone(effect, mesh.tagNames[index])) effect.position.fromArray(mesh.tagOrigins[index]);
-                else parent.attachObjectToBone(effect, 0);
+            case 0x2: case 0x40: case 0x80: case 0x100: {
+                if (parent.attachObjectToBone(effect, mesh.tagNames[index], true)) {
+                    const bigHead = this.stats.find(stat => stat.state === 0x2000);
+
+                    effect.position.fromArray(mesh.tagOrigins[index]);
+                    if (bigHead) effect.position.multiplyScalar(bigHead.scale);
+                }
+                else parent.attachObjectToBone(effect, 0, true);
                 break;
+            }
             case 0x200: case 0x4000: setSizeScale(effect, radius / 9); break;
             default: throw new Error(`Abnormal state 0x${stat.state.toString(16)} has no effect.`);
         }

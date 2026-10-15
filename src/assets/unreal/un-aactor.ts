@@ -83,6 +83,8 @@ export abstract class UAActor extends UObject {
 
     // protected _mesh: any;
     declare public readonly forcedRegionTag: string;
+    declare public readonly isSpecialLit: boolean;
+    declare protected readonly forcedRegion: number;
     declare public readonly forcedVisibilityZoneTag: string;
 
     declare public readonly skins: FObjectArray<UTexture>;
@@ -285,6 +287,8 @@ export abstract class UAActor extends UObject {
             "bPendingDelete": "isPendingDelete",
 
             "ForcedRegionTag": "forcedRegionTag",
+            "bSpecialLit": "isSpecialLit",
+            "ForcedRegion": "forcedRegion",
             "ForcedVisibilityZoneTag": "forcedVisibilityZoneTag",
 
             "Skins": "skins",

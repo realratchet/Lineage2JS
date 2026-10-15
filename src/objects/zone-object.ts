@@ -26,6 +26,9 @@ const tmpSphere = new Sphere();
 const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
 const arrLightSortKeys = new Float64Array(8);
+const arrLightNodes: number[] = [];
+const tmpLightCenter = new Vector3();
+const tmpLightExtent = new Vector3();
 const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 const TRANSPARENT_SORT_DISTANCE_SQ = 128 * 128;
 
@@ -361,11 +364,47 @@ export class SectorObject extends GameObject {
         return entry.uri;
     }
 
+    public getPermeatingLights(bounds: Box3, target: string[], forcedRegionTag: string = "None", forcedRegion: number = 0): string[] {
+        target.length = 0;
+        arrLightNodes.length = 0;
+        if (!this.bspNodes.length) return target;
+
+        bounds.getCenter(tmpLightCenter);
+        bounds.getSize(tmpLightExtent).multiplyScalar(0.5);
+        const tag = forcedRegionTag.toLowerCase();
+        arrLightNodes.push(0);
+
+        while (arrLightNodes.length) {
+            const node = this.bspNodes[arrLightNodes.pop()], plane = node.plane;
+            const distance = tmpLightCenter.x * plane.x + tmpLightCenter.y * plane.y + tmpLightCenter.z * plane.z - plane.w;
+            const pushOut = Math.abs(tmpLightExtent.x * plane.x) + Math.abs(tmpLightExtent.y * plane.y) + Math.abs(tmpLightExtent.z * plane.z);
+
+            for (let side = 0; side < 2; side++) {
+                if ((side ? -distance : distance) >= pushOut) continue;
+                const child = side ? node.front : node.back;
+                if (child >= 0) {
+                    arrLightNodes.push(child);
+                    continue;
+                }
+                if (node.leaves[side] < 0) continue;
+                const leaf = this.bspLeaves[node.leaves[side]];
+                if (tag === "none") {
+                    if (forcedRegion && leaf.zone !== forcedRegion) continue;
+                } else if (this.bspZones[leaf.zone].zoneInfo.scriptProperties.ZoneTag.toLowerCase() !== tag) continue;
+
+                for (const name of leaf.permeatingLights) if (!target.includes(name)) target.push(name);
+            }
+        }
+
+        return target;
+    }
+
     // GetRelevantLights, UnRenderVisibility.cpp line 439: Consider only contains zone-relevant lights.
-    public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, permeatingLights: string[] = null): DynamicLight[] {
+    public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, permeatingLights: string[] = null, isSpecialLit: boolean = false): DynamicLight[] {
         target.length = 0;
 
         for (const light of this.lightList) {
+            if (light.isSpecialLit !== isSpecialLit) continue;
             if (light.isSunlight && !allowSunlight) continue;
             if (permeatingLights && !light.isSunlight && !light.isDynamic && !permeatingLights.includes(light.name)) continue;
 

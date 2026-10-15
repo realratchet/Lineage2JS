@@ -169,16 +169,16 @@ export class ZUpOrbitControls extends EventDispatcher {
 
                 offset.copy(position).sub(scope.target);
 
+                if (scope.unclippedDistance > 0) {
+                    offset.set(0, 0, scope.unclippedDistance).applyQuaternion(scope.object.quaternion);
+                    scope.unclippedDistance = 0;
+                }
+
                 // rotate offset to "y-axis-is-up" space
                 offset.applyQuaternion(quat);
 
                 // angle from z-axis around y-axis
                 spherical.setFromVector3(offset);
-
-                if (scope.unclippedDistance > 0) {
-                    spherical.radius = scope.unclippedDistance;
-                    scope.unclippedDistance = 0;
-                }
 
                 if (scope.autoRotate && state === STATE.NONE) {
 

@@ -5,6 +5,8 @@ import decodeTexture from "./texture-decoder";
 import computePointNormals from "./point-normals";
 import Terrain from "../../objects/terrain";
 import CollidingMesh from "../../objects/colliding-mesh";
+import AgitStaticMeshActor from "../../objects/agit-static-mesh-actor";
+import LitActorMesh from "../../objects/lit-actor";
 import SpriteEmitter from "../../objects/emitters/sprite-emitter";
 import MeshEmitter from "../../objects/emitters/mesh-emitter";
 import VertMeshEmitter from "../../objects/emitters/vert-mesh-emitter";
@@ -396,8 +398,13 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     const isSunAffected = info.isSunAffected ?? true;
     const ambient = info.ambient;
 
-    const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, ambient, collision: info.collision, staticMeshCollision, collisionIndex };
-    const object = info.mover ? new MovableObject({ ...props, mover: info.mover })
+    const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, isSpecialLit: info.isSpecialLit, permeatingLights: info.permeatingLights, forcedRegionTag: info.forcedRegionTag, forcedRegion: info.forcedRegion, ambient, collision: info.collision, staticMeshCollision, collisionIndex };
+    const accessories = info.agit ? info.agit.accessories.map(accessory => {
+        const decoded = decodeStaticMeshInstance(library, { ...instanceInfo, mesh: accessory.mesh, attributes: {}, lights: null }, fetchGeometry);
+        return new LitActorMesh({ geometry: decoded.geometry, materials: canonicalizeStaticMeshMaterials(decoded.materials), lightInfo: null, scaledGlow, isSunAffected, isSpecialLit: info.isSpecialLit, permeatingLights: info.permeatingLights, forcedRegionTag: info.forcedRegionTag, forcedRegion: info.forcedRegion, ambient: { ...ambient, hardwareLighting: true } });
+    }) : null;
+    const object = info.agit ? new AgitStaticMeshActor(props, info.agit, accessories)
+        : info.mover ? new MovableObject({ ...props, mover: info.mover })
         : info.swaying ? new SwayingObject({ ...props, swaying: info.swaying })
             : info.rotating ? new RotatingObject({ ...props, rotating: info.rotating })
                 : new CollidingMesh(props);
@@ -514,6 +521,7 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo | ISunLightD
     const light = new DynamicLight({
         lightMethod: info.type,
         isDynamic: info.dynamic,
+        isSpecialLit: info.isSpecialLit,
         colorHSV: new ColorHSV(...info.hsv),
         isSunlightColor: info.isSunlightColor,
         cone: info.cone,

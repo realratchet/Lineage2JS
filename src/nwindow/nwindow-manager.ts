@@ -42,6 +42,7 @@ export class NWindowManager {
     protected isReady = false;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
+    public readonly arrTooltipPaint: (() => void)[] = [];
     public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillRecords: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
     public constructor(protected readonly asset: AssetManager) {
@@ -489,11 +490,14 @@ export class NWindowManager {
 
         const canvas = this.canvas;
 
+        this.arrTooltipPaint.length = 0;
         canvas.beginFrame();
 
         if (hasOverlay) this.overlayPaint(canvas);
 
         for (const wnd of this.windows) wnd.paint(canvas);
+        for (const paint of this.arrTooltipPaint) paint();
+        this.arrTooltipPaint.length = 0;
 
         this.isDirty = false;
     }

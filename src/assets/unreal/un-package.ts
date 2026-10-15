@@ -15,7 +15,7 @@ import UNSun from "./un-nsun";
 import UNMoon from "./un-nmoon";
 import UNMovableSunLight from "./un-movable-sunlight";
 import ULight from "./un-light";
-import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+import UStaticMeshActor, { FAccessory } from "./static-mesh/un-static-mesh-actor";
 import UPlayerStart from "./un-player-start";
 import UPhysicsVolume from "./un-physics-volume";
 import UDefaultPhysicsVolume from "./un-physics";
@@ -332,6 +332,7 @@ export class UNativePackage extends ANativePackage {
 
             case "L2RotatorTime": Constructor = FL2RotatorTime; break;
             case "SkillActionInfo": Constructor = FSkillActionInfo; break;
+            case "AccessoryType": Constructor = FAccessory; break;
 
             case "FFighter":
             case "baium":
@@ -354,7 +355,6 @@ export class UNativePackage extends ANativePackage {
             case "Interpolator":
             case "AnimRep":
             case "Orientation":
-            case "AccessoryType":
             case "L2Event":
             case "NMagicInfo":
             case "ParticleBeamEndPoint": Constructor = PEmitter.UParticleBeamEndPoint; break;

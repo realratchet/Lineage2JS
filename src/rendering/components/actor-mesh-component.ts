@@ -60,6 +60,9 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         // LocalSpaceSkeleton poses exclude the mesh transform; retain its origin and rotation outside skinning.
         for (const inverse of this.mesh.skeleton.boneInverses) inverse.multiply(this.mesh.bindMatrix);
         this.mesh.bind(this.mesh.skeleton, tmpIdentity);
+        // Reference-pose bounds stay local; SkinnedMesh.computeBoundingSphere uses world-space bone matrices.
+        this.mesh.geometry.computeBoundingSphere();
+        this.mesh.boundingSphere = this.mesh.geometry.boundingSphere.clone();
         this.renderManager.retainGeometry(this.mesh.geometry);
         this.renderManager.retainMeshTextures([this.mesh], this.meshTextures);
 

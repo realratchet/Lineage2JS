@@ -96,7 +96,7 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
             event.preventDefault();
 
             if (this.onUse) this.onUse(this.page, Number(match[1]) - 1, event.ctrlKey, event.shiftKey);
-        });
+        }, true);
     }
 
     public getTextures(): string[] {

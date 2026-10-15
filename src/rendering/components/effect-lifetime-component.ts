@@ -50,10 +50,11 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
             }
             if (owner && (properties.get("bSelfRotation") || !properties.get("Base"))) { // Engine.dll physTrailer 0x8ce32e..0x8ce5ef.
                 owner.getWorldPosition(effect.position);
+                if ((owner as any).isActor) effect.position.z += (owner as BaseActor).getCollisionHeight();
                 if (properties.get("bRelativeTrail")) {
                     owner.getWorldQuaternion(tmpOwnerRotation);
                     effect.position.add(tmpTrailerOffset.fromArray(properties.get("RelativeTrailOffset")).applyQuaternion(tmpOwnerRotation));
-                } else if (properties.get("bTrailerPrePivot")) effect.position.add(tmpTrailerOffset.fromArray(properties.get("PrePivot")));
+                } else if (properties.get("bTrailerPrePivot")) effect.position.add(tmpTrailerOffset.fromArray(properties.get((effect as any).isEmitterActor ? "TrailerPrePivot" : "PrePivot")));
                 if (!properties.get("bSelfRotation") && properties.get("bTrailerSameRotation")) owner.getWorldQuaternion(effect.quaternion);
                 effect.updateMatrixWorld(true);
             }

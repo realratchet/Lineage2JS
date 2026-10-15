@@ -704,7 +704,7 @@ void main() {
     #endif
     #ifdef USE_ACTOR_LIGHTS
         vec3 actorPosition = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
-        vec3 actorNormal = normalize( mat3( modelMatrix ) * objectNormal );
+        vec3 actorNormal = inverseTransformDirection( normalMatrix * objectNormal, viewMatrix );
         vec3 actorLighting = actorAmbient;
 
         for ( int i = 0; i < NUM_ACTOR_LIGHTS; i++ ) {

@@ -178,6 +178,7 @@ export class SpecialView {
         this.input.getParent().getComponent("render").player.getCameraTargetPosition(orbit.target);
         viewDirection(this.normalRotation.x, this.normalRotation.y, tmpDirection);
         orbit.object.position.copy(orbit.target).addScaledVector(tmpDirection, -this.normalDistance);
+        orbit.unclippedDistance = 0;
         orbit.update();
         orbit.enabled = this.wasEnabled;
         this.objectId = 0;
