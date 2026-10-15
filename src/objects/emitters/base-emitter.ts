@@ -590,8 +590,8 @@ export abstract class BaseEmitter extends Object3D {
     protected finishConstruction(config: EmitterConfig_T): void {
         this.initSettings(config);
 
-        if (this.coordinateSystem === "spray") {
-            // Engine.dll 0x8a18f4: Spray draws stored world positions, not the attachment's latest pose.
+        if (this.coordinateSystem === "spray" || this.coordinateSystem === "independent") {
+            // Engine.dll RenderParticles 0x106ac0e8 keeps non-relative particles in world space.
             this.particleSpace = new ParticleSpace(this.oldSprayMatrix);
             this.add(this.particleSpace);
         }
@@ -1610,6 +1610,7 @@ export abstract class BaseEmitter extends Object3D {
         }
 
         this.updateParticles(dt);
+        if (this.coordinateSystem === "independent") this.oldSprayMatrix.copy(this.matrixWorld);
 
         if (!this.visible && (this as any).emitterActorUuid && !(this as any).isActorAttachedEmitter) {
             this.currentTime = currentTime;

@@ -15,9 +15,9 @@ export type ClippingRangeConfig_T = {
 };
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
-export type GameConfig_T = { arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
+export type GameConfig_T = { autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
 export type AudioConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
-export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; };
+export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; };
 
 export class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
@@ -44,9 +44,11 @@ export class UConfigSystem extends BaseConfigFile {
 
     public audio: AudioConfig_T = { soundVolume: 0.8, musicVolume: 1, wavVoiceVolume: 0.6, oggVoiceVolume: 0.6 }; // ALAudio.dll Init 0x1000a1b4/0x1000a1e0/0x1000a20c/0x1000a238.
 
-    public game: GameConfig_T = { arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
+    public game: GameConfig_T = { autoTrackingPawn: false, arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
     public readonly definedGameKeys = new Set<keyof GameConfig_T>();
     public cameraViewHeightAdjust = 0;
+    public useAutoTrackingPawn = false;
+    public autoTrackingPawnSpeed = 0;
 
     public async load(): Promise<this> {
         const fileContents = this.decodeConfig();
@@ -64,6 +66,7 @@ export class UConfigSystem extends BaseConfigFile {
 
         this.loadSection(fileContents, "Game", (key, value) => {
             switch (key.toLowerCase()) {
+                case "autotrackingpawn": this.game.autoTrackingPawn = value.toLowerCase() === "true"; this.definedGameKeys.add("autoTrackingPawn"); break;
                 case "arrowmode": this.game.arrowMode = value.toLowerCase() === "true"; this.definedGameKeys.add("arrowMode"); break;
                 case "showzonetitle": this.game.showZoneTitle = value.toLowerCase() === "true"; this.definedGameKeys.add("showZoneTitle"); break;
                 case "systemmsgwnddamage": this.game.systemMsgWndDamage = value.toLowerCase() === "true"; this.definedGameKeys.add("systemMsgWndDamage"); break;
@@ -89,6 +92,12 @@ export class UConfigSystem extends BaseConfigFile {
         const fileContents = this.decodeConfig();
 
         this.loadSection(fileContents, "Engine.LineagePlayerController", (key, value) => {
+            if (key.toLowerCase() === "buseautotrackingpawn") { this.useAutoTrackingPawn = value.toLowerCase() === "true"; return; }
+            if (key.toLowerCase() === "autotrackingpawnspeed") {
+                this.autoTrackingPawnSpeed = Math.fround(Number(value));
+                if (!Number.isFinite(this.autoTrackingPawnSpeed)) throw new Error(`Invalid camera tracking speed '${value}'.`);
+                return;
+            }
             if (key.toLowerCase() !== "cameraviewheightadjust") return;
             this.cameraViewHeightAdjust = Math.fround(Number(value));
             if (!Number.isFinite(this.cameraViewHeightAdjust)) throw new Error(`Invalid camera view height '${value}'.`);
@@ -158,10 +167,10 @@ export async function getUserConfig(): Promise<UserConfig_T> {
     for (const key of options.definedGameKeys)
         (defaults.game as any)[key] = options.game[key];
 
-    for (const key of ["arrowMode", "showZoneTitle", "myName", "npcName", "groupName", "pledgeMemberName", "partyMemberName", "otherPCName", "oldChatting", "systemMsgWndDamage", "systemMsgWndExpendableItem"] as const)
+    for (const key of ["autoTrackingPawn", "arrowMode", "showZoneTitle", "myName", "npcName", "groupName", "pledgeMemberName", "partyMemberName", "otherPCName", "oldChatting", "systemMsgWndDamage", "systemMsgWndExpendableItem"] as const)
         defaults.game[key] = options.game[key];
 
-    return { audio: options.audio, clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game, cameraViewHeightAdjust: user.cameraViewHeightAdjust };
+    return { audio: options.audio, clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game, cameraViewHeightAdjust: user.cameraViewHeightAdjust, useAutoTrackingPawn: user.useAutoTrackingPawn, autoTrackingPawnSpeed: user.autoTrackingPawnSpeed };
 }
 
 export default UConfigSystem;

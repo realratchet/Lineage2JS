@@ -62,7 +62,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         if (damageSound) this.play(damageSound, damage.volume / 255, 1, damage.radius, damage.radius * 100, true, `Pawn '${actor.name}' damage`, tmpPosition);
     }
 
-    public playSkillSound(info: NpcSkillSound_T, actor: BaseActor = this.getParent(), assets: DecodeLibrary = this.library): void {
+    public playSkillSound(info: NpcSkillSound_T, actor: BaseActor = this.getParent(), assets: DecodeLibrary = this.library, onStarted?: (duration: number) => void): void {
         if (info.charClassId !== undefined && info.charClassId !== this.getParent().charClassId) return;
 
         const library = assets || this.library;
@@ -74,7 +74,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         actor.getWorldPosition(tmpPosition);
         tmpPosition.z += actor.getCollisionHeight();
         // Engine.dll APawn::PlaySkillSound 0x797e55: volume / 255, table radius, pitch 1.
-        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition, library);
+        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition, library, onStarted);
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
@@ -182,7 +182,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, volume, pitch, radius, radius * 100, attenuate, `UnrealScript ${call.name}`);
     }
 
-    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null, library: DecodeLibrary = this.library): void {
+    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null, library: DecodeLibrary = this.library, onStarted?: (duration: number) => void): void {
         if (!library) throw new Error(`${source} has no decode library.`);
 
         const sound = library.soundBlobCache.get(soundName);
@@ -190,7 +190,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         if (!sound?.uri) throw new Error(`${source} has no decoded sound '${soundName}'.`);
 
         if (!position) this.getParent().getWorldPosition(tmpPosition);
-        this.audioManager.playOneShotSound(sound.uri, position || tmpPosition, volume, pitch, refDistance, maxDistance, attenuate);
+        this.audioManager.playOneShotSound(sound.uri, position || tmpPosition, volume, pitch, refDistance, maxDistance, attenuate, onStarted);
     }
 }
 

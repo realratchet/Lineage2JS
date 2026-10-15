@@ -167,6 +167,8 @@ export type NativeSkillEffect_T = {
 const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.e_u001_a": [{ phase: "shot", effectClass: "LineageEffect.e_u001_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
     "lineageeffect.e_u002_a": [{ phase: "shot", effectClass: "LineageEffect.e_u002_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
+    "lineageeffect.e_u003_a": [{ phase: "shot", effectClass: "LineageEffect.e_u003_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
+    "lineageeffect.e_u032_a": [{ phase: "shot", effectClass: "LineageEffect.e_u032_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero", trailerPrePivot: { meshOriginScale: 1 } }],
     "lineageeffect.m_u030_a": mU030.filter(effect => effect.effectClass === "LineageEffect.m_u030_a"),
     "lineageeffect.m_u030_b": mU030.filter(effect => effect.effectClass === "LineageEffect.m_u030_b"),
     "lineageeffect.s_u020_a": sU020.filter(effect => effect.effectClass === "LineageEffect.s_u020_a"),

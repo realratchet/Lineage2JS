@@ -4,5 +4,7 @@ declare namespace L2JS.Engine {
         dropType: number;
         dropAnimType: number;
         dropSound: string;
+        collisionRadius: number;
+        collisionHeight: number;
     }
 }

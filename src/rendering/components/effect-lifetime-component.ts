@@ -7,6 +7,7 @@ import type RenderManager from "../render-manager";
 
 const tmpTrailerOffset = new Vector3();
 const tmpOwnerRotation = new Quaternion();
+const pawnMeshRotation = new Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
 
 export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Object3D> {
     public readonly componentName = "effectLifetime";
@@ -48,16 +49,7 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
                 this.renderManager.removeTransientEffect(effect);
                 return true;
             }
-            if (owner && (properties.get("bSelfRotation") || !properties.get("Base"))) { // Engine.dll physTrailer 0x8ce32e..0x8ce5ef.
-                owner.getWorldPosition(effect.position);
-                if ((owner as any).isActor) effect.position.z += (owner as BaseActor).getCollisionHeight();
-                if (properties.get("bRelativeTrail")) {
-                    owner.getWorldQuaternion(tmpOwnerRotation);
-                    effect.position.add(tmpTrailerOffset.fromArray(properties.get("RelativeTrailOffset")).applyQuaternion(tmpOwnerRotation));
-                } else if (properties.get("bTrailerPrePivot")) effect.position.add(tmpTrailerOffset.fromArray(properties.get((effect as any).isEmitterActor ? "TrailerPrePivot" : "PrePivot")));
-                if (!properties.get("bSelfRotation") && properties.get("bTrailerSameRotation")) owner.getWorldQuaternion(effect.quaternion);
-                effect.updateMatrixWorld(true);
-            }
+            this.updateTrailerTransform();
         }
 
         while (root.parent) root = root.parent;
@@ -67,6 +59,28 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
         this.renderManager.removeTransientEffect(effect);
 
         return true;
+    }
+
+    // Engine.dll physTrailer 0x8ce32e..0x8ce5ef.
+    public updateTrailerTransform(): void {
+        const effect = this.getParent(), properties = (effect as any).scriptProperties;
+
+        if (properties?.get("Physics") !== EPhysics_T.PHYS_Trailer) return;
+        const owner = (effect as any).scriptOwner as THREE.Object3D;
+
+        if (!owner || !properties.get("bSelfRotation") && properties.get("Base")) return;
+        owner.getWorldPosition(effect.position);
+        if ((owner as any).isActor) effect.position.z += (owner as BaseActor).getCollisionHeight();
+        if (properties.get("bRelativeTrail")) {
+            owner.getWorldQuaternion(tmpOwnerRotation);
+            if ((owner as any).isActor) tmpOwnerRotation.multiply(pawnMeshRotation);
+            effect.position.add(tmpTrailerOffset.fromArray(properties.get("RelativeTrailOffset")).applyQuaternion(tmpOwnerRotation));
+        } else if (properties.get("bTrailerPrePivot")) effect.position.add(tmpTrailerOffset.fromArray(properties.get((effect as any).isEmitterActor ? "TrailerPrePivot" : "PrePivot")));
+        if (!properties.get("bSelfRotation") && properties.get("bTrailerSameRotation")) {
+            owner.getWorldQuaternion(effect.quaternion);
+            if ((owner as any).isActor) effect.quaternion.multiply(pawnMeshRotation);
+        }
+        effect.updateMatrixWorld(true);
     }
 }
 

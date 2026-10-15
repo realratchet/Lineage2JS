@@ -227,6 +227,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly levelSectors = new Set<string>();
     protected preferCompressedTextures = false;
     public userConfig: UserConfig_T = null;
+    public playerController: PlayerController = null;
     protected warriorAnimations: Record<string, WarriorAnimations_T> = null;
     protected charGroups: ICharacterGroup[] = null;
     protected characterPrecache: Promise<void> = null;
@@ -339,6 +340,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const underwaterLoopSound = playerController.getUnderWaterLoopSound();
 
         this.userConfig = clientConfig.userConfig;
+        this.playerController = playerController;
+        playerController.scriptProperties.set("bUseAutoTrackingPawn", this.userConfig.useAutoTrackingPawn);
+        playerController.scriptProperties.set("AutoTrackingPawnSpeed", this.userConfig.autoTrackingPawnSpeed);
         manRender.audioManager.setSoundVolume(this.userConfig.audio.soundVolume);
         manRender.audioManager.setMusicVolume(this.userConfig.audio.musicVolume);
         manRender.audioManager.setWavVoiceVolume(this.userConfig.audio.wavVoiceVolume);

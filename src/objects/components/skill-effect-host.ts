@@ -220,8 +220,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     public isLowDetail(): boolean { return this.renderManager.keepMinFrameRate; }
     public playAttackSounds(actor: SkillActor_T, critical: boolean = false): void { this.actor(actor).getComponent<SoundComponent>("sound").playAttackSounds(critical); }
 
-    public playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T, assets: DecodeLibrary = null): void {
-        this.actor(actor).getComponent<SoundComponent>("sound").playSkillSound(sound, target ? this.actor(target) : undefined, assets);
+    public playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T, assets: DecodeLibrary = null, onStarted?: (duration: number) => void): void {
+        this.actor(actor).getComponent<SoundComponent>("sound").playSkillSound(sound, target ? this.actor(target) : undefined, assets, onStarted);
     }
 
     public addViewShakeState(duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, amplitude: Vector3Arr, velocity: Vector3Arr, position: Vector3Arr, origin: Vector3Arr, strength: number, range: number, type?: "damage" | "upDown"): void {

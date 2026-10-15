@@ -10,6 +10,7 @@ export class ZUpOrbitControls extends EventDispatcher {
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;
+    public manualYaw = 0;
     public unclippedDistance: number = 0;
     protected nativeLike: boolean;
 
@@ -335,6 +336,7 @@ export class ZUpOrbitControls extends EventDispatcher {
 
         let state = STATE.NONE;
 
+
         const EPS = 0.000001;
 
         // current position in spherical coordinates
@@ -373,6 +375,8 @@ export class ZUpOrbitControls extends EventDispatcher {
         }
 
         function rotateLeft(angle: number) {
+
+            scope.manualYaw -= angle;
 
             sphericalDelta.theta -= angle;
 

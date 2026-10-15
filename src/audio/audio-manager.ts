@@ -788,7 +788,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         await this.playOneShotSound(uri, [0, 0, 0], 1, 1, 0, 0, false); // Engine.dll OnInterfacePlaySound 0x74711b: SOUND_No3D, pitch 1.
     }
 
-    public async playOneShotSound(dataUri: string, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true) {
+    public async playOneShotSound(dataUri: string, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true, onStarted?: (duration: number) => void) {
         const sourcePosition = position as any;
         const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
         const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
@@ -832,6 +832,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             if (panner) panner.disconnect();
         };
 
+        if (onStarted) onStarted(buffer.duration);
         source.start(0);
     }
 

@@ -3,7 +3,7 @@ import nativeSkillDispatch from "./native-skill-dispatch";
 import nativeSkillHandlers from "./native-skill-handlers";
 import nativeSkillRecipes from "./native-skill-recipes";
 
-export type NativeSkillBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, associatedActors?: boolean, pending?: string };
+export type NativeSkillBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, associatedActors?: boolean, pending?: string, firecracker?: 1 | 2 | 3, echoCrystal?: boolean };
 
 const nativeSkillBindings = new Map<string, NativeSkillBinding_T>([
     // Engine.dll OnReceiveMagicSkillUse 0x75086c; Init 0x7a16f9; Shot 0x7b0d96.
@@ -21,6 +21,14 @@ const nativeSkillBindings = new Map<string, NativeSkillBinding_T>([
     // Engine.dll SkillEffectShot 0x7abbb4 / 0x7abd11.
     ["s_group_hold", { effects: ["LineageEffect.e_u067_hand", "LineageEffect.e_u067_a"], soundPhases: ["shot"] }]
 ]);
+
+// Engine.dll SpawnNTransientEffect 0x104c91eb..0x104c9309; OnFirecracker 0x104777c0.
+for (const [name, type] of [["fairy firecracker", 1], ["firecracker", 2], ["large firecracker", 3]] as const)
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], firecracker: type });
+
+// Engine.dll SpawnNTransientEffect 0x104c9063/0x104c9e32; sound duration0x104ca91e.
+for (const name of ["item - race sound crystal", "item - theme sound crystal", "item - carol sound crystal", "item - special sound crystal"])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: ["casting"], echoCrystal: true });
 
 // Engine.dll Init 0x79f9ec; Shot 0x7ac0d5 requires AssociatedActor.Num(); primary target branch0x7ac1ab.
 for (const name of ["s_zaken_tel_pc", "s_zaken_range_tel_pc"])
@@ -382,8 +390,20 @@ for (const name of ["healing potion", "greater healing potion", "quick healing p
 for (const name of ["lesser healing potion", "rice cake"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u001_a"], soundPhases: ["casting"] });
 
+// Engine.dll SpawnNTransientEffect: IDs2011/2012/2034/2035/2103 share class0xaafc00 and spawn0x798ff2.
+for (const name of ["haste potion", "potion of alacrity", "greater haste potion", "greater swift attack potion", "mystery potion"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u003_a"], soundPhases: ["casting"] });
+
+// Engine.dll SpawnNTransientEffect 0x104c911e..0x104c91eb: e_u032_a and unscaled mesh Origin.Z in TrailerPrePivot.Z.
+for (const name of ["antidote", "greater antidote", "emergency dressing"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u032_a"], soundPhases: ["casting"] });
+
 // Engine.dll ID2036: empty phase handlers; transient selector0x79a9d1 ->0x79a7e1 with edi=0.
 nativeSkillBindings.set("l2day blessed scroll of escape", { effects: [], soundPhases: [], rejectTransient: true });
+
+// Engine.dll IDs2001/2002: unsigned selector rejection0x798e5d ->0x79a7e1; edi=0 skips sound and returns false.
+for (const name of ["red potion", "healing drug"])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
 
 // SpawnNTransientEffect IDs60/337/4338 reach0x79a7e1 with edi=0; none spawns an effect or sound.
 for (const name of ["fake death", "arcane power", "life cubic for novice"])

@@ -184,6 +184,9 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public updateFollowPlayer(deltaTime: number): void {
+        const manualYaw = this.controls.orbit.manualYaw;
+
+        this.controls.orbit.manualYaw = 0;
         if (this.isCameraLocked) return;
 
         if (this.specialView.update(this.manGame.getComponent("network"), deltaTime / 1000)) {
@@ -197,11 +200,33 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         renderManager.player.getCameraTargetPosition(tmpMouseIntersection);
         cameraVelocity.copy(tmpMouseIntersection).sub(this.controls.orbit.target);
+        this.updateAutoTrackingPawn(tmpMouseIntersection, manualYaw);
         renderManager.camera.position.add(cameraVelocity);
         this.controls.orbit.target.copy(tmpMouseIntersection);
         this.controls.orbit.update();
         this.hitCheckCamera();
         renderManager.updateCameraMatrices();
+    }
+
+    protected updateAutoTrackingPawn(target: Vector3, manualYaw: number): void {
+        if (cameraVelocity.lengthSq() === 0 || manualYaw !== 0 || !this.manGame.getComponent("network").ui.isAutoTrackingPawnEnabled()) return;
+
+        const controller = this.manGame.getComponent("asset").playerController.scriptProperties;
+        const speed = controller.get("AutoTrackingPawnSpeed") as number;
+
+        if (!controller.get("bUseAutoTrackingPawn") || speed === 0 || controller.get("bUseHoldCamera") || controller.get("bCameraMovingToDefault") || controller.get("bFixView") || controller.get("ManuallyCameraYaw")) return;
+
+        const camera = this.renderManager.camera, previousTarget = this.controls.orbit.target;
+        // OldCameraRotation.Yaw is integral; recover it from the floating camera basis.
+        const previousYaw = Math.round(Math.atan2(previousTarget.y - camera.position.y, previousTarget.x - camera.position.x) * 32768 / Math.PI) & 65535;
+        const desiredYaw = Math.trunc(Math.atan2(target.y - camera.position.y, target.x - camera.position.x) * 32768 / Math.PI) & 65535;
+        const difference = (desiredYaw - previousYaw) & 65535;
+        // Engine.dll CalcBehindView 0x10537f2e..0x1053807b: per-update shortest yaw arc, negative half-turn.
+        const yaw = (previousYaw + (difference < 32768 ? Math.trunc(difference * Math.min(1, speed)) : -Math.trunc(((previousYaw - desiredYaw) & 65535) * Math.min(1, speed)))) * Math.PI / 32768;
+        const distance = Math.hypot(previousTarget.x - camera.position.x, previousTarget.y - camera.position.y);
+
+        camera.position.x = previousTarget.x - Math.cos(yaw) * distance;
+        camera.position.y = previousTarget.y - Math.sin(yaw) * distance;
     }
 
     protected hitCheckCamera(): void { // ALineagePlayerController::CalcBehindView 0x807ce0, bUseHitCheckCamera branch

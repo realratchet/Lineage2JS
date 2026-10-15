@@ -1211,6 +1211,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
         pickup.release();
     }
 
+    public clearDice(): void {
+        for (const pickup of this.pickups)
+            if ((pickup as any).isL2Dice) this.removePickup(pickup);
+    }
+
     protected retainTransientGeometries(effect: Object3D): void {
         let geometries = this.transientGeometries.get(effect);
 
@@ -2068,6 +2073,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // }
 
         this.updatePawnPresentation(currentTime, deltaTime);
+        for (const effect of this.getPhysicsManager().getPhysicsComponents<EffectLifetimeComponent>("effectLifetime")) effect.updateTrailerTransform();
         for (const fishing of this.pawnFishing) fishing.tick(deltaTime / 1000);
 
         this.getInputManager().updateFollowPlayer(deltaTime);

@@ -113,6 +113,16 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
             await pullEffectTemplate(path, true, weapon?.weaponId);
         }
 
+        if (decoded.visual.echoCrystal) await pullEffectTemplate("LineageEffect.e_u059_a", true);
+
+        if (decoded.visual.firecracker) {
+            for (let i = 0; i < 4; i++) {
+                await pullEffectTemplate(`LineageEffect.e_u519_fireseed_${i}`, true);
+                await pullEffectTemplate(`LineageEffect.e_u519_firecracker_${i}`, true);
+            }
+            if (decoded.visual.firecracker === 3) await pullEffectTemplate("LineageEffect.m_u015_b", true);
+        }
+
         decoded.sounds = decoded.sounds.slice();
         for (let i = decoded.sounds.length - 1; i >= 0; i--) {
             const sound = decoded.sounds[i];

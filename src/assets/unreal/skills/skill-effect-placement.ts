@@ -573,15 +573,22 @@ export class SkillEffectPlacement {
         }
 
         if (action.attachOn === "trail" && !projectile) {
-            const selfRotation = !!effect.scriptProperties.get("bSelfRotation");
-            const sameRotation = !selfRotation && (action.useCharacterRotation || !!effect.scriptProperties.get("bTrailerSameRotation"));
+            const properties = effect.scriptProperties;
+            properties.set("Physics", EPhysics_T.PHYS_Trailer);
             // Engine.dll LocateEffect 0x79634c / physTrailer 0x8ce46a: local RelativeTrailOffset or world TrailerPrePivot.
-            if (action.useCharacterRotation) this.addTrailer(effect, attachHost, tmpPosition, true, sameRotation);
-            else {
-                tmpPosition2[2] += height;
-                this.addTrailer(effect, attachHost, tmpPosition2, false, sameRotation);
+            if (action.useCharacterRotation) {
+                properties.set("RelativeTrailOffset", [...tmpPosition]);
+                properties.set("bRelativeTrail", true);
+                if (!properties.get("bSelfRotation")) properties.set("bTrailerSameRotation", true);
             }
-            this.update();
+            else {
+                properties.set("TrailerPrePivot", [...tmpPosition2]);
+                properties.set("bTrailerPrePivot", true);
+            }
+            this.host.getPosition(attachHost, tmpPosition, true);
+            tmpPosition[2] += height;
+            FVector.addElements(tmpPosition, tmpPosition2, tmpPosition);
+            this.host.setPosition(effect, tmpPosition);
             return effect;
         }
 

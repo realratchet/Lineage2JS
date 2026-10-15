@@ -30,6 +30,7 @@ export class NCOptionWnd {
     protected selectedTab = 2;
     protected readonly nameKeys: (keyof GameConfig_T)[] = ["myName", "npcName", "groupName", "pledgeMemberName", "partyMemberName", "otherPCName"];
     protected readonly nameChecks: NDomCheckBox_T[] = [];
+    protected readonly autoTrackingPawn: NDomCheckBox_T;
     protected readonly arrowMode: NDomCheckBox_T;
     protected readonly showZoneTitle: NDomCheckBox_T;
     protected readonly enterChatting: NDomCheckBox_T;
@@ -94,6 +95,7 @@ export class NCOptionWnd {
 
             this.nameChecks.push(checkbox);
         });
+        this.autoTrackingPawn = layer.checkbox(game, 25, 240, 100, 12, manager.getSysString(463));
         this.arrowMode = layer.checkbox(game, 25, 257, 100, 12, manager.getSysString(928));
         this.showZoneTitle = layer.checkbox(game, 135, 257, 100, 12, manager.getSysString(1196));
         this.enterChatting = layer.checkbox(game, 25, 200, 100, 12, manager.getSysString(442));
@@ -102,7 +104,7 @@ export class NCOptionWnd {
         this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(1197), () => this.updateSystemMessageControls());
         this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(357));
         this.systemMsgWndExpendableItem = layer.checkbox(game, 120, 344, 130, 12, manager.getSysString(796));
-        [...this.nameChecks, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem].forEach(checkbox => {
+        [...this.nameChecks, this.autoTrackingPawn, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
                 if (checkbox.getAttribute("aria-disabled") === "true" || event.repeat || event.key !== " " && event.key !== "Enter") return;
@@ -163,6 +165,7 @@ export class NCOptionWnd {
 
             this.nameChecks.forEach((checkbox, index) => checkbox.setChecked(options[this.nameKeys[index]] as boolean));
             this.updateNameControls();
+            this.autoTrackingPawn.setChecked(options.autoTrackingPawn);
             this.arrowMode.setChecked(options.arrowMode);
             this.showZoneTitle.setChecked(options.showZoneTitle);
             this.enterChatting.setChecked(options.enterChatting);
@@ -252,7 +255,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio(Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])) as AudioConfig_T);
-        this.onApply({ ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
+        this.onApply({ ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
     }
 }
 

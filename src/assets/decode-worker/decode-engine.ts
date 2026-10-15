@@ -1415,7 +1415,7 @@ export class DecodeEngine {
         const skins = [row.drop_tex1 ?? row.drop_texture_1, row.drop_tex2 ?? row.drop_texture_2, row.drop_tex3 ?? row.drop_texture_3];
 
         library.name = `Item_${id}`;
-        library.pickup = { items: [], dropSound: row.drop_sound ?? row.item_sound, dropType: row.drop_type, dropAnimType: row.drop_anim_type };
+        library.pickup = { items: [], dropSound: row.drop_sound ?? row.item_sound, dropType: row.drop_type, dropAnimType: row.drop_anim_type, collisionRadius: Math.fround(row.drop_radius | 0), collisionHeight: Math.max(Math.fround(0.2), Math.fround(row.drop_height | 0)) };
 
         let collisionRadius = Math.fround(row.drop_radius | 0), collisionHeight = Math.fround(row.drop_height | 0);
 

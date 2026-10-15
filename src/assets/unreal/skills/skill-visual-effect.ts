@@ -1,3 +1,4 @@
+import FireCrackerAction from "./firecracker-action";
 import SkillEffectPlacement from "./skill-effect-placement";
 import FVector from "../un-vector";
 import { EPhysics_T } from "../un-aactor";
@@ -58,6 +59,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     protected readonly projectileCasts = new Map<SkillActor_T, SkillCast_T>();
     protected frame: SkillPhase_T = null;
     protected lastTime = 0;
+    protected readonly firecrackers: FireCrackerAction[] = [];
 
     public constructor(protected readonly host: SkillEffectHost_T) {
         this.placement = new SkillEffectPlacement(host);
@@ -66,6 +68,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     public update(currentTime: number): void {
         this.lastTime = currentTime;
         this.placement.update();
+        for (let i = this.firecrackers.length - 1; i >= 0; i--)
+            if (!this.firecrackers[i].update(currentTime)) this.firecrackers.splice(i, 1);
 
         for (let i = 0; i < this.pendingEffects.length; i++) {
             const pending = this.pendingEffects[i];
@@ -96,6 +100,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         this.preparedProjectiles.length = 0;
         this.castingEffects.length = 0;
         this.placement.clear();
+        for (const action of this.firecrackers) action.clear();
+        this.firecrackers.length = 0;
     }
 
     public cancel(): void {
@@ -117,6 +123,34 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
         this.clearSkillTargets();
         if (!skill.visual) return false;
+
+        if (skill.visual.echoCrystal) {
+            const effect = this.host.createEffect(cast.caster, "LineageEffect.e_u059_a", skill.assets);
+
+            effect.scriptProperties.set("RelativeTrailOffset", [this.host.getCollisionRadius(cast.caster) * 2, 0, this.host.getCollisionHeight(cast.caster) * 0.5]);
+            this.host.setPosition(effect, [0, 0, 0]);
+            this.host.setRotation(effect, [0, 0, 0, 1]);
+            if (skill.id >= 2066 && skill.id <= 2073) this.host.adjustParticleLife(effect, 10);
+            const sounds = skill.sounds.filter(sound => sound.phase === "casting");
+            let added = false;
+
+            for (const sound of sounds)
+                this.host.playSkillSound(cast.caster, sound, undefined, skill.assets, duration => {
+                    if (!this.host.isAlive(cast.caster)) return;
+                    this.host.adjustParticleLife(effect, duration);
+                    if (!added) {
+                        this.host.addEffect(effect, cast.caster);
+                        added = true;
+                    }
+                });
+            if (!sounds.length) this.host.addEffect(effect, cast.caster);
+            return true;
+        }
+
+        if (skill.visual.firecracker) {
+            this.firecrackers.push(new FireCrackerAction(this.host, cast.caster, skill, skill.visual.firecracker, currentTime));
+            return true;
+        }
 
         if (skill.visual.soulshot) {
             this.placement.spawnSoulShot(skill, cast.caster);

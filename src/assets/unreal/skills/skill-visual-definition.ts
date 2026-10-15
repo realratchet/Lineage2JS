@@ -12,6 +12,8 @@ export type SkillVisualDefinition_T = {
     transientRejected: boolean;
     soulshot?: { sticks: string, books: string, hands: number[][] };
     associatedActors: boolean;
+    firecracker?: 1 | 2 | 3;
+    echoCrystal?: boolean;
     programs: Record<NpcSkillEffectPhase_T, IScriptFunctionDecodeInfo>;
 };
 
@@ -29,7 +31,7 @@ const programs = Object.fromEntries((["casting", "preshot", "shot", "explosion"]
 }])) as Record<NpcSkillEffectPhase_T, IScriptFunctionDecodeInfo>;
 
 export function createSkillVisualDefinition(actions: NpcSkillEffectAction_T[] | null, native: NativeSkillBinding_T = null): SkillVisualDefinition_T {
-    return { actions, effects: native ? native.effects.flatMap(name => getNativeEffect(name, native.effectGroup)) : [], soundPhases: native ? native.soundPhases : [], finalShotOnly: !!native?.finalShotOnly, transientRejected: !!native?.rejectTransient, associatedActors: !!native?.associatedActors, programs };
+    return { actions, effects: native ? native.effects.flatMap(name => getNativeEffect(name, native.effectGroup)) : [], soundPhases: native ? native.soundPhases : [], finalShotOnly: !!native?.finalShotOnly, transientRejected: !!native?.rejectTransient, associatedActors: !!native?.associatedActors, firecracker: native?.firecracker, echoCrystal: native?.echoCrystal, programs };
 }
 
 export function getSkillHitTimeOffset(skill: NpcSkillAttack_T): number {

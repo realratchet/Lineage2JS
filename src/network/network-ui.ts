@@ -2075,6 +2075,7 @@ export class NetworkUI {
 
         for (const [key, value] of Object.entries(options)) {
             switch (key) {
+                case "autoTrackingPawn":
                 case "arrowMode":
                 case "showZoneTitle":
                 case "systemMsgWndDamage":
@@ -2114,6 +2115,8 @@ export class NetworkUI {
         this.applyGameOptions(options);
         localStorage.setItem(`option:${owner}`, JSON.stringify(options));
     }
+
+    public isAutoTrackingPawnEnabled() { return this.options.game.autoTrackingPawn; }
 
     public isQuestArrowEnabled() { return this.options.game.arrowMode; }
 

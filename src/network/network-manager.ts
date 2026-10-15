@@ -10,6 +10,7 @@ import NetworkUI, { type Nameplate_T } from "./network-ui";
 import getCommandTokens from "./command-parser";
 import L2Lobby from "./l2-lobby";
 import GroundPickup from "../objects/ground-pickup";
+import L2Dice from "../objects/l2-dice";
 import type { SectorObject } from "../objects/zone-object";
 import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
 import * as GamePackets from "./game-packets";
@@ -777,6 +778,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (fishing) render.player.removeComponent(fishing);
         for (const pickup of this.pickups.values()) render.removePickup(pickup);
         this.pickups.clear();
+        render.clearDice();
         this.gnoCategory = this.gnoElapsed = 0;
         this.gnoObjectId = -1;
         this.inventory.clear();
@@ -1134,7 +1136,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.ShowTownMap: this.townMap = GamePackets.readTownMap(packet); break;
             case GamePackets.GameServerPacket_T.ShowCalculator: this.calculatorId = packet.d(); break;
             case GamePackets.GameServerPacket_T.ShowXMasSeal: this.xmasSealItemId = packet.d(); break;
-            case GamePackets.GameServerPacket_T.Dice: this.dice = GamePackets.readDice(packet); break;
+            case GamePackets.GameServerPacket_T.Dice:
+                this.dice = GamePackets.readDice(packet);
+                void this.onDice(this.dice);
+                break;
             case GamePackets.GameServerPacket_T.MonRaceInfo: this.monRace = GamePackets.readMonRaceInfo(packet); break;
             case GamePackets.GameServerPacket_T.SSQStatus: this.onSSQStatus(packet); break;
             case GamePackets.GameServerPacket_T.ClanHallDecoration: {
@@ -2926,6 +2931,22 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.flushSkillTargets(object.objectId);
     }
 
+    protected async onDice(info: GamePackets.Dice_T): Promise<void> {
+        const render = this.manGame.getComponent("render"), asset = this.manGame.getComponent("asset");
+        const generation = this.teleportGeneration, owner = this.objects.get(info.objectId);
+        const origin = owner && owner.actor ? owner.actor.getWorldPosition(new Vector3()) : null;
+
+        if (origin) origin.z += owner.actor.getCollisionHeight();
+        const library = await asset.loadItem(info.itemId);
+
+        if (!this.inWorld || generation !== this.teleportGeneration) return;
+        const dice = new L2Dice(render, info.itemId, info.number, origin);
+
+        setVector(dice.position, info);
+        dice.setMeshes(library);
+        render.addPickup(dice);
+    }
+
     protected async onSpawnItem(packet: PacketReader, dropped: boolean) {
         const ownerId = dropped ? packet.d() : 0;
 
@@ -4520,6 +4541,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected clearKnownObjects() {
         for (const objectId of this.objects.keys()) if (objectId !== this.userId) this.removeObject(objectId);
         for (const objectId of this.pickups.keys()) this.removeObject(objectId);
+        this.manGame.getComponent("render").clearDice();
 
         this.vehicles.clear();
     }
