@@ -1671,7 +1671,7 @@ export class NetworkUI {
         if (!(wnd instanceof HTMLElement)) { wnd.setVisible(isVisible); return; }
         const owner = [...this.getDOMWindows(), this.petWnd, this.summonedWnd, this.pledgePowerWnd].find(owner => owner.element === wnd);
 
-        if (owner) owner.setVisible(isVisible);
+        if (owner && "setVisible" in owner) owner.setVisible(isVisible);
         else wnd.hidden = !isVisible;
     }
 

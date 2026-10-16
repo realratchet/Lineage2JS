@@ -2,6 +2,7 @@ import { AnimationAction } from "three";
 import { ObjectComponent } from "../../game/components";
 import { NPC_ENTER_EVENT } from "../../audio/components/sound-component";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
+import type { ScriptValue_T } from "../../ue-script/vm";
 import { MountType_T } from "../../network/game-packets";
 import type AnimationComponent from "./animation-component";
 import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
@@ -19,13 +20,14 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     protected isReleased = false;
     protected deathSkyAnimation: string = null;
     protected isDeathFalling = false;
-    protected scriptController = { scriptClassId: "engine.Controller", scriptProperties: new Map<string, number | boolean>([["bDead", false], ["WaitType", PStopType_T.STP_STAND], ["bAutoAttacking", false]]) };
+    protected scriptController = { scriptClassId: "engine.Controller", scriptProperties: new Map<string, ScriptValue_T>([["bDead", false], ["WaitType", PStopType_T.STP_STAND], ["bAutoAttacking", false]]) };
 
     public setControllerState(waitType: number, isAutoAttacking: boolean): void {
         const rider = this.getParent().ridePawn;
 
         if (rider) this.scriptController = rider.getComponent<NpcLifecycleComponent>("npcLifecycle").scriptController;
 
+        this.getComponent<ScriptComponent>("script").getVM().initializeHost(this.scriptController);
         this.scriptController.scriptProperties.set("WaitType", waitType);
         this.scriptController.scriptProperties.set("bAutoAttacking", isAutoAttacking);
         this.getParent().setUnrealScriptProperty("Controller", this.scriptController);
@@ -92,6 +94,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         this.getComponent<PawnMovementComponent>("pawnMovement").setDying();
 
         if (script) {
+            script.getVM().initializeHost(this.scriptController);
             this.scriptController.scriptProperties.set("bDead", true);
             parent.setUnrealScriptProperty("Controller", this.scriptController);
 
