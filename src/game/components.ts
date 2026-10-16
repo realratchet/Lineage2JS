@@ -1,20 +1,20 @@
 import { BufferGeometry, Material, Mesh, Object3D } from "three";
 
-export interface IEngineComponent<T extends IEngineComponent<T>> {
+export type IEngineComponent<T extends IEngineComponent<T>> = {
     startTicking?(currentTime: number): void; // for syncing clocks
-    onInit?(): Promise<this>;
+    onInit?(): Promise<IEngineComponent<T>>;
     onBeforeEngineTick?(currentTime: number, deltaTime: number): void;
     onEngineTick?(currentTime: number, deltaTime: number): void;
     onAfterEngineTick?(currentTime: number, deltaTime: number): void;
-    setParent(parent: T): this;
+    setParent(parent: T): IEngineComponent<T>;
     getParent(): T;
-}
+};
 
 export const COMPONENT_EVENT_NOT_HANDLED = Symbol("componentEventNotHandled");
 
 export type ComponentEventResult_T<T> = T | typeof COMPONENT_EVENT_NOT_HANDLED;
 
-export interface IObject {
+export type IObject = {
     addComponent<T extends IComponent<any>>(component: T): T;
     removeComponent(component: IComponent<any>): boolean;
     getComponent<T extends IComponent<any>>(componentName: string): T;
@@ -25,10 +25,10 @@ export interface IObject {
     detachComponents(): void;
 };
 
-export interface IComponent<TParent extends IObject = IObject> {
+export type IComponent<TParent extends IObject = IObject> = {
     readonly componentName: string;
     readonly updateOrder?: number;
-    setParent(parent: TParent | null): this;
+    setParent(parent: TParent | null): IComponent<TParent>;
     getParent(): TParent;
     isAttached(): boolean;
     getComponent<T extends IComponent<any>>(componentName: string): T;

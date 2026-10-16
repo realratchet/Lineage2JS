@@ -2,10 +2,11 @@ import NDomLayer, { NDOM_EDIT_TEXTURES, type NDomEdit_T } from "./ndom";
 import { NCComboBox } from "./nc-lobby-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { PartyMatchDetail_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.PartyMatchWnd.PartyMatch3_Back";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_normalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 
 export type PartyRoomSettings_T = { roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string };
 

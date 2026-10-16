@@ -6,7 +6,7 @@ import PawnEquipmentComponent from "../objects/components/pawn-equipment-compone
 import { CHARACTER_FULL_ARMOR_SLOT, CHARACTER_ALLDRESS_SLOT } from "@l2js/engine/datafile/schema/armorgrp.schema";
 import LoginClient, { type SessionKey_T } from "./login-client";
 import GameClient, { type CharacterCreate_T } from "./game-client";
-import NetworkUI, { type Nameplate_T } from "./network-ui";
+import type { GameGUI_T, Nameplate_T } from "../nwindow/nconsole-wnd";
 import getCommandTokens from "./command-parser";
 import L2Lobby from "./l2-lobby";
 import L2ReplayFile from "./l2-replay-file";
@@ -120,7 +120,7 @@ type GMServerTransfer_T = { phase: number, lastPhase: number, serverId: number, 
 
 export class NetworkManager implements IEngineComponent<GameManager> {
     protected manGame: GameManager;
-    protected ui: NetworkUI;
+    protected ui: GameGUI_T = null;
     protected login: LoginClient = null;
     protected lobby: L2Lobby = null;
     protected loginUrl: string = null;
@@ -326,7 +326,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         asset.setStreaming(render, false);
 
         if (!this.ui) {
-            this.ui = new NetworkUI(this, asset, render);
+            this.ui = this.manGame.getComponent("gui");
+            this.ui.create();
             this.lobby = new L2Lobby(this.manGame, (appearance, actor) => this.loadAppearance(appearance, actor));
 
             await this.ui.setStrings(await asset.getGameStrings());
@@ -5316,7 +5317,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public onEngineTick(currentTime: number, deltaTime: number): void {
         this.tickGMServerTransfer();
         if (this.getReplayRecordingTime() > 1800) this.stopReplayRecording(); // FL2ReplayManager::Tick 0x75f8a6.
-        if (this.ui) this.ui.tick(deltaTime);
 
         if (this.resolveNextTick) {
             const resolve = this.resolveNextTick;
@@ -5388,13 +5388,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return plates;
     }
 
-    public onBeforeEngineTick(_currentTime: number, _deltaTime: number): void {
-        if (this.ui) this.ui.updateNameplates();
-    }
-
-    public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
-        if (this.ui) this.ui.render();
-    }
 }
 
 export default NetworkManager;

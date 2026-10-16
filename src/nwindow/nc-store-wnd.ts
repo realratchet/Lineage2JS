@@ -2,12 +2,13 @@ import NCShopWnd from "./nc-shop-wnd";
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { WarehouseType_T, type ShopItem_T, type WarehouseList_T } from "../network/game-packets";
+import type { StoreWndView_T, GMStoreWndView_T } from "./skin";
 
 export class NCStoreWnd extends NCShopWnd {
     public onDrop: (side: number, target: Element) => boolean = null;
     public onTransfer: () => void = null;
     protected readonly counter: HTMLCanvasElement;
-    protected readonly arrDestinations: [NCStoreWnd, number][];
+    protected readonly arrDestinations: [StoreWndView_T | GMStoreWndView_T, number][];
     protected type = WarehouseType_T.Private;
     protected maxCount = 0;
 
@@ -22,7 +23,7 @@ export class NCStoreWnd extends NCShopWnd {
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 80, 156); }
     public setLimit(limit: number) { this.maxCount = limit; this.drawTotal(); }
-    public setDestination(side: number, wnd: NCStoreWnd, targetSide: number) { this.arrDestinations[this.getLogicalSide(side)] = [wnd, wnd.getLogicalSide(targetSide)]; }
+    public setDestination(side: number, wnd: StoreWndView_T | GMStoreWndView_T, targetSide: number) { this.arrDestinations[this.getLogicalSide(side)] = [wnd, wnd.getLogicalSide(targetSide)]; }
     public updateFee() { this.drawTotal(); }
     public transfer(side: number, item: ShopItem_T, count: number) {
         if (!this.items[side].includes(item) || count <= 0) return;
@@ -48,7 +49,7 @@ export class NCStoreWnd extends NCShopWnd {
     }
 
     protected getLabelIds() { return this.isSell ? [132, 138, 135] : [138, 132, 135]; }
-    protected getLogicalSide(side: number) { return this.isSell ? 1 - side : side; }
+    public getLogicalSide(side: number) { return this.isSell ? 1 - side : side; }
     protected getDestinationItems(side: number) {
         const [wnd, targetSide] = this.arrDestinations[this.getLogicalSide(side)];
 

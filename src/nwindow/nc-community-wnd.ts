@@ -2,12 +2,13 @@ import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import CBBSHtmlViewer from "./cbbs-html-viewer";
 import { FontType_T } from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_PATH = "L2UI_CH3.BoardWnd.";
 const TEX_TAB = TEX_PATH + "Board_tab2";
 const TEX_SELECTED = TEX_PATH + "Board_tab1";
-const TEX_BUTTON = "L2UI_CH3.Button.SmallButton2";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.SmallButton2_down";
+const TEX_BUTTON = SKIN_SLOTS.smallButton;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.smallButtonDown;
 const TEX_CAPTION = "NWindow.Icon.chatback";
 const arrTabs = [[377, 0], [379, 75], [381, 157], [382, 232], [403, 314], [905, 389], [904, 464]];
 const arrActions = ["bypass _bbshome", "bypass _bbsgetfav", "bypass _bbsloc", "bypass _bbsclan", "bypass _bbsmemo", "bypass _maillist_0_1_0_", "bypass _friendlist_0_"];

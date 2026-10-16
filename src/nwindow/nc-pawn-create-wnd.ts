@@ -1,5 +1,6 @@
 import { FontType_T } from "./nwindow-canvas";
 import { NDOM_EDIT_TEXTURES, NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
+import { SKIN_SLOTS } from "./skin-textures";
 
 export type PawnCreateStep_T = "race" | "class" | "sex" | "appearance";
 export type PawnCreateSelection_T = { race: number, isMystic: boolean, sex: number, hairStyle: number, hairColor: number, face: number, step: PawnCreateStep_T };
@@ -19,8 +20,8 @@ const TEX_PREV = "L2UI_CH3.Button.PREV1";
 const TEX_PREV_DOWN = "L2UI_CH3.Button.PREV1_down";
 const TEX_NEXT = "L2UI_CH3.Button.NEXT1";
 const TEX_NEXT_DOWN = "L2UI_CH3.Button.NEXT1_down";
-const TEX_BIGBUTTON = "L2UI_CH3.Button.BigButton";
-const TEX_BIGBUTTON_DOWN = "L2UI_CH3.Button.BigButton_down";
+const TEX_BIGBUTTON = SKIN_SLOTS.bigButton;
+const TEX_BIGBUTTON_DOWN = SKIN_SLOTS.bigButtonDown;
 const TEX_LEFT = "l2ui.LobbyWnd.left";
 const TEX_LEFT_DOWN = "l2ui.LobbyWnd.left_click";
 const TEX_RIGHT = "l2ui.LobbyWnd.right";

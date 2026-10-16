@@ -1,10 +1,11 @@
 import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
+import { SKIN_SLOTS } from "./skin-textures";
+import { TEX_TOOLTIP_SLICES } from "./nc-tooltip";
 
 const TEX_LIST = "L2UI_CH3.ListCtrl.";
 const arrClassGroups = [[2, 3, 8, 23, 36, 46, 48, 55, 57], [9, 24, 37], [5, 6, 20, 33], [21, 34], [12, 13, 27, 40], [16, 17, 30, 43, 52, 51], [14, 28, 41], [0, 1, 4, 7, 18, 19, 22, 31, 32, 35, 44, 45, 47, 53, 54, 56], [49, 50, 38, 39, 42, 25, 26, 29, 10, 11, 15], [88, 89, 93, 101, 108, 113, 114, 117, 118], [92, 102, 109], [90, 91, 99, 106], [100, 107], [94, 95, 103, 110], [97, 98, 105, 112, 116, 115], [96, 104, 111]];
 const arrClassIcons = ["1", "2", "3", "4", "5", "6", "7", "1_1", "1_2", "1_3", "2_3", "3_3", "4_3", "5_3", "6_3", "7_3"].map(name => `L2UI_CH3.PartyWnd.party_styleicon${name}`);
-const arrTooltipTextures = Array.from({ length: 9 }, (_, index) => `L2UI_CH3.Tooltip.Tooltip${index + 1}`);
 
 export type ListColumn_T = { width: number, label: number, numeric: boolean, isClass?: boolean };
 export type ListRow_T = { id: number | string, cells: string[], classId?: number };
@@ -29,8 +30,8 @@ export function paintListColumn(layer: NDomLayer, parent: HTMLElement, width: nu
 }
 
 export function paintListSelection(layer: NDomLayer, parent: HTMLElement, width: number, y: number, height: number = 17) {
-    layer.tile(parent, 1, y - 1, width - 49, height, 0, 0, 16, 13, TEX_LIST + "TextSelect");
-    layer.tile(parent, width - 48, y - 1, 32, height, 0, 0, 32, 13, TEX_LIST + "TextSelect2");
+    layer.tile(parent, 1, y - 1, width - 49, height, 0, 0, 16, 13, SKIN_SLOTS.listSelect);
+    layer.tile(parent, width - 48, y - 1, 32, height, 0, 0, 32, 13, SKIN_SLOTS.listSelectEnd);
 }
 
 export function createClassTooltip(layer: NDomLayer, classId: number, x: number, anchorY: number) {
@@ -46,7 +47,7 @@ export function createClassTooltip(layer: NDomLayer, classId: number, x: number,
     tooltip.style.zIndex = "2147483647";
     tooltip.style.pointerEvents = "none";
     tooltip.style.overflow = "hidden";
-    arrTooltipTextures.forEach((texture, index) => layer.tile(tooltip, [0, 8, width - 8][index % 3], [0, 8, height - 8][Math.floor(index / 3)], index % 3 === 1 ? width - 16 : 8, Math.floor(index / 3) === 1 ? height - 16 : 8, 0, 0, 8, 8, texture));
+    TEX_TOOLTIP_SLICES.forEach((texture, index) => layer.tile(tooltip, [0, 8, width - 8][index % 3], [0, 8, height - 8][Math.floor(index / 3)], index % 3 === 1 ? width - 16 : 8, Math.floor(index / 3) === 1 ? height - 16 : 8, 0, 0, 8, 8, texture));
     layer.text(tooltip, label, 0xffa3a3a3, undefined, 5, 11);
     layer.text(tooltip, " : ", 0xffdcdcdc, undefined, 5 + layer.measureText(label), 11);
     layer.text(tooltip, value, 0xffb09b79, undefined, 5 + layer.measureText(label) + layer.measureText(" : "), 11);
@@ -54,7 +55,7 @@ export function createClassTooltip(layer: NDomLayer, classId: number, x: number,
 }
 
 export class NCListCtrl {
-    public static getTextures() { return ["TextSelect", "TextSelect2", "tab1", "tab2", "tab3", "tab1_down", "tab2_down", "tab3_down"].map(name => TEX_LIST + name).concat([1, 2, 3].map(index => "?" + TEX_LIST + `tab${index}_over`), ["L2UI_CH3.Etc.textbackline"], arrClassIcons, NDOM_SCROLL_TEXTURES, arrTooltipTextures); }
+    public static getTextures() { return ([SKIN_SLOTS.listSelect, SKIN_SLOTS.listSelectEnd] as string[]).concat(["tab1", "tab2", "tab3", "tab1_down", "tab2_down", "tab3_down"].map(name => TEX_LIST + name), [1, 2, 3].map(index => "?" + TEX_LIST + `tab${index}_over`), ["L2UI_CH3.Etc.textbackline"], arrClassIcons, NDOM_SCROLL_TEXTURES, TEX_TOOLTIP_SLICES); }
     public readonly element: HTMLDivElement;
     public onDoubleClick: (row: ListRow_T) => void = null;
     public onSelection: (row: ListRow_T) => void = null;

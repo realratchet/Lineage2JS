@@ -2,13 +2,14 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { TradeItem_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_ch3.TradeWnd.Trade_Back";
 const TEX_OUTLINE = "L2ui_ch3.etc.iconbox";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_ARROW = "l2ui_ch3.button.downbutton";
-const TEX_BUTTON = "L2UI_ch3.button.btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_ch3.button.btn1_normalon";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 
 type TradeDrag_T = { item: TradeItem_T, icon: string, isDragging: boolean };
 

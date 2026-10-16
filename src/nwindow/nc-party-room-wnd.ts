@@ -4,10 +4,11 @@ import NCMinimizedWnd from "./nc-minimized-wnd";
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { PartyMatchDetail_T, PartyRoomMember_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.PartyMatchWnd.PartyMatch2_Back";
-const TEX_BUTTON = "L2UI_CH3.Button.SmallButton2";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.SmallButton2_down";
+const TEX_BUTTON = SKIN_SLOTS.smallButton;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.smallButtonDown;
 
 export class NCPartyRoomWnd {
     public static getTextures() { return [TEX_BACK, TEX_BUTTON, TEX_BUTTON_DOWN, ...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), ...NCMinimizedWnd.getTextures(), ...NDOM_EDIT_TEXTURES, ...NDOM_SCROLL_TEXTURES]; }

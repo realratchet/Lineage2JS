@@ -3,11 +3,12 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeShopManageList_T, RecipeShopListEntry_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe1_Back";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 
 export type RecipeShopRow_T = { recipe: RecipeInfo_T, price: number, initialCount: number };
 type RecipeShopDrag_T = { side: number, item: RecipeShopRow_T, isDragging: boolean };

@@ -19,7 +19,16 @@ import type { QuaternionArr, Vector3Arr, EulerArr, ArrGeometryGroup, IndexLikeAr
 import type { EmitterConfig_T } from "./emitters/un-particle-emitter";
 import type { IStaticMeshCollisionDecodeInfo } from "./static-mesh/un-static-mesh";
 import type { IBoundsDecodeInfo } from "./un-primitive";
-import type { NpcSkillAttack_T } from "./un-pawn";
+import type { NpcSkillAttack_T, IPawnSoundsDecodeInfo, INpcBowDecodeInfo, IPawnEquipmentDecodeInfo } from "./un-pawn";
+
+export type IPickupDecodeInfo = {
+    items: { mesh: string; skins: string[]; meshIndex: number; collisionRadius: number; collisionHeight: number }[];
+    dropType: number;
+    dropAnimType: number;
+    dropSound: string;
+    collisionRadius: number;
+    collisionHeight: number;
+};
 
 export type DecodableObject_T =
     | "Group"
@@ -151,7 +160,7 @@ export class DecodeLibrary {
     public sourceLibrary: DecodeLibrary = null;
     public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly sounds: Record<string, string> = {};
-    public pawnSounds: L2JS.Engine.IPawnSoundsDecodeInfo = null;
+    public pawnSounds: IPawnSoundsDecodeInfo = null;
     public readonly scriptClasses: Record<string, IScriptClassDecodeInfo> = {};
     public readonly scriptFunctions: Record<string, IScriptFunctionDecodeInfo> = {};
     public readonly scriptStates: Record<string, IScriptStateDecodeInfo> = {};
@@ -160,9 +169,9 @@ export class DecodeLibrary {
     public readonly scriptMeshes: Record<string, ISkinnedMeshObjectDecodeInfo> = {};
     public readonly scriptMaterials: Record<string, string> = {};
     public readonly npcSkillAttacks: NpcSkillAttack_T[] = [];
-    public npcBow: L2JS.Engine.INpcBowDecodeInfo = null;
-    public pawnEquipment: L2JS.Engine.IPawnEquipmentDecodeInfo = null;
-    public pickup: L2JS.Engine.IPickupDecodeInfo = null;
+    public npcBow: INpcBowDecodeInfo = null;
+    public pawnEquipment: IPawnEquipmentDecodeInfo = null;
+    public pickup: IPickupDecodeInfo = null;
     public effectSpawnBoneIndex: number = null;
     public damageEffect: string = null;
     public npcScriptClassId: string = null;

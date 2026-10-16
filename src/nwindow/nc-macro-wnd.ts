@@ -3,6 +3,7 @@ import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T } 
 import NCFrameCtrl from "./nc-frame-ctrl";
 import { FontType_T } from "./nwindow-canvas";
 import type { Macro_T, MacroCommand_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const arrBack = ["macro2_back", "macro1_back", "macro3_back"].map(name => `L2UI_CH3.MacroWnd.${name}`);
 const arrIcons = Array.from({ length: 7 }, (_, i) => `L2UI.MacroWnd.Macro_Icon${i + 1}`);
@@ -10,8 +11,8 @@ const TEX_EDIT = "L2UI_CH3.MacroWnd.macro_edit";
 const TEX_TRASH = "L2UI_CH3.InventoryWnd.Inventory_trash";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_HIGHLIGHT = "L2UI.MacroWnd.Macro_Line_HighLight";
-const TEX_BUTTON = "L2UI_ch3.button.btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_ch3.button.btn1_normalon";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 
 export class NCMacroWnd {
     public static getTextures() { return [...arrBack, ...arrIcons, TEX_EDIT, `${TEX_EDIT}_Drag`, TEX_TRASH, `${TEX_TRASH}_Drag`, TEX_SELECTED, TEX_HIGHLIGHT, "L2UI_CH3.MacroWnd.MacroListIcon", "L2UI_CH3.MacroWnd.MacroEditIcon", TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI_ch3.Button.Prev1", "L2UI_ch3.Button.Prev1_Down", "L2UI_ch3.Button.next1", "L2UI_ch3.Button.next1_down", "L2UI_ch3.button.SmallButton2", "L2UI_ch3.button.SmallButton2_Down", ...NCFrameCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, ...NDOM_SCROLL_TEXTURES]; }

@@ -1,4 +1,5 @@
-import type { APackage, UClass, UObject } from "@l2js/core";
+import type { APackage } from "@l2js/core";
+import type { USkillVisualEffect, FSkillActionInfo, USkillActionLocateEffect } from "../un-skill-visual-effect";
 import DecodeLibrary from "../decode-library";
 import type { NpcSkillAttack_T, NpcSkillAttachOn_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T } from "../un-pawn";
 import getNativeEffect from "./native-effects";
@@ -76,16 +77,16 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
 
     for (const attack of attacks) {
         const visualPath = attack.visualEffect;
-        let visual: UObject = null;
+        let visual: USkillVisualEffect = null;
 
         if (visualPath && visualPath.toLowerCase() !== "none") {
             const [packageName, groupName, objectName] = splitGroupedObjectPath(visualPath);
             const pkg = await loadPackage(packageName);
 
-            visual = pkg.fetchObjectByType<UObject>("SkillVisualEffect", objectName, groupName);
+            visual = pkg.fetchObjectByType<USkillVisualEffect>("SkillVisualEffect", objectName, groupName);
 
             // Core.dll StaticLoadObject 0x1016d4f5 -> ULinkerLoad::Create 0x1014dfed uses outer index -1.
-            if (!visual) visual = pkg.fetchObjectByType<UObject>("SkillVisualEffect", objectName);
+            if (!visual) visual = pkg.fetchObjectByType<USkillVisualEffect>("SkillVisualEffect", objectName);
 
             if (visual) visual.loadSelf();
         }
@@ -147,39 +148,37 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
             continue;
         }
 
-        const phases: [string, NpcSkillEffectPhase_T][] = [["CastingActions", "casting"], ["ShotActions", "shot"], ["ExplosionActions", "explosion"]];
+        const phases: [FSkillActionInfo[], NpcSkillEffectPhase_T][] = [[visual.castingActions, "casting"], [visual.shotActions, "shot"], [visual.explosionActions, "explosion"]];
 
-        decoded.flyingTime = Number(visual.propertyDict.get("FlyingTime")) || 0;
+        decoded.flyingTime = Number(visual.flyingTime) || 0;
 
-        for (const [property, phase] of phases) {
-            const infos = visual.propertyDict.get(property) as UObject[];
-
+        for (const [infos, phase] of phases) {
             if (!infos) continue;
 
             for (const rawInfo of infos) {
                 const info = rawInfo.loadSelf();
-                const action = (info.propertyDict.get("Action") as UObject).loadSelf();
-                const effectClass = action.propertyDict.get("EffectClass") as UClass;
+                const action = info.action.loadSelf() as USkillActionLocateEffect;
+                const effectClass = action.effectClass;
 
                 if (!effectClass) continue;
 
-                const offset = action.propertyDict.get("offset") as any;
+                const offset = action.offset as any;
                 const effectPath = effectClass.name;
 
                 decoded.visual.actions!.push({
                     phase,
-                    specificStage: Number(info.propertyDict.get("SpecificStage")) || 0,
+                    specificStage: Number(info.specificStage) || 0,
                     effectClass: effectPath,
-                    attachOn: getAttachOn(Number(action.propertyDict.get("AttachOn")) || 0),
-                    attachBoneName: String(action.propertyDict.get("AttachBoneName") || "None"),
-                    isAbsolute: !!action.propertyDict.get("bAbsolute"),
-                    spawnDelay: Number(action.propertyDict.get("SpawnDelay")) || 0,
-                    useCharacterRotation: !!action.propertyDict.get("bUseCharacterRotation"),
+                    attachOn: getAttachOn(Number(action.attachOn) || 0),
+                    attachBoneName: String(action.attachBoneName || "None"),
+                    isAbsolute: !!action.isAbsolute,
+                    spawnDelay: Number(action.spawnDelay) || 0,
+                    useCharacterRotation: !!action.useCharacterRotation,
                     offset: offset && typeof offset.getElements === "function" ? offset.getElements() : [0, 0, 0],
-                    relativeToCylinder: !!action.propertyDict.get("bRelativeToCylinder"),
-                    spawnOnTarget: !!action.propertyDict.get("bSpawnOnTarget"),
-                    sizeScale: !!action.propertyDict.get("bSizeScale"),
-                    onMultiTarget: !!action.propertyDict.get("bOnMultiTarget")
+                    relativeToCylinder: !!action.relativeToCylinder,
+                    spawnOnTarget: !!action.spawnOnTarget,
+                    sizeScale: !!action.sizeScale,
+                    onMultiTarget: !!action.onMultiTarget
                 });
 
                 if (pulledEffects.has(effectPath.toLowerCase())) continue;

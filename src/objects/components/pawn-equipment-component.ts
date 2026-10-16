@@ -8,6 +8,7 @@ import type { IEmitterActorDecodeInfo, IEmitterDecodeInfo } from "@l2js/engine/c
 import type RenderManager from "../../rendering/render-manager";
 import { AnimationComponent, ExtraMeshAnimationComponent } from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type { IWeaponEnchantEffect, IWeaponEnchantMesh } from "@l2js/engine/contracts/pawn";
 
 class EquippedItem extends GameObject {
     public readonly scriptProperties = new Map<string, any>();
@@ -112,7 +113,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         return item;
     }
 
-    protected attachEnchantMesh(info: L2JS.Engine.IWeaponEnchantMesh, bone: string): void {
+    protected attachEnchantMesh(info: IWeaponEnchantMesh, bone: string): void {
         const item = this.attachItem(info.mesh, [info.skin], bone);
 
         if (!item) return;
@@ -138,7 +139,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         });
     }
 
-    protected attachEnchantEffect(info: L2JS.Engine.IWeaponEnchantEffect, bone: string): void {
+    protected attachEnchantEffect(info: IWeaponEnchantEffect, bone: string): void {
         const parent = this.getParent();
         const template = this.library.effectTemplates[info.path];
         // FNWeaponEffect::Init 0x763551 / 0x763796..0x763917.

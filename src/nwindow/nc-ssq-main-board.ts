@@ -2,13 +2,14 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { SSQStatus_T, SSQRecord_T, SSQFestival_T, SSQSealStatus_T, SSQSealPrediction_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.SSQWnd.SSQ_back";
 const TEX_RECORD = "L2UI_CH3.SSQWnd.SSQ_back1";
 const TEX_PROJECTION = "L2UI_CH3.SSQWnd.SSQ_back1_1";
 const TEX_LIST = "L2UI_CH3.SSQWnd.ssq_back2";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_TAB = "L2UI_CH3.TabButton.normal_tab_on";
 const TEX_TAB_SELECTED = "L2UI_CH3.TabButton.normal_tab";
 const TEX_TEXT = "L2UI_CH3.Etc.TextBox";
@@ -20,8 +21,8 @@ const TEX_PLUS = "L2UI_CH3.QuestWnd.QuestWndPlusBtn";
 const TEX_MINUS = "L2UI_CH3.QuestWnd.QuestWndMinusBtn";
 const TEX_DOWN = "L2UI_CH3.QuestWnd.QuestWndDownBtn";
 const TEX_UP = "L2UI_CH3.QuestWnd.QuestWndUpBtn";
-const TEX_SELECT = "L2UI_CH3.ListCtrl.TextSelect";
-const TEX_SELECT_END = "L2UI_CH3.ListCtrl.TextSelect2";
+const TEX_SELECT = SKIN_SLOTS.listSelect;
+const TEX_SELECT_END = SKIN_SLOTS.listSelectEnd;
 const GRAY = 0xff808080;
 const WHITE = 0xffdcdcdc;
 const GOLD = 0xffb09b79;
@@ -184,11 +185,11 @@ export class NCSSQMainBoard {
     protected cabal(cabal: number) { return this.layer.getManager().getSysString(cabal === 1 ? 814 : cabal === 2 ? 815 : 27); }
     protected seal(seal: number) { return this.layer.getManager().getSysString(seal >= 1 && seal <= 3 ? 815 + seal : 27); }
     protected text(parent: HTMLElement, text: string, x: number, y: number, color = WHITE) { return this.layer.text(parent, text, color, FontType_T.SMALL, x, y); }
-    protected lines(parent: HTMLElement, text: string, x: number, y: number, width: number, color = GRAY) {
-        const canvas = this.layer.getManager().canvas, lines = canvas.wrapText(text.replace(/\\n/g, "\n"), width);
+    protected lines(parent: HTMLElement, text: string, x: number, y: number, width: number, color = GRAY, isSpaced = false) { // UCanvas::DrawNormalText / GetTextSize: each new line adds the 'A' height, plus 6 when spaced.
+        const canvas = this.layer.getManager().canvas, lines = canvas.wrapText(text.replace(/\\n/g, "\n"), width), step = canvas.getLineHeight() + (isSpaced ? 6 : 0);
 
-        lines.forEach((line, index) => this.text(parent, line, x, y + index * canvas.getLineHeight(), color));
-        return lines.length * canvas.getLineHeight();
+        lines.forEach((line, index) => this.text(parent, line, x, y + index * step, color));
+        return lines.length ? canvas.getLineHeight() + (lines.length - 1) * step : 0;
     }
 
     protected paintRecord() { // NCSSQStatusWnd paint 0x100fa620 / 0x100fb370.
@@ -212,7 +213,7 @@ export class NCSSQMainBoard {
 
                 this.text(list.content, label, 6, y, GRAY);
                 this.text(list.content, entry.cabal ? this.cabal(entry.cabal) : manager.getSysString(936), 6 + layer.measureText(label), y, GOLD);
-                const descriptionHeight = this.lines(list.content, manager.getSystemMessage(entry.messageId), 10, y + height + 6, 214);
+                const descriptionHeight = this.lines(list.content, manager.getSystemMessage(entry.messageId), 10, y + height + 6, 214, GRAY, true);
 
                 paintedHeight = Math.max(paintedHeight, y + height + 6 + descriptionHeight);
                 contentHeight += previousHeight + height * 2 + 17;
@@ -386,7 +387,7 @@ export class NCSSQMainBoard {
             });
             if (expanded) { // NCSSQSealStatusTree 0x100fed9d..0x100ff1f1.
                 const count = seal.id === 1 ? 8 : seal.id === 2 ? 6 : 0, first = seal.id === 1 ? 941 : 957;
-                const description = manager.getSystemMessage(1177 + seal.id), descriptionHeight = manager.canvas.wrapText(description, 207).length * height;
+                const description = manager.getSystemMessage(1177 + seal.id), descriptionLines = manager.canvas.wrapText(description, 207).length, descriptionHeight = height + (descriptionLines - 1) * (height + 6);
                 const panelHeight = descriptionHeight + 24 + count * 2 * (height + 6), panel = layer.createWindow(10, y - 3, 236, panelHeight, list.content);
 
                 layer.tile(panel, 0, 0, 236, 8, 0, 0, 222, 8, arrPanels[0]);
@@ -394,7 +395,7 @@ export class NCSSQMainBoard {
                 layer.tile(panel, 0, panelHeight - 8, 236, 8, 0, 0, 222, 8, arrPanels[2]);
                 for (let row = 1; row < Math.trunc(panelHeight / 17); row += 2)
                     layer.tile(panel, 0, 1 + row * 18, 222, 15, 0, 0, 8, 15, TEX_TEXT_BACK);
-                this.lines(panel, description, 5, 3, 207);
+                this.lines(panel, description, 5, 3, 207, GRAY, true);
                 for (let index = 0; index < count; index++) {
                     const row = descriptionHeight + 27 + index * 2 * (height + 6);
 

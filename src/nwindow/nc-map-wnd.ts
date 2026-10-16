@@ -3,6 +3,7 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NCTooltip from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import type { QuestLocation_T } from "./nc-quest-wnd";
+import { SKIN_SLOTS } from "./skin-textures";
 
 export type MapPartyMember_T = { objectId: number, name: string, x: number, y: number, z: number };
 type MapPartyMarker_T = { element: HTMLDivElement, x: number, y: number, memberIndex: number, caption: HTMLDivElement };
@@ -46,8 +47,8 @@ const TEX_SHADOW = "L2UI_CH3.Minimap.MapShadow";
 const TEX_SUN = "L2UI_CH3.Minimap.Map_Sun";
 const TEX_MOON = "L2UI_CH3.Minimap.Map_Moon";
 const TEX_QUEST = "L2UI_CH3.Minimap.MapIcon_Mark";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrMaps = Array.from({ length: 6 }, (_, i) => `L2Font-e.Minimap.ch4_worldmap${i + 1}`);
 
 export class NCMapWnd {

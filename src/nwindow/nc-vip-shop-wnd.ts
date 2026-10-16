@@ -1,8 +1,9 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
-import type { default as NCInventoryWnd, InventoryEntry_T } from "./nc-inventory-wnd";
+import type { InventoryEntry_T } from "./nc-inventory-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { MultiSellList_T, MultiSellEntry_T, MultiSellProduct_T, MultiSellIngredient_T } from "../network/game-packets";
+import type { InventoryWndView_T } from "./skin";
 
 const TEX_BACK = "L2UI_CH3.MultiSellWnd.multicell_back";
 const TEX_PLUS = "L2UI_CH3.MultiSellWnd.Multisell_plusicon";
@@ -28,7 +29,7 @@ export class NCVIPShopWnd {
     protected hoveredIndex = -1;
     protected generation = 0;
 
-    public constructor(protected readonly layer: NDomLayer, protected readonly inventory: NCInventoryWnd) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly inventory: InventoryWndView_T) {
         this.element = layer.createWindow(0, 0, 512, 401);
         this.element.hidden = true;
         this.element.tabIndex = -1;

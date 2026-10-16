@@ -4,12 +4,13 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeShopSellList_T, RecipeShopItem_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe3_Back";
 const TEX_MP = "L2UI_CH3.PlayerStatusWnd.ps_mpbar";
 const TEX_SELECTED = "L2UI_CH3.etc.IconSelect2";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_DEFAULT_ICON = "NWindow.BlackTexture";
 
 type RecipeBuyRow_T = RecipeShopItem_T & { recipe: RecipeInfo_T };

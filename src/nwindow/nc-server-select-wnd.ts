@@ -1,21 +1,22 @@
 import NDomLayer from "./ndom";
 import NCHtmlViewer from "./nc-html-viewer";
 import { FontType_T } from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const HEADER_COLOR = 0xffe6dcbe;
 const TEX_SELECT_BACK = "L2UI_CH3.Serverselectwnd.Serverselect_back";
 const TEX_INFO_BACK = "L2UI_CH3.Serverselectwnd.Serverinfo_back";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_normalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_TEXTBACKLINE = "L2UI_CH3.Etc.textbackline";
-const TEX_TEXTSELECT = "L2UI_CH3.ListCtrl.TextSelect";
-const TEX_TEXTSELECT2 = "L2UI_CH3.ListCtrl.TextSelect2";
+const TEX_TEXTSELECT = SKIN_SLOTS.listSelect;
+const TEX_TEXTSELECT2 = SKIN_SLOTS.listSelectEnd;
 const TEX_TABS = ["L2UI_CH3.ListCtrl.tab1", "L2UI_CH3.ListCtrl.tab2", "L2UI_CH3.ListCtrl.tab3"];
-const TEX_UP = "L2UI_CH3.ScrollBar.ScrollBarUpBtn";
-const TEX_UP_ON = "L2UI_CH3.ScrollBar.ScrollBarUpOnBtn";
-const TEX_DOWN = "L2UI_CH3.ScrollBar.ScrollBarDownBtn";
-const TEX_DOWN_ON = "L2UI_CH3.ScrollBar.ScrollBarDownOnBtn";
+const TEX_UP = SKIN_SLOTS.scrollUp;
+const TEX_UP_ON = SKIN_SLOTS.scrollUpDown;
+const TEX_DOWN = SKIN_SLOTS.scrollDown;
+const TEX_DOWN_ON = SKIN_SLOTS.scrollDownDown;
 const CONNECT_RESET_INTERVAL = 3000;
 
 const VISIBLE_ROWS = 15;

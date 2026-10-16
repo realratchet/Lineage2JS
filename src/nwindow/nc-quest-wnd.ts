@@ -2,12 +2,13 @@ import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T 
 import NCTooltip from "./nc-tooltip";
 import { ItemType2_T, type QuestState_T, type InventoryItem_T } from "../network/game-packets";
 import type { GameStrings_T, QuestInfo_T } from "../assets/decode-worker/decode-protocol";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_PATH = "L2UI_CH3.QUESTWND.";
-const TEX_CHECK = "L2UI.Control.CheckBox";
-const TEX_CHECKED = "L2UI.ActionWnd.CheckBox_checked"; // Core 0x1014dfed resolves the native Control request with outerIndex -1.
-const TEX_SELECT = "L2UI_CH3.ListCtrl.TextSelect";
-const TEX_SELECT_END = "L2UI_CH3.ListCtrl.TextSelect2";
+const TEX_CHECK = SKIN_SLOTS.checkBox;
+const TEX_CHECKED = SKIN_SLOTS.checkBoxChecked; // Core 0x1014dfed resolves the native Control request with outerIndex -1.
+const TEX_SELECT = SKIN_SLOTS.listSelect;
+const TEX_SELECT_END = SKIN_SLOTS.listSelectEnd;
 const TEX_OUTLINE = "L2UI_CH3.Etc.menu_outline";
 
 type QuestNode_T = { kind: number, info: QuestInfo_T, completed: boolean, expanded: boolean, selected: boolean, children: QuestNode_T[], available: number[] };

@@ -6,7 +6,7 @@ import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
-import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type { IScriptFieldDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine/contracts/script";
 import { PropertyFlags_T } from "@l2js/core";
 
@@ -359,7 +359,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (characterLibrary) await this.applyCharacter(manRender, characterLibrary, undefined, DEFAULT_CHAR_INDEX);
 
-        manRender.waterEffects.underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
+        manRender.getWaterEffects().underWaterEffect.setEffects(this.createEffect(UNDERWATER_EFFECTS[0]), this.createEffect(UNDERWATER_EFFECTS[1]));
 
         const underwaterSoundName = effectLibrary.sounds[underwaterLoopSound];
         const underwaterSound = effectLibrary.soundBlobCache.get(underwaterSoundName);
@@ -597,7 +597,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         renderManager.queueShaderCompile(player);
     }
 
-    public async loadCharacterEquipment(renderManager: RenderManager, actor: BaseActor, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment) { // UGameEngine::OnEquipItem 0x7456d0 queues a ChangeItemAction on a loaded pawn instead of User::SetPawnResource.
+    public async loadCharacterEquipment(renderManager: RenderManager, actor: BaseActor, charIndex: number, hairVariant: number, equipment: ICharacterEquipment) { // UGameEngine::OnEquipItem 0x7456d0 queues a ChangeItemAction on a loaded pawn instead of User::SetPawnResource.
         const request = (this.characterLoads.get(actor) || 0) + 1;
 
         this.characterLoads.set(actor, request);
@@ -621,7 +621,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         renderManager.needsUpdate = true;
     }
 
-    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, actor: BaseActor = renderManager.player, equipment: L2JS.Engine.ICharacterEquipment = null) {
+    public async loadCharacter(renderManager: RenderManager, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, actor: BaseActor = renderManager.player, equipment: ICharacterEquipment = null) {
         const request = (this.characterLoads.get(actor) || 0) + 1;
 
         this.characterLoads.set(actor, request);
@@ -629,7 +629,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         renderManager.needsUpdate = true;
     }
 
-    protected async getCharacterLibrary(charIndex: number, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: L2JS.Engine.ICharacterEquipment = null): Promise<DecodeLibrary> {
+    protected async getCharacterLibrary(charIndex: number, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: ICharacterEquipment = null): Promise<DecodeLibrary> {
         const key = JSON.stringify([charIndex, faceVariant, hairVariant, hairColour, armor.chest, armor.legs, armor.gloves, armor.boots, equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.enchantLevel], this.loadSettings.rgbaTextures !== false]);
 
         return copyPawnLibrary(await loadCachedLibrary(this.cacheCharacterLibraries, key, () => this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor, equipment)));
@@ -737,7 +737,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         actor.findComponent<PawnAttackComponent>("pawnAttack")?.stop();
     }
 
-    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: L2JS.Engine.INpcEquipment | null = null, preloadSkills: boolean = true) {
+    public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: INpcEquipment | null = null, preloadSkills: boolean = true) {
         const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
         const libraryPromise = npcId === null ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment) : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, preloadSkills);
         const [library, localization] = await Promise.all([libraryPromise, localizationPromise]);
@@ -820,7 +820,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return this.cacheScriptLocalizations.get(scriptClassPath);
     }
 
-    protected async getNpcLibrary(packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: L2JS.Engine.INpcEquipment | null, preloadSkills: boolean = true): Promise<DecodeLibrary> {
+    protected async getNpcLibrary(packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: INpcEquipment | null, preloadSkills: boolean = true): Promise<DecodeLibrary> {
         const key = `${npcId}:${JSON.stringify(equipment)}`;
 
         const library = await loadCachedLibrary(this.cacheNpcLibraries, key, async () => {
@@ -899,7 +899,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return effect;
     }
 
-    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
         const npc = await this.resolveNpc(selector);
         const index = npc.mesh.indexOf(".");
 

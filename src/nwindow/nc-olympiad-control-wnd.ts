@@ -1,8 +1,9 @@
 import NDomLayer from "./ndom";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.Olympiad.olympiad_back";
-const TEX_BUTTON = "L2UI_CH3.Button.btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.btn1_normalon";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_STRIP = "L2UI_CH3.FrameCtrl.smallbar";
 
 export class NCOlympiadControlWnd {

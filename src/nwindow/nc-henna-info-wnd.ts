@@ -2,11 +2,12 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { HennaItemInfo_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.HennaWnd.henna2_back";
 const TEX_EMPTY = "NWindow.BlackTexture";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 
 export class NCHennaInfoWnd {
     public static getTextures() { return [TEX_BACK, TEX_EMPTY, TEX_BUTTON, TEX_BUTTON_DOWN, ...NCFrameCtrl.getTextures()]; }

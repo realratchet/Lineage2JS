@@ -13,7 +13,7 @@ import type SoundComponent from "../../audio/components/sound-component";
 import type EffectsComponent from "../../rendering/components/effects-component";
 import { NPawnLightComponent, type PawnLight_T } from "../../rendering/components/pawn-light-component";
 import type { DecodeLibrary } from "@l2js/engine";
-import type { NpcSkillSound_T } from "@l2js/engine/contracts/pawn";
+import type { NpcSkillSound_T, IPawnEquipmentDecodeInfo } from "@l2js/engine/contracts/pawn";
 import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
 import UnScriptVM, { type ScriptHost_T } from "../../ue-script/vm";
@@ -191,7 +191,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
 
     public getWeaponLength(actor: SkillActor_T, left: boolean): number | null {
         const library = (this.script(actor).getVM() as any).library;
-        const equipment = library.pawnEquipment as L2JS.Engine.IPawnEquipmentDecodeInfo;
+        const equipment = library.pawnEquipment as IPawnEquipmentDecodeInfo;
         const hand = left ? "Left" : "Right";
         const item = equipment && (equipment.items.find(item => item.bone === `${hand}HandBone`) || equipment.items.find(item => item.bone === `${hand}ArmBone`));
         const path = item ? item.mesh : left && library.npcBow ? library.npcBow.weaponMesh : null;

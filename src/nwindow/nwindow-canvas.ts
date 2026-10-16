@@ -1,6 +1,7 @@
 import type AssetManager from "../assets/asset-manager";
 import type { BitmapFontSource_T } from "../assets/decode-worker/decode-protocol";
 import fetchAsset from "../assets/asset-source";
+import { isSkinImageUrl, type SkinTextures } from "./skin-textures";
 
 type UIImage_T = { frames: ImageBitmap[], frameTime: number };
 type Glyph_T = { u: number, v: number, w: number, h: number };
@@ -41,6 +42,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     public readonly element = document.createElement("canvas");
     protected readonly context = this.element.getContext("2d");
     protected readonly asset: AssetManager;
+    protected readonly skin: SkinTextures;
     protected readonly textures = new Map<string, UIImage_T>();
     protected readonly pending = new Map<string, Promise<void>>();
     protected readonly fonts = new Map<FontType_T, BitmapFont_T>();
@@ -48,22 +50,24 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     protected originX = 0;
     protected originY = 0;
     public scale = 1;
+    public uiScale = 1;
     public cssScale = 1;
     public width = 0;
     public height = 0;
     public needsRedraw = true;
     public isAnimating = false;
 
-    public constructor(asset: AssetManager) {
+    public constructor(asset: AssetManager, skin: SkinTextures) {
         this.asset = asset;
+        this.skin = skin;
         this.element.className = "nwindow-canvas";
     }
 
-    public resize(width: number, height: number) { // UI pixels map to a whole number of device pixels, bitmap glyphs smear at fractional ratios like 1.5.
-        const ratio = window.devicePixelRatio || 1;
+    public resize(width: number, height: number) { // the backing store keeps whole device pixels per UI pixel, a fractional uiScale is a pixelated css stretch so bitmap glyphs never smear
+        const ratio = window.devicePixelRatio || 1, pixels = Math.max(1, Math.floor(ratio)) * this.uiScale;
 
-        this.scale = Math.max(1, Math.floor(ratio));
-        this.cssScale = this.scale / ratio;
+        this.scale = Math.max(1, Math.round(pixels));
+        this.cssScale = pixels / ratio;
         this.width = Math.floor(width / this.cssScale);
         this.height = Math.floor(height / this.cssScale);
         this.element.width = this.width * this.scale;
@@ -73,6 +77,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         this.needsRedraw = true;
     }
 
+    public getScreenSize(uiScale: number) { const ratio = window.devicePixelRatio || 1, cssScale = Math.max(1, Math.floor(ratio)) * uiScale / ratio; return [Math.floor(window.innerWidth / cssScale), Math.floor(window.innerHeight / cssScale)]; }
     public toUI(client: number) { return Math.floor(client / this.cssScale); }
 
     public async loadTextures(paths: string[]) {
@@ -97,20 +102,39 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
 
     protected async loadMissingTextures(missing: string[]) {
         const byPackage = new Map<string, string[]>();
+        const keysBySource = new Map<string, string[]>();
+        const images: [string, string][] = [];
 
         for (const path of missing) {
-            const name = path.replace(/^\?/, "").split(".")[0].toLowerCase();
+            const key = path.replace(/^\?/, "").toLowerCase(), source = this.skin.resolve(key);
 
+            if (isSkinImageUrl(source)) { images.push([key, source]); continue; }
+
+            const name = source.split(".")[0].toLowerCase();
+
+            if (!keysBySource.has(source.toLowerCase())) keysBySource.set(source.toLowerCase(), []);
             if (!byPackage.has(name)) byPackage.set(name, []);
 
-            byPackage.get(name).push(path);
+            keysBySource.get(source.toLowerCase()).push(key);
+            byPackage.get(name).push(path.startsWith("?") ? `?${source}` : source);
         }
 
         try {
             const decoded = (await Promise.all([...byPackage.values()].map(group => this.asset.decodeUITextures(group)))).flat();
 
-            for (const texture of decoded)
-                this.textures.set(texture.path.toLowerCase(), { frames: await Promise.all(texture.frames.map(frame => createImageBitmap(new ImageData(new Uint8ClampedArray(frame), texture.width, texture.height)))), frameTime: texture.frameTime });
+            for (const texture of decoded) {
+                const image = { frames: await Promise.all(texture.frames.map(frame => createImageBitmap(new ImageData(new Uint8ClampedArray(frame), texture.width, texture.height)))), frameTime: texture.frameTime };
+
+                for (const key of keysBySource.get(texture.path.toLowerCase())) this.textures.set(key, image);
+            }
+
+            for (const [key, source] of images) {
+                const response = await fetchAsset(source);
+
+                if (!response.ok) throw new Error(`Skin image '${source}' for '${key}' failed to load.`);
+
+                this.textures.set(key, { frames: [await createImageBitmap(await response.blob())], frameTime: 0 });
+            }
 
             for (const path of missing) {
                 const key = path.replace(/^\?/, "").toLowerCase();

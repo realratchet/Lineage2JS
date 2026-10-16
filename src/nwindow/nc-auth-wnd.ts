@@ -1,10 +1,11 @@
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDomButton_T, NDomEdit_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const TEX_BACK = "L2UI_CH3.LoginWnd.logon_back";
-const TEX_BUTTON = "L2UI_CH3.BUTTON.bigbutton";
-const TEX_BUTTON_DOWN = "L2UI_CH3.BUTTON.bigbutton_down";
+const TEX_BUTTON = SKIN_SLOTS.bigButton;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.bigButtonDown;
 const SEND_RESET_INTERVAL = 1000;
 
 export class NCAuthWnd { // NCAuthWnd: 256x108, OnCreate 0x1009f230, paint 0x1009ea90.

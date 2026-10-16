@@ -7,7 +7,7 @@ import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import Player from "../player";
 import type BaseActor from "../base-actor";
 import type CollidingMesh from "../objects/colliding-mesh";
-import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo } from "./visualizer";
+import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo_T } from "./visualizer";
 import EnvColor from "./env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
 import SkyRenderer from "./sky-renderer";
@@ -47,7 +47,7 @@ import ActorOwnershipComponent from "../objects/components/actor-ownership-compo
 import NPawnLightComponent from "./components/pawn-light-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
-import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import Radar from "./radar";
 import QuestArrow from "./quest-arrow";
@@ -336,13 +336,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected manInput: InputManager = null;
 
     public player = new Player(this);
-    public get waterEffects(): WaterEffectsComponent { return this.player.getComponent<WaterEffectsComponent>("waterEffects"); }
+    public getWaterEffects(): WaterEffectsComponent { return this.player.getComponent<WaterEffectsComponent>("waterEffects"); }
 
     public setPlayer(player: Player): void {
-        this.waterEffects.underWaterEffect.removeFromParent();
+        this.getWaterEffects().underWaterEffect.removeFromParent();
         this.player.deleteLandmark();
         this.player = player;
-        this.scene.add(this.waterEffects.underWaterEffect);
+        this.scene.add(this.getWaterEffects().underWaterEffect);
     }
     protected readonly shadowProjector = new ShadowProjector();
     protected readonly colliderOverlay = new ColliderOverlay();
@@ -415,7 +415,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
         this.scene.add(this.colliderOverlay);
-        this.scene.add(this.waterEffects.underWaterEffect);
+        this.scene.add(this.getWaterEffects().underWaterEffect);
         this.objectGroup.add(this.particleBatcher.root);
         this.mixer.addEventListener("finished", (event: any) => {
             let object = event.action.getRoot() as Object3D;
@@ -1014,10 +1014,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     protected static readonly EMITTER_DEBUG_MAX = 80;
 
-    public collectEmitterDebugInfo(): EmitterDebugInfo[] {
+    public collectEmitterDebugInfo(): EmitterDebugInfo_T[] {
         const cameraPosition = this.camera.position;
         const currentSector = this.getSector(cameraPosition);
-        const results: EmitterDebugInfo[] = [];
+        const results: EmitterDebugInfo_T[] = [];
 
         this.scene.traverse(obj => {
             const emitter = obj as any;
@@ -1258,7 +1258,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.deferredMixerOperations.length = 0;
     }
 
-    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
         return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering, undefined, preloadSkills, collisionSize);
     }
 
@@ -1959,7 +1959,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const waterVolume = sector ? sector.getWaterVolumeAt(camera.position) : null;
 
         if (updateAudio) {
-            this.waterEffects.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
+            this.getWaterEffects().underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
             this.audioManager.setUnderwater(!!waterVolume);
         }
 
@@ -2058,8 +2058,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const timeOfDay = this.environment.getTimeOfDay();
 
         // UL2NEnvManager::IsDay (L2.exe 0x7b7320): 6.0 <= time <= 24.0.
-        this.waterEffects.setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
-        this.waterEffects.underWaterEffect.updatePresentation(this.camera);
+        this.getWaterEffects().setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
+        this.getWaterEffects().underWaterEffect.updatePresentation(this.camera);
 
         this.getInputManager().updateCamera();
 
@@ -2318,7 +2318,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // Always update HUD in Fogs/Audio mode to prevent stale data when transitioning between sectors or leaving them
         if (this.visualizer.isEnabled()) {
             // Capture raw source colors from the active fog if available
-            let activeFogColors: import("./visualizer").FogSourceColors | undefined;
+            let activeFogColors: import("./visualizer").FogSourceColors_T | undefined;
             if (this.activeFogId) {
                 const s = this.getSector(this.camera.position);
                 const fogInfo = s?.fogInfos?.find(fi => fi.uuid === this.activeFogId);
@@ -2333,7 +2333,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
             }
             // Capture global environment colors
-            const globalEnvColors: import("./visualizer").GlobalEnvColors = {
+            const globalEnvColors: import("./visualizer").GlobalEnvColors_T = {
                 fog: this.environment.getFogColor(new ColorByte()),
                 sky: this.environment.getSkyColor(new ColorByte()),
                 cloud1: this.environment.getCloudColor(0, new ColorByte()),
@@ -2344,7 +2344,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             };
 
             // Capture active zone fog data
-            let zoneFogData: import("./visualizer").ZoneFogData | undefined;
+            let zoneFogData: import("./visualizer").ZoneFogData_T | undefined;
             const sector = this.getSector(this.camera.position);
             if (sector) {
                 const zoneIndex = sector.findPositionZone(this.camera.position);
@@ -2379,7 +2379,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         updateEmitterRenderState(this.scene, this.getPhysicsManager().getParticleEmitters());
         this.drawWorld();
 
-        this.waterEffects.underWaterEffect.renderCellophane(this.renderer);
+        this.getWaterEffects().underWaterEffect.renderCellophane(this.renderer);
         this.renderer.getSize(tmpSize);
         this.questArrow.draw();
         this.radar.render(this.renderer, this.camera, this.player.position, tmpSize.x, tmpSize.y);

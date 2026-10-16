@@ -2,15 +2,16 @@ import type NWnd from "./nwnd";
 import type NWindowCanvas from "./nwindow-canvas";
 import type NDomLayer from "./ndom";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEXT_COLOR = 0xffdcdcdc;
-const TEX_SLICES = Array.from({ length: 9 }, (_, i) => `L2UI_ch3.Tooltip.Tooltip${i + 1}`);
+export const TEX_TOOLTIP_SLICES = [SKIN_SLOTS.tooltip1, SKIN_SLOTS.tooltip2, SKIN_SLOTS.tooltip3, SKIN_SLOTS.tooltip4, SKIN_SLOTS.tooltip5, SKIN_SLOTS.tooltip6, SKIN_SLOTS.tooltip7, SKIN_SLOTS.tooltip8, SKIN_SLOTS.tooltip9];
 
 export type TooltipInfo_T = { title: string; extentTitle?: string; titleRuns?: { text: string; color: number; gap?: number }[]; lines: { label: string; value: string }[]; description: string; minimumWidth?: number; };
 type TooltipLayout_T = { width: number; height: number; runs: { x: number; y: number; color: number; text: string }[]; };
 
 export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCWnd::OnCreate 0x100360d6); nine 8x8 slices.
-    public getTextures(): string[] { return TEX_SLICES; }
+    public getTextures(): string[] { return TEX_TOOLTIP_SLICES; }
 
     public static skill(strings: GameStrings_T, id: number, level: number): TooltipInfo_T { // NWindow 0x100317f3: type, HP, MP, range, then the level-specific description.
         const info = strings.skillInfos[`${id}:${level}`];
@@ -123,7 +124,7 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         const widths = [8, w - 16, 8], heights = [8, h - 16, 8];
         const xs = [0, 8, w - 8], ys = [0, 8, h - 8];
 
-        TEX_SLICES.forEach((texture, index) => tile(xs[index % 3], ys[Math.trunc(index / 3)], widths[index % 3], heights[Math.trunc(index / 3)], texture));
+        TEX_TOOLTIP_SLICES.forEach((texture, index) => tile(xs[index % 3], ys[Math.trunc(index / 3)], widths[index % 3], heights[Math.trunc(index / 3)], texture));
         layout.runs.forEach(run => text(run.x, run.y, run.color, run.text));
     }
 

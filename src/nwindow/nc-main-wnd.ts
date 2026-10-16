@@ -6,6 +6,7 @@ import NCQuestWnd from "./nc-quest-wnd";
 import NCClanWnd from "./nc-clan-wnd";
 import NCDetailStatusWnd from "./nc-detail-status-wnd";
 import type NCCoolTimeIcon from "./nc-cool-time-icon";
+import type { default as Skin, DetailStatusWndView_T, SkillWndView_T, ActionWndView_T, QuestWndView_T, ClanWndView_T } from "./skin";
 
 const TEX_BACK = "L2UI_CH3.TabButton.MainWndTabBack";
 const arrTabs: { type: MainTab_T, title: number, tooltip: number, texture: string }[] = [
@@ -21,27 +22,27 @@ export type MainTab_T = "status" | "skills" | "actions" | "clan" | "quest";
 export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 256x335 pages at (0,66).
     public static getTextures() { return [TEX_BACK, ...arrTabs.flatMap(tab => [tab.texture, `${tab.texture}On`]), ...NCFrameCtrl.getTextures(), ...NCSkillWnd.getTextures(), ...NCActionWnd.getTextures(), ...NCQuestWnd.getTextures(), ...NCClanWnd.getTextures(), ...NCDetailStatusWnd.getTextures()]; }
     public readonly element: HTMLDivElement;
-    public readonly skillWnd: NCSkillWnd;
-    public readonly actionWnd: NCActionWnd;
-    public readonly questWnd: NCQuestWnd;
-    public readonly clanWnd: NCClanWnd;
-    public readonly detailStatusWnd: NCDetailStatusWnd;
+    public readonly skillWnd: SkillWndView_T;
+    public readonly actionWnd: ActionWndView_T;
+    public readonly questWnd: QuestWndView_T;
+    public readonly clanWnd: ClanWndView_T;
+    public readonly detailStatusWnd: DetailStatusWndView_T;
     public onSelect: (tab: MainTab_T) => void = null;
     protected readonly caption: HTMLCanvasElement;
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly pages: Record<MainTab_T, HTMLDivElement>;
     protected selectedTab: MainTab_T = "status";
 
-    public constructor(protected readonly layer: NDomLayer, coolTimes: Map<string, NCCoolTimeIcon>) {
+    public constructor(protected readonly layer: NDomLayer, coolTimes: Map<string, NCCoolTimeIcon>, skin: Skin) {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 46, 0, 0, 256, 46, TEX_BACK);
         this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(433), false, () => this.setVisible(false));
-        this.detailStatusWnd = new NCDetailStatusWnd(layer, this.element);
-        this.skillWnd = new NCSkillWnd(layer, coolTimes, this.element);
-        this.actionWnd = new NCActionWnd(layer, this.element);
-        this.questWnd = new NCQuestWnd(layer, this.element);
-        this.clanWnd = new NCClanWnd(layer, this.element);
+        this.detailStatusWnd = skin.createDetailStatusWnd(layer, this.element);
+        this.skillWnd = skin.createSkillWnd(layer, coolTimes, this.element);
+        this.actionWnd = skin.createActionWnd(layer, this.element);
+        this.questWnd = skin.createQuestWnd(layer, this.element);
+        this.clanWnd = skin.createClanWnd(layer, this.element);
         this.pages = { status: this.detailStatusWnd.element, skills: this.skillWnd.element, actions: this.actionWnd.element, clan: this.clanWnd.element, quest: this.questWnd.element };
         Object.values(this.pages).forEach(page => page.tabIndex = -1);
 

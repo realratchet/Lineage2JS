@@ -2,13 +2,14 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { ShopItem_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.StoreWnd.Store1_back";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_UP = "L2UI_CH3.Button.UpButton";
 const TEX_DOWN = "L2UI_CH3.Button.DownButton";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 
 type ShopDrag_T = { side: number, item: ShopItem_T, isDragging: boolean };
 
@@ -249,7 +250,7 @@ export class NCShopWnd {
     protected paintSelection(side: number) {
         this.lists[side].content.querySelectorAll<HTMLElement>("[data-selected]").forEach((frame, index) => frame.hidden = this.items[side][index] !== this.selected[side]);
     }
-    protected async paintItems(scrollSide = -1) {
+    public async paintItems(scrollSide = -1) {
         const generation = ++this.generation, strings = this.layer.getManager().strings;
 
         await this.layer.loadTextures([...new Set(this.items.flat().map(item => strings.itemIcons[item.itemId]))]);

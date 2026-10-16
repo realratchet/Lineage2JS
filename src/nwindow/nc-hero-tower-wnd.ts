@@ -2,10 +2,11 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl, { type ListRow_T, type ListColumn_T } from "./nc-list-ctrl";
 import type { default as NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
 import type { HeroEntry_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.HeroTower.herotower1_back";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_normal";
-const TEX_DOWN = "L2UI_CH3.Button.Btn1_normalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_DOWN = SKIN_SLOTS.buttonDown;
 
 class HeroListCtrl extends NCListCtrl {
     public getCrest: (crestId: number, isAlly: boolean) => CanvasImageSource = null;

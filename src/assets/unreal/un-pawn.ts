@@ -26,7 +26,7 @@ export type INpcDefinition = {
     alternateTextures: string[];
     skillAttacks: NpcSkillAttack_T[];
     enterEvent: INpcEnterEvent | null;
-    sounds: L2JS.Engine.IPawnSoundsDecodeInfo;
+    sounds: IPawnSoundsDecodeInfo;
 };
 
 export type NpcSkillAttack_T = {
@@ -106,6 +106,68 @@ export type ICharacterArmorSelection = {
     legs: number,
     gloves: number,
     boots: number
+};
+
+export type IPawnSoundSetDecodeInfo = {
+    sounds: (string | null)[];
+    volume: number;
+    radius: number;
+};
+
+export type IPawnSoundsDecodeInfo = {
+    attack?: IPawnSoundSetDecodeInfo;
+    defense: IPawnSoundSetDecodeInfo;
+    damage: IPawnSoundSetDecodeInfo & { random: number };
+    item: IPawnSoundSetDecodeInfo | null;
+    shield?: IPawnSoundSetDecodeInfo | null;
+    critical?: { sound: string | null; volume: number; radius: number };
+    soulshot?: { sound: string | null; volume: number; radius: number };
+};
+
+export type ICharacterEquipment = {
+    rightHand: number;
+    leftHand: number;
+    head?: number;
+    hair?: number;
+    enchantLevel?: number;
+};
+
+export type IWeaponEnchantMesh = {
+    mesh: string;
+    skin: string;
+    scale: [number, number, number];
+    offset: [number, number, number];
+    colors: number[][];
+};
+
+export type IWeaponEnchantEffect = {
+    path: string;
+    offset: [number, number, number];
+    scale: number;
+    velocityScale: number;
+    opacity: number;
+    num: number;
+};
+
+export type IPawnEquipmentDecodeInfo = {
+    attackSound?: IPawnSoundSetDecodeInfo | null;
+    weaponType: number;
+    items: { mesh: string; skins: string[]; bone: string | number; extraMesh?: boolean; enchantMesh?: IWeaponEnchantMesh; enchantEffect?: IWeaponEnchantEffect }[];
+};
+
+export type INpcBowDecodeInfo = {
+    weaponMesh: string;
+    weaponSkins: string[];
+    curvature: number;
+    attackRange: number;
+    ammo: number;
+};
+
+export type INpcEquipment = {
+    rightHand: number;
+    leftHand?: number;
+    chest?: number;
+    attackRange: number;
 };
 
 export abstract class UPawn extends UAActor {

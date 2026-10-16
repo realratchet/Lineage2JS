@@ -1,5 +1,6 @@
 import NDomLayer, { NDomButton_T, NDomEdit_T, NDOM_EDIT_TEXTURES } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const TEXT_X = 41;
@@ -7,8 +8,8 @@ const TEXT_Y = 16;
 const WRAP_WIDTH = 200;
 const TEX_BACK = "L2UI_ch3.dialog.system_back";
 const TEX_ICON = "L2UI_ch3.dialog.warningicon";
-const TEX_BUTTON = "L2UI_ch3.button.btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_ch3.button.btn1_normalon";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_KEYPAD = "L2UI_ch3.Calculate.Calculate1_back";
 const TEX_TIME = "L2UI_ch3.dialog.minibar_time1";
 const TEX_TIME_BACK = "L2UI_ch3.dialog.minibar_back";

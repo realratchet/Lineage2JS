@@ -90,7 +90,7 @@ export class NCPrivateBuyWnd extends NCPrivateShopWnd {
     }
     protected getLabelIds() { return this.isOwn ? [138, 502, 142] : [503, 137, 143]; }
     protected getTooltipContext(side: number) { return this.isOwn ? side ? 0x808 : 0 : side ? 0 : 0x808; }
-    protected async paintItems(scrollSide = -1) {
+    public async paintItems(scrollSide = -1) {
         const generation = this.generation + 1;
 
         await super.paintItems(scrollSide);

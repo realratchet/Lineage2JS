@@ -1,6 +1,7 @@
 import NDomLayer, { NDOM_EDIT_TEXTURES } from "./ndom";
 import CHtmlMultiEdit from "./c-html-multi-edit";
 import { FontType_T } from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const LINK_COLOR = 0xff6699ff;
@@ -10,13 +11,13 @@ const BR_HEIGHT = 9;
 const SCROLLBAR_RESERVE = 16;
 const REPEAT_PERIOD = 100;
 const MIN_THUMB = 15;
-const TEX_UP = "L2UI_CH3.ScrollBar.ScrollBarUpBtn";
-const TEX_UP_ON = "L2UI_CH3.ScrollBar.ScrollBarUpOnBtn";
-const TEX_DOWN = "L2UI_CH3.ScrollBar.ScrollBarDownBtn";
-const TEX_DOWN_ON = "L2UI_CH3.ScrollBar.ScrollBarDownOnBtn";
-const TEX_THUMB_TOP = "L2UI_CH3.ScrollBar.SliderBarTop";
-const TEX_THUMB_CENTER = "L2UI_CH3.ScrollBar.SliderBarCenter";
-const TEX_THUMB_BOTTOM = "L2UI_CH3.ScrollBar.SliderBarBottom";
+const TEX_UP = SKIN_SLOTS.scrollUp;
+const TEX_UP_ON = SKIN_SLOTS.scrollUpDown;
+const TEX_DOWN = SKIN_SLOTS.scrollDown;
+const TEX_DOWN_ON = SKIN_SLOTS.scrollDownDown;
+const TEX_THUMB_TOP = SKIN_SLOTS.scrollThumbTop;
+const TEX_THUMB_CENTER = SKIN_SLOTS.scrollThumbCenter;
+const TEX_THUMB_BOTTOM = SKIN_SLOTS.scrollThumbBottom;
 const DEFAULT_FORE = "NWindow.BlackTexture";
 const DEFAULT_BACK = "NWindow.WhiteTexture";
 const TEXT_ENTITIES = [["&nbsp;", " "], ["&apos;", "'"], ["&quot;", "\""], ["&amp;", "&"], ["&lt;", "<"], ["&gt;", "> "], ["&#160;", " "]]; // 0x100449e0, table 0x102369e4.

@@ -2,9 +2,9 @@ import NDomLayer, { NDomButton_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCTooltip from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
-import NCInventoryWnd from "./nc-inventory-wnd";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { PetStatus_T } from "../network/game-packets";
+import type { InventoryWndView_T } from "./skin";
 
 const TEX_BACK = "L2UI_CH3.SummonWnd.summon_back";
 const TEX_TAB = "L2UI_CH3.SummonWnd.summon_tab2";
@@ -33,7 +33,7 @@ export class NCSummonedWnd {
     protected actionsReady = false;
     protected pressedAction: HTMLDivElement = null;
 
-    public constructor(protected readonly layer: NDomLayer, protected readonly inventory: NCInventoryWnd) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly inventory: InventoryWndView_T) {
         const manager = layer.getManager();
 
         this.element = layer.createWindow(172, 76, 256, 201);

@@ -2,6 +2,7 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane
 import { FontType_T } from "./nwindow-canvas";
 import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
 import { ItemType2_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.Inventory_Back";
 const TEX_TAB = "L2UI_CH3.InventoryWnd.Inventory_tab2";
@@ -10,13 +11,13 @@ const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
 const TEX_OUTLINE_DOWN = "L2UI_CH3.InventoryWnd.Inventory_OutLine_down";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_DUAL = "L2UI.InventoryWnd.Icon_dualcap";
-const TEX_FRAME_LEFT = "L2UI_CH3.FrameCtrl.FrameBackLeft";
-const TEX_FRAME_MID = "L2UI_CH3.FrameCtrl.FrameBackMid";
-const TEX_FRAME_RIGHT = "L2UI_CH3.FrameCtrl.FrameBackRight";
-const TEX_CLOSE = "L2UI_CH3.FrameCtrl.FrameCloseBtn";
-const TEX_CLOSE_DOWN = "L2UI_CH3.FrameCtrl.FrameCloseOnBtn";
-const TEX_MINIMIZE = "L2UI_CH3.FrameCtrl.FrameMiniBtn";
-const TEX_MINIMIZE_DOWN = "L2UI_CH3.FrameCtrl.FrameMiniOnBtn";
+const TEX_FRAME_LEFT = SKIN_SLOTS.frameLeft;
+const TEX_FRAME_MID = SKIN_SLOTS.frameMid;
+const TEX_FRAME_RIGHT = SKIN_SLOTS.frameRight;
+const TEX_CLOSE = SKIN_SLOTS.frameClose;
+const TEX_CLOSE_DOWN = SKIN_SLOTS.frameCloseDown;
+const TEX_MINIMIZE = SKIN_SLOTS.frameMinimize;
+const TEX_MINIMIZE_DOWN = SKIN_SLOTS.frameMinimizeDown;
 const TEX_FOLDED = "L2UI_CH3.MenuIcon.Menuicon2";
 const TEX_CAPTION = "NWindow.Icon.chatback";
 const TEX_ADENA = "L2UI.WindowIcon.WindowIconAdena";

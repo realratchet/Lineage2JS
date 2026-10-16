@@ -3,14 +3,15 @@ import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomButton_T,
 import type { TooltipInfo_T } from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import { Say2_T, type CommandChannelInfo_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.PartyCommandWnd.Herochat_back";
 const TEX_TAB = "L2UI_CH3.PartyCommandWnd.herochat_tab2";
 const TEX_TAB_SELECTED = "L2UI_CH3.PartyCommandWnd.herochat_tab1";
 const TEX_TOGGLE = "L2UI_CH3.PartyCommandWnd.Herochat_btn1";
 const TEX_TOGGLE_SELECTED = "L2UI_CH3.PartyCommandWnd.Herochat_btn2";
-const TEX_BUTTON = "L2UI_CH3.Button.smallbutton2";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.smallbutton2_down";
+const TEX_BUTTON = SKIN_SLOTS.smallButton;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.smallButtonDown;
 const TEX_FRAME = "L2UI_CH3.FrameCtrl.smallbar";
 
 type CommandChatLine_T = { text: string, color: number, indent: number };

@@ -2,6 +2,7 @@ html { cursor: var(--game-cursor, default); }
 
 .nwindow-canvas {
     position: fixed;
+    image-rendering: pixelated;
     left: 0;
     top: 0;
     pointer-events: none;

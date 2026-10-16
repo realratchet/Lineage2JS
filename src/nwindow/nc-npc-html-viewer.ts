@@ -1,6 +1,7 @@
 import NDomLayer from "./ndom";
 import NCHtmlViewer from "./nc-html-viewer";
 import { FontType_T } from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TITLE_COLOR = 0xffc8d2dc;
 const WIDTH = 310;
@@ -8,11 +9,11 @@ const HEIGHT = 401;
 const TITLE_HEIGHT = 20;
 const TITLE_SYSSTRING = 0x1bc;
 const TEX_BACK = "L2UI_ch3.NpcWnd.Npc1_back";
-const TEX_FRAME_LEFT = "L2UI_CH3.FrameCtrl.FrameBackLeft";
-const TEX_FRAME_MID = "L2UI_CH3.FrameCtrl.FrameBackMid";
-const TEX_FRAME_RIGHT = "L2UI_CH3.FrameCtrl.FrameBackRight";
-const TEX_CLOSE = "L2UI_CH3.FrameCtrl.FrameCloseBtn";
-const TEX_CLOSE_DOWN = "L2UI_CH3.FrameCtrl.FrameCloseOnBtn";
+const TEX_FRAME_LEFT = SKIN_SLOTS.frameLeft;
+const TEX_FRAME_MID = SKIN_SLOTS.frameMid;
+const TEX_FRAME_RIGHT = SKIN_SLOTS.frameRight;
+const TEX_CLOSE = SKIN_SLOTS.frameClose;
+const TEX_CLOSE_DOWN = SKIN_SLOTS.frameCloseDown;
 
 export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole 0x100608f4 chat instance 310x401, OnCreate 0x1003f510, paint 0x1003c840.
     public static getTextures(): string[] { return [TEX_BACK, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, `?${TEX_CLOSE}_over`, ...NCHtmlViewer.getTextures()]; }

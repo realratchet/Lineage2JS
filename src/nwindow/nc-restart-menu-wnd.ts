@@ -1,10 +1,11 @@
 import NWnd from "./nwnd";
 import NCButton from "./nc-button";
 import type NWindowCanvas from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.SystemMenuWnd.system2_back";
-const TEX_BUTTON = "L2UI_CH3.button.bigbutton";
-const TEX_BUTTON_DOWN = "L2UI_CH3.button.bigbutton_down";
+const TEX_BUTTON = SKIN_SLOTS.bigButton;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.bigButtonDown;
 
 const BUTTON_LABELS = [0x174, 0x176, 0x177, 0x175, 0x1d1]; // village, hideaway, castle, siege HQ, fixed (0x100b7518..0x100b77f4); index is the restart type sent.
 const BUTTON_Y = [6, 30, 54, 78, 102];

@@ -67,6 +67,7 @@ import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
 import USkillVisualEffect, { USkillAction, FSkillActionInfo, USkillActionLocateEffect, USkillActionSwordTrail } from "./un-skill-visual-effect";
 import * as AnimNotify from "./skeletal-mesh/un-anim-notify";
+import USceneManager, { UMatAction, UActionMoveCamera, UInterpolationPoint } from "./un-scene-manager";
 
 export type NativeClientTypes_T =
     | NativeTypes_T
@@ -472,19 +473,20 @@ export class UNativePackage extends ANativePackage {
 
             // Classes we don't care about atm are marked as UObject for general puprose constructor
             case "L2SeamlessInfo":
-            case "SceneManager":
             case "MatObject":
-            case "MatAction":
             case "MatSubAction":
-            case "ActionMoveCamera":
-            case "ActionWarp":
-            case "ActionPause":
             case "PathNode":
-            case "InterpolationPoint":
             case "Projector":
             case "AntiPortalActor":
             case "LineagePlayerController":
             case "AmbientSound": Constructor = UObject; break;
+
+            case "SceneManager": Constructor = USceneManager; break;
+            case "MatAction":
+            case "ActionWarp":
+            case "ActionPause": Constructor = UMatAction; break;
+            case "ActionMoveCamera": Constructor = UActionMoveCamera; break;
+            case "InterpolationPoint": Constructor = UInterpolationPoint; break;
 
             case "SkillVisualEffect": Constructor = USkillVisualEffect; break;
             case "SkillAction": Constructor = USkillAction; break;

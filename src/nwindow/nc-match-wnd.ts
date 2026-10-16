@@ -4,12 +4,13 @@ import NCMinimizedWnd from "./nc-minimized-wnd";
 import { NCComboBox } from "./nc-lobby-wnd";
 import NDomLayer, { type NDomButton_T } from "./ndom";
 import type { PartyMatchList_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.PartyMatchWnd.PartyMatch1_Back";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_normalOn";
-const TEX_SMALL = "L2UI_CH3.Button.SmallButton2";
-const TEX_SMALL_DOWN = "L2UI_CH3.Button.SmallButton2_down";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
+const TEX_SMALL = SKIN_SLOTS.smallButton;
+const TEX_SMALL_DOWN = SKIN_SLOTS.smallButtonDown;
 const arrLocations = [-2, -1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 const arrLocationLabels = [1047, 1046, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1247, 1248];
 

@@ -3,14 +3,17 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import { NCComboBox } from "./nc-lobby-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_ch3.OptionWnd.option1_back";
 const TEX_AUDIO_BACK = "L2UI_ch3.OptionWnd.option2_back";
 const TEX_TAB_BACK = "L2UI_ch3.SSQWnd.ssq_back";
 const TEX_TAB = "L2UI_ch3.TabButton.normal_tab_on";
 const TEX_TAB_SELECTED = "L2UI_ch3.TabButton.normal_tab";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_normalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
+
+export const UI_SCALES = [1, 1.25, 1.5, 1.75, 2];
 
 export class NCOptionWnd {
     public static getTextures() { return [TEX_BACK, TEX_AUDIO_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
@@ -20,8 +23,14 @@ export class NCOptionWnd {
     public getAudioOptions: () => AudioConfig_T = null;
     public onApplyAudio: (options: AudioConfig_T) => void = null;
     public canChangePartyLoot: () => boolean = null;
+    public getUIScale: () => number = null;
+    public getUIScales: () => number[] = null;
+    public onApplyUIScale: (scale: number) => void = null;
     protected readonly game: HTMLDivElement;
     protected readonly audio: HTMLDivElement;
+    protected readonly video: HTMLDivElement;
+    protected readonly uiScale: NCComboBox;
+    protected uiScales = UI_SCALES;
     protected readonly background: HTMLDivElement;
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly audioCombos: NCComboBox[] = [];
@@ -51,25 +60,27 @@ export class NCOptionWnd {
         layer.tile(this.element, 0, 20, 256, 28, 0, 0, 256, 28, TEX_TAB_BACK);
         this.background = layer.tile(this.element, 0, 48, 256, 432, 0, 0, 256, 432, TEX_BACK);
         NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(146), false, () => this.setVisible(false));
-        // shortcut: Video controls are pending; enable the tab with its native settings.
+        // shortcut: retail Video controls are pending; the tab only holds the non-retail UI scale.
         [206, 207, 208].forEach((id, index) => {
             const tab = layer.tab(this.element, 12 + index * 74, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(id), null, () => this.selectTab(index));
 
             tab.setAttribute("aria-selected", String(index === 2));
-            tab.setAttribute("aria-disabled", String(index === 0));
-            tab.setEnabled(index !== 0);
-            tab.tabIndex = index === 0 ? -1 : 0;
+            tab.tabIndex = 0;
             this.tabs.push(tab);
         });
         const game = this.game = layer.createWindow(0, 48, 256, 400, this.element);
         this.audio = layer.createWindow(0, 48, 256, 400, this.element);
         this.audio.hidden = true;
+        this.video = layer.createWindow(0, 48, 256, 400, this.element);
+        this.video.hidden = true;
+        layer.text(this.video, "UI Scale", 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText("UI Scale"), 14);
+        this.uiScale = new NCComboBox(layer, this.video, 107, 11, 125, 17);
+        this.uiScale.element.tabIndex = 0;
+        this.uiScale.element.setAttribute("role", "combobox");
+        this.uiScale.element.setAttribute("aria-label", "UI Scale");
         layer.text(game, manager.getSysString(478), 0xffdcdcdc, FontType_T.SMALL, 24, 15);
-        [[329, 79, 49], [435, 76, 82]].forEach(([id, x, y]) => {
-            const label = manager.getSysString(id);
-
-            layer.text(game, label, 0xffdcdcdc, FontType_T.SMALL, x - layer.measureText(label), y);
-        });
+        layer.text(game, manager.getSysString(329), 0xffdcdcdc, FontType_T.SMALL, 79, 49); // NCGameOptionWnd paint 0x100c77f0 draws Language left-aligned, Display right-aligned to 76.
+        layer.text(game, manager.getSysString(435), 0xffdcdcdc, FontType_T.SMALL, 76 - layer.measureText(manager.getSysString(435)), 82);
         [216, 217, 977, 978].forEach((id, index) => {
             const label = manager.getSysString(id);
             const combo = new NCComboBox(layer, this.audio, 107, 11 + index * 19, 125, 17);
@@ -157,10 +168,15 @@ export class NCOptionWnd {
 
     public setVisible(isVisible: boolean) {
         this.partyLooting.setOpen(false);
+        this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
         this.element.hidden = !isVisible;
 
         if (isVisible) {
+            this.uiScales = this.getUIScales();
+            this.uiScale.setItems(this.uiScales.map(scale => `${scale * 100}%`));
+            this.uiScale.setSelected(this.uiScales.indexOf(this.getUIScale()));
+
             const options = this.getOptions();
 
             this.nameChecks.forEach((checkbox, index) => checkbox.setChecked(options[this.nameKeys[index]] as boolean));
@@ -217,13 +233,15 @@ export class NCOptionWnd {
         this.selectedTab = index;
         this.game.hidden = index !== 2;
         this.audio.hidden = index !== 1;
+        this.video.hidden = index !== 0;
         this.partyLooting.setOpen(false);
+        this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
         this.tabs.forEach((tab, i) => {
             tab.setTextures(i === index ? TEX_TAB_SELECTED : TEX_TAB, TEX_TAB_SELECTED);
             tab.setAttribute("aria-selected", String(i === index));
         });
-        this.layer.setTile(this.background, 256, 432, 0, 0, 256, 432, index === 1 ? TEX_AUDIO_BACK : TEX_BACK);
+        this.layer.setTile(this.background, 256, 432, 0, 0, 256, 432, index !== 2 ? TEX_AUDIO_BACK : TEX_BACK);
     }
 
     protected updateNameControls() {
@@ -249,6 +267,7 @@ export class NCOptionWnd {
     }
 
     protected apply() {
+        this.onApplyUIScale(this.uiScales[this.uiScale.getSelected()]);
         this.updatePartyLootControl();
         if (!this.lootEnabled) {
             this.lootType = this.getOptions().partyLooting;

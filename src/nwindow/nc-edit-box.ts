@@ -1,6 +1,7 @@
 import NWnd, { NMouseEvent_T } from "./nwnd";
 import type NWindowCanvas from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const CARET_BLINK = 500;
@@ -127,12 +128,12 @@ export class NCEditBox extends NWnd {
     }
 
     public onPaint(canvas: NWindowCanvas) {
-        const suffix = this.isFocused() ? "" : "_disable";
+        const isFocused = this.isFocused();
         const W = this.width, H = this.height;
 
-        canvas.drawTile(0, 0, 8, H, 0, 0, 8, 17, `L2UI_CH3.Etc.inputbox1${suffix}`);
-        canvas.drawTile(8, 0, W - 16, H, 0, 0, 8, 17, `L2UI_CH3.Etc.inputbox2${suffix}`);
-        canvas.drawTile(W - 8, 0, 8, H, 0, 0, 8, 17, `L2UI_CH3.Etc.inputbox3${suffix}`);
+        canvas.drawTile(0, 0, 8, H, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit1 : SKIN_SLOTS.edit1Disabled);
+        canvas.drawTile(8, 0, W - 16, H, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit2 : SKIN_SLOTS.edit2Disabled);
+        canvas.drawTile(W - 8, 0, 8, H, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit3 : SKIN_SLOTS.edit3Disabled);
 
         const shown = this.mode === EditMode_T.PASSWORD ? "*".repeat(this.text.length) : this.text;
         let start = 0;

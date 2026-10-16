@@ -1,4 +1,4 @@
-import type { APackage, UClass, UObject } from "@l2js/core";
+import type { APackage, UClass } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 import AssetLoader from "../asset-loader";
 import UConfigEnv from "@l2js/engine/conf-files/un-conf-env";
@@ -31,7 +31,7 @@ import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
-import type { ICharacterArmorSelection, INpcDefinition, NpcSkillAttack_T, NpcSkillEffectPhase_T, ICharacterGroup, ICharacterArmorOptions } from "@l2js/engine/contracts/pawn";
+import type { ICharacterArmorSelection, INpcDefinition, NpcSkillAttack_T, NpcSkillEffectPhase_T, ICharacterGroup, ICharacterArmorOptions, ICharacterEquipment, INpcEquipment, IPawnEquipmentDecodeInfo, IPawnSoundsDecodeInfo } from "@l2js/engine/contracts/pawn";
 import type { IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { UEmitter } from "@l2js/engine/un-emitter";
 import type UTexture from "@l2js/engine/un-texture";
@@ -39,9 +39,8 @@ import type { IAnimatedSpriteDecodeInfo, IDataTextureDecodeInfo, ITextureDecodeI
 import type { UMaterial } from "@l2js/engine/un-material";
 import type { USound } from "@l2js/engine/un-sound";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
+import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
 import fetchAsset from "../asset-source";
-
-enum EPathStyle_T { PATHSTYLE_Linear, PATHSTYLE_Bezier }
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type SoundPath_T = { name: string, sound: { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } };
@@ -827,7 +826,7 @@ export class DecodeEngine {
 
     protected async getSwimSoundConfig(): Promise<SwimSoundConfig_T> { return (await this.getAudioConfig()).getSwimSound(); }
 
-    protected async pullPawnSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, profile: L2JS.Engine.IPawnSoundsDecodeInfo): Promise<void> {
+    protected async pullPawnSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, profile: IPawnSoundsDecodeInfo): Promise<void> {
         const config = await this.getAudioConfig();
 
         library.pawnSounds = { ...profile };
@@ -1248,7 +1247,7 @@ export class DecodeEngine {
         bundle.dirty = true;
     }
 
-    protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean, equipment: L2JS.Engine.INpcEquipment | null): Promise<DecodeLibrary> {
+    protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean, equipment: INpcEquipment | null): Promise<DecodeLibrary> {
         const library = await this.getStoredAssets("npc_runtime", JSON.stringify([npcId, equipment]), settings, () => this.decodeNpcAssets(settings, npcId, equipment), source => Object.assign(new DecodeLibrary(), source, { pawnActors: source.pawnActors.map(info => Object.assign({}, info, { animations: includeAnimations ? info.animations : {}, animationSequences: includeAnimations ? info.animationSequences : {}, animationNotifies: includeAnimations ? info.animationNotifies : {} })) }));
         const groups = Object.entries(library.materials).filter(([, material]) => material.materialType === "group" && (material as IMaterialGroupDecodeInfo).materials.includes(null));
 
@@ -1281,7 +1280,7 @@ export class DecodeEngine {
         return library;
     }
 
-    protected async decodeNpcAssets(settings: LoadSettings_T, npcId: number, equipment: L2JS.Engine.INpcEquipment | null): Promise<DecodeLibrary> {
+    protected async decodeNpcAssets(settings: LoadSettings_T, npcId: number, equipment: INpcEquipment | null): Promise<DecodeLibrary> {
         const includeAnimations = true;
         const npc = await this.resolveNpc(npcId, settings);
 
@@ -1373,7 +1372,7 @@ export class DecodeEngine {
         return library;
     }
 
-    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
         if (npcId !== null) return this.decodeNpc(settings, npcId, includeAnimations, equipment);
 
         const mesh = await this.fetchSkeletalMesh(`${packageName}.${meshName}`);
@@ -1610,34 +1609,33 @@ export class DecodeEngine {
         const scenes: MatineeScene_T[] = [];
 
         for (const { index } of pkg.exportGroups.SceneManager || []) {
-            const manager = pkg.fetchObject<UObject>(index + 1).loadSelf();
+            const manager = pkg.fetchObject<USceneManager>(index + 1).loadSelf();
             const actions: MatineeAction_T[] = [];
 
-            for (const ref of [...(manager.propertyDict.get("Actions") || [])] as UObject[]) {
+            for (const ref of manager.actions || []) {
                 if (!ref) continue;
 
-                const action = ref.loadSelf(), point = (action.propertyDict.get("IntPoint") as UObject).loadSelf();
-                const location = point.propertyDict.get("Location") as any, rotation = point.propertyDict.get("Rotation") as any;
-                const start = action.propertyDict.get("StartControlPoint") as any, end = action.propertyDict.get("EndControlPoint") as any;
-                const pathStyle = action.constructor.friendlyName === "ActionMoveCamera" ? action.propertyDict.get("PathStyle") : EPathStyle_T.PATHSTYLE_Linear;
+                const action = ref.loadSelf(), point = action.intPoint.loadSelf();
+                const { location, rotation } = point, start = action.startControlPoint, end = action.endControlPoint;
+                const pathStyle = action.constructor.friendlyName === "ActionMoveCamera" ? (action as UActionMoveCamera).pathStyle : EPathStyle_T.PATHSTYLE_Linear;
 
                 if (pathStyle !== EPathStyle_T.PATHSTYLE_Linear && pathStyle !== EPathStyle_T.PATHSTYLE_Bezier)
                     throw new Error(`Unsupported Matinee path style ${pathStyle}.`);
 
                 actions.push({
                     action: action.constructor.friendlyName,
-                    duration: action.propertyDict.get("Duration") as number,
+                    duration: action.duration,
                     pathStyle: pathStyle === EPathStyle_T.PATHSTYLE_Linear ? "linear" : "bezier",
                     startControlPoint: [start.x, start.y, start.z],
                     endControlPoint: [end.x, end.y, end.z],
-                    constantPathVelocity: action.propertyDict.get("bConstantPathVelocity") as boolean,
-                    pathVelocity: action.propertyDict.get("PathVelocity") as number,
+                    constantPathVelocity: action.isConstantPathVelocity,
+                    pathVelocity: action.pathVelocity,
                     location: [location.x, location.y, location.z],
                     rotation: [rotation.pitch, rotation.yaw, rotation.roll]
                 });
             }
 
-            scenes.push({ tag: manager.propertyDict.get("Tag") as string, actions });
+            scenes.push({ tag: manager.tag, actions });
         }
 
         return scenes;
@@ -2075,7 +2073,7 @@ export class DecodeEngine {
         }
     }
 
-    protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number, equipment: L2JS.Engine.ICharacterEquipment, hairVariant: number): Promise<DecodeLibrary> {
+    protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number, equipment: ICharacterEquipment, hairVariant: number): Promise<DecodeLibrary> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const library = new DecodeLibrary();
@@ -2125,7 +2123,7 @@ export class DecodeEngine {
         return library;
     }
 
-    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true, equipment: L2JS.Engine.ICharacterEquipment = null): Promise<DecodeLibrary> {
+    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true, equipment: ICharacterEquipment = null): Promise<DecodeLibrary> {
         await this.sweepCache(settings);
 
         const rows = await this.decodeCharGrp();
@@ -2403,7 +2401,7 @@ export class DecodeEngine {
         return library;
     }
 
-    protected async characterPartPaths(charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, equipment: L2JS.Engine.ICharacterEquipment): Promise<[string[], string[]]> {
+    protected async characterPartPaths(charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, equipment: ICharacterEquipment): Promise<[string[], string[]]> {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const hairPieces = await this.characterHairPieces(charIndex);
@@ -2510,7 +2508,7 @@ export class DecodeEngine {
         return pkg.exports.map(entry => entry.objectName as string);
     }
 
-    public async decodeCharacterEquipment(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment): Promise<DecodeLibrary> {
+    public async decodeCharacterEquipment(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: ICharacterEquipment): Promise<DecodeLibrary> {
         await this.sweepCache(settings);
 
         const row = getCharacterRow(await this.decodeCharGrp(), charIndex);
@@ -2521,22 +2519,22 @@ export class DecodeEngine {
         return library;
     }
 
-    public async decodeCharacterEquipmentBinary(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment): Promise<ArrayBuffer> {
+    public async decodeCharacterEquipmentBinary(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: ICharacterEquipment): Promise<ArrayBuffer> {
         return this.serializeTransfer(await this.decodeCharacterEquipment(settings, charIndex, hairVariant, equipment), true);
     }
 
-    public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean, equipment: L2JS.Engine.ICharacterEquipment): Promise<ArrayBuffer> {
+    public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean, equipment: ICharacterEquipment): Promise<ArrayBuffer> {
         return this.serializeTransfer(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment));
     }
 
-    public async decodeSkeletalMeshTransfer(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
+    public async decodeSkeletalMeshTransfer(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
         const { transfer, fresh } = this.prepareTransfer(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment));
 
         for (const [sent, id] of fresh) sent.add(id);
         return transfer;
     }
 
-    public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<ArrayBuffer> {
+    public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: INpcEquipment | null = null): Promise<ArrayBuffer> {
         return this.serializeTransfer(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment));
     }
 
@@ -2685,7 +2683,7 @@ export class DecodeEngine {
         return this.cacheEtcItemGrpRows;
     }
 
-    protected async pullCharacterEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, equipment: L2JS.Engine.ICharacterEquipment, hairVariant: number): Promise<void> {
+    protected async pullCharacterEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, equipment: ICharacterEquipment, hairVariant: number): Promise<void> {
         if (!equipment) return;
 
         const parts = [
@@ -2693,7 +2691,7 @@ export class DecodeEngine {
             { leftHand: equipment.leftHand !== equipment.rightHand ? equipment.leftHand : 0 },
             { head: equipment.hair ? 0 : equipment.head, hair: equipment.hair }
         ];
-        const info: L2JS.Engine.IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
+        const info: IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
 
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
@@ -2725,7 +2723,7 @@ export class DecodeEngine {
                     }
                 }
 
-                await this.decodeCharacterEquipmentAssets(assets, new DecodeLibraryBuilder(assets, builder.getSettings()), row, part as L2JS.Engine.ICharacterEquipment, hairVariant);
+                await this.decodeCharacterEquipmentAssets(assets, new DecodeLibraryBuilder(assets, builder.getSettings()), row, part as ICharacterEquipment, hairVariant);
                 prepareLibraryForTransfer(assets, this.collectPackageBuffers());
                 if (builder.getSettings().rgbaTextures !== false) convertDDSMaterialsToRGBA(assets);
 
@@ -2753,11 +2751,11 @@ export class DecodeEngine {
         library.pawnEquipment = info;
     }
 
-    protected async decodeCharacterEquipmentAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, equipment: L2JS.Engine.ICharacterEquipment, hairVariant: number): Promise<void> {
+    protected async decodeCharacterEquipmentAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, equipment: ICharacterEquipment, hairVariant: number): Promise<void> {
         const rows = await this.decodeWeaponGrp();
         const right = rows.find(row => row.id === equipment.rightHand);
         const left = rows.find(row => row.id === equipment.leftHand);
-        const info: L2JS.Engine.IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
+        const info: IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
 
         if (equipment.rightHand && !right) throw new Error(`Missing weapon '${equipment.rightHand}'.`);
 
@@ -2769,7 +2767,7 @@ export class DecodeEngine {
 
             // User::GetPcMeshName 0x738171..0x738282: dual weapons split mesh and texture indices.
             for (let i = 0; i < bones.length; i++) {
-                const item: L2JS.Engine.IPawnEquipmentDecodeInfo["items"][number] = { mesh: right.wpn_mesh[i], skins: dual ? [right.wpn_tex[i]] : right.wpn_tex.slice(), bone: bones[i], extraMesh: !!right.add_bone };
+                const item: IPawnEquipmentDecodeInfo["items"][number] = { mesh: right.wpn_mesh[i], skins: dual ? [right.wpn_tex[i]] : right.wpn_tex.slice(), bone: bones[i], extraMesh: !!right.add_bone };
 
                 await this.pullWeaponEnchant(library, builder, right, equipment.enchantLevel || 0, i, item);
                 info.items.push(item);
@@ -2830,7 +2828,7 @@ export class DecodeEngine {
         library.pawnEquipment = info;
     }
 
-    protected async pullWeaponEnchant(library: DecodeLibrary, builder: DecodeLibraryBuilder, weapon: Record<string, any>, level: number, index: number, item: L2JS.Engine.IPawnEquipmentDecodeInfo["items"][number]): Promise<void> {
+    protected async pullWeaponEnchant(library: DecodeLibrary, builder: DecodeLibraryBuilder, weapon: Record<string, any>, level: number, index: number, item: IPawnEquipmentDecodeInfo["items"][number]): Promise<void> {
         if (!this.cacheEnchantConfig) {
             const file = await new UConfigLocalization("assets/system/env.int").decode();
 
@@ -2860,7 +2858,7 @@ export class DecodeEngine {
         }
     }
 
-    protected async pullNpcEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, equipment: L2JS.Engine.INpcEquipment | null): Promise<void> {
+    protected async pullNpcEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, equipment: INpcEquipment | null): Promise<void> {
         if (!equipment) return;
 
         const rows = await this.decodeWeaponGrp();
@@ -2872,7 +2870,7 @@ export class DecodeEngine {
         if (equipment.leftHand && !left) throw new Error(`NPC equipment references missing weapon '${equipment.leftHand}'.`);
         if (equipment.chest && !armor) throw new Error(`NPC equipment references missing armor '${equipment.chest}'.`);
 
-        const info: L2JS.Engine.IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
+        const info: IPawnEquipmentDecodeInfo = { weaponType: WeaponType.WT_HAND, items: [] };
         const bow = right && right.handness === WeaponType.WT_BOW;
 
         if (right) {

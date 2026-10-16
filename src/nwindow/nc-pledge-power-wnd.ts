@@ -1,10 +1,11 @@
 import type NDomLayer from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import { FontType_T } from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.BloodHoodWnd.empower_back";
-const TEX_BUTTON = "L2UI_CH3.Button.btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.btn1_normalon";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrChecks = ["L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", "L2UI.Control.CheckBox_unable", "L2UI.ActionWnd.CheckBox_checked_unable"];
 const arrControls = [[673, 21, 87, 200, -1], [674, 32, 107, 100, 0], [1210, 142, 107, 200, 10], [675, 32, 126, 200, 1], [676, 32, 145, 200, 2], [677, 32, 164, 200, 3], [678, 21, 191, 200, -1], [679, 32, 210, 200, 4], [684, 32, 229, 200, 5], [685, 32, 248, 200, 6], [682, 21, 275, 200, -1], [683, 32, 294, 200, 7], [684, 32, 313, 200, 8], [685, 32, 332, 200, 9]];
 const arrGroups = [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9], [10, 11, 12, 13]];

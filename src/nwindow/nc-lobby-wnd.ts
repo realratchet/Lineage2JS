@@ -1,5 +1,6 @@
 import { FontType_T } from "./nwindow-canvas";
 import type { NDomLayer, NDomButton_T } from "./ndom";
+import { SKIN_SLOTS } from "./skin-textures";
 
 export type LobbyCharacter_T = { name: string, level: number, className: string, curHp: number, maxHp: number, curMp: number, maxMp: number, sp: number, exp: number, karma: number, deleteSeconds: number };
 export type LobbyPawnLabel_T = { x: number, y: number, name: string, karma: number, deleteSeconds: number };
@@ -21,15 +22,15 @@ const TEX_MENU_BACK = "L2UI_CH3.LobbyWnd.lobby_menuback";
 const TEX_HPBAR = "L2UI_CH3.PlayerStatusWnd.ps_hpbar";
 const TEX_MPBAR = "L2UI_CH3.PlayerStatusWnd.ps_mpbar";
 const TEX_EXPBAR = "L2UI_CH3.PlayerStatusWnd.ps_expbar";
-const TEX_BIGBUTTON = "L2UI_CH3.Button.BigButton";
-const TEX_BIGBUTTON_DOWN = "L2UI_CH3.Button.BigButton_down";
+const TEX_BIGBUTTON = SKIN_SLOTS.bigButton;
+const TEX_BIGBUTTON_DOWN = SKIN_SLOTS.bigButtonDown;
 const TEX_BIGBUTTON2 = "L2UI_CH3.Button.BigButton2";
 const TEX_BIGBUTTON2_DOWN = "L2UI_CH3.Button.BigButton2_down";
 const TEX_TEXTBOX1 = "L2UI_CH3.Etc.textbox1";
 const TEX_TEXTBOX2 = "L2UI_CH3.Etc.textbox2";
 const TEX_TEXTBOX3 = "L2UI_CH3.Etc.textbox3";
-const TEX_TEXTSELECT = "L2UI_CH3.ListCtrl.TextSelect";
-const TEX_TEXTSELECT2 = "L2UI_CH3.ListCtrl.TextSelect2";
+const TEX_TEXTSELECT = SKIN_SLOTS.listSelect;
+const TEX_TEXTSELECT2 = SKIN_SLOTS.listSelectEnd;
 const TEX_DOWNBUTTON = "L2UI_CH3.Button.downbutton";
 const TEX_DOWNBUTTON_DOWN = "L2UI_CH3.Button.downbutton_down";
 const TEX_DIGITS = "L2UI.NWindow.Number";

@@ -3,6 +3,7 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import { ItemType2_T, type InventoryItem_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe5_Back";
 const TEX_NODE = "L2UI.RecipeWnd.RecipeTreeIconBack";
@@ -11,8 +12,8 @@ const TEX_LEAF = "L2UI.RecipeWnd.RecipeTreeIconDisableBack";
 const TEX_PLUS = "L2UI.RecipeWnd.TreePlus";
 const TEX_MINUS = "L2UI.RecipeWnd.TreeMinus";
 const TEX_SHORTAGE = "NWindow.ChatBack";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrGrades = ["", "graded", "gradec", "gradeb", "gradea", "grades"];
 
 type RecipeNode_T = { itemId: number, required: number, available: number, isExpanded: boolean, children: RecipeNode_T[] };

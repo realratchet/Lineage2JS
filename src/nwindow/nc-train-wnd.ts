@@ -3,16 +3,17 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, NDomScrollPane_T } from "./ndom";
 import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { EnchantSkill_T, EnchantSkillInfo_T, AquireSkillEntry_T, AquireSkillInfo_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_LIST = "L2UI_CH3.SkillTrainWnd.SkillTrain1";
 const TEX_AQUIRE_INFO = "L2UI_CH3.SkillTrainWnd.SkillTrain2";
 const TEX_INFO = "L2UI_CH3.SkillTrainWnd.skillenchant_back";
 const TEX_OUTLINE = "l2ui_ch3.InventoryWnd.Inventory_OutLine";
 const TEX_OUTLINE_DOWN = "l2ui_ch3.InventoryWnd.Inventory_OutLine_down";
-const TEX_SELECT = "L2UI_CH3.ListCtrl.TextSelect";
-const TEX_SELECT_END = "L2UI_CH3.ListCtrl.TextSelect2";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_SELECT = SKIN_SLOTS.listSelect;
+const TEX_SELECT_END = SKIN_SLOTS.listSelectEnd;
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_DEFAULT_ICON = "NWindow.BlackTexture";
 
 type TrainStatus_T = { level: number, exp: number, sp: number };

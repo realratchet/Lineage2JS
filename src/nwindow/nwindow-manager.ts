@@ -4,6 +4,7 @@ import type { default as NWnd, NMouseEvent_T } from "./nwnd";
 import type AssetManager from "../assets/asset-manager";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import fetchAsset from "../assets/asset-source";
+import type SkinTextures from "./skin-textures";
 
 type TextInputHandler_T = { onTextInput(text: string): void, onTextSubmit(text: string, isShift: boolean): void, onTextBlur(): void };
 
@@ -45,8 +46,8 @@ export class NWindowManager {
     public readonly arrTooltipPaint: (() => void)[] = [];
     public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillRecords: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
-    public constructor(protected readonly asset: AssetManager) {
-        this.canvas = new NWindowCanvas(asset);
+    public constructor(protected readonly asset: AssetManager, skin: SkinTextures) {
+        this.canvas = new NWindowCanvas(asset, skin);
 
         document.body.appendChild(this.canvas.element);
 
@@ -122,6 +123,11 @@ export class NWindowManager {
 
         await face.load();
         document.fonts.add(face);
+    }
+
+    public setUIScale(scale: number) {
+        this.canvas.uiScale = scale;
+        this.resize();
     }
 
     protected resize() {

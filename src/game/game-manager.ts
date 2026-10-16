@@ -6,6 +6,8 @@ import RenderManager, { type HTMLViewportElement_T } from "../rendering/render-m
 import UIManager from "./ui-manager";
 import InputManager from "./input-manager";
 import NetworkManager from "../network/network-manager";
+import NConsoleWnd, { type GameGUI_T } from "../nwindow/nconsole-wnd";
+import Skin from "../nwindow/skin";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 
 export class GameManager implements IEngineComponent<GameManager> {
@@ -16,6 +18,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     protected manUI: UIManager;
     protected manInput: InputManager;
     protected manNetwork: NetworkManager;
+    protected manGUI: GameGUI_T;
 
     protected components: IEngineComponent<any>[] = [];
 
@@ -40,6 +43,7 @@ export class GameManager implements IEngineComponent<GameManager> {
         game.manUI = new UIManager();
         game.manInput = new InputManager();
         game.manNetwork = new NetworkManager();
+        game.manGUI = await game.createGUI();
 
         game.attach(game.manPhysics);
         game.attach(game.manRender);
@@ -47,6 +51,7 @@ export class GameManager implements IEngineComponent<GameManager> {
         game.attach(game.manAudio);
         game.attach(game.manAsset);
         game.attach(game.manUI);
+        game.attach(game.manGUI);
         game.attach(game.manNetwork);
 
         return await game.onInit();
@@ -71,6 +76,14 @@ export class GameManager implements IEngineComponent<GameManager> {
         this.onVisibilityChange();
     }
 
+    protected async createGUI(): Promise<GameGUI_T> {
+        const skin = new Skin(), url = new URLSearchParams(location.search).get("skin");
+
+        if (url) Object.assign(skin, (await import(/* webpackIgnore: true */ url)).default); // user skins duck-type their factory overrides onto the retail skin
+
+        return new NConsoleWnd(skin);
+    }
+
     protected attach<T extends IEngineComponent<any>>(comp: T): T {
         this.components.push(comp.setParent(this));
         return comp;
@@ -83,6 +96,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     public getComponent(component: "ui"): UIManager;
     public getComponent(component: "input"): InputManager;
     public getComponent(component: "network"): NetworkManager;
+    public getComponent(component: "gui"): GameGUI_T;
     public getComponent(component: unknown): unknown {
         switch (component) {
             case "asset": return this.manAsset;
@@ -92,6 +106,7 @@ export class GameManager implements IEngineComponent<GameManager> {
             case "ui": return this.manUI;
             case "input": return this.manInput;
             case "network": return this.manNetwork;
+            case "gui": return this.manGUI;
             default: throw new Error(`Unknown component: ${component}`);
         }
     }

@@ -7,7 +7,7 @@ import type RotatingObject from "../../objects/rotating-object";
 import type PhysicsManager from "../physics-manager";
 import type UIManager from "../../game/ui-manager";
 
-export interface IPhysicsComponent<TParent extends IObject = IObject> extends IComponent<TParent> {
+export type IPhysicsComponent<TParent extends IObject = IObject> = IComponent<TParent> & {
     readonly isPhysicsComponent: boolean;
     isPhysicsAdded(manager: PhysicsManager): boolean;
     onPhysicsAdded(manager: PhysicsManager): void;
@@ -15,7 +15,7 @@ export interface IPhysicsComponent<TParent extends IObject = IObject> extends IC
     getPhysicsTickRate?(): number;
     onPhysicsTick?(currentTime: number, deltaTime: number, actors: BaseActor[]): boolean;
     onTriggerPosition?(currentTime: number, position: Vector3): void;
-}
+};
 
 export abstract class PhysicsComponent<TParent extends IObject = IObject> extends ObjectComponent<TParent> implements IPhysicsComponent<TParent> {
     declare public readonly isPhysicsComponent: boolean;

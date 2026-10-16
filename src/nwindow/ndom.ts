@@ -1,6 +1,7 @@
 import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const CARET_BLINK = 500;
 const TEXT_COLOR = 0xffdcdcdc;
@@ -78,7 +79,7 @@ export class NDomLayer {
         this.resize();
     }
 
-    protected resize() {
+    public resize() {
         const canvas = this.manager.canvas;
 
         this.root.style.width = `${canvas.width}px`;
@@ -88,8 +89,10 @@ export class NDomLayer {
 
     public getManager() { return this.manager; }
 
+    public setBackground(wnd: HTMLElement) { wnd.classList.add("ndom-back"); } // NCGodWnd children (login, lobby, loading screens) stay behind every popup window.
+
     public activate(wnd: HTMLElement) {
-        if (wnd && wnd !== this.activeWindow) wnd.style.zIndex = String(++this.zOrder);
+        if (wnd && wnd !== this.activeWindow && !wnd.classList.contains("ndom-back")) wnd.style.zIndex = String(++this.zOrder);
 
         this.activeWindow = wnd;
         this.updateTransparency();
@@ -418,7 +421,7 @@ export class NDomLayer {
 
     public checkbox(parent: HTMLElement, x: number, y: number, w: number, h: number, label: string, onChange: (checked: boolean) => void = null, checked = false): NDomCheckBox_T {
         const element = this.createWindow(x, y, w, h, parent) as NDomCheckBox_T;
-        const icon = this.tile(element, 0, 0, 12, 12, 0, 0, 12, 12, "L2UI.Control.CheckBox");
+        const icon = this.tile(element, 0, 0, 12, 12, 0, 0, 12, 12, SKIN_SLOTS.checkBox);
 
         element.setAttribute("role", "checkbox");
         element.setAttribute("aria-label", label);
@@ -427,7 +430,7 @@ export class NDomLayer {
         element.setChecked = value => {
             checked = value;
             element.setAttribute("aria-checked", String(value));
-            this.setTile(icon, 12, 12, 0, 0, 12, 12, value ? "L2UI.ActionWnd.CheckBox_checked" : "L2UI.Control.CheckBox");
+            this.setTile(icon, 12, 12, 0, 0, 12, 12, value ? SKIN_SLOTS.checkBoxChecked : SKIN_SLOTS.checkBox);
         };
         element.addEventListener("mousedown", event => {
             if (event.button !== 0 || event.detail === 2) return;
@@ -443,8 +446,8 @@ export class NDomLayer {
         const element = this.createWindow(x, y, w, h, parent) as NDomScrollPane_T;
         const content = this.createWindow(0, 0, w - 15, 0, element);
         const thumb = this.createWindow(w - 15, 15, 15, 0, element);
-        const thumbCenter = this.tile(thumb, 0, 8, 15, 8, 0, 0, 15, 8, "L2UI_CH3.ScrollBar.SliderBarCenter");
-        const thumbBottom = this.tile(thumb, 0, 8, 15, 8, 0, 0, 15, 8, "L2UI_CH3.ScrollBar.SliderBarBottom");
+        const thumbCenter = this.tile(thumb, 0, 8, 15, 8, 0, 0, 15, 8, SKIN_SLOTS.scrollThumbCenter);
+        const thumbBottom = this.tile(thumb, 0, 8, 15, 8, 0, 0, 15, 8, SKIN_SLOTS.scrollThumbBottom);
         const viewRows = visibleRows;
         let scroll = 0, contentHeight = 0, thumbLen = 0;
 
@@ -458,7 +461,7 @@ export class NDomLayer {
             thumbLen = Math.max(MIN_THUMB, Math.trunc(visibleRows * sliderH / contentRows));
             this.place(thumb, w - 15, 15 + Math.trunc((sliderH - thumbLen) * (isPixel ? scroll : scroll / step) / (contentRows - visibleRows)), 15, thumbLen);
             this.place(thumbCenter, 0, 8, 15, Math.max(0, thumbLen - 16));
-            this.setTile(thumbCenter, 15, Math.max(0, thumbLen - 16), 0, 0, 15, 8, "L2UI_CH3.ScrollBar.SliderBarCenter");
+            this.setTile(thumbCenter, 15, Math.max(0, thumbLen - 16), 0, 0, 15, 8, SKIN_SLOTS.scrollThumbCenter);
             this.place(thumbBottom, 0, thumbLen - 8);
         };
         const pushButton = (button: HTMLElement, direction: number) => {
@@ -498,9 +501,9 @@ export class NDomLayer {
             else setScroll(scroll);
         };
 
-        pushButton(this.button(element, w - 15, 0, 15, 15, "L2UI_CH3.ScrollBar.ScrollBarUpBtn", "L2UI_CH3.ScrollBar.ScrollBarUpOnBtn", "L2UI_CH3.ScrollBar.ScrollBarUpBtn"), -1);
-        pushButton(this.button(element, w - 15, h - 15, 15, 15, "L2UI_CH3.ScrollBar.ScrollBarDownBtn", "L2UI_CH3.ScrollBar.ScrollBarDownOnBtn", "L2UI_CH3.ScrollBar.ScrollBarDownBtn"), 1);
-        this.tile(thumb, 0, 0, 15, 8, 0, 0, 15, 8, "L2UI_CH3.ScrollBar.SliderBarTop");
+        pushButton(this.button(element, w - 15, 0, 15, 15, SKIN_SLOTS.scrollUp, SKIN_SLOTS.scrollUpDown, SKIN_SLOTS.scrollUp), -1);
+        pushButton(this.button(element, w - 15, h - 15, 15, 15, SKIN_SLOTS.scrollDown, SKIN_SLOTS.scrollDownDown, SKIN_SLOTS.scrollDown), 1);
+        this.tile(thumb, 0, 0, 15, 8, 0, 0, 15, 8, SKIN_SLOTS.scrollThumbTop);
         thumb.tabIndex = -1;
         thumb.addEventListener("mousedown", event => {
             if (event.button !== 0 && event.button !== 2) return;
@@ -532,9 +535,9 @@ export class NDomLayer {
 
     public edit(parent: HTMLElement, x: number, y: number, w: number, h: number, isPassword: boolean = false, maxLength: number = 0, isNumeric: boolean = false): NDomEdit_T { // NCEditBox paint 0x1000ef50: inputbox1/2/3 three-slice (source 8x17), text at (2,2), '*' for passwords, '|' caret.
         const element = document.createElement("div") as NDomEdit_T;
-        const left = this.tile(element, 0, 0, 8, h, 0, 0, 8, 17, "L2UI_CH3.Etc.inputbox1");
-        const middle = this.tile(element, 8, 0, w - 16, h, 0, 0, 8, 17, "L2UI_CH3.Etc.inputbox2");
-        const right = this.tile(element, w - 8, 0, 8, h, 0, 0, 8, 17, "L2UI_CH3.Etc.inputbox3");
+        const left = this.tile(element, 0, 0, 8, h, 0, 0, 8, 17, SKIN_SLOTS.edit1);
+        const middle = this.tile(element, 8, 0, w - 16, h, 0, 0, 8, 17, SKIN_SLOTS.edit2);
+        const right = this.tile(element, w - 8, 0, 8, h, 0, 0, 8, 17, SKIN_SLOTS.edit3);
         const input = document.createElement("input");
         const overlay = document.createElement("canvas");
         const nwindow = this.manager.canvas;
@@ -750,11 +753,11 @@ export class NDomLayer {
         });
 
         const updateTiles = () => { // Retail draws the unfocused box with the _disable slices.
-            const suffix = !input.disabled && document.activeElement === input ? "" : "_disable";
+            const isFocused = !input.disabled && document.activeElement === input;
 
-            this.setTile(left, 8, h, 0, 0, 8, 17, `L2UI_CH3.Etc.inputbox1${suffix}`);
-            this.setTile(middle, w - 16, h, 0, 0, 8, 17, `L2UI_CH3.Etc.inputbox2${suffix}`);
-            this.setTile(right, 8, h, 0, 0, 8, 17, `L2UI_CH3.Etc.inputbox3${suffix}`);
+            this.setTile(left, 8, h, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit1 : SKIN_SLOTS.edit1Disabled);
+            this.setTile(middle, w - 16, h, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit2 : SKIN_SLOTS.edit2Disabled);
+            this.setTile(right, 8, h, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit3 : SKIN_SLOTS.edit3Disabled);
         };
 
         input.addEventListener("focus", () => { input.setSelectionRange(input.value.length, input.value.length); updateTiles(); draw(); });
@@ -807,7 +810,7 @@ export class NDomLayer {
     }
 }
 
-export const NDOM_SCROLL_TEXTURES = ["ScrollBarUpBtn", "ScrollBarUpOnBtn", "ScrollBarDownBtn", "ScrollBarDownOnBtn", "SliderBarTop", "SliderBarCenter", "SliderBarBottom"].map(name => `L2UI_CH3.ScrollBar.${name}`);
-export const NDOM_EDIT_TEXTURES = ["L2UI_CH3.Etc.inputbox1", "L2UI_CH3.Etc.inputbox2", "L2UI_CH3.Etc.inputbox3", "L2UI_CH3.Etc.inputbox1_disable", "L2UI_CH3.Etc.inputbox2_disable", "L2UI_CH3.Etc.inputbox3_disable", "NWindow.WhiteTexture"];
+export const NDOM_SCROLL_TEXTURES = [SKIN_SLOTS.scrollUp, SKIN_SLOTS.scrollUpDown, SKIN_SLOTS.scrollDown, SKIN_SLOTS.scrollDownDown, SKIN_SLOTS.scrollThumbTop, SKIN_SLOTS.scrollThumbCenter, SKIN_SLOTS.scrollThumbBottom];
+export const NDOM_EDIT_TEXTURES = [SKIN_SLOTS.edit1, SKIN_SLOTS.edit2, SKIN_SLOTS.edit3, SKIN_SLOTS.edit1Disabled, SKIN_SLOTS.edit2Disabled, SKIN_SLOTS.edit3Disabled, "NWindow.WhiteTexture"];
 
 export default NDomLayer;

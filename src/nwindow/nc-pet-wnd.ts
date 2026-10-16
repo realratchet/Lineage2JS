@@ -2,9 +2,11 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, NDomButton_T, NDomScrollPane_T } from 
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCTooltip from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
-import NCInventoryWnd, { InventoryEntry_T } from "./nc-inventory-wnd";
+import { InventoryEntry_T } from "./nc-inventory-wnd";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { PetStatus_T } from "../network/game-packets";
+import { SKIN_SLOTS } from "./skin-textures";
+import type { InventoryWndView_T } from "./skin";
 
 const TEX_BACK = "L2UI_CH3.PetWnd.Petinterface_back";
 const TEX_TAB = "L2UI_CH3.PetWnd.petinterface_tab2";
@@ -15,8 +17,8 @@ const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
 const TEX_PRESSED = "L2UI_CH3.InventoryWnd.Inventory_OutLine_down";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_EQUIPPED = "L2UI_CH3.PetWnd.petitem_click";
-const TEX_BUTTON = "L2UI_CH3.BUTTON.btn1_normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.BUTTON.btn1_normalon";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrBars = ["ps_HPbar", "ps_MPbar", "ps_ExPbar", "ps_foodbar"].map(name => `L2UI_CH3.PlayerStatusWnd.${name}`);
 const arrWeight = [1, 2, 3, 4].map(index => `L2UI_CH3.PlayerStatusWnd.ps_weightbar${index}`);
 const arrLabels = [94, 95, 96, 113, 111, 404, 98, 99, 97, 432, 112, 496];
@@ -60,7 +62,7 @@ export class NCPetWnd {
     protected drag: PetDrag_T = null;
     protected isDoubleClick = false;
 
-    public constructor(protected readonly layer: NDomLayer, protected readonly inventory: NCInventoryWnd) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly inventory: InventoryWndView_T) {
         const manager = layer.getManager();
 
         this.element = layer.createWindow(172, 76, 256, 229);

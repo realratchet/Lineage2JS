@@ -1,8 +1,9 @@
 import NDomLayer from "./ndom";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.LobbyWnd.lobby_menuback";
-const TEX_BUTTON = "L2UI_CH3.Button.BigButton";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.BigButton_down";
+const TEX_BUTTON = SKIN_SLOTS.bigButton;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.bigButtonDown;
 
 const BUTTON_LABELS = [154, 155, 156, 805, 1251]; // New Account, Lost Account, Options, Production Team, Replay (OnCreate 0x1009d9a0).
 const BUTTON_Y = [8, 33, 58, 83, 107];

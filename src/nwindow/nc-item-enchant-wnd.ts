@@ -2,12 +2,13 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { InventoryEntry_T } from "./nc-inventory-wnd";
+import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.itemenchant_back";
 const TEX_OUTLINE = "L2UI_CH3.etc.iconbox";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
-const TEX_BUTTON = "L2UI_CH3.Button.Btn1_Normal";
-const TEX_BUTTON_DOWN = "L2UI_CH3.Button.Btn1_NormalOn";
+const TEX_BUTTON = SKIN_SLOTS.button;
+const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 
 export class NCItemEnchantWnd {
     public static getTextures() { return [TEX_BACK, TEX_OUTLINE, TEX_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, ...NCFrameCtrl.getTextures(), ...NDOM_SCROLL_TEXTURES]; }

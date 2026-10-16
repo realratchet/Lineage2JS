@@ -1,7 +1,7 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
 import type { GameStrings_T, MatineeScene_T, UITexture_T, PlayerSkillInfo_T, WorkerToMainMessage_T, PrecacheResult_T, ClientConfig_T, WorkerMemoryStats_T } from "./decode-protocol";
 import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contracts/config";
-import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup } from "@l2js/engine/contracts/pawn";
+import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";
@@ -292,7 +292,7 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeEnv" });
     }
 
-    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: L2JS.Engine.ICharacterEquipment = null): Promise<DecodeLibrary> {
+    public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: ICharacterEquipment = null): Promise<DecodeLibrary> {
         const includeAnimations = !this.characterAnimationSets.has(charIndex);
 
         if (this.mainThreadEngine) {
@@ -315,7 +315,7 @@ export class DecodeWorkerClient {
         return library;
     }
 
-    public async decodeCharacterEquipment(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: L2JS.Engine.ICharacterEquipment): Promise<DecodeLibrary> {
+    public async decodeCharacterEquipment(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: ICharacterEquipment): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) return Object.setPrototypeOf(await this.mainThreadEngine.decodeCharacterEquipment(settings, charIndex, hairVariant, equipment), DecodeLibrary.prototype) as DecodeLibrary;
 
         const workerIndex = this.pickCharacterWorker();
@@ -325,7 +325,7 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "decodeCharacterEquipment", settings, charIndex, hairVariant, equipment });
     }
 
-    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
+    public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
         const bundleName = npcId === null || !packageName ? null : getNpcBundleName(packageName);
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
         const includeAnimations = npcId === null || !this.npcAnimationSets.has(animationSet);

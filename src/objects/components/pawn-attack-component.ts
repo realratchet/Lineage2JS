@@ -13,7 +13,7 @@ import type RenderManager from "../../rendering/render-manager";
 import type AnimationComponent from "./animation-component";
 import type { ScriptComponent } from "../../game/script-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
-import type { NpcSkillAttack_T, NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
+import type { NpcSkillAttack_T, NpcSkillEffectPhase_T, INpcBowDecodeInfo } from "@l2js/engine/contracts/pawn";
 
 const ATTACK_RANGE_PADDING = 20;
 const arrPhysicalAnimations = ["atk01", "atk02", "atk03"];
@@ -86,7 +86,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected bowPreShotFrame = 0;
     protected bowShotFrame = 0;
 
-    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[], protected bow: L2JS.Engine.INpcBowDecodeInfo = null) {
+    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[], protected bow: INpcBowDecodeInfo = null) {
         super();
 
         this.renderManager = renderManager;
@@ -129,7 +129,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.attacks.unshift(...attacks);
     }
 
-    public setWeapon(bow: L2JS.Engine.INpcBowDecodeInfo): void {
+    public setWeapon(bow: INpcBowDecodeInfo): void {
         for (let i = this.attacks.length - 1; i >= 0; i--)
             if (!this.attacks[i].skill) this.attacks.splice(i, 1);
 

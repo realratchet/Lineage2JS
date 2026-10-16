@@ -1,10 +1,11 @@
 import NWnd, { type NMouseEvent_T } from "./nwnd";
 import NCButton, { NCBUTTON_NO_OVER } from "./nc-button";
 import type NWindowCanvas from "./nwindow-canvas";
+import { SKIN_SLOTS } from "./skin-textures";
 
-const TEX_TOP = "L2UI_CH3.ScrollBar.SliderBarTop";
-const TEX_CENTER = "L2UI_CH3.ScrollBar.SliderBarCenter";
-const TEX_BOTTOM = "L2UI_CH3.ScrollBar.SliderBarBottom";
+const TEX_TOP = SKIN_SLOTS.scrollThumbTop;
+const TEX_CENTER = SKIN_SLOTS.scrollThumbCenter;
+const TEX_BOTTOM = SKIN_SLOTS.scrollThumbBottom;
 const MIN_THUMB = 15;
 const REPEAT_PERIOD = 100; // NCPushButton auto-repeat period (0x10003940).
 
@@ -100,8 +101,8 @@ export class NCScrollBar extends NWnd { // NCScrollWnd scrollbar column (0x1002b
     public constructor(x: number, y: number, height: number) {
         super(x, y, 15, height);
 
-        this.upButton = this.addChild(new NCPushButton(0, 0, 15, 15, "L2UI_CH3.ScrollBar.ScrollBarUpBtn", "L2UI_CH3.ScrollBar.ScrollBarUpOnBtn", null, NCBUTTON_NO_OVER));
-        this.downButton = this.addChild(new NCPushButton(0, height - 15, 15, 15, "L2UI_CH3.ScrollBar.ScrollBarDownBtn", "L2UI_CH3.ScrollBar.ScrollBarDownOnBtn", null, NCBUTTON_NO_OVER));
+        this.upButton = this.addChild(new NCPushButton(0, 0, 15, 15, SKIN_SLOTS.scrollUp, SKIN_SLOTS.scrollUpDown, null, NCBUTTON_NO_OVER));
+        this.downButton = this.addChild(new NCPushButton(0, height - 15, 15, 15, SKIN_SLOTS.scrollDown, SKIN_SLOTS.scrollDownDown, null, NCBUTTON_NO_OVER));
         this.slider = this.addChild(new NCSliderBar(this, 0, 15, 15, height - 30));
         this.upButton.onPress = () => this.scrollBy(-1);
         this.downButton.onPress = () => this.scrollBy(1);
