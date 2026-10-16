@@ -1,4 +1,5 @@
 import { Bone, BufferGeometry, Matrix4, Object3D, Skeleton, SkinnedMesh, Vector3 } from "three";
+import { evaluateDeferredPose, invalidatePoseRequirements } from "./skeletal-animation-mixer";
 
 const tmpMeshInverse = new Matrix4();
 const tmpBoneMatrix = new Matrix4();
@@ -40,6 +41,17 @@ function writeBoneMatrix(a: Matrix4, b: Matrix4, target: Float32Array, offset: n
 
 function frozenUpdateMatrixWorld(): void { }
 
+function getBoneMesh(bone: Object3D): Object3D {
+    while ((bone as Bone).isBone && bone.parent) bone = bone.parent;
+    return bone;
+}
+
+export function requireBonePose(bone: Bone): void {
+    const skeleton = (getBoneMesh(bone) as SkinnedMesh).skeleton as LocalSpaceSkeleton, index = skeleton.bones.indexOf(bone);
+
+    if (index >= 0) skeleton.requireBone(index); // a loose chain hangs off another skeleton's bone and is always posed whole
+}
+
 type BoneAttachment_T = { object: Object3D, bone: number, usesBindMatrix: boolean, absolute?: Object3D };
 
 // three skins through world space, where float32 quantizes a vertex to ~0.03 units at level coordinates - a whole frame of idle motion
@@ -48,6 +60,7 @@ export class LocalSpaceSkeleton extends Skeleton {
     public mesh: SkinnedMesh = null;
     public posePaused: boolean = false;
     public rootBoneSource: Bone = null;
+    public isAtlasPacked: boolean = false;
 
     protected parents: Int32Array = null;
     protected locals: Matrix4[] = null;
@@ -83,6 +96,14 @@ export class LocalSpaceSkeleton extends Skeleton {
         this.activeBones = null;
     }
 
+    public requireBone(index: number): void {
+        if (index < 0) throw new Error(`Bone is not part of skeleton '${this.mesh.name}'.`);
+        if (!this.requiredBones || this.requiredBones.has(index)) return;
+
+        this.requiredBones.add(index);
+        this.activeBones = null;
+    }
+
     public getBoneWorldPosition(index: number, target: Vector3, offset?: Vector3): Vector3 {
         this.getBoneWorldMatrix(index, tmpBoneMatrix);
 
@@ -94,6 +115,7 @@ export class LocalSpaceSkeleton extends Skeleton {
     public getBoneWorldMatrix(index: number, target: Matrix4): Matrix4 {
         if (this.parents === null) this.claimBones();
         if (!this.ownsBones) {
+            evaluateDeferredPose(this.mesh);
             this.bones[index].updateWorldMatrix(true, false);
             return target.copy(this.bones[index].matrixWorld);
         }
@@ -107,6 +129,20 @@ export class LocalSpaceSkeleton extends Skeleton {
     }
 
     protected getBonePose(index: number, target: Matrix4): void {
+        let isLazy = false;
+
+        for (let bone = this.bones[index]; bone.isBone && !isLazy; bone = bone.parent as Bone) {
+            if (bone === this.bones[0] && this.rootBoneSource) bone = this.rootBoneSource;
+            isLazy = (bone as any).isPoseRequired === false;
+        }
+
+        evaluateDeferredPose(this.mesh, isLazy);
+        if (this.rootBoneSource) evaluateDeferredPose(getBoneMesh(this.rootBoneSource), isLazy);
+        if (isLazy) { // posed exactly now, and every frame after
+            this.requireBone(index);
+            if (this.rootBoneSource) requireBonePose(this.rootBoneSource);
+        }
+
         target.identity();
 
         for (let bone = this.bones[index]; bone.isBone; bone = bone.parent as Bone) {
@@ -211,6 +247,8 @@ export class LocalSpaceSkeleton extends Skeleton {
         if (this.parents === null) this.claimBones();
         if (this.posePaused) return;
 
+        evaluateDeferredPose(this.mesh, this.activeBones === null);
+
         if (this.ownsBones) this.updateOwnedPose();
         else this.updateAttachedPose();
 
@@ -233,6 +271,8 @@ export class LocalSpaceSkeleton extends Skeleton {
                 for (let parent = parents[index]; parent >= 0; parent = parents[parent]) active.add(parent);
 
             this.activeBones = Array.from(active).sort((a, b) => a - b);
+            for (let i = 0; i < bones.length; i++) (bones[i] as any).isPoseRequired = active.has(i);
+            invalidatePoseRequirements();
         }
 
         for (let j = 0, len = this.activeBones.length; j < len; j++) {

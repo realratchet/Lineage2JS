@@ -535,6 +535,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
     protected readonly ambientSlotAnchors = new Map<string, number>();
     protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
+    protected readonly cacheSoundBuffers = new WeakMap<Uint8Array | Blob, Promise<AudioBuffer | null>>();
 
     public registerAmbientSound(component: AmbientSoundComponent): void {
         this.ambientSounds.add(component);
@@ -745,6 +746,26 @@ export class AudioManager implements IEngineComponent<GameManager> {
         return pending;
     }
 
+    protected loadSoundBuffer(data: Uint8Array | Blob): Promise<AudioBuffer | null> {
+        let pending = this.cacheSoundBuffers.get(data);
+
+        if (pending) return pending;
+
+        pending = (async () => {
+            try {
+                return await this.audioContext.decodeAudioData(data instanceof Blob ? await data.arrayBuffer() : data.slice().buffer);
+            } catch (e) {
+                this.cacheSoundBuffers.delete(data);
+                console.warn(`Failed to decode one-shot sound`, e);
+                return null;
+            }
+        })();
+
+        this.cacheSoundBuffers.set(data, pending);
+
+        return pending;
+    }
+
     protected startAmbientSource(id: string, buffer: AudioBuffer, entry: AmbientChannel_T) {
         const info = entry.info;
 
@@ -791,7 +812,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         await this.playOneShotSound(uri, [0, 0, 0], 1, 1, 0, 0, false); // Engine.dll OnInterfacePlaySound 0x74711b: SOUND_No3D, pitch 1.
     }
 
-    public async playOneShotSound(dataUri: string, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true, onStarted?: (duration: number) => void) {
+    public async playOneShotSound(dataUri: string | Uint8Array | Blob, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true, onStarted?: (duration: number) => void) {
         const sourcePosition = position as any;
         const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
         const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
@@ -799,7 +820,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const sourceRadius = refDistance === 0 ? AL_SOURCE_RADIUS_FALLBACK : refDistance;
         const sourceMaxDistance = maxDistance === 0 ? sourceRadius * 100 : maxDistance;
 
-        const pendingBuffer = this.loadAmbientBuffer(dataUri, "one-shot");
+        const pendingBuffer = typeof dataUri === "string" ? this.loadAmbientBuffer(dataUri, "one-shot") : this.loadSoundBuffer(dataUri);
         const pendingUnlock = this.ensureUnlocked();
         const buffer = await pendingBuffer;
         // SpawnNTransientEffect 0x104ca91e uses USound.Duration independently of playback.

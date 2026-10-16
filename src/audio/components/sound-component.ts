@@ -187,10 +187,10 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
 
         const sound = library.soundBlobCache.get(soundName);
 
-        if (!sound?.uri) throw new Error(`${source} has no decoded sound '${soundName}'.`);
+        if (!sound || !sound.data && !sound.uri) throw new Error(`${source} has no decoded sound '${soundName}'.`);
 
         if (!position) this.getParent().getWorldPosition(tmpPosition);
-        this.audioManager.playOneShotSound(sound.uri, position || tmpPosition, volume, pitch, refDistance, maxDistance, attenuate, onStarted);
+        this.audioManager.playOneShotSound(sound.data || sound.uri, position || tmpPosition, volume, pitch, refDistance, maxDistance, attenuate, onStarted);
     }
 }
 

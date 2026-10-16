@@ -1,6 +1,6 @@
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../game/components";
 import type { default as UnScriptVM, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
-import { ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
 import type { ICollidable } from "./objects";
 import type BaseActor from "../base-actor";
 import { setScriptObjectProperty } from "./components/actor-ownership-component";
@@ -49,12 +49,9 @@ export class Actor extends GameObject {
 
     public getUnrealScriptProperty(id: string): ScriptValue_T {
         if (this.scriptProperties.has(id)) return this.scriptProperties.get(id);
-        const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
+        const key = findScriptPropertyKey(this.scriptProperties, getScriptPropertyName(id));
 
-        for (const [key, value] of this.scriptProperties)
-            if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === name) return value;
-
-        return null;
+        return key === undefined ? null : this.scriptProperties.get(key);
     }
 
     public getBaseActor(): ICollidable | null {

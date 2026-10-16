@@ -7,6 +7,8 @@ import type RenderManager from "../render-manager";
 import GLOBAL_UNIFORMS from "../../materials/global-uniforms";
 import PawnMesh, { createPawnMeshes } from "../../objects/pawn-mesh";
 
+export const EQUIPMENT_MESHES_CHANGED_EVENT = "equipmentMeshesChanged";
+
 const tmpSphere = new Sphere();
 const tmpWhite = new Vector3(1, 1, 1);
 
@@ -18,6 +20,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     protected readonly localSphere = new Sphere();
     protected readonly worldSphere = new Sphere();
     protected meshes: Mesh[] = [];
+    protected equipmentMeshes: Mesh[] = [];
     protected batches: PawnMesh[] = [];
     protected lastRenderTime = -Infinity;
 
@@ -53,6 +56,10 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public onEvent(type: string, data: unknown): ComponentEventResult_T<unknown> {
         if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) this.updateLocalSphere();
         else if (type === MESHES_CHANGED_EVENT) this.setMeshes(data as Mesh[]);
+        else if (type === EQUIPMENT_MESHES_CHANGED_EVENT) {
+            this.equipmentMeshes = data as Mesh[];
+            if (this.isAttached()) this.setMeshes(this.meshes); // equipment detaches during a pawn's component clear, possibly after this one
+        }
         else return COMPONENT_EVENT_NOT_HANDLED;
 
         return;
@@ -66,7 +73,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
             this.releaseBatches();
             this.meshes = meshes;
             this.lastRenderTime = -Infinity;
-            this.batches = createPawnMeshes(meshes, this.renderManager.renderer);
+            this.batches = createPawnMeshes([...meshes, ...this.equipmentMeshes], this.renderManager.renderer);
 
             for (const batch of this.batches) {
                 this.getParent().add(batch);

@@ -10,6 +10,7 @@ import type MusicVolume from "../objects/music-volume";
 import type { ScriptHost_T, default as UnScriptVM } from "../ue-script/vm";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
 import type BaseActor from "../base-actor";
+import type CollidingMesh from "../objects/colliding-mesh";
 import type { ScriptComponent } from "../game/script-component";
 import { beginTouch, endTouch } from "../objects/components/transform-component";
 
@@ -21,6 +22,7 @@ const tmpRayDelta = new Vector3();
 const identityRotation = new Quaternion();
 const tmpEnd = new Vector3();
 const tmpSweepBounds = new Box3();
+const tmpRecordBounds = new Box3();
 const zeroExtentVector = new Vector3();
 const tmpPlacementStart = new Vector3();
 const tmpPlacementDelta = new Vector3();
@@ -1140,10 +1142,10 @@ export class CollisionWorld {
             for (const entries of this.volumeActors.values()) {
                 for (const entry of entries) {
                     const actor = entry.actor, primitive = entry.primitive;
+                    if (!primitive.supportsNonZeroExtent || !sweptIntersectsBox(query.location, end, extent, primitive.bounds)) continue;
                     if (!getTraceProperty(actor, "bCollideActors") || !getTraceProperty(actor, "bBlockNonZeroExtentTraces") || getTraceProperty(actor, "bDeleteMe") || getTraceProperty(actor, "bPendingDelete")) continue;
                     if (getTraceProperty(query.sourceActor as ScriptHost_T, "bOnlyAffectPawns") || getTraceProperty(actor, "bOnlyAffectPawns") && !(query.sourceProfile || defaultProfile).isPawn) continue;
                     if (isOwnedBy(query.sourceActor as ScriptHost_T, actor)) continue;
-                    if (!primitive.supportsNonZeroExtent || !sweptIntersectsBox(query.location, end, extent, primitive.bounds)) continue;
                     const hit = queryPrimitive(primitive, query.location, end, extent);
                     if (hit) this.analyticalMoveHits.push({ actor, time: Math.max(0, hit.time - getTraceBackoff(primitive, testDistance, false) / testDistance) });
                 }
@@ -1211,11 +1213,14 @@ export class CollisionWorld {
         }
 
         if (individual) {
-            for (const record of records) {
+            const candidates = (entry.actor as CollidingMesh).getCollisionActorCandidates(sweptBounds(this.analyticalStart, this.analyticalEnd, this.analyticalExtent, tmpRecordBounds));
+
+            for (let i = 0, len = candidates.length; i < len; i++) {
+                const record = records[candidates[i]];
                 const actor = record.object || entry.actor;
 
-                if (this.shouldIgnoreActor(actor, this.analyticalQuery) || !(this.analyticalMoveHits ? this.shouldTraceActor(actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(actor, this.analyticalQuery, this.analyticalZeroExtent))) continue;
                 if (!sweptIntersectsBox(this.analyticalStart, this.analyticalEnd, this.analyticalExtent, record.primitive.bounds)) continue;
+                if (this.shouldIgnoreActor(actor, this.analyticalQuery) || !(this.analyticalMoveHits ? this.shouldTraceActor(actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(actor, this.analyticalQuery, this.analyticalZeroExtent))) continue;
 
                 this.stats.analyticalPrimitiveTests++;
                 const hit = queryPrimitive(record.primitive, this.analyticalStart, this.analyticalEnd, this.analyticalExtent);

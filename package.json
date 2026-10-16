@@ -43,6 +43,7 @@
         "node-forge": "^1.3.1",
         "pako": "^2.0.4",
         "three": "~0.186.1",
+        "three-wasm": "git+ssh://git@github.com:realratchet/three-wasm.git#master",
         "uuid": "^8.3.2"
     }
 }

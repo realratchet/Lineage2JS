@@ -358,7 +358,11 @@
 
 #ifdef USE_ACTOR_LIGHTS
     #include <actor_light>
-    uniform ActorLight actorLights[NUM_ACTOR_LIGHTS];
+    uniform vec3 actorLightPositions[NUM_ACTOR_LIGHTS];
+    uniform vec3 actorLightDirections[NUM_ACTOR_LIGHTS];
+    uniform vec3 actorLightColors[NUM_ACTOR_LIGHTS];
+    uniform vec4 actorLightParameters[NUM_ACTOR_LIGHTS];
+    uniform vec2 actorLightAttenuations[NUM_ACTOR_LIGHTS];
     uniform int numActorLights;
     uniform vec3 actorAmbient;
     uniform float actorScaledGlow;
@@ -719,7 +723,8 @@ void main() {
 
             // SampleIntensity carries UE's own x2; D3D hardware lighting has none, it is just
             // Diffuse * atten * N.L - so halve to land on the term the baked static-mesh pass produces
-            actorLighting += actorLights[i].color * ( actorLightIntensity( actorLights[i], actorPosition, actorNormal ) * actorScaledGlow * 0.5 );
+            ActorLight actorLight = ActorLight( actorLightPositions[i], actorLightDirections[i], actorLightColors[i], actorLightParameters[i].x, actorLightParameters[i].y, int( actorLightParameters[i].z ), actorLightParameters[i].w > 0.5, actorLightAttenuations[i] );
+            actorLighting += actorLight.color * ( actorLightIntensity( actorLight, actorPosition, actorNormal ) * actorScaledGlow * 0.5 );
         }
 
         vLitColor = clamp( actorLighting, 0.0, 1.0 );

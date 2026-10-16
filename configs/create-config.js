@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const webpack = require("webpack");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { initChunkerMiddleware } = require("./chunker-middleware");
 // const { SourceMapDevToolPlugin } = require("webpack");
@@ -29,6 +30,19 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
 
         const dirAssets = "assets-c4/";
         const plugins = [];
+        const dirThreeWasm = path.resolve(__dirname, "../node_modules/three-wasm/src");
+
+        if (!isWorker) {
+            if (!fs.existsSync(dirThreeWasm)) throw new Error(`three-wasm is not linked at '${dirThreeWasm}', run 'npm link ../three-wasm'.`);
+
+            for (const name of ["Matrix4", "Euler"])
+                plugins.push(new webpack.NormalModuleReplacementPlugin(new RegExp(`three[\\\\/]src[\\\\/]math[\\\\/]${name}\\.js$`), data => {
+                    if (!data.createData || !data.createData.resource) return;
+
+                    data.createData.resource = path.join(dirThreeWasm, `${name}.js`);
+                    data.createData.context = dirThreeWasm;
+                }));
+        }
 
         if (!isWorker && httpAssets) {
             const fileList = {
@@ -128,7 +142,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             }
         }, {
             test: /\.(js|jsx|ts|tsx)$/,
-            exclude: /(node_modules|submodules)/,
+            exclude: /(node_modules|submodules|three-wasm)/,
             use: [
                 {
                     loader: "babel-loader",
@@ -163,7 +177,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             mode,
             stats,
             target: isWorker ? "webworker" : "web",
-            resolve,
+            resolve: !isWorker ? { ...resolve, alias: { ...resolve.alias, "three$": path.resolve(__dirname, "../node_modules/three/src/Three.js"), "three": path.resolve(__dirname, "../node_modules/three") } } : resolve,
             optimization: {
                 minimize
             },

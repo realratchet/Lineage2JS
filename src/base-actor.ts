@@ -14,7 +14,7 @@ import ActorOwnershipComponent from "./objects/components/actor-ownership-compon
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
 import PawnAttackComponent, { type PawnAttackSelection_T, type PawnAttack_T } from "./objects/components/pawn-attack-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
-import { ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 
@@ -93,7 +93,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public resolveUnrealObject(id: string): string { return id; }
 
     public getUnrealScriptProperty(id: string): ScriptValue_T {
-        const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
+        const name = getScriptPropertyName(id);
 
         switch (name) {
             case "bpendingdelete": return this.isPendingDelete;
@@ -120,16 +120,17 @@ export class BaseActor extends GameObject implements ICollidable {
     }
 
     protected getStoredUnrealScriptProperty(id: string): ScriptValue_T {
-        const name = id.slice(id.lastIndexOf(".") + 1).toLowerCase();
         const properties = this.scriptProperties;
 
         if (!properties) return null;
-        if (properties.has(id)) return properties.get(id);
 
-        for (const [key, value] of properties)
-            if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === name) return value;
+        const value = properties.get(id);
 
-        return null;
+        if (value !== undefined || properties.has(id)) return value;
+
+        const key = findScriptPropertyKey(properties, getScriptPropertyName(id));
+
+        return key === undefined ? null : properties.get(key);
     }
 
     public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
@@ -158,13 +159,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
         if (!this.scriptProperties) throw new Error(`${this.type} has no UnrealScript property storage.`);
 
-        let property = field;
-
-        for (const key of this.scriptProperties.keys())
-            if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === field.toLowerCase()) {
-                property = key;
-                break;
-            }
+        const property = findScriptPropertyKey(this.scriptProperties, field.toLowerCase()) ?? field;
 
         this.scriptProperties.set(property, value);
         switch (field.toLowerCase()) {

@@ -1,8 +1,10 @@
-import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ZeroFactor, type Vector3, type Vector4, type Event } from "three";
+import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, Vector3, ZeroFactor, type Vector4, type Event, type Camera, type Scene, type WebGLRenderer } from "three";
 import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 
 // shared per-vertex quad data - only instance attributes differ per emitter
 const baseGeometry = new PlaneGeometry(2, 2);
+
+const tmpDirection = new Vector3();
 
 export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, InstancedParticleMaterial> {
     public readonly isWorldBatchCandidate: boolean;
@@ -12,6 +14,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
     protected readonly colorAttr: InstancedBufferAttribute;
     protected readonly uvAttr: InstancedBufferAttribute;
     protected readonly uvBlendAttr: InstancedBufferAttribute;
+    protected readonly directionAttr: InstancedBufferAttribute;
     protected renderCount = 0;
 
     constructor(material: InstancedParticleMaterial, capacity: number) {
@@ -43,6 +46,10 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
             this.uvBlendAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
             geometry.setAttribute("instanceUVBlend", this.uvBlendAttr);
         }
+        if (material.defines.USE_VELOCITY_UP !== undefined) {
+            this.directionAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
+            geometry.setAttribute("instanceDirection", this.directionAttr);
+        }
 
         // vertex shader computes world offsets from a camera-facing basis, invisible to three's bounding-sphere culling
         this.frustumCulled = false;
@@ -54,7 +61,23 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
             && material.blendSrc === OneFactor
             && material.blendDst === OneFactor
             && material.blendSrcAlpha === ZeroFactor
-            && material.blendDstAlpha === OneFactor;
+            && material.blendDstAlpha === OneFactor
+            && material.defines.USE_VELOCITY_UP === undefined;
+    }
+
+    public withCapacity(capacity: number): InstancedSpriteMesh { return new InstancedSpriteMesh(this.material, capacity); }
+
+    public getUsesDirection(): boolean { return !!this.directionAttr; }
+
+    public setInstanceDirection(index: number, position: Vector3, oldLocation: Vector3) {
+        tmpDirection.subVectors(position, oldLocation).normalize(); // Engine.dll FillVertexBuffer 0x97a72d: Location - OldLocation
+        this.directionAttr.setXYZ(index, tmpDirection.x, tmpDirection.y, tmpDirection.z);
+    }
+
+    public onBeforeRender(_renderer: WebGLRenderer, _scene: Scene, camera: Camera): void {
+        if (!this.directionAttr) return;
+
+        this.parent.worldToLocal(camera.getWorldPosition(this.material.uniforms.particleViewLocation.value));
     }
 
     public setInstance(index: number, position: Vector3, scaleX: number, scaleY: number, spin: number, color: Vector4, uvOffsetX: number, uvOffsetY: number, uvScaleX: number, uvScaleY: number, uvBlend: Vector3) {
@@ -83,6 +106,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
         this.markUpdated(this.colorAttr, count * 4);
         this.markUpdated(this.uvAttr, count * 4);
         if (this.uvBlendAttr) this.markUpdated(this.uvBlendAttr, count * 3);
+        if (this.directionAttr) this.markUpdated(this.directionAttr, count * 3);
     }
 
     protected markUpdated(attribute: InstancedBufferAttribute, count: number) {

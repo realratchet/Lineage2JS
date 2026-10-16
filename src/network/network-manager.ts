@@ -3085,6 +3085,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (wasTarget) this.updateTarget();
 
         this.vehicles.delete(objectId);
+        this.doors.delete(objectId);
         for (const vehicle of this.vehicles.values()) vehicle.riders.delete(objectId);
         this.endRide(objectId);
         this.mounts.delete(objectId);

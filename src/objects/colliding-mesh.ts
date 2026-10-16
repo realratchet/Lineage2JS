@@ -17,6 +17,10 @@ const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
 const tmpScale = new Vector3();
 
+const COLLISION_ACTOR_CELL_SIZE = 512;
+
+function getCollisionActorCell(x: number, y: number) { return (x + 32768) * 65536 + (y + 32768); }
+
 export type CollidingMeshProps_T = { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, isSpecialLit?: boolean, forcedRegionTag?: string, forcedRegion?: number, permeatingLights?: string[], ambient?: { glow: number, vector: number[], isUnlit: boolean }, collision?: ActorCollisionProfile_T, staticMeshCollision?: IStaticMeshCollisionDecodeInfo, collisionIndex?: CollisionTriangleIndex_T };
 
 export class CollidingMesh extends LitActorMesh implements ICollidable {
@@ -25,6 +29,10 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     public actorUuid: string;
     public readonly collisionActors: { actor: IStaticMeshActorDecodeInfo; object: StaticMeshActor; primitive: CollisionPrimitive_T<"staticMesh">; firstTriangle: number; triangleCount: number }[] = [];
     public hasChangedCollisionActors = false;
+    protected collisionActorCells: Map<number, number[]> = null;
+    protected collisionActorMarks: Uint32Array = null;
+    protected collisionActorTag = 0;
+    protected readonly collisionActorCandidates: number[] = [];
     declare public scriptProperties: Map<string, ScriptValue_T>;
     declare public scriptClassId: string;
 
@@ -79,12 +87,68 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             const bounds = new Box3();
             for (const index of indices) bounds.expandByPoint(tmpPosition.fromArray(vertices, index * 3));
 
-            this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: null, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
+            this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: indices.length < 384 ? null : buildTriangleIndex(vertices, indices), matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
             indexOffset += indices.length;
         }
 
+        this.collisionActorCells = null;
+
         if (source && indexOffset !== source.length) throw new Error(`Actor collision triangles do not cover '${this.name}'.`);
         if (this.colliderIndices && (this.colliderIndices !== source || indexOffset !== this.colliderIndices.length)) throw new Error(`Actor collision triangles do not cover '${this.name}'.`);
+    }
+
+    protected buildCollisionActorCells(): void {
+        const cells = new Map<number, number[]>();
+
+        for (let i = 0; i < this.collisionActors.length; i++) {
+            const bounds = this.collisionActors[i].primitive.bounds;
+            const minX = Math.floor(bounds.min.x / COLLISION_ACTOR_CELL_SIZE), maxX = Math.floor(bounds.max.x / COLLISION_ACTOR_CELL_SIZE);
+            const minY = Math.floor(bounds.min.y / COLLISION_ACTOR_CELL_SIZE), maxY = Math.floor(bounds.max.y / COLLISION_ACTOR_CELL_SIZE);
+
+            for (let x = minX; x <= maxX; x++)
+                for (let y = minY; y <= maxY; y++) {
+                    const key = getCollisionActorCell(x, y);
+                    let cell = cells.get(key);
+
+                    if (!cell) cells.set(key, cell = []);
+                    cell.push(i);
+                }
+        }
+
+        this.collisionActorCells = cells;
+        this.collisionActorMarks = new Uint32Array(this.collisionActors.length);
+    }
+
+    public getCollisionActorCandidates(bounds: Box3): readonly number[] {
+        if (!this.collisionActorCells) this.buildCollisionActorCells();
+
+        const candidates = this.collisionActorCandidates, marks = this.collisionActorMarks, tag = ++this.collisionActorTag;
+        const minX = Math.floor(bounds.min.x / COLLISION_ACTOR_CELL_SIZE), maxX = Math.floor(bounds.max.x / COLLISION_ACTOR_CELL_SIZE);
+        const minY = Math.floor(bounds.min.y / COLLISION_ACTOR_CELL_SIZE), maxY = Math.floor(bounds.max.y / COLLISION_ACTOR_CELL_SIZE);
+
+        candidates.length = 0;
+
+        if ((maxX - minX + 1) * (maxY - minY + 1) > this.collisionActors.length) {
+            for (let i = 0; i < this.collisionActors.length; i++) candidates.push(i);
+            return candidates;
+        }
+
+        for (let x = minX; x <= maxX; x++)
+            for (let y = minY; y <= maxY; y++) {
+                const cell = this.collisionActorCells.get(getCollisionActorCell(x, y));
+
+                if (!cell) continue;
+
+                for (let i = 0; i < cell.length; i++)
+                    if (marks[cell[i]] !== tag) {
+                        marks[cell[i]] = tag;
+                        candidates.push(cell[i]);
+                    }
+            }
+
+        if (candidates.length > 1) candidates.sort((a, b) => a - b); // keep record order for hit tie-breaks and touch order
+
+        return candidates;
     }
 
     public getCollisionActor(item: number): StaticMeshActor {

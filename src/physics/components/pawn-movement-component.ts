@@ -134,6 +134,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected hasStartedPhysics = false;
     protected adjustToFloor = false;
     protected teleportLanding = false;
+    protected isPhysicInit = false;
     protected validateLocationPending = false;
     protected readonly validatePosition = new Vector3();
     protected physicsMode: PhysicsMode_T = "falling";
@@ -506,6 +507,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
 
         this.calcVelocity(position, tmpAccelDir, deltaTime, this.isWalking ? this.walkSpeed : this.groundSpeed);
+        if (this.isPhysicInit && this.velocity.x === 0 && this.velocity.y === 0 && this.velocity.z === 0) return; // bPhysicInit, APawn::physWalking 0x8d49eb
+
         tmpDesiredMove.copy(this.velocity);
         tmpDesiredMove.z = 0;
         tmpWalkingStart.copy(position);
@@ -539,6 +542,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                         this.moveSwept(position, tmpDown.set(0, 0, -(floorDistance - FLOOR_DISTANCE)));
                     else if (floorDistance > 0 && floorDistance < MIN_FLOOR_DISTANCE)
                         this.moveSwept(position, tmpStepUp.set(0, 0, FLOOR_DISTANCE - floorDistance));
+                    else if (floorDistance >= MIN_FLOOR_DISTANCE && floorHit.actor === this.getBaseActor())
+                        this.isPhysicInit = true; // APawn::physWalking 0x8d554d
 
                     this.setBase(floorHit.actor, tmpNormal);
                     continue;
@@ -1505,6 +1510,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return tmpFloorPosition;
     }
 
+    public resetPhysicInit() { this.isPhysicInit = false; }
+
     public teleportTo(position: Vector3, adjustToFloor: boolean = false) {
         this.velocity.set(0, 0, 0);
         this.hasDesiredRotation = false;
@@ -1521,6 +1528,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         this.adjustToFloor = adjustToFloor && !isFlying;
         this.teleportLanding = false;
+        this.isPhysicInit = false;
         this.validateLocationPending = false;
         this.setBase(null);
         this.getPosition().copy(position);

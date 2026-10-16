@@ -13,7 +13,8 @@ uniform float opacity;
         int envMode;
         bool visible;
     };
-    uniform PawnMaterialData pawnMaterials[NUM_PAWN_PARTS];
+    uniform vec4 pawnMaterialData[NUM_PAWN_PARTS * 4];
+    uniform bool pawnSilhouette;
 #endif
 #ifdef USE_TERRAIN_DECORATION_FADE
     varying float vTerrainDecorationFade;
@@ -555,7 +556,13 @@ void main() {
     #include <logdepthbuf_fragment>
 
     #ifdef USE_PAWN_MATERIALS
-        PawnMaterialData part = pawnMaterials[vPawnPart];
+        int partRow = vPawnPart * 4;
+        PawnMaterialData part = PawnMaterialData(pawnMaterialData[partRow], pawnMaterialData[partRow + 1], pawnMaterialData[partRow + 2], int(pawnMaterialData[partRow + 3].x), int(pawnMaterialData[partRow + 3].y), pawnMaterialData[partRow + 3].z > 0.5);
+        if (pawnSilhouette) { // same coverage as the per-part black FrontSide silhouette the shadow pass draws for unbatched meshes
+            if (!part.visible || !gl_FrontFacing) discard;
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
         if (!part.visible || part.parameters.w == 0.0 && !gl_FrontFacing || part.parameters.w == 1.0 && gl_FrontFacing) discard;
         vec4 texelDiffuse = samplePawnTexture(int(part.maps.x), vUv);
         diffuseColor = part.color;

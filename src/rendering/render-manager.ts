@@ -57,6 +57,7 @@ import type PawnFishingComponent from "../objects/components/pawn-fishing-compon
 export type HTMLViewportElement_T = HTMLDivElement;
 
 const tmpBox = new Box3();
+const tmpShaderCompileGroup = new Scene();
 const tmpCamDir = new Vector3();
 const tmpSize = new Vector2();
 const tmpFarPoint = new Vector3();
@@ -1684,14 +1685,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
 
             if ((child as THREE.Mesh).isMesh) {
-                const mat = (child as THREE.Mesh).material;
+                const mat = (child as THREE.Mesh).material as any;
                 if (mat) {
-                    const materials = (mat as any).isMaterial ? [mat] : (mat as any);
-                    (materials as THREE.Material[]).forEach(m => {
-                        if (m && (m as any).isUpdatable) {
-                            (m as any).update(currentTime);
-                        }
-                    });
+                    if (mat.isMaterial) {
+                        if (mat.isUpdatable) mat.update(currentTime);
+                    } else for (const m of mat) if (m && m.isUpdatable) m.update(currentTime);
                 }
             }
 
@@ -2015,8 +2013,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.manGame.getComponent("asset").tick(this);
         this.processSectorWarmups();
         for (const root of this.pendingShaderCompiles)
-            if (root.parent) this.renderer.compileAsync(root, this.camera, this.scene);
+            if (root.parent) tmpShaderCompileGroup.children.push(root);
 
+        tmpShaderCompileGroup.fog = this.scene.fog;
+        if (tmpShaderCompileGroup.children.length) this.renderer.compileAsync(tmpShaderCompileGroup, this.camera); // the world has no three lights, so only fog has to match the real scene; roots stay parented where they are
+        tmpShaderCompileGroup.children.length = 0;
         this.pendingShaderCompiles.clear();
         this.processShaderDiagnostics();
         this.viewShakeDelta = deltaTime / 1000;

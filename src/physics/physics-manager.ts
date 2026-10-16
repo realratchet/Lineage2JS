@@ -102,6 +102,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
         }
 
+        if (physicsTicks > 0) this.simEmitters.syncParticles();
+
         if (this.nextPhysicsTick <= currentTime)
             this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
 
@@ -224,6 +226,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public findSpot(extent: Vector3, location: Vector3): boolean { return this.collisionWorld.findSpot(extent, location); }
     public farMoveActor(pawn: BaseActor, destination: Vector3, test: boolean = false): boolean {
         if (pawn.getUnrealScriptProperty("bStatic") || !pawn.getUnrealScriptProperty("bMovable")) return false;
+        pawn.getComponent<PawnMovementComponent>("pawnMovement").resetPhysicInit(); // ULevel::FarMoveActor 0x85af66
         if (pawn.scriptBase) throw new Error(`FarMoveActor on bone attachments is not implemented for '${pawn.name}'.`);
         for (const actor of pawn.getBasedActors())
             if (!(actor as BaseActor).scriptBase) throw new Error(`FarMoveActor with unboned attachments is not implemented for '${pawn.name}'.`);
@@ -607,6 +610,7 @@ class EmitterSimulation {
 
     public getSize(): number { return this.emitters.size + this.actors.size; }
     public getEmitters(): ReadonlySet<any> { return this.emitters; }
+    public syncParticles(): void { for (const emitter of this.emitters) emitter.syncParticles(); }
 
     public add(emitter: Object3D): void {
         if ((emitter as any).isEmitterActor) this.actors.add(emitter);

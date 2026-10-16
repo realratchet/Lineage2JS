@@ -9,6 +9,7 @@ import type RenderManager from "../../rendering/render-manager";
 import { AnimationComponent, ExtraMeshAnimationComponent } from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type { IWeaponEnchantEffect, IWeaponEnchantMesh } from "@l2js/engine/contracts/pawn";
+import { EQUIPMENT_MESHES_CHANGED_EVENT } from "../../rendering/components/pawn-renderable-component";
 
 class EquippedItem extends GameObject {
     public readonly scriptProperties = new Map<string, any>();
@@ -58,6 +59,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
         this.weaponScale = null;
         this.updateWeaponScale();
+        this.dispatchEvent(EQUIPMENT_MESHES_CHANGED_EVENT, this.items.filter(item => item.mesh).map(item => item.mesh));
     }
 
     public setLibrary(library: DecodeLibrary): void {
@@ -228,6 +230,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         for (const item of this.items)
             if (item.object.parent) this.renderManager.removeTransientEffect(item.object);
         this.items.length = 0;
+        this.dispatchEvent(EQUIPMENT_MESHES_CHANGED_EVENT, []);
     }
 }
 

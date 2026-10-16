@@ -192,7 +192,7 @@ export class ShadowProjector {
                 arrSwappedObjects[i].material = arrSwappedMaterials[i];
 
             for (const attachment of arrHiddenAttachments) attachment.visible = true;
-            for (const mesh of arrPawnMeshes) mesh.setEnabled(true);
+            for (const mesh of arrPawnMeshes) mesh.setSilhouette(false);
         }
 
         (GLOBAL_UNIFORMS.shadowMatrix.value as Matrix4)
@@ -223,7 +223,7 @@ function swapMaterials(root: Object3D, material: Material): void {
         if (!object.visible) continue;
         if ((object as PawnMesh).isPawnMesh) {
             arrPawnMeshes.push(object as PawnMesh);
-            (object as PawnMesh).setEnabled(false);
+            (object as PawnMesh).setSilhouette(true);
             continue;
         }
 
@@ -238,7 +238,7 @@ function swapMaterials(root: Object3D, material: Material): void {
 
         for (const child of object.children) arrTraverse.push(child);
 
-        if (!mesh.material) continue;
+        if (!mesh.material || object.layers.mask === 0) continue; // batched sources stay masked, their PawnMesh draws the silhouette
 
         arrSwappedObjects.push(mesh);
         arrSwappedMaterials.push(mesh.material);

@@ -1,5 +1,7 @@
 import { Bone, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from "three";
 import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
+import { evaluateDeferredPose } from "./skeletal-animation-mixer";
+import { requireBonePose } from "./local-space-skeleton";
 
 const tmpMatrix = new Matrix4();
 const tmpParentMatrix = new Matrix4();
@@ -162,6 +164,7 @@ export class DynamicHairSimulation {
     protected actions: Map<string, { initial: boolean, spheres: CollisionSphere_T[] }> = null;
     protected actionSpheres: CollisionSphere_T[] = null;
     protected headBone: Bone = null;
+    protected parts: SkinnedMesh[] = null;
     protected readonly previousSimulationMatrix = new Matrix4();
     protected readonly previousSimulationPosition = new Vector3();
     protected readonly previousHeadPosition = new Vector3();
@@ -191,6 +194,7 @@ export class DynamicHairSimulation {
 
     public initialize(parts: SkinnedMesh[]): void {
         this.cacheWorldMatrices.frame++;
+        this.parts = parts;
         const topology = topologies.get(this.info.type);
 
         if (!topology) throw new Error(`Skeletal mesh '${this.mesh.name}' uses unsupported bone simulation '${this.info.type}'.`);
@@ -230,6 +234,7 @@ export class DynamicHairSimulation {
         this.actions = new Map(this.info.config.actions.map(info => [info.name.toLowerCase(), { initial: info.initial, spheres: info.sphereIndices.map(index => this.spheres[index]) }]));
         this.actionSpheres = [];
         this.headBone = this.spheres.length > 0 ? this.spheres[0].bone : findBone(parts, "Bip01 head");
+        for (const bone of [...this.bones, this.headBone, ...this.planes.map(plane => plane.bone), ...this.spheres.map(sphere => sphere.bone)]) requireBonePose(bone);
 
         this.updateBonePose();
         this.resetParticles();
@@ -255,6 +260,7 @@ export class DynamicHairSimulation {
         if (!this.bones || deltaTime < 0 || !Number.isFinite(deltaTime)) throw new Error(`Invalid dynamic hair delta '${deltaTime}'.`);
 
         this.cacheWorldMatrices.frame++;
+        for (let i = 0, len = this.parts.length; i < len; i++) evaluateDeferredPose(this.parts[i]);
         this.updateAction(animationName, animationFrame, attackState, attackEffectFrame, attackEndEffectFrame, isDying, isBowRunning, isSpecialAttack);
         this.attackForceCount = 0;
         this.frameDelta = deltaTime;

@@ -9,6 +9,11 @@ const tmpTrailerOffset = new Vector3();
 const tmpOwnerRotation = new Quaternion();
 const pawnMeshRotation = new Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
 
+function updateEmitterMatrices(object: THREE.Object3D): void { // particles are posed by the render's own matrix pass
+    object.updateWorldMatrix(false, false);
+    if (!(object as any).particlePool) for (const child of object.children) updateEmitterMatrices(child);
+}
+
 export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Object3D> {
     public readonly componentName = "effectLifetime";
     protected readonly renderManager: RenderManager;
@@ -80,7 +85,8 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
             owner.getWorldQuaternion(effect.quaternion);
             if ((owner as any).isActor) effect.quaternion.multiply(pawnMeshRotation);
         }
-        effect.updateMatrixWorld(true);
+        if ((effect as any).isEmitterActor) updateEmitterMatrices(effect);
+        else effect.updateMatrixWorld(true);
     }
 }
 

@@ -490,6 +490,11 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             isHardwareLight: false,
             attenuation: new Vector2()
         })));
+        this.uniforms.actorLightPositions = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 3));
+        this.uniforms.actorLightDirections = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 3));
+        this.uniforms.actorLightColors = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 3));
+        this.uniforms.actorLightParameters = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 4));
+        this.uniforms.actorLightAttenuations = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 2));
 
         this.defines["USE_ACTOR_LIGHTS"] = "";
         this.defines["NUM_ACTOR_LIGHTS"] = MAX_HARDWARE_LIGHTS;
@@ -544,6 +549,27 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             entry.isHardwareLight = true;
             entry.attenuation.copy(light.attenuation);
         }
+
+        this.packActorLights();
+    }
+
+    protected packActorLights(): void { // flat arrays upload in five calls, a struct array costs a setter per field per light
+        const uniforms = this.uniforms, entries = uniforms.actorLights.value;
+        const positions = uniforms.actorLightPositions.value, directions = uniforms.actorLightDirections.value, colors = uniforms.actorLightColors.value;
+        const parameters = uniforms.actorLightParameters.value, attenuations = uniforms.actorLightAttenuations.value;
+
+        for (let i = 0, count = uniforms.numActorLights.value; i < count; i++) {
+            const entry = entries[i];
+
+            entry.position.toArray(positions, i * 3);
+            entry.direction.toArray(directions, i * 3);
+            entry.color.toArray(colors, i * 3);
+            parameters[i * 4] = entry.radius;
+            parameters[i * 4 + 1] = entry.cone;
+            parameters[i * 4 + 2] = entry.effect;
+            parameters[i * 4 + 3] = entry.isHardwareLight ? 1 : 0;
+            entry.attenuation.toArray(attenuations, i * 2);
+        }
     }
 
     public updateHardwareLighting(ambient: ColorByte, lights: readonly DynamicLight[], center: Vector3, radius: number) {
@@ -554,6 +580,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             lights[i].getHardwareLight(center, radius, entries[i]);
             entries[i].isHardwareLight = true;
         }
+
+        this.packActorLights();
     }
 
     public copy(source: this): this {

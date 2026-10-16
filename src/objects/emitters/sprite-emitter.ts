@@ -44,7 +44,7 @@ export class SpriteEmitter extends BaseEmitter {
         // emitter, so neither needs a mesh/draw call per particle. Velocity-driven
         // modes still require a per-particle basis and stay on the legacy path.
         // Animated textures select a frame per particle age.
-        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal");
+        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal" || this.spriteDirection === "up"); // except PTDU_Up, its basis is built in the shader
     }
 
     protected initParticleMesh() {

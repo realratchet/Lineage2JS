@@ -29,6 +29,10 @@ export class InstancedParticleMaterial extends ShaderMaterial {
         if (spriteDirection === "normal") {
             defines.USE_FIXED_NORMAL = "";
         }
+        if (spriteDirection === "up") {
+            defines.USE_VELOCITY_UP = "";
+            uniforms.particleViewLocation = { value: new Vector3() };
+        }
         const { isAdditive, ...blendingSettings } = getPartcileBlendingSettings(blendingMode);
 
         if (isAdditive) {

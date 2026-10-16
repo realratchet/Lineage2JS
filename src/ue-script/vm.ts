@@ -74,6 +74,31 @@ function getClassField(cls: IScriptClassDecodeInfo, fieldName: string) {
     return fields.get(fieldName);
 }
 
+type ClassDefault_T = { name: string, lowerName: string, fieldName: string, value: ScriptValue_T, isStructOrArray: boolean, isArray: boolean };
+
+const cacheClassDefaults = new WeakMap<IScriptClassDecodeInfo, ClassDefault_T[]>();
+
+type HostDefault_T = { key: string, value: ScriptValue_T, isEmptyArray: boolean };
+
+const cacheHostDefaults = new WeakMap<IScriptClassDecodeInfo, Map<string, HostDefault_T[]>>();
+
+function getClassDefaults(cls: IScriptClassDecodeInfo): ClassDefault_T[] {
+    let defaults = cacheClassDefaults.get(cls);
+
+    if (defaults) return defaults;
+    if (!cls.defaults) throw new Error(`UnrealScript class '${cls.id}' has no decoded defaults`);
+
+    defaults = Object.entries(cls.defaults).map(([name, value]) => {
+        const fieldName = getFieldName(name).toLowerCase();
+        const type = getClassField(cls, fieldName)?.type as any;
+
+        return { name, lowerName: name.toLowerCase(), fieldName, value, isStructOrArray: type === "Struct" || type === "Array", isArray: type === "Array" };
+    });
+    cacheClassDefaults.set(cls, defaults);
+
+    return defaults;
+}
+
 function getProperties(host: ScriptHost_T): ScriptProperties_T {
     if (host.scriptProperties) return host.scriptProperties;
 
@@ -647,6 +672,28 @@ export class UnScriptVM {
         }
 
         const properties = getProperties(host);
+        let layout = "";
+
+        if (properties instanceof Map) for (const [key, value] of properties) layout += value === null ? `${key}\0!` : `${key}\0`;
+        else for (const key of Object.keys(properties)) layout += properties[key] === null ? `${key}\0!` : `${key}\0`;
+
+        let cacheLayouts = cacheHostDefaults.get(classes[0]);
+        if (!cacheLayouts) cacheHostDefaults.set(classes[0], cacheLayouts = new Map());
+
+        const replay = cacheLayouts.get(layout); // the defaults pass only depends on the class chain and the initial keys and nulls
+
+        if (replay) {
+            for (let i = 0, len = replay.length; i < len; i++) {
+                const { key, value, isEmptyArray } = replay[i];
+                const initialized = isEmptyArray ? [] : cloneScriptValue(value);
+
+                if (properties instanceof Map) properties.set(key, initialized);
+                else properties[key] = initialized;
+            }
+            return;
+        }
+
+        const recorded: HostDefault_T[] = [];
         const initialProperties = new Map<string, ScriptValue_T>();
         const keysByLower = new Map<string, string>();
 
@@ -662,25 +709,25 @@ export class UnScriptVM {
         }
 
         for (let i = classes.length - 1; i >= 0; i--) {
-            const defaults = classes[i].defaults;
+            const defaults = getClassDefaults(classes[i]);
 
-            if (!defaults) throw new Error(`UnrealScript class '${classes[i].id}' has no decoded defaults`);
-
-            for (const [name, value] of Object.entries(defaults)) {
-                const fieldName = getFieldName(name).toLowerCase();
-                const key = keysByLower.get(name.toLowerCase()) ?? keysByLower.get(fieldName) ?? null;
-                const field = getClassField(classes[i], fieldName);
+            for (let j = 0, len = defaults.length; j < len; j++) {
+                const { name, lowerName, fieldName, value, isStructOrArray, isArray } = defaults[j];
+                const key = keysByLower.get(lowerName) ?? keysByLower.get(fieldName) ?? null;
                 const initial = initialProperties.get(fieldName);
 
-                if (initialProperties.has(fieldName) && !(initial === null && field && ((field.type as any) === "Struct" || (field.type as any) === "Array"))) continue;
-                const initialized = value === null && field && (field.type as any) === "Array" ? [] : cloneScriptValue(value);
+                if (initialProperties.has(fieldName) && !(initial === null && isStructOrArray)) continue;
+                const initialized = value === null && isArray ? [] : cloneScriptValue(value);
 
                 if (properties instanceof Map) properties.set(key ?? name, initialized);
                 else properties[key ?? name] = initialized;
+                recorded.push({ key: key ?? name, value, isEmptyArray: value === null && isArray });
 
-                if (key === null) keysByLower.set(name.toLowerCase(), name);
+                if (key === null) keysByLower.set(lowerName, name);
             }
         }
+
+        cacheLayouts.set(layout, recorded);
     }
 
     protected findFunctionOptional(classId: string, name: string): IScriptFunctionDecodeInfo | null {
