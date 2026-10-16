@@ -9,6 +9,7 @@ import GameClient, { type CharacterCreate_T } from "./game-client";
 import NetworkUI, { type Nameplate_T } from "./network-ui";
 import getCommandTokens from "./command-parser";
 import L2Lobby from "./l2-lobby";
+import L2ReplayFile from "./l2-replay-file";
 import GroundPickup from "../objects/ground-pickup";
 import L2Dice from "../objects/l2-dice";
 import type { SectorObject } from "../objects/zone-object";
@@ -18,11 +19,12 @@ import PawnFishingComponent, { FishingType_T } from "../objects/components/pawn-
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component";
 import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
+import { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import type PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { IEngineComponent } from "../game/components";
 import type GameManager from "../game/game-manager";
-import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
+import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
 import Radar, { type RadarState_T } from "../rendering/radar";
 
@@ -98,6 +100,7 @@ const NPC_SPAWN_CONCURRENCY = 8;
 const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 4165, 4166]);
 
 const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
+const tmpTeleportPosition = new Vector3();
 const tmpEarthquakePosition = new Vector3();
 const tmpEarthquakeRotationAmplitude = new Vector3(0, 0.1, 0);
 const tmpEarthquakeRotationVelocity = new Vector3(0, 1000, 0);
@@ -302,6 +305,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected manorSellCrops: GamePackets.ManorSellCropList_T = null;
     protected manorProcureCropDetail: GamePackets.ManorProcureCropDetail_T = null;
     protected stuckCheckAt = 0;
+    protected replayIndex = 0;
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
     public getParent(): GameManager { return this.manGame; }
@@ -574,6 +578,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case 46: case 47: case 48: case 49: case 50: case 51: this.game.requestSocialAction(type - 41); break;
             case 54: case 55: case 56: this.game.requestSocialAction(type - 43); break;
             case 57: this.useAction(0, this.ui.getInputModifiers()[0], isShift); break;
+            case 103: this.startReplayRecording(); break;
+            case 104: this.stopReplayRecording(); break;
+            case 105: this.useAction(55); break;
             case 24: case 25: case 26: {
                 if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]); break; }
 
@@ -743,6 +750,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected leaveWorld() {
         const render = this.manGame.getComponent("render");
 
+        this.stopReplayRecording();
         for (const objectId of this.riders.keys()) this.endRide(objectId);
 
         render.clearViewportWindowParam();
@@ -1426,6 +1434,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         actor.setUnrealScriptProperty("GroundSpeed", Math.fround((isRunning ? speeds.runSpd : speeds.walkSpd) * Math.fround(speeds.moveMultiplier)));
         actor.setUnrealScriptProperty("WaterSpeed", Math.fround((isRunning ? speeds.swimRunSpd : speeds.swimWalkSpd) * Math.fround(speeds.moveMultiplier)));
         actor.setCollisionSize(speeds.collisionRadius, speeds.collisionHeight);
+        if (speeds.originalCollisionRadius !== undefined) {
+            actor.setUnrealScriptProperty("OriCollisionRadius", Math.fround(speeds.originalCollisionRadius));
+            actor.setUnrealScriptProperty("OriCollisionHeight", Math.fround(speeds.originalCollisionHeight));
+        }
         actor.setWalking(!isRunning);
     }
 
@@ -2451,6 +2463,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 else this.ui.addSystemMessage(this.ui.getStrings().systemMessages[1400], 0xffb09b79);
                 break;
             }
+            case 55:
+                if (this.game.isRecording()) this.stopReplayRecording();
+                else this.startReplayRecording();
+                break;
             case 56: {
                 const target = this.objects.get(this.getTargetId());
 
@@ -2472,6 +2488,36 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
     public requestRestart() { if (this.inWorld) this.game.requestRestart(); }
     public logout() { if (this.inWorld) this.game.logout(); }
+
+    public startReplayRecording(): void {
+        if (!this.inWorld || this.game.isRecording()) return;
+        const render = this.manGame.getComponent("render"), input = this.manGame.getComponent("input"), properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+        const file = new L2ReplayFile(), direction = render.camera.getWorldDirection(new Vector3());
+        const time = (render.environment.getTimeSeconds() % 86400 + 86400) % 86400;
+        const zoom = (input.controls.orbit.unclippedDistance || render.camera.position.distanceTo(input.controls.orbit.target)) - 250;
+        const fixedCamera = properties.get("CurFixedDefaultCameraNo") as number;
+
+        file.setScene({ position: render.camera.position.toArray(), yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI), pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI), zoom, desiredZoom: zoom, hour: Math.floor(time / 3600), minute: Math.floor(time / 60) % 60, second: time % 60, duration: 0, cameraMode: properties.get("bCameraWalking") ? 1 : 0, firstPerson: fixedCamera === 1 ? 1 : 0, observerMode: this.observation ? 1 : 0, actorYaw: render.player.getRotationYaw(), fixedCamera });
+        file.arrUserIds = [...this.objects.keys()];
+        this.game.startRecording(file);
+        this.ui.setReplayRecording(true);
+        this.ui.addSystemMessage(this.ui.getSystemMessage(1652), this.ui.getStrings().systemMessageColors[1652]);
+    }
+
+    public stopReplayRecording(): void {
+        if (!this.game || !this.game.isRecording()) return;
+        const file = this.game.stopRecording(), name = `Rep${String(this.replayIndex++).padStart(5, "0")}.l2r`;
+        this.ui.setReplayRecording(false);
+        const url = URL.createObjectURL(new Blob([file.toBytes()], { type: "application/octet-stream" })), link = document.createElement("a");
+
+        link.href = url;
+        link.download = name;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        this.ui.addSystemMessage(this.ui.getSystemMessage(1653).replace("$s1", name), this.ui.getStrings().systemMessageColors[1653]);
+    }
+
+    public getReplayRecordingTime() { return this.game ? this.game.getRecordingTime() : null; }
 
     public requestItemList() { if (this.inWorld) this.game.requestItemList(); }
     public useItem(objectId: number) { if (this.inWorld) this.game.useItem(objectId, this.ui.getInputModifiers()[0]); }
@@ -2545,6 +2591,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         player.setUnrealScriptProperty("bNpc", false);
         if (!info.mountType || this.riders.has(info.objectId)) this.applySpeeds(object.actor, info, this.isRunning);
         object.actor.setRotationYaw(info.heading);
+        this.setIdleAnimation(object, false);
 
         if (isFirst) {
             this.inWorld = true;
@@ -2682,6 +2729,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const info = GamePackets.readNpcInfo(packet);
 
         info.abnormalState = packet.d(); // NpcInfo 0x6f66ca: PetInfo's shared prefix stops before this field.
+        packet.skip(18);
+        info.originalCollisionRadius = packet.f();
+        info.originalCollisionHeight = packet.f();
+        packet.d();
         this.setNpc(info);
     }
 
@@ -2703,7 +2754,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.ui.setPetRenameAvailable(info.name.length === 0);
         this.ui.setPetInfo(this.petInfo);
         this.updateMountable();
-        const object = this.setNpc(info);
+        const object = this.setNpc(info, false);
 
         object.curHp = info.curHp;
         object.maxHp = info.maxHp;
@@ -2820,13 +2871,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (objectId === this.getTargetId()) this.updateTarget();
     }
 
-    protected setNpc(info: GamePackets.NpcInfo_T) {
+    protected setNpc(info: GamePackets.NpcInfo_T, updateLocation: boolean = true) {
         const object = this.objects.get(info.objectId);
 
         if (object) {
             const wasDead = object.isDead;
             object.npcId = info.npcId;
-            this.adjustPawnLocation(object, info);
+            if (updateLocation) this.adjustPawnLocation(object, info);
             if (info.name) object.name = info.name;
             object.title = info.title || this.ui.getStrings().npcTitles[info.npcId] || "";
             if (!info.name && info.npcId in this.ui.getStrings().npcTitleColors) object.titleColor = this.ui.getStrings().npcTitleColors[info.npcId];
@@ -2870,6 +2921,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected async spawnNpc(object: NetObject_T, npcId: number, info: GamePackets.NpcInfo_T) {
         const render = this.manGame.getComponent("render");
         let actor: BaseActor;
+        let npc: INpcDefinition;
 
         while (this.npcSpawnCount >= NPC_SPAWN_CONCURRENCY) await new Promise<void>(resolve => this.npcSpawnWaiters.push(resolve));
         if (object.isRemoved) {
@@ -2879,7 +2931,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.npcSpawnCount++;
 
         try {
-            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, info.spawnType === 2, false, [info.collisionRadius, info.collisionHeight]);
+            npc = await this.manGame.getComponent("asset").resolveNpc(npcId);
+            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, false, false, [info.collisionRadius, info.collisionHeight]);
         } catch (e) {
             object.resolveActor(null);
             this.npcSpawnCount--;
@@ -2911,6 +2964,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         this.attachActor(object, actor, info);
+        if (info.spawnType === 2 && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
     }
 
     protected attachActor(object: NetObject_T, actor: BaseActor, info: GamePackets.CreatureInfo_T) {
@@ -3072,11 +3126,21 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected adjustPawnLocation(object: NetObject_T, position: GamePackets.Location_T) {
         setVector(object.position, position);
 
-        // AdjustPawnLocation 0x7425a0: remote living pawns, more than 200 units from the server feet position.
-        if (object.actor && object.kind !== "user" && !object.isDead && (!object.actor.visible || object.actor.position.distanceTo(object.position) > 200)) object.actor.adjustLocation(object.position);
-    }
+        const actor = object.actor;
 
-    protected getStopSnapDistance(object: NetObject_T) { return object.kind === "user" ? SNAP_DISTANCE : STOP_SNAP_DISTANCE; } // Server AI starts casts anywhere within range + 100 and ignores our X/Y, so small user gaps are left alone.
+        if (!actor || object.kind === "user" || object.isDead) return;
+
+        const controller = actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (!controller || getProperty(controller, "bDead")) return;
+
+        const arrReservedMovePoint = getProperty(controller, "ReservedMovePoint") as unknown[];
+
+        if (arrReservedMovePoint && arrReservedMovePoint.length) return;
+
+        // AdjustPawnLocation 0x7425a0: remote living pawns, more than 200 units from the server feet position.
+        if (actor.position.distanceTo(object.position) > 200) actor.adjustLocation(object.position);
+    }
 
     protected onMoveToLocation(packet: PacketReader) {
         const object = this.objects.get(packet.d());
@@ -3087,8 +3151,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         setVector(object.position, this.readLocation(packet));
 
-        if (!object.actor) return;
-        if (object.kind !== "user" && (!object.actor.visible || distanceXY(object.actor.position, object.position) > SNAP_DISTANCE)) object.actor.teleportTo(object.position, true);
+        if (!object.actor || object.isDead) return;
+
+        this.adjustPawnLocation(object, object.position);
 
         object.actor.goTo(destination);
     }
@@ -3104,7 +3169,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         setVector(object.position, position);
 
+        if (object.isDead) return;
+
         if (target && target.actor && object.actor) {
+            this.adjustPawnLocation(object, object.position);
             object.destination = null;
             object.actor.goToActor(target.actor, Math.max(5, distance - Math.abs(destination.z - position.z)) - 5); // L2Character.moveToLocation: offset shrinks by |dz|, stops at offset - 5.
             return;
@@ -3123,11 +3191,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.heading = packet.d() & 0xffff;
         object.destination = null;
 
-        if (!object.actor) return;
+        if (!object.actor || object.isDead) return;
 
+        this.adjustPawnLocation(object, object.position);
         object.actor.stopMoving();
-
-        if (!object.actor.visible || distanceXY(object.actor.position, object.position) > this.getStopSnapDistance(object)) object.actor.teleportTo(object.position, true);
 
         object.actor.setRotationYaw(object.heading);
     }
@@ -3140,7 +3207,27 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         setVector(object.position, this.readLocation(packet));
         object.heading = packet.d() & 0xffff;
 
-        if (object.actor && (!object.actor.visible || distanceXY(object.actor.position, object.position) > SNAP_DISTANCE)) object.actor.teleportTo(object.position, true);
+        const actor = object.actor;
+
+        if (!actor) return;
+
+        const controller = actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (!controller || getProperty(controller, "bDead") || getProperty(controller, "WaitType") !== PStopType_T.STP_STAND) return;
+
+        if (actor === this.manGame.getComponent("render").player) {
+            actor.l2Teleport(object.position);
+            actor.setRotationYaw(object.heading);
+            return;
+        }
+
+        if (actor.isLocomoting()) {
+            if (!actor.visible || distanceXY(actor.position, object.position) > SNAP_DISTANCE) actor.teleportTo(object.position, true);
+            return;
+        }
+
+        this.adjustPawnLocation(object, object.position);
+        actor.validateLocation(object.position);
     }
 
     protected onTeleport(packet: PacketReader) {
@@ -3151,7 +3238,18 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         setVector(object.position, this.readLocation(packet));
         object.destination = null;
 
-        if (object.actor) object.actor.teleportTo(object.position, true);
+        if (object.actor) {
+            if (object.actor.getUnrealScriptProperty("Controller")) {
+                object.actor.stopMove();
+                this.stopSkill(object.objectId);
+                object.pendingAttack = null;
+            }
+            tmpTeleportPosition.copy(object.position);
+            tmpTeleportPosition.z = Math.fround(tmpTeleportPosition.z + Math.fround(object.speeds.collisionHeight) + 10);
+            if (object.actor === this.manGame.getComponent("render").player) {
+                object.actor.l2Teleport(tmpTeleportPosition);
+            } else this.manGame.getComponent("physics").farMoveActor(object.actor, tmpTeleportPosition);
+        }
         if (object.kind === "user") void this.finishTeleport();
     }
 
@@ -3211,7 +3309,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         for (let i = 0; i < count; i++) hits.push(this.readAttackHit(packet));
 
-        if (!attacker) return;
+        if (!attacker || attacker.isDead) return;
 
         if (!attacker.actor || !hits[0].actionTarget) {
             attacker.pendingAttack = { hits, position: { x: position.x, y: position.y, z: position.z } };
@@ -3238,12 +3336,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected startServerAttack(attacker: NetObject_T, hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T) {
-        if (!attacker.actor || !hits[0].actionTarget || attacker.actor === hits[0].actionTarget) return;
+        if (!attacker.actor || !hits[0].actionTarget || attacker.actor === hits[0].actionTarget || attacker.isDead) return;
 
         attacker.pendingAttack = null;
-        setVector(attacker.position, position);
+        this.adjustPawnLocation(attacker, position);
         attacker.destination = null;
-        if (distanceXY(attacker.actor.position, attacker.position) > this.getStopSnapDistance(attacker)) attacker.actor.teleportTo(attacker.position, true);
         this.stopSkill(attacker.objectId);
         attacker.actor.getComponent<PawnAttackComponent>("pawnAttack").attackFromServer(hits);
         if (!attacker.isDead)
@@ -3282,6 +3379,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         packet.d();
 
+        if (caster && caster.isDead) return;
+
         if (caster && caster.objectId === this.userId) this.ui.setSkillCoolTime(id, level, Math.trunc(reuseDelay / 1000), Math.trunc(reuseDelay / 1000)); // OnReceiveMagicSkillUse 0x7505a2 / 0x750690.
 
         const isTransient = CUBIC_SKILLS.has(id) || this.ui.getStrings().skillCastStyles[`${id}:${level}`] === 0;
@@ -3301,6 +3400,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected startServerSkill(caster: NetObject_T, target: NetObject_T, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
+        if (caster.isDead) return;
+
         const skill: NetSkill_T = { id, level, hitTime, receivedTime, associatedActors: [], associatedObjectIds: [...associatedObjectIds] }; // OnReceiveMagicSkillUse 0x7507f7..0x750831.
 
         for (const objectId of skill.associatedObjectIds) {
@@ -3309,10 +3410,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             if (object?.actor) skill.associatedActors.push(object.actor);
         }
 
+        this.adjustPawnLocation(caster, position);
+
         if (!isTransient) {
-            setVector(caster.position, position);
             caster.destination = null;
-            if (distanceXY(caster.actor.position, caster.position) > this.getStopSnapDistance(caster)) caster.actor.teleportTo(caster.position, true);
             this.manGame.getComponent("asset").stopPawnSkill(caster.actor);
             caster.skill = skill;
         }
@@ -3527,7 +3628,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         let component = actor.findComponent<PawnAbnormalComponent>("pawnAbnormal");
 
         if (!abnormalState) {
-            if (component) actor.removeComponent(component);
+            if (component) {
+                if (component.hasPendingSizeChange()) void component.setAbnormalState(0);
+                else actor.removeComponent(component);
+            }
             return;
         }
 
@@ -5211,6 +5315,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public onEngineTick(currentTime: number, deltaTime: number): void {
         this.tickGMServerTransfer();
+        if (this.getReplayRecordingTime() > 1800) this.stopReplayRecording(); // FL2ReplayManager::Tick 0x75f8a6.
         if (this.ui) this.ui.tick(deltaTime);
 
         if (this.resolveNextTick) {

@@ -1,7 +1,7 @@
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
-import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T } from "./collision-world";
+import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T } from "./collision-world";
 import Player from "../player";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
@@ -10,6 +10,9 @@ import type { ScriptComponent } from "../game/script-component";
 
 import type BaseActor from "../base-actor";
 import type PhysicsVolume from "../objects/physics-volume";
+import type Actor from "../objects/actor";
+import type Volume from "../objects/volume";
+import type MusicVolume from "../objects/music-volume";
 import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
@@ -23,7 +26,7 @@ const tmpZoneLocation = new Vector3();
 const tmpVolumeLocation = new Vector3();
 const tmpPlacementExtent = new Vector3();
 
-function callZoneEvent(pawn: BaseActor, host: ScriptHost_T, name: string, args: ScriptValue_T[]): ScriptValue_T {
+function callZoneEvent(pawn: BaseActor | Actor, host: ScriptHost_T, name: string, args: ScriptValue_T[]): ScriptValue_T {
     const object = host as any;
 
     if (object.findComponent) return object.getComponent("script").call(name, args);
@@ -193,13 +196,30 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
     public updateDynamicEntries(currentTime: number): void { this.collisionWorld.updateDynamicEntries(currentTime); }
     public updatePawnCollision(pawn: BaseActor): void { this.collisionWorld.updatePawnCollision(pawn); }
+    public setCollision(pawn: BaseActor, collideActors?: boolean, blockActors?: boolean, blockPlayers?: boolean): void { this.collisionWorld.setCollision(pawn, collideActors, blockActors, blockPlayers); }
     public setPawnLevel(pawn: BaseActor, level: ScriptHost_T | null): void {
         if (!level) return this.collisionWorld.setPawnLevel(pawn, null);
         const sector = this.manGame.getComponent("render").getLoadedSectors().find(sector => sector.levelInfoActor === level);
         if (!sector) throw new Error(`Pawn '${pawn.name}' has an unregistered LevelInfo.`);
         this.collisionWorld.setPawnLevel(pawn, sector.physicsVolumeActors);
     }
-    public moveActor(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.moveActor(query); }
+    public moveActor(query: CollisionQuery_T, pawn: BaseActor = null): CheckResult_T | null {
+        if (!pawn) return this.collisionWorld.moveActor(query);
+
+        // shortcut: ordinary pawn translation; port native rotation/attachment/encroacher branches before routing them here.
+        const contacts: ActorLineHit_T[] = [];
+        const notify = query.delta.lengthSq() !== 0 && (query.sourceProfile.collideActors || query.sourceProfile.collideWorld);
+        const location = query.location, ignoreBases = query.ignoreBases;
+        let hit = this.collisionWorld.moveActor(query, notify ? contacts : null);
+        if (hit) hit = { ...hit, location: hit.location.clone(), normal: hit.normal.clone() };
+        pawn.setUnrealScriptProperty("Location", location.toArray());
+        if (notify) {
+            this.collisionWorld.notifyMove(pawn, contacts, hit, ignoreBases);
+            this.setPawnZone(pawn);
+        }
+        location.fromArray(pawn.getUnrealScriptProperty("Location") as number[]);
+        return hit;
+    }
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.singleLineCheck(query); }
     public findSpot(extent: Vector3, location: Vector3): boolean { return this.collisionWorld.findSpot(extent, location); }
     public farMoveActor(pawn: BaseActor, destination: Vector3, test: boolean = false): boolean {
@@ -243,11 +263,11 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return this.collisionWorld.physicsVolumeLineCheck(start, end, source, sourceIsPawn);
     }
     public physicsVolumePointCheck(location: Vector3, volumes: PhysicsVolume[]): PhysicsVolume[] { return this.collisionWorld.physicsVolumePointCheck(location, volumes); }
-    public getPhysicsVolume(level: SectorObject, location: Vector3, actor: BaseActor, useTouching: boolean = false): PhysicsVolume {
+    public getPhysicsVolume(level: SectorObject, location: Vector3, actor: BaseActor | Actor, useTouching: boolean = false): PhysicsVolume {
         const main = this.manGame.getComponent("render").getLevel();
         let selected = (main || level).getDefaultPhysicsVolume();
 
-        if (actor.scriptBase) return actor.scriptBase.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume || selected;
+        if ((actor as BaseActor).scriptBase) return (actor as BaseActor).scriptBase.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume || selected;
 
         const candidates = useTouching ? actor.getUnrealScriptProperty("Touching") as unknown as PhysicsVolume[] : this.physicsVolumePointCheck(location, level.physicsVolumeActors);
         for (const volume of candidates) {
@@ -261,6 +281,106 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         return selected;
     }
+    public updatePawnWaterHitEffect(pawn: BaseActor, volume: PhysicsVolume): void {
+        if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
+        pawn.getComponent<PawnMovementComponent>("pawnMovement").updateWaterHitEffect(volume, this.collisionWorld.getPhysicsVolumePrimitive(volume));
+    }
+
+    public setActorZone(actor: Actor, test: boolean = false, forceRefresh: boolean = false): void {
+        if (actor.isPendingKill()) return;
+
+        const owner = actor.getUnrealScriptProperty("Level");
+        const level = this.manGame.getComponent("render").getLoadedSectors().find(sector => sector.levelInfoActor === owner);
+
+        if (!level) throw new Error(`Actor '${actor.name}' has no registered level for SetZone.`);
+        const vm = actor.getComponent<ScriptComponent>("script").getVM();
+
+        if (vm.invokeNative(actor, actor, 303, "IsA", ["LevelInfo"])) {
+            actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+            return;
+        }
+        if (forceRefresh) actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+
+        const oldRegion = actor.getUnrealScriptProperty("Region") as any;
+        const region = level.pointRegion(tmpZoneLocation.fromArray(actor.getUnrealScriptProperty("Location") as number[]));
+        const changedZone = oldRegion.Zone !== region.Zone;
+
+        if (!oldRegion.Zone) throw new Error(`Actor '${actor.name}' has no initial zone for SetZone.`);
+        if (!test && changedZone) {
+            callZoneEvent(actor, oldRegion.Zone, "ActorLeaving", [actor]);
+            callZoneEvent(actor, actor, "ZoneChange", [region.Zone as any]);
+        }
+        actor.setUnrealScriptProperty("Region", region as any);
+        if (!test && changedZone) callZoneEvent(actor, region.Zone, "ActorEntered", [actor]);
+
+        if (vm.invokeNative(actor, actor, 303, "IsA", ["PhysicsVolume"])) {
+            actor.setUnrealScriptProperty("PhysicsVolume", actor);
+            return;
+        }
+
+        tmpZoneLocation.fromArray(actor.getUnrealScriptProperty("Location") as number[]);
+        const touching = !!actor.getUnrealScriptProperty("bCollideActors") && !test && !forceRefresh;
+        const body = this.getPhysicsVolume(level, tmpZoneLocation, actor, touching);
+        const oldBody = actor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+
+        if (!test && body !== oldBody) {
+            if (oldBody) {
+                callZoneEvent(actor, oldBody, "ActorLeavingVolume", [actor]);
+                callZoneEvent(actor, actor, "PhysicsVolumeChange", [body as any]);
+            }
+            actor.setUnrealScriptProperty("PhysicsVolume", body as any);
+            callZoneEvent(actor, body, "ActorEnteredVolume", [actor]);
+        } else actor.setUnrealScriptProperty("PhysicsVolume", body as any);
+    }
+
+    public setActorVolumes(actor: Actor | BaseActor, volumes: (PhysicsVolume | MusicVolume | Volume)[]): void {
+        const vm = actor.getComponent<ScriptComponent>("script").getVM();
+
+        if (vm.invokeNative(actor, actor, 303, "IsA", ["LevelInfo"]) || vm.invokeNative(actor, actor, 303, "IsA", ["Volume"])) return;
+
+        tmpVolumeLocation.fromArray(actor.getUnrealScriptProperty("Location") as number[]);
+        for (const volume of volumes) {
+            if (!volume.encompasses(tmpVolumeLocation)) continue;
+
+            if (actor.getUnrealScriptProperty("bCollideActors") && volume.getUnrealScriptProperty("bCollideActors")) {
+                (volume.getUnrealScriptProperty("Touching") as ScriptValue_T[]).push(actor);
+                (actor.getUnrealScriptProperty("Touching") as ScriptValue_T[]).push(volume);
+            }
+            if (!vm.invokeNative(volume, volume, 303, "IsA", ["PhysicsVolume"])) continue;
+
+            const previous = actor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+            if ((volume.getUnrealScriptProperty("Priority") as number) > (previous.getUnrealScriptProperty("Priority") as number))
+                actor.setUnrealScriptProperty("PhysicsVolume", volume as any);
+        }
+    }
+
+    protected getLevelVolumes(level: SectorObject): (PhysicsVolume | MusicVolume | Volume)[] {
+        const volumes = new Map<string, PhysicsVolume | MusicVolume | Volume>();
+        for (const actor of [...level.physicsVolumeActors, ...level.musicVolumeActors]) volumes.set(actor.actorUuid, actor);
+        level.traverse((object: any) => {
+            if (object.scriptActor) volumes.set(object.scriptActor.actorUuid, object.scriptActor);
+        });
+
+        const arrVolumes: (PhysicsVolume | MusicVolume | Volume)[] = [];
+        for (const uuid of level.levelActorUuids) {
+            const actor = volumes.get(uuid);
+            if (actor) arrVolumes.push(actor);
+        }
+        return arrVolumes;
+    }
+
+    public setPawnVolumes(pawn: BaseActor): void {
+        const render = this.manGame.getComponent("render"), owner = pawn.getUnrealScriptProperty("Level");
+        const levels = render.getLoadedSectors(), level = levels.find(sector => sector.levelInfoActor === owner);
+
+        if (!level) throw new Error(`Pawn '${pawn.name}' has no registered level for SetVolumes.`);
+
+        this.setActorVolumes(pawn, this.getLevelVolumes(level));
+        // shortcut: loaded sectors are the attachment roster until native AddSWLevel ordering/lifetime is ported.
+        for (const attached of levels)
+            if (attached !== level) this.setActorVolumes(pawn, this.getLevelVolumes(attached));
+    }
+
     public setPawnZone(pawn: BaseActor, test: boolean = false, forceRefresh: boolean = false): void {
         if (pawn.isPendingDelete) return;
 
@@ -309,8 +429,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             }
             pawn.setUnrealScriptProperty("HeadVolume", head as any);
         }
-        // shortcut: native water-hit surface/effect updates remain unwired; implement before enabling SetZone in water.
-        if (foot.getUnrealScriptProperty("bWaterVolume")) throw new Error(`SetZone water-hit effects are not implemented for '${pawn.name}'.`);
+        this.updatePawnWaterHitEffect(pawn, foot);
         if (foot !== pawn.getUnrealScriptProperty("FootVolume")) pawn.setUnrealScriptProperty("FootVolume", foot as any);
     }
     public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true): RayCheckResult_T | null {
@@ -318,13 +437,16 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     }
 
     public registerSimulationObjects(root: Object3D): void {
+        const sectors: SectorObject[] = [];
         root.updateMatrixWorld(true);
         root.traverse(object => {
             if ((object as any).isSectorObject) {
                 const sector = object as SectorObject;
                 sector.createZoneInfoActors();
                 sector.createPhysicsVolumeActors();
-                this.collisionWorld.registerPhysicsVolumes(sector.physicsVolumeActors, (sector as any).decodeLibrary);
+                sector.createMusicVolumeActors();
+                this.collisionWorld.registerPhysicsVolumes(sector.physicsVolumeActors, (sector as any).decodeLibrary, sector.musicVolumeActors);
+                sectors.push(sector);
             }
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.registerObjectComponents(terrain);
@@ -333,11 +455,34 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             this.registerObjectComponents(object);
         });
 
+        for (const sector of sectors) {
+            const volume = sector.getDefaultPhysicsVolume();
+            const actors = new Set([sector.levelInfoActor, ...sector.zoneInfoActors, ...sector.physicsVolumeActors, ...sector.musicVolumeActors, volume]);
+            sector.traverse((object: any) => {
+                if (object.scriptActor) {
+                    actors.add(object.scriptActor);
+                }
+            });
+            const arrVolumes = this.getLevelVolumes(sector);
+            const pending = [...actors].filter(actor => !actor.getComponent<ScriptComponent>("script").getHasBegunPlay());
+            for (const actor of pending) {
+                actor.setUnrealScriptProperty("Level", sector.levelInfoActor);
+                actor.setUnrealScriptProperty("PhysicsVolume", volume as any);
+            }
+            for (const actor of pending) this.setActorZone(actor, true, true);
+            for (const actor of pending) this.setActorVolumes(actor, arrVolumes);
+            // shortcut: PreBeginPlay/BeginPlay and state execution remain unimplemented; initialize zones/volumes before PostBeginPlay.
+            for (const actor of pending) actor.beginPlay();
+        }
+
         this.lastMoverTriggerPosition.set(Infinity, Infinity, Infinity);
     }
 
     public registerCollider(object: ICollidable): void {
         if (!object.isCollidable) return;
+
+        const actor = object as any;
+        if (actor.scriptVM && actor.scriptActor === null) actor.setScriptRuntime(actor.scriptVM, actor.scriptObjectFactory);
 
         const primitive = object.getCollisionPrimitive ? object.getCollisionPrimitive() : null;
         const needsCollider = this.collisionWorld.usesRapier() || !primitive || primitive.kind === "cylinder" || (object as any).isMovableObject || (object as any).isRotatingObject;
@@ -353,6 +498,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
                 const sector = object as SectorObject;
                 this.collisionWorld.unregisterPhysicsVolumes(sector.physicsVolumeActors);
                 sector.releasePhysicsVolumeActors();
+                sector.releaseMusicVolumeActors();
                 sector.releaseZoneInfoActors();
             }
             if ((object as any).isTerrainBatch)

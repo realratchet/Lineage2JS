@@ -2,6 +2,8 @@ import L2Socket from "./l2-socket";
 import PacketReader from "./packet-reader";
 import PacketWriter from "./packet-writer";
 import GameCrypt from "./l2-crypt";
+import L2ReplayFile from "./l2-replay-file";
+import L2ReplayRecorder from "./l2-replay-recorder";
 import * as GamePackets from "./game-packets";
 import type { SessionKey_T } from "./login-client";
 
@@ -12,6 +14,7 @@ export type CharacterCreate_T = { name: string, race: number, sex: number, class
 export class GameClient {
     protected readonly socket = new L2Socket();
     protected readonly crypt = new GameCrypt();
+    protected replayRecorder: L2ReplayRecorder = null;
 
     public onPacket: GamePacketHandler_T = null;
     public onClose: (code: number, reason: string) => void = null;
@@ -33,6 +36,7 @@ export class GameClient {
             this.crypt.setKey(packet.b(8));
         }
 
+        if (this.replayRecorder) this.replayRecorder.addPacket(body, performance.now() / 1000);
         this.onPacket(opcode, packet);
     }
 
@@ -52,6 +56,26 @@ export class GameClient {
 
     public isConnected() { return this.socket.isOpen(); }
     public close() { this.socket.close(); }
+
+    public startRecording(file: L2ReplayFile): void {
+        if (this.replayRecorder) throw new Error(`Replay recording is already active.`);
+        if (!this.isConnected()) throw new Error(`Replay recording requires a game connection.`);
+
+        this.replayRecorder = new L2ReplayRecorder(file);
+        try { this.requestRecordInfo(); }
+        catch (error) { this.replayRecorder = null; throw error; }
+    }
+
+    public stopRecording(): L2ReplayFile {
+        if (!this.replayRecorder) throw new Error(`Replay recording is not active.`);
+        const file = this.replayRecorder.finish(performance.now() / 1000);
+
+        this.replayRecorder = null;
+        return file;
+    }
+
+    public isRecording() { return this.replayRecorder !== null; }
+    public getRecordingTime() { return this.replayRecorder ? this.replayRecorder.getElapsed(performance.now() / 1000) : null; }
 
     public authLogin(account: string, key: SessionKey_T) { this.send(this.write(GamePackets.GameClientPacket_T.AuthLogin).S(account).d(key.playOk2).d(key.playOk1).d(key.loginOk1).d(key.loginOk2)); }
     public characterSelected(slot: number, position: GamePackets.Location_T = null) { this.send(this.write(GamePackets.GameClientPacket_T.CharacterSelected).d(slot).h(position ? 1 : 0).d(position ? Math.trunc(position.x) : 0).d(position ? Math.trunc(position.y) : 0).d(position ? Math.trunc(position.z) : 0)); }

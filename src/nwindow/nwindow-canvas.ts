@@ -277,9 +277,9 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         this.renderDigits(this.context, x + this.originX, y + this.originY, color, text, type);
     }
 
-    public renderDigits(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: DigitFont_T = DigitFont_T.NORMAL) {
+    public renderDigits(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: DigitFont_T = DigitFont_T.NORMAL, alphaRef: number = -1) {
         const [texture, cellW, cellH] = DIGIT_FONTS[type];
-        const atlas = this.getTintedImage(texture, color);
+        const atlas = this.getTintedImage(texture, color, alphaRef);
         let penX = Math.trunc(x);
         const penY = Math.trunc(y);
 
@@ -297,8 +297,8 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         context.globalAlpha = 1;
     }
 
-    public getTintedImage(path: string, color: number): HTMLCanvasElement {
-        const key = `${path.toLowerCase()}:${color & 0xffffff}`;
+    public getTintedImage(path: string, color: number, alphaRef: number = -1): HTMLCanvasElement {
+        const key = `${path.toLowerCase()}:${color & 0xffffff}` + (alphaRef < 0 ? "" : `:${alphaRef}`);
         let atlas = this.tinted.get(key);
 
         if (atlas) return atlas;
@@ -321,6 +321,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
             data[i] = data[i] * r / 255;
             data[i + 1] = data[i + 1] * g / 255;
             data[i + 2] = data[i + 2] * b / 255;
+            if (data[i + 3] <= alphaRef) data[i + 3] = 0;
         }
 
         context.putImageData(pixels, 0, 0);

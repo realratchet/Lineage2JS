@@ -3,6 +3,7 @@ import type { IStaticMeshActorDecodeInfo } from "@l2js/engine/contracts/mesh";
 import Actor from "./actor";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects";
 import type CollidingMesh from "./colliding-mesh";
+import type { ScriptValue_T } from "../ue-script/vm";
 
 export class StaticMeshActor extends Actor implements ICollidable {
     public readonly isCollidable = true;
@@ -32,6 +33,13 @@ export class StaticMeshActor extends Actor implements ICollidable {
     public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
     public getCollisionPrimitive(): CollisionPrimitive_T { return this.primitive; }
     public getCollisionRadius(): number { return this.collisionProfile.collisionRadius; }
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void { this.collisionOwner.setActorProperty(this, id, value); }
+
+    public release(notifyDestroyed = true): void {
+        super.release(notifyDestroyed);
+
+        if (this.isPendingKill()) this.collisionOwner.hasChangedCollisionActors = true;
+    }
 }
 
 export default StaticMeshActor;

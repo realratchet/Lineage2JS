@@ -105,7 +105,7 @@ export class BSPCollider extends GameObject implements ICollidable {
         this.scriptVM = vm;
         this.scriptObjectFactory = objectFactory;
         if (!this.scriptActor) this.scriptActor = new Volume(this);
-        this.scriptActor.setScriptRuntime(vm, objectFactory);
+        this.scriptActor.setScriptRuntime(vm, objectFactory, false);
     }
 }
 

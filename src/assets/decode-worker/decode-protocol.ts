@@ -68,6 +68,7 @@ export type DecodeEffectTemplatesMessage_T = {
     classPaths: string[];
     soundPaths: string[];
     scriptClassPaths: string[];
+    requiredSounds: boolean;
 };
 
 export type CharGroupsMessage_T = { type: "charGroups"; requestId: number; };

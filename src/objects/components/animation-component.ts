@@ -96,7 +96,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected animationNotifyTime = 0;
     protected animationTweenEndTime = 0;
     protected simulationSuspendedAt: number = null;
-    protected readonly boneScalers = new Map<string, BoneScaler_T>();
+    protected readonly boneScalers = new Map<string | number, BoneScaler_T>();
     protected readonly tweenTimeScales = new Map<AnimationAction, number>();
     protected isAnimationsInit = false;
     protected readonly basicActorAnimations: BasicActorAnimations_T = {
@@ -227,8 +227,8 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.mixer.time < this.animationTweenEndTime);
     }
 
-    public setBoneScale(name: string, scale: number): void {
-        const key = name.toLowerCase();
+    public setBoneScale(name: string | number, scale: number): void {
+        const key = typeof name === "number" ? name : name.toLowerCase();
         let scaler = this.boneScalers.get(key);
 
         if (scale === 1) {
@@ -243,8 +243,8 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         for (const mesh of this.meshes) {
             const skeleton = (mesh as LitSkinnedMesh).skeleton;
             if (!skeleton) continue;
-            const index = skeleton.matchRefBone(name);
-            if (index < 0) continue;
+            const index = typeof name === "number" ? name : skeleton.matchRefBone(name);
+            if (index < 0 || index >= skeleton.bones.length) continue;
             const bone = skeleton.bones[index];
             if (!scaler.bones.has(bone)) scaler.bones.set(bone, bone.scale.clone());
             bone.scale.copy(scaler.bones.get(bone)).multiplyScalar(scale);

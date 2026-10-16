@@ -1,8 +1,8 @@
 import UVolume, { type IVolumeBspDecodeInfo } from "./un-volume";
-import type { DecodeLibrary, IAudioDecodeInfo } from "./decode-library";
+import type { DecodeLibrary, IAudioDecodeInfo, IBaseObjectDecodeInfo } from "./decode-library";
 import type { IBoundsDecodeInfo } from "./un-primitive";
 
-export type IMusicVolumeDecodeInfo = IAudioDecodeInfo & {
+export type IMusicVolumeDecodeInfo = IAudioDecodeInfo & Pick<IBaseObjectDecodeInfo, "scriptClassId" | "scriptProperties" | "ownerUuid"> & {
     type: "MusicVolume",
     musicId: number,
     isMusicForced: boolean,

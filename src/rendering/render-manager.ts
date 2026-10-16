@@ -6,6 +6,7 @@ import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import Player from "../player";
 import type BaseActor from "../base-actor";
+import type CollidingMesh from "../objects/colliding-mesh";
 import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo } from "./visualizer";
 import EnvColor from "./env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
@@ -1128,7 +1129,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (owner) (owner.findComponent<ActorOwnershipComponent>("actorOwnership") || owner.addComponent(new ActorOwnershipComponent())).gainScriptChild(effect);
         const script = object.findComponent<ScriptComponent>("script");
 
-        if (script) script.beginPlay();
+        if (object.findComponent("pawnMovement")) (object as BaseActor).beginPlay();
+        else if (script) script.beginPlay();
         this.queueShaderCompile(effect);
         this.needsUpdate = true;
     }
@@ -1393,6 +1395,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         arrShadowCasters.length = 0;
         arrShadowCasters.push(this.player);
+
+        for (const component of this.pawnRenderables)
+            if (component.getParent() !== this.player) arrShadowCasters.push(component.getParent());
 
         this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
     }
@@ -2709,7 +2714,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public disposeSector(sector: SectorObject) {
+        sector.releaseMusicVolumeActors();
         sector.releaseZoneInfoActors();
+        sector.traverse(object => {
+            const actor = object as CollidingMesh;
+
+            if (actor.isStaticMeshActor && actor.findComponent("script"))
+                actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        });
         const soundCache = (sector as any).decodeLibrary?.soundBlobCache as Map<string, { uri: string }>;
 
         if (soundCache) {

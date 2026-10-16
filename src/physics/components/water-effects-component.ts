@@ -5,6 +5,8 @@ import { encompassesVolume, findVolumeTransition } from "../volume-bsp";
 import UnderWaterEffect from "../../rendering/under-water-effect";
 import WaterHitEffect from "../../rendering/water-hit-effect";
 import type PhysicsManager from "../../physics/physics-manager";
+import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
+import type PhysicsVolume from "../../objects/physics-volume";
 import type Player from "../../player";
 import type RenderManager from "../../rendering/render-manager";
 import type { SectorObject } from "../../objects/zone-object";
@@ -13,8 +15,7 @@ import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
 const tmpWaterSurfaceEnd = new Vector3();
 const tmpWaterFloorStart = new Vector3();
-const tmpWaterHitStart = new Vector3();
-const tmpWaterHitEnd = new Vector3();
+const tmpWaterVelocity = new Vector3();
 const tmpWaterHitPosition = new Vector3();
 const tmpDown = new Vector3(0, 0, -1);
 const tmpSunBeamSample = new Vector2();
@@ -23,8 +24,6 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
     protected static readonly UNDERWATER_SUN_BEAM_DEPTH = 2000;
     protected static readonly UNDERWATER_SUN_BEAM_TRACE_START = 200;
     protected static readonly UNDERWATER_SAMPLE_DISTANCE_SQ = 40000;
-    protected static readonly WATER_HIT_SURFACE_HEIGHT = 20;
-    protected static readonly WATER_HIT_MIN_SURFACE_HEIGHT = 0.85;
 
     public readonly componentName = "waterEffects";
     public readonly underWaterEffect = new UnderWaterEffect();
@@ -37,9 +36,6 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
     protected hasUnderWaterSample = false;
     protected wasUnderWaterDay = false;
     protected isUnderWaterDay = false;
-    protected waterHitEffectName: string = null;
-    protected waterHitElapsed = 0;
-    protected waterHitInterval = 0;
 
     public onPhysicsAdded(manager: PhysicsManager): void {
         super.onPhysicsAdded(manager);
@@ -69,66 +65,37 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
 
     protected updateWaterHitEffect(deltaTime: number): void {
         const owner = this.getParent();
+        const ownerLevel = owner.getUnrealScriptProperty("Level");
+        if (!ownerLevel) return;
+        const sector = this.renderManager.getLoadedSectors().find(sector => sector.levelInfoActor === ownerLevel);
+        if (!sector) throw new Error(`Pawn '${owner.name}' has no registered level for water effects.`);
 
-        if (!owner.isSwimmingMovement()) {
-            this.waterHitEffectName = null;
-            this.waterHitElapsed = 0;
+        const foot = owner.getUnrealScriptProperty("FootVolume") as unknown as PhysicsVolume;
+        if (!owner.getComponent<PawnRenderableComponent>("pawnRenderable").isRendered || !foot || !foot.getUnrealScriptProperty("bL2WaterVolume")) return;
+        tmpWaterHitPosition.fromArray(owner.getUnrealScriptProperty("HitLocation") as number[]);
+        if (tmpWaterHitPosition.lengthSq() === 0) {
+            owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
             return;
         }
 
-        const height = owner.getCollisionHeight();
-
-        tmpWaterHitStart.copy(owner.position);
-        tmpWaterHitEnd.copy(tmpWaterHitStart);
-        tmpWaterHitEnd.z += height * 2 + WaterEffectsComponent.WATER_HIT_SURFACE_HEIGHT;
-
-        let selectedSector: SectorObject = null;
-        let selectedVolume: IWaterVolumeDecodeInfo = null;
-        let selectedTime = 0;
-
-        for (const sector of this.renderManager.getLoadedSectors()) {
-            if (!sector.waterVolumes) continue;
-
-            for (const volume of sector.waterVolumes) {
-                const startsInside = encompassesVolume(tmpWaterHitStart, volume.bsp);
-
-                if (!startsInside || encompassesVolume(tmpWaterHitEnd, volume.bsp)) continue;
-
-                const time = findVolumeTransition(tmpWaterHitStart, tmpWaterHitEnd, volume.bsp, true);
-                const surfaceHeight = time * (height * 2 + WaterEffectsComponent.WATER_HIT_SURFACE_HEIGHT);
-
-                if (surfaceHeight < height * (1 + WaterEffectsComponent.WATER_HIT_MIN_SURFACE_HEIGHT)) continue;
-                if (!selectedVolume || volume.priority >= selectedVolume.priority) {
-                    selectedSector = sector;
-                    selectedVolume = volume;
-                    selectedTime = time;
-                }
+        if (owner.getUnrealScriptProperty("HitWaterEffectTimer") === 0) {
+            tmpWaterVelocity.fromArray(owner.getUnrealScriptProperty("Velocity") as number[]);
+            const moving = Math.abs(tmpWaterVelocity.x) >= 0.0001 || Math.abs(tmpWaterVelocity.y) >= 0.0001 || Math.abs(tmpWaterVelocity.z) >= 0.0001;
+            const wait = (owner.getUnrealScriptProperty("SitWaitAnimName") as string[])[owner.getUnrealScriptProperty("CurWeaponType") as number];
+            const action = owner.getAnimationAction();
+            const resting = !moving && action && action.getClip().name.toLowerCase() === wait.toLowerCase() && (owner.getUnrealScriptProperty("Location") as number[])[2] - tmpWaterHitPosition.z <= owner.getCollisionHeight() * 0.20000000298023224;
+            if (!resting) {
+                const effectName = WaterEffectsComponent.getWaterHitEffectName(sector, foot, moving);
+                if (effectName) owner.setUnrealScriptProperty("RecentHitWaterInterval", this.waterHitEffect.spawn(sector, effectName, tmpWaterHitPosition, tmpWaterVelocity, moving));
             }
         }
 
-        if (!selectedVolume) {
-            this.waterHitEffectName = null;
-            this.waterHitElapsed = 0;
-            return;
-        }
-
-        const speed = owner.getSpeed();
-        const effectName = WaterEffectsComponent.getWaterHitEffectName(selectedSector, selectedVolume, speed > 0);
-
-        if (!effectName) return;
-
-        this.waterHitElapsed += deltaTime / 1000;
-
-        if (effectName === this.waterHitEffectName && this.waterHitElapsed < this.waterHitInterval) return;
-
-        this.waterHitEffectName = effectName;
-        this.waterHitElapsed = 0;
-
-        tmpWaterHitPosition.lerpVectors(tmpWaterHitStart, tmpWaterHitEnd, selectedTime);
-        this.waterHitInterval = this.waterHitEffect.spawn(selectedSector, effectName, tmpWaterHitPosition, speed);
+        // APawn::UpdateWaterHitEffectMovement 0x8c08f1 resets before the following tick can spawn.
+        const elapsed = owner.getUnrealScriptProperty("HitWaterEffectTimer") as number;
+        owner.setUnrealScriptProperty("HitWaterEffectTimer", elapsed > (owner.getUnrealScriptProperty("RecentHitWaterInterval") as number) ? 0 : Math.fround(elapsed + Math.fround(deltaTime / 1000)));
     }
 
-    protected static getWaterHitEffectName(sector: SectorObject, volume: IWaterVolumeDecodeInfo, isMoving: boolean): string | null {
+    protected static getWaterHitEffectName(sector: SectorObject, volume: PhysicsVolume, isMoving: boolean): string | null {
         if (!volume.scriptClassId) throw new Error(`Water volume '${volume.name}' has no UnrealScript class.`);
 
         let waitHitEffect: ScriptPropertyValue_T = null;
@@ -144,7 +111,7 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
         if (effectName === null) return null;
         if (typeof effectName !== "string") throw new Error(`'${volume.scriptClassId}.GetHitEffectName' returned a non-name value.`);
 
-        return effectName;
+        return effectName.toLowerCase() === "none" ? null : effectName;
     }
 
     protected sampleUnderWaterSunBeam(position: Vector3, volume: IWaterVolumeDecodeInfo, target: Vector2): boolean {

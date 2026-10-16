@@ -115,7 +115,7 @@ function cloneScriptValue(value: ScriptValue_T): ScriptValue_T {
     return clone;
 }
 
-function getProperty(host: ScriptHost_T, id: string): ScriptValue_T {
+export function getProperty(host: ScriptHost_T, id: string): ScriptValue_T {
     if (host.getUnrealScriptProperty) return host.getUnrealScriptProperty(id);
 
     const properties = getProperties(host);

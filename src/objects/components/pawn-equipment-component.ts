@@ -34,6 +34,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     protected readonly renderManager: RenderManager;
     protected readonly items: { object: GameObject; bone: string | number; mesh?: LitSkinnedMesh; animation?: ExtraMeshAnimationComponent }[] = [];
     protected hiddenAnimation: string = null;
+    protected weaponScale: number = null;
 
     public constructor(library: DecodeLibrary, renderManager: RenderManager) {
         super();
@@ -53,6 +54,9 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
                 if (item.enchantEffect) this.attachEnchantEffect(item.enchantEffect, typeof item.bone === "string" && item.bone.startsWith("Left") ? "LeftHandBone" : "RightHandBone");
             }
         } else if (bow) this.attachItem(bow.weaponMesh, bow.weaponSkins, "LeftHandBone");
+
+        this.weaponScale = null;
+        this.updateWeaponScale();
     }
 
     public setLibrary(library: DecodeLibrary): void {
@@ -86,6 +90,8 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         }
 
         const item = new EquippedItem();
+
+        (item as any).isAttachedMesh = ["RightHandBone", "LeftHandBone", "RightArmBone", "LeftArmBone"].includes(bone as string);
 
         item.scriptProperties.set("Mesh", mesh);
         item.scriptProperties.set("Skins", skins);
@@ -194,6 +200,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     }
 
     public onUpdate(_currentTime: number, deltaTime: number): void {
+        this.updateWeaponScale();
         const action = this.getParent().getAnimationAction();
         for (const item of this.items)
             if (item.animation) item.animation.copyOwnerAnimation(action, deltaTime);
@@ -202,6 +209,18 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
         for (const item of this.items) item.object.visible = true;
         this.hiddenAnimation = null;
+    }
+
+    protected updateWeaponScale(): void {
+        const parent = this.getParent();
+        const weaponScale = Math.fround(parent.getUnrealScriptProperty("WeaponScale") as number);
+        const scale = weaponScale === 0 ? Math.fround(Math.fround(Math.sqrt(Math.fround(parent.getCollisionRadius()) * Math.fround(parent.getCollisionHeight()))) / Math.fround(Math.sqrt(207))) : weaponScale;
+
+        if (scale === this.weaponScale) return;
+
+        for (const item of this.items)
+            if ((item.object as any).isAttachedMesh) item.mesh.scale.setScalar(scale);
+        this.weaponScale = scale;
     }
 
     public onDetach(): void {

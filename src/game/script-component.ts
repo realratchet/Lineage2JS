@@ -40,10 +40,13 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
 
     public onDetach(): void { this.destroy(); }
 
-    public beginPlay(): void {
+    public getHasBegunPlay(): boolean { return this.hasBegunPlay; }
+
+    public beginPlay(initialize?: () => void): void {
         if (this.hasBegunPlay || this.isDestroyed) return;
 
         this.hasBegunPlay = true;
+        if (initialize) initialize();
         this.call("PostBeginPlay");
     }
 

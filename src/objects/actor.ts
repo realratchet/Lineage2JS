@@ -26,15 +26,19 @@ export class Actor extends GameObject {
         setScriptObjectProperty(this, "Touching", []);
     }
 
-    public setScriptRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T): void {
+    public setScriptRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T, beginPlay: boolean = true): void {
         if (this.scriptComponent) {
             this.scriptComponent.setRuntime(vm, objectFactory);
             return;
         }
 
         this.scriptComponent = this.addComponent(new ScriptComponent(vm, objectFactory, this.scriptClassId));
-        this.scriptComponent.beginPlay();
+        if (beginPlay) this.beginPlay();
     }
+
+    public beginPlay(initialize?: () => void): void { this.scriptComponent.beginPlay(initialize); }
+
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void { setScriptObjectProperty(this, id, value); }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
         const result = this.scriptComponent.dispatchNative(call);

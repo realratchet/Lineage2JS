@@ -49,7 +49,7 @@ function groupActorsForBatching(
         const meshMaterials = actor.instance?.mesh?.materials;
         const meshGeometry = library.geometries[actor.instance?.mesh?.geometry];
         const collision = actor.collision;
-        const hasDistinctCollision = collision.useCylinderCollision || collision.blockZeroExtent !== collision.blockNonZeroExtent || !!meshGeometry?.staticMeshCollision?.collisionModel;
+        const hasDistinctCollision = collision.useCylinderCollision || collision.blockZeroExtent !== collision.blockNonZeroExtent || !!meshGeometry?.staticMeshCollision?.collisionModel || !!(actor.scriptProperties.bOnlyAffectPawns ?? actor.sharedScriptProperties?.bOnlyAffectPawns);
         const isBatchable = !(actor as any).dontBatch && !hasDistinctCollision && meshMaterials && meshGeometry && !(actor.ambient?.hardwareLighting && isReachedByDynamicLight(dynamicLights, (actor as any).bounds));
 
         if (!isBatchable) {
@@ -69,6 +69,13 @@ function groupActorsForBatching(
             batchGroups.delete(key);
         }
     });
+
+    for (const actor of unbatchable) {
+        if (!actor.sharedScriptProperties) continue;
+
+        actor.scriptProperties = { ...actor.sharedScriptProperties, ...actor.scriptProperties };
+        delete actor.sharedScriptProperties;
+    }
 
     return batchGroups;
 }

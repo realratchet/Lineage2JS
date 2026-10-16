@@ -1561,20 +1561,20 @@ export class DecodeEngine {
         return this.serializeTransfer(await this.decodeItem(settings, id));
     }
 
-    public decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<DecodeLibrary> {
-        const key = JSON.stringify([classPaths, soundPaths, scriptClassPaths]);
+    public decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = [], requiredSounds: boolean = true): Promise<DecodeLibrary> {
+        const key = JSON.stringify(requiredSounds ? [classPaths, soundPaths, scriptClassPaths] : [classPaths, soundPaths, scriptClassPaths, false]);
 
-        return this.getStoredAssets("effect_templates", key, settings, () => this.decodeEffectTemplateAssets(settings, classPaths, soundPaths, scriptClassPaths));
+        return this.getStoredAssets("effect_templates", key, settings, () => this.decodeEffectTemplateAssets(settings, classPaths, soundPaths, scriptClassPaths, requiredSounds));
     }
 
-    protected async decodeEffectTemplateAssets(settings: LoadSettings_T, classPaths: string[], soundPaths: string[], scriptClassPaths: string[]): Promise<DecodeLibrary> {
+    protected async decodeEffectTemplateAssets(settings: LoadSettings_T, classPaths: string[], soundPaths: string[], scriptClassPaths: string[], requiredSounds: boolean): Promise<DecodeLibrary> {
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, settings);
 
         library.name = "EffectTemplates";
 
         for (const path of classPaths) await this.pullEffectTemplate(library, builder, path, scriptClassPaths.includes(path));
-        for (const path of soundPaths) library.sounds[path] = await this.pullSoundPath(builder, path);
+        for (const path of soundPaths) library.sounds[path] = await this.pullSoundPath(builder, path, requiredSounds);
         for (const path of scriptClassPaths) {
             const [, cls] = await this.fetchScriptClass(path);
 
@@ -2523,8 +2523,8 @@ export class DecodeEngine {
         return this.serializeTransfer(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment));
     }
 
-    public async decodeEffectTemplatesBinary(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = []): Promise<ArrayBuffer> {
-        return this.serializeTransfer(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths));
+    public async decodeEffectTemplatesBinary(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = [], requiredSounds: boolean = true): Promise<ArrayBuffer> {
+        return this.serializeTransfer(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths, requiredSounds));
     }
 
     public async decodeSkillBinary(settings: LoadSettings_T, id: number, level: number, urgent: boolean = false, record: NpcSkillAttack_T = null): Promise<ArrayBuffer> {
@@ -2958,7 +2958,7 @@ export class DecodeEngine {
 
     protected async decodeNpcDefinitions(settings: LoadSettings_T): Promise<INpcDefinition[]> {
         if (!this.cacheNpcDefinitions) {
-            const library = await this.getStoredAssets("npc_runtime", "definitions", settings, async () => Object.assign(new DecodeLibrary(), { npcDefinitions: await this.loadNpcDefinitions() })) as DecodeLibrary & { npcDefinitions: INpcDefinition[] };
+            const library = await this.getStoredAssets("npc_runtime", "definitions-v2", settings, async () => Object.assign(new DecodeLibrary(), { npcDefinitions: await this.loadNpcDefinitions() })) as DecodeLibrary & { npcDefinitions: INpcDefinition[] };
             this.cacheNpcDefinitions = library.npcDefinitions;
         }
 
@@ -3031,6 +3031,7 @@ export class DecodeEngine {
             movementAnimationRate: row.npc_speed as number,
             mesh: row.mesh as string,
             textures: [...row.tex1 as string[], ...row.tex2 as string[]].filter(path => path && path.toLowerCase() !== "none"),
+            alternateTextures: (row.tex2 as string[]).filter(path => path && path.toLowerCase() !== "none"),
             skillAttacks: skillAttacksByNpcId.get(row.tag as number) || [],
             enterEvent: enterEventsById.get(row.tag as number) || null,
             // Engine.dll NpcDataLoad 0x73205d/0x7320ad and 0x732103..0x732159.

@@ -419,10 +419,10 @@ export class DecodeLibraryBuilder {
                     const music = actor.loadSelf() as UMusicVolume;
                     this.pullVolumeCollisionActor(music);
 
-                    if (this.settings.loadAudio === false) break;
                     const musicInfo = music.getDecodeInfo(this.library);
 
-                    this.library.audioList.push(musicInfo);
+                    this.setScriptClass(music, musicInfo);
+                    if (this.settings.loadAudio !== false) this.library.audioList.push(musicInfo);
                     this.library.musicVolumes.push(musicInfo);
                     break;
                 }

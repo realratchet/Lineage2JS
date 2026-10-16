@@ -7,8 +7,11 @@ import { ColliderComponent } from "../physics/components/physics-component";
 import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, StaticMeshBatchInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
 import StaticMeshActor from "./static-mesh-actor";
-import type UnScriptVM from "../ue-script/vm";
-import type { ScriptObjectFactory_T } from "../game/script-component";
+import Actor from "./actor";
+import type { default as UnScriptVM, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
+import { ScriptComponent, type ScriptObjectFactory_T } from "../game/script-component";
+import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import { releaseTouching, type TouchActor_T } from "./components/transform-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -18,8 +21,12 @@ export type CollidingMeshProps_T = { geometry: THREE.BufferGeometry, materials: 
 
 export class CollidingMesh extends LitActorMesh implements ICollidable {
     public readonly isCollidable: boolean = true;
+    declare public readonly isStaticMeshActor: boolean;
     public actorUuid: string;
     public readonly collisionActors: { actor: IStaticMeshActorDecodeInfo; object: StaticMeshActor; primitive: CollisionPrimitive_T<"staticMesh">; firstTriangle: number; triangleCount: number }[] = [];
+    public hasChangedCollisionActors = false;
+    declare public scriptProperties: Map<string, ScriptValue_T>;
+    declare public scriptClassId: string;
 
     protected colliderDesc: ColliderDesc;
     protected rigidbodyDesc: RigidBodyDesc;
@@ -40,13 +47,14 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     protected readonly basedActors = new Set<ICollidable>();
     protected scriptVM: UnScriptVM = null;
     protected scriptObjectFactory: ScriptObjectFactory_T = null;
+    protected scriptComponent: ScriptComponent = null;
 
     public constructor(props: CollidingMeshProps_T) {
         super(props);
 
         (this as any).isStaticMeshActor = true;
 
-        this.collisionProfile = props.collision;
+        this.collisionProfile = props.collision && { ...props.collision };
         this.staticMeshCollision = props.staticMeshCollision;
         this.collisionIndex = props.collisionIndex;
 
@@ -63,6 +71,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
         for (const record of this.collisionActors) if (record.object) record.object.release();
         this.collisionActors.length = 0;
+        this.hasChangedCollisionActors = false;
         for (const { actor, indexCount } of actors) {
             if (!Number.isSafeInteger(indexCount) || indexCount <= 0 || indexCount % 3 || !source || indexOffset + indexCount > source.length) throw new Error(`Actor '${actor.name}' has invalid collision triangles.`);
             const indices = source.subarray(indexOffset, indexOffset + indexCount);
@@ -105,8 +114,56 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         this.scriptVM = vm;
         this.scriptObjectFactory = objectFactory;
 
+        if (this.scriptClassId) {
+            if (this.scriptComponent) this.scriptComponent.setRuntime(vm, objectFactory);
+            else {
+                setScriptObjectProperty(this, "Touching", []);
+                // shortcut: map actors receive callbacks; defer PostBeginPlay until iterator/state initialization exists.
+                this.scriptComponent = this.addComponent(new ScriptComponent(vm, objectFactory, this.scriptClassId));
+            }
+        }
+
         for (const record of this.collisionActors)
             if (record.object) record.object.setScriptRuntime(vm, objectFactory);
+    }
+
+    public getUnrealScriptProperty(id: string): ScriptValue_T {
+        if (!this.scriptProperties) return null;
+        if (id.slice(id.lastIndexOf(".") + 1).toLowerCase() === "location") return this.getWorldPosition(tmpPosition).toArray();
+
+        return Actor.prototype.getUnrealScriptProperty.call(this, id);
+    }
+
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T { return Actor.prototype.callUnrealNative.call(this, call); }
+    public getBaseActor(): ICollidable | null { return Actor.prototype.getBaseActor.call(this); }
+    public isPendingKill(): boolean { return Actor.prototype.isPendingKill.call(this); }
+    public beginTouch(other: TouchActor_T): void { Actor.prototype.beginTouch.call(this, other); }
+    public endTouch(other: TouchActor_T, noNotifySelf = false): void { Actor.prototype.endTouch.call(this, other, noNotifySelf); }
+    public release(notifyDestroyed = true): void { Actor.prototype.release.call(this, notifyDestroyed); }
+
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void { this.setActorProperty(this, id, value); }
+
+    public setActorProperty(actor: CollidingMesh | StaticMeshActor, id: string, value: ScriptValue_T): void {
+        const field = id.slice(id.lastIndexOf(".") + 1);
+
+        if (!actor.scriptProperties) throw new Error(`Actor '${actor.name}' has no UnrealScript property storage.`);
+        setScriptObjectProperty(actor, field, value);
+
+        const profile = actor.getCollisionProfile();
+
+        switch (field.toLowerCase()) {
+            case "bcollideactors": profile.collideActors = !!value; break;
+            case "bcollideworld": profile.collideWorld = !!value; break;
+            case "bblockactors": profile.blockActors = !!value; break;
+            case "bblockplayers": profile.blockPlayers = !!value; break;
+            case "bblockzeroextenttraces": profile.blockZeroExtent = !!value; break;
+            case "bblocknonzeroextenttraces": profile.blockNonZeroExtent = !!value; break;
+            case "bworldgeometry": profile.worldGeometry = !!value; break;
+            case "bonlyaffectpawns": break;
+            default: return;
+        }
+
+        if (actor !== this) this.hasChangedCollisionActors = true;
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {
@@ -174,19 +231,20 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         }
 
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
-        this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
-
         this.rigidbody.setTranslation(this.getWorldPosition(tmpPosition), false);
         this.rigidbody.setRotation(this.getWorldQuaternion(tmpQuaternion), false);
+        this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
 
         return this.collider;
     }
 
     public releaseCollider() {
+        if (this.scriptComponent) releaseTouching(this);
         for (const record of this.collisionActors) {
             if (record.object) record.object.release();
             record.object = null;
         }
+        this.hasChangedCollisionActors = false;
         this.collider = null;
         this.rigidbody = null;
     }

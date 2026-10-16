@@ -565,7 +565,7 @@ export function readInventoryItem(packet: PacketReader): InventoryItem_T {
     return { type1: packet.h(), objectId: packet.d(), itemId: packet.d(), count: packet.d(), type2: packet.h(), customType1: packet.h(), isEquipped: packet.h() !== 0, bodyPart: packet.d(), enchantLevel: packet.h(), customType2: packet.h() };
 }
 
-export type Speeds_T = { runSpd: number, walkSpd: number, swimRunSpd: number, swimWalkSpd: number, airRunSpd?: number, airWalkSpd?: number, moveMultiplier: number, attackSpeedMultiplier: number, collisionRadius: number, collisionHeight: number };
+export type Speeds_T = { runSpd: number, walkSpd: number, swimRunSpd: number, swimWalkSpd: number, airRunSpd?: number, airWalkSpd?: number, moveMultiplier: number, attackSpeedMultiplier: number, collisionRadius: number, collisionHeight: number, originalCollisionRadius?: number, originalCollisionHeight?: number };
 
 export type Appearance_T = { race: Race_T, sex: number, classId: number, hairStyle: number, hairColor: number, face: number, paperdoll: number[], enchantLevel: number };
 

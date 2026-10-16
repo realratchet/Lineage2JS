@@ -23,6 +23,7 @@ export type INpcDefinition = {
     className: string;
     mesh: string;
     textures: string[];
+    alternateTextures: string[];
     skillAttacks: NpcSkillAttack_T[];
     enterEvent: INpcEnterEvent | null;
     sounds: L2JS.Engine.IPawnSoundsDecodeInfo;

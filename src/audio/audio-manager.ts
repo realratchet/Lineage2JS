@@ -783,7 +783,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     public async playInterfaceSound(path: string): Promise<void> {
-        const uri = await this.gameManager.getComponent("asset").loadSound(path);
+        const uri = await this.gameManager.getComponent("asset").loadSound(path, false);
+
+        if (uri === null) return; // UGameEngine::OnInterfacePlaySound 0x7470f7.
 
         await this.playOneShotSound(uri, [0, 0, 0], 1, 1, 0, 0, false); // Engine.dll OnInterfacePlaySound 0x74711b: SOUND_No3D, pitch 1.
     }
@@ -797,8 +799,11 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const sourceMaxDistance = maxDistance === 0 ? sourceRadius * 100 : maxDistance;
 
         const pendingBuffer = this.loadAmbientBuffer(dataUri, "one-shot");
-        await this.ensureUnlocked();
+        const pendingUnlock = this.ensureUnlocked();
         const buffer = await pendingBuffer;
+        // SpawnNTransientEffect 0x104ca91e uses USound.Duration independently of playback.
+        if (buffer && onStarted) onStarted(buffer.duration);
+        await pendingUnlock;
         if (!buffer) return;
 
         const gain = this.audioContext.createGain();
@@ -832,7 +837,6 @@ export class AudioManager implements IEngineComponent<GameManager> {
             if (panner) panner.disconnect();
         };
 
-        if (onStarted) onStarted(buffer.duration);
         source.start(0);
     }
 

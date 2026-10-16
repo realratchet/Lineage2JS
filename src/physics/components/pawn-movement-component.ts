@@ -1,14 +1,16 @@
 import RAPIER from "@dimforge/rapier3d";
 import { Box3, Euler, LoopOnce, Object3D, Quaternion, Sphere, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T } from "../../game/components";
-import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
+import { SCRIPT_NATIVE_EVENT, type ScriptComponent } from "../../game/script-component";
 import { PhysicsComponent } from "./physics-component";
 import { findVolumeTransition } from "../volume-bsp";
+import { pointPrimitive, queryPrimitive } from "../collision-primitive";
+import type PhysicsVolume from "../../objects/physics-volume";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../../objects/objects";
 import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
-import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import { getProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
@@ -19,6 +21,10 @@ const tmpPosition = new Vector3();
 const tmpFloorPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
 const tmpWaterEnd = new Vector3();
+const tmpWaterHitStart = new Vector3();
+const tmpWaterHitEnd = new Vector3();
+const tmpWaterHitLocation = new Vector3();
+const zeroWaterExtent = new Vector3();
 const tmpSwimStart = new Vector3();
 const tmpBodyPosition = new Vector3();
 const tmpMovement = new Vector3();
@@ -50,7 +56,14 @@ const tmpBaseOffset = new Vector3();
 const tmpWalkingStart = new Vector3();
 const tmpWalkingSubStart = new Vector3();
 const tmpDesiredMove = new Vector3();
+const tmpCrouchStart = new Vector3();
+const tmpCrouchEnd = new Vector3();
+const tmpCrouchLocation = new Vector3();
+const tmpCrouchDelta = new Vector3();
+const tmpCrouchExtent = new Vector3();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+const arrMoveTemps = [tmpPosition, tmpBodyPosition, tmpStepPosition, tmpStepNormal, tmpRemaining, tmpNormal, tmpStepUp];
+let moveActorDepth = 0;
 
 const COLLISION_RADIUS = 7.5; // Live retail pawn APawn+752.
 const COLLISION_HEIGHT = 23; // Live retail pawn APawn+756.
@@ -93,6 +106,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected readonly floor = new Vector3(0, 0, 1);
     protected collisionRadius = COLLISION_RADIUS;
     protected collisionHeight = COLLISION_HEIGHT;
+    protected collideActors = true;
     protected readonly analyticalCenter = new Vector3();
     protected readonly analyticalBounds = new Box3();
     protected readonly analyticalOrigin = new Vector3(NaN, NaN, NaN);
@@ -119,6 +133,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected isGrounded = false;
     protected hasStartedPhysics = false;
     protected adjustToFloor = false;
+    protected teleportLanding = false;
+    protected validateLocationPending = false;
+    protected readonly validatePosition = new Vector3();
     protected physicsMode: PhysicsMode_T = "falling";
     protected isWalking = false;
     protected groundSpeed = GROUND_SPEED;
@@ -128,6 +145,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected waterVolume: IWaterVolumeDecodeInfo = null;
     protected readonly ignoredActors = new Set<ICollidable>();
     protected readonly collisionQuery: CollisionQuery_T = { location: null, delta: null, extent: null, sourceIsPlayer: false };
+    protected readonly adjustmentQuery: CollisionQuery_T = { location: tmpBodyPosition, delta: tmpMovement, extent: tmpStepPosition, sourceIsPlayer: false, traceWorld: true, ignorePawns: false, ignoreBases: false };
+    protected readonly crouchQuery: CollisionQuery_T = { location: tmpCrouchLocation, delta: tmpCrouchDelta, extent: tmpCrouchExtent, sourceIsPlayer: false, traceWorld: true, ignorePawns: false, ignoreBases: false };
     protected readonly actorState = new ActorState();
     protected oldRotationYaw = 0;
     protected enterRiseTargetZ: number = null;
@@ -157,10 +176,16 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         const call = data as ScriptNativeCall_T;
         const name = call.name.toLowerCase();
+        const context = call.context as any;
+
+        if (call.index === 262 || name === "setcollision") {
+            if (context !== this.getParent()) throw new Error(`SetCollision for '${context.scriptClassId}' is not implemented by '${this.getParent().name}'.`);
+
+            this.renderManager.getPhysicsManager().setCollision(context, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
+            return;
+        }
 
         if (call.index !== 3970 && name !== "setphysics") return COMPONENT_EVENT_NOT_HANDLED;
-
-        const context = call.context as any;
 
         if (typeof context.setUnrealScriptProperty === "function") context.setUnrealScriptProperty("Physics", call.args[0]);
         else if (context.scriptProperties instanceof Map) context.scriptProperties.set("Physics", call.args[0]);
@@ -176,13 +201,28 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public getBasedActors(): ReadonlySet<ICollidable> { return this.getTransformComponent().getBasedActors(); }
     public addBasedActor(actor: ICollidable) { this.getTransformComponent().addBasedActor(actor); }
     public removeBasedActor(actor: ICollidable) { this.getTransformComponent().removeBasedActor(actor); }
-    public isInteractive(): boolean { return this.renderManager.isSectorCollisionReady(this.getPosition()); }
+    public isInteractive(): boolean {
+        if (!this.renderManager.isSectorCollisionReady(this.getPosition())) return false;
+
+        const owner = this.getParent();
+
+        if (!owner.scriptClassId) return false;
+
+        const level = owner.getUnrealScriptProperty("Level"), main = this.renderManager.getLevel();
+
+        return !!level && (!!main && main.levelInfoActor === level || this.renderManager.getLoadedSectors().some(sector => sector.levelInfoActor === level));
+    }
     public getCollisionProfile(): ActorCollisionProfile_T {
-        this.collisionProfile.collideActors = this.isInteractive();
+        this.collisionProfile.collideActors = this.collideActors && this.isInteractive();
         this.collisionProfile.collisionRadius = this.collisionRadius;
         this.collisionProfile.collisionHeight = this.collisionHeight;
 
         return this.collisionProfile;
+    }
+
+    public setCollideActors(value: boolean): void {
+        this.collideActors = value;
+        this.collisionProfile.collideActors = value && this.isInteractive();
     }
 
     public getCollisionPrimitive(): CollisionPrimitive_T {
@@ -213,6 +253,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected updatePhysics(currentTime: number, deltaTime: number) {
+        this.updateValidateLocation();
+
         if (this.physicsMode === "none" || !this.isInteractive()) return;
 
         if (this.enterRiseTargetZ !== null) {
@@ -222,7 +264,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         const isInteractive = this.isInteractive();
 
-        this.collisionProfile.collideActors = isInteractive;
+        this.collisionProfile.collideActors = this.collideActors && isInteractive;
 
         if (!this.rigidbody || !isInteractive) {
             this.checkAnimationState(deltaTime);
@@ -290,15 +332,18 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public moveSmooth(movement: Vector3, ignoredActor?: ICollidable) {
         if (!this.isInteractive()) return;
 
-        const position = tmpPosition.copy(this.getPosition());
+        const arrSaved = moveActorDepth ? arrMoveTemps.map(value => value.clone()) : null;
         const wasIgnored = ignoredActor && this.ignoredActors.has(ignoredActor);
-
-        if (ignoredActor) this.ignoredActors.add(ignoredActor);
-        this.moveWithWallResponse(position, movement);
-        if (ignoredActor && !wasIgnored) this.ignoredActors.delete(ignoredActor);
-
-        this.getPosition().copy(position);
-        this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
+        try {
+            const position = tmpPosition.copy(this.getPosition());
+            if (ignoredActor) this.ignoredActors.add(ignoredActor);
+            this.moveWithWallResponse(position, movement);
+            this.getPosition().copy(position);
+            this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
+        } finally {
+            if (ignoredActor && !wasIgnored) this.ignoredActors.delete(ignoredActor);
+            if (arrSaved) arrMoveTemps.forEach((value, index) => value.copy(arrSaved[index]));
+        }
     }
 
     protected tickPhysics(deltaTime: number) {
@@ -309,22 +354,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.updateIgnoredActors(position);
         if (this.adjustToFloor) {
             this.adjustToFloor = false;
+            const teleport = this.teleportLanding;
+            this.teleportLanding = false;
 
-            // UGameEngine::AdjustPawnLocation 0x7426ac..0x7427c7.
-            let hit: CheckResult_T = null;
-            let i = 0;
-            for (; i < 30; i++) {
-                const start = tmpFloorPosition.copy(position).addScaledVector(tmpUp, 20 + i * 30);
-                const delta = tmpMovement.set(0, 0, -50 - this.collisionHeight - i * 60);
-                hit = this.castShape(start, delta, true);
-
-                if (hit && hit.location.z !== 0) break;
-            }
-
-            if (i === 30) tmpFloorPosition.copy(position);
-            else tmpFloorPosition.copy(hit.location);
-            if (hit && hit.time * 12 < 1.9) tmpFloorPosition.z += FLOOR_DISTANCE - hit.time * 12;
-            this.physicsManager.farMoveActor(this.getParent(), tmpFloorPosition);
+            this.physicsManager.farMoveActor(this.getParent(), this.findAdjustmentLocation(position, teleport));
             position.copy(this.getPosition());
         }
 
@@ -645,8 +678,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     // APawn::stepUp (0x8cf640) is void; the step only counts when the lifted move is clear (0x8cf859)
-    protected stepUp(position: Vector3, desiredDir: Vector3, movement: Vector3, hit: CheckResult_T) {
-        this.getHitNormal(hit, tmpStepNormal);
+    protected stepUp(position: Vector3, desiredDir: Vector3, movement: Vector3, hit: CheckResult_T | null) {
+        if (hit) this.getHitNormal(hit, tmpStepNormal);
+        else tmpStepNormal.set(0, 0, 0);
 
         let current: CheckResult_T | null = hit;
 
@@ -667,12 +701,17 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.getHitNormal(current, tmpNormal);
 
         if (Math.abs(tmpNormal.z) < MAX_STEP_SIDE_Z && movement.lengthSq() * current.time > STEP_RECURSE_DIST_SQ) {
-            this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
-            tmpStepRemaining.copy(movement).multiplyScalar(1 - current.time);
+            current = this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
+            tmpStepRemaining.copy(movement).multiplyScalar(1 - (current ? current.time : 1));
             this.stepUp(position, desiredDir, tmpStepRemaining, current);
             return;
         }
 
+        this.processHitWall(current.normal, current.actor);
+        position.copy(this.getPosition());
+        if (this.physicsMode === "falling") return;
+
+        this.getHitNormal(current, tmpNormal);
         tmpStepNormal.copy(tmpNormal);
         tmpStepNormal.z = 0;
 
@@ -684,6 +723,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             const slideHit = this.moveActor(position, tmpStepRemaining);
 
             if (slideHit) {
+                this.processHitWall(slideHit.normal, slideHit.actor);
+                position.copy(this.getPosition());
+                if (this.physicsMode === "falling") return;
+
                 this.getHitNormal(slideHit, tmpNormal);
                 twoWallAdjust(desiredDir, tmpStepRemaining, tmpNormal, tmpStepNormal, slideHit.time);
                 this.moveActor(position, tmpStepRemaining);
@@ -691,6 +734,103 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         }
 
         this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
+    }
+
+    protected processHitWall(normal: Vector3, actor: ICollidable): void {
+        if (!actor) return;
+
+        const parent = this.getParent(), script = this.getComponent<ScriptComponent>("script"), vm = script.getVM();
+        const target = actor as unknown as ScriptHost_T;
+        if (target.scriptClassId && vm.invokeNative(parent, target, 303, "IsA", ["Pawn"])) return;
+
+        let controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+        const hitNormal = normal.toArray() as Vector3Arr;
+
+        // APawn::processHitWall 0x8d01b0..0x8d04de.
+        moveActorDepth++;
+        try {
+            if (!parent.getUnrealScriptProperty("bDirectHitWall") && controller) {
+                if (this.acceleration.lengthSq() === 0) return;
+
+                const destination = getProperty(controller, "Destination") as Vector3Arr, location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
+                let x = destination[0] - location[0], y = destination[1] - location[1], z = destination[2] - location[2];
+                let square = x * x + y * y + z * z;
+                let length = Math.sqrt(square);
+                if (square >= 1e-8) { x /= length; y /= length; z /= length; }
+                else x = y = z = 0;
+
+                if (this.physicsMode === "walking") {
+                    hitNormal[2] = z = 0;
+                    square = hitNormal[0] * hitNormal[0] + hitNormal[1] * hitNormal[1];
+                    length = Math.sqrt(square);
+                    if (square >= 1e-8) { hitNormal[0] /= length; hitNormal[1] /= length; }
+                    else hitNormal[0] = hitNormal[1] = 0;
+                    square = x * x + y * y;
+                    length = Math.sqrt(square);
+                    if (square >= 1e-8) { x /= length; y /= length; }
+                    else x = y = 0;
+                }
+
+                if (x * hitNormal[0] + y * hitNormal[1] + z * hitNormal[2] > (getProperty(controller, "MinHitWall") as number)) return;
+                if (vm.call(controller, "NotifyHitWall", [hitNormal.slice(), target])) return;
+
+                if (this.physicsMode !== "falling") {
+                    controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+                    const tryCrouch = this.physicsMode === "walking" && parent.getUnrealScriptProperty("bCanCrouch") && !parent.getUnrealScriptProperty("bIsCrouched") && !(controller && vm.invokeNative(parent, controller, 303, "IsA", ["PlayerController"]));
+                    if (tryCrouch) {
+                        tmpCrouchStart.fromArray(parent.getUnrealScriptProperty("Location") as Vector3Arr);
+                        tmpCrouchEnd.set(tmpCrouchStart.x + this.collisionRadius * x, tmpCrouchStart.y + this.collisionRadius * y, tmpCrouchStart.z + this.collisionRadius * z);
+                        if (this.canCrouchWalk(tmpCrouchStart, tmpCrouchEnd)) return;
+                    }
+
+                    this.moveActor(this.getPosition(), tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
+                    if (tryCrouch) {
+                        tmpCrouchStart.fromArray(parent.getUnrealScriptProperty("Location") as Vector3Arr);
+                        tmpCrouchEnd.set(tmpCrouchStart.x + this.collisionRadius * x, tmpCrouchStart.y + this.collisionRadius * y, tmpCrouchStart.z + this.collisionRadius * z);
+                        if (this.canCrouchWalk(tmpCrouchStart, tmpCrouchEnd)) return;
+                    }
+
+                    controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+                    if (controller && vm.invokeNative(parent, controller, 303, "IsA", ["AIController"])) {
+                        debugger;
+                        throw new Error(`AI controller wall adjustment is not implemented for '${parent.name}'.`);
+                    }
+                }
+            }
+
+            script.call("HitWall", [hitNormal, target]);
+        } finally { moveActorDepth--; }
+    }
+
+    protected canCrouchWalk(start: Vector3, end: Vector3): boolean {
+        const parent = this.getParent();
+        if (!parent.getUnrealScriptProperty("bCanCrouch")) return false;
+
+        const height = parent.getUnrealScriptProperty("CrouchHeight") as number, radius = parent.getUnrealScriptProperty("CrouchRadius") as number;
+        const query = this.crouchQuery;
+        tmpCrouchLocation.copy(start).setZ(start.z + height - this.collisionHeight);
+        tmpCrouchDelta.subVectors(end, start);
+        tmpCrouchExtent.set(0, 0, 0);
+        query.sourceActor = parent;
+        query.sourceProfile = this.collisionProfile;
+        query.sourceCollider = this.collider;
+        query.sourceBody = this.rigidbody;
+        query.sourceIsPlayer = !!(parent as any).isPlayer;
+        query.zeroExtent = true;
+
+        // APawn::CanCrouchWalk 0x8cbca0..0x8cbeb1.
+        const pointHit = this.physicsManager.singleLineCheck(query);
+        if (pointHit && pointHit.actor) return false;
+
+        tmpCrouchExtent.set(radius, radius, height);
+        query.zeroExtent = false;
+        const hit = this.physicsManager.singleLineCheck(query);
+        if (hit && hit.time !== 1) return false;
+
+        parent.setUnrealScriptProperty("bWantsToCrouch", true);
+        parent.setUnrealScriptProperty("bTryToUncrouch", true);
+        parent.setUnrealScriptProperty("UncrouchTime", 0.5);
+        return true;
     }
 
     protected physFalling(position: Vector3, deltaTime: number, iterations: number = 0) {
@@ -768,7 +908,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.calcVelocity(position, tmpAccelDir, deltaTime, this.waterSpeed);
 
         tmpSwimStart.copy(position);
-        tmpMovement.copy(this.velocity).addScaledVector(tmpVelocityDelta.fromArray(volume.zoneVelocity), 25 * deltaTime).multiplyScalar(deltaTime);
+        const body = this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        tmpMovement.copy(this.velocity).addScaledVector(tmpVelocityDelta.fromArray(body.getUnrealScriptProperty("ZoneVelocity") as Vector3Arr), 25 * deltaTime).multiplyScalar(deltaTime);
         const hit = this.moveWithWallResponse(position, tmpMovement);
         const nextVolume = this.getWaterVolume(position);
 
@@ -815,17 +956,13 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.calcVelocity(position, tmpAccelDir, deltaTime, this.airSpeed);
         tmpSwimStart.copy(position);
 
-        const volume = this.getWaterVolume(position);
-        const gravityZ = volume ? volume.gravity[2] : DEFAULT_VOLUME_GRAVITY_Z;
+        const volume = this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        const gravityZ = (volume.getUnrealScriptProperty("Gravity") as Vector3Arr)[2];
 
-        tmpVelocityDelta.set(0, 0, 0);
+        tmpVelocityDelta.fromArray(volume.getUnrealScriptProperty("ZoneVelocity") as Vector3Arr);
 
-        if (volume) {
-            tmpVelocityDelta.fromArray(volume.zoneVelocity);
-
-            if (!(this.getParent() as any).isPlayer && tmpVelocityDelta.lengthSq() <= 90000)
-                tmpVelocityDelta.set(0, 0, 0);
-        }
+        if (!(this.getParent() as any).isPlayer && tmpVelocityDelta.lengthSq() <= 90000)
+            tmpVelocityDelta.set(0, 0, 0);
 
         tmpMovement.copy(this.velocity).add(tmpVelocityDelta).multiplyScalar(deltaTime);
         tmpDesiredDirection.copy(tmpMovement);
@@ -914,22 +1051,78 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return hit;
     }
 
+    public updateWaterHitEffect(volume: PhysicsVolume, primitive: CollisionPrimitive_T): void {
+        if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
+
+        const owner = this.getParent();
+        if (volume !== owner.getUnrealScriptProperty("FootVolume")) owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
+        if (!volume.getUnrealScriptProperty("Brush")) return;
+        if (!primitive) throw new Error(`Water volume '${volume.name}' has no registered primitive.`);
+
+        // APawn::UpdateWaterHitEffect 0x858010; shortcut: GL2UseHitWateEffect stays enabled until graphics settings expose it.
+        const location = owner.getUnrealScriptProperty("Location") as number[], height = this.collisionHeight;
+        tmpWaterHitStart.set(Math.fround(location[0]), Math.fround(location[1]), Math.fround(location[2] + height + 20));
+        tmpWaterHitEnd.set(tmpWaterHitStart.x, tmpWaterHitStart.y, Math.fround(location[2] - height));
+        const hit = queryPrimitive(primitive, tmpWaterHitStart, tmpWaterHitEnd, zeroWaterExtent);
+        const time = hit ? Math.fround(Math.min(1, Math.max(0, hit.time - 0.5 / tmpWaterHitStart.distanceTo(tmpWaterHitEnd)))) : 1;
+
+        if (time === 0) {
+            owner.setUnrealScriptProperty("bSwimAfloat", false);
+            owner.setUnrealScriptProperty("HitLocation", [0, 0, 0]);
+            return;
+        }
+
+        owner.setUnrealScriptProperty("bSwimAfloat", true);
+        tmpWaterHitLocation.set(0, 0, 0);
+        if (hit) {
+            tmpWaterHitLocation.lerpVectors(tmpWaterHitStart, tmpWaterHitEnd, time);
+            tmpWaterHitLocation.set(Math.fround(tmpWaterHitLocation.x), Math.fround(tmpWaterHitLocation.y), Math.fround(tmpWaterHitLocation.z));
+        }
+        if (tmpWaterHitLocation.z - location[2] <= height * 0.8500000238418579) {
+            owner.setUnrealScriptProperty("HitLocation", [0, 0, 0]);
+            return;
+        }
+
+        if (pointPrimitive(primitive, tmpWaterHitLocation, zeroWaterExtent)) tmpWaterHitLocation.set(0, 0, 0);
+        owner.setUnrealScriptProperty("HitLocation", tmpWaterHitLocation.toArray());
+    }
+
     protected getWaterVolume(position: Vector3): IWaterVolumeDecodeInfo | null {
+        if (this.hasStartedPhysics && position.equals(this.getPosition()))
+            return this.getWaterVolumeData(this.getParent().getUnrealScriptProperty("HeadVolume") as unknown as PhysicsVolume);
+
         tmpWaterPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight + WATERLINE_DEPTH);
 
         return this.getWaterVolumeAt(tmpWaterPosition);
     }
 
     protected getWaterVolumeAt(position: Vector3): IWaterVolumeDecodeInfo | null {
-        let selected: IWaterVolumeDecodeInfo = null;
+        const owner = this.getParent(), sectors = this.renderManager.getLoadedSectors();
+        const main = this.renderManager.getLevel(), ownerLevel = owner.getUnrealScriptProperty("Level");
+        const level = main && main.levelInfoActor === ownerLevel ? main : sectors.find(sector => sector.levelInfoActor === ownerLevel);
 
-        for (const sector of this.renderManager.getLoadedSectors()) {
-            const volume = sector.getWaterVolumeAt(position);
+        if (!level) throw new Error(`Pawn '${owner.name}' has no registered level for water selection.`);
 
-            if (volume && (!selected || volume.priority >= selected.priority)) selected = volume;
+        const selected = this.renderManager.getPhysicsManager().getPhysicsVolume(level, position, owner);
+
+        return this.getWaterVolumeData(selected);
+    }
+
+    protected getWaterVolumeData(selected: PhysicsVolume): IWaterVolumeDecodeInfo | null {
+        if (!selected || !selected.getUnrealScriptProperty("bL2WaterVolume")) return null;
+
+        const sectors = this.renderManager.getLoadedSectors(), main = this.renderManager.getLevel();
+        const info = main && main.waterVolumes.find(volume => volume.uuid === selected.actorUuid);
+
+        if (info) return info;
+
+        for (const sector of sectors) {
+            const volume = sector.waterVolumes.find(volume => volume.uuid === selected.actorUuid);
+
+            if (volume) return volume;
         }
 
-        return selected;
+        throw new Error(`Water volume '${selected.name}' has no decoded water data.`);
     }
 
     protected findWaterTransition(position: Vector3, movement: Vector3, startsInWater: boolean): number {
@@ -961,11 +1154,12 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.ignorePawns = !query.sourceIsPlayer;
         query.zeroExtent = false;
 
-        const hit = this.physicsManager.moveActor(query);
+        let hit: CheckResult_T;
+        moveActorDepth++;
+        try { hit = this.physicsManager.moveActor(query, this.getParent()); }
+        finally { moveActorDepth--; }
 
-        position.copy(bodyPosition).addScaledVector(tmpUp, -this.collisionHeight);
-
-        if (position === this.getPosition()) this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
+        position.copy(this.getPosition());
 
         return hit;
     }
@@ -1086,6 +1280,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public goTo(position: Vector3) {
         console.log(`[actor] goTo from=(${this.getPosition().x}, ${this.getPosition().y}, ${this.getPosition().z}) to=(${position.x}, ${position.y}, ${position.z})`);
+        this.validateLocationPending = false;
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
@@ -1095,6 +1290,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public goToActor(actor: Object3D, offset: number = 0) {
+        this.validateLocationPending = false;
         this.actorState.locomotion = true;
         actor.getWorldPosition(this.actorState.desired.position);
         this.actorState.desired.actor = actor;
@@ -1106,6 +1302,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public moveInDirection(direction: Vector3, faceMovement: boolean = true) {
         if (!this.isInteractive()) return;
 
+        this.validateLocationPending = false;
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.getPosition());
         this.actorState.desired.actor = null;
@@ -1119,7 +1316,19 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.desired.faceTarget = actor;
     }
 
+    public stopMove() {
+        this.actorState.locomotion = false;
+        this.actorState.desired.actor = null;
+        this.actorState.desired.faceTarget = null;
+        this.acceleration.set(0, 0, 0);
+        this.desiredRotationYaw = this.rotationYaw;
+        this.hasDesiredRotation = false;
+        this.adjustToFloor = this.teleportLanding = false;
+        this.validateLocationPending = false;
+    }
+
     public stopMoving() {
+        this.validateLocationPending = false;
         this.actorState.locomotion = false;
         this.acceleration.set(0, 0, 0);
         this.velocity.set(0, 0, 0);
@@ -1227,6 +1436,75 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.rigidbody.setNextKinematicTranslation(primitive.center);
     }
 
+    public l2Teleport(position: Vector3) {
+        this.teleportTo(position, true);
+        this.teleportLanding = this.adjustToFloor;
+    }
+
+    public validateLocation(position: Vector3) {
+        this.validateLocationPending = false;
+
+        const parent = this.getParent();
+        const action = parent.getUnrealScriptProperty("NPrimeAction") as any;
+
+        if (action.ActionID || this.getComponent<PawnAttackComponent>("pawnAttack").hasAction()) return;
+
+        const distance = Math.hypot(position.x - this.getPosition().x, position.y - this.getPosition().y);
+
+        if (distance > 2 && distance < 200) {
+            parent.setUnrealScriptProperty("ValidateLocationMoveTime", 0);
+            parent.setUnrealScriptProperty("ValidateLocationSpeed", 0);
+            this.goTo(position);
+            return;
+        }
+
+        if (distance < 200) return;
+
+        this.validatePosition.copy(position);
+        this.validateLocationPending = true;
+        this.updateValidateLocation();
+    }
+
+    protected updateValidateLocation() {
+        if (!this.validateLocationPending || !this.renderManager.isSectorCollisionReady(this.validatePosition)) return;
+
+        this.validateLocationPending = false;
+        this.physicsManager.farMoveActor(this.getParent(), this.findAdjustmentLocation(this.validatePosition, false, true));
+    }
+
+    protected findAdjustmentLocation(position: Vector3, teleport: boolean, validate: boolean = false): Vector3 {
+        // AdjustPawnLocation 0x7426ac / L2_Teleport 0x83bb90 / OnValidateLocation 0x743434.
+        let hit: CheckResult_T = null;
+        let i = 0;
+        const query = this.adjustmentQuery;
+
+        query.sourceActor = this.getParent();
+        query.sourceIsPlayer = !!(this.getParent() as any).isPlayer;
+        query.sourceProfile = this.collisionProfile;
+        query.sourceCollider = this.collider;
+        query.sourceBody = this.rigidbody;
+        query.extent.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
+
+        for (; i < 30; i++) {
+            query.location.copy(position).addScaledVector(tmpUp, teleport ? (i + 1) * 30 : this.collisionHeight + 20 + i * 30);
+            query.delta.set(0, 0, teleport ? -(i + 1) * 60 : -(validate ? 30 : 50) - this.collisionHeight - i * 60);
+            hit = this.physicsManager.singleLineCheck(query);
+
+            if (hit && hit.location.z !== 0) break;
+        }
+
+        if (i === 30) tmpFloorPosition.copy(position);
+        else tmpFloorPosition.copy(hit.location);
+        if (hit && (!(teleport || validate) || i < 30)) {
+            const distance = (teleport || validate ? Math.fround(hit.time) : hit.time) * 12;
+            const minimum = teleport || validate ? Math.fround(1.9) : 1.9;
+
+            if (distance < minimum) tmpFloorPosition.z += (teleport || validate ? (Math.fround(2.4) + minimum) * 0.5 : FLOOR_DISTANCE) - distance;
+        }
+
+        return tmpFloorPosition;
+    }
+
     public teleportTo(position: Vector3, adjustToFloor: boolean = false) {
         this.velocity.set(0, 0, 0);
         this.hasDesiredRotation = false;
@@ -1242,6 +1520,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const isFlying = this.physicsMode === "flying";
 
         this.adjustToFloor = adjustToFloor && !isFlying;
+        this.teleportLanding = false;
+        this.validateLocationPending = false;
         this.setBase(null);
         this.getPosition().copy(position);
         this.isGrounded = false;
@@ -1347,7 +1627,8 @@ function fixedTurn(current: number, desired: number, deltaRate: number): number 
 function twoWallAdjust(desiredDir: Vector3, delta: Vector3, hitNormal: Vector3, oldHitNormal: Vector3, hitTime: number) {
     if (oldHitNormal.dot(hitNormal) <= 0) {
         tmpStepUp.crossVectors(hitNormal, oldHitNormal).normalize();
-        delta.copy(tmpStepUp).multiplyScalar(delta.dot(tmpStepUp) * (1 - hitTime));
+        const distance = delta.dot(tmpStepUp) * (1 - hitTime);
+        delta.copy(tmpStepUp).multiplyScalar(distance);
 
         if (desiredDir.dot(delta) < 0) delta.multiplyScalar(-1);
     } else {

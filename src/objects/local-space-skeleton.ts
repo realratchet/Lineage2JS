@@ -151,7 +151,7 @@ export class LocalSpaceSkeleton extends Skeleton {
         let anchor: Object3D = null;
 
         if (attachment?.absolute) attachment.absolute.removeFromParent();
-        if (absolute) {
+        if (absolute || (object as any).isAttachedMesh) {
             anchor = new Object3D();
             anchor.updateMatrixWorld = frozenUpdateMatrixWorld;
             anchor.updateWorldMatrix = () => {
@@ -264,6 +264,12 @@ export class LocalSpaceSkeleton extends Skeleton {
     }
 
     protected updateAbsoluteAttachment(object: Object3D, bone: Object3D, anchor: Object3D): void {
+        if ((object as any).isAttachedMesh) {
+            // AttachedMeshToWorld 0x94fe80 uses FCoords::OrthoRotation before mesh scale.
+            anchor.matrixWorld.extractRotation(bone.matrixWorld).copyPosition(bone.matrixWorld);
+            return;
+        }
+
         // Engine.dll SetAttachmentLocation 0x94b99d: offset in mesh space, RelativeRotation copied directly at 0x94b9eb.
         const position = object.position;
         const origin = bone.matrixWorld.elements;

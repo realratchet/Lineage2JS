@@ -12,6 +12,7 @@ import ChatBalloon from "../rendering/chat-balloon";
 import LandmarkComponent from "../rendering/components/landmark-component";
 import NDomLayer, { NDOM_EDIT_TEXTURES } from "../nwindow/ndom";
 import NCPlayerStatusWnd from "../nwindow/nc-player-status-wnd";
+import RecordMark from "../nwindow/record-mark";
 import NCAbnormalStatusWnd from "../nwindow/nc-abnormal-status-wnd";
 import NCTargetStatusWnd, { type TargetStatus_T } from "../nwindow/nc-target-status-wnd";
 import NCRestartMenuWnd from "../nwindow/nc-restart-menu-wnd";
@@ -222,6 +223,7 @@ export class NetworkUI {
     protected systemMenuWnd: NCSystemMenuWnd = null;
     protected optionWnd: NCOptionWnd = null;
     protected zoneTitleWnd: NCZoneTitleWnd = null;
+    protected recordMark: RecordMark = null;
     protected messageWnd: NCMessageWnd = null;
     protected dialogBox: NCDialogBox = null;
     protected yesNoDialogBox: NCDialogBox = null;
@@ -497,7 +499,7 @@ export class NetworkUI {
     public async createScreens() {
         if (this.loginWnd) return;
 
-        await this.layer.loadTextures([...NCLoginWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...["graded", "gradec", "gradeb", "gradea", "grades"].map(key => this.strings.symbols[key]), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCSSQMainBoard.getTextures(), ...NCItemEnchantWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCFishViewportWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCOptionWnd.getTextures(), ...NCZoneTitleWnd.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES]);
+        await this.layer.loadTextures([...NCLoginWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...["graded", "gradec", "gradeb", "gradea", "grades"].map(key => this.strings.symbols[key]), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCSSQMainBoard.getTextures(), ...NCItemEnchantWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCFishViewportWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCOptionWnd.getTextures(), ...NCZoneTitleWnd.getTextures(), ...RecordMark.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES]);
 
         const network = this.manNetwork;
 
@@ -1061,6 +1063,7 @@ export class NetworkUI {
         this.macroWnd.onHelp = () => { this.helpWnd.setVisible(!this.helpWnd.isVisible()); if (this.helpWnd.isVisible()) void this.loadHtmlFile(this.helpWnd, "help_macro.htm"); };
         this.macroWnd.onDrop = (id, x, y) => this.registerSkillDrop("macro", id, this.nwindow.canvas.toUI(x), this.nwindow.canvas.toUI(y));
         this.zoneTitleWnd = new NCZoneTitleWnd(this.layer);
+        this.recordMark = new RecordMark(this.layer);
         this.optionWnd = new NCOptionWnd(this.layer);
         this.optionWnd.getOptions = () => this.getGameOptions();
         this.optionWnd.onApply = options => this.setGameOptions(options);
@@ -1083,7 +1086,7 @@ export class NetworkUI {
         this.show(null);
     }
 
-    protected getDOMWindows() { return [this.loginWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.npcItemHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.ssqMainBoard, this.itemEnchantWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.fishViewportWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.macroWnd, this.systemMenuWnd, this.optionWnd, this.zoneTitleWnd, this.messageWnd, this.dialogBox, this.yesNoDialogBox]; }
+    protected getDOMWindows() { return [this.loginWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.npcItemHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.ssqMainBoard, this.itemEnchantWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.fishViewportWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.macroWnd, this.systemMenuWnd, this.optionWnd, this.zoneTitleWnd, this.recordMark, this.messageWnd, this.dialogBox, this.yesNoDialogBox]; }
 
     protected getSavedWindows(): [string, HTMLElement][] { return [["DebugStatsWnd", this.manNetwork.getParent().getComponent("ui").getStatsWindow()], ["InventoryWnd", this.inventoryWnd.element], ["MainWnd", this.mainWnd.element], ["MenuWnd", this.menuWnd.element], ["SystemMenuWnd", this.systemMenuWnd.element], ["OptionWnd", this.optionWnd.element], ["MapWnd", this.mapWnd.element], ["MacroWnd", this.macroWnd.element], ["CommunityWnd", this.communityWnd.element], ["PetWnd", this.petWnd.element], ["SummonedWnd", this.summonedWnd.element], ["PledgePowerWnd", this.pledgePowerWnd.element], ["NPCHtmlViewer", this.npcHtmlViewer.element], ["NPCItemHtmlViewer", this.npcItemHtmlViewer.element], ["HelpHtmlViewer", this.helpWnd.element], ["TradeWnd", this.tradeWnd.element], ["ShopWnd", this.shopWnd.element], ["PreviewShopWnd", this.previewShopWnd.element], ["ManorShopWnd", this.manorShopWnd.element], ["StoreWnd", this.storeWnd.element], ["DeliverWnd", this.deliverWnd.element], ["SelectDeliverWnd", this.selectDeliverWnd.element], ["PrivateShopWnd", this.privateShopWnd.element], ["PrivateBuyWnd", this.privateBuyWnd.element], ["VIPShopWnd", this.vipShopWnd.element], ["RecipeBookWnd", this.recipeBookWnd.element], ["RecipeManufactureWnd", this.recipeManufactureWnd.element], ["RecipeBuyManufactureWnd", this.recipeBuyManufactureWnd.element], ["RecipeTreeWnd", this.recipeTreeWnd.element], ["RecipeShopWnd", this.recipeShopWnd.element], ["RecipeBuyListWnd", this.recipeBuyListWnd.element], ["HennaListWnd", this.hennaListWnd.element], ["HennaInfoWnd", this.hennaInfoWnd.element], ["SSQMainBoard", this.ssqMainBoard.element], ["ItemEnchantWnd", this.itemEnchantWnd.element], ["MatchWnd", this.matchWnd.element], ["PartyRoomWnd", this.partyRoomWnd.element], ["HeroTowerWnd", this.heroTowerWnd.element], ["TrainWnd", this.trainWnd.element], ["FishViewportWnd", this.fishViewportWnd.element], ["CommandInfoWnd", this.commandInfoWnd.element], ["OlympiadControlWnd", this.olympiadControlWnd.element], ["GMWnd", this.gmWnd.element], ["GMMagicSkillWnd", this.gmSkillWnd.element], ["GMInventoryWnd", this.gmInventoryWnd.element], ["GMStoreWnd", this.gmStoreWnd.element], ["GMQuestWnd", this.gmQuestWnd.element], ["GMDetailStatusWnd", this.gmDetailWnd.element], ["GMClanWnd", this.gmClanWnd.element]]; }
 
@@ -1256,6 +1259,8 @@ export class NetworkUI {
 
     public showHtml(html: string) { void this.npcHtmlViewer.show(html); }
     public hideHtml() { this.npcHtmlViewer.hide(); }
+    public setReplayRecording(visible: boolean) { this.recordMark.setVisible(visible && this.screen === "world"); }
+
     public tick(deltaTime: number) {
         this.abnormalStatusWnd.tick(deltaTime / 1000);
         for (const wnd of this.olympiadAbnormalWnds) wnd.tick(deltaTime / 1000);
@@ -1276,6 +1281,7 @@ export class NetworkUI {
         this.commandInfoWnd.tick(deltaTime);
         this.fishViewportWnd.tick(deltaTime / 1000);
 
+        this.recordMark.update(performance.now() / 1000, this.manNetwork.getReplayRecordingTime());
         this.communityWnd.viewer.tick(deltaSeconds);
         this.npcHtmlViewer.tick(deltaSeconds);
         this.npcItemHtmlViewer.tick(deltaSeconds);
@@ -1487,6 +1493,7 @@ export class NetworkUI {
     }
 
     public hideWorld() {
+        this.recordMark.setVisible(false);
         this.zoneTitleWnd.clear();
         this.dialogBox.hide();
         this.yesNoDialogBox.hide();

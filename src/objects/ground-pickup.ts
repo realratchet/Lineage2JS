@@ -8,7 +8,6 @@ import Rotator from "../utils/rotator";
 import type { ActorCollisionProfile_T } from "./objects";
 
 const tmpIdentity = new Matrix4();
-const tmpRotationMatrix = new Matrix4();
 const tmpStart = new Vector3();
 const tmpDelta = new Vector3();
 const tmpExtent = new Vector3();
@@ -38,6 +37,8 @@ export class GroundPickup extends Object3D {
     protected readonly arrRotations: PickupRotation_T[] = [];
     protected readonly landingPosition = new Vector3();
     protected readonly landingNormal = new Vector3();
+    protected readonly tracePosition = new Vector3();
+    protected readonly traceNormal = new Vector3();
     protected readonly effectPosition = new Vector3();
     protected mover: L2NMover = null;
     protected nextPickup: GroundPickup = null;
@@ -72,6 +73,8 @@ export class GroundPickup extends Object3D {
 
         this.dropAnimType = library.pickup.dropAnimType;
         this.dropType = library.pickup.dropType;
+        // OnDropItem 0x74d097..0x74d0f8 omits incoming rotation for animation 5.
+        if (this.dropped && this.dropAnimType === 5) this.quaternion.identity();
         this.collisionRadius = item.collisionRadius;
         this.collisionHeight = item.collisionHeight;
         const mesh = decodeSkinnedMesh(library, library.scriptMeshes[item.mesh.toLowerCase()], item.skins);
@@ -88,8 +91,7 @@ export class GroundPickup extends Object3D {
 
         const type = library.pickup.dropType, index = item.meshIndex;
         const pitch = type === 1 ? -19114 : type === 2 ? -32768 : type === 3 ? 13653 : 0;
-        const heading = new Rotator().setFromRotationMatrix(tmpRotationMatrix.makeRotationFromQuaternion(this.quaternion)).yaw;
-        const yaw = this.origin ? Math.trunc(Math.atan2(this.position.y - this.origin.y, this.position.x - this.origin.x) * vectorRotationScale) + (type === 2 ? 16384 : 32768) - heading : 0;
+        const yaw = this.origin && this.dropAnimType >= 1 && this.dropAnimType <= 3 ? Math.trunc(Math.atan2(this.position.y - this.origin.y, this.position.x - this.origin.x) * vectorRotationScale) + (type === 2 ? 16384 : 32768) : 0;
         const target = new Rotator(type ? pitch - Math.trunc(1310720 * index / 360) : 0, yaw, type ? 16384 : 0);
         const current = new Rotator(target.pitch, target.yaw, target.roll), rate = new Rotator(), base = mesh.quaternion.clone();
 
@@ -152,13 +154,14 @@ export class GroundPickup extends Object3D {
         if (previous) {
             if (!previous.grounded && !previous.mover) return;
 
-            this.position.x = previous.landingPosition.x;
+            this.position.x = previous.tracePosition.x;
         }
         if (!this.renderManager.getSector(this.position)) return;
 
         const physics = this.renderManager.getParent().getComponent("physics");
 
         tmpExtent.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
+        let hit = previous && { location: previous.tracePosition, normal: previous.traceNormal, time: 1, actor: null };
 
         // OnSpawnItem 0x74c5e0..0x74c7dc, OnDropItem 0x74ceb0..0x74d9e8.
         for (let i = 0; i < 500; i++) {
@@ -169,9 +172,17 @@ export class GroundPickup extends Object3D {
             tmpDelta.set(0, 0, -this.collisionHeight - 90 - step * 70);
 
             // SingleLineCheck 0x85dc31..0x85dc42 leaves Location/Normal unchanged on a miss.
-            const hit = physics.singleLineCheck({ location: tmpStart, delta: tmpDelta, extent: tmpExtent, sourceIsPlayer: false, sourceProfile: pickupProfile, traceWorld: true }) || previous && { location: previous.landingPosition, normal: previous.landingNormal, time: 1, actor: null };
+            const result = physics.singleLineCheck({ location: tmpStart, delta: tmpDelta, extent: tmpExtent, sourceIsPlayer: false, sourceProfile: pickupProfile, traceWorld: true });
+            hit = result || hit && { location: hit.location, normal: hit.normal, time: 1, actor: null };
 
-            if (!hit || hit.location.z === 0) continue;
+            if (!hit || hit.location.z === 0) {
+                // OnDropItem 0x74cf7f -> 0x74d933 -> 0x74d9cd reuses ESI after a zero-Z result.
+                if (hit && previous && this.dropped) {
+                    this.reusePreviousPickup(hit.location, hit.normal);
+                    return;
+                }
+                continue;
+            }
 
             const actor = hit.actor as any;
             const script = actor && actor.findComponent("script");
@@ -179,8 +190,7 @@ export class GroundPickup extends Object3D {
             const height = hit.location.z + (actor && !isLevel ? 2 : 0);
             const time = hit.time * 12;
             const offset = time < Math.fround(1.9) ? (Math.fround(2.4) + Math.fround(1.9)) * 0.5 - time : 0;
-            const heading = new Rotator().setFromRotationMatrix(tmpRotationMatrix.makeRotationFromQuaternion(this.quaternion)).yaw;
-            const ownerYaw = this.origin ? Math.trunc(Math.atan2(hit.location.y - this.origin.y, hit.location.x - this.origin.x) * vectorRotationScale) + (this.dropType === 2 ? 16384 : 32768) - heading : 0;
+            const ownerYaw = this.origin && this.dropAnimType >= 1 && this.dropAnimType <= 3 ? Math.trunc(Math.atan2(hit.location.y - this.origin.y, hit.location.x - this.origin.x) * vectorRotationScale) + (this.dropType === 2 ? 16384 : 32768) : 0;
 
             // UGameEngine::OnDropItem 0x74d462..0x74d49d aligns with FVector(Normal.Z, Normal.Y, -Normal.X).
             const pitch = Math.trunc(Math.atan2(-hit.normal.x, Math.hypot(hit.normal.z, hit.normal.y)) * vectorRotationScale);
@@ -196,6 +206,8 @@ export class GroundPickup extends Object3D {
             this.position.z = height - (this.dropType === 3 || this.dropType === 4 ? this.collisionHeight : 0) + offset;
             this.landingPosition.copy(this.position);
             this.landingNormal.copy(hit.normal);
+            this.tracePosition.copy(this.position);
+            this.traceNormal.copy(hit.normal);
             this.previousPickup = null;
             this.effectPosition.copy(hit.location);
             this.effectPosition.z = height - this.collisionHeight * (this.dropType === 1 || this.dropType === 2 ? 1.5 : 1);
@@ -223,7 +235,34 @@ export class GroundPickup extends Object3D {
             return;
         }
 
+        if (previous) previous.nextPickup = null;
         this.renderManager.removePickup(this);
+    }
+
+    protected reusePreviousPickup(location: Vector3, normal: Vector3): void {
+        const previous = this.previousPickup, mesh = this.meshes[0], oldMesh = previous.meshes[0], rotation = previous.arrRotations[0];
+
+        previous.remove(oldMesh);
+        previous.meshes[0] = mesh;
+        this.meshes[0] = oldMesh;
+        previous.add(mesh);
+        rotation.base.copy(this.arrRotations[0].base);
+        if (this.dropAnimType === 1 || this.dropAnimType === 2) {
+            rotation.target.set(rotation.current.pitch, rotation.current.yaw, rotation.current.roll);
+            rotation.rate.set(this.arrRotations[0].rate.pitch, this.arrRotations[0].rate.yaw, this.arrRotations[0].rate.roll);
+        }
+        rotation.current.toQuaternion(mesh.quaternion).multiply(rotation.base);
+        previous.collisionRadius = this.collisionRadius;
+        previous.collisionHeight = this.collisionHeight;
+        previous.tracePosition.copy(location);
+        previous.traceNormal.copy(normal);
+        previous.dropSound = this.dropSound;
+        previous.nextPickup = this.nextPickup;
+        if (this.nextPickup) this.nextPickup.previousPickup = previous;
+        this.nextPickup = null;
+        previous.updateBounds();
+        this.renderManager.removePickup(this);
+        if (previous.grounded) previous.playDropSound();
     }
 
     protected addDropEffect(): void {

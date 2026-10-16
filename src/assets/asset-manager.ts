@@ -485,16 +485,18 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return this.arrCursors[index];
     }
 
-    public loadSound(path: string): Promise<string> {
-        const key = path.toLowerCase();
+    public loadSound(path: string, required: boolean = true): Promise<string> {
+        const key = required ? path.toLowerCase() : `${path.toLowerCase()}:optional`;
 
-        if (!this.cacheSounds.has(key)) this.cacheSounds.set(key, this.decodeSound(path));
+        if (!this.cacheSounds.has(key)) this.cacheSounds.set(key, this.decodeSound(path, required));
 
         return this.cacheSounds.get(key);
     }
 
-    protected async decodeSound(path: string): Promise<string> {
-        const library = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [path]);
+    protected async decodeSound(path: string, required: boolean): Promise<string> {
+        const library = await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [path], [], required);
+
+        if (library.sounds[path] === null) return null;
         const sound = library.soundBlobCache.get(library.sounds[path]);
 
         if (!sound || !sound.uri) throw new Error(`Sound '${path}' has no decoded audio.`);
@@ -833,7 +835,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return Object.assign(Object.create(Object.getPrototypeOf(library)), library, { sourceLibrary: library, npcSkillAttacks: library.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })) });
     }
 
-    protected resolveNpc(selector: string | number): Promise<INpcDefinition> {
+    public resolveNpc(selector: string | number): Promise<INpcDefinition> {
         if (!this.cacheNpcs.has(selector)) this.cacheNpcs.set(selector, this.decodeWorker.resolveNpc(selector, this.loadSettings));
 
         return this.cacheNpcs.get(selector);
@@ -918,6 +920,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         }
 
         actor.addComponent(new PawnAttackComponent(renderManager, actor.getAnimationNames(), library.npcSkillAttacks, library.npcBow));
+        actor.setUnrealScriptProperty("NpcClassID", npc.id);
 
         if (!position) {
             tmpNpcFloorStart.copy(actor.position);
@@ -1033,7 +1036,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected setSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): void {
         sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
         sector.traverse((object: any) => {
-            if (!object.isVolume && (!object.collisionActors || object.collisionActors.length === 0)) return;
+            if (!object.isVolume && !object.isStaticMeshActor) return;
 
             object.setScriptRuntime(sector.scriptVM, classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
         });

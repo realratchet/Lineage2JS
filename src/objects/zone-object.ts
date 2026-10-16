@@ -6,6 +6,7 @@ import type { TerrainDecoration } from "./terrain-decoration";
 import { encompassesVolume } from "../physics/volume-bsp";
 import { GameObject } from "../game/components";
 import PhysicsVolume from "./physics-volume";
+import MusicVolume from "./music-volume";
 import Actor from "./actor";
 import { setScriptObjectProperty } from "./components/actor-ownership-component";
 import type { ScriptObjectFactory_T } from "../game/script-component";
@@ -243,9 +244,11 @@ export class SectorObject extends GameObject {
     public readonly gridBounds = new Box3();
 
     public musicVolumes?: IMusicVolumeDecodeInfo[];
+    public musicVolumeInfos: IMusicVolumeDecodeInfo[] = [];
     public waterVolumes?: IWaterVolumeDecodeInfo[];
     public physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
     public readonly physicsVolumeActors: PhysicsVolume[] = [];
+    public readonly musicVolumeActors: MusicVolume[] = [];
     public levelInfoActor: Actor = null;
     public readonly zoneInfoActors: Actor[] = [];
     protected physicsVolumeObjectFactory: ScriptObjectFactory_T = null;
@@ -292,11 +295,12 @@ export class SectorObject extends GameObject {
     public setPhysicsVolumeScriptRuntime(objectFactory: ScriptObjectFactory_T): void {
         this.physicsVolumeObjectFactory = objectFactory;
         this.createZoneInfoActors();
-        for (const actor of new Set([this.levelInfoActor, ...this.zoneInfoActors])) actor.setScriptRuntime(this.scriptVM, objectFactory);
+        for (const actor of new Set([this.levelInfoActor, ...this.zoneInfoActors])) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
         this.createPhysicsVolumeActors();
-        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, objectFactory);
+        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
+        this.createMusicVolumeActors();
         const volume = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
-        if (volume) volume.setScriptRuntime(this.scriptVM, objectFactory);
+        if (volume) volume.setScriptRuntime(this.scriptVM, objectFactory, false);
     }
 
     public createZoneInfoActors(): void {
@@ -321,11 +325,11 @@ export class SectorObject extends GameObject {
             setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
             setScriptObjectProperty(volume, "bNoDelete", true);
             setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
-            volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+            volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
         } else if (this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume")) {
             throw new Error(`Level '${this.levelInfo.name}' has an unresolved PhysicsVolume.`);
         }
-        for (const actor of actors.values()) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+        for (const actor of actors.values()) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
     }
 
     public releaseZoneInfoActors(): void {
@@ -351,7 +355,7 @@ export class SectorObject extends GameObject {
         this.scriptVM.initializeHost(info as any);
         const volume = new PhysicsVolume(info);
         setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
-        volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+        volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
         setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
         setScriptObjectProperty(volume, "Priority", -1000000);
         setScriptObjectProperty(volume, "bNoDelete", true);
@@ -365,12 +369,30 @@ export class SectorObject extends GameObject {
         const cached = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
         for (const info of this.physicsVolumes) this.physicsVolumeActors.push(cached && cached.actorUuid === info.uuid ? cached : new PhysicsVolume(info));
         for (const actor of this.physicsVolumeActors) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
-        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory);
+        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
     }
 
     public releasePhysicsVolumeActors(): void {
         for (const actor of this.physicsVolumeActors) actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
         this.physicsVolumeActors.length = 0;
+    }
+
+    public createMusicVolumeActors(): void {
+        if (this.musicVolumeActors.length || !this.musicVolumeInfos.length) return;
+
+        for (const info of this.musicVolumeInfos) {
+            if (!info.scriptClassId || !info.scriptProperties) throw new Error(`Volume '${info.name}' has no decoded script data.`);
+
+            const actor = new MusicVolume(info);
+            actor.setUnrealScriptProperty("Level", this.levelInfoActor);
+            actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.musicVolumeActors.push(actor);
+        }
+    }
+
+    public releaseMusicVolumeActors(): void {
+        for (const actor of this.musicVolumeActors) actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        this.musicVolumeActors.length = 0;
     }
 
     public setLights(lights: DynamicLight[]): this {

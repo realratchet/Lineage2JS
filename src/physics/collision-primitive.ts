@@ -886,17 +886,17 @@ function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Ve
 
             if (!intersectPlanes(a, b)) continue;
 
-            if ((flags & 3) === 3) {
+            if ((flags & 3) === 3 && a[1] * b[1] + a[2] * b[2] > 0.0010000000474974513) {
                 tmpN.set(0, -tmpD.z, tmpD.y).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
                 if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
             }
-            if ((flags & 12) === 12) {
+            if ((flags & 12) === 12 && a[0] * b[0] + a[2] * b[2] > 0.0010000000474974513) {
                 tmpN.set(tmpD.z, 0, -tmpD.x).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
                 if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
             }
-            if ((flags & 48) === 48) {
+            if ((flags & 48) === 48 && a[0] * b[0] + a[1] * b[1] > 0.0010000000474974513) {
                 tmpN.set(-tmpD.y, tmpD.x, 0).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
                 if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;

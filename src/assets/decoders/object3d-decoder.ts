@@ -573,7 +573,8 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
     sector.setLights(library.lightActors.map(info => decodeLight(library, info)))
     library.skyZoneInfos.forEach(info => sector.add(decodeObject3D(library, info)));
-    sector.musicVolumes = library.musicVolumes;
+    sector.musicVolumeInfos = library.musicVolumes;
+    sector.musicVolumes = library.musicVolumes.filter(volume => library.audioList.some(info => info.uuid === volume.uuid));
     sector.waterVolumes = library.waterVolumes;
     sector.physicsVolumes = library.physicsVolumes;
     sector.ambientSounds = library.ambientSounds;

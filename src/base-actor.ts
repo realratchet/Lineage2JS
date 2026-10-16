@@ -75,10 +75,20 @@ export class BaseActor extends GameObject implements ICollidable {
         if (isOnVehicle !== null) this.setUnrealScriptProperty("bGetOnVehicle", isOnVehicle);
         if (loadingResourceRef !== null) this.setUnrealScriptProperty("LoadingResourceRef", loadingResourceRef);
         if (createdResource !== null) this.setUnrealScriptProperty("bCreatedResource", createdResource);
+        for (const field of ["bCollideActors", "bCollideWorld", "bBlockActors", "bBlockPlayers", "bBlockZeroExtentTraces", "bBlockNonZeroExtentTraces", "bWorldGeometry"])
+            this.setUnrealScriptProperty(field, this.getStoredUnrealScriptProperty(field));
         this.setCollisionSize(this.getStoredUnrealScriptProperty("CollisionRadius") as number, this.getStoredUnrealScriptProperty("CollisionHeight") as number);
     }
 
-    public beginPlay(): void { this.scriptComponent?.beginPlay(); }
+    public beginPlay(): void {
+        this.scriptComponent?.beginPlay(() => {
+            if (this.renderManager.getLevel()) {
+                const physics = this.renderManager.getPhysicsManager();
+                physics.setPawnZone(this, false, true);
+                physics.setPawnVolumes(this);
+            }
+        });
+    }
 
     public resolveUnrealObject(id: string): string { return id; }
 
@@ -157,6 +167,18 @@ export class BaseActor extends GameObject implements ICollidable {
             }
 
         this.scriptProperties.set(property, value);
+        switch (field.toLowerCase()) {
+            case "bcollideactors":
+                this.movementComponent.setCollideActors(!!value);
+                this.renderManager.getPhysicsManager().updatePawnCollision(this);
+                break;
+            case "bcollideworld": this.movementComponent.getCollisionProfile().collideWorld = !!value; break;
+            case "bblockactors": this.movementComponent.getCollisionProfile().blockActors = !!value; break;
+            case "bblockplayers": this.movementComponent.getCollisionProfile().blockPlayers = !!value; break;
+            case "bblockzeroextenttraces": this.movementComponent.getCollisionProfile().blockZeroExtent = !!value; break;
+            case "bblocknonzeroextenttraces": this.movementComponent.getCollisionProfile().blockNonZeroExtent = !!value; break;
+            case "bworldgeometry": this.movementComponent.getCollisionProfile().worldGeometry = !!value; break;
+        }
         if (field.toLowerCase() === "drawscale" || field.toLowerCase() === "drawscale3d") this.dispatchComponentEvent(MESH_SCALE_CHANGED_EVENT);
     }
 
@@ -237,8 +259,12 @@ export class BaseActor extends GameObject implements ICollidable {
     public getBoneWorldPosition(name: string | number, target: Vector3, offset?: Vector3): Vector3 { return this.getAnimationComponent().getBoneWorldPosition(name, target, offset); }
 
     public getEffectTargetLocation(target: Vector3): Vector3 {
-        // Retail Engine.u Pawn.GetEffTargetLocation directly uses EffectSpawnBoneIdx; no SpineBone fallback.
-        const index = this.scriptComponent ? this.getUnrealScriptProperty("EffectSpawnBoneIdx") as number : this.effectSpawnBoneIndex;
+        if (this.scriptComponent) {
+            this.scriptComponent.call("GetEffTargetLocation", [{ get: () => target.toArray(), set: value => target.fromArray(value as Vector3Arr) } as any]);
+            return target;
+        }
+
+        const index = this.effectSpawnBoneIndex;
 
         if (!Number.isInteger(index)) throw new Error(`${this.name} has no effect target bone index.`);
 
@@ -310,9 +336,11 @@ export class BaseActor extends GameObject implements ICollidable {
     public playAnimation(animationName: string, tweenTime: number = 0.1, rate: number = 1, loop: boolean = true, restart: boolean = false): void { this.getAnimationComponent().play(animationName, tweenTime, rate, loop, restart); }
 
     public goTo(position: Vector3): void { this.movementComponent.goTo(position); }
+    public validateLocation(position: Vector3): void { this.movementComponent.validateLocation(position); }
     public goToActor(actor: Object3D, offset: number = 0): void { this.movementComponent.goToActor(actor, offset); }
     public moveInDirection(direction: Vector3, faceMovement: boolean = true): void { this.movementComponent.moveInDirection(direction, faceMovement); }
     public faceActor(actor: Object3D | null): void { this.movementComponent.faceActor(actor); }
+    public stopMove(): void { this.movementComponent.stopMove(); }
     public stopMoving(): void { this.movementComponent.stopMoving(); }
     public setWalking(isWalking: boolean): void { this.movementComponent.setWalking(isWalking); }
     public isIdle(): boolean { return this.movementComponent.isIdle(); }
@@ -331,6 +359,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public resetRotationYaw(yaw: number): void { this.movementComponent.resetRotationYaw(yaw); }
     public getRotationYaw(): number { return this.movementComponent.getRotationYaw(); }
     public setCollisionSize(collisionRadius: number, collisionHeight: number): void { this.movementComponent.setCollisionSize(collisionRadius, collisionHeight); }
+    public l2Teleport(position: Vector3): void { this.movementComponent.l2Teleport(position); }
     public teleportTo(position: Vector3, adjustToFloor: boolean = false): void { this.movementComponent.teleportTo(position, adjustToFloor); }
     public adjustLocation(position: Vector3): void { this.movementComponent.adjustLocation(position); }
 
