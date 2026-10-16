@@ -9,6 +9,7 @@ const bundleConfigs = {
     mode: "development",
     devtool: "source-map",
     minimize: false,
+    httpAssets: process.env.HTTP_ASSETS === "1",
     dirOutput
 };
 

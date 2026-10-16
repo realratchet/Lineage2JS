@@ -14,7 +14,7 @@ body {
         display: block;
     }
 
-    viewport.sector-precache {
+    viewport.sector-precache, viewport.asset-source {
         display: grid;
         place-items: center;
         background: #0c0c0c;

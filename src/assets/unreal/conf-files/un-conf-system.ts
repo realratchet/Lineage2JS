@@ -1,6 +1,7 @@
 
 import BaseConfigFile from "./un-base-config";
 import { consumeNextValue, skipToNextToken } from "./conf-parser";
+import fetchAsset from "../../asset-source";
 
 export type ClippingRangeConfig_T = {
     staticMesh: number;
@@ -154,9 +155,10 @@ export async function getUserConfig(): Promise<UserConfig_T> {
     const defaults = new UConfigSystem("assets/system/l2.ini");
     const options = new UConfigSystem("assets/system/Option.ini");
     const user = new UConfigSystem("assets/system/user.ini");
+    const hasOptions = (await fetchAsset(options.path)).ok; // retail writes Option.ini on first run, a fresh install has none
 
-    await Promise.all([defaults.decode(), options.decode(), user.decode()]);
-    await Promise.all([defaults.load(), options.load(), user.loadCamera()]);
+    await Promise.all([defaults.decode(), hasOptions && options.decode(), user.decode()]);
+    await Promise.all([defaults.load(), hasOptions && options.load(), user.loadCamera()]);
 
     for (const key of options.definedClippingKeys)
         (defaults.clippingRange as any)[key] = (options.clippingRange as any)[key];

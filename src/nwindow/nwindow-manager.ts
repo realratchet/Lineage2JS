@@ -3,7 +3,7 @@ import NWindowCanvas from "./nwindow-canvas";
 import type { default as NWnd, NMouseEvent_T } from "./nwnd";
 import type AssetManager from "../assets/asset-manager";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
-import fetchAssetHandle from "../assets/unreal/asset-handle";
+import fetchAsset from "../assets/asset-source";
 
 type TextInputHandler_T = { onTextInput(text: string): void, onTextSubmit(text: string, isShift: boolean): void, onTextBlur(): void };
 
@@ -114,9 +114,11 @@ export class NWindowManager {
 
         if (!file) throw new Error(`TrueFont '${font.name}' has no game font asset.`);
 
-        const handle = await fetchAssetHandle(`assets/system/${file}`);
-        const readable = await handle.getReadable();
-        const face = new FontFace("L2ZoneTitle", readable.buffer, { weight: String(font.weight), style: font.italic ? "italic" : "normal" });
+        const response = await fetchAsset(`assets/system/${file}`);
+
+        if (!response.ok) return; // retail takes TrueFonts from the OS, an untouched client folder doesn't ship them
+
+        const face = new FontFace("L2ZoneTitle", await response.arrayBuffer(), { weight: String(font.weight), style: font.italic ? "italic" : "normal" });
 
         await face.load();
         document.fonts.add(face);

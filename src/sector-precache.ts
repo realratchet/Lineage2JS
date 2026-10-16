@@ -1,6 +1,7 @@
 import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import fetchAsset from "./assets/asset-source";
 
 type PrecacheView_T = {
     progress: HTMLProgressElement,
@@ -40,7 +41,7 @@ function formatBytes(bytes: number): string {
 }
 
 async function buildSectorCache(view: PrecacheView_T, loadSettings: LoadSettings_T): Promise<void> {
-    const assetList = await (await fetch("asset-list.json")).json();
+    const assetList = await (await fetchAsset("asset-list.json")).json();
     const sectors = Object.keys(assetList.supported)
         .filter(path => /^maps\/\d+_\d+\.unr$/.test(path))
         .map(path => path.slice("maps/".length, -".unr".length))

@@ -2,11 +2,12 @@ import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSet
 import type { ICharacterArmorSelection, ICharacterGroup, INpcDefinition, NpcSkillAttack_T } from "@l2js/engine/contracts/pawn";
 
 import type { TrueFont_T } from "../unreal/conf-files/un-conf-ttfont-info";
+import type { AssetFiles_T } from "../asset-source";
 
 export type ForgetSharedTexturesMessage_T = { type: "forgetSharedTextures"; keys: string[] };
 export type ConfirmSharedTexturesMessage_T = { type: "confirmSharedTextures"; keys: string[] };
 
-export type InitMessage_T = { type: "init"; };
+export type InitMessage_T = { type: "init"; assetFiles: AssetFiles_T; };
 
 export type DecodeMessage_T = {
     type: "decode";
@@ -30,7 +31,8 @@ export type RecipeInfo_T = { id: number; itemId: number; level: number; productI
 export type HennaInfo_T = { dyeItemId: number; name: string; icon: string; addName: string; description: string; };
 export type ZoneName_T = { id: number; color: number; sectorX: number; sectorY: number; top: number; bottom: number; name: string; };
 export type ZoneNameMask_T = { width: number; height: number; pixels: Uint8Array; };
-export type GameStrings_T = { trueFonts: Record<string, TrueFont_T>; zoneNames: ZoneName_T[]; zoneNameMasks: Record<string, ZoneNameMask_T>; socialSounds: Record<number, { sound: string; volume: number; radius: number; }[]>; systemMessages: Record<number, string>; systemMessageColors: Record<number, number>; systemMessageGroups: Record<number, number>; systemMessageSounds: Record<number, string>; systemMessageVoices: Record<number, string>; sysStrings: Record<number, string>; serverNames: Record<number, string>; npcNames: Record<number, string>; npcPassiveSkills: Record<number, number[]>; npcTitles: Record<number, string>; npcTitleColors: Record<number, number>; obsceneWords: string[]; residences: Record<number, string>; quests: QuestInfo_T[]; recipes: RecipeInfo_T[]; hennas: Record<number, HennaInfo_T>; skillIcons: Record<number, string>; skillCastStyles: Record<string, number>; skillRecords: Record<string, NpcSkillAttack_T>; skillInfos: Record<string, SkillInfo_T>; actions: Record<number, { name: string, icon: string, type: number, category: number, allowedNpcIds: number[], command: string, macroCommand: string, requiresMount: boolean }>; logonSpots: [number, number, number, number][]; classNames: Record<number, string>; skillNames: Record<number, string>; skillCommands: Record<string, number>; commands: Record<number, string>; itemNames: Record<number, string>; itemIcons: Record<number, string>; itemInfos: Record<number, ItemInfo_T>; symbols: Record<string, string>; };
+export type BitmapFontSource_T = { texture: string; glyph: string; };
+export type GameStrings_T = { trueFonts: Record<string, TrueFont_T>; bitmapFonts: { small: BitmapFontSource_T; large: BitmapFontSource_T; }; zoneNames: ZoneName_T[]; zoneNameMasks: Record<string, ZoneNameMask_T>; socialSounds: Record<number, { sound: string; volume: number; radius: number; }[]>; systemMessages: Record<number, string>; systemMessageColors: Record<number, number>; systemMessageGroups: Record<number, number>; systemMessageSounds: Record<number, string>; systemMessageVoices: Record<number, string>; sysStrings: Record<number, string>; serverNames: Record<number, string>; npcNames: Record<number, string>; npcPassiveSkills: Record<number, number[]>; npcTitles: Record<number, string>; npcTitleColors: Record<number, number>; obsceneWords: string[]; residences: Record<number, string>; quests: QuestInfo_T[]; recipes: RecipeInfo_T[]; hennas: Record<number, HennaInfo_T>; skillIcons: Record<number, string>; skillCastStyles: Record<string, number>; skillRecords: Record<string, NpcSkillAttack_T>; skillInfos: Record<string, SkillInfo_T>; actions: Record<number, { name: string, icon: string, type: number, category: number, allowedNpcIds: number[], command: string, macroCommand: string, requiresMount: boolean }>; logonSpots: [number, number, number, number][]; classNames: Record<number, string>; skillNames: Record<number, string>; skillCommands: Record<string, number>; commands: Record<number, string>; itemNames: Record<number, string>; itemIcons: Record<number, string>; itemInfos: Record<number, ItemInfo_T>; symbols: Record<string, string>; };
 export type PlayerSkillInfo_T = { id: number; level: number; name: string; animationCategory: string; hitTime: number; castRange: number; previewTarget?: "self"; };
 
 export type DecodeCharacterEquipmentMessage_T = { type: "decodeCharacterEquipment"; requestId: number; settings: LoadSettings_T; charIndex: number; hairVariant: number; equipment: L2JS.Engine.ICharacterEquipment; };

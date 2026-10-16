@@ -33,7 +33,7 @@ export class NCZoneTitleWnd {
 
         if (!info) throw new Error(`Zone title TrueFont is not configured.`);
 
-        this.font = `${info.italic ? "italic " : ""}${info.weight} ${Math.round(info.size * 96 / 72)}px L2ZoneTitle`;
+        this.font = `${info.italic ? "italic " : ""}${info.weight} ${Math.round(info.size * 96 / 72)}px L2ZoneTitle, ${info.name}`;
         this.setFont();
         const metrics = this.context.measureText("A");
 

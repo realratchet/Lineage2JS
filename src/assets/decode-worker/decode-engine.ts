@@ -39,6 +39,7 @@ import type { IAnimatedSpriteDecodeInfo, IDataTextureDecodeInfo, ITextureDecodeI
 import type { UMaterial } from "@l2js/engine/un-material";
 import type { USound } from "@l2js/engine/un-sound";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
+import fetchAsset from "../asset-source";
 
 enum EPathStyle_T { PATHSTYLE_Linear, PATHSTYLE_Bezier }
 
@@ -433,6 +434,16 @@ function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: n
     }
 }
 
+function getLanguageValue(localization: UConfigLocalization, key: string): string {
+    const languageSet = localization.getProperties("LanguageSet");
+    const language = languageSet.find(property => property.name === languageSet.find(property => property.name === "Language").value).value;
+    const property = localization.getProperties(language).find(property => property.name.toLowerCase() === `${language}_${key}`.toLowerCase());
+
+    if (!property) throw new Error(`localization.ini has no '${language}_${key}'.`);
+
+    return property.value;
+}
+
 export class DecodeEngine {
     protected assetLoader: AssetLoader = null;
     protected hasSweptCache = false;
@@ -471,7 +482,7 @@ export class DecodeEngine {
     }
 
     public async initialize(): Promise<void> {
-        const assetList = await (await fetch("asset-list.json")).json();
+        const assetList = await (await fetchAsset("asset-list.json")).json();
 
         for (const path of assetList.unsupported)
             if (path.toLowerCase().endsWith(".int")) this.localizationFiles.set(path.toLowerCase(), path);
@@ -1705,6 +1716,11 @@ export class DecodeEngine {
         await trueFontInfo.decode();
         await trueFontInfo.load();
 
+        const localization = new UConfigLocalization("assets/system/localization.ini");
+
+        await localization.decode();
+        await localization.load();
+
         const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols, commands, npcNames, obscene, quests, residences, recipes, hennas, zoneNames, zoneNameMasks, npcGroups] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_SYSTEMMSG_E_DAT, "assets/system/systemmsg-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SYSSTRING_E_DAT, "assets/system/sysstring-e.dat").asReadable()).decode(),
@@ -1773,6 +1789,7 @@ export class DecodeEngine {
 
         return {
             trueFonts: trueFontInfo.fonts,
+            bitmapFonts: { small: { texture: getLanguageValue(localization, "Font"), glyph: getLanguageValue(localization, "Glyph") }, large: { texture: getLanguageValue(localization, "Font2"), glyph: getLanguageValue(localization, "Glyph2") } },
             zoneNames: zoneNames.datarows.map((row: any) => ({ id: row.nbr, color: row.zone_color_id, sectorX: row.x_world_grid, sectorY: row.y_world_grid, top: row.top_z, bottom: row.bottom_z, name: row.zone_name })),
             zoneNameMasks,
             socialSounds,

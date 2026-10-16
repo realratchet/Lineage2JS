@@ -1,4 +1,5 @@
 import type { ILazyAssetHandle, IReadyAssetHandle } from "@l2js/core";
+import fetchAsset from "../asset-source";
 
 type FileSystemSyncAccessHandle_T = {
     read(buffer: BufferSource, options?: { at: number }): number;
@@ -31,9 +32,9 @@ async function fetchCached(path: string): Promise<LazyFileSystemHandle> {
         const existingFile = await fh.getFile();
 
         if (existingFile.size === 0) {
-            const response = await fetch(path);
+            const response = await fetchAsset(path);
 
-            if (!response.ok) throw new Error(response.statusText);
+            if (!response.ok) throw new Error(`${path}: ${response.statusText}`);
 
             const writable = await fh.createWritable();
             await response.body!.pipeTo(writable);
@@ -44,9 +45,9 @@ async function fetchCached(path: string): Promise<LazyFileSystemHandle> {
 }
 
 async function uncachedFetch(path: string): Promise<IReadyAssetHandle> {
-    const response = await fetch(path);
+    const response = await fetchAsset(path);
 
-    if (!response.ok) throw new Error(response.statusText);
+    if (!response.ok) throw new Error(`${path}: ${response.statusText}`);
 
     const buffer = await response.arrayBuffer();
 

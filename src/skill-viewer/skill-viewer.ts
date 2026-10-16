@@ -11,6 +11,8 @@ import { ZUpOrbitControls } from "../rendering/camera/controllers/zup-orbit-cont
 import type { AssetList_T } from "../assets/asset-manager";
 import type { HTMLViewportElement_T } from "../rendering/render-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import fetchAsset from "../assets/asset-source";
+import pickAssetSource from "../asset-source-picker";
 
 const FLOOR_SIZE = 20000;
 
@@ -49,11 +51,13 @@ export class SkillViewerGame extends GameManager {
 export async function runSkillViewer(isPlayer: boolean = false): Promise<void> {
     const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 114 }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
 
+    await pickAssetSource();
+
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
 
     viewport.classList.add("skill-viewer-viewport");
 
-    const assetList = await (await fetch("asset-list.json")).json();
+    const assetList = await (await fetchAsset("asset-list.json")).json();
     const game = await SkillViewerGame.initialize(viewport, assetList, loadSettings, isPlayer ? 0 : undefined);
     const renderManager = game.getComponent("render"), assetManager = game.getComponent("asset");
     const controls = new ZUpOrbitControls(renderManager.camera, renderManager.renderer.domElement);

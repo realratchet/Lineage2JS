@@ -1,4 +1,6 @@
 import type AssetManager from "../assets/asset-manager";
+import type { BitmapFontSource_T } from "../assets/decode-worker/decode-protocol";
+import fetchAsset from "../assets/asset-source";
 
 type UIImage_T = { frames: ImageBitmap[], frameTime: number };
 type Glyph_T = { u: number, v: number, w: number, h: number };
@@ -10,11 +12,6 @@ export enum DigitFont_T { SMALL, NORMAL, LARGE } // NWindow 0x10013570 canvas di
 
 const DIGIT_FONTS: [string, number, number][] = [["SEK.cbui13", 5, 5], ["L2UI.NWindow.Number", 8, 8], ["L2UI_CH3.Etc.XLargeNumber", 11, 14]];
 const DIGIT_CELLS = "0123456789HMP/%.C:";
-
-const FONT_SOURCES: [FontType_T, string, string][] = [
-    [FontType_T.SMALL, "assets/system/smallfont-r.gly", "L2Font-r.SmallFont-r"],
-    [FontType_T.LARGE, "assets/system/largefont-r.gly", "L2Font-r.LargeFont-r"]
-];
 
 function parseGlyphs(buffer: ArrayBuffer): Map<number, Glyph_T> { // NL2Font::Load 0x10088a50 legacy layout; GetGlyph 0x10088400 takes the first range holding a non-empty rect.
     const view = new DataView(buffer);
@@ -200,10 +197,13 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     }
 
     public async loadFonts() {
-        await this.loadTextures([...FONT_SOURCES.map(([, , texture]) => texture), ...DIGIT_FONTS.map(([texture]) => texture)]);
+        const { bitmapFonts } = await this.asset.getGameStrings();
+        const sources: [FontType_T, BitmapFontSource_T][] = [[FontType_T.SMALL, bitmapFonts.small], [FontType_T.LARGE, bitmapFonts.large]];
 
-        for (const [type, gly, texture] of FONT_SOURCES) {
-            const glyphs = parseGlyphs(await (await fetch(gly)).arrayBuffer());
+        await this.loadTextures([...sources.map(([, { texture }]) => texture), ...DIGIT_FONTS.map(([texture]) => texture)]);
+
+        for (const [type, { texture, glyph }] of sources) {
+            const glyphs = parseGlyphs(await (await fetchAsset(`assets/system/${glyph.toLowerCase()}`)).arrayBuffer());
 
             this.fonts.set(type, { texture, glyphs, lineHeight: glyphs.get(0x41).h });
         }

@@ -5,6 +5,8 @@ import AssetManager from "./assets/asset-manager";
 import runSectorPrecache from "./sector-precache";
 import GameManager from "./game/game-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import fetchAsset from "./assets/asset-source";
+import pickAssetSource from "./asset-source-picker";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -89,6 +91,8 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         ]
     } as const;
 
+    await pickAssetSource();
+
     if (new URLSearchParams(location.search).has("precacheSectors")) {
         await runSectorPrecache(loadSettings);
         return null;
@@ -96,7 +100,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
-    const assetList = await (await fetch("asset-list.json")).json();
+    const assetList = await (await fetchAsset("asset-list.json")).json();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
     const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");
 

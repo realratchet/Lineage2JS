@@ -1,5 +1,6 @@
 import DecodeEngine from "./decode-engine";
 import type { MainToWorkerMessage_T, WorkerToMainMessage_T } from "./decode-protocol";
+import { selectAssetFiles } from "../asset-source";
 
 const ctx = self as any;
 
@@ -19,6 +20,8 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
     switch (msg.type) {
         case "init": {
             try {
+                if (msg.assetFiles) await selectAssetFiles(msg.assetFiles);
+
                 await engine.initialize();
                 post({ type: "ready" });
             } catch (e) {

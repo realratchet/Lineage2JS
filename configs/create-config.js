@@ -18,7 +18,7 @@ function* walkSync(dir) {
 const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
 
 function createModuleConfig({ name, resolve, entry: _entry, library, isWorker }) {
-    return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats }) {
+    return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats, httpAssets }) {
         const pluginsSASS = (mode === "production"
             ? [{ loader: MiniCssExtractPlugin.loader }]
             : ["style-loader"])
@@ -30,7 +30,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         const dirAssets = "assets-c4/";
         const plugins = [];
 
-        if (!isWorker) {
+        if (!isWorker && httpAssets) {
             const fileList = {
                 comment: "This file is auto-generated, any changes will be lost.",
                 supported: {},
@@ -51,11 +51,13 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             }
 
             fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
+        }
 
+        if (!isWorker) {
             plugins.push(new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
-                    { from: "../asset-list.json", to: "asset-list.json" },
+                    ...(httpAssets ? [{ from: "../asset-list.json", to: "asset-list.json" }] : []),
                     // ...copyFiles
                 ],
             }));
@@ -181,10 +183,10 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 allowedHosts: "all",
                 hot: false,
                 liveReload: process.env.LIVE_RELOAD !== "0",
-                static: {
+                static: httpAssets ? {
                     directory: path.resolve(__dirname, "../", dirAssets),
                     publicPath: "/assets"
-                },
+                } : false,
                 setupMiddlewares: (middlewares, devServer) => {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
 

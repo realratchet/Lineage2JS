@@ -2,6 +2,7 @@ import { IEngineComponent } from "../game/components";
 import type GameManager from "../game/game-manager";
 import { randInt } from "three/src/math/MathUtils";
 import type AmbientSoundComponent from "./components/ambient-sound-component";
+import fetchAsset from "../assets/asset-source";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const MAX_AUDIOCHANNELS = 32, ROLLOFF = 0.5; // hardcoded from l2.ini
@@ -399,7 +400,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     protected async loadStream(path: string): Promise<AudioBuffer | null> {
-        const res = await fetch(path);
+        const res = await fetchAsset(path);
 
         if (res.status === 404) {
             console.warn(`Audio '${path}': ${res.statusText}.`);
