@@ -53,7 +53,7 @@ export type CollisionQuery_T = {
     extent: Vector3;
     sourceCollider?: RAPIER.Collider;
     sourceBody?: RAPIER.RigidBody;
-    sourceActor?: ICollidable;
+    sourceActor?: ICollidable | ScriptHost_T;
     sourceIsPlayer: boolean;
     sourceProfile?: ActorCollisionProfile_T;
     ignoredActors?: Set<ICollidable>;
@@ -897,13 +897,13 @@ export class CollisionWorld {
         return analyticalHit;
     }
 
-    public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true): RayCheckResult_T | null {
+    public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true, sourceActor?: CollisionQuery_T["sourceActor"]): RayCheckResult_T | null {
         this.stats.queries++;
         this.rayQuery.location = origin;
         this.rayQuery.delta = tmpRayDelta.copy(direction).multiplyScalar(maxDistance);
         this.rayQuery.sourceCollider = sourceCollider;
         this.rayQuery.sourceBody = sourceBody;
-        this.rayQuery.sourceActor = sourceCollider ? this.colliderOwners.get(sourceCollider.handle) : null;
+        this.rayQuery.sourceActor = sourceActor || (sourceCollider ? this.colliderOwners.get(sourceCollider.handle) : null);
         this.rayQuery.sourceIsPlayer = sourceIsPlayer;
         this.rayQuery.ignoredActors = null;
         this.rayQuery.ignoreBases = false;
@@ -1435,7 +1435,9 @@ export class CollisionWorld {
     protected shouldIgnoreActor(actor: ICollidable, query: CollisionQuery_T): boolean {
         const entry = this.entriesByActor.get(actor);
         if (entry && !entry.active) return true;
-        const sourceObject = query.sourceActor || (query.sourceCollider ? this.colliderOwners.get(query.sourceCollider.handle) : null);
+        const colliderOwner = query.sourceCollider ? this.colliderOwners.get(query.sourceCollider.handle) : null;
+        if (actor === colliderOwner) return true;
+        const sourceObject = query.sourceActor || colliderOwner;
         const source = (sourceObject as any)?.scriptActor || sourceObject;
 
         if (actor === source) return true;

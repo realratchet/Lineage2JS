@@ -514,7 +514,8 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         this.mousePickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
 
-        return this.mousePickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, this.mousePickDistance, player.getCollider(), player.getRigidbody()) : null;
+        // UGameEngine::FindMouseTargetObject 0x829c88/0x829dfd uses UViewport.Actor (PlayerController), not its Pawn.
+        return this.mousePickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, this.mousePickDistance, player.getCollider(), player.getRigidbody(), true, this.manGame.getComponent("asset").playerController) : null;
     }
 
     public getMouseTarget(): BaseActor { return this.mouseTarget; }

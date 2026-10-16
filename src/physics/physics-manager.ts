@@ -432,8 +432,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         this.updatePawnWaterHitEffect(pawn, foot);
         if (foot !== pawn.getUnrealScriptProperty("FootVolume")) pawn.setUnrealScriptProperty("FootVolume", foot as any);
     }
-    public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true): RayCheckResult_T | null {
-        return this.collisionWorld.rayCheck(origin, direction, maxDistance, sourceCollider, sourceBody, sourceIsPlayer);
+    public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true, sourceActor?: CollisionQuery_T["sourceActor"]): RayCheckResult_T | null {
+        return this.collisionWorld.rayCheck(origin, direction, maxDistance, sourceCollider, sourceBody, sourceIsPlayer, sourceActor);
     }
 
     public registerSimulationObjects(root: Object3D): void {
