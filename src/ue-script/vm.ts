@@ -487,6 +487,7 @@ class ScriptExecutor {
         const value = this.evalToken();
 
         switch (cast) {
+            case CastToken_T.VectorToRotator: return UNativeRegistry.getNativeFunc("Vector2Rotator")(value);
             case CastToken_T.FloatToInt: return Math.fround(Number(value)) | 0;
             case CastToken_T.ByteToInt:
             case CastToken_T.IntToByte: return Number(value) | 0;
@@ -527,8 +528,13 @@ class ScriptExecutor {
         switch (opcode) {
             case ExprToken_T.LocalVariable:
             case ExprToken_T.InstanceVariable:
-            case ExprToken_T.DefaultVariable:
-            case ExprToken_T.StructMember: return this.evalLValueFromEntry(entry).get();
+            case ExprToken_T.DefaultVariable: return this.evalLValueFromEntry(entry).get();
+            case ExprToken_T.StructMember: {
+                const id = this.next().value as string;
+                const value = this.evalToken() ?? createDefaultArrayStruct(id);
+
+                return (value as any)[getStructMemberKey(value, id)] as ScriptValue_T;
+            }
             case ExprToken_T.Return:
                 this.frame.returnValue = this.evalToken();
                 this.frame.didReturn = true;

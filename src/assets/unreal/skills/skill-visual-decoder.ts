@@ -9,9 +9,10 @@ import UConfigLocalization from "../conf-files/un-conf-localization";
 
 let cacheSoulShot: UConfigLocalization = null;
 
-async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: string, hands: number[][] }> {
+async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: string, hands: number[][], velocityScale: number }> {
     // SpawnNTransientEffect 0x799053 / 0x79905b / 0x79934a / 0x7997b5.
-    const grade = [2039, 2047, 2061].includes(id) ? 0 : id >= 2150 && id <= 2164 ? (id - 2150) % 5 + 1 : -1;
+    const fishing = id >= 2181 && id <= 2186;
+    const grade = fishing ? id - 2181 : [2039, 2047, 2061].includes(id) ? 0 : id >= 2150 && id <= 2164 ? (id - 2150) % 5 + 1 : -1;
 
     if (grade < 0) return null;
     if (!cacheSoulShot) {
@@ -22,7 +23,7 @@ async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: 
     }
 
     const properties = cacheSoulShot.getProperties(["None", "D", "C", "B", "A", "S"][grade]);
-    const prefix = id === 2039 || id >= 2150 && id <= 2154 ? "" : "Spirit";
+    const prefix = fishing || id === 2039 || id >= 2150 && id <= 2154 ? "" : "Spirit";
     const sticks = properties.find(property => property.name === `${prefix}OnSticks`);
     const books = properties.find(property => property.name === `${prefix}OnBooks`);
 
@@ -35,10 +36,11 @@ async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: 
             const mode = property ? parseInt(property.value, 10) : NaN;
 
             if (![-1, 0, 1].includes(mode)) throw new Error(`Soulshot weapon '${type}.${hand}' has invalid mode '${mode}'.`);
-            return mode;
+            return fishing && hand === "LH" ? -1 : mode;
         });
     });
-    return { sticks: sticks.value, books: books.value, hands };
+    // SpawnNTransientEffect 0x104c9cc7 scales fishing-rod metadata; an absent length retains30.
+    return { sticks: sticks.value, books: books.value, hands, velocityScale: fishing ? Math.fround(1 / 3) : 1 };
 }
 
 type SkillVisualDecodeOps_T = {

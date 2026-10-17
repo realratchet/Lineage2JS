@@ -622,9 +622,8 @@ export class UIManager implements IEngineComponent<GameManager> {
     public addDisplayGammaControls(): void {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
         const display = asset.userConfig.display;
-        display.gamma = 0;
         const steps = GAMMA_STEPS.reduce((acc, gamma) => (acc[gamma.toFixed(1)] = gamma, acc), { off: 0 } as Record<string, number>);
-        this.addSelect(this.qualitySection, "Gamma", steps, "0", value => render.setDisplayGamma(display, Number(value)));
+        this.addSelect(this.qualitySection, "Gamma", steps, String(render.getDisplayGamma()), value => render.setDisplayGamma(display, Number(value)));
     }
 }
 

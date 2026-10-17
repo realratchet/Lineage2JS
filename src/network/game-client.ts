@@ -2,12 +2,13 @@ import L2Socket from "./l2-socket";
 import PacketReader from "./packet-reader";
 import PacketWriter from "./packet-writer";
 import GameCrypt from "./l2-crypt";
-import L2ReplayFile from "./l2-replay-file";
-import L2ReplayRecorder from "./l2-replay-recorder";
+import L2ReplayFile, { type ReplayCameraInstruction_T, type ReplayPacket_T } from "./l2-replay-file";
+import L2ReplayRecorder, { isReplayPacket } from "./l2-replay-recorder";
 import * as GamePackets from "./game-packets";
 import type { SessionKey_T } from "./login-client";
 
 type GamePacketHandler_T = (opcode: GamePackets.GameServerPacket_T, packet: PacketReader) => void;
+type ReplayPlayback_T = { file: L2ReplayFile, time: number, duration: number, packetIndex: number, cameraIndex: number, lockCamera: boolean, useChatData: boolean, prepared: boolean, ended: boolean, paused: boolean, speed: number };
 
 export type CharacterCreate_T = { name: string, race: number, sex: number, classId: number, INT: number, STR: number, CON: number, MEN: number, DEX: number, WIT: number, hairStyle: number, hairColor: number, face: number };
 
@@ -15,9 +16,12 @@ export class GameClient {
     protected readonly socket = new L2Socket();
     protected readonly crypt = new GameCrypt();
     protected replayRecorder: L2ReplayRecorder = null;
+    protected replayPlayback: ReplayPlayback_T = null;
+    protected isConnecting = false;
 
     public onPacket: GamePacketHandler_T = null;
     public onClose: (code: number, reason: string) => void = null;
+    public onReplayCamera: (instruction: ReplayCameraInstruction_T) => void = null;
 
     public constructor() {
         this.socket.onPacket = body => this.receive(body);
@@ -25,6 +29,7 @@ export class GameClient {
     }
 
     protected receive(body: Uint8Array) {
+        if (this.replayPlayback) throw new Error(`Network packet received during replay playback.`);
         this.crypt.decrypt(body);
 
         const packet = new PacketReader(body);
@@ -41,6 +46,7 @@ export class GameClient {
     }
 
     protected send(writer: PacketWriter) {
+        if (this.replayPlayback) return;
         const body = writer.toBytes();
 
         this.crypt.encrypt(body);
@@ -50,12 +56,110 @@ export class GameClient {
     protected write(opcode: GamePackets.GameClientPacket_T): PacketWriter { return new PacketWriter().c(opcode); }
 
     public async connect(url: string) {
-        await this.socket.connect(url);
-        this.send(this.write(GamePackets.GameClientPacket_T.ProtocolVersion).d(GamePackets.PROTOCOL_REVISION));
+        if (this.replayPlayback) throw new Error(`Cannot connect during replay playback.`);
+        if (this.isConnecting) throw new Error(`Game connection is already pending.`);
+
+        this.isConnecting = true;
+        try {
+            await this.socket.connect(url);
+            this.send(this.write(GamePackets.GameClientPacket_T.ProtocolVersion).d(GamePackets.PROTOCOL_REVISION));
+        } finally { this.isConnecting = false; }
     }
 
     public isConnected() { return this.socket.isOpen(); }
-    public close() { this.socket.close(); }
+    public close() { this.stopReplayPlayback(); this.socket.close(); }
+
+    public startReplayPlayback(file: L2ReplayFile, lockCamera = true, useChatData = false): void {
+        if (this.isConnecting || this.isConnected() || this.replayRecorder || this.replayPlayback) throw new Error(`Replay playback requires an idle game client.`);
+        const copy = new L2ReplayFile(file.toBytes()), duration = copy.getScene().duration;
+
+        if (!Number.isFinite(duration) || duration < 0) throw new Error(`Invalid replay duration '${duration}'.`);
+        if (lockCamera && copy.arrCameraInstructions.length && !this.onReplayCamera) throw new Error(`Replay camera handler is missing.`);
+
+        this.replayPlayback = { file: copy, time: 0, duration, packetIndex: 0, cameraIndex: 0, lockCamera, useChatData, prepared: false, ended: false, paused: false, speed: 1 };
+    }
+
+    public isReplayPaused() { return !!this.replayPlayback?.paused; }
+    public getReplayPlaySpeed() { return this.replayPlayback?.speed ?? 1; }
+    public inputReplay(key: number, action: number): boolean {
+        const playback = this.replayPlayback;
+
+        if (!playback || key !== 32 && key !== 107 && key !== 109 || action !== 1 && action !== 3) return false;
+        if (action === 3) {
+            if (key === 32) playback.paused = !playback.paused;
+            else if (key === 107 && playback.speed <= 4) playback.speed *= 2;
+            else if (key === 109 && playback.speed >= 0.25) playback.speed *= 0.5;
+        }
+        return true;
+    }
+
+    protected dispatchReplayPacket(packet: ReplayPacket_T): void {
+        const body = new PacketWriter().c(packet.opcode);
+
+        if (packet.opcode === 254) body.h(packet.extendedOpcode);
+        const reader = new PacketReader(body.b(packet.payload).toBytes());
+
+        this.onPacket(reader.c(), reader);
+    }
+
+    public prepareReplayPlayback(): boolean {
+        const playback = this.replayPlayback;
+
+        if (!playback || playback.prepared || playback.time !== 0 || playback.packetIndex || playback.cameraIndex || playback.ended) throw new Error(`Replay preparation requires a new playback session.`);
+        const arrUserIds = playback.file.arrUserIds.slice(), arrPackets = playback.file.arrPackets;
+
+        // FL2ReplayManager::Tick 0x75f9a5..0x75fb24 advances the index after erasing a listed snapshot.
+        for (let i = 0; arrUserIds.length && i < arrPackets.length; i++) {
+            const packet = arrPackets[i];
+            let index = -1;
+
+            if (packet.opcode === GamePackets.GameServerPacket_T.CharInfo || packet.opcode === GamePackets.GameServerPacket_T.UserInfo || packet.opcode === GamePackets.GameServerPacket_T.NpcInfo || packet.opcode === GamePackets.GameServerPacket_T.ServerObjectInfo) {
+                const reader = new PacketReader(packet.payload);
+
+                if (packet.opcode === GamePackets.GameServerPacket_T.CharInfo || packet.opcode === GamePackets.GameServerPacket_T.UserInfo) reader.skip(16);
+                index = arrUserIds.indexOf(reader.d());
+            }
+            if (index !== -1) {
+                arrUserIds.splice(index, 1);
+                this.dispatchReplayPacket(packet);
+                if (this.replayPlayback !== playback) return false;
+                arrPackets.splice(i, 1);
+            }
+        }
+        playback.prepared = true;
+        return true;
+    }
+
+    public tickReplayPlayback(deltaTime: number): boolean {
+        const playback = this.replayPlayback;
+
+        if (!playback) throw new Error(`Replay playback is not active.`);
+        if (!Number.isFinite(Math.fround(deltaTime)) || deltaTime < 0) throw new Error(`Invalid replay time step '${deltaTime}'.`);
+        if (playback.ended) return false;
+
+        // FL2ReplayManager::Tick 0x75fc33: packets, then camera; finish strictly after duration.
+        playback.time += Math.fround(deltaTime);
+        if (playback.time > playback.duration) { playback.ended = true; return false; }
+
+        const file = playback.file;
+
+        while (playback.packetIndex < file.arrPackets.length && file.arrPackets[playback.packetIndex].time <= playback.time) {
+            const packet = file.arrPackets[playback.packetIndex++];
+
+            if (!isReplayPacket(packet.opcode, packet.extendedOpcode, playback.useChatData)) continue;
+            this.dispatchReplayPacket(packet);
+            if (this.replayPlayback !== playback) return false;
+        }
+
+        while (playback.lockCamera && playback.cameraIndex < file.arrCameraInstructions.length && file.arrCameraInstructions[playback.cameraIndex].time <= playback.time) {
+            this.onReplayCamera(file.arrCameraInstructions[playback.cameraIndex++]);
+            if (this.replayPlayback !== playback) return false;
+        }
+        return true;
+    }
+
+    public stopReplayPlayback(): void { this.replayPlayback = null; }
+    public isPlayingReplay(): boolean { return this.replayPlayback !== null; }
 
     public startRecording(file: L2ReplayFile): void {
         if (this.replayRecorder) throw new Error(`Replay recording is already active.`);
@@ -72,6 +176,10 @@ export class GameClient {
 
         this.replayRecorder = null;
         return file;
+    }
+
+    public recordCameraInput(action: "press" | "release" | "axis" | "wheel", yaw: number, pitch: number): void {
+        if (this.replayRecorder) this.replayRecorder.addCameraInput(action, yaw, pitch, performance.now() / 1000);
     }
 
     public isRecording() { return this.replayRecorder !== null; }

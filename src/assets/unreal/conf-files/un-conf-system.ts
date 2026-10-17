@@ -16,9 +16,9 @@ export type ClippingRangeConfig_T = {
 };
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
-export type GameConfig_T = { autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
+export type GameConfig_T = { pawnShadow: boolean; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
 export type AudioConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
-export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; };
+export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; minZoomingDist: number; maxZoomingDist: number; };
 
 export class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
@@ -45,11 +45,13 @@ export class UConfigSystem extends BaseConfigFile {
 
     public audio: AudioConfig_T = { soundVolume: 0.8, musicVolume: 1, wavVoiceVolume: 0.6, oggVoiceVolume: 0.6 }; // ALAudio.dll Init 0x1000a1b4/0x1000a1e0/0x1000a20c/0x1000a238.
 
-    public game: GameConfig_T = { autoTrackingPawn: false, arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
+    public game: GameConfig_T = { pawnShadow: true, useColorCursor: true, autoTrackingPawn: false, arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
     public readonly definedGameKeys = new Set<keyof GameConfig_T>();
     public cameraViewHeightAdjust = 0;
     public useAutoTrackingPawn = false;
     public autoTrackingPawnSpeed = 0;
+    public minZoomingDist: number = null;
+    public maxZoomingDist: number = null;
 
     public async load(): Promise<this> {
         const fileContents = this.decodeConfig();
@@ -64,6 +66,18 @@ export class UConfigSystem extends BaseConfigFile {
         // C4 UClient::Init overrides the l2.ini config field with Option.ini [Video] Gamma.
         this.loadNumbers(fileContents, "WinDrv.WindowsClient", this.display, this.definedDisplayKeys);
         this.loadNumbers(fileContents, "Video", this.display, this.definedDisplayKeys);
+
+        this.loadSection(fileContents, "Video", (key, value) => {
+            if (key.toLowerCase() === "pawnshadow") {
+                this.game.pawnShadow = value.toLowerCase() === "true";
+                this.definedGameKeys.add("pawnShadow");
+                return;
+            }
+            if (key.toLowerCase() !== "usecolorcursor") return;
+
+            this.game.useColorCursor = value.toLowerCase() === "true";
+            this.definedGameKeys.add("useColorCursor");
+        });
 
         this.loadSection(fileContents, "Game", (key, value) => {
             switch (key.toLowerCase()) {
@@ -93,6 +107,15 @@ export class UConfigSystem extends BaseConfigFile {
         const fileContents = this.decodeConfig();
 
         this.loadSection(fileContents, "Engine.LineagePlayerController", (key, value) => {
+            const name = key.toLowerCase();
+
+            if (name === "minzoomingdist" || name === "maxzoomingdist") {
+                const field = name === "minzoomingdist" ? "minZoomingDist" : "maxZoomingDist";
+
+                this[field] = Math.fround(Number(value));
+                if (!Number.isFinite(this[field])) throw new Error(`Invalid camera zoom limit '${value}'.`);
+                return;
+            }
             if (key.toLowerCase() === "buseautotrackingpawn") { this.useAutoTrackingPawn = value.toLowerCase() === "true"; return; }
             if (key.toLowerCase() === "autotrackingpawnspeed") {
                 this.autoTrackingPawnSpeed = Math.fround(Number(value));
@@ -172,7 +195,7 @@ export async function getUserConfig(): Promise<UserConfig_T> {
     for (const key of ["autoTrackingPawn", "arrowMode", "showZoneTitle", "myName", "npcName", "groupName", "pledgeMemberName", "partyMemberName", "otherPCName", "oldChatting", "systemMsgWndDamage", "systemMsgWndExpendableItem"] as const)
         defaults.game[key] = options.game[key];
 
-    return { audio: options.audio, clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game, cameraViewHeightAdjust: user.cameraViewHeightAdjust, useAutoTrackingPawn: user.useAutoTrackingPawn, autoTrackingPawnSpeed: user.autoTrackingPawnSpeed };
+    return { audio: options.audio, clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game, cameraViewHeightAdjust: user.cameraViewHeightAdjust, useAutoTrackingPawn: user.useAutoTrackingPawn, autoTrackingPawnSpeed: user.autoTrackingPawnSpeed, minZoomingDist: user.minZoomingDist, maxZoomingDist: user.maxZoomingDist };
 }
 
 export default UConfigSystem;

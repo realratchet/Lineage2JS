@@ -1,4 +1,7 @@
 #include <common>
+#ifdef USE_PROJECTOR_RECEIVER
+    varying vec3 vProjectorNormal;
+#endif
 #ifdef USE_PAWN_MATERIALS
     attribute float pawnPart;
     flat varying int vPawnPart;
@@ -731,6 +734,9 @@ void main() {
     #endif
     #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
         vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
+    #ifdef USE_PROJECTOR_RECEIVER
+        vProjectorNormal = normalize(normalMatrix * normal);
+    #endif
     #endif
     #include <project_vertex>
     #ifdef USE_TERRAIN_DECORATION_FADE

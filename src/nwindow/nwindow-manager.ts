@@ -17,11 +17,10 @@ function snapToEdge(position: number, size: number, screen: number) { // NWindow
     return position;
 }
 
-function snapToWindow(position: number, size: number, otherPosition: number, otherSize: number) {
-    if (Math.abs(position - otherPosition - otherSize) < SNAP_DISTANCE) return otherPosition + otherSize;
-    if (Math.abs(position + size - otherPosition) < SNAP_DISTANCE) return otherPosition - size;
+type DockWindow_T = NWnd | HTMLElement;
 
-    return null;
+function getWindowRect(wnd: DockWindow_T): [number, number, number, number] {
+    return wnd instanceof HTMLElement ? [wnd.offsetLeft, wnd.offsetTop, wnd.offsetWidth, wnd.offsetHeight] : [wnd.x, wnd.y, wnd.width, wnd.height];
 }
 
 export class NWindowManager {
@@ -29,6 +28,7 @@ export class NWindowManager {
     protected readonly windows: NWnd[] = [];
     protected readonly windowPositions = new Map<NWnd, [number, number]>();
     protected windowOwner: string = null;
+    protected readonly dockedWindows = new Map<DockWindow_T, Set<DockWindow_T>[]>();
     protected readonly textInput = document.createElement("input");
     protected textHandler: TextInputHandler_T = null;
     protected textOwner: NWnd = null;
@@ -131,6 +131,7 @@ export class NWindowManager {
     }
 
     protected resize() {
+        this.dockedWindows.clear();
         this.canvas.resize(window.innerWidth, window.innerHeight);
 
         for (const wnd of this.windows) this.placeWindow(wnd);
@@ -189,6 +190,7 @@ export class NWindowManager {
                 this.hovered = null;
             }
 
+            this.clearWindowDocking(wnd);
             this.windows.splice(index, 1);
             this.windowPositions.delete(wnd);
             wnd.detach();
@@ -236,21 +238,113 @@ export class NWindowManager {
     public snapX(x: number, width: number) { return snapToEdge(x, width, this.canvas.width); }
     public snapY(y: number, height: number) { return snapToEdge(y, height, this.canvas.height); }
 
-    public snapWindow(x: number, y: number, width: number, height: number, owner: NWnd | HTMLElement): [number, number] {
-        // shortcut: edge snapping has no retained dock links; add them when porting connected-window movement.
+    protected getDockedWindows(wnd: DockWindow_T) {
+        let edges = this.dockedWindows.get(wnd);
+
+        if (!edges) {
+            edges = [new Set<DockWindow_T>(), new Set<DockWindow_T>(), new Set<DockWindow_T>(), new Set<DockWindow_T>()];
+            this.dockedWindows.set(wnd, edges);
+        }
+
+        return edges;
+    }
+
+    protected dockWindow(wnd: DockWindow_T, edge: number, peer: DockWindow_T) { // NWindow 0x10037010: reciprocal edges, one edge per peer; null is the screen.
+        const edges = this.getDockedWindows(wnd);
+
+        if (edges[edge].has(peer)) return;
+
+        if (peer) for (let i = 0; i < 4; i++) this.undockWindow(wnd, i, peer);
+        edges[edge].add(peer);
+        if (peer) this.dockWindow(peer, 3 - edge, wnd);
+    }
+
+    protected undockWindow(wnd: DockWindow_T, edge: number, peer: DockWindow_T) {
+        const edges = this.dockedWindows.get(wnd);
+
+        if (!edges || !edges[edge].delete(peer)) return;
+        if (peer) this.undockWindow(peer, 3 - edge, wnd);
+    }
+
+    public clearWindowDocking(wnd: DockWindow_T) {
+        const edges = this.dockedWindows.get(wnd);
+
+        if (!edges) return;
+
+        for (let i = 0; i < 4; i++) for (const peer of edges[i]) this.undockWindow(wnd, i, peer);
+        this.dockedWindows.delete(wnd);
+    }
+
+    public snapWindow(x: number, y: number, width: number, height: number, owner: DockWindow_T): [number, number] { // NWindow 0x10037150: acquire from the current rectangle, release from the mouse position.
+        for (const wnd of this.dockedWindows.keys())
+            if (wnd !== owner && (wnd instanceof HTMLElement ? !wnd.isConnected : !this.windows.includes(wnd))) this.clearWindowDocking(wnd);
+
+        const [oldX, oldY] = getWindowRect(owner), edges = this.getDockedWindows(owner);
         let nextX = x, nextY = y;
-        const snap = (otherX: number, otherY: number, otherWidth: number, otherHeight: number) => {
-            if (Math.max(y, otherY) <= Math.min(y + height, otherY + otherHeight)) nextX = snapToWindow(x, width, otherX, otherWidth) ?? nextX;
-            if (Math.max(x, otherX) <= Math.min(x + width, otherX + otherWidth)) nextY = snapToWindow(y, height, otherY, otherHeight) ?? nextY;
-        };
 
-        for (const wnd of this.windows)
-            if (wnd !== owner && wnd.isVisible) snap(wnd.x, wnd.y, wnd.width, wnd.height);
+        for (const edge of [1, 0, 2, 3]) {
+            if (!edges[edge].has(null)) continue;
 
-        for (const wnd of document.querySelectorAll<HTMLElement>(".ndom-layer > .ndom-window"))
-            if (wnd !== owner && wnd.getClientRects().length) snap(wnd.offsetLeft, wnd.offsetTop, wnd.offsetWidth, wnd.offsetHeight);
+            const delta = edge === 1 ? x : edge === 0 ? y : edge === 2 ? x - oldX : y - oldY;
+            const released = edge === 3 ? Math.abs(delta) > SNAP_DISTANCE : Math.abs(delta) >= SNAP_DISTANCE;
 
-        return [this.snapX(nextX, width), this.snapY(nextY, height)];
+            if (edge === 1 || edge === 2) nextX = oldX + (released ? delta : 0);
+            else nextY = oldY + (released ? delta : 0);
+
+            if (released) {
+                this.undockWindow(owner, edge, null);
+                return [nextX, nextY];
+            }
+        }
+
+        for (const edge of [1, 0, 2, 3]) {
+            const delta = edge === 1 ? -oldX : edge === 0 ? -oldY : edge === 2 ? this.canvas.width - oldX - width : this.canvas.height - oldY - height;
+
+            if (edges[edge].has(null) || Math.abs(delta) >= SNAP_DISTANCE) continue;
+            if (edge === 1 || edge === 2) nextX = oldX + delta;
+            else nextY = oldY + delta;
+            this.dockWindow(owner, edge, null);
+        }
+
+        const peers: DockWindow_T[] = [...this.windows, ...document.querySelectorAll<HTMLElement>(".ndom-layer > .ndom-window")];
+
+        for (const peer of peers) {
+            if (peer === owner || (peer instanceof HTMLElement ? !peer.getClientRects().length : !peer.isVisible)) continue;
+
+            const [otherX, otherY, otherWidth, otherHeight] = getWindowRect(peer);
+            const overlapX = Math.max(oldX, otherX) <= Math.min(oldX + width, otherX + otherWidth), overlapY = Math.max(oldY, otherY) <= Math.min(oldY + height, otherY + otherHeight);
+            let released = false;
+
+            for (const edge of [1, 0, 2, 3]) {
+                if (!edges[edge].has(peer)) continue;
+
+                const delta = edge === 1 ? Math.trunc(x - otherX - otherWidth) : edge === 0 ? Math.trunc(y - otherY - otherHeight) : edge === 2 ? x - oldX : y - oldY;
+                released = Math.abs(delta) >= SNAP_DISTANCE || !(edge === 1 || edge === 2 ? overlapY : overlapX);
+                if (edge === 1 || edge === 2) nextX = oldX + (released ? delta : 0);
+                else nextY = oldY + (released ? delta : 0);
+
+                if (released) {
+                    this.undockWindow(owner, edge, peer);
+                    break;
+                }
+            }
+
+            if (released) continue;
+
+            for (const edge of [1, 0, 2, 3]) {
+                if (edge === 1 ? edges[3].has(peer) : edge === 0 ? edges[0].has(peer) : edge === 2 ? edges[2].has(peer) || edges[1].has(peer) : edges[3].has(peer) || edges[0].has(peer)) continue;
+                if (!(edge === 1 || edge === 2 ? overlapY : overlapX)) continue;
+
+                const delta = edge === 1 ? otherX + otherWidth - oldX : edge === 0 ? otherY + otherHeight - oldY : edge === 2 ? otherX - oldX - width : otherY - oldY - height;
+
+                if (Math.abs(delta) >= SNAP_DISTANCE) continue;
+                if (edge === 1 || edge === 2) nextX = oldX + Math.trunc(delta);
+                else nextY = oldY + Math.trunc(delta);
+                this.dockWindow(owner, edge, peer);
+            }
+        }
+
+        return [nextX, nextY];
     }
 
     public loadWindowPosition(name: string, width: number, height: number): [number, number] { // NWindow 0x10073480 reads posX/posY per window from WindowsInfo.ini.
@@ -269,12 +363,32 @@ export class NWindowManager {
 
     public saveWindowPosition(name: string, x: number, y: number) { if (this.windowOwner !== null) localStorage.setItem(`wnd:${this.windowOwner}:${name}`, JSON.stringify([x, y])); } // NWindow 0x100732c0 writes posX/posY to WindowsInfo.ini.
 
+    public resetWindowPositions() {
+        this.cancelMouse();
+        this.dockedWindows.clear();
+
+        if (this.windowOwner !== null) {
+            const prefix = `wnd:${this.windowOwner}:`;
+
+            for (const key of Object.keys(localStorage))
+                if (key.startsWith(prefix)) localStorage.removeItem(key);
+        }
+
+        for (const wnd of this.windows) {
+            [wnd.x, wnd.y] = this.windowPositions.get(wnd);
+            this.placeWindow(wnd);
+        }
+
+        this.invalidate();
+    }
+
     public getWindowOwner() { return this.windowOwner; }
 
     public setWindowOwner(owner: string) {
         if (owner === this.windowOwner) return;
 
         this.cancelMouse();
+        this.dockedWindows.clear();
         this.windowOwner = owner;
 
         for (const wnd of this.windows) {

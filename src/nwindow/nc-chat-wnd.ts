@@ -137,8 +137,21 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
     public getTextures(): string[] { return [TEX_BACK1, TEX_BACK2, TEX_BACK3, TEX_BACK4, TEX_SIZECONTROL, TEX_IME_EN]; }
 
     public placeOnScreen(_screenWidth: number, screenHeight: number) {
+        const owner = this.manager.getWindowOwner();
+        const saved = owner === null ? null : localStorage.getItem(`wnd:${owner}:${this.windowName}:height`);
+        const height = saved === null ? MIN_HEIGHT : JSON.parse(saved);
+
+        if (!Number.isInteger(height) || height < MIN_HEIGHT || height > MAX_HEIGHT || (height - MIN_HEIGHT) % RESIZE_STEP !== 0) throw new Error(`Invalid chat height.`);
+
+        this.resizeDelta = 0;
+        this.onResizeWnd(height - this.height, false);
         this.x = 0;
         this.y = screenHeight - this.height;
+    }
+
+    public resetLayout() {
+        this.resizeDelta = 0;
+        this.onResizeWnd(MIN_HEIGHT - this.height);
     }
 
     public setOldChatting(isEnabled: boolean) { this.oldChatting = isEnabled; }
@@ -249,7 +262,7 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
         this.onSend(rest.slice(length + 1), 2, rest.slice(0, length));
     }
 
-    public onResizeWnd(delta: number) { // OnResizeWnd 0x10054d50: 15 px steps, 187 <= H <= 502, grows upward; the delta resets either way.
+    public onResizeWnd(delta: number, save = true) { // OnResizeWnd 0x10054d50: 15 px steps, 187 <= H <= 502, grows upward; the delta resets either way.
         this.resizeDelta += delta;
 
         if (this.resizeDelta < RESIZE_STEP && this.resizeDelta > -RESIZE_STEP) return;
@@ -271,6 +284,13 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
         for (const list of this.lists) list.resize(this.width - 10, height - 46);
 
         this.invalidate();
+
+        const owner = this.manager.getWindowOwner();
+
+        if (save && owner !== null) {
+            localStorage.setItem(`wnd:${owner}:${this.windowName}:height`, JSON.stringify(this.height));
+            this.manager.saveWindowPosition(this.windowName, this.x, this.y);
+        }
     }
 
     public onWheel(delta: number): boolean { return this.lists[this.tabControl.selected].onWheel(delta); }

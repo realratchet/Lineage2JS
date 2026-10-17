@@ -36,6 +36,10 @@ varying vec4 vShadowCoord;
     varying vec2 vUv[UV_COUNT];
 #endif
 
+#ifdef USE_PROJECTOR_RECEIVER
+    #include <projector_receiver>
+#endif
+
 void main() {
     #include <clipping_planes_fragment>
     vec4 diffuseColor = vec4( diffuse, opacity );
@@ -61,6 +65,10 @@ void main() {
     diffuseColor.rgb *= 2.0;
 
     #include <alphatest_fragment>
+    #ifdef USE_PROJECTOR_RECEIVER
+        gl_FragColor = getProjectorShadow();
+        return;
+    #endif
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
     #ifdef USE_LIGHTMAP
         vec4 lightMapTexel= texture2D( lightMap, vUv2 );
@@ -72,12 +80,7 @@ void main() {
     reflectedLight.indirectDiffuse *= diffuseColor.rgb;
     vec3 outgoingLight = reflectedLight.indirectDiffuse;
 
-    if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
-        vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;
 
-        if ( all( greaterThanEqual( shadowCoord, vec3( 0.0 ) ) ) && all( lessThanEqual( shadowCoord, vec3( 1.0 ) ) ) )
-            outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
-    }
     #include <envmap_fragment>
     #include <opaque_fragment>
     #include <tonemapping_fragment>

@@ -5,6 +5,7 @@ import { ColorByte } from "../utils/color-byte";
 import type { NPawnLightComponent } from "../rendering/components/pawn-light-component";
 import type BaseActor from "../base-actor";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 
 // 127 = 1.0 in the Modulate2X domain, same as unlit meshes in LitSkinnedMesh
 const viewerZone = { ambient: [127, 127, 127], isSunAffected: false };
@@ -130,7 +131,7 @@ export class SkillViewerRenderManager extends RenderManager {
     protected updateViewerLighting(actor: Object3D): void {
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
 
-        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getRenderSphere());
+        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getComponent<PawnRenderableComponent>("pawnRenderable").getLightingSphere());
 
         arrLightingObjects.length = 0;
         arrLightingObjects.push(actor);
@@ -138,7 +139,7 @@ export class SkillViewerRenderManager extends RenderManager {
         while (arrLightingObjects.length > 0) {
             const object = arrLightingObjects.pop()!;
 
-            for (const child of object.children) arrLightingObjects.push(child);
+            for (const child of object.children) if (!(child as BaseActor).isActor) arrLightingObjects.push(child);
 
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
                 (object as LitSkinnedMesh).updateActorLighting(viewerZone, [], tmpSunAmbient, pawnLights ? pawnLights.getLights() : undefined);

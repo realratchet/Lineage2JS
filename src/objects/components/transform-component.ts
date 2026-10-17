@@ -88,10 +88,11 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
                 this.renderManager.needsUpdate = true;
                 return true;
             }
+            case "getbonecoords":
             case "getbonecoordswithboneindex": {
                 if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' bones.`);
 
-                this.getComponent<AnimationComponent>("animation").getBoneWorldMatrix(Number(call.args[0]), tmpBoneMatrix);
+                this.getComponent<AnimationComponent>("animation").getBoneWorldMatrix(name === "getbonecoords" ? call.args[0] as string : Math.max(0, Number(call.args[0])), tmpBoneMatrix, 0);
                 const matrix = tmpBoneMatrix.elements;
 
                 return { Origin: [matrix[12], matrix[13], matrix[14]], XAxis: [matrix[0], matrix[1], matrix[2]], YAxis: [matrix[4], matrix[5], matrix[6]], ZAxis: [matrix[8], matrix[9], matrix[10]] };

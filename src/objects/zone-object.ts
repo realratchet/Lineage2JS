@@ -28,6 +28,7 @@ const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
 const arrLightSortKeys = new Float64Array(8);
 const arrLightNodes: number[] = [];
+const arrLightLeaves: number[] = [];
 const arrLightCandidates: number[] = [];
 const tmpLightCenter = new Vector3();
 const tmpLightExtent = new Vector3();
@@ -419,6 +420,16 @@ export class SectorObject extends GameObject {
     }
 
     public getPermeatingLights(bounds: Box3, target: string[], forcedRegionTag: string = "None", forcedRegion: number = 0): string[] {
+        this.boxLeafIndices(bounds, arrLightLeaves, forcedRegionTag, forcedRegion);
+        target.length = 0;
+
+        for (const index of arrLightLeaves)
+            for (const name of this.bspLeaves[index].permeatingLights) if (!target.includes(name)) target.push(name);
+
+        return target;
+    }
+
+    public boxLeafIndices(bounds: Box3, target: number[], forcedRegionTag: string = "None", forcedRegion: number = 0): number[] {
         target.length = 0;
         arrLightNodes.length = 0;
         if (!this.bspNodes.length) return target;
@@ -446,7 +457,7 @@ export class SectorObject extends GameObject {
                     if (forcedRegion && leaf.zone !== forcedRegion) continue;
                 } else if (this.bspZones[leaf.zone].zoneInfo.scriptProperties.ZoneTag.toLowerCase() !== tag) continue;
 
-                for (const name of leaf.permeatingLights) if (!target.includes(name)) target.push(name);
+                target.push(node.leaves[side]);
             }
         }
 

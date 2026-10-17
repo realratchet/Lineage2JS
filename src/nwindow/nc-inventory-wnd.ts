@@ -108,7 +108,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         layer.tile(frame, 240, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME_RIGHT);
         layer.text(frame, layer.getManager().getSysString(138), 0xffc8d2dc, FontType_T.SMALL, 20, 5);
 
-        const close = layer.button(frame, 233, 3, 15, 15, TEX_CLOSE, TEX_CLOSE_DOWN, null, null, () => this.setVisible(false));
+        const close = layer.button(frame, 233, 3, 15, 15, TEX_CLOSE, TEX_CLOSE_DOWN, null, null, () => { layer.getManager().playWindowCloseSound(); this.setVisible(false); });
         const minimize = layer.button(frame, 216, 3, 15, 15, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, null, null, () => this.minimize());
 
         minimize.setAttribute("aria-label", "Minimize");
@@ -173,6 +173,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
             event.preventDefault();
             this.layer.getManager().playButtonSound(true);
+            this.layer.getManager().playWindowCloseSound();
             this.setVisible(false);
         });
         this.element.addEventListener("keydown", event => { if (event.key === "Escape") this.setVisible(false); });
@@ -463,7 +464,10 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         if (isFull) this.restoreOrder();
         const symbols = this.layer.getManager().strings.symbols;
 
-        await this.layer.loadTextures([...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[arrGradeSymbols[item.info.crystalType]]] : [])]).filter(path => path && path.toLowerCase() !== "none"))]);
+        const textures = [...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[arrGradeSymbols[item.info.crystalType]]] : [])]).filter(path => path && path.toLowerCase() !== "none"))];
+
+        if (textures.some(path => !this.layer.hasTexture(path))) this.paintItems(!isFull);
+        await this.layer.loadTextures(textures);
 
         if (this.items !== items) return;
 

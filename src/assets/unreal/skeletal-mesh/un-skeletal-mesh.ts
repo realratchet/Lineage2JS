@@ -448,7 +448,7 @@ export abstract class USkeletalMesh extends ULodMesh {
         if (section.vertexInfluences.length > 0) section.vertexInfluences.getElem(0);
 
         const maxBoneInfluences = builder.isLoadingExtendedBoneInfluences() ? MAX_EXTENDED_INFLUENCES : MAX_BONES;
-        const lod = section.wedges.length === 0 && section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
+        const lod = section.lodModels.length > 0 ? section.lodModels.getElem(0) : null;
         const skin = lod ? convertLodModel(lod, this.lodMeshMaterials.length, this.refSkeleton, maxBoneInfluences) : null;
         const { positions, uvs, bones, weights, bones2, weights2, numInfs } = skin ?? convertWedges(section.points, section.wedges, section.vertexInfluences, this.refSkeleton.length, maxBoneInfluences);
         const { indices, groups } = skin ?? buildIndices(section.faces, this.lodMeshMaterials.length);
@@ -459,7 +459,7 @@ export abstract class USkeletalMesh extends ULodMesh {
         const geometryInfo: IGeometryDecodeInfo = {
             attributes: {
                 positions,
-                normals: computePointNormals(positions, indices),
+                normals: skin ? skin.normals : computePointNormals(positions, indices),
                 skinIndex: bones,
                 skinWeight: weights,
                 uvs
@@ -675,6 +675,7 @@ function readStreamFloat(stream: FPrimitiveArray<"uint32">, index: number) {
 // skinning stream commands, one per soft wedge: 0xF fetches a previously stored vertex, 0x8 stores this one
 const SKIN_FETCH_DUPE = 0xf0000000;
 const SKIN_STORE_DUPE = 0x80000000;
+const SKIN_WEIGHT_SCALE = Math.fround(1 / (65535 * 4096)); // ComputeSkinVerts 0x954504, float at 0xae0d88.
 
 function getSkinningStreamMaxInfluences(lod: FStaticModelLOD) {
     const stream = lod.skinningData;
@@ -698,7 +699,7 @@ function getSkinningStreamMaxInfluences(lod: FStaticModelLOD) {
     return numInfs;
 }
 
-function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uvs: Float32Array, bones: SkinIndexArray_T, weights: Float32Array, bones2: SkinIndexArray_T | null, weights2: Float32Array | null, maxBoneInfluences: number) {
+function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, normals: Float32Array, uvs: Float32Array, bones: SkinIndexArray_T, weights: Float32Array, bones2: SkinIndexArray_T | null, weights2: Float32Array | null, maxBoneInfluences: number) {
     const stream = lod.skinningData;
     const wedgeCount = lod.numSoftWedges;
     const dupes: number[] = [];
@@ -715,6 +716,7 @@ function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uv
             const source = dupes[(command & 0x0fffffff) / 6];
 
             positions.copyWithin(offsetVertex, 3 * source, 3 * source + 3);
+            normals.copyWithin(offsetVertex, 3 * source, 3 * source + 3);
             bones.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
             weights.copyWithin(offsetBone, MAX_BONES * source, MAX_BONES * source + MAX_BONES);
 
@@ -724,17 +726,22 @@ function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uv
             cursor += 1;
         } else {
             const influenceCount = ((command >>> 28) & 0x7) + 1;
-            const point = lod.skinPoints[pointIndex++].point;
+            const vertex = lod.skinPoints[pointIndex++], point = vertex.point, normal = vertex.normal.v;
 
             positions[offsetVertex + 0] = point.x;
             positions[offsetVertex + 1] = point.y;
             positions[offsetVertex + 2] = point.z;
 
+            // ComputeSkinVerts 0x954390..0x954404 unpacks the normal before blending bone transforms.
+            normals[offsetVertex + 0] = (normal & 1023) - 511;
+            normals[offsetVertex + 1] = ((normal >>> 10) & 1023) - 511;
+            normals[offsetVertex + 2] = ((normal >>> 20) & 1023) - 511;
+
             for (let i = 0; i < influenceCount; i++) {
                 const influence = stream.getElem(cursor + i) >>> 0;
 
                 arrBones[i] = (influence & 0xfff) / 6;
-                arrWeights[i] = ((influence >>> 12) & 0xffff) / 65535;
+                arrWeights[i] = influenceCount === 1 ? 1 : (influence & 0x0fffffff) * SKIN_WEIGHT_SCALE;
             }
 
             for (let i = 1; i < influenceCount; i++) {
@@ -756,6 +763,8 @@ function convertSkinningStream(lod: FStaticModelLOD, positions: Float32Array, uv
 
             for (let i = 0; i < storedInfluenceCount; i++)
                 total += arrWeights[i];
+
+            if (storedInfluenceCount === influenceCount) total = 1;
 
             for (let i = 0; i < storedInfluenceCount; i++) {
                 const targetIndex = offsetBone + i % MAX_BONES;
@@ -803,6 +812,7 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
     const useExtendedBoneInfluences = maxBoneInfluences > MAX_BONES && numInfs > MAX_BONES;
 
     const positions = new Float32Array(3 * vertexCount);
+    const normals = new Float32Array(3 * vertexCount);
     const uvs = new Float32Array(2 * vertexCount);
     const BoneIndexConstructor = getTypedArrayConstructor(refSkeleton.length);
     const bones = new BoneIndexConstructor(MAX_BONES * vertexCount);
@@ -811,7 +821,7 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
     const weights2 = useExtendedBoneInfluences ? new Float32Array(MAX_BONES * vertexCount) : null;
 
     if (softCount > 0)
-        convertSkinningStream(lod, positions, uvs, bones, weights, bones2, weights2, maxBoneInfluences);
+        convertSkinningStream(lod, positions, normals, uvs, bones, weights, bones2, weights2, maxBoneInfluences);
 
     for (let i = 0; i < rigidCount; i++) {
         const vertex = rigidStream.getElem(i);
@@ -820,6 +830,10 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
         positions[offsetVertex + 0] = vertex.position.x;
         positions[offsetVertex + 1] = vertex.position.y;
         positions[offsetVertex + 2] = vertex.position.z;
+
+        normals[offsetVertex + 0] = vertex.normal.x;
+        normals[offsetVertex + 1] = vertex.normal.y;
+        normals[offsetVertex + 2] = vertex.normal.z;
 
         uvs[offsetUv + 0] = vertex.texU;
         uvs[offsetUv + 1] = vertex.texV;
@@ -857,7 +871,7 @@ function convertLodModel(lod: FStaticModelLOD, materialCount: number, refSkeleto
         groups.push([softIndexCount + 3 * section.firstFace, 3 * section.numFaces, Math.min(section.materialIndex, materialCount - 1)]);
     }
 
-    return { positions, uvs, bones, weights, bones2, weights2, indices, groups, numInfs };
+    return { positions, normals, uvs, bones, weights, bones2, weights2, indices, groups, numInfs };
 }
 
 function convertWedges(points: FMeshVector[], wedges: FMeshWedge[], influences: FVertexInfluence[], boneCount: number, maxBoneInfluences: number) {

@@ -11,6 +11,7 @@ const ATLAS_WIDTH = 2048;
 const MIN_THUMB = 15;
 
 type AtlasEntry_T = { url: string, x: number, y: number, width: number, height: number, atlasWidth: number, atlasHeight: number };
+type TextLabel_T = { text: string, color: number, font: FontType_T };
 
 function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with RGBA bitfields: raw canvas bytes, no PNG compression pass.
     const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
@@ -42,6 +43,7 @@ export type NDomEdit_T = HTMLDivElement & { input: HTMLInputElement, getValue():
 
 export class NDomLayer {
     protected readonly tooltips = new NCTooltip();
+    protected readonly cacheText = new WeakMap<HTMLCanvasElement, TextLabel_T>();
     public readonly root = document.createElement("div");
     protected readonly manager: NWindowManager;
     protected readonly atlas = new Map<string, AtlasEntry_T>();
@@ -85,6 +87,11 @@ export class NDomLayer {
         this.root.style.width = `${canvas.width}px`;
         this.root.style.height = `${canvas.height}px`;
         this.root.style.transform = `scale(${canvas.cssScale})`;
+        for (const element of this.root.querySelectorAll("canvas")) {
+            const text = this.cacheText.get(element);
+
+            if (text) this.renderText(element, text.text, text.color, text.font);
+        }
     }
 
     public getManager() { return this.manager; }
@@ -149,8 +156,12 @@ export class NDomLayer {
 
             place(nextX, nextY);
         }, () => {
-            if (this.windowNames.has(element) && (element.offsetLeft !== startX || element.offsetTop !== startY)) this.manager.saveWindowPosition(this.windowNames.get(element), element.offsetLeft, element.offsetTop);
+            if (element.offsetLeft !== startX || element.offsetTop !== startY) this.saveWindowPosition(element);
         });
+    }
+
+    public saveWindowPosition(element: HTMLElement) {
+        if (this.windowNames.has(element)) this.manager.saveWindowPosition(this.windowNames.get(element), parseFloat(element.style.left), parseFloat(element.style.top));
     }
 
     public restoreWindow(element: HTMLElement, name: string) {
@@ -288,6 +299,7 @@ export class NDomLayer {
         context.setTransform(scale, 0, 0, scale, 0, 0);
         context.imageSmoothingEnabled = false;
         nwindow.renderText(context, 0, 0, color, text, font);
+        this.cacheText.set(canvas, { text, color, font });
     }
 
     public text(parent: HTMLElement, text: string, color: number = TEXT_COLOR, font: FontType_T = FontType_T.SMALL, x: number = null, y: number = null): HTMLCanvasElement {

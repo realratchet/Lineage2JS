@@ -10,6 +10,7 @@ import type BaseActor from "../base-actor";
 import type GroundPickup from "../objects/ground-pickup";
 import type { CollisionQuery_T } from "../physics/collision-world";
 import SpecialView from "../rendering/camera/special-view";
+import type { ReplayScene_T, ReplayCameraInstruction_T } from "../network/l2-replay-file";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
 const MOUSE_TARGET_INTERVAL_MS = 50;
@@ -24,6 +25,7 @@ const tmpCameraTraceStart = new Vector3();
 const tmpCameraTraceDelta = new Vector3();
 const hitCheckCameraExtent = new Vector3(0.1, 0.1, 0.1);
 const arrMouseIntersections: THREE.Intersection[] = [];
+type ReplayCameraState_T = { height: number, adjusted: boolean, rotating: boolean, yaw: number, pitch: number };
 
 function getBatchIntersectionActor(intersection: THREE.Intersection): { actorIndex: number, actorName: string, actorUuid: string } | null {
     const object = intersection.object as any;
@@ -81,6 +83,8 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected hasMouseDragged = false;
     protected followPlayer = false;
     protected isCameraLocked = false;
+    protected isCameraHeightAdjusted = false;
+    protected replayCameraState: ReplayCameraState_T = null;
     protected readonly specialView = new SpecialView(this);
     protected shiftTimeDown = 0;
     protected activeSector = 0;
@@ -110,6 +114,33 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.controls.fps = new ZUpPointerLockControls(renderManager.camera, renderManager.renderer.domElement);
         this.controls.orbit.target.copy(renderManager.cameraTarget);
         this.controls.orbit.update();
+        this.controls.orbit.onCameraInput = (action, yaw, pitch) => {
+            const network = this.manGame.getComponent("network");
+
+            if (network.inWorld && (action === "release" || this.followPlayer && !this.isCameraLocked && (action === "wheel" || !this.manGame.getComponent("asset").playerController.scriptProperties.get("bCameraWalking"))))
+                network.game.recordCameraInput(action, yaw, pitch);
+        };
+        this.controls.orbit.onCameraZoom = (direction, distance) => {
+            if (!this.manGame.getComponent("network").inWorld || !this.followPlayer) return null;
+
+            const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+
+            if (this.isCameraLocked || properties.get("bDisableZoom") || properties.get("bCameraSpecialMove") || properties.get("bCameraMovingToSpecial")) return distance;
+
+            const minimum = properties.get("MinZoomingDist") as number, maximum = properties.get("MaxZoomingDist") as number, zoom = Math.fround(distance - 250);
+            // UInput::Exec ZoomInPress/ZoomOutPress 0x84adfc..0x84b066.
+            const step = minimum + this.renderManager.player.getCollisionHeight() * 2 > zoom ? 2.5 : 20;
+            const next = Math.fround(zoom + (direction > 0 ? -step : step));
+
+            if (direction > 0 ? next < minimum && !this.isCameraHeightAdjusted : this.isCameraHeightAdjusted) {
+                const height = this.renderManager.player.getCollisionHeight() * Math.fround(0.8);
+
+                properties.set("CameraViewHeightAdjust", Math.fround((properties.get("CameraViewHeightAdjust") as number) + (direction > 0 ? height : -height)));
+                this.isCameraHeightAdjusted = direction > 0;
+            }
+
+            return (direction > 0 ? Math.max(minimum, next) : Math.min(maximum, next)) + 250;
+        };
         this.controls.orbit.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("lock", this.onPointerControlsLocked.bind(this));
@@ -163,6 +194,65 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.renderManager.onFollowPlayerChanged(follow);
     }
 
+    public startReplayCamera(scene: ReplayScene_T): void {
+        const render = this.renderManager, asset = this.manGame.getComponent("asset"), properties = asset.playerController.scriptProperties;
+        const yaw = scene.yaw * Math.PI / 32768, pitch = Math.min(scene.pitch * Math.PI / 32768, Math.PI / 2 - 0.000001);
+
+        if (this.replayCameraState) throw new Error(`Replay camera is already active.`);
+        this.replayCameraState = { height: properties.get("CameraViewHeightAdjust") as number, adjusted: this.isCameraHeightAdjusted, rotating: properties.get("bCameraManuallyRotating") as boolean, yaw: properties.get("ManuallyCameraYaw") as number, pitch: properties.get("ManuallyCameraPitch") as number };
+        properties.set("bCameraManuallyRotating", false);
+        properties.set("ManuallyCameraYaw", 0);
+        properties.set("ManuallyCameraPitch", 0);
+        render.player.getCameraTargetPosition(this.controls.orbit.target);
+        dirForward.set(Math.cos(yaw) * Math.cos(pitch), Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch));
+        render.camera.position.copy(this.controls.orbit.target).addScaledVector(dirForward, -(scene.zoom + 250));
+        render.camera.lookAt(this.controls.orbit.target);
+        this.controls.orbit.unclippedDistance = 0;
+        this.controls.orbit.update();
+        this.setFollowPlayer(true);
+        render.updateCameraMatrices();
+    }
+
+    public endReplayCamera(): void {
+        const state = this.replayCameraState;
+
+        if (!state) return;
+        const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+
+        properties.set("CameraViewHeightAdjust", state.height);
+        properties.set("bCameraManuallyRotating", state.rotating);
+        properties.set("ManuallyCameraYaw", state.yaw);
+        properties.set("ManuallyCameraPitch", state.pitch);
+        this.isCameraHeightAdjusted = state.adjusted;
+        this.replayCameraState = null;
+    }
+
+    public applyReplayCamera(instruction: ReplayCameraInstruction_T): void {
+        const { key, action, amount } = instruction, properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+
+        switch (key) {
+            case 2:
+                if (action === 3 || !properties.get("bDisableCameraManuallyRotating")) properties.set("bCameraManuallyRotating", action === 1);
+                break;
+            case 228:
+            case 229:
+                if (!properties.get("bCameraManuallyRotating") || properties.get("bCameraWalking") && properties.get("CameraModeTarget")) return;
+                const name = key === 228 ? "ManuallyCameraYaw" : "ManuallyCameraPitch";
+
+                properties.set(name, Math.fround((properties.get(name) as number) + Math.trunc(amount * 3600 * Math.fround(0.01))));
+                break;
+            case 236:
+            case 237:
+                if (action !== 1) return;
+                const orbit = this.controls.orbit;
+
+                orbit.unclippedDistance = orbit.onCameraZoom(key === 236 ? -1 : 1, orbit.unclippedDistance || this.renderManager.camera.position.distanceTo(orbit.target));
+                orbit.update();
+                break;
+            default: throw new Error(`Replay camera key '${key}' is not implemented.`);
+        }
+    }
+
     public updateCamera(): void {
         if (this.isOrbitControls || this.specialView.isActive()) return;
 
@@ -184,6 +274,22 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public updateFollowPlayer(deltaTime: number): void {
+        if (this.manGame.getComponent("network").game?.isPlayingReplay()) {
+            const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+            const yaw = properties.get("ManuallyCameraYaw") as number, pitch = properties.get("ManuallyCameraPitch") as number;
+
+            if (yaw !== 0 || pitch !== 0) {
+                const orbit = this.controls.orbit;
+                const cameraYaw = ((Math.round((orbit.getAzimuthalAngle() + Math.PI / 2) * 32768 / Math.PI) + 32767) & 65535) - 32767, cameraPitch = Math.round((orbit.getPolarAngle() - Math.PI / 2) * 32768 / Math.PI);
+                // Engine.dll 105381bb: signed rotator normalization, pitch limits -15000/16384.
+                const nextYaw = ((Math.trunc(cameraYaw + yaw) + 32767) & 65535) - 32767;
+                const nextPitch = Math.max(-15000, Math.min(16384, ((Math.trunc(cameraPitch + pitch) + 32767) & 65535) - 32767));
+
+                orbit.rotate((nextYaw - cameraYaw) * Math.PI / 32768, (nextPitch - cameraPitch) * Math.PI / 32768);
+                properties.set("ManuallyCameraYaw", 0);
+                properties.set("ManuallyCameraPitch", 0);
+            }
+        }
         const manualYaw = this.controls.orbit.manualYaw;
 
         this.controls.orbit.manualYaw = 0;

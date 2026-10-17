@@ -1,4 +1,4 @@
-import { Mesh, Texture } from "three";
+import { Material, Texture } from "three";
 import { GameObject, ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type { DecodeLibrary } from "@l2js/engine";
@@ -17,17 +17,6 @@ class EquippedItem extends GameObject {
 
 class EquipmentMeshComponent extends ActorMeshComponent {
     public getMesh(): LitSkinnedMesh { return this.mesh; }
-}
-
-function disposeMaterials(item: EquippedItem): void {
-    item.traverse(object => {
-        if (!(object as any).isMesh) return;
-
-        const mesh = object as Mesh;
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-
-        for (const material of materials) material.dispose();
-    });
 }
 
 export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
@@ -64,10 +53,10 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
     public setLibrary(library: DecodeLibrary): void {
         const meshes = this.items.filter(item => item.mesh).map(item => item.mesh);
-        const textures = new Set<Texture>();
+        const resources = new Set<Material | Texture>();
 
         for (const mesh of meshes) this.renderManager.retainGeometry(mesh.geometry);
-        this.renderManager.retainMeshTextures(meshes, textures);
+        this.renderManager.retainMeshResources(meshes, resources);
         try {
             this.onDetach();
             this.library = library;
@@ -78,7 +67,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
             throw error;
         } finally {
             for (const mesh of meshes) this.renderManager.releaseGeometry(mesh.geometry);
-            this.renderManager.releaseTextures(textures);
+            this.renderManager.releaseMeshResources(resources);
         }
     }
 
@@ -106,7 +95,6 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         const animation = extraMesh ? item.addComponent(new ExtraMeshAnimationComponent(this.renderManager, meshComponent.getMesh())) : null;
 
         if (!parent.attachObjectToBone(item, boneName, false)) {
-            disposeMaterials(item);
             item.detachComponents();
             throw new Error(`Pawn '${parent.scriptClassId}' cannot attach '${mesh}' to ${bone}.`);
         }

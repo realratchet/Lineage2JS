@@ -146,7 +146,7 @@ export class GroundPickup extends Object3D {
         this.dropSound = null;
     }
 
-    public placeOnGround(currentTime = performance.now()): void {
+    public placeOnGround(currentTime = this.renderManager.getParent().getCurrentTime()): void {
         if (this.grounded || this.mover || !this.meshes.length) return;
 
         const previous = this.previousPickup;

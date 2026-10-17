@@ -1,5 +1,6 @@
 uniform vec3 diffuse;
 uniform vec3 texModifierColor;
+uniform float texModifierAlpha;
 uniform float opacity;
 #ifdef USE_PAWN_MATERIALS
     flat varying int vPawnPart;
@@ -550,6 +551,10 @@ vec3 getFadeColor(FadeData fade) {
 }
 #endif
 
+#ifdef USE_PROJECTOR_RECEIVER
+    #include <projector_receiver>
+#endif
+
 void main() {
     #include <clipping_planes_fragment>
     vec4 diffuseColor = vec4( diffuse, opacity );
@@ -569,7 +574,7 @@ void main() {
         diffuseColor.rgb *= texelDiffuse.rgb;
         if (part.parameters.y > 0.0) diffuseColor.a *= texelDiffuse.a;
         if (part.maps.w >= 0.0) diffuseColor.a *= samplePawnTexture(int(part.maps.w), vUv).a;
-        if (diffuseColor.a < part.parameters.x) discard;
+        if (texModifierAlpha < 0.0 && diffuseColor.a < part.parameters.x) discard;
         vec3 outgoingLight = vLitColor * 2.0 * diffuseColor.rgb;
         if (part.parameters.z > 0.0) {
             vec2 uvSpecular = part.envMode == 1 ? vPawnWorldSpecularUv : vPawnSpecularUv;
@@ -687,7 +692,18 @@ void main() {
     // #include <alphamap_fragment>
 
 
-    #include <alphatest_fragment>
+    #ifdef USE_SHADOW_SILHOUETTE
+        if (diffuseColor.a <= 0.0) discard;
+        gl_FragColor = vec4(0.0, 0.0, 0.0, diffuseColor.a);
+        return;
+    #endif
+    if (texModifierAlpha < 0.0) {
+        #include <alphatest_fragment>
+    }
+    #ifdef USE_PROJECTOR_RECEIVER
+        gl_FragColor = getProjectorShadow();
+        return;
+    #endif
     // #include <specularmap_fragment>
     
     // accumulation (baked indirect lighting only)
@@ -786,17 +802,23 @@ void main() {
     #endif
 
     #endif
-    #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
-        if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
-            vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;
-
-            if ( all( greaterThanEqual( shadowCoord, vec3( 0.0 ) ) ) && all( lessThanEqual( shadowCoord, vec3( 1.0 ) ) ) )
-                outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
-        }
-    #endif
     
     #include <envmap_fragment>
     outgoingLight *= texModifierColor;
+
+    if (texModifierAlpha >= 0.0) {
+        #ifdef USE_PAWN_MATERIALS
+            bool masked = part.parameters.x == 127.0 / 255.0;
+        #else
+            #ifdef USE_ALPHATEST
+                bool masked = alphaTest == 127.0 / 255.0;
+            #else
+                bool masked = false;
+            #endif
+        #endif
+        diffuseColor.a = masked ? diffuseColor.a * texModifierAlpha : texModifierAlpha;
+        if (diffuseColor.a <= 0.0) discard;
+    }
 
     #include <opaque_fragment>
     #include <tonemapping_fragment>

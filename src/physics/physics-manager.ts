@@ -178,7 +178,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
                 manRender.scene.add(pawn);
                 pawn.position.copy(this_.manGame.getComponent("input").getOrbitTarget());
                 pawn.updateMatrixWorld(true);
-                this_.addPawn(pawn, performance.now() + NpcSimulationComponent.LIFETIME, 0, true);
+                this_.addPawn(pawn, this_.manGame.getCurrentTime() + NpcSimulationComponent.LIFETIME, 0, true);
                 manRender.needsUpdate = true;
             }
         }

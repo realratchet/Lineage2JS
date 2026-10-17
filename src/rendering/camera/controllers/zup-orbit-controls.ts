@@ -10,7 +10,10 @@ export class ZUpOrbitControls extends EventDispatcher {
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;
+    public rotate: (yaw: number, pitch: number) => void;
     public manualYaw = 0;
+    public onCameraInput: (action: "press" | "release" | "axis" | "wheel", yaw: number, pitch: number) => void = null;
+    public onCameraZoom: (direction: number, distance: number) => number = null;
     public unclippedDistance: number = 0;
     protected nativeLike: boolean;
 
@@ -388,6 +391,12 @@ export class ZUpOrbitControls extends EventDispatcher {
 
         }
 
+        this.rotate = function (yaw: number, pitch: number) {
+            rotateLeft(-yaw);
+            rotateUp(-pitch);
+            scope.update();
+        };
+
         const panLeft = function () {
 
             const v = new Vector3();
@@ -548,6 +557,8 @@ export class ZUpOrbitControls extends EventDispatcher {
 
             rotateUp(2 * Math.PI * rotateDelta.y / element.clientHeight);
 
+            scope.onCameraInput?.("axis", rotateDelta.x * 65536 / element.clientHeight, -rotateDelta.y * 65536 / element.clientHeight);
+
             rotateStart.copy(rotateEnd);
 
             scope.update();
@@ -591,6 +602,17 @@ export class ZUpOrbitControls extends EventDispatcher {
         }
 
         function handleMouseWheel(event: WheelEvent) {
+
+            if (scope.nativeLike && scope.onCameraZoom && event.deltaY !== 0) {
+                const direction = Math.sign(event.deltaY), distance = scope.unclippedDistance || scope.object.position.distanceTo(scope.target), next = scope.onCameraZoom(direction, distance);
+
+                if (next !== null) {
+                    scope.unclippedDistance = next;
+                    scope.update();
+                    scope.onCameraInput?.("wheel", direction, 0);
+                    return;
+                }
+            }
 
             let dollyFunc = null;
 
@@ -856,6 +878,8 @@ export class ZUpOrbitControls extends EventDispatcher {
 
             }
 
+            if (state === STATE.ROTATE) scope.onCameraInput?.("release", 0, 0);
+
             scope.dispatchEvent(_endEvent);
 
             state = STATE.NONE;
@@ -864,6 +888,7 @@ export class ZUpOrbitControls extends EventDispatcher {
 
         function onPointerCancel(event: PointerEvent) {
 
+            if (state === STATE.ROTATE) scope.onCameraInput?.("release", 0, 0);
             removePointer(event);
 
         }
@@ -956,6 +981,8 @@ export class ZUpOrbitControls extends EventDispatcher {
                     state = STATE.NONE;
 
             }
+
+            if (state === STATE.ROTATE) scope.onCameraInput?.("press", 0, 0);
 
             if (state !== STATE.NONE) {
 

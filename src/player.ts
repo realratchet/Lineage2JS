@@ -19,7 +19,7 @@ export class Player extends BaseActor {
     public getCameraTargetPosition(target: Vector3): Vector3 {
         this.getWorldPosition(target);
         // CalcBehindView 0x807ceb..0x807d1b uses ViewTarget.Location + CameraViewHeightAdjust.
-        target.z += this.getCollisionHeight() + this.renderManager.getParent().getComponent("asset").userConfig.cameraViewHeightAdjust;
+        target.z += this.getCollisionHeight() + (this.renderManager.getParent().getComponent("asset").playerController.scriptProperties.get("CameraViewHeightAdjust") as number);
         return target;
     }
 

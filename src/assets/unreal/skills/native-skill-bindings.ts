@@ -382,8 +382,8 @@ const collisionBindings = new Map<string, NativeSkillBinding_T>([
     ["bossSpearStun", { effects: ["LineageEffect.s_u010_a", "LineageEffect.NSpear_sp", "LineageEffect.s_u505_c"], effectGroup: "bossSpearStun", soundPhases: ["casting", "shot", "explosion"], pending: "spear rendering, retail visual/timing and no-hit verification" }]
 ]);
 
-// Engine.dll SpawnNTransientEffect: IDs2032/2037/2038/2048 ->0x798eaa, class0xaafc38.
-for (const name of ["healing potion", "greater healing potion", "quick healing potion", "wolves' food"])
+// Engine.dll SpawnNTransientEffect: IDs2032/2037/2038/2048/2060/2063/2101/2102 ->0x798eaa, class0xaafc38.
+for (const name of ["healing potion", "greater healing potion", "quick healing potion", "wolves' food", "healing medicine", "hatchling food", "feed: general strider", "feed: clan hall strider"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u002_a"], soundPhases: ["casting"] });
 
 // Engine.dll SpawnNTransientEffect: IDs2031/2136 ->0x798e71, class0xaafc70.
@@ -394,19 +394,35 @@ for (const name of ["lesser healing potion", "rice cake"])
 for (const name of ["haste potion", "potion of alacrity", "greater haste potion", "greater swift attack potion", "mystery potion"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u003_a"], soundPhases: ["casting"] });
 
-// Engine.dll SpawnNTransientEffect 0x104c911e..0x104c91eb: e_u032_a and unscaled mesh Origin.Z in TrailerPrePivot.Z.
-for (const name of ["antidote", "greater antidote", "emergency dressing"])
+// Engine.dll SpawnNTransientEffect IDs2042..2045 ->0x104c911e: e_u032_a and unscaled mesh Origin.Z in TrailerPrePivot.Z.
+for (const name of ["antidote", "greater antidote", "bandage", "emergency dressing"])
     nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u032_a"], soundPhases: ["casting"] });
+
+// SpawnNTransientEffect 0x104ca6fa..0x104ca7dc: TrailerPrePivot.Z = -mesh Origin.Z.
+for (const name of ["facelifting potion", "dye potion", "hair style change potion"])
+    nativeSkillBindings.set(name, { effects: ["LineageEffect.e_u004_a"], soundPhases: ["casting"] });
 
 // Engine.dll ID2036: empty phase handlers; transient selector0x79a9d1 ->0x79a7e1 with edi=0.
 nativeSkillBindings.set("l2day blessed scroll of escape", { effects: [], soundPhases: [], rejectTransient: true });
+
+// SpawnNTransientEffect selector15 sends IDs2065/2074/2075/2077 to0x104ca7e1 with edi=0.
+for (const name of ["box key", "potion of critical escape", "decrease hate scroll", "potion of revenge"])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
+
+// SpawnNTransientEffect rejects IDs2137..2139/2171..2176/2188/2189/2190/2208..2212/2229 at0x104ca7e1 with edi=0.
+for (const name of ["summon regular tree", "summon special tree", "special tree recovery bonus", "spellbook paper", "scroll of giants", "book of giants", "ingredient bag", "ingredient box", "ancient papyrus", "golden spice", "crystal spice", "item - green fish", "item - blessed scroll of enchant armor", ...[1,2,3,4,5,6,7,8].map(level => `key of treasure chest - ${level}`)])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
+
+// SpawnNTransientEffect rejects enchant/package/fish records through0x104ca7e1 with edi=0.
+for (const name of ["compressed package of blessed spiritshots: a-grade", "compressed package of blessed spiritshots: b-grade", "compressed package of blessed spiritshots: c-grade", "compressed package of blessed spiritshots: d-grade", "compressed package of blessed spiritshots: no grade", "compressed package of blessed spiritshots: s-grade", "compressed package of soulshots: a-grade", "compressed package of soulshots: b-grade", "compressed package of soulshots: c-grade", "compressed package of soulshots: d-grade", "compressed package of soulshots: no grade", "compressed package of soulshots: s-grade", "compressed package of spiritshots: a-grade", "compressed package of spiritshots: b-grade", "compressed package of spiritshots: c-grade", "compressed package of spiritshots: d-grade", "compressed package of spiritshots: no grade", "compressed package of spiritshots: s-grade", "endeavor potion", "greater compressed package of blessed spiritshots:  b-grade", "greater compressed package of blessed spiritshots:  c-grade", "greater compressed package of blessed spiritshots:  d-grade", "greater compressed package of blessed spiritshots:  no-grade", "greater compressed package of blessed spiritshots: a-grade", "greater compressed package of blessed spiritshots: s-grade", "greater compressed package of soulshots:  a-grade", "greater compressed package of soulshots:  b-grade", "greater compressed package of soulshots:  c-grade", "greater compressed package of soulshots:  d-grade", "greater compressed package of soulshots: no-grade", "greater compressed package of soulshots: s-grade", "greater compressed package of spiritshots:  b-grade", "greater compressed package of spiritshots:  c-grade", "greater compressed package of spiritshots:  d-grade", "greater compressed package of spiritshots:  no-grade", "greater compressed package of spiritshots: a-grade", "greater compressed package of spiritshots: s-grade", "item - black fish", "item - black treasue box", "item - blue fish", "item - blue treasue box", "item - easy black fish", "item - easy blue fish", "item - easy green fish", "item - easy jade fish", "item - easy orange fish", "item - easy red fish", "item - easy violet fish", "item - easy white fish", "item - easy yellow fish", "item - green treasue box", "item - jade fish", "item - jade treasue box", "item - orange fish", "item - orange treasue box", "item - quest sac", "item - quest special box", "item - quest special fish", "item - quest treasure box", "item - red fish", "item - red treasue box", "item - violet fish", "item - violet treasue box", "item - white fish", "item - white treasue box", "item - yellow fish", "item - yellow treasue box", "scroll: enchant armor (grade a)", "scroll: enchant armor (grade b)", "scroll: enchant armor (grade c)", "scroll: enchant armor (grade d)", "scroll: enchant armor (grade s)", "scroll: enchant weapon (grade a)", "scroll: enchant weapon (grade b)", "scroll: enchant weapon (grade c)", "scroll: enchant weapon (grade d)", "scroll: enchant weapon (grade s)"])
+    nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
 
 // Engine.dll IDs2001/2002: unsigned selector rejection0x798e5d ->0x79a7e1; edi=0 skips sound and returns false.
 for (const name of ["red potion", "healing drug"])
     nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
 
-// SpawnNTransientEffect IDs60/337/4338 reach0x79a7e1 with edi=0; none spawns an effect or sound.
-for (const name of ["fake death", "arcane power", "life cubic for novice"])
+// SpawnNTransientEffect IDs60/337/1001/4338 reach0x79a7e1 with edi=0; none spawns an effect or sound.
+for (const name of ["fake death", "arcane power", "soul cry", "life cubic for novice"])
     nativeSkillBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
 
 // Engine.dll ID4616: Init0x79c74b, PreShot0x7a3de7, Shot0x7b0e38, Explosion0x791ade; transient0x79a7e1 has edi=0.

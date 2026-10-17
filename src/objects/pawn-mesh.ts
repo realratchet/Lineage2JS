@@ -24,7 +24,7 @@ function isVisibleUnder(object: Object3D, root: Object3D): boolean {
 }
 
 function canBatch(material: MeshStaticMaterial): boolean {
-    if (!material.isStaticMeshMaterial || material.transparent || !material.depthTest || !material.depthWrite || material.blending !== NormalBlending || material.isUpdatable || material.side === BackSide) return false;
+    if (!material.isStaticMeshMaterial || material.transparent || material.shadowOpacity || !material.depthTest || !material.depthWrite || material.blending !== NormalBlending || material.isUpdatable || material.side === BackSide) return false;
     if (!("USE_MAP_DIFFUSE" in material.defines)) return false;
     if (Object.keys(material.defines).some(name => !supportedDefines.has(name))) return false;
     if ("USE_SPECULAR" in material.defines && !["ENVMAP", "ENVMAPWORLD"].includes(material.defines.USE_MAP_SPECULAR_TRANSFORM)) return false;

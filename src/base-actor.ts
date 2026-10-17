@@ -286,7 +286,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
         this.isPendingDelete = true;
         this.renderManager.getPhysicsManager().setPawnLevel(this, null);
-        this.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
+        this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.release();
         this.isDeleted = true;
         this.detachComponents();
     }

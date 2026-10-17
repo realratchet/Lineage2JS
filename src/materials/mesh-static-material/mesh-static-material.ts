@@ -117,6 +117,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     protected proceduralMaps: any[] = [];
 
     public isUpdatable = false;
+    public shadowOpacity: IDecodedParameter = null;
+    protected shadowMaterial: MeshStaticMaterial = null;
 
     // @ts-ignore
     public constructor(info: MeshStaticMaterialParameters_T = { diffuse: null, opacity: null, specular: null, specularMask: null, side: FrontSide, blendingMode: "normal", transparent: false, depthWrite: true, depthTest: true, visible: true }) {
@@ -148,6 +150,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
                 texModifierColor: new Uniform(new Vector3(1, 1, 1)),
+                texModifierAlpha: new Uniform(-1),
                 terrainDecorationFadeRange: new Uniform(new Vector2()),
                 uv1Transform: new Uniform(new Matrix3()),
                 transformSpecular: new Uniform(null),
@@ -290,6 +293,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         });
 
         this.sprites = sprites;
+        this.shadowOpacity = info.shadowOpacity || null;
         this.spriteEntries = Object.entries(sprites);
 
         // procedural maps (water) drive their own animation through update()
@@ -584,6 +588,29 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.packActorLights();
     }
 
+    public getShadowMaterial(): MeshStaticMaterial {
+        if (!this.shadowOpacity) return null;
+        if (this.shadowMaterial) {
+            this.shadowMaterial.update(this.uniforms.globalTimeSeconds.value);
+            return this.shadowMaterial;
+        }
+
+        const material = this.shadowMaterial = new MeshStaticMaterial({ diffuse: null, opacity: this.shadowOpacity, specular: null, specularMask: null, side: FrontSide, blendingMode: "normal", transparent: true, depthWrite: false, depthTest: true, visible: true });
+
+        // FShadowBitmapRenderInterface::SetMaterial 0x93df70; trace7333994 uses SRCALPHA for color and alpha.
+        material.defines.USE_SHADOW_SILHOUETTE = "";
+        material.blending = CustomBlending;
+        material.blendSrc = material.blendSrcAlpha = SrcAlphaFactor;
+        material.blendDst = material.blendDstAlpha = OneMinusSrcAlphaFactor;
+        material.update(this.uniforms.globalTimeSeconds.value);
+        return material;
+    }
+
+    public dispose(): void {
+        if (this.shadowMaterial) this.shadowMaterial.dispose();
+        super.dispose();
+    }
+
     public copy(source: this): this {
         const copySource = Object.create(source) as this;
         const uniforms = getLocalUniforms(source.uniforms);
@@ -605,6 +632,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.spriteEntries = source.spriteEntries;
         this.proceduralMaps = getProceduralMaps(this.uniforms);
         this.isUpdatable = source.isUpdatable;
+        this.shadowOpacity = source.shadowOpacity;
+        if (this.shadowMaterial) this.shadowMaterial.dispose();
+        this.shadowMaterial = null;
 
         return this;
     }
@@ -641,6 +671,7 @@ type DirectionalAmbientLighting_T = BaseLighting_T & { direction: THREE.Vector3 
 type MeshStaticMaterialParameters_T = {
     diffuse: IDecodedParameter,
     opacity: IDecodedParameter,
+    shadowOpacity?: IDecodedParameter,
     specular: IDecodedParameter,
     specularMask: IDecodedParameter,
     detail?: IDecodedParameter,

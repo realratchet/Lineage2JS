@@ -5,16 +5,17 @@ export class NCCoolTimeIcon {
     public texture: string = null;
     public color = 0xffffff;
     public isFinishing = false;
-    protected readonly startedAt = performance.now();
+    protected readonly startedAt: number;
     protected readonly endsAt: number;
     protected readonly duration: number;
     protected readonly firstFrame: number;
 
-    public constructor(duration: number, remaining: number) {
+    public constructor(duration: number, remaining: number, currentTime = performance.now()) {
+        this.startedAt = currentTime;
         this.duration = duration * 1000;
         this.endsAt = this.startedAt + remaining * 1000;
         this.firstFrame = Math.trunc(360 * (1 - remaining / duration));
-        this.update(performance.now());
+        this.update(currentTime);
     }
 
     public static getTextures() { return [...arrRotation, ...arrEnd]; }

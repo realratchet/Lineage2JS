@@ -51,7 +51,7 @@ export class Nameplate extends Sprite {
 
         this.canvas.width = this.width;
         this.canvas.height = this.height;
-        this.center.set(0.5, bottom / this.height);
+        this.center.set(this.width ? 1 - Math.trunc(this.width / 2) / this.width : 0.5, bottom / this.height);
 
         const context = this.canvas.getContext("2d"), nameX = Math.trunc(this.width / 2) - Math.trunc(nameWidth / 2);
 

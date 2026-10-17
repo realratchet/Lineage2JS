@@ -188,6 +188,7 @@ export class NCComboBox { // NCComboBox OnCreate 0x100064d0, OnPaint 0x10005e40;
     }
 
     public getSelected() { return this.selected; }
+    public isOpen() { return !this.list.hidden; }
 
     public setOpen(isOpen: boolean) {
         this.list.hidden = !isOpen || this.items.length === 0;

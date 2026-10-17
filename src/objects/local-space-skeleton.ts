@@ -57,11 +57,14 @@ type BoneAttachment_T = { object: Object3D, bone: number, usesBindMatrix: boolea
 // three skins through world space, where float32 quantizes a vertex to ~0.03 units at level coordinates - a whole frame of idle motion
 export class LocalSpaceSkeleton extends Skeleton {
     public static updateEnabled: boolean = true;
+    public static renderFrame: number = 0;
+    public static nextRenderFrame: number = 0;
     public mesh: SkinnedMesh = null;
     public posePaused: boolean = false;
     public rootBoneSource: Bone = null;
     public isAtlasPacked: boolean = false;
 
+    protected poseFrame: number = 0;
     protected parents: Int32Array = null;
     protected locals: Matrix4[] = null;
     protected attachments: BoneAttachment_T[] = null;
@@ -242,6 +245,8 @@ export class LocalSpaceSkeleton extends Skeleton {
             for (let i = attachment.bone; i >= 0; i = this.parents[i]) this.bones[i].visible = true;
     }
 
+    public hasCurrentPose(): boolean { return LocalSpaceSkeleton.renderFrame !== 0 && this.poseFrame === LocalSpaceSkeleton.renderFrame && this.activeBones !== null; }
+
     public update(): void {
         if (!LocalSpaceSkeleton.updateEnabled) return;
         if (this.parents === null) this.claimBones();
@@ -253,6 +258,7 @@ export class LocalSpaceSkeleton extends Skeleton {
         else this.updateAttachedPose();
 
         if (this.boneTexture !== null) this.boneTexture.needsUpdate = true;
+        this.poseFrame = LocalSpaceSkeleton.renderFrame;
     }
 
     // Compose the mesh-space pose directly and freeze three's redundant world-space walk.

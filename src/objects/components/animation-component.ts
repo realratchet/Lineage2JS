@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, AnimationMixer, LoopOnce, LoopRepeat, Matrix4, Mesh, Skeleton, Texture, Vector3, Bone } from "three";
+import { AnimationAction, AnimationClip, AnimationMixer, LoopOnce, LoopRepeat, Matrix4, Material, Mesh, Skeleton, Texture, Vector3, Bone } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
@@ -88,7 +88,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected readonly renderManager: RenderManager;
     protected mixer: AnimationMixer;
     protected meshes: Mesh[] = [];
-    protected meshTextures = new Set<Texture>();
+    protected meshResources = new Set<Material | Texture>();
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
     protected prevAnimations = new WeakMap<Mesh, AnimationAction[]>();
     protected actorAnimations: Record<string, AnimationClip> = {};
@@ -262,20 +262,20 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             scaler.bones.clear();
         }
 
-        const textures = new Set<Texture>();
+        const resources = new Set<Material | Texture>();
 
         for (const mesh of meshes) this.renderManager.retainGeometry(mesh.geometry);
-        this.renderManager.retainMeshTextures(meshes, textures);
+        this.renderManager.retainMeshResources(meshes, resources);
         for (const mesh of this.meshes) {
             parent.remove(mesh);
             this.mixer.uncacheRoot(mesh);
             this.renderManager.releaseGeometry(mesh.geometry);
         }
         this.disposeSkeletons();
-        this.renderManager.releaseTextures(this.meshTextures);
+        this.renderManager.releaseMeshResources(this.meshResources);
 
         this.meshes = meshes;
-        this.meshTextures = textures;
+        this.meshResources = resources;
 
         for (const mesh of meshes) {
             (mesh as any).hasStartedAnimation = true;
@@ -612,7 +612,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             this.renderManager.releaseGeometry(mesh.geometry);
         }
         this.disposeSkeletons();
-        this.renderManager.releaseTextures(this.meshTextures);
+        this.renderManager.releaseMeshResources(this.meshResources);
 
         this.meshes = [];
     }

@@ -2,6 +2,7 @@ import * as GamePackets from "../network/game-packets";
 import { EDrawType_T } from "../assets/unreal/un-aactor";
 import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
 import { Vector3 } from "three";
+import { GAMMA_STEPS } from "../rendering/display-gamma";
 import NWindowManager from "./nwindow-manager";
 import type NWindowCanvas from "./nwindow-canvas";
 import type BaseActor from "../base-actor";
@@ -16,6 +17,9 @@ import { type TargetStatus_T } from "./nc-target-status-wnd";
 import { type ShortcutEntry_T } from "./nc-shortcut-wnd";
 import NCCoolTimeIcon from "./nc-cool-time-icon";
 import NCLoginWnd from "./nc-login-wnd";
+import NCReplayWnd from "./nc-replay-wnd";
+import { listReplayFiles, readReplayFile, saveReplayFile, deleteReplayFile } from "../network/replay-files";
+import L2ReplayFile from "../network/l2-replay-file";
 import NCLoginServerWnd from "./nc-server-select-wnd";
 import NCLobbyWnd, { type LobbyPawnLabel_T } from "./nc-lobby-wnd";
 import NCPawnCreateWnd, { type PawnCreateSelection_T } from "./nc-pawn-create-wnd";
@@ -70,7 +74,7 @@ import encodeCrest from "../network/crest-encoder";
 import NCTooltip from "./nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { IEngineComponent } from "../game/components";
-import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type CommandInfoWndView_T, type CommunityWndView_T, type DeliverWndView_T, type DialogBoxView_T, type FishViewportWndView_T, type GMClanWndView_T, type GMDetailStatusWndView_T, type GMInventoryWndView_T, type GMMagicSkillWndView_T, type GMQuestWndView_T, type GMStoreWndView_T, type GMWndView_T, type HennaInfoWndView_T, type HennaListWndView_T, type HeroTowerWndView_T, type InventoryWndView_T, type ItemEnchantWndView_T, type LoadingWndView_T, type LobbyWndView_T, type LoginServerWndView_T, type LoginWndView_T, type MacroWndView_T, type MainWndView_T, type ManorShopWndView_T, type MapWndView_T, type MatchWndView_T, type MenuWndView_T, type MessageWndView_T, type NPCHtmlViewerView_T, type OlympiadControlWndView_T, type OlympiadPlayerWndView_T, type OlympiadTargetWndView_T, type OptionWndView_T, type PartyRoomMakingWndView_T, type PartyRoomWndView_T, type PawnCreateWndView_T, type PetStatusWndView_T, type PetWndView_T, type PlayerStatusWndView_T, type PledgePowerWndView_T, type PrivateBuyWndView_T, type PrivateShopWndView_T, type RecipeBookWndView_T, type RecipeBuyListWndView_T, type RecipeBuyManufactureWndView_T, type RecipeManufactureWndView_T, type RecipeShopWndView_T, type RecipeTreeWndView_T, type RecordMarkView_T, type RestartMenuWndView_T, type SSQMainBoardView_T, type SelectDeliverWndView_T, type ShopWndView_T, type ShortCutWndView_T, type SkillWndView_T, type StoreWndView_T, type SummonedWndView_T, type SystemMenuWndView_T, type TargetStatusWndView_T, type TradeWndView_T, type TrainWndView_T, type VIPShopWndView_T, type ZoneTitleWndView_T } from "./skin";
+import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type CommandInfoWndView_T, type CommunityWndView_T, type DeliverWndView_T, type DialogBoxView_T, type FishViewportWndView_T, type GMClanWndView_T, type GMDetailStatusWndView_T, type GMInventoryWndView_T, type GMMagicSkillWndView_T, type GMQuestWndView_T, type GMStoreWndView_T, type GMWndView_T, type HennaInfoWndView_T, type HennaListWndView_T, type HeroTowerWndView_T, type InventoryWndView_T, type ItemEnchantWndView_T, type LoadingWndView_T, type LobbyWndView_T, type LoginServerWndView_T, type LoginWndView_T, type ReplayWndView_T, type MacroWndView_T, type MainWndView_T, type ManorShopWndView_T, type MapWndView_T, type MatchWndView_T, type MenuWndView_T, type MessageWndView_T, type NPCHtmlViewerView_T, type OlympiadControlWndView_T, type OlympiadPlayerWndView_T, type OlympiadTargetWndView_T, type OptionWndView_T, type PartyRoomMakingWndView_T, type PartyRoomWndView_T, type PawnCreateWndView_T, type PetStatusWndView_T, type PetWndView_T, type PlayerStatusWndView_T, type PledgePowerWndView_T, type PrivateBuyWndView_T, type PrivateShopWndView_T, type RecipeBookWndView_T, type RecipeBuyListWndView_T, type RecipeBuyManufactureWndView_T, type RecipeManufactureWndView_T, type RecipeShopWndView_T, type RecipeTreeWndView_T, type RecordMarkView_T, type RestartMenuWndView_T, type SSQMainBoardView_T, type SelectDeliverWndView_T, type ShopWndView_T, type ShortCutWndView_T, type SkillWndView_T, type StoreWndView_T, type SummonedWndView_T, type SystemMenuWndView_T, type TargetStatusWndView_T, type TradeWndView_T, type TrainWndView_T, type VIPShopWndView_T, type ZoneTitleWndView_T } from "./skin";
 import type GameManager from "../game/game-manager";
 
 export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
@@ -113,7 +117,7 @@ function getTitleColor(plate: Nameplate_T): number { // DrawTargetName 0x1051e74
     return 0xffa2f9ec;
 }
 
-type Screen_T = "login" | "servers" | "lobby" | "create" | "loading" | "world";
+type Screen_T = "login" | "replay" | "servers" | "lobby" | "create" | "loading" | "world";
 type SkillPointerDrag_T = { type: "skill" | "action", id: number, pointerId: number, icon: string, button: HTMLElement, isDragging: boolean };
 
 function getEquipmentSlot(bodyPart: number, objectId: number, paperdoll: number[]): number {
@@ -144,6 +148,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected readonly shortCutWnd: ShortCutWndView_T;
     protected readonly chatWnd: ChatWndView_T;
     protected loginWnd: LoginWndView_T = null;
+    protected replayWnd: ReplayWndView_T = null;
     protected loginServerWnd: LoginServerWndView_T = null;
     protected lobbyWnd: LobbyWndView_T = null;
     protected pawnCreateWnd: PawnCreateWndView_T = null;
@@ -249,7 +254,6 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public getParent(): GameManager { return this.manGame; }
     public isCreated() { return this.nwindow !== null; }
 
-    public onBeforeEngineTick(_currentTime: number, _deltaTime: number): void { if (this.nwindow) this.updateNameplates(); }
     public onEngineTick(_currentTime: number, deltaTime: number): void { if (this.nwindow) this.tick(deltaTime); }
     public onAfterEngineTick(_currentTime: number, _deltaTime: number): void { if (this.nwindow) this.render(); }
 
@@ -257,7 +261,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const network = this.manGame.getComponent("network"), asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
 
         this.manNetwork = network;
-        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game }, audio: { ...asset.userConfig.audio } };
+        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game }, audio: { ...asset.userConfig.audio }, display: { ...asset.userConfig.display } };
         this.manRender = render;
         this.nwindow = new NWindowManager(asset, this.skin.textures);
         this.layer = new NDomLayer(this.nwindow);
@@ -295,11 +299,28 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 }
             }, true);
 
+        const replayInput = (event: KeyboardEvent) => {
+            let key: number;
+
+            switch (event.code) {
+                case "Escape": key = 27; break;
+                case "Space": key = 32; break;
+                case "NumpadAdd": key = 107; break;
+                case "NumpadSubtract": key = 109; break;
+                default: return;
+            }
+            if (key !== 27 && this.screen !== "world" || !network.inputReplay(key, event.type === "keydown" ? 1 : 3)) return;
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        };
+
+        window.addEventListener("keydown", replayInput, true);
+        window.addEventListener("keyup", replayInput, true);
         window.addEventListener("keydown", event => { // NConsole 0x1007610a: Escape requests target cancellation before dispatching to the focused window.
             if (event.key !== "Escape" || this.screen !== "world") return;
 
             event.preventDefault();
-            event.stopPropagation();
             network.cancelTarget();
         }, true);
         window.addEventListener("keydown", event => {
@@ -325,7 +346,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
             if (this.options.game.enterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
             if (this.chatWnd.isInputFocused() || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-            if (event.key === " " && target.closest('[role="checkbox"], [role="tab"], [role="button"]')) return;
+            if (event.key === " " && target.closest('[role="checkbox"], [role="tab"], [role="button"], [role="combobox"]')) return;
 
             event.stopPropagation();
             this.chatWnd.focusInput();
@@ -513,7 +534,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public async createScreens() {
         if (this.loginWnd) return;
 
-        await this.layer.loadTextures([...NCLoginWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...["graded", "gradec", "gradeb", "gradea", "grades"].map(key => this.strings.symbols[key]), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCSSQMainBoard.getTextures(), ...NCItemEnchantWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCFishViewportWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCOptionWnd.getTextures(), ...NCZoneTitleWnd.getTextures(), ...RecordMark.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES]);
+        await this.layer.loadTextures([...NCLoginWnd.getTextures(), ...NCReplayWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...["graded", "gradec", "gradeb", "gradea", "grades"].map(key => this.strings.symbols[key]), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCSSQMainBoard.getTextures(), ...NCItemEnchantWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCFishViewportWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCOptionWnd.getTextures(), ...NCZoneTitleWnd.getTextures(), ...RecordMark.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES]);
 
         const network = this.manNetwork;
 
@@ -522,7 +543,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.loginWnd = this.skin.createLoginWnd(this.layer);
         this.loginWnd.onLogin = (account, password) => void network.connectLogin(account, password);
         this.loginWnd.auth.onError = text => this.showMessage(text);
-        this.loginWnd.loginFunction.onOption = index => { if (index === 2) this.optionWnd.toggle(); };
+        this.loginWnd.loginFunction.onOption = index => { if (index === 2) this.optionWnd.toggle(); else if (index === 4) void this.showReplayList(); };
+
+        this.replayWnd = this.skin.createReplayWnd(this.layer);
+        this.replayWnd.onCancel = () => this.showLogin();
+        this.replayWnd.onPlay = (name, lockCamera, showChat) => void this.playReplayFile(name, lockCamera, showChat);
+        this.replayWnd.onDelete = name => void this.removeReplayFile(name);
+        this.replayWnd.onImport = files => void this.importReplayFiles(files);
 
         this.loginServerWnd = this.skin.createLoginServerWnd(this.layer);
         this.loginServerWnd.onSelect = serverId => void network.connectGame(serverId);
@@ -1085,10 +1112,22 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.optionWnd.onApply = options => this.setGameOptions(options);
         this.optionWnd.getAudioOptions = () => this.getAudioOptions();
         this.optionWnd.onApplyAudio = options => this.setAudioOptions(options);
+        this.optionWnd.getGamma = () => this.manRender.getDisplayGamma();
+        this.optionWnd.onApplyGamma = gamma => this.setGamma(gamma);
+        this.optionWnd.getPawnRange = () => this.manRender.getPawnRange();
+        this.optionWnd.onApplyPawnRange = range => this.setPawnRange(range);
         this.optionWnd.canChangePartyLoot = () => !network.isInParty() && !this.partyRoomWnd.isVisible();
         this.optionWnd.getUIScale = () => this.nwindow.canvas.uiScale;
-        this.optionWnd.getUIScales = () => UI_SCALES.filter(scale => { const [width, height] = this.nwindow.canvas.getScreenSize(scale); return scale === 1 || scale === this.nwindow.canvas.uiScale || width >= 800 && height >= 600; });
+        this.optionWnd.getUIScales = () => UI_SCALES.filter(scale => { const [width, height] = this.nwindow.canvas.getScreenSize(scale); return scale <= 1 || scale === this.nwindow.canvas.uiScale || width >= 800 && height >= 600; });
         this.optionWnd.onApplyUIScale = scale => this.setUIScale(scale);
+        this.optionWnd.onInitialize = () => {
+            this.layer.cancelDrag();
+            this.shortCutWnd.resetLayout();
+            this.chatWnd.resetLayout();
+            this.nwindow.resetWindowPositions();
+            this.layer.resetWindowPositions();
+            this.placeScreens();
+        };
         this.systemMenuWnd = this.skin.createSystemMenuWnd(this.layer);
         this.systemMenuWnd.onSelect = item => {
             switch (item) {
@@ -1105,7 +1144,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.show(null);
     }
 
-    protected getDOMWindows() { return [this.loginWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.npcItemHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.ssqMainBoard, this.itemEnchantWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.fishViewportWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.macroWnd, this.systemMenuWnd, this.optionWnd, this.zoneTitleWnd, this.recordMark, this.messageWnd, this.dialogBox, this.yesNoDialogBox]; }
+    protected getDOMWindows() { return [this.loginWnd, this.replayWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.npcItemHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.ssqMainBoard, this.itemEnchantWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.fishViewportWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.macroWnd, this.systemMenuWnd, this.optionWnd, this.zoneTitleWnd, this.recordMark, this.messageWnd, this.dialogBox, this.yesNoDialogBox]; }
 
     protected getSavedWindows(): [string, HTMLElement][] { return [["DebugStatsWnd", this.manNetwork.getParent().getComponent("ui").getStatsWindow()], ["InventoryWnd", this.inventoryWnd.element], ["MainWnd", this.mainWnd.element], ["MenuWnd", this.menuWnd.element], ["SystemMenuWnd", this.systemMenuWnd.element], ["OptionWnd", this.optionWnd.element], ["MapWnd", this.mapWnd.element], ["MacroWnd", this.macroWnd.element], ["CommunityWnd", this.communityWnd.element], ["PetWnd", this.petWnd.element], ["SummonedWnd", this.summonedWnd.element], ["PledgePowerWnd", this.pledgePowerWnd.element], ["NPCHtmlViewer", this.npcHtmlViewer.element], ["NPCItemHtmlViewer", this.npcItemHtmlViewer.element], ["HelpHtmlViewer", this.helpWnd.element], ["TradeWnd", this.tradeWnd.element], ["ShopWnd", this.shopWnd.element], ["PreviewShopWnd", this.previewShopWnd.element], ["ManorShopWnd", this.manorShopWnd.element], ["StoreWnd", this.storeWnd.element], ["DeliverWnd", this.deliverWnd.element], ["SelectDeliverWnd", this.selectDeliverWnd.element], ["PrivateShopWnd", this.privateShopWnd.element], ["PrivateBuyWnd", this.privateBuyWnd.element], ["VIPShopWnd", this.vipShopWnd.element], ["RecipeBookWnd", this.recipeBookWnd.element], ["RecipeManufactureWnd", this.recipeManufactureWnd.element], ["RecipeBuyManufactureWnd", this.recipeBuyManufactureWnd.element], ["RecipeTreeWnd", this.recipeTreeWnd.element], ["RecipeShopWnd", this.recipeShopWnd.element], ["RecipeBuyListWnd", this.recipeBuyListWnd.element], ["HennaListWnd", this.hennaListWnd.element], ["HennaInfoWnd", this.hennaInfoWnd.element], ["SSQMainBoard", this.ssqMainBoard.element], ["ItemEnchantWnd", this.itemEnchantWnd.element], ["MatchWnd", this.matchWnd.element], ["PartyRoomWnd", this.partyRoomWnd.element], ["HeroTowerWnd", this.heroTowerWnd.element], ["TrainWnd", this.trainWnd.element], ["FishViewportWnd", this.fishViewportWnd.element], ["CommandInfoWnd", this.commandInfoWnd.element], ["OlympiadControlWnd", this.olympiadControlWnd.element], ["GMWnd", this.gmWnd.element], ["GMMagicSkillWnd", this.gmSkillWnd.element], ["GMInventoryWnd", this.gmInventoryWnd.element], ["GMStoreWnd", this.gmStoreWnd.element], ["GMQuestWnd", this.gmQuestWnd.element], ["GMDetailStatusWnd", this.gmDetailWnd.element], ["GMClanWnd", this.gmClanWnd.element]]; }
 
@@ -1124,6 +1163,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.dialogBox.isInGame = this.yesNoDialogBox.isInGame = screen === "world";
         this.loginWnd.setVisible(screen === "login" || screen === "servers", screen === "login");
         this.loginServerWnd.setVisible(screen === "servers");
+        this.replayWnd.setVisible(screen === "replay");
         this.lobbyWnd.setVisible(screen === "lobby");
         this.pawnCreateWnd.setVisible(screen === "create");
         this.loadingWnd.setVisible(screen === "loading");
@@ -1176,6 +1216,48 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.yesNoDialogBox.hide();
         this.messageWnd.show(this.nwindow.getSystemMessage(94));
         this.show("login");
+    }
+
+    protected async refreshReplayList() {
+        const files = await listReplayFiles();
+
+        if (this.screen === "replay") this.replayWnd.setFiles(files);
+    }
+
+    protected async showReplayList() {
+        if (this.screen !== "login" && this.screen !== "servers") return;
+        this.manNetwork.cancelLogin();
+        this.messageWnd.hide();
+        this.show("replay");
+        this.replayWnd.focus();
+        try { await this.refreshReplayList(); }
+        catch (error) { this.showMessage((error as Error).message); }
+    }
+
+    protected async playReplayFile(name: string, lockCamera: boolean, showChat: boolean) {
+        if (this.screen !== "replay") return;
+        try {
+            const bytes = new Uint8Array(await (await readReplayFile(name)).arrayBuffer());
+
+            if (this.screen === "replay") await this.manNetwork.playReplay(bytes, lockCamera, showChat);
+        } catch (error) { this.showMessage((error as Error).message); }
+    }
+
+    protected async removeReplayFile(name: string) {
+        try { await deleteReplayFile(name); await this.refreshReplayList(); }
+        catch (error) { this.showMessage((error as Error).message); }
+    }
+
+    protected async importReplayFiles(files: File[]) {
+        try {
+            for (const file of files) {
+                const bytes = new Uint8Array(await file.arrayBuffer());
+
+                new L2ReplayFile(bytes);
+                await saveReplayFile(bytes, file.name);
+            }
+        } catch (error) { this.showMessage((error as Error).message); }
+        await this.refreshReplayList();
     }
 
     public getSystemMessage(id: number) { return this.nwindow.getSystemMessage(id); }
@@ -1234,21 +1316,21 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         void this.nwindow.addWindow(this.abnormalStatusWnd, "AbnormalStatusWnd");
         void this.nwindow.addWindow(this.targetStatusWnd, "TargetStatusWnd");
         void this.nwindow.addWindow(this.shortCutWnd, "ShortCutWnd");
-        void this.nwindow.addWindow(this.chatWnd);
+        void this.nwindow.addWindow(this.chatWnd, "ChatWnd");
         void this.nwindow.addWindow(this.restartMenuWnd);
         for (let i = 0; i < 2; i++) {
             const player = this.olympiadPlayerWnds[i], abnormal = this.olympiadAbnormalWnds[i];
 
             abnormal.setVisible(false);
-            void this.nwindow.addWindow(player);
-            void this.nwindow.addWindow(abnormal);
-            abnormal.x = player.x;
+            abnormal.x = i === 0 ? 0 : Math.trunc(this.nwindow.canvas.width - player.width);
             abnormal.y = 47;
             abnormal.width = 252;
             abnormal.height = 50;
+            void this.nwindow.addWindow(player, `OlympiadPlayerWnd${i + 1}`);
+            void this.nwindow.addWindow(abnormal, `OlympiadAbnormalWnd${i + 1}`);
             player.onExpand = delta => { abnormal.y += delta; abnormal.invalidate(); };
         }
-        void this.nwindow.addWindow(this.olympiadTargetWnd);
+        void this.nwindow.addWindow(this.olympiadTargetWnd, "OlympiadTargetWnd");
     }
 
     public showWorld() {
@@ -1312,6 +1394,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         else this.communityWnd.hide();
     }
 
+    public hasNameplate(actor: BaseActor): boolean { return this.nameplates.get(actor)?.visible === true; }
+
     public updateNameplates() { // FDynamicActor::Render anchor (cylinder top) and DrawTargetName 0x1051d780 layout, LargeFont, no crests or icons.
         if (this.pickupLabel) {
             this.pickupLabel.visible = false;
@@ -1336,8 +1420,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         }
         if (this.screen !== "world") return;
 
-        const camera = this.manRender.camera, canvas = this.nwindow.canvas;
-        const width = canvas.width, height = canvas.height;
+        const camera = this.manRender.camera, canvas = this.nwindow.canvas, renderer = this.manRender.renderer;
+        const pixels = Math.max(1, Math.floor(renderer.getPixelRatio()));
+        const width = renderer.domElement.width / pixels, height = renderer.domElement.height / pixels;
         const scale = 2 / (height * camera.projectionMatrix.elements[5]);
 
         const pickup = this.manRender.getParent().getComponent("input").getMousePickup();
@@ -1449,7 +1534,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (!arrGaugeTextures[color]) throw new Error(`Unknown gauge color '${color}'.`);
 
         if (remaining <= 0 || maximum <= 0) this.gauges.delete(color);
-        else this.gauges.set(color, { remaining, maximum, startedAt: performance.now() });
+        else this.gauges.set(color, { remaining, maximum, startedAt: this.manNetwork.getParent().getCurrentTime() });
 
         this.updateGaugeOverlay();
     }
@@ -1463,7 +1548,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (this.gauges.size === 0) return;
 
         const camera = this.manRender.camera, player = this.manRender.player;
-        const now = performance.now();
+        const now = this.manNetwork.getParent().getCurrentTime();
         const left = canvas.getTexture(arrGaugeBack[0]), middle = canvas.getTexture(arrGaugeBack[1]), right = canvas.getTexture(arrGaugeBack[2]);
 
         if (!left || !middle || !right) return;
@@ -1607,13 +1692,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const key = `${id}:${level}`;
 
         if (remaining === 0) this.skillCoolTimes.delete(key);
-        else this.skillCoolTimes.set(key, new NCCoolTimeIcon(duration, remaining));
+        else this.skillCoolTimes.set(key, new NCCoolTimeIcon(duration, remaining, this.manNetwork.getParent().getCurrentTime()));
 
         this.nwindow.invalidate();
     }
 
     public render() {
-        const now = performance.now();
+        const now = this.manNetwork.getParent().getCurrentTime();
 
         for (const [key, coolTime] of this.skillCoolTimes) {
             const wasFinishing = coolTime.isFinishing;
@@ -2092,10 +2177,30 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     protected loadOptions(owner: string) {
-        const game = localStorage.getItem(`option:${owner}`) ?? localStorage.getItem("option:*"), audio = localStorage.getItem(`audio:${owner}`) ?? localStorage.getItem("audio:*");
+        const game = localStorage.getItem(`option:${owner}`) ?? localStorage.getItem("option:*"), audio = localStorage.getItem(`audio:${owner}`) ?? localStorage.getItem("audio:*"), gamma = localStorage.getItem(`gamma:${owner}`) ?? localStorage.getItem("gamma:*");
 
         this.applyGameOptions(game === null ? {} : JSON.parse(game));
         this.applyAudioOptions(audio === null ? {} : JSON.parse(audio));
+        this.applyGamma(gamma === null ? 0 : JSON.parse(gamma));
+        const range = localStorage.getItem(`pawnRange:${owner}`) ?? localStorage.getItem("pawnRange:*");
+
+        this.manRender.setPawnRange(range === null ? this.manNetwork.getParent().getComponent("asset").userConfig.clippingRange.pawn : JSON.parse(range));
+    }
+
+    public setPawnRange(range: number) {
+        this.manRender.setPawnRange(range);
+        localStorage.setItem(`pawnRange:${this.nwindow.getWindowOwner() ?? "*"}`, String(range));
+    }
+
+    protected applyGamma(gamma: number) {
+        if (gamma !== 0 && !GAMMA_STEPS.includes(gamma)) throw new Error(`Invalid gamma '${gamma}'.`);
+
+        this.manRender.setDisplayGamma(this.options.display, gamma);
+    }
+
+    public setGamma(gamma: number) {
+        this.applyGamma(gamma);
+        localStorage.setItem(`gamma:${this.nwindow.getWindowOwner() ?? "*"}`, String(gamma));
     }
 
     protected applyGameOptions(options: Partial<GameConfig_T>) {
@@ -2103,6 +2208,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         for (const [key, value] of Object.entries(options)) {
             switch (key) {
+                case "pawnShadow":
+                case "useColorCursor":
                 case "autoTrackingPawn":
                 case "arrowMode":
                 case "showZoneTitle":
@@ -2128,6 +2235,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         }
 
         this.options.game = { ...this.manNetwork.getParent().getComponent("asset").userConfig.game, ...options };
+        this.manRender.setPawnShadow(this.options.game.pawnShadow);
+        document.documentElement.classList.toggle("nwindow-default-cursor", !this.options.game.useColorCursor);
         this.chatWnd.setSystemMsgWnd(this.options.game.systemMsgWnd);
         this.chatWnd.setOldChatting(this.options.game.oldChatting);
         this.chatWnd.setSystemMessageFilters(this.options.game.systemMsgWndDamage, this.options.game.systemMsgWndExpendableItem);

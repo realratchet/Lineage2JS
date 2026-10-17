@@ -49,17 +49,17 @@ export function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 
 
 const SUN_TILT = 30 * DEG2RAD; // ANMovableSunLight::Tick 0x869af0 applies envManager+0x174 about X.
 
-export function sunModifierToDirection(polar: number, yaw: number, target: Vector3): Vector3 {
+export function sunModifierToDirection(polar: number, yaw: number, target: Vector3, entryMap = false): Vector3 {
     const sinPolar = Math.sin(polar);
     const x = sinPolar * Math.cos(yaw);
     const y = sinPolar * Math.sin(yaw);
     const z = Math.cos(polar);
 
     const cosTilt = Math.cos(SUN_TILT);
-    const sinTilt = Math.sin(SUN_TILT);
+    const sinTilt = Math.sin(entryMap ? -SUN_TILT : SUN_TILT);
 
-    // ANMovableSunLight::Tick 0x869c58 negates the tilt before Core.dll RVA 0x10e30 (RotateAngleAxis).
-    return target.set(-x, -(y * cosTilt + z * sinTilt), -(-y * sinTilt + z * cosTilt));
+    // ANMovableSunLight::Tick 0x869c43..0x869ca2 keeps positive tilt in normal mode.
+    return target.set(-x, -(y * cosTilt - z * sinTilt), -(y * sinTilt + z * cosTilt));
 }
 
 function isNightTime(timeOfDay: number): boolean {
@@ -318,7 +318,7 @@ export class DynamicLight extends Object3D {
                 } else {
                     [pitch, yaw] = getSunModifierInfo(timeOfDay);
                 }
-                sunModifierToDirection(pitch, yaw, this.lightDirection);
+                sunModifierToDirection(pitch, yaw, this.lightDirection, envManager.isEntryMap());
             } else {
                 tmpVec3_1.set(1, 0, 0).applyQuaternion(this.quaternion);
                 this.lightDirection.copy(tmpVec3_1);

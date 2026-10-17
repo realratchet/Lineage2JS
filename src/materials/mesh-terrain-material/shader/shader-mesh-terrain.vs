@@ -1,4 +1,7 @@
 #include <common>
+#ifdef USE_PROJECTOR_RECEIVER
+    varying vec3 vProjectorNormal;
+#endif
 #include <envmap_pars_vertex>
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
@@ -125,6 +128,9 @@ void main() {
     #include <morphtarget_vertex>
     #include <skinning_vertex>
     vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
+    #ifdef USE_PROJECTOR_RECEIVER
+        vProjectorNormal = normalize(normalMatrix * normal);
+    #endif
     #include <project_vertex>
     #include <logdepthbuf_vertex>
     #include <clipping_planes_vertex>

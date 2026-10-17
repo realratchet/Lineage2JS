@@ -24,8 +24,12 @@ function hashSettings(settings: LoadSettings_T): string {
     return hash.toString(16).padStart(8, "0");
 }
 
+function isAssetCatalog(sectorName: string): boolean {
+    return ["npc_runtime", "skill_visuals", "effect_templates", "character_effects", "character_sounds", "character_equipment"].includes(sectorName);
+}
+
 function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
-    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${sectorName === "npc_runtime" ? ".a1" : ""}.bin`;
+    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${isAssetCatalog(sectorName) ? ".a1" : ""}.bin`;
 }
 
 async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
@@ -47,7 +51,7 @@ async function getCachedFile(sectorName: string, settings: LoadSettings_T): Prom
             return null;
         }
 
-        if (sectorName !== "npc_runtime" && !isSerializedLibrary(await file.slice(0, 5).arrayBuffer())) {
+        if (!isAssetCatalog(sectorName) && !isSerializedLibrary(await file.slice(0, 5).arrayBuffer())) {
             try { await dir.removeEntry(handle.name); } catch (e) { }
             return null;
         }
@@ -79,27 +83,41 @@ export async function loadCachedLibrary(sectorName: string, settings: LoadSettin
 }
 
 export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
-    const file = await getCachedFile(sectorName, settings);
+    if (!isCacheEnabled(settings)) return null;
 
-    if (!file) return null;
+    return navigator.locks.request(cacheFileName(sectorName, settings), async () => {
+        const file = await getCachedFile(sectorName, settings);
 
-    try {
-        return sectorName === "npc_runtime" ? await openAssetCatalog(file) : await openLibraryFile(file);
-    } catch (e) {
-        if (sectorName === "npc_runtime") {
-            const dir = await getCacheDir(false);
+        if (!file) return null;
 
-            await dir.removeEntry(cacheFileName(sectorName, settings));
+        try {
+            return isAssetCatalog(sectorName) ? await openAssetCatalog(file) : await openLibraryFile(file);
+        } catch (e) {
+            if (isAssetCatalog(sectorName)) {
+                const dir = await getCacheDir(false);
+
+                await dir.removeEntry(cacheFileName(sectorName, settings));
+            }
+            console.warn(`[decode-cache] failed to open cached sector '${sectorName}', re-decoding:`, e);
+            return null;
         }
-        console.warn(`[decode-cache] failed to open cached sector '${sectorName}', re-decoding:`, e);
-        return null;
-    }
+    });
 }
 
 export async function loadCachedLibraryBuffer(sectorName: string, settings: LoadSettings_T): Promise<ArrayBuffer | null> {
     const file = await getCachedFile(sectorName, settings);
 
     return file ? file.arrayBuffer() : null;
+}
+
+export async function readCachedLibrary<T>(sectorName: string, settings: LoadSettings_T, read: (file: File) => Promise<T>): Promise<T> {
+    return navigator.locks.request(cacheFileName(sectorName, settings), { mode: "shared" }, async () => {
+        const file = await getCachedFile(sectorName, settings);
+
+        if (!file) throw new Error(`Missing cached library '${sectorName}'.`);
+
+        return read(file);
+    });
 }
 
 export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, library: any): void {
@@ -120,11 +138,11 @@ export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T,
 export async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any, seekable: SeekableLibrary_T = null): Promise<number> {
     if (!isCacheEnabled(settings)) return 0;
 
-    if (sectorName === "npc_runtime") {
+    if (isAssetCatalog(sectorName)) {
         const dir = await getCacheDir(true);
         const handle = await dir.getFileHandle(cacheFileName(sectorName, settings), { create: true });
 
-        return storeAssetCatalog(handle, library.entries, seekable);
+        return navigator.locks.request(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
     }
 
     const bytes = serializeLibraryBlob(library, seekable);

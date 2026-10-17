@@ -137,7 +137,7 @@ export class SkillEffectPlacement {
                 actor = effect;
                 this.host.addEffect(effect, caster);
             });
-            if (hasBone && sticks) this.host.setSoulShotVelocity(actor, length);
+            if (hasBone && sticks) this.host.setSoulShotVelocity(actor, this.host.getWeaponLength(caster, i === 0, shot.velocityScale));
         }
     }
 

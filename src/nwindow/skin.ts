@@ -26,6 +26,7 @@ import NCLoadingWnd from "./nc-loading-wnd";
 import NCLobbyWnd from "./nc-lobby-wnd";
 import NCLoginServerWnd from "./nc-server-select-wnd";
 import NCLoginWnd from "./nc-login-wnd";
+import NCReplayWnd from "./nc-replay-wnd";
 import NCMacroWnd from "./nc-macro-wnd";
 import NCMainWnd from "./nc-main-wnd";
 import NCManorShopWnd from "./nc-manor-shop-wnd";
@@ -95,6 +96,7 @@ export type ItemEnchantWndView_T = Pick<NCItemEnchantWnd, "element" | "isVisible
 export type LoadingWndView_T = Pick<NCLoadingWnd, "element" | "placeOnScreen" | "setBlack" | "setVisible">;
 export type LobbyWndView_T = Pick<NCLobbyWnd, "element" | "gameStart" | "onCreate" | "onDelete" | "onRelogin" | "onRestore" | "onSelect" | "onStart" | "onSystemMessage" | "pick" | "placeOnScreen" | "setCharacters" | "setPawnLabels" | "setSelected" | "setVisible">;
 export type LoginServerWndView_T = Pick<NCLoginServerWnd, "element" | "onCancel" | "onSelect" | "placeOnScreen" | "serverInfo" | "setServers" | "setVisible">;
+export type ReplayWndView_T = Pick<NCReplayWnd, "element" | "focus" | "onPlay" | "onDelete" | "onCancel" | "onImport" | "placeOnScreen" | "setFiles" | "setVisible">;
 export type LoginWndView_T = Pick<NCLoginWnd, "auth" | "element" | "loginFunction" | "onLogin" | "placeOnScreen" | "setBusy" | "setVisible">;
 export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "element" | "hide" | "highlightCommand" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setMacros" | "setVisible">;
 export type MainWndView_T = Pick<NCMainWnd, "element" | "getSelectedTab" | "isVisible" | "placeOnScreen" | "selectTab" | "setVisible"> & { readonly detailStatusWnd: DetailStatusWndView_T, readonly skillWnd: SkillWndView_T, readonly actionWnd: ActionWndView_T, readonly questWnd: QuestWndView_T, readonly clanWnd: ClanWndView_T };
@@ -107,7 +109,7 @@ export type NPCHtmlViewerView_T = Pick<NCNPCHtmlViewer, "element" | "hide" | "is
 export type OlympiadControlWndView_T = Pick<NCOlympiadControlWnd, "element" | "isVisible" | "onOtherGame" | "onStopObserving" | "placeOnScreen" | "setVisible">;
 export type OlympiadPlayerWndView_T = NWnd & Pick<NCOlympiadPlayerWnd, "appendMessage" | "getObjectId" | "onExpand" | "placeOnScreen" | "reset" | "setInfo" | "setVisible">;
 export type OlympiadTargetWndView_T = NWnd & Pick<NCOlympiadTargetWnd, "getSide" | "initialize" | "placeOnScreen" | "reset" | "setInfo" | "setVisible">;
-export type OptionWndView_T = Pick<NCOptionWnd, "canChangePartyLoot" | "element" | "getAudioOptions" | "getOptions" | "getUIScale" | "getUIScales" | "isVisible" | "onApply" | "onApplyAudio" | "onApplyUIScale" | "placeOnScreen" | "setVisible" | "toggle" | "updatePartyLootControl">;
+export type OptionWndView_T = Pick<NCOptionWnd, "canChangePartyLoot" | "element" | "getAudioOptions" | "getGamma" | "getOptions" | "getPawnRange" | "getUIScale" | "getUIScales" | "isVisible" | "onApply" | "onApplyAudio" | "onApplyGamma" | "onApplyPawnRange" | "onApplyUIScale" | "onInitialize" | "placeOnScreen" | "setVisible" | "toggle" | "updatePartyLootControl">;
 export type PartyRoomMakingWndView_T = Pick<NCPartyRoomMakingWnd, "element" | "getLootType" | "isVisible" | "onSubmit" | "placeOnScreen" | "setVisible" | "showCreate" | "showEdit">;
 export type PartyRoomWndView_T = Pick<NCPartyRoomWnd, "appendChat" | "clearChat" | "element" | "isVisible" | "minimized" | "onChat" | "onInvite" | "onKick" | "onSettings" | "onTerminate" | "placeOnScreen" | "setMembers" | "setVisible" | "show" | "table" | "tick">;
 export type PawnCreateWndView_T = Pick<NCPawnCreateWnd, "element" | "getTemplate" | "onBack" | "onChange" | "onCreate" | "onRotate" | "onZoom" | "placeOnScreen" | "setTemplates" | "setVisible">;
@@ -168,6 +170,7 @@ export class Skin {
     public createLoadingWnd(...args: ConstructorParameters<typeof NCLoadingWnd>): LoadingWndView_T { return new NCLoadingWnd(...args); }
     public createLobbyWnd(...args: ConstructorParameters<typeof NCLobbyWnd>): LobbyWndView_T { return new NCLobbyWnd(...args); }
     public createLoginServerWnd(...args: ConstructorParameters<typeof NCLoginServerWnd>): LoginServerWndView_T { return new NCLoginServerWnd(...args); }
+    public createReplayWnd(...args: ConstructorParameters<typeof NCReplayWnd>): ReplayWndView_T { return new NCReplayWnd(...args); }
     public createLoginWnd(...args: ConstructorParameters<typeof NCLoginWnd>): LoginWndView_T { return new NCLoginWnd(...args); }
     public createMacroWnd(...args: ConstructorParameters<typeof NCMacroWnd>): MacroWndView_T { return new NCMacroWnd(...args); }
     public createMainWnd(...args: ConstructorParameters<typeof NCMainWnd>): MainWndView_T { return new NCMainWnd(...args); }

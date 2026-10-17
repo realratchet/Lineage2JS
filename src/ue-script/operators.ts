@@ -52,7 +52,8 @@ function Asin(a: number) { return Math.asin(a); }
 function Cos(a: number) { return Math.cos(a); }
 function Acos(a: number) { return Math.acos(a); }
 function Tan(a: number) { return Math.tan(a); }
-function Atan(a: number) { return Math.atan(a); }
+// Core.dll 0x1013d268..0x1013d286 calls FPATAN with both float arguments.
+function Atan(a: number, b: number) { return Math.atan2(a, b); }
 function Exp(a: number) { return Math.exp(a); }
 function Loge(a: number) { return Math.log(a); }
 function Sqrt(a: number) { return Math.sqrt(a); }
@@ -68,7 +69,7 @@ function op_div_int_int                 /* /  */(a: number, b: number) { return 
 function rand_int(max: number) { return Math.floor(Math.random() * max); }
 
 
-function pre_op_sub_vector(a: FVector) { return a.negate(); }
+function pre_op_sub_vector(a: Vector3Arr): Vector3Arr { return [-a[0], -a[1], -a[2]]; }
 function op_mul_vector_float(a: FVector, b: number) { return a.multiplyScalar(b); }
 function op_mul_float_vector(a: number, b: FVector) { return b.multiplyScalar(a); }
 function op_mul_vector_vector(a: FVector, b: FVector) { return a.mul(b); }
@@ -85,12 +86,24 @@ function op_cross_vector_vector(a: FVector, b: FVector) { return a.cross(b); }
 function fn_not_implemented(...args: any[]) { throw new Error(`Called non-implemented function with arguments: ${JSON.stringify(args, undefined, 4)}`) };
 
 function VSize(a: FVector) { return a.length(); }
-function Normal(a: FVector) { return a.normalized(); }
+function Normal(a: Vector3Arr): Vector3Arr {
+    const x = Math.fround(a[0]), y = Math.fround(a[1]), z = Math.fround(a[2]);
+    const lengthSq = x * x + y * y + z * z;
+
+    if (lengthSq < 1e-8) return [0, 0, 0];
+
+    // Core SafeNormal 0x1014fc8f..0x1014fcae retains the x87 inverse for Z, stores float scale for X/Y.
+    const inverse = 1 / Math.sqrt(lengthSq), scale = Math.fround(inverse);
+
+    return [Math.fround(x * scale), Math.fround(y * scale), Math.fround(z * inverse)];
+}
 function VRand() { return FVector.make(Math.random(), Math.random(), Math.random()); }
 
 function Vector2Rotator(v: Vector3Arr): Vector3Arr {
-    const yaw = Math.round(Math.atan2(v[1], v[0]) * 32768 / Math.PI);
-    const pitch = Math.round(Math.atan2(v[2], Math.hypot(v[0], v[1])) * 32768 / Math.PI);
+    // Core FVector::Rotation 0x1014f310 uses 65535/(2*PI) and truncates.
+    const scale = 32767.5 / Math.PI;
+    const yaw = Math.trunc(Math.atan2(v[1], v[0]) * scale);
+    const pitch = Math.trunc(Math.atan2(v[2], Math.hypot(v[0], v[1])) * scale);
 
     return [pitch, yaw, 0];
 }

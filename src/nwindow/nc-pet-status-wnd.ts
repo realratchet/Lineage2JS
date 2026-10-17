@@ -83,7 +83,17 @@ export class NCPetStatusWnd extends NWnd {
         this.invalidate();
     }
 
-    public resize(delta: number) {
+    public placeOnScreen() {
+        const owner = this.manager.getWindowOwner();
+        const saved = owner === null ? null : localStorage.getItem(`wnd:${owner}:${this.windowName}:width`);
+        const width = saved === null ? 172 : JSON.parse(saved);
+
+        if (!Number.isInteger(width) || width < 172 || width > 374) throw new Error(`Invalid status width.`);
+
+        this.resize(width - this.width, false);
+    }
+
+    public resize(delta: number, save = true) {
         const size = Math.max(0, Math.min(202, this.sizeDelta + delta)), change = size - this.sizeDelta;
 
         this.sizeDelta = size;
@@ -91,6 +101,13 @@ export class NCPetStatusWnd extends NWnd {
         this.nameCtrl.width += change;
         this.resizeCtrl.x += change;
         this.invalidate();
+
+        const owner = this.manager.getWindowOwner();
+
+        if (save && change !== 0 && owner !== null) {
+            localStorage.setItem(`wnd:${owner}:${this.windowName}:width`, JSON.stringify(this.width));
+            this.manager.saveWindowPosition(this.windowName, this.x, this.y);
+        }
     }
 
     public setRemainTime(maximum: number, remaining: number) {

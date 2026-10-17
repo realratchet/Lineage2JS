@@ -1,4 +1,4 @@
-import { Matrix4, Object3D, Texture } from "three";
+import { Material, Matrix4, Object3D, Texture } from "three";
 import { ObjectComponent, type IObject } from "../../game/components";
 import { decodeSkinnedMesh } from "../../assets/decoders/object3d-decoder";
 import type { DecodeLibrary } from "@l2js/engine";
@@ -17,7 +17,7 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
     protected mesh: LitSkinnedMesh = null;
     protected meshPath: string = null;
     protected skins: string[] = null;
-    protected readonly meshTextures = new Set<Texture>();
+    protected readonly meshResources = new Set<Material | Texture>();
 
     public constructor(library: DecodeLibrary, renderManager: RenderManager) {
         super();
@@ -37,12 +37,9 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         if (meshPath === this.meshPath && this.skins && skins.length === this.skins.length && skins.every((skin, index) => skin === this.skins[index])) return;
 
         if (this.mesh) {
-            const materials = Array.isArray(this.mesh.material) ? this.mesh.material : [this.mesh.material];
-
-            for (const material of materials) material.dispose();
             this.mesh.skeleton.dispose();
             this.renderManager.releaseGeometry(this.mesh.geometry);
-            this.renderManager.releaseTextures(this.meshTextures);
+            this.renderManager.releaseMeshResources(this.meshResources);
             this.mesh.removeFromParent();
             this.mesh = null;
         }
@@ -64,7 +61,7 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         this.mesh.geometry.computeBoundingSphere();
         this.mesh.boundingSphere = this.mesh.geometry.boundingSphere.clone();
         this.renderManager.retainGeometry(this.mesh.geometry);
-        this.renderManager.retainMeshTextures([this.mesh], this.meshTextures);
+        this.renderManager.retainMeshResources([this.mesh], this.meshResources);
 
         this.mesh.isUnlit = !!properties.get("bUnlit");
         this.mesh.ambientGlow = properties.get("AmbientGlow");
@@ -80,7 +77,7 @@ export class ActorMeshComponent extends ObjectComponent<MeshActor_T> {
         if (this.mesh) {
             this.mesh.skeleton.dispose();
             this.renderManager.releaseGeometry(this.mesh.geometry);
-            this.renderManager.releaseTextures(this.meshTextures);
+            this.renderManager.releaseMeshResources(this.meshResources);
             this.mesh = null;
         }
     }

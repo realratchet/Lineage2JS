@@ -13,7 +13,12 @@ import { buildTransformStage } from "../../materials/mesh-static-material/transf
 const cacheTextures = new WeakMap<ITextureDecodeInfo, MapData_T>();
 const cacheTextureData = new WeakMap<THREE.Texture, MapData_T>();
 type WeakCacheEntry_T<T extends object> = { deref(): T | undefined };
+type WeakCacheKey_T = { cache: Map<string, WeakCacheEntry_T<object>>, key: string, entry: WeakCacheEntry_T<object> };
 const WeakRefConstructor = (globalThis as any).WeakRef;
+const FinalizationRegistryConstructor = (globalThis as any).FinalizationRegistry;
+const cacheFinalizer = FinalizationRegistryConstructor ? new FinalizationRegistryConstructor(({ cache, key, entry }: WeakCacheKey_T) => {
+    if (cache.get(key) === entry) cache.delete(key);
+}) : null;
 
 function getWeakCacheValue<T extends object>(cache: Map<string, WeakCacheEntry_T<T>>, key: string): T | undefined {
     const value = cache.get(key)?.deref();
@@ -23,7 +28,10 @@ function getWeakCacheValue<T extends object>(cache: Map<string, WeakCacheEntry_T
 }
 
 function setWeakCacheValue<T extends object>(cache: Map<string, WeakCacheEntry_T<T>>, key: string, value: T): void {
-    cache.set(key, WeakRefConstructor ? new WeakRefConstructor(value) : { deref: () => value });
+    const entry = WeakRefConstructor ? new WeakRefConstructor(value) : { deref: () => value };
+
+    cache.set(key, entry);
+    if (WeakRefConstructor && cacheFinalizer) cacheFinalizer.register(value, { cache, key, entry });
 }
 
 const cacheTexturesByName = new Map<string, WeakCacheEntry_T<MapData_T>>();
@@ -533,6 +541,7 @@ function decodeShader(library: DecodeLibrary, info: MaterialContracts.IShaderDec
     const useSelfIllumination = !info.specular && !!info.selfIllumination && !!info.selfIlluminationMask;
     const detail = info.detail ? decodeParameter(library, library.materials[info.detail]) : null;
     const diffuse = decodeParameter(library, library.materials[info.diffuse]);
+    const opacity = decodeParameter(library, library.materials[info.opacity]);
     const combiner = library.materials[info.diffuse] as MaterialContracts.ICombinerDecodeInfo;
 
     if (detail) detail.uniforms.detailScale = info.detailScale;
@@ -540,7 +549,8 @@ function decodeShader(library: DecodeLibrary, info: MaterialContracts.IShaderDec
     return new MeshStaticMaterial({
         diffuse,
         detail,
-        opacity: decodeParameter(library, library.materials[info.opacity]),
+        opacity,
+        shadowOpacity: opacity,
         specular: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIllumination : info.specular]),
         specularMask: decodeParameter(library, library.materials[useSelfIllumination ? info.selfIlluminationMask : info.specularMask]),
         side: info.doubleSide ? DoubleSide : FrontSide,
@@ -608,6 +618,7 @@ function decodeModifier(library: DecodeLibrary, info: MaterialContracts.IBaseMat
         diffuse: _decodeModifier(library, info, isShader ? shader.diffuse : materialIndex),
         detail,
         opacity: isShader ? _decodeModifier(library, info, shader.opacity) : ((isColorMod && colorMod.alphaBlend) ? _decodeModifier(library, info, materialIndex) : null),
+        shadowOpacity: isFinalBlend ? decodeParameter(library, info) : null,
         specular: isShader ? _decodeModifier(library, info, useSelfIllumination ? shader.selfIllumination : shader.specular) : null,
         specularMask: isShader ? _decodeModifier(library, info, useSelfIllumination ? shader.selfIlluminationMask : shader.specularMask) : null,
         side: (isColorMod && colorMod.doubleSide) ? DoubleSide : (isFinalBlend ? (finalBlend.doubleSide ? DoubleSide : FrontSide) : ((info as MaterialContracts.IBaseMaterialDecodeInfo).color ? DoubleSide : FrontSide)),

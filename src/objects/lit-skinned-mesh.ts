@@ -45,7 +45,7 @@ export class LitSkinnedMesh extends SkinnedMesh {
             // one env plane, halved per byte (shr at 0x959d63) - the sun itself arrives as a hardware light
             tmpColorByte.copy(sunAmbient);
         } else {
-            // SetAmbientLight 0x959d96 uses the unshifted zone color; retail measured (40,40,40).
+            // SetAmbientLight 0x959d96 uses FDynamicActor::AmbientColor from the cached render-box leaves.
             const ambient = zoneInfo?.ambient ?? arrNoAmbient;
 
             tmpColorByte.set(

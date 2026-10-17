@@ -3,7 +3,7 @@ import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-
 import "../materials/shader-chunks/register-chunks";
 import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
-import GLOBAL_UNIFORMS from "../materials/global-uniforms";
+import GLOBAL_UNIFORMS, { getLocalUniforms } from "../materials/global-uniforms";
 import Player from "../player";
 import type BaseActor from "../base-actor";
 import type CollidingMesh from "../objects/colliding-mesh";
@@ -26,6 +26,7 @@ import ColliderOverlay from "./collider-overlay";
 import type PhysicsManager from "../physics/physics-manager";
 import LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import SkeletalAnimationMixer from "../objects/skeletal-animation-mixer";
+import LocalSpaceSkeleton from "../objects/local-space-skeleton";
 import type GroundPickup from "../objects/ground-pickup";
 import ShadowProjector from "../objects/shadow-projector";
 import type DynamicLight from "../objects/dynamic-light";
@@ -42,7 +43,7 @@ import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
 import type AnimationComponent from "../objects/components/animation-component";
 import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
-import type { ScriptHost_T } from "../ue-script/vm";
+import { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
 import NPawnLightComponent from "./components/pawn-light-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
@@ -62,6 +63,7 @@ const tmpCamDir = new Vector3();
 const tmpSize = new Vector2();
 const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
+const tmpPawnViewOrigin = new Vector3();
 const tmpPawnSunAmbient = new ColorByte();
 const arrPawnLights: DynamicLight[] = [];
 const arrLightingObjects: THREE.Object3D[] = [];
@@ -112,6 +114,7 @@ const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
 type PawnLightingState_T = {
     position: Vector3,
     lightingPosition: Vector3,
+    lightingRootPosition: Vector3,
     lightingRadius: number,
     sector: SectorObject | null,
     lightingSector: SectorObject | null,
@@ -121,6 +124,7 @@ type PawnLightingState_T = {
     zoneIndex: number | null,
     lightingZoneIndex: number | null,
     envVersion: number,
+    ambientZoneVersion: number,
     pawnLightVersion: number,
     ambientR: number,
     ambientG: number,
@@ -273,6 +277,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected mainRenderTarget: WebGLRenderTarget;
     protected displayGammaPass: DisplayGammaPass;
     protected displayGammaEnabled: boolean = false;
+    protected displayGamma = 0;
 
     public bspHelperCamera: PerspectiveCamera | null = null;
     public bspHelperCameraHelper: CameraHelper | null = null;
@@ -291,10 +296,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
+    protected pawnRange: number = null;
+    protected pawnShadow = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
     protected readonly pickups = new Set<GroundPickup>();
-    protected readonly transientGeometries = new WeakMap<Object3D, Set<THREE.BufferGeometry>>();
+    protected readonly transientResources = new WeakMap<Object3D, Set<Disposable_T>>();
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
@@ -805,7 +812,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.screenFadeInDuration = Math.max(0, info.fadeInDuration);
         this.screenFadeColorAlpha = color[3] / 255;
         this.screenFadeElement.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-        this.screenFadeStartedAt = performance.now();
+        this.screenFadeStartedAt = this.manGame.getCurrentTime();
         this.needsUpdate = true;
     }
 
@@ -1088,13 +1095,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public setDisplayGamma(display: any, value: unknown): void {
-        display.gamma = parseFloat(value as any);
+        this.displayGamma = display.gamma = parseFloat(value as any);
         this.displayGammaEnabled = display.gamma !== 0;
 
         if (this.displayGammaEnabled) this.displayGammaPass.setRamp(display);
 
         this.needsUpdate = true;
     }
+
+    public getDisplayGamma() { return this.displayGamma; }
 
     protected wireEmitterVisibilityHandlers(): void {
         this.visualizer.setEmitterVisibilityHandlers(
@@ -1122,7 +1131,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const lifetime = object.findComponent<EffectLifetimeComponent>("effectLifetime") || object.addComponent(new EffectLifetimeComponent(this));
 
-        this.retainTransientGeometries(effect);
+        this.retainTransientResources(effect);
         this.scene.add(effect);
         this.getPhysicsManager().registerPhysicsComponent(lifetime);
         this.getPhysicsManager().registerSimulationObjects(effect);
@@ -1137,7 +1146,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public removeTransientEffect(effect: Object3D): void {
-        this.retainTransientGeometries(effect);
+        this.retainTransientResources(effect);
 
         const base = (effect as any).scriptBase as BaseActor;
         const owner = (effect as any).scriptOwner as Object3D & IObject;
@@ -1162,15 +1171,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
 
             for (const material of materials)
-                if (!(material as any).isSharedMaterial) material.dispose();
+                if (!(material as any).isSharedMaterial && !resourceRefs.has(material)) material.dispose();
             if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
         });
 
         if ((effect as any).isActor) (effect as BaseActor).release();
         else (effect as Object3D & IObject).detachComponents();
 
-        for (const geometry of this.transientGeometries.get(effect)) this.releaseGeometry(geometry);
-        this.transientGeometries.delete(effect);
+        for (const resource of this.transientResources.get(effect)) releaseResource(resource);
+        this.transientResources.delete(effect);
 
         this.needsUpdate = true;
     }
@@ -1178,29 +1187,29 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public retainGeometry(geometry: THREE.BufferGeometry): void { retainResource(geometry); }
     public releaseGeometry(geometry: THREE.BufferGeometry): void { releaseResource(geometry); }
 
-    public retainMeshTextures(meshes: THREE.Mesh[], target: Set<THREE.Texture>): void {
-        const textures = new Set<THREE.Texture>();
+    public retainMeshResources(meshes: THREE.Mesh[], target: Set<THREE.Material | THREE.Texture>): void {
+        const resources = new Set<THREE.Material | THREE.Texture>();
 
         for (const mesh of meshes) {
             for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
-                if (material) collectMaterialTextures(material, textures, new WeakSet());
+                if (material) collectMaterialResources(material, resources);
             if ((mesh as any).skinMaterials)
                 for (const material of Object.values((mesh as any).skinMaterials) as THREE.Material[])
-                    collectMaterialTextures(material, textures, new WeakSet());
+                    collectMaterialResources(material, resources);
         }
 
-        for (const texture of textures) {
-            if (target.has(texture)) continue;
+        for (const resource of resources) {
+            if (target.has(resource)) continue;
 
-            target.add(texture);
-            retainResource(texture);
+            target.add(resource);
+            retainResource(resource);
         }
     }
 
-    public releaseTextures(textures: Set<THREE.Texture>): void {
-        for (const texture of textures) releaseResource(texture);
+    public releaseMeshResources(resources: Set<THREE.Material | THREE.Texture>): void {
+        for (const resource of resources) releaseResource(resource);
 
-        textures.clear();
+        resources.clear();
     }
 
     public addPickup(pickup: GroundPickup): void {
@@ -1220,18 +1229,28 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if ((pickup as any).isL2Dice) this.removePickup(pickup);
     }
 
-    protected retainTransientGeometries(effect: Object3D): void {
-        let geometries = this.transientGeometries.get(effect);
+    protected retainTransientResources(effect: Object3D): void {
+        let retained = this.transientResources.get(effect);
 
-        if (!geometries) this.transientGeometries.set(effect, geometries = new Set());
+        if (!retained) this.transientResources.set(effect, retained = new Set());
+
+        const resources = new Set<Disposable_T>();
 
         effect.traverse((object: any) => {
             // ActorMeshComponent owns skinned meshes; sprite instance buffers are private to each emitter.
-            if (!object.geometry || object.isSkinnedMesh || object.isInstancedSpriteMesh || geometries.has(object.geometry)) return;
+            if (!object.geometry || object.isSkinnedMesh) return;
+            if (!object.isInstancedSpriteMesh) resources.add(object.geometry);
 
-            geometries.add(object.geometry);
-            this.retainGeometry(object.geometry);
+            for (const material of Array.isArray(object.material) ? object.material : [object.material])
+                if (material) collectMaterialResources(material, resources);
         });
+
+        for (const resource of resources) {
+            if (retained.has(resource)) continue;
+
+            retained.add(resource);
+            retainResource(resource);
+        }
     }
 
     public removePawn(pawn: BaseActor): void {
@@ -1268,6 +1287,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
+    public getPawnRange(): number { return this.pawnRange ?? this.manGame.getComponent("asset").userConfig.clippingRange.pawn; }
+    public setPawnRange(range: number): void {
+        if (!Number.isFinite(range) || range <= 0) throw new Error(`Invalid pawn range '${range}'.`);
+        this.pawnRange = range;
+        this.needsUpdate = true;
+    }
     public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
     public registerPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.add(component); }
     public unregisterPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.delete(component); }
@@ -1281,10 +1306,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public queueShaderCompile(root: THREE.Object3D): void { this.pendingShaderCompiles.add(root); }
 
     protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
+        const timeDilation = this.level ? this.level.levelInfoActor.getUnrealScriptProperty("TimeDilation") as number : 1;
+        const actorDelta = Math.fround(Math.max(Math.fround(0.0005), Math.min(Math.fround(0.4), Math.fround(Math.fround(deltaTime / 1000) * timeDilation))));
+
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
             if (pawn !== this.player && !pawn.isInteractive()) continue;
             if (pawn.isInStasis(currentTime)) continue;
+
+            component.tickActorView(actorDelta);
 
             if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) {
                 const animation = pawn.findComponent<AnimationComponent>("animation");
@@ -1315,16 +1345,28 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     protected updatePawnVisibility(frustum = this.frustum): void {
+        const inWorld = this.manGame.getComponent("network").isInWorld();
+        const range = Math.fround(this.getPawnRange()) * CLIPPING_RANGE_SCALE;
+        const controller = this.manGame.getComponent("asset").playerController;
+        const viewTarget = getProperty(controller, "ViewTarget");
+
+        // The viewport controller's runtime transform is the player pawn's transform.
+        const reference = !viewTarget || viewTarget === controller ? this.player : viewTarget as unknown as THREE.Object3D;
+        reference.getWorldPosition(tmpPawnViewOrigin);
+        const originX = Math.fround(tmpPawnViewOrigin.x), originY = Math.fround(tmpPawnViewOrigin.y);
+
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
             const state = this.resolvePawnLocation(pawn);
+            const dx = Math.fround(state.position.x) - originX, dy = Math.fround(state.position.y) - originY;
+            const inRange = !inWorld || component.updateActorView(Math.sqrt(dx * dx + dy * dy), range);
 
             if (!state.sector || !state.sector.staticMeshGroup || state.leafIndex === null) {
                 pawn.visible = false;
                 continue;
             }
 
-            pawn.visible = state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            pawn.visible = inRange && state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
             if (pawn.visible) component.createSkin();
         }
 
@@ -1371,6 +1413,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
+    public setPawnShadow(enabled: boolean) { this.pawnShadow = enabled; }
+
     protected updatePawnShadow(): void {
         const timeOfDay = this.environment.getTimeOfDay();
 
@@ -1387,7 +1431,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
 
         if (sun) tmpShadowDirection.copy(sun.lightDirection).normalize();
-        else tmpShadowDirection.set(0, 0, -1);
+        else tmpShadowDirection.set(-0, -0, -1);
 
         const minVertical = Math.abs(tmpShadowDirection.x) * 0.5;
 
@@ -1395,10 +1439,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
             tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
 
         arrShadowCasters.length = 0;
-        arrShadowCasters.push(this.player);
+        if (this.pawnShadow) {
+            arrShadowCasters.push(this.player);
 
-        for (const component of this.pawnRenderables)
-            if (component.getParent() !== this.player) arrShadowCasters.push(component.getParent());
+            const gui = this.manGame.getComponent("gui");
+            for (const component of this.pawnRenderables)
+                if (component.getParent() !== this.player && (gui.screen !== "world" || gui.hasNameplate(component.getParent()))) arrShadowCasters.push(component.getParent());
+        }
 
         this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
     }
@@ -1415,6 +1462,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         state = {
             position: new Vector3(NaN, NaN, NaN),
             lightingPosition: new Vector3(NaN, NaN, NaN),
+            lightingRootPosition: new Vector3(NaN, NaN, NaN),
             lightingRadius: -1,
             sector: null,
             lightingSector: null,
@@ -1424,6 +1472,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             zoneIndex: null,
             lightingZoneIndex: null,
             envVersion: -1,
+            ambientZoneVersion: -1,
             pawnLightVersion: -1,
             ambientR: -1,
             ambientG: -1,
@@ -1460,16 +1509,21 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!sector) return;
 
         const zoneInfo = state.zoneIndex === null ? null : sector.bspZones[state.zoneIndex]?.zoneInfo;
+        const renderable = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<PawnRenderableComponent>("pawnRenderable") : null;
+        const ambientZone = renderable && (actor as BaseActor).findComponent("script") ? renderable.getAmbientZone(sector) : null;
+        const ambientZoneVersion = ambientZone ? ambientZone.version : -1;
         const sphere = (actor as BaseActor).isActor ? (actor as BaseActor).getRenderSphere() : null;
         const center = sphere ? sphere.center : state.position;
         const radius = sphere ? sphere.radius : 24;
+        const lightingSphere = renderable ? renderable.getLightingSphere() : sphere;
+        const rootChanged = !state.lightingRootPosition.equals(lightingSphere ? lightingSphere.center : center);
         const isSpecialLit = (actor as BaseActor).isActor && !!(actor as BaseActor).getUnrealScriptProperty("bSpecialLit");
         const specialLitChanged = state.lightingSpecialLit !== isSpecialLit;
         const moved = state.lightingPosition.distanceToSquared(center) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
         const boundsChanged = state.lightingRadius !== radius;
         const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
         const envVersion = this.environment.getEnvVersion();
-        const ambientChanged = state.envVersion !== envVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
+        const ambientChanged = state.envVersion !== envVersion || state.ambientZoneVersion !== ambientZoneVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
         const pawnLightVersion = pawnLights ? pawnLights.version : -1;
         let relevantLightsChanged = false;
@@ -1498,9 +1552,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
             state.lightingSpecialLit = isSpecialLit;
         }
 
-        if (!moved && !boundsChanged && !locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
+        if (!moved && !boundsChanged && !rootChanged && !locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
 
-        if (pawnLights) pawnLights.updateLighting(sphere);
+        if (pawnLights) pawnLights.updateLighting(lightingSphere);
 
         arrLightingObjects.length = 0;
         arrLightingObjects.push(actor);
@@ -1508,13 +1562,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
         while (arrLightingObjects.length > 0) {
             const object = arrLightingObjects.pop()!;
 
-            for (const child of object.children) arrLightingObjects.push(child);
+            for (const child of object.children) if (!(child as BaseActor).isActor) arrLightingObjects.push(child);
 
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
-                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined, sphere);
+                (object as LitSkinnedMesh).updateActorLighting(ambientZone || zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined, lightingSphere);
         }
 
+        state.lightingRootPosition.copy(lightingSphere ? lightingSphere.center : center);
         state.envVersion = envVersion;
+        state.ambientZoneVersion = ambientZoneVersion;
         state.pawnLightVersion = pawnLightVersion;
         state.ambientR = sunAmbient.r;
         state.ambientG = sunAmbient.g;
@@ -1649,6 +1705,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             (GLOBAL_UNIFORMS.staticMeshHardwareSunDirection.value as Vector3).copy(sunLight.lightDirection);
         }
 
+        this.manGame.getComponent("gui").updateNameplates();
         this.updatePawnLighting(true, currentTime);
 
         for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
@@ -2395,7 +2452,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (viewShakeActive) this.restoreViewShake();
     }
 
-    protected drawWorld() { this.renderer.render(this.scene, this.camera); }
+    protected drawWorld() {
+        const frame = LocalSpaceSkeleton.renderFrame;
+        LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
+        try {
+            this.renderer.render(this.scene, this.camera);
+        } finally {
+            LocalSpaceSkeleton.renderFrame = frame;
+        }
+    }
 
     public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
         if (!this.isRenderingFrame) return;
@@ -2479,6 +2544,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (const info of sector.ambientSounds)
                 sector.addComponent(new AmbientSoundComponent(this.audioManager, info));
 
+        this.shadowProjector.attachReceivers(sector);
         this.updateClanHallDecorations(sector);
         retainSectorResources(sector, sector);
         this.pawnLightingStates = new WeakMap();
@@ -2664,6 +2730,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
+        this.shadowProjector.attachReceivers(sector.staticMeshGroup);
         this.updateClanHallDecorations(sector.staticMeshGroup);
         retainSectorResources(sector, sector.staticMeshGroup);
 
@@ -2911,7 +2978,7 @@ function collectMaterialTextures(material: THREE.Material, textures: Set<THREE.T
         if ((value as THREE.Texture)?.isTexture) textures.add(value as THREE.Texture);
     }
 
-    if ((material as any).uniforms) collectTexturesDeep((material as any).uniforms, textures, seen);
+    if ((material as any).uniforms) collectTexturesDeep(getLocalUniforms((material as any).uniforms), textures, seen);
     if ((material as any).sprites) collectTexturesDeep((material as any).sprites, textures, seen);
     if ((material as any).arrLightmaps) collectTexturesDeep((material as any).arrLightmaps, textures, seen);
 }

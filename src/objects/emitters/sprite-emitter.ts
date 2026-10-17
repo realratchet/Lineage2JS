@@ -38,6 +38,8 @@ export class SpriteEmitter extends BaseEmitter {
         this.isSpriteEmitter = true;
         this.material = config.material;
         this.spriteDirection = config.spriteDirection || "camera";
+        // USpriteEmitter::Initialize 0x106a9e99 forces UniformSize for PTDU_None.
+        if (this.spriteDirection === "camera") this.isUniformScale = true;
         this.projectionNormal = new Vector3().fromArray(config.projectionNormal ?? [0, 0, 1]);
 
         // Both camera-facing sprites and PTDU_Normal use one basis for the whole

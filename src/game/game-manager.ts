@@ -23,6 +23,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     protected components: IEngineComponent<any>[] = [];
 
     protected lastTick: number = 0;
+    protected currentTime = 0;
     protected readonly animationFrameCallback: FrameRequestCallback;
     protected readonly visibilityCallback: () => void;
     protected animationFrameHandle = 0;
@@ -65,7 +66,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     }
 
     public startTicking(currentTime: number): void {
-        this.lastTick = currentTime;
+        this.currentTime = this.lastTick = currentTime;
 
         for (const comp of this.components)
             comp.startTicking?.(this.lastTick);
@@ -113,6 +114,7 @@ export class GameManager implements IEngineComponent<GameManager> {
 
     public setParent(_parent: GameManager): this { return this; } // this is the root
     public getParent() { return this; }
+    public getCurrentTime() { return this.currentTime; }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onBeforeEngineTick?.(currentTime, deltaTime); }
     public onEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onEngineTick?.(currentTime, deltaTime); }
@@ -120,13 +122,15 @@ export class GameManager implements IEngineComponent<GameManager> {
 
     protected tick(currentTime: number): void {
         currentTime = Math.max(currentTime, this.lastTick);
-        const deltaTime = currentTime - this.lastTick;
-
-        this.onBeforeEngineTick(currentTime, deltaTime);
-        this.onEngineTick(currentTime, deltaTime);
-        this.onAfterEngineTick(currentTime, deltaTime);
+        const deltaTime = this.manNetwork ? this.manNetwork.getReplayDeltaTime(currentTime - this.lastTick) : currentTime - this.lastTick;
 
         this.lastTick = currentTime;
+        if (deltaTime === null) return;
+        this.currentTime += deltaTime;
+
+        this.onBeforeEngineTick(this.currentTime, deltaTime);
+        this.onEngineTick(this.currentTime, deltaTime);
+        this.onAfterEngineTick(this.currentTime, deltaTime);
     }
 
     protected onHandleAnimationFrame(currentTime: number): void {

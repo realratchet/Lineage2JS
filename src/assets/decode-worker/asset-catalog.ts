@@ -65,6 +65,8 @@ export async function openAssetCatalog(file: Blob): Promise<Catalog_T> {
 
 export async function storeAssetCatalog(handle: FileSystemFileHandle, entries: Record<string, any>, seekable: SeekableLibrary_T = null): Promise<number> {
     const previous = seekable as Catalog_T;
+    const file = await handle.getFile();
+    const current = file.size ? await openAssetCatalog(file) : null;
     const access = await (handle as any).createSyncAccessHandle();
     let written = 0;
 
@@ -82,29 +84,23 @@ export async function storeAssetCatalog(handle: FileSystemFileHandle, entries: R
     }
 
     try {
-        if (previous) {
-            const header = new Uint8Array(HEADER_SIZE);
+        if (!current) write(new Uint8Array(HEADER_SIZE), 0);
 
-            if (access.read(header, { at: 0 }) !== HEADER_SIZE || header.some((byte, index) => byte !== previous.header[index])) throw new Error(`Asset catalog changed before update.`);
-        } else {
-            if (access.getSize() !== 0) throw new Error(`Cannot replace an existing asset catalog without its index.`);
-
-            write(new Uint8Array(HEADER_SIZE), 0);
-        }
-
-        let offset = previous ? previous.end : HEADER_SIZE;
-        const index: CatalogEntry_T[] = [];
+        let offset = current ? current.end : HEADER_SIZE;
+        const index: CatalogEntry_T[] = current ? Object.entries(current.library.entries).map(([key, value]: [string, any]) => [key, current.entries[value.index].offset, current.entries[value.index].length]) : [];
 
         for (const [key, value] of Object.entries(entries)) {
             if (value.isLibraryChunk) {
                 const entry = previous && previous.entries[value.index];
+                const retained = current && current.library.entries[key];
+                const stored = retained && current.entries[retained.index];
 
-                if (!entry || entry.length !== value.byteLength) throw new Error(`Invalid retained asset '${key}'.`);
+                if (!entry || entry.length !== value.byteLength || !stored || stored.offset !== entry.offset || stored.length !== entry.length) throw new Error(`Invalid retained asset '${key}'.`);
 
-                index.push([key, entry.offset, entry.length]);
                 continue;
             }
             if (!(value instanceof Blob) || value.size > 0xffffffff) throw new Error(`Invalid asset catalog data '${key}'.`);
+            if (current && Object.hasOwn(current.library.entries, key)) continue;
 
             index.push([key, offset, value.size]);
             for (let start = 0; start < value.size; start += WRITE_SIZE) {
@@ -115,8 +111,10 @@ export async function storeAssetCatalog(handle: FileSystemFileHandle, entries: R
             }
         }
 
+        if (current && index.length === current.entries.length) return 0;
+
         const bytes = encoder.encode(JSON.stringify(index));
-        const generation = previous ? previous.generation + 1 : 1;
+        const generation = current ? current.generation + 1 : 1;
         const slot = new Uint8Array(SLOT_SIZE), view = new DataView(slot.buffer);
 
         if (!Number.isSafeInteger(generation) || bytes.length > 0xffffffff) throw new Error(`Asset catalog index exceeds its format.`);

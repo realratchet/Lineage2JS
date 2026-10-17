@@ -18,6 +18,21 @@ import type { UModel } from "./model/un-model";
 import type { Matrix4Arr, Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
+export enum EActorViewType_T {
+    EAVT_None,
+    EAVT_InSight,
+    EAVT_InSighting,
+    EAVT_OutSight,
+    EAVT_OutSighting,
+    EAVT_Spawning,
+    EAVT_Deleting,
+    EAVT_Hiding,
+    EAVT_Showing,
+    EAVT_Controller,
+    EAVT_HighLight,
+    EAVT_Despawning
+}
+
 export enum ENetRole_T {
     ROLE_None,
     ROLE_DumbProxy,

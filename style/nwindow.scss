@@ -1,8 +1,9 @@
 html { cursor: var(--game-cursor, default); }
+html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !important; }
 
 .nwindow-canvas {
     position: fixed;
-    image-rendering: pixelated;
+    image-rendering: auto;
     left: 0;
     top: 0;
     pointer-events: none;
@@ -37,13 +38,13 @@ html { cursor: var(--game-cursor, default); }
 
 .ndom-tile, .ndom-button {
     background-repeat: repeat;
-    image-rendering: pixelated;
+    image-rendering: auto;
 }
 
 .ndom-text {
     display: inline-block;
     vertical-align: top;
-    image-rendering: pixelated;
+    image-rendering: auto;
 }
 
 .ndom-button, .ndom-inventory-item { cursor: inherit; }
@@ -85,5 +86,5 @@ html { cursor: var(--game-cursor, default); }
     left: 0;
     top: 0;
     pointer-events: none;
-    image-rendering: pixelated;
+    image-rendering: auto;
 }

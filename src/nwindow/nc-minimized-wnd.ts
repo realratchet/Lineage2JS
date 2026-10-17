@@ -32,13 +32,16 @@ export class NCMinimizedWnd {
 
             event.preventDefault();
             let x = layer.toUI(event.clientX), y = layer.toUI(event.clientY), wasDragged = false;
+            const offsetX = x - this.element.offsetLeft, offsetY = y - this.element.offsetTop;
 
             layer.beginDrag(event => {
                 const nextX = layer.toUI(event.clientX), nextY = layer.toUI(event.clientY);
-                const left = parseInt(this.element.style.left), top = parseInt(this.element.style.top);
 
-                layer.place(this.element, left + nextX - x, top + nextY - y);
-                layer.place(this.parentElement, left + nextX - x, top + nextY - y);
+                if (nextX !== x || nextY !== y) {
+                    const [left, top] = layer.getManager().snapWindow(nextX - offsetX, nextY - offsetY, this.element.offsetWidth, this.element.offsetHeight, this.element);
+
+                    layer.place(this.element, left, top);
+                }
                 x = nextX;
                 y = nextY;
                 wasDragged = true;
@@ -62,7 +65,10 @@ export class NCMinimizedWnd {
     }
 
     public minimize() {
-        this.layer.place(this.element, Math.max(0, parseInt(this.parentElement.style.left)), parseInt(this.parentElement.style.top));
+        const x = Math.max(0, parseInt(this.parentElement.style.left)), y = parseInt(this.parentElement.style.top);
+
+        if (x !== parseInt(this.element.style.left) || y !== parseInt(this.element.style.top)) this.layer.getManager().clearWindowDocking(this.element);
+        this.layer.place(this.element, x, y);
         this.parentElement.hidden = true;
         this.setVisible(true);
     }
@@ -70,7 +76,12 @@ export class NCMinimizedWnd {
     public restore(isSilent = false) {
         if (!this.isVisible()) return;
 
-        this.layer.place(this.parentElement, parseInt(this.element.style.left), parseInt(this.element.style.top));
+        const x = parseInt(this.element.style.left), y = parseInt(this.element.style.top);
+
+        if (x !== parseInt(this.parentElement.style.left) || y !== parseInt(this.parentElement.style.top)) {
+            this.layer.place(this.parentElement, x, y);
+            this.layer.saveWindowPosition(this.parentElement);
+        }
         this.hide();
         if (!isSilent) this.layer.getManager().playWindowSound();
         this.parentElement.hidden = false;

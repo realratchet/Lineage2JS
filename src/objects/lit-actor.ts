@@ -366,6 +366,11 @@ export class LitActorMesh extends GameMesh {
         if (!this.lightInfo && !this.ambient && !this.isSunAffected) return;
         if (this.needsInitialLighting() && !this.lightingGate) return;
 
+        if (this.lightInfo && !this.isBatch && !this.lightInfo.matrix.equals(this.matrixWorld)) {
+            this.lightInfo.matrix.copy(this.matrixWorld);
+            this.lastEnvVersion = -1;
+        }
+
         if (this.ambient?.hardwareLighting) {
             if (!this.geometry.boundingSphere) this.geometry.computeBoundingSphere();
 

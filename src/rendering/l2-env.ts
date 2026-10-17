@@ -86,6 +86,7 @@ export class FogBlendState {
 }
 
 export class L2Environment {
+    protected entryMap = false;
     protected activeEnv: 0 | 1 | 2 = 0;
     protected env: EnvInfo;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
@@ -103,6 +104,8 @@ export class L2Environment {
     public setTimeScale(scale: number) { this.timeScale = scale; }
 
     public getTimeOfDay() { return this.time / 3600 % 24; }
+    public isEntryMap() { return this.entryMap; }
+    public setEntryMap(entryMap: boolean) { this.entryMap = entryMap; }
     public setTimeOfDay(hours: number) { this.time = (hours % 24) * 3600; }
     public setTimeToLobbyTime() {
         // UL2NEnvManager::SetTimeToLobbyTime (0x7b7c30): StartTime, environment 0.

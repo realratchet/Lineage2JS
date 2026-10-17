@@ -63,21 +63,21 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         this.element.className = "nwindow-canvas";
     }
 
-    public resize(width: number, height: number) { // the backing store keeps whole device pixels per UI pixel, a fractional uiScale is a pixelated css stretch so bitmap glyphs never smear
-        const ratio = window.devicePixelRatio || 1, pixels = Math.max(1, Math.floor(ratio)) * this.uiScale;
+    public resize(width: number, height: number) {
+        const ratio = window.devicePixelRatio || 1;
 
-        this.scale = Math.max(1, Math.round(pixels));
-        this.cssScale = pixels / ratio;
+        this.scale = ratio * this.uiScale;
+        this.cssScale = this.uiScale;
         this.width = Math.floor(width / this.cssScale);
         this.height = Math.floor(height / this.cssScale);
-        this.element.width = this.width * this.scale;
-        this.element.height = this.height * this.scale;
+        this.element.width = Math.round(this.width * this.scale);
+        this.element.height = Math.round(this.height * this.scale);
         this.element.style.width = `${this.width * this.cssScale}px`;
         this.element.style.height = `${this.height * this.cssScale}px`;
         this.needsRedraw = true;
     }
 
-    public getScreenSize(uiScale: number) { const ratio = window.devicePixelRatio || 1, cssScale = Math.max(1, Math.floor(ratio)) * uiScale / ratio; return [Math.floor(window.innerWidth / cssScale), Math.floor(window.innerHeight / cssScale)]; }
+    public getScreenSize(uiScale: number) { return [Math.floor(window.innerWidth / uiScale), Math.floor(window.innerHeight / uiScale)]; }
     public toUI(client: number) { return Math.floor(client / this.cssScale); }
 
     public async loadTextures(paths: string[]) {
@@ -170,7 +170,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
 
         context.setTransform(this.scale, 0, 0, this.scale, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
-        context.imageSmoothingEnabled = false;
+        context.imageSmoothingEnabled = true;
         this.originX = this.originY = 0;
         this.isAnimating = false;
     }
@@ -307,6 +307,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         let penX = Math.trunc(x);
         const penY = Math.trunc(y);
 
+        context.imageSmoothingEnabled = true;
         context.globalAlpha = ((color >>> 24) & 0xff) / 255;
 
         for (let i = 0; i < text.length; i++) {
@@ -450,6 +451,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         const startX = Math.trunc(x);
         let penX = startX, penY = Math.trunc(y);
 
+        context.imageSmoothingEnabled = true;
         context.globalAlpha = ((color >>> 24) & 0xff) / 255;
 
         for (let i = 0; i < text.length; i++) {

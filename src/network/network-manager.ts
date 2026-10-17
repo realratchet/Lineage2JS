@@ -10,6 +10,7 @@ import type { GameGUI_T, Nameplate_T } from "../nwindow/nconsole-wnd";
 import getCommandTokens from "./command-parser";
 import L2Lobby from "./l2-lobby";
 import L2ReplayFile from "./l2-replay-file";
+import { saveReplayFile } from "./replay-files";
 import GroundPickup from "../objects/ground-pickup";
 import L2Dice from "../objects/l2-dice";
 import type { SectorObject } from "../objects/zone-object";
@@ -20,7 +21,7 @@ import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component";
 import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
 import { getProperty, type ScriptHost_T } from "../ue-script/vm";
-import type PacketReader from "./packet-reader";
+import PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { IEngineComponent } from "../game/components";
 import type GameManager from "../game/game-manager";
@@ -213,6 +214,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected skillListLoad: Promise<void> = null;
     protected resolveSkillList: () => void = null;
     protected userAppearanceLoad: Promise<void> = null;
+    protected worldLoad: Promise<void> = null;
+    protected replayLoading = false;
     protected nextTick: Promise<void> = null;
     protected resolveNextTick: () => void = null;
     protected allyInvite: GamePackets.AllyInvite_T = null;
@@ -305,12 +308,26 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected manorSellCrops: GamePackets.ManorSellCropList_T = null;
     protected manorProcureCropDetail: GamePackets.ManorProcureCropDetail_T = null;
     protected stuckCheckAt = 0;
-    protected replayIndex = 0;
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
     public getParent(): GameManager { return this.manGame; }
 
     public isInWorld() { return this.inWorld; }
+    public isPlayingReplay() { return !!this.game?.isPlayingReplay(); }
+    public getReplayDeltaTime(deltaTime: number): number | null {
+        if (!this.isPlayingReplay()) return deltaTime;
+        if (this.game.isReplayPaused()) return null;
+
+        return Math.fround(Math.fround(deltaTime / 1000) * (this.replayLoading ? 1 : this.game.getReplayPlaySpeed())) * 1000;
+    }
+    public inputReplay(key: number, action: number): boolean {
+        if (!this.isPlayingReplay()) return false;
+        if (key !== 27) return this.game.inputReplay(key, action);
+        if (action !== 1 && action !== 3) return false;
+        if (action === 3) void this.stopReplayPlayback();
+
+        return true;
+    }
 
     protected getTargetId() {
         const user = this.objects.get(this.userId);
@@ -378,20 +395,23 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public async connectLogin(account: string, password: string) {
+        if (this.game?.isPlayingReplay()) throw new Error(`Cannot log in during replay playback.`);
         this.gmTransfer = null;
         if (this.login) this.login.close();
 
         this.loginAccount = account;
         this.loginPassword = password;
-        this.login = new LoginClient();
+        const login = this.login = new LoginClient();
         this.account = account.toLowerCase();
         this.ui.setLoginBusy(true);
 
         try {
-            const servers = await this.login.login(this.loginUrl, account, password);
+            const servers = await login.login(this.loginUrl, account, password);
 
-            this.ui.showServers(servers, this.login.lastServerId);
+            if (this.login !== login) return;
+            this.ui.showServers(servers, login.lastServerId);
         } catch (e) {
+            if (this.login !== login) return;
             this.ui.showLogin();
             this.ui.showMessage(this.getLoginErrorMessage(e));
         }
@@ -399,7 +419,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public cancelLogin() {
         this.gmTransfer = null;
-        this.login.close();
+        const login = this.login;
+
+        this.login = null;
+        if (login) login.close();
         this.ui.showLogin();
     }
 
@@ -752,6 +775,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const render = this.manGame.getComponent("render");
 
         this.stopReplayRecording();
+        this.worldLoad = null;
         for (const objectId of this.riders.keys()) this.endRide(objectId);
 
         render.clearViewportWindowParam();
@@ -1387,7 +1411,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         void this.enterWorld(entry);
     }
 
-    protected async enterWorld(entry: GamePackets.CharSelectEntry_T) {
+    protected async enterWorld(entry: GamePackets.Appearance_T) {
         const render = this.manGame.getComponent("render");
         const asset = this.manGame.getComponent("asset");
         const generation = this.teleportGeneration;
@@ -1411,7 +1435,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         render.player.setUnrealScriptProperty("Level", level.levelInfoActor as any);
         this.userAppearanceLoad = null;
-        this.skillListLoad = new Promise(resolve => this.resolveSkillList = resolve);
+        if (this.game.isPlayingReplay()) this.skillListLoad = this.resolveSkillList = null;
+        else this.skillListLoad = new Promise(resolve => this.resolveSkillList = resolve);
         this.game.enterWorld();
         this.game.requestSkillList();
         this.game.requestSkillCoolTime();
@@ -2487,8 +2512,77 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             }
         }
     }
-    public requestRestart() { if (this.inWorld) this.game.requestRestart(); }
-    public logout() { if (this.inWorld) this.game.logout(); }
+    public requestRestart() { if (this.game?.isPlayingReplay()) void this.stopReplayPlayback(); else if (this.inWorld) this.game.requestRestart(); }
+    public logout() { if (this.game?.isPlayingReplay()) void this.stopReplayPlayback(); else if (this.inWorld) this.game.logout(); }
+
+    public async playReplay(bytes: Uint8Array, lockCamera = true, useChatData = false): Promise<void> {
+        if (this.inWorld || this.game || this.ui.screen !== "login" && this.ui.screen !== "replay") throw new Error(`Replay playback requires the login screen.`);
+        const file = new L2ReplayFile(bytes), scene = file.getScene(), first = file.arrPackets[0];
+
+        file.setScene(scene);
+        // shortcut: ordinary mouse follow-camera recordings; extend after alternate controls are traced.
+        if (scene.cameraMode || scene.firstPerson || scene.observerMode || scene.fixedCamera || scene.zoom !== scene.desiredZoom || scene.zoom + 250 <= 0) throw new Error(`Replay camera mode is not implemented.`);
+        if (!first || first.opcode !== GamePackets.GameServerPacket_T.UserInfo || first.time !== 0) throw new Error(`Replay requires an initial UserInfo snapshot.`);
+        if (lockCamera) {
+            for (const { key, action, amount } of file.arrCameraInstructions) {
+                if ((key === 228 || key === 229) && action === 4) {
+                    if (Math.abs(Math.trunc(amount * 3600 * Math.fround(0.01))) > 0x7fffffff) throw new Error(`Replay camera axis exceeds the implemented input range.`);
+                    continue;
+                }
+                if ((key === 2 || key === 236 || key === 237) && (action === 1 || action === 3)) continue;
+                throw new Error(`Replay camera key/action '${key}/${action}' is not implemented.`);
+            }
+        }
+        const info = GamePackets.readUserInfo(new PacketReader(first.payload)), render = this.manGame.getComponent("render"), input = this.manGame.getComponent("input");
+        if (file.format < 1 || !file.arrUserIds.includes(info.objectId)) throw new Error(`Replay initial pawn list is not implemented.`);
+        const game = new GameClient();
+
+        game.onPacket = (opcode, packet) => { if (this.game === game) this.onPacket(opcode, packet); };
+        game.onReplayCamera = instruction => input.applyReplayCamera(instruction);
+        game.startReplayPlayback(file, lockCamera, useChatData);
+        this.game = game;
+        this.replayLoading = true;
+
+        try {
+            this.gmTransfer = null;
+            const login = this.login;
+
+            this.login = null;
+            if (login) login.close();
+            this.ui.showLoading();
+            this.lobby.leave();
+            render.player.teleportTo(setVector(new Vector3(), info), true);
+            input.resetFollowCamera();
+            await this.enterWorld(info);
+            if (this.game !== game) return;
+
+            render.getEnvironment().setTimeOfDay(scene.hour + scene.minute / 60 + scene.second / 3600);
+            render.getEnvironment().setTimeScale(GAME_TIME_SCALE);
+            game.prepareReplayPlayback();
+            await this.worldLoad;
+            if (this.game !== game) return;
+
+            render.player.setRotationYaw(Math.trunc(scene.actorYaw));
+            input.startReplayCamera(scene);
+            game.tickReplayPlayback(0);
+            this.replayLoading = false;
+        } catch (error) {
+            if (this.game === game) await this.stopReplayPlayback();
+            throw error;
+        }
+    }
+
+    public async stopReplayPlayback(): Promise<void> {
+        const game = this.game;
+
+        if (!game || !game.isPlayingReplay()) return;
+        this.leaveWorld();
+        game.close();
+        this.game = null;
+        this.replayLoading = false;
+        this.manGame.getComponent("input").endReplayCamera();
+        await this.showLogin(this.loginUrl);
+    }
 
     public startReplayRecording(): void {
         if (!this.inWorld || this.game.isRecording()) return;
@@ -2505,16 +2599,21 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.ui.addSystemMessage(this.ui.getSystemMessage(1652), this.ui.getStrings().systemMessageColors[1652]);
     }
 
-    public stopReplayRecording(): void {
+    public async stopReplayRecording(): Promise<void> {
         if (!this.game || !this.game.isRecording()) return;
-        const file = this.game.stopRecording(), name = `Rep${String(this.replayIndex++).padStart(5, "0")}.l2r`;
+        const file = this.game.stopRecording(), bytes = file.toBytes();
         this.ui.setReplayRecording(false);
-        const url = URL.createObjectURL(new Blob([file.toBytes()], { type: "application/octet-stream" })), link = document.createElement("a");
+        let name = "Replay.l2r";
 
-        link.href = url;
-        link.download = name;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        try { name = await saveReplayFile(bytes); }
+        finally {
+            const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" })), link = document.createElement("a");
+
+            link.href = url;
+            link.download = name;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
         this.ui.addSystemMessage(this.ui.getSystemMessage(1653).replace("$s1", name), this.ui.getStrings().systemMessageColors[1653]);
     }
 
@@ -2556,7 +2655,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             object = this.createObject(info.objectId, "user", info);
             object.actor = player;
             object.resolveActor(player);
-            object.appearanceKey = this.getAppearanceKey(this.characters[this.selectedSlot]);
+            object.appearanceKey = this.getAppearanceKey(this.game.isPlayingReplay() ? info : this.characters[this.selectedSlot]);
         }
 
         this.objects.delete(info.objectId);
@@ -2617,7 +2716,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.setRide({ objectId: info.objectId, isMounted: info.mountType !== 0, mountType: info.mountType, npcId: info.mountNpcId });
 
-        if (isFirst) void this.finishLoading();
+        if (isFirst) this.worldLoad = this.finishLoading();
         this.teleportInfoPending = false;
     }
 
@@ -2659,7 +2758,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             object.isRunning = info.isRunning;
             object.isInCombat = info.isInCombat;
             object.isDead = info.isAlikeDead;
-            object.waitType = info.isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING;
             object.privateStoreType = info.privateStoreType;
             object.cubics = info.cubics;
             object.abnormalState = info.abnormalState;
@@ -3371,7 +3469,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected onMagicSkillUse(packet: PacketReader) {
-        const receivedTime = performance.now();
+        const receivedTime = this.manGame.getCurrentTime();
         const caster = this.objects.get(packet.d());
         const targetObjectId = packet.d(), target = this.objects.get(targetObjectId);
         const id = packet.d(), level = packet.d(), hitTime = Math.max(0, packet.d());
@@ -3436,7 +3534,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved) return;
 
-        attack.castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (performance.now() - cast.receivedTime) / 1000);
+        attack.castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (this.manGame.getCurrentTime() - cast.receivedTime) / 1000);
 
         if (!skill.visual) {
             const [loaded, targetActor] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), target.actor || target.actorReady]);
@@ -3447,7 +3545,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             Object.assign(skill, { visual: loaded.visual, flyingTime: loaded.flyingTime, sounds: loaded.sounds, assets: loaded.assets });
             attack.setSkillTargets(cast.id, cast.associatedActors, target.actor);
-            attack.attachSkillVisual(skill, target.actor, cast.hitTime, cast.associatedActors, (performance.now() - cast.receivedTime) / 1000);
+            attack.attachSkillVisual(skill, target.actor, cast.hitTime, cast.associatedActors, (this.manGame.getCurrentTime() - cast.receivedTime) / 1000);
         }
         if (target.actor) this.ui.notifyOlympiadSkill(caster.objectId, cast.id);
     }
@@ -3901,7 +3999,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected addChat(object: NetObject_T, name: string, text: string, type: GamePackets.Say2_T) {
         if (object && object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE && type !== GamePackets.Say2_T.PETITION_PLAYER && type !== GamePackets.Say2_T.PETITION_GM) { // NCConsole 0x1005d5e9..0x1005d811
             object.chatMessage = text.length < 19 ? text : `${text.slice(0, 18)}...`;
-            object.chatTime = performance.now();
+            object.chatTime = this.manGame.getCurrentTime();
         }
 
         this.ui.addChat(name, text, type);
@@ -5318,6 +5416,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public onEngineTick(currentTime: number, deltaTime: number): void {
         this.tickGMServerTransfer();
         if (this.getReplayRecordingTime() > 1800) this.stopReplayRecording(); // FL2ReplayManager::Tick 0x75f8a6.
+        if (this.game?.isPlayingReplay() && !this.replayLoading && !this.game.tickReplayPlayback(deltaTime / 1000)) {
+            void this.stopReplayPlayback();
+            return;
+        }
 
         if (this.resolveNextTick) {
             const resolve = this.resolveNextTick;
@@ -5363,7 +5465,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const player = this.manGame.getComponent("render").player;
         const mouseTarget = this.manGame.getComponent("input").getMouseTarget();
         const plates: Nameplate_T[] = [];
-        const now = performance.now();
+        const now = this.manGame.getCurrentTime();
         const clanId = this.objects.get(this.userId)?.clanId || 0;
 
         for (const object of this.objects.values()) {

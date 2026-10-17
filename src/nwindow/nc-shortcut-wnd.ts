@@ -107,6 +107,12 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
     }
 
     public placeOnScreen(screenWidth: number, screenHeight: number) {
+        const owner = this.manager.getWindowOwner();
+        const saved = owner === null ? null : localStorage.getItem(`wnd:${owner}:${this.windowName}:horizontal`);
+        const horizontal = saved === null ? false : JSON.parse(saved);
+
+        if (typeof horizontal !== "boolean") throw new Error(`Invalid shortcut orientation.`);
+        if (horizontal !== this.isHorizontal) this.rotate(false);
         if (this.isHorizontal) return;
 
         this.x = Math.trunc(screenWidth - 46);
@@ -114,6 +120,8 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
     }
 
     public getPage() { return this.page; }
+
+    public resetLayout() { if (this.isHorizontal) this.rotate(); }
 
     public hasCoolTime(key: string) {
         return this.isVisible && this.entries.slice(this.page * SLOTS_PER_PAGE, (this.page + 1) * SLOTS_PER_PAGE).some(entry => entry && entry.skillKey === key);
@@ -149,7 +157,7 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
         this.invalidate();
     }
 
-    protected rotate() { // slot80 0x10106300 -> slot75 0x101058e0: swap w/h around x+W-H, y+H-W, clamped to >= 0.
+    protected rotate(save = true) { // slot80 0x10106300 -> slot75 0x101058e0: swap w/h around x+W-H, y+H-W, clamped to >= 0.
         const w = this.width, h = this.height;
 
         this.isHorizontal = !this.isHorizontal;
@@ -159,6 +167,13 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
         this.height = w;
         this.layoutChildren();
         this.invalidate();
+
+        const owner = this.manager.getWindowOwner();
+
+        if (save && owner !== null) {
+            localStorage.setItem(`wnd:${owner}:${this.windowName}:horizontal`, JSON.stringify(this.isHorizontal));
+            this.manager.saveWindowPosition(this.windowName, this.x, this.y);
+        }
     }
 
     protected layoutChildren() {

@@ -341,8 +341,12 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         this.userConfig = clientConfig.userConfig;
         this.playerController = playerController;
+        playerController.scriptProperties.set("CameraViewHeightAdjust", this.userConfig.cameraViewHeightAdjust);
         playerController.scriptProperties.set("bUseAutoTrackingPawn", this.userConfig.useAutoTrackingPawn);
         playerController.scriptProperties.set("AutoTrackingPawnSpeed", this.userConfig.autoTrackingPawnSpeed);
+        if (this.userConfig.minZoomingDist !== null) playerController.scriptProperties.set("MinZoomingDist", this.userConfig.minZoomingDist);
+        if (this.userConfig.maxZoomingDist !== null) playerController.scriptProperties.set("MaxZoomingDist", this.userConfig.maxZoomingDist);
+        if ((playerController.scriptProperties.get("MinZoomingDist") as number) > (playerController.scriptProperties.get("MaxZoomingDist") as number)) throw new Error(`Invalid camera zoom limits.`);
         manRender.audioManager.setSoundVolume(this.userConfig.audio.soundVolume);
         manRender.audioManager.setMusicVolume(this.userConfig.audio.musicVolume);
         manRender.audioManager.setWavVoiceVolume(this.userConfig.audio.wavVoiceVolume);

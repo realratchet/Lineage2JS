@@ -66,55 +66,6 @@ const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
 const SCRIPT_KEYS = ["scriptClasses", "scriptFunctions", "scriptStates"] as const;
 const SKILL_VOICE_GROUPS = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman"];
 
-function shareLibraryValue(value: any, previous: any): any {
-    if (Object.is(value, previous)) return previous;
-    if (!value || !previous || typeof value !== "object" || typeof previous !== "object") return value;
-
-    const prototype = Object.getPrototypeOf(value);
-
-    if (prototype !== Object.getPrototypeOf(previous) || prototype !== Object.prototype && prototype !== null && !Array.isArray(value)) return value;
-    if (Array.isArray(value) && value.length !== previous.length) return value;
-
-    const keys = Object.keys(value);
-    let equal = keys.length === Object.keys(previous).length, shared = value;
-
-    for (const key of keys) {
-        const field = shareLibraryValue(value[key], previous[key]);
-
-        if (!Object.hasOwn(previous, key) || !Object.is(field, previous[key])) equal = false;
-        if (Object.is(field, value[key])) continue;
-
-        if (shared === value) shared = Array.isArray(value) ? value.slice() : Object.assign(Object.create(prototype), value);
-        shared[key] = field;
-    }
-
-    return equal ? previous : shared;
-}
-
-function shareStoredAssets(entries: Record<string, DecodeLibrary>): Record<string, DecodeLibrary> {
-    const assets = new Map<string, any>(), values = new WeakMap<object, any>();
-    const shared: Record<string, DecodeLibrary> = {};
-
-    for (const [name, source] of Object.entries(entries)) {
-        const library = shared[name] = Object.assign({}, source);
-
-        for (const key of [...SCRIPT_KEYS, "effectTemplates", "actorTemplates"] as const) {
-            const dictionary = library[key] = {};
-
-            for (const [id, value] of Object.entries(source[key])) {
-                const asset = `${key}:${id}`;
-                const previous = values.has(value) ? values.get(value) : shareLibraryValue(value, assets.get(asset));
-
-                dictionary[id] = previous;
-                assets.set(asset, previous);
-                values.set(value, previous);
-            }
-        }
-    }
-
-    return shared;
-}
-
 function copyLibraryAssets(target: DecodeLibrary, source: DecodeLibrary): void {
     for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         for (const [id, value] of Object.entries(source[key])) {
@@ -2015,25 +1966,25 @@ export class DecodeEngine {
 
         let library = bundle.entries[key];
 
-        if (name === "npc_runtime" && library.isLibraryChunk) {
+        if (library.isLibraryChunk) {
             const entry = bundle.seekable.entries[library.index];
-            const cached = await openLibraryFile(bundle.seekable.file.slice(entry.offset, entry.offset + entry.length));
 
-            if (select) cached.library = select(cached.library);
+            return DecodeCache.readCachedLibrary(name, settings, async file => {
+                const cached = await openLibraryFile(file.slice(entry.offset, entry.offset + entry.length));
 
-            return this.hydrateSectorTransfer(cached);
+                if (select) cached.library = select(cached.library);
+
+                if (name === "npc_runtime") return this.hydrateSectorTransfer(cached);
+
+                if (name === "skill_visuals" && key.startsWith("sound:"))
+                    for (const sound of cached.library.soundBlobCache.values())
+                        if (sound.data.isLibraryChunk) sound.data = await getLibraryChunkBlob(cached, sound.data, sound.mimeType);
+
+                return hydrateLibraryFile(cached);
+            });
         }
 
         if (select) library = select(library);
-
-        if (bundle.seekable && name === "skill_visuals" && key.startsWith("sound:")) {
-            library = Object.assign({}, library, { soundBlobCache: new Map(library.soundBlobCache) });
-
-            for (const [id, sound] of library.soundBlobCache)
-                if ((sound.data as any).isLibraryChunk) library.soundBlobCache.set(id, Object.assign({}, sound, { data: await getLibraryChunkBlob(bundle.seekable, sound.data, sound.mimeType) }));
-        }
-
-        if (bundle.seekable) await hydrateLibraryFile(bundle.seekable, library);
 
         return library;
     }
@@ -2055,11 +2006,10 @@ export class DecodeEngine {
         for (const [name, bundle] of this.cacheStoredAssets) {
             if (!bundle.dirty) continue;
 
-            const entries = name === "npc_runtime" ? {} : shareStoredAssets(bundle.entries);
+            const entries = {};
 
-            if (name === "npc_runtime")
-                for (const [key, library] of Object.entries(bundle.entries))
-                    entries[key] = library.isLibraryChunk ? library : serializeLibraryBlob(library);
+            for (const [key, library] of Object.entries(bundle.entries))
+                entries[key] = library.isLibraryChunk ? library : serializeLibraryBlob(library);
 
             await DecodeCache.storeCachedLibraryDurable(name, bundle.settings, { entries }, bundle.seekable);
 

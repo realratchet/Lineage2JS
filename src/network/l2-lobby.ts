@@ -65,6 +65,7 @@ export class L2Lobby {
         const [x, y] = render.getSectorId(new Vector3(spots[0][0], spots[0][1], spots[0][2]));
 
         asset.setStreaming(render, false);
+        render.getEnvironment().setEntryMap(true);
         render.getEnvironment().setTimeToLobbyTime();
         this.manGame.getComponent("input").setCameraLocked(true);
         render.player.visible = false;
@@ -88,6 +89,7 @@ export class L2Lobby {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
 
         this.clearPawns();
+        render.getEnvironment().setEntryMap(false);
         render.setLevel(null);
         render.skyRenderer.setSkyZone(null);
         render.setHorizontalFov();
