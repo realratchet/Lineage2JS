@@ -1,6 +1,6 @@
 import getNativeEffect, { type NativeSkillEffect_T } from "./native-effects";
 import { call, if_, while_, return_, compile } from "./skill-program";
-import type { NativeSkillBinding_T } from "./native-skill-bindings";
+import type { NativeEffectBinding_T } from "./native-effect-bindings";
 import type { NpcSkillAttack_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T } from "../un-pawn";
 import type { IScriptFunctionDecodeInfo } from "../script-dump-loader";
 
@@ -30,7 +30,7 @@ const programs = Object.fromEntries((["casting", "preshot", "shot", "explosion"]
     ])
 }])) as Record<NpcSkillEffectPhase_T, IScriptFunctionDecodeInfo>;
 
-export function createSkillVisualDefinition(actions: NpcSkillEffectAction_T[] | null, native: NativeSkillBinding_T = null): SkillVisualDefinition_T {
+export function createSkillVisualDefinition(actions: NpcSkillEffectAction_T[] | null, native: NativeEffectBinding_T = null): SkillVisualDefinition_T {
     return { actions, effects: native ? native.effects.flatMap(name => getNativeEffect(name, native.effectGroup)) : [], soundPhases: native ? native.soundPhases : [], finalShotOnly: !!native?.finalShotOnly, transientRejected: !!native?.rejectTransient, associatedActors: !!native?.associatedActors, firecracker: native?.firecracker, echoCrystal: native?.echoCrystal, programs };
 }
 

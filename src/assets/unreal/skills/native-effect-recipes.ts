@@ -1,6 +1,6 @@
-import type { NativeSkillBinding_T } from "./native-skill-bindings";
+import type { NativeEffectBinding_T } from "./native-effect-bindings";
 
-const nativeSkillRecipes = new Map<string, NativeSkillBinding_T>([
+const nativeEffectRecipes = new Map<string, NativeEffectBinding_T>([
     // Engine.dll Init/PreShot/Shot/Explosion: 0x7a13ed / 0x7a3de7 / 0x7a5035 / 0x791ade.
     ["s_drain_health", { effects: ["LineageEffect.s_u019_a", "LineageEffect.s_u019_b", "LineageEffect.s_u019_c"], effectGroup: "drainHealth", soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79c9b4 / 0x7a3de7 / 0x7a6d16 / 0x791ade.
@@ -174,6 +174,6 @@ const nativeSkillRecipes = new Map<string, NativeSkillBinding_T>([
 ]);
 
 // Engine.dll SpawnNTransientEffect 0x104c9309..0x104ca7e1 returns false without an effect or sound.
-nativeSkillRecipes.set("e_rejected_transient", { effects: [], soundPhases: [], rejectTransient: true });
+nativeEffectRecipes.set("e_rejected_transient", { effects: [], soundPhases: [], rejectTransient: true });
 
-export default nativeSkillRecipes;
+export default nativeEffectRecipes;

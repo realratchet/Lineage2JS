@@ -1,4 +1,4 @@
-const nativeSkillIds = new Map<number, string>([
+const nativeEffectIds = new Map<number, string>([
     [1, "s_triple_slash"],
     [2, "s_confusion"],
     [3, "s_power_strike"],
@@ -1065,4 +1065,4 @@ const nativeSkillIds = new Map<number, string>([
     [7029, "s_super_haste"],
 ]);
 
-export default nativeSkillIds;
+export default nativeEffectIds;
