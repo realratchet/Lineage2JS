@@ -185,6 +185,24 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         return this.execute({ phase, dueTime: phaseTime, cast, source, target, hitActor, associatedActors, impactActor, actions: [], effects: [], first: 0, end: 0, projectileExplosion: false, effectSpawned: false, targeted: false, primaryAssociated: false, soundWithoutEffect: false, lastEffect: null });
     }
 
+    public replaceTarget(actor: SkillActor_T, replacement: SkillActor_T): void {
+        const casts = new Set(this.projectileCasts.values());
+
+        for (const frame of [...this.pendingEffects, ...this.associatedActions.map(entry => entry.frame)]) {
+            casts.add(frame.cast);
+            if (frame.target === actor) frame.target = replacement;
+            if (frame.impactActor === actor) frame.impactActor = replacement;
+            frame.associatedActors = frame.associatedActors.map(target => target === actor ? replacement : target);
+        }
+        for (const cast of casts) {
+            if (cast.target === actor) cast.target = replacement;
+            cast.associatedActors = cast.associatedActors.map(target => target === actor ? replacement : target);
+        }
+        for (const entry of this.associatedActions) entry.actors = entry.actors.map(target => target === actor ? replacement : target);
+        for (const pending of this.pendingSounds)
+            if (pending.pawn === actor) pending.pawn = replacement;
+    }
+
     public setSkillTargets(skillId: number, actors: readonly SkillActor_T[]): void {
         const previous = this.frame;
 
@@ -219,6 +237,16 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
     protected execute(frame: SkillPhase_T): boolean {
         const previous = this.frame;
+
+        if (frame.target?.isActor && !this.host.isAlive(frame.target)) {
+            if (frame.impactActor === frame.target) {
+                frame.impactActor = null;
+                frame.hitActor = false;
+            }
+            frame.target = null;
+        }
+        if (frame.associatedActors.some(actor => actor?.isActor && !this.host.isAlive(actor)))
+            frame.associatedActors = frame.associatedActors.filter(actor => !actor?.isActor || this.host.isAlive(actor));
 
         this.frame = frame;
         try { return this.host.executeProgram(frame.cast.caster, this, frame.cast.skill.visual.programs[frame.phase]); }
@@ -304,6 +332,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
                     actor.scriptProperties.set("Physics", EPhysics_T.PHYS_NProjectile);
                     this.projectileCasts.set(actor, projectileCast);
                     this.host.initProjectile(actor, caster, destination, projectile => {
+                        const destination = projectile.scriptProperties.get("TargetActor") as SkillActor_T;
+
                         this.projectileCasts.delete(actor);
                         this.notify("explosion", this.lastTime, projectileCast, projectile, destination, !!destination, projectileCast.associatedActors);
                     });
@@ -397,6 +427,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         const projectileCast = { ...cast, associatedActors: frame.associatedActors.slice() };
         this.projectileCasts.set(actor, projectileCast);
         const projectile = this.host.initProjectile(actor, caster, destination, (projectile, hitActor, impactActor) => {
+            const destination = projectile.scriptProperties.get("TargetActor") as SkillActor_T;
+
             this.projectileCasts.delete(actor);
             this.notify("explosion", this.lastTime, projectileCast, projectile, destination, hitActor, projectileCast.associatedActors, impactActor);
         }, flight.path, flight.speed, flight.acceleration);

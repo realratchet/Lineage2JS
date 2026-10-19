@@ -201,7 +201,8 @@ export class L2Lobby {
 
         await this.loadAppearance({ race, sex, classId: PREVIEW_CLASS_IDS[race][isMystic ? 1 : 0], hairStyle, hairColor, face, enchantLevel: 0, paperdoll: new Array(16).fill(0) }, actor);
 
-        if (generation !== this.generation || !isNew) return;
+        if (generation !== this.generation) return actor.release();
+        if (!isNew) return;
 
         render.addPawn(actor);
         actor.setRotationYaw(yaw);

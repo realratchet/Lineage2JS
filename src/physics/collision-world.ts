@@ -160,7 +160,7 @@ export class CollisionWorld {
     protected readonly physicsVolumes = new Map<PhysicsVolume[], PhysicsVolumeEntry_T[]>();
     protected readonly volumeActors = new Map<PhysicsVolume[], VolumeEntry_T[]>();
     protected readonly physicsVolumeTrees = new Map<PhysicsVolume[], PhysicsVolumeTree_T>();
-    protected readonly pawnLevels = new Map<BaseActor, PhysicsVolumeTree_T>();
+    protected readonly pawnLevels = new Map<BaseActor | CollidingMesh, PhysicsVolumeTree_T>();
     protected readonly volumeHit: PhysicsVolumeHit_T = { time: 1, location: new Vector3(), normal: new Vector3(), actor: null };
     protected readonly entriesByActor = new Map<ICollidable, AnalyticalEntry_T>();
     protected readonly unsupportedActors = new Set<ICollidable>();
@@ -293,7 +293,7 @@ export class CollisionWorld {
             return;
         }
 
-        const dynamic = primitive.kind === "cylinder" || !!(object as any).isMovableObject || !!(object as any).isRotatingObject;
+        const dynamic = primitive.kind === "cylinder" || !!(object as any).isMovableObject || !!(object as any).isRotatingObject || !!(object as any).isVehicle;
         let bounds = primitive.bounds;
 
         if (primitive.kind === "bsp" && !(object as any).isVolume) {
@@ -411,7 +411,7 @@ export class CollisionWorld {
         return this.sweepQuery(query, 0);
     }
 
-    public notifyMove(pawn: BaseActor, contacts: ActorLineHit_T[], hit: CheckResult_T, ignoreBases: boolean): void {
+    public notifyMove(pawn: BaseActor | CollidingMesh, contacts: ActorLineHit_T[], hit: CheckResult_T, ignoreBases: boolean): void {
         const vm = pawn.getComponent<ScriptComponent>("script").getVM();
         const target = hit && hit.actor;
         if (target && !(target.getCollisionProfile ? target.getCollisionProfile() || defaultProfile : defaultProfile).worldGeometry && !isBasedOn(pawn, target)) {
@@ -558,7 +558,7 @@ export class CollisionWorld {
         this.physicsVolumeTrees.delete(volumes);
     }
 
-    public setPawnLevel(pawn: BaseActor, volumes: PhysicsVolume[] | null): void {
+    public setPawnLevel(pawn: BaseActor | CollidingMesh, volumes: PhysicsVolume[] | null): void {
         const previous = this.pawnLevels.get(pawn), level = volumes ? this.physicsVolumeTrees.get(volumes) : null;
         if (volumes && !level) throw new Error(`Pawn '${pawn.name}' has no registered owning level.`);
         if (previous && previous !== level) previous.tree.removeActor(pawn.uuid);
@@ -570,11 +570,17 @@ export class CollisionWorld {
         this.updateLevelPawn(pawn, level);
     }
 
-    protected updateLevelPawn(pawn: BaseActor, level: PhysicsVolumeTree_T): void {
+    protected updateLevelPawn(pawn: BaseActor | CollidingMesh, level: PhysicsVolumeTree_T): void {
         const entry = this.entriesByActor.get(pawn);
 
         if (entry && !entry.active || !pawn.getUnrealScriptProperty("bCollideActors") || pawn.isPendingKill()) {
             level.tree.removeActor(pawn.uuid);
+            return;
+        }
+        const primitive = pawn.getCollisionPrimitive();
+        if (primitive.kind !== "cylinder") {
+            tmpVolumeBounds.copy(primitive.bounds).expandByScalar(1);
+            level.tree.updateActor(pawn.uuid, tmpVolumeBounds);
             return;
         }
         pawn.getWorldPosition(tmpBodyPosition);
@@ -585,7 +591,7 @@ export class CollisionWorld {
         level.tree.updateActor(pawn.uuid, tmpVolumeBounds);
     }
 
-    public updatePawnCollision(pawn: BaseActor): void {
+    public updatePawnCollision(pawn: BaseActor | CollidingMesh): void {
         const entry = this.entriesByActor.get(pawn);
         const active = !!pawn.getUnrealScriptProperty("bCollideActors") && !pawn.isPendingKill();
 
@@ -607,7 +613,7 @@ export class CollisionWorld {
         this.insertEntry(entry, entry.margin);
     }
 
-    public removePawnCollision(pawn: BaseActor): void {
+    public removePawnCollision(pawn: BaseActor | CollidingMesh): void {
         const entry = this.entriesByActor.get(pawn);
         if (entry) this.removeActor(pawn);
         const level = this.pawnLevels.get(pawn);
@@ -708,8 +714,8 @@ export class CollisionWorld {
     }
 
     public isOverlapping(source: ICollidable & ScriptHost_T, target: ScriptHost_T, vm: UnScriptVM): boolean {
-        // shortcut: ordinary cylinder pawns only; extend before encroacher or brush-source movement.
-        if (!source.getCollisionProfile().isPawn || source.getCollisionPrimitive().kind !== "cylinder" || isEncroacher(source, vm))
+        // shortcut: ordinary pawns only; extend before encroacher or brush-source movement.
+        if (!source.getCollisionProfile().isPawn || isEncroacher(source, vm))
             throw new Error(`Unsupported overlap source '${source.name}'.`);
         if (source === target || getTraceProperty(source, "Level") === target) return false;
         if (isJoinedTo(source, target) || isJoinedTo(target, source)) return false;
@@ -733,7 +739,7 @@ export class CollisionWorld {
         return dx * dx + dy * dy < totalRadius * totalRadius;
     }
 
-    public checkEncroachment(source: BaseActor, location: Vector3, touchNotify: boolean, vm: UnScriptVM): boolean {
+    public checkEncroachment(source: BaseActor | CollidingMesh, location: Vector3, touchNotify: boolean, vm: UnScriptVM): boolean {
         if (!getTraceProperty(source, "bCollideActors") && !getTraceProperty(source, "bBlockActors") && !getTraceProperty(source, "bBlockPlayers")) return false;
         const actors = this.actorEncroachmentCheck(source, location);
         const level = getTraceProperty(source, "Level");
@@ -769,8 +775,8 @@ export class CollisionWorld {
         const profile = source.getCollisionProfile(), primitive = source.getCollisionPrimitive();
         const physics = getTraceProperty(source, "Physics");
 
-        // shortcut: only ordinary cylinder pawns initiate this query; extend for encroachers before wiring their movement.
-        if (!profile.isPawn || primitive.kind !== "cylinder" || profile.collideActors && (physics === 13 || physics === 14))
+        // shortcut: only ordinary pawns initiate this query; extend for encroachers before wiring their movement.
+        if (!profile.isPawn || profile.collideActors && (physics === 13 || physics === 14))
             throw new Error(`Unsupported encroachment source '${source.name}'.`);
         if (this.unsupportedActors.size) throw new Error(`Encroachment query contains actors without analytical primitives.`);
 
@@ -778,8 +784,13 @@ export class CollisionWorld {
         if (!profile.blockNonZeroExtent || getTraceProperty(source, "bOnlyAffectPawns")) return actors;
 
         tmpEncroachmentExtent.set(profile.collisionRadius, profile.collisionRadius, profile.collisionHeight);
-        tmpEncroachmentBounds.min.copy(location).sub(tmpEncroachmentExtent);
-        tmpEncroachmentBounds.max.copy(location).add(tmpEncroachmentExtent);
+        if (primitive.kind === "cylinder") {
+            tmpEncroachmentBounds.min.copy(location).sub(tmpEncroachmentExtent);
+            tmpEncroachmentBounds.max.copy(location).add(tmpEncroachmentExtent);
+        } else {
+            tmpEncroachmentCenter.fromArray(getTraceProperty(source, "Location") as number[]).negate().add(location);
+            tmpEncroachmentBounds.copy(primitive.bounds).translate(tmpEncroachmentCenter);
+        }
 
         for (const entry of this.analyticalEntries) {
             if (!entry.active || entry.primitive.kind === "terrain") continue;
@@ -1489,7 +1500,7 @@ export class CollisionWorld {
             }
         }
 
-        if (query.ignorePawns && profile.isPawn) return true;
+        if (query.ignorePawns && profile.isPawn && !getTraceProperty(actor, "bAsTreatWorld")) return true;
         if (!query.ignoreBases || !source) return false;
 
         if (profile.worldGeometry) return false;

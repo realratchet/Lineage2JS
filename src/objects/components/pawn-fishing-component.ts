@@ -35,7 +35,7 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
     protected active = false;
     protected endResult: boolean = null;
 
-    public constructor(renderManager: RenderManager) {
+    public constructor(renderManager: RenderManager, protected readonly onFloatReady: () => void) {
         super();
 
         this.renderManager = renderManager;
@@ -140,6 +140,7 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
                 if (equipment) equipment.playWeaponAnimation(8, "Fishing_wait", 0.1, pawn.getUnrealScriptProperty("NonAttackSpeedRate") as number, true);
                 this.actionStage = 1;
                 if (this.controller) this.controller.setCalcStep(ECALCSTEP_T.STEP_MOVE_BACK, this.rotation);
+                this.onFloatReady();
             }
         }
 
@@ -151,13 +152,12 @@ export class PawnFishingComponent extends ObjectComponent<BaseActor> {
     }
 
     public startCombat(mode: number): void {
-        if (!this.active) return;
+        if (!this.active || !this.float) return;
 
         const pawn = this.getParent();
         if (pawn.getUnrealScriptProperty("CurFishingType") === FishingType_T.FST_BATTLE) return;
 
         pawn.setUnrealScriptProperty("CurFishingType", FishingType_T.FST_BATTLE);
-        if (!this.float) return;
 
         this.float.startCombat(!!(mode & 1));
         if (this.controller) this.controller.setCalcStep(ECALCSTEP_T.STEP_MOVE_FLOAT, this.rotation, this.float.position, this.float.getSkeleton());

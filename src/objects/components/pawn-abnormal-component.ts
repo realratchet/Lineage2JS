@@ -36,11 +36,12 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     }
 
     public async setAbnormalState(abnormalState: number): Promise<void> {
-        if (abnormalState & ~this.abnormalState & 0xc00) this.getParent().stopAttack();
+        const asset = this.renderManager.getParent().getComponent("asset");
+
+        if (abnormalState & ~this.abnormalState & 0xc00) asset.stopPawnSkill(this.getParent());
         if ((abnormalState ^ this.abnormalState) & 0x800) this.setOverlayColor(abnormalState & 0x800 ? 72 : 255, abnormalState & 0x800 ? 105 : 255, abnormalState & 0x800 ? 140 : 255);
 
         this.abnormalState = abnormalState;
-        const asset = this.renderManager.getParent().getComponent("asset");
 
         if (!(abnormalState & 0x8000)) this.restoreNpcSkins();
         else if (!this.npcSkins.length && this.getParent().getUnrealScriptProperty("bNpc")) {

@@ -424,19 +424,19 @@ export class GameClient {
     public requestShowMiniMap() { this.send(this.write(GamePackets.GameClientPacket_T.RequestShowMiniMap)); }
 
     public requestGetOnVehicle(vehicleId: number, position: GamePackets.Location_T) {
-        this.send(this.write(GamePackets.GameClientPacket_T.RequestGetOnVehicle).d(vehicleId).d(Math.round(position.x)).d(Math.round(position.y)).d(Math.round(position.z)));
+        this.send(this.write(GamePackets.GameClientPacket_T.RequestGetOnVehicle).d(vehicleId).d(Math.trunc(position.x)).d(Math.trunc(position.y)).d(Math.trunc(position.z)));
     }
 
     public requestGetOffVehicle(vehicleId: number, position: GamePackets.Location_T) {
-        this.send(this.write(GamePackets.GameClientPacket_T.RequestGetOffVehicle).d(vehicleId).d(Math.round(position.x)).d(Math.round(position.y)).d(Math.round(position.z)));
+        this.send(this.write(GamePackets.GameClientPacket_T.RequestGetOffVehicle).d(vehicleId).d(Math.trunc(position.x)).d(Math.trunc(position.y)).d(Math.trunc(position.z)));
     }
 
     public requestMoveToLocationInVehicle(vehicleId: number, target: GamePackets.Location_T, origin: GamePackets.Location_T) {
-        this.send(this.write(GamePackets.GameClientPacket_T.RequestMoveToLocationInVehicle).d(vehicleId).d(Math.round(target.x)).d(Math.round(target.y)).d(Math.round(target.z)).d(Math.round(origin.x)).d(Math.round(origin.y)).d(Math.round(origin.z)));
+        this.send(this.write(GamePackets.GameClientPacket_T.RequestMoveToLocationInVehicle).d(vehicleId).d(Math.trunc(target.x)).d(Math.trunc(target.y)).d(Math.trunc(target.z)).d(Math.trunc(origin.x)).d(Math.trunc(origin.y)).d(Math.trunc(origin.z)));
     }
 
     public cannotMoveAnymoreInVehicle(vehicleId: number, position: GamePackets.Location_T, heading: number) {
-        this.send(this.write(GamePackets.GameClientPacket_T.CannotMoveAnymoreInVehicle).d(vehicleId).d(Math.round(position.x)).d(Math.round(position.y)).d(Math.round(position.z)).d(heading));
+        this.send(this.write(GamePackets.GameClientPacket_T.CannotMoveAnymoreInVehicle).d(vehicleId).d(Math.trunc(position.x)).d(Math.trunc(position.y)).d(Math.trunc(position.z)).d(heading));
     }
 
     public requestRecipeBookOpen(isDwarven: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestRecipeBookOpen).d(isDwarven ? 0 : 1)); }

@@ -1,5 +1,6 @@
 import { AnimationAction, Sphere, Vector3 } from "three";
 import { GameObject } from "../game/components";
+import { findScriptPropertyKey, getScriptPropertyName } from "../game/script-component";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import ActorOwnershipComponent from "./components/actor-ownership-component";
 import AnimationComponent from "./components/animation-component";
@@ -78,6 +79,12 @@ export class FishingFloat extends GameObject {
 
     public getSkeleton(): LocalSpaceSkeleton { return this.meshComponent.getMesh().skeleton as LocalSpaceSkeleton; }
     public getAnimationAction(): AnimationAction { return this.animation.getAction(); }
+    public getUnrealScriptProperty(name: string) {
+        const key = this.scriptProperties.has(name) ? name : findScriptPropertyKey(this.scriptProperties, getScriptPropertyName(name));
+
+        return key === undefined ? null : this.scriptProperties.get(key);
+    }
+    public release(): void { this.detachComponents(); }
 
     public getRenderSphere(): Sphere {
         const mesh = this.meshComponent.getMesh();

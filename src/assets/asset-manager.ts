@@ -463,6 +463,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
         });
     }
 
+    public async loadVehicle(): Promise<DecodeLibrary> {
+        const library = await this.decodeWorker.decodeVehicle(this.loadSettings);
+
+        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (library as any).preferCompressedTextures = this.preferCompressedTextures;
+
+        return library;
+    }
+
     public async loadItem(id: number): Promise<DecodeLibrary> {
         const library = await this.decodeWorker.decodeItem(this.loadSettings, id);
 
@@ -530,7 +539,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!classId) throw new Error(`Character class '${classPath}' was not decoded.`);
 
         mergePawnLibrary(characterLibrary, scriptLibrary);
-        if (request !== null && this.characterLoads.get(actor) !== request) {
+        if (request !== null && (this.characterLoads.get(actor) !== request || actor.isPendingKill())) {
             for (const sound of characterLibrary.soundBlobCache.values())
                 revokeSoundUri(sound);
             return;
@@ -609,7 +618,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const library = await this.decodeWorker.decodeCharacterEquipment(this.loadSettings, charIndex, hairVariant, equipment);
         const pawnLibrary = this.pawnLibraries.get(actor);
 
-        if (this.characterLoads.get(actor) !== request) {
+        if (this.characterLoads.get(actor) !== request || actor.isPendingKill()) {
             for (const sound of library.soundBlobCache.values())
                 revokeSoundUri(sound);
             return;
@@ -735,6 +744,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public stopPlayerSkill(renderManager: RenderManager): void {
         this.stopPawnSkill(renderManager.player);
     }
+
+    public getPawnSkillRequest(actor: BaseActor) { return this.pawnSkillRequests.get(actor); }
 
     public stopPawnSkill(actor: BaseActor): void {
         this.pawnSkillRequests.set(actor, (this.pawnSkillRequests.get(actor) || 0) + 1);
@@ -1175,7 +1186,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             }
 
             const input = this.gameManager.getComponent("input");
-            const cameraPosition = input.isFollowingPlayer() ? tmpCameraPosition.copy(renderManager.player.position) : renderManager.camera.getWorldPosition(tmpCameraPosition); // orbiting the player must not read as movement, it prefetched the whole 3x3 ring
+            const cameraPosition = input.isFollowingPlayer() || this.gameManager.getComponent("network").isWorldLoading() ? tmpCameraPosition.copy(renderManager.player.position) : renderManager.camera.getWorldPosition(tmpCameraPosition); // orbiting the player must not read as movement, it prefetched the whole 3x3 ring
             const [sx, sy] = renderManager.getSectorId(cameraPosition);
             const originIdx = `${sx}_${sy}`;
             const sectorsLoaded = renderManager.getLoadedSectors();

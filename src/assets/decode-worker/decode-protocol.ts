@@ -20,6 +20,7 @@ export type PrecacheMessage_T = { type: "precache"; requestId: number; sectorNam
 export type FreeMessage_T = { type: "free"; sectorName: string; };
 export type DecodeEnvMessage_T = { type: "decodeEnv"; requestId: number; };
 export type DecodeSkillMessage_T = { type: "decodeSkill"; requestId: number; settings: LoadSettings_T; id: number; level: number; urgent?: boolean; record?: NpcSkillAttack_T; };
+export type DecodeVehicleMessage_T = { type: "decodeVehicle"; requestId: number; settings: LoadSettings_T; };
 export type DecodeItemMessage_T = { type: "decodeItem"; requestId: number; settings: LoadSettings_T; id: number; };
 export type MatineeAction_T = { action: string; duration: number; pathStyle: "linear" | "bezier"; startControlPoint: [number, number, number]; endControlPoint: [number, number, number]; constantPathVelocity: boolean; pathVelocity: number; location: [number, number, number]; rotation: [number, number, number]; };
 export type MatineeScene_T = { tag: string; actions: MatineeAction_T[]; };
@@ -108,6 +109,7 @@ export type MainToWorkerMessage_T =
     | FreeMessage_T
     | DecodeEnvMessage_T
     | DecodeSkillMessage_T
+    | DecodeVehicleMessage_T
     | DecodeItemMessage_T
     | DecodeCharacterMessage_T
     | DecodeCharacterEquipmentMessage_T

@@ -184,6 +184,17 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
+        case "decodeVehicle": {
+            try {
+                const buffer = await engine.decodeVehicleBinary(msg.settings);
+
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
+            } catch (e) {
+                console.error("[decode-worker] failed to decode vehicle:", e);
+                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error).message, stack: (e as Error).stack });
+            }
+            break;
+        }
         case "decodeEffectTemplates": {
             try {
                 const buffer = await engine.decodeEffectTemplatesBinary(msg.settings, msg.classPaths, msg.soundPaths, msg.scriptClassPaths, msg.requiredSounds);

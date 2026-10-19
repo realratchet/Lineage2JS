@@ -41,6 +41,7 @@ export class NWindowManager {
     protected dragOffsetY = 0;
     protected isDirty = true;
     protected isReady = false;
+    public readonly ready: Promise<void>;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
     public readonly arrTooltipPaint: (() => void)[] = [];
@@ -95,7 +96,7 @@ export class NWindowManager {
         }, { capture: true, passive: true });
 
         this.resize();
-        void this.loadFonts();
+        this.ready = this.loadFonts();
     }
 
     protected async loadFonts() {

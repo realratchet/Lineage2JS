@@ -151,7 +151,7 @@ export function getProperty(host: ScriptHost_T, id: string): ScriptValue_T {
     return properties instanceof Map ? properties.get(key) : properties[key];
 }
 
-function setProperty(host: ScriptHost_T, id: string, value: ScriptValue_T): void {
+export function setProperty(host: ScriptHost_T, id: string, value: ScriptValue_T): void {
     if (host.setUnrealScriptProperty) {
         host.setUnrealScriptProperty(id, value);
         return;

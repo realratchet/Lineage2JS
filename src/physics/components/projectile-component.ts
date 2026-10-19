@@ -28,7 +28,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     protected readonly targetLocation = new Vector3();
     protected readonly delta = new Vector3();
     protected readonly renderManager: RenderManager;
-    protected readonly target: BaseActor;
+    protected target: BaseActor;
     protected readonly caster: BaseActor;
     protected readonly onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void | boolean;
     protected readonly mover: NMover;
@@ -53,6 +53,8 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         this.velocity.fromArray(properties.get("Velocity"));
         this.acceleration.fromArray(properties.get("Acceleration"));
         properties.set("TargetActor", this.target);
+        this.target.getEffectTargetLocation(this.targetLocation);
+        this.targetLocation.toArray(properties.get("LastTargetLocation"));
         this.query = {
             location: effect.position, delta: this.delta,
             extent: new Vector3(properties.get("CollisionRadius"), properties.get("CollisionRadius"), properties.get("CollisionHeight")),
@@ -135,8 +137,13 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         if (mode === EPhysics_T.PHYS_None) return false;
         if (mode !== EPhysics_T.PHYS_NProjectile) throw new Error(`Projectile '${effect.name}' does not implement physics '${mode}'.`);
 
-        this.target.getEffectTargetLocation(this.targetLocation);
-        this.targetLocation.toArray(properties.get("LastTargetLocation"));
+        if (this.target && (!this.target.parent || this.target.isPendingKill())) {
+            this.removeTarget(this.target);
+        }
+        if (this.target) {
+            this.target.getEffectTargetLocation(this.targetLocation);
+            this.targetLocation.toArray(properties.get("LastTargetLocation"));
+        } else this.targetLocation.fromArray(properties.get("LastTargetLocation")); // ANProjectile::Tick 0x78cdd1 / 0x78d168.
 
         if (!this.hasStarted) {
             this.hasStarted = true;
@@ -219,6 +226,20 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         this.velocity.toArray(properties.get("Velocity"));
         this.acceleration.toArray(properties.get("Acceleration"));
         return true;
+    }
+
+    public replaceTarget(target: BaseActor, replacement: BaseActor): void {
+        if (this.target !== target) return;
+
+        this.target = replacement;
+        this.getParent().scriptProperties.set("TargetActor", replacement);
+    }
+
+    public removeTarget(target: BaseActor): void {
+        if (this.target !== target) return;
+
+        this.target = null;
+        this.getParent().scriptProperties.set("TargetActor", null);
     }
 
     public detachFromBase(): void {

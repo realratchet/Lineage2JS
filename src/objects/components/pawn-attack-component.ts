@@ -450,6 +450,17 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
     public getAttacks(): readonly PawnAttack_T[] { return this.attacks; }
 
+    public replaceTarget(actor: BaseActor, replacement: BaseActor): void {
+        if (this.target === actor) this.target = replacement;
+        if (this.requestedTarget === actor) this.requestedTarget = replacement;
+        for (let i = 0; i < this.associatedActors.length; i++)
+            if (this.associatedActors[i] === actor) this.associatedActors[i] = replacement;
+        if (this.requestedAssociatedActors) this.requestedAssociatedActors = this.requestedAssociatedActors.map(target => target === actor ? replacement : target);
+        this.attackParams = this.attackParams.map(hit => hit.actionTarget === actor ? { ...hit, actionTarget: replacement } : hit);
+        this.skillEffects.replaceTarget(actor, replacement);
+        this.transientSkillEffects.replaceTarget(actor, replacement);
+    }
+
     public attackFromServer(hits: readonly NAttackActionParam_T[]): void {
         const attacks = this.attacks.filter(attack => !attack.skill);
 
@@ -654,6 +665,9 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
         if (!this.bowProjectile && (force || frame >= this.bowPreShotFrame)) {
             const target = this.target;
+
+            if (!target || !target.parent) return;
+
             const param = this.attackParams[0];
             const arrow = parent.getComponent<ScriptComponent>("script").createObject("LineageEffect.NArrow") as unknown as ProjectileActor_T;
             const properties = arrow.scriptProperties;
@@ -666,6 +680,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             properties.get("DrawScale3D")[0] *= scale;
             arrow.scale.x *= scale;
             const projectile = arrow.addComponent(new NProjectileComponent(this.renderManager, parent, target, (_arrow, hitActor, impactActor) => {
+                const target = properties.get("TargetActor") as BaseActor;
+
                 // Engine.dll ANProjectile::processHitWall 0x78d5b0: physical impact sounds/light are deferred until arrival.
                 if (!hitActor || impactActor !== target || param?.isMiss) return false;
 

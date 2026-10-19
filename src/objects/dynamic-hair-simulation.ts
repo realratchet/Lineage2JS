@@ -91,7 +91,7 @@ const topologies = new Map<number, Topology_T>([
 function normalizeBoneName(name: string): string { return name.replaceAll(" ", "_").toLowerCase(); }
 
 function getObjectWorldMatrix(object: Object3D, target: Matrix4, cache: WorldMatrixCache_T = null): Matrix4 {
-    arrParents.length = 0;
+    let count = 0;
     target.identity();
 
     while (object) {
@@ -102,12 +102,14 @@ function getObjectWorldMatrix(object: Object3D, target: Matrix4, cache: WorldMat
             break;
         }
 
-        arrParents.push(object);
+        arrParents[count++] = object;
         object = object.parent;
     }
 
-    for (let i = arrParents.length - 1; i >= 0; i--) {
+    for (let i = count - 1; i >= 0; i--) {
         const parent = arrParents[i];
+
+        arrParents[i] = null;
 
         parent.updateMatrix();
         target.multiply(parent.matrix);
@@ -121,7 +123,6 @@ function getObjectWorldMatrix(object: Object3D, target: Matrix4, cache: WorldMat
         }
     }
 
-    arrParents.length = 0;
     return target;
 }
 

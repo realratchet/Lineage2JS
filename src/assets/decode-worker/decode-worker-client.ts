@@ -351,6 +351,20 @@ export class DecodeWorkerClient {
         return library;
     }
 
+    public async decodeVehicle(settings: LoadSettings_T): Promise<DecodeLibrary> {
+        if (this.mainThreadEngine) {
+            const library = await this.mainThreadEngine.decodeVehicle(settings);
+
+            return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
+        }
+
+        const workerIndex = this.pickScriptWorker();
+
+        if (workerIndex < 0) throw new Error("Decode worker is dead");
+
+        return this.dispatch(workerIndex, { type: "decodeVehicle", settings });
+    }
+
     public async decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = [], requiredSounds: boolean = true): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) {
             const library = await this.mainThreadEngine.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths, requiredSounds);

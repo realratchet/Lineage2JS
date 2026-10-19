@@ -8,6 +8,7 @@ import UnScriptVM, { ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
 import { GameObject, COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
 import { ColliderComponent } from "./physics/components/physics-component";
 import PawnMovementComponent, { PawnMovementState_T } from "./physics/components/pawn-movement-component";
+import type NProjectileComponent from "./physics/components/projectile-component";
 import AnimationComponent, { MESH_SCALE_CHANGED_EVENT } from "./objects/components/animation-component";
 import TransformComponent from "./objects/components/transform-component";
 import ActorOwnershipComponent from "./objects/components/actor-ownership-component";
@@ -113,7 +114,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
                 return [rotation[0], this.movementComponent.getRotationYaw(), rotation[2]];
             }
-            case "physics": return ["none", "walking", "falling", "swimming", "flying"].indexOf(this.movementComponent.getPhysicsMode());
+            case "physics": return this.movementComponent.getPhysicsMode() === "nMover" ? EPhysics_T.PHYS_NMover : ["none", "walking", "falling", "swimming", "flying"].indexOf(this.movementComponent.getPhysicsMode());
         }
 
         return this.getStoredUnrealScriptProperty(id);
@@ -285,6 +286,10 @@ export class BaseActor extends GameObject implements ICollidable {
         if (this.isPendingDelete) return;
 
         this.isPendingDelete = true;
+        for (const movement of this.renderManager.getPhysicsManager().getPhysicsComponents<PawnMovementComponent>("pawnMovement"))
+            movement.replaceTarget(this, null);
+        for (const projectile of this.renderManager.getPhysicsManager().getPhysicsComponents<NProjectileComponent>("nProjectile"))
+            projectile.removeTarget(this);
         this.renderManager.getPhysicsManager().setPawnLevel(this, null);
         this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.release();
         this.isDeleted = true;
@@ -325,14 +330,17 @@ export class BaseActor extends GameObject implements ICollidable {
 
     public getNpcAttacks(): readonly PawnAttack_T[] { return this.getComponent<PawnAttackComponent>("pawnAttack").getAttacks(); }
     public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void { this.getComponent<PawnAttackComponent>("pawnAttack").attack(target, selection, locList, associatedActors, targetExcepted); }
-    public stopAttack(): void { this.getComponent<PawnAttackComponent>("pawnAttack").stop(); }
+    public stopAttack(): void { this.renderManager.getParent().getComponent("asset").stopPawnSkill(this); }
 
     public isPlayingOneShotAnimation(animationName: string): boolean { return this.getAnimationComponent().isPlayingOneShot(animationName); }
     public playAnimation(animationName: string, tweenTime: number = 0.1, rate: number = 1, loop: boolean = true, restart: boolean = false): void { this.getAnimationComponent().play(animationName, tweenTime, rate, loop, restart); }
 
     public goTo(position: Vector3): void { this.movementComponent.goTo(position); }
+    public flyTo(position: Vector3): void { this.movementComponent.flyTo(position); }
+    public addFlyTo(origin: Vector3, position: Vector3): void { this.movementComponent.addFlyTo(origin, position); }
     public validateLocation(position: Vector3): void { this.movementComponent.validateLocation(position); }
     public goToActor(actor: Object3D, offset: number = 0): void { this.movementComponent.goToActor(actor, offset); }
+    public copyMovement(actor: BaseActor): void { this.movementComponent.copyMovement(actor.movementComponent); }
     public moveInDirection(direction: Vector3, faceMovement: boolean = true): void { this.movementComponent.moveInDirection(direction, faceMovement); }
     public faceActor(actor: Object3D | null): void { this.movementComponent.faceActor(actor); }
     public stopMove(): void { this.movementComponent.stopMove(); }

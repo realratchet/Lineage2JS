@@ -42,8 +42,9 @@ export class NCReplayWnd {
             button.setAttribute("aria-label", manager.getSysString(label));
             button.tabIndex = 0;
             button.addEventListener("keydown", event => {
-                if (event.repeat || event.key !== " ") return;
+                if (event.repeat || event.key !== " " && event.key !== "Enter") return;
                 event.preventDefault();
+                event.stopPropagation();
                 manager.playButtonSound(true);
                 commands[index]();
             });

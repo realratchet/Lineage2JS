@@ -95,7 +95,7 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
 
         // Engine.dll SetMagicInfo 0x79b45e; MagicProcess 0x7b4f65 branches on the resolved object.
         const soulshot = visual ? null : await getSoulShotEffects(attack.id);
-        const native = visual ? null : soulshot ? { effects: [], soundPhases: ["casting"] as NpcSkillEffectPhase_T[] } : getNativeSkillBinding(attack.name, attack.id);
+        const native = visual ? null : soulshot ? { effects: [], soundPhases: ["casting"] as NpcSkillEffectPhase_T[] } : getNativeSkillBinding(attack.id);
 
         if (!visual && !native)
             throw new Error(`Skill '${attack.id}:${attack.level}' (${attack.name}) has no resolved visual or implemented native recipe.`);

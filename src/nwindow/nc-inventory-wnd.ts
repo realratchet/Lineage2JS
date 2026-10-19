@@ -503,6 +503,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             if (item.slot >= 0) {
                 const arrSlots = item.bodyPart === SLOT_LR_HAND ? [5, 7] : item.bodyPart === SLOT_FULL_ARMOR ? [6, 11] : item.bodyPart === SLOT_ALLDRESS ? [6, 11, 10, 12] : [item.slot];
                 const arrIcons = arrSlots.length > 1 ? item.info.equipmentIcons : [];
+                if (arrIcons.some(path => path && path.toLowerCase() !== "none" && !this.layer.hasTexture(path))) continue;
                 let icon = arrIcons[0] && arrIcons[0].toLowerCase() !== "none" ? arrIcons[0] : null;
 
                 arrSlots.forEach((slot, index) => { // NCEquipItemWnd::OnPaint 0x1009433b..0x100946ac.

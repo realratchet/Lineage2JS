@@ -3,14 +3,18 @@ import { Box3, Euler, LoopOnce, Object3D, Quaternion, Sphere, Vector3 } from "th
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, type ScriptComponent } from "../../game/script-component";
 import { PhysicsComponent } from "./physics-component";
+import L2NMover from "../l2-nmover";
+import { EPhysics_T } from "../../assets/unreal/un-aactor";
+import { PMoveType_T } from "../../assets/unreal/un-controller";
 import { findVolumeTransition } from "../volume-bsp";
-import { pointPrimitive, queryPrimitive } from "../collision-primitive";
+import { sinRotator } from "../../assets/unreal/utils/rotator";
 import type PhysicsVolume from "../../objects/physics-volume";
 import type BaseActor from "../../base-actor";
+import type Vehicle from "../../objects/vehicle";
 import type RenderManager from "../../rendering/render-manager";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../../objects/objects";
 import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
-import { getProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
+import { getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
@@ -21,10 +25,6 @@ const tmpPosition = new Vector3();
 const tmpFloorPosition = new Vector3();
 const tmpWaterPosition = new Vector3();
 const tmpWaterEnd = new Vector3();
-const tmpWaterHitStart = new Vector3();
-const tmpWaterHitEnd = new Vector3();
-const tmpWaterHitLocation = new Vector3();
-const zeroWaterExtent = new Vector3();
 const tmpSwimStart = new Vector3();
 const tmpBodyPosition = new Vector3();
 const tmpMovement = new Vector3();
@@ -61,6 +61,7 @@ const tmpCrouchEnd = new Vector3();
 const tmpCrouchLocation = new Vector3();
 const tmpCrouchDelta = new Vector3();
 const tmpCrouchExtent = new Vector3();
+const tmpVehicleDestination = new Vector3();
 const colliderRotation = new Quaternion(Math.SQRT1_2, 0, 0, Math.SQRT1_2);
 const arrMoveTemps = [tmpPosition, tmpBodyPosition, tmpStepPosition, tmpStepNormal, tmpRemaining, tmpNormal, tmpStepUp];
 let moveActorDepth = 0;
@@ -138,6 +139,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected validateLocationPending = false;
     protected readonly validatePosition = new Vector3();
     protected physicsMode: PhysicsMode_T = "falling";
+    protected nMover: L2NMover = null;
+    protected flyDestination: Vector3 = null;
+    protected vehicleId = 0;
+    protected readonly vehicleMovePoint = new Vector3();
     protected isWalking = false;
     protected groundSpeed = GROUND_SPEED;
     protected walkSpeed = WALK_SPEED;
@@ -167,6 +172,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public setPhysicsTickRate(tickRate: number): void { this.tickRate = tickRate; }
 
     public onPhysicsTick(currentTime: number, deltaTime: number, _actors: BaseActor[]): boolean {
+        if (this.vehicleId) this.tickMoveInVehicle();
         this.updatePhysics(currentTime, deltaTime * 0.001);
 
         return true;
@@ -254,7 +260,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected updatePhysics(currentTime: number, deltaTime: number) {
+        this.updateSpeedCorrection(deltaTime);
         this.updateValidateLocation();
+
+        if (this.flyDestination && this.isInteractive() && this.renderManager.isSectorCollisionReady(this.flyDestination)) this.startNMover();
 
         if (this.physicsMode === "none" || !this.isInteractive()) return;
 
@@ -398,7 +407,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const isThreeDimensional = this.physicsMode === "flying" || this.physicsMode === "swimming";
         const distanceZ = isThreeDimensional ? desired.position.z - position.z : 0;
         const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ);
-        const maxSpeed = this.physicsMode === "swimming" ? this.waterSpeed : this.physicsMode === "flying" ? this.airSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;
+        const maxSpeed = this.getMovementSpeed();
 
         const willReachDestination = this.actorState.locomotion && Math.max(0, distance - desired.offset) <= maxSpeed * deltaTime;
 
@@ -421,6 +430,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             case "falling": this.physFalling(position, deltaTime); break;
             case "swimming": this.physSwimming(position, deltaTime, waterVolume); break;
             case "flying": this.physFlying(position, deltaTime); break;
+            case "nMover": this.physNMover(position, deltaTime); break;
             default: throw new Error(`Unknown player physics mode '${this.physicsMode}'.`);
         }
 
@@ -429,8 +439,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             const dy = desired.position.y - position.y;
             const dz = isThreeDimensional ? desired.position.z - position.z : 0;
 
-            if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= desired.offset + 0.01)
+            if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= desired.offset + 0.01) {
                 this.actorState.locomotion = false;
+                this.vehicleId = 0;
+            }
         }
 
         this.physicsRotation(deltaTime);
@@ -493,7 +505,25 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public setBase(actor: ICollidable | null, floor?: Vector3): void {
         if (floor) this.floor.copy(floor);
-        this.getTransformComponent().setBase(actor);
+
+        const transform = this.getTransformComponent(), previous = transform.getBase();
+
+        if (previous === actor || !transform.setBase(actor)) return;
+        if (this.getParent() !== this.renderManager.player) return;
+
+        const oldVehicle = previous as Vehicle, vehicle = actor as Vehicle;
+
+        if ((!oldVehicle || !oldVehicle.isVehicle) && (!vehicle || !vehicle.isVehicle)) return;
+
+        const network = this.renderManager.getParent().getComponent("network");
+
+        // APawn::SetBase 0x10500b20 sends world center on exit, yaw-relative center on entry.
+        tmpVehicleDestination.fromArray(this.getParent().getUnrealScriptProperty("Location") as Vector3Arr);
+        if (oldVehicle && oldVehicle.isVehicle) network.requestGetOffVehicle(oldVehicle.getUnrealScriptProperty("L2ServerObjectID") as number, tmpVehicleDestination);
+        if (vehicle && vehicle.isVehicle) {
+            vehicle.getLocalLocation(tmpVehicleDestination, tmpVehicleDestination);
+            network.requestGetOnVehicle(vehicle.getUnrealScriptProperty("L2ServerObjectID") as number, tmpVehicleDestination);
+        }
     }
 
     protected updateBaseRelativePosition(): void { this.getTransformComponent().updateBaseRelativePosition(); }
@@ -506,7 +536,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
 
-        this.calcVelocity(position, tmpAccelDir, deltaTime, this.isWalking ? this.walkSpeed : this.groundSpeed);
+        this.calcVelocity(position, tmpAccelDir, deltaTime, this.getMovementSpeed(0));
         if (this.isPhysicInit && this.velocity.x === 0 && this.velocity.y === 0 && this.velocity.z === 0) return; // bPhysicInit, APawn::physWalking 0x8d49eb
 
         tmpDesiredMove.copy(this.velocity);
@@ -910,7 +940,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         tmpAccelDir.copy(this.acceleration);
 
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
-        this.calcVelocity(position, tmpAccelDir, deltaTime, this.waterSpeed);
+        this.calcVelocity(position, tmpAccelDir, deltaTime, this.getMovementSpeed(1));
 
         tmpSwimStart.copy(position);
         const body = this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
@@ -958,7 +988,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (tmpAccelDir.lengthSq() > 0) tmpAccelDir.normalize();
 
-        this.calcVelocity(position, tmpAccelDir, deltaTime, this.airSpeed);
+        this.calcVelocity(position, tmpAccelDir, deltaTime, this.getMovementSpeed(2));
         tmpSwimStart.copy(position);
 
         const volume = this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
@@ -1056,41 +1086,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return hit;
     }
 
-    public updateWaterHitEffect(volume: PhysicsVolume, primitive: CollisionPrimitive_T): void {
-        if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
 
-        const owner = this.getParent();
-        if (volume !== owner.getUnrealScriptProperty("FootVolume")) owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
-        if (!volume.getUnrealScriptProperty("Brush")) return;
-        if (!primitive) throw new Error(`Water volume '${volume.name}' has no registered primitive.`);
-
-        // APawn::UpdateWaterHitEffect 0x858010; shortcut: GL2UseHitWateEffect stays enabled until graphics settings expose it.
-        const location = owner.getUnrealScriptProperty("Location") as number[], height = this.collisionHeight;
-        tmpWaterHitStart.set(Math.fround(location[0]), Math.fround(location[1]), Math.fround(location[2] + height + 20));
-        tmpWaterHitEnd.set(tmpWaterHitStart.x, tmpWaterHitStart.y, Math.fround(location[2] - height));
-        const hit = queryPrimitive(primitive, tmpWaterHitStart, tmpWaterHitEnd, zeroWaterExtent);
-        const time = hit ? Math.fround(Math.min(1, Math.max(0, hit.time - 0.5 / tmpWaterHitStart.distanceTo(tmpWaterHitEnd)))) : 1;
-
-        if (time === 0) {
-            owner.setUnrealScriptProperty("bSwimAfloat", false);
-            owner.setUnrealScriptProperty("HitLocation", [0, 0, 0]);
-            return;
-        }
-
-        owner.setUnrealScriptProperty("bSwimAfloat", true);
-        tmpWaterHitLocation.set(0, 0, 0);
-        if (hit) {
-            tmpWaterHitLocation.lerpVectors(tmpWaterHitStart, tmpWaterHitEnd, time);
-            tmpWaterHitLocation.set(Math.fround(tmpWaterHitLocation.x), Math.fround(tmpWaterHitLocation.y), Math.fround(tmpWaterHitLocation.z));
-        }
-        if (tmpWaterHitLocation.z - location[2] <= height * 0.8500000238418579) {
-            owner.setUnrealScriptProperty("HitLocation", [0, 0, 0]);
-            return;
-        }
-
-        if (pointPrimitive(primitive, tmpWaterHitLocation, zeroWaterExtent)) tmpWaterHitLocation.set(0, 0, 0);
-        owner.setUnrealScriptProperty("HitLocation", tmpWaterHitLocation.toArray());
-    }
 
     protected getWaterVolume(position: Vector3): IWaterVolumeDecodeInfo | null {
         if (this.hasStartedPhysics && position.equals(this.getPosition()))
@@ -1284,7 +1280,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public goTo(position: Vector3) {
-        console.log(`[actor] goTo from=(${this.getPosition().x}, ${this.getPosition().y}, ${this.getPosition().z}) to=(${position.x}, ${position.y}, ${position.z})`);
+        // console.log(`[actor] goTo from=(${this.getPosition().x}, ${this.getPosition().y}, ${this.getPosition().z}) to=(${position.x}, ${position.y}, ${position.z})`);
+        this.vehicleId = 0;
+        this.stopNMover();
         this.validateLocationPending = false;
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(position);
@@ -1295,6 +1293,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public goToActor(actor: Object3D, offset: number = 0) {
+        this.vehicleId = 0;
+        this.stopNMover();
         this.validateLocationPending = false;
         this.actorState.locomotion = true;
         actor.getWorldPosition(this.actorState.desired.position);
@@ -1304,15 +1304,48 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.desired.faceTarget = null;
     }
 
+    public copyMovement(component: PawnMovementComponent): void {
+        const desired = this.actorState.desired, source = component.actorState.desired;
+
+        this.validateLocationPending = false;
+        this.stopNMover();
+        this.nMover = component.nMover;
+        this.flyDestination = component.flyDestination;
+        for (const field of ["ValidateLocationMoveTime", "ValidateLocationSpeed"])
+            this.getParent().setUnrealScriptProperty(field, component.getParent().getUnrealScriptProperty(field));
+        if (this.nMover) {
+            this.physicsMode = "nMover";
+            this.hasStartedPhysics = true;
+            this.adjustToFloor = this.teleportLanding = false;
+        }
+        this.actorState.locomotion = component.actorState.locomotion;
+        this.vehicleId = component.vehicleId;
+        this.vehicleMovePoint.copy(component.vehicleMovePoint);
+        desired.position.copy(source.position);
+        desired.actor = source.actor;
+        desired.offset = source.offset;
+        desired.faceMovement = source.faceMovement;
+        desired.faceTarget = source.faceTarget;
+    }
+
     public moveInDirection(direction: Vector3, faceMovement: boolean = true) {
         if (!this.isInteractive()) return;
 
+        this.vehicleId = 0;
+        this.stopNMover();
         this.validateLocationPending = false;
         this.actorState.locomotion = true;
         this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.getPosition());
         this.actorState.desired.actor = null;
         this.actorState.desired.offset = 0;
         this.actorState.desired.faceMovement = faceMovement;
+    }
+
+    public replaceTarget(actor: Object3D, replacement: Object3D): void {
+        const desired = this.actorState.desired;
+
+        if (desired.actor === actor) desired.actor = replacement;
+        if (desired.faceTarget === actor) desired.faceTarget = replacement;
     }
 
     public faceActor(actor: Object3D | null) {
@@ -1322,6 +1355,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public stopMove() {
+        this.vehicleId = 0;
+        this.stopNMover();
         this.actorState.locomotion = false;
         this.actorState.desired.actor = null;
         this.actorState.desired.faceTarget = null;
@@ -1333,14 +1368,40 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public stopMoving() {
+        this.vehicleId = 0;
+        this.stopNMover();
         this.validateLocationPending = false;
         this.actorState.locomotion = false;
+        this.actorState.desired.actor = null;
         this.acceleration.set(0, 0, 0);
         this.velocity.set(0, 0, 0);
     }
 
+    public moveInVehicle(vehicleId: number, position: Vector3): void {
+        this.vehicleId = vehicleId;
+        this.vehicleMovePoint.copy(position);
+    }
+
+    protected tickMoveInVehicle(): void {
+        const vehicleId = this.vehicleId;
+        const vehicle = this.renderManager.getParent().getComponent("network").getVehicleActor(vehicleId);
+        const controller = this.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (!vehicle || !controller || getProperty(controller, "bDead")) return;
+
+        // APawn::TickMoveInVehicle 0x10593bc0 rotates the queued center by current vehicle yaw.
+        const yaw = (vehicle.getUnrealScriptProperty("Rotation") as Vector3Arr)[1];
+        const sine = sinRotator(yaw), cosine = sinRotator(yaw + 16384), point = this.vehicleMovePoint;
+
+        tmpVehicleDestination.set(Math.fround(Math.fround(point.x * cosine - point.y * sine) + vehicle.position.x), Math.fround(Math.fround(point.x * sine + point.y * cosine) + vehicle.position.y), Math.fround(point.z + vehicle.position.z) - this.collisionHeight);
+        this.goTo(tmpVehicleDestination);
+        this.vehicleId = vehicleId;
+    }
+
     public setWalking(isWalking: boolean) {
         this.isWalking = isWalking;
+        const controller = this.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T;
+        if (controller) setProperty(controller, "MoveType", isWalking ? PMoveType_T.PMT_SLOW : PMoveType_T.PMT_FAST);
     }
 
     public isIdle(): boolean { return this.actorState.state === "idle"; }
@@ -1358,7 +1419,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public setFlying(isFlying: boolean) {
         this.setBase(null);
-        this.physicsMode = isFlying ? "flying" : "falling";
+        if (!this.nMover) this.physicsMode = isFlying ? "flying" : "falling";
         this.isGrounded = false;
 
         if (isFlying) {
@@ -1439,6 +1500,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         this.rigidbody.setTranslation(primitive.center, true);
         this.rigidbody.setNextKinematicTranslation(primitive.center);
+        this.collider.setTranslation(primitive.center);
     }
 
     public l2Teleport(position: Vector3) {
@@ -1513,6 +1575,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public resetPhysicInit() { this.isPhysicInit = false; }
 
     public teleportTo(position: Vector3, adjustToFloor: boolean = false) {
+        this.vehicleId = 0;
         this.velocity.set(0, 0, 0);
         this.hasDesiredRotation = false;
         this.keyboardRotationDirection = this.keyboardRotationYaw = null;
@@ -1524,6 +1587,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public adjustLocation(position: Vector3, adjustToFloor: boolean = true) {
+        this.stopNMover();
+        this.enterRiseTargetZ = null;
+        this.enterRiseVelocity = 0;
         const isFlying = this.physicsMode === "flying";
 
         this.adjustToFloor = adjustToFloor && !isFlying;
@@ -1549,11 +1615,142 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public setAcceleration(value: Vector3Arr): void { this.acceleration.fromArray(value); }
     public setPhysicsMode(value: number): void {
         const modes: PhysicsMode_T[] = ["none", "walking", "falling", "swimming", "flying"];
-        const mode = modes[value];
+        const mode = value === EPhysics_T.PHYS_NMover ? "nMover" : modes[value];
 
         if (!mode) throw new Error(`Unsupported UnrealScript physics mode '${value}'.`);
+        if (mode === "nMover" && !this.nMover) throw new Error(`Pawn '${this.getParent().name}' has no NMover.`);
 
+        if (mode !== "nMover") this.stopNMover();
         this.physicsMode = mode;
+    }
+
+    public flyTo(destination: Vector3): void {
+        this.stopMoving();
+        this.flyDestination = destination.clone();
+        if (this.isInteractive() && this.renderManager.isSectorCollisionReady(destination)) this.startNMover();
+    }
+
+    public getCurSpeed(environment = -1): number {
+        const parent = this.getParent(), controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+        if (controller && getProperty(controller, "bCameraWalking") && this.getComponent<ScriptComponent>("script").getVM().invokeNative(parent, controller, 303, "IsA", ["LineagePlayerController"]))
+            return parent.getUnrealScriptProperty("AirSpeed") as number;
+        if (parent.getUnrealScriptProperty("bNotRotationMoving")) return (parent.getUnrealScriptProperty("GroundMinSpeed") as number) * Math.fround(2 / 3);
+        if (environment === -1) environment = parent.getUnrealScriptProperty("Environment") as number;
+
+        let isFast = !!controller && getProperty(controller, "MoveType") === PMoveType_T.PMT_FAST;
+        if (isFast && !parent.getUnrealScriptProperty("bNpc") && environment !== 1 && environment !== 2) {
+            const animation = (parent.getUnrealScriptProperty("WalkAnimName") as string[])[parent.getUnrealScriptProperty("CurWeaponType") as number];
+            if (this.getComponent<AnimationComponent>("animation").getAnimationClip(animation))
+                isFast = (parent.getUnrealScriptProperty("MoveTimer") as number) > (parent.getUnrealScriptProperty("WalkAnimFrameInMove") as number) * Math.fround(1 / 30);
+        }
+
+        return parent.getUnrealScriptProperty(environment === 2 ? isFast ? "AirMaxSpeed" : "AirMinSpeed" : environment === 1 ? isFast ? "WaterMaxSpeed" : "WaterMinSpeed" : isFast ? "GroundMaxSpeed" : "GroundMinSpeed") as number;
+    }
+
+    public addFlyTo(origin: Vector3, destination: Vector3): void {
+        const parent = this.getParent(), speed = Math.fround(this.getCurSpeed());
+        let time = 0, delta = 0;
+        if (speed > 0) {
+            const distance = getDistance(origin, destination);
+            if (distance > 0 && this.getMovementSpeed(0) > 0) {
+                time = Math.fround(distance / speed);
+                tmpPosition.copy(this.getPosition());
+                tmpPosition.z += this.collisionHeight;
+                delta = Math.fround((getDistance(tmpPosition, destination) - distance) / time);
+            }
+        }
+        parent.setUnrealScriptProperty("ValidateLocationMoveTime", time);
+        parent.setUnrealScriptProperty("ValidateLocationSpeed", delta);
+        if (speed > 0) this.flyTo(destination);
+    }
+
+    protected updateSpeedCorrection(deltaTime: number): void {
+        const parent = this.getParent(), time = parent.getUnrealScriptProperty("ValidateLocationMoveTime") as number;
+        if (!time || !parent.getUnrealScriptProperty("Controller") || !this.renderManager.getParent().getComponent("network").isInWorld()) return;
+
+        const remaining = Math.fround(time - Math.fround(deltaTime));
+        parent.setUnrealScriptProperty("ValidateLocationMoveTime", remaining > 0 ? remaining : 0);
+        if (remaining <= 0) parent.setUnrealScriptProperty("ValidateLocationSpeed", 0);
+    }
+
+    protected getMovementSpeed(environment = -1): number {
+        if (environment === -1) environment = this.physicsMode === "swimming" ? 1 : this.physicsMode === "flying" ? 2 : 0;
+        const speed = environment === 1 ? this.waterSpeed : environment === 2 ? this.airSpeed : this.isWalking ? this.walkSpeed : this.groundSpeed;
+        const delta = Number(this.getParent().getUnrealScriptProperty("ValidateLocationSpeed"));
+        return delta === 0 ? speed : Math.fround(speed + delta);
+    }
+
+    protected startNMover(): void {
+        const destination = this.flyDestination, query = this.adjustmentQuery;
+        this.flyDestination = null;
+        query.sourceActor = this.getParent();
+        query.sourceIsPlayer = !!(this.getParent() as any).isPlayer;
+        query.sourceProfile = this.collisionProfile;
+        query.sourceCollider = this.collider;
+        query.sourceBody = this.rigidbody;
+        query.extent.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
+
+        let radius = 10;
+        tmpFloorPosition.copy(destination);
+        tmpBodyPosition.copy(destination);
+        tmpBodyPosition.z += 40;
+
+        // AController::FlyTo 0x10533b90..0x10533ffa.
+        for (let i = 0; i < 100; i++) {
+            for (let j = 0; j < 5; j++) {
+                tmpFloorPosition.z -= 50;
+                query.delta.subVectors(tmpFloorPosition, tmpBodyPosition);
+                const hit = this.physicsManager.singleLineCheck(query);
+                if (!hit || hit.location.z === 0) continue;
+
+                const landing = hit.location.clone();
+                const time = Math.fround(hit.time) * 12, clearance = Math.fround(1.9);
+                if (time < clearance) landing.z += clearance - time;
+                landing.z -= this.collisionHeight;
+                const target = landing.clone();
+                target.z += this.getPosition().distanceTo(landing);
+                const mover = new L2NMover(target, landing, 300, 100);
+                this.nMover = new L2NMover(this.getPosition(), mover.position, 300, 100, mover);
+                this.physicsMode = "nMover";
+                this.hasStartedPhysics = true;
+                this.adjustToFloor = this.teleportLanding = false;
+                this.setBase(null);
+                return;
+            }
+            if (i % 4 === 0) radius += 10;
+            tmpFloorPosition.copy(destination);
+            if (i % 4 === 1) tmpFloorPosition.x += radius;
+            else if (i % 4 === 2) tmpFloorPosition.x -= radius;
+            else if (i % 4 === 3) tmpFloorPosition.y += radius;
+            else tmpFloorPosition.y -= radius;
+            tmpBodyPosition.copy(tmpFloorPosition);
+        }
+    }
+
+    protected physNMover(position: Vector3, deltaTime: number): void {
+        const mover = this.nMover;
+        mover.tick(deltaTime);
+        tmpMovement.subVectors(mover.position, position);
+        this.moveActor(position, tmpMovement);
+        if (!mover.isEnded()) return;
+
+        this.nMover = null;
+        this.physicsMode = "walking";
+        this.isPhysicInit = false;
+    }
+
+    protected stopNMover(): void {
+        this.nMover = null;
+        this.flyDestination = null;
+        if (this.physicsMode === "nMover") {
+            this.physicsMode = "falling";
+            this.isPhysicInit = false;
+        }
+    }
+
+    public onDetach(): void {
+        this.stopNMover();
+        super.onDetach();
     }
     public setDying(): void {
         this.actorState.state = "dying";
@@ -1565,7 +1762,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.reset();
         this.collisionProfile.blockPlayers = true;
     }
-    public resetAnimationState(): void { this.actorState.reset(); }
+    public resetAnimationState(): void { if (!this.isDying()) this.actorState.state = "idle"; }
     public startEnterRise(mode: number): void {
         if (!mode) return;
 
@@ -1608,10 +1805,15 @@ export type DesiredState_T = {
     faceTarget: Object3D | null;
 };
 
-export type PhysicsMode_T = "none" | "walking" | "falling" | "swimming" | "flying";
+export type PhysicsMode_T = "none" | "walking" | "falling" | "swimming" | "flying" | "nMover";
 export type PawnMovementState_T = "idle" | "turning" | "walking" | "running" | "dying" | "falling" | "swimming" | "swimmingIdle";
 
 function signedYaw(yaw: number): number { return ((yaw + 32767) & 65535) - 32767; }
+
+function getDistance(a: Vector3, b: Vector3): number {
+    const x = Math.fround(Math.fround(a.x) - Math.fround(b.x)), y = Math.fround(Math.fround(a.y) - Math.fround(b.y)), z = Math.fround(Math.fround(a.z) - Math.fround(b.z));
+    return Math.fround(Math.sqrt(x * x + y * y + z * z));
+}
 
 function fixedTurn(current: number, desired: number, deltaRate: number): number {
     current &= 65535;

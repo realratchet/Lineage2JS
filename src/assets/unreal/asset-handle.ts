@@ -1,5 +1,5 @@
 import type { ILazyAssetHandle, IReadyAssetHandle } from "@l2js/core";
-import fetchAsset from "../asset-source";
+import fetchAsset, { getAssetSourceId } from "../asset-source";
 
 type FileSystemSyncAccessHandle_T = {
     read(buffer: BufferSource, options?: { at: number }): number;
@@ -15,7 +15,8 @@ type SyncFileSystemFileHandle_T = FileSystemFileHandle & { createSyncAccessHandl
 async function fetchCached(path: string): Promise<LazyFileSystemHandle> {
     const root = await navigator.storage.getDirectory();
 
-    const parts = path.split('/').filter(Boolean);
+    const cachePath = `asset-cache/${getAssetSourceId()}/${path}`;
+    const parts = cachePath.split("/").filter(Boolean);
     const baseName = parts.pop()!;
 
     let dir: FileSystemDirectoryHandle = root;
@@ -28,7 +29,7 @@ async function fetchCached(path: string): Promise<LazyFileSystemHandle> {
     // multiple decode workers can race to populate the same shared package (native/core/
     // engine.u) on a cold cache - a named lock serializes the fetch+write so only one
     // context does it; the rest just wait, then see the now-populated file below
-    await navigator.locks.request(`asset-cache:${path}`, async () => {
+    await navigator.locks.request(`asset-cache:${cachePath}`, async () => {
         const existingFile = await fh.getFile();
 
         if (existingFile.size === 0) {

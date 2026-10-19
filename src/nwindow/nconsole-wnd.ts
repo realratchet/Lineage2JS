@@ -149,6 +149,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected readonly chatWnd: ChatWndView_T;
     protected loginWnd: LoginWndView_T = null;
     protected replayWnd: ReplayWndView_T = null;
+    protected replayRequest = 0;
     protected loginServerWnd: LoginServerWndView_T = null;
     protected lobbyWnd: LobbyWndView_T = null;
     protected pawnCreateWnd: PawnCreateWndView_T = null;
@@ -534,6 +535,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public async createScreens() {
         if (this.loginWnd) return;
 
+        await this.nwindow.ready;
+
         await this.layer.loadTextures([...NCLoginWnd.getTextures(), ...NCReplayWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...["graded", "gradec", "gradeb", "gradea", "grades"].map(key => this.strings.symbols[key]), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCSSQMainBoard.getTextures(), ...NCItemEnchantWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCFishViewportWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCOptionWnd.getTextures(), ...NCZoneTitleWnd.getTextures(), ...RecordMark.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES]);
 
         const network = this.manNetwork;
@@ -546,7 +549,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.loginWnd.loginFunction.onOption = index => { if (index === 2) this.optionWnd.toggle(); else if (index === 4) void this.showReplayList(); };
 
         this.replayWnd = this.skin.createReplayWnd(this.layer);
-        this.replayWnd.onCancel = () => this.showLogin();
+        this.replayWnd.onCancel = () => { this.replayRequest++; this.showLogin(); };
         this.replayWnd.onPlay = (name, lockCamera, showChat) => void this.playReplayFile(name, lockCamera, showChat);
         this.replayWnd.onDelete = name => void this.removeReplayFile(name);
         this.replayWnd.onImport = files => void this.importReplayFiles(files);
@@ -1117,6 +1120,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.optionWnd.getPawnRange = () => this.manRender.getPawnRange();
         this.optionWnd.onApplyPawnRange = range => this.setPawnRange(range);
         this.optionWnd.canChangePartyLoot = () => !network.isInParty() && !this.partyRoomWnd.isVisible();
+        this.optionWnd.getAntiAliasingLevels = () => this.manRender.getAntiAliasingLevels();
         this.optionWnd.getUIScale = () => this.nwindow.canvas.uiScale;
         this.optionWnd.getUIScales = () => UI_SCALES.filter(scale => { const [width, height] = this.nwindow.canvas.getScreenSize(scale); return scale <= 1 || scale === this.nwindow.canvas.uiScale || width >= 800 && height >= 600; });
         this.optionWnd.onApplyUIScale = scale => this.setUIScale(scale);
@@ -1226,6 +1230,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     protected async showReplayList() {
         if (this.screen !== "login" && this.screen !== "servers") return;
+        this.replayRequest++;
         this.manNetwork.cancelLogin();
         this.messageWnd.hide();
         this.show("replay");
@@ -1236,11 +1241,12 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     protected async playReplayFile(name: string, lockCamera: boolean, showChat: boolean) {
         if (this.screen !== "replay") return;
+        const request = ++this.replayRequest;
         try {
             const bytes = new Uint8Array(await (await readReplayFile(name)).arrayBuffer());
 
-            if (this.screen === "replay") await this.manNetwork.playReplay(bytes, lockCamera, showChat);
-        } catch (error) { this.showMessage((error as Error).message); }
+            if (this.screen === "replay" && request === this.replayRequest) await this.manNetwork.playReplay(bytes, lockCamera, showChat);
+        } catch (error) { if (request === this.replayRequest) this.showMessage((error as Error).message); }
     }
 
     protected async removeReplayFile(name: string) {
@@ -2208,6 +2214,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         for (const [key, value] of Object.entries(options)) {
             switch (key) {
+                case "useTrilinear":
+                case "renderDeco":
                 case "pawnShadow":
                 case "useColorCursor":
                 case "autoTrackingPawn":
@@ -2227,6 +2235,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "otherPCName":
                     if (typeof value !== "boolean") throw new Error(`Invalid game option '${key}'.`);
                     break;
+                case "antiAliasing":
+                case "textureDetail":
+                    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`Invalid game option '${key}'.`);
+                    break;
                 case "partyLooting":
                     if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`Invalid game option '${key}'.`);
                     break;
@@ -2236,6 +2248,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         this.options.game = { ...this.manNetwork.getParent().getComponent("asset").userConfig.game, ...options };
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
+        this.manRender.setRenderDeco(this.options.game.renderDeco);
+        this.manRender.setUseTrilinear(this.options.game.useTrilinear);
+        this.manRender.setTextureDetail(this.options.game.textureDetail);
+        this.manRender.setAntiAliasing(this.options.game.antiAliasing);
         document.documentElement.classList.toggle("nwindow-default-cursor", !this.options.game.useColorCursor);
         this.chatWnd.setSystemMsgWnd(this.options.game.systemMsgWnd);
         this.chatWnd.setOldChatting(this.options.game.oldChatting);

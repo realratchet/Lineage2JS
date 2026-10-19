@@ -1,6 +1,9 @@
 import { MathUtils } from "three";
 import FVector from "@l2js/engine/un-vector";
-import type { Vector3Arr } from "@l2js/engine";
+import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
+import type { QuaternionArr, Vector3Arr } from "@l2js/engine";
+
+const tmpRotation: QuaternionArr = [0, 0, 0, 1];
 
 type UNativeRegistry_T = typeof import("./native-registry").UNativeRegistry;
 
@@ -16,6 +19,7 @@ function op_mul_num_num                 /* *  */(a: number, b: number) { return 
 function op_div_num_num                 /* /  */(a: number, b: number) { return a / b; }
 function op_add_num_num                 /* +  */(a: number, b: number) { return a + b; }
 function op_sub_num_num                 /* -  */(a: number, b: number) { return a - b; }
+function pre_op_sub_int(a: number) { return -a | 0; }
 function pre_op_sub_num                 /* -  */(a: number) { return -a; }
 function op_inc_num                     /* ++ */(a: number) { return a + 1; }
 function op_dec_num                     /* -- */(a: number) { return a - 1; }
@@ -70,22 +74,32 @@ function rand_int(max: number) { return Math.floor(Math.random() * max); }
 
 
 function pre_op_sub_vector(a: Vector3Arr): Vector3Arr { return [-a[0], -a[1], -a[2]]; }
-function op_mul_vector_float(a: FVector, b: number) { return a.multiplyScalar(b); }
-function op_mul_float_vector(a: number, b: FVector) { return b.multiplyScalar(a); }
-function op_mul_vector_vector(a: FVector, b: FVector) { return a.mul(b); }
-function op_div_vector_float(a: FVector, b: number) { return a.divideScalar(b); }
-function op_add_vector_vector(a: FVector, b: FVector) { return a.add(b); }
-function op_sub_vector_vector(a: FVector, b: FVector) { return a.sub(b); }
+function op_mul_vector_float(a: Vector3Arr, b: number): Vector3Arr { return [a[0] * b, a[1] * b, a[2] * b]; }
+function op_mul_float_vector(a: number, b: Vector3Arr): Vector3Arr { return op_mul_vector_float(b, a); }
+function op_mul_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [a[0] * b[0], a[1] * b[1], a[2] * b[2]]; }
+function op_div_vector_float(a: Vector3Arr, b: number): Vector3Arr { return op_mul_vector_float(a, 1 / b); }
+function op_add_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+function op_sub_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+
+function op_vec_rot_lsh(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
+    getRotatorQuaternionElements(b[0], b[1], b[2], tmpRotation);
+    tmpRotation[0] = -tmpRotation[0]; tmpRotation[1] = -tmpRotation[1]; tmpRotation[2] = -tmpRotation[2];
+    return FVector.applyQuaternionElements(a, tmpRotation, [0, 0, 0]);
+}
+function op_vec_rot_rsh(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
+    getRotatorQuaternionElements(b[0], b[1], b[2], tmpRotation);
+    return FVector.applyQuaternionElements(a, tmpRotation, [0, 0, 0]);
+}
 
 function op_eq_vector_vector(a: Vector3Arr, b: Vector3Arr) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
 function op_neq_vector_vector(a: Vector3Arr, b: Vector3Arr) { return !op_eq_vector_vector(a, b); }
 
-function op_dot_vector_vector(a: FVector, b: FVector) { return a.dot(b); }
-function op_cross_vector_vector(a: FVector, b: FVector) { return a.cross(b); }
+function op_dot_vector_vector(a: Vector3Arr, b: Vector3Arr) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function op_cross_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
 
 function fn_not_implemented(...args: any[]) { throw new Error(`Called non-implemented function with arguments: ${JSON.stringify(args, undefined, 4)}`) };
 
-function VSize(a: FVector) { return a.length(); }
+function VSize(a: Vector3Arr) { return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); }
 function Normal(a: Vector3Arr): Vector3Arr {
     const x = Math.fround(a[0]), y = Math.fround(a[1]), z = Math.fround(a[2]);
     const lengthSq = x * x + y * y + z * z;
@@ -166,7 +180,7 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(141, op_inv_num);
 
     // integer operators
-    native(143, op_sub_num_num);
+    native(143, pre_op_sub_int);
     native(144, op_mul_num_num);
     native(145, op_div_int_int);
     native(146, op_add_num_num);
@@ -245,8 +259,8 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(214, op_div_vector_float);
     native(215, op_add_vector_vector);
     native(216, op_sub_vector_vector);
-    native(275, function op_vec_rot_lsh() { fn_not_implemented() });  // vector <<    ( vector A, rotator B );
-    native(276, function op_vec_rot_rsh() { fn_not_implemented() });  // vector >>    ( vector A, rotator B );
+    native(275, op_vec_rot_lsh);  // vector <<    ( vector A, rotator B );
+    native(276, op_vec_rot_rsh);  // vector >>    ( vector A, rotator B );
     native(217, op_eq_vector_vector);
     native(218, op_neq_vector_vector);
     native(219, op_dot_vector_vector);

@@ -38,6 +38,7 @@ import type UTexture from "@l2js/engine/un-texture";
 import type { IAnimatedSpriteDecodeInfo, IDataTextureDecodeInfo, ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
 import type { UMaterial } from "@l2js/engine/un-material";
 import type { USound } from "@l2js/engine/un-sound";
+import type { UStaticMesh } from "@l2js/engine/static-mesh/un-static-mesh";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
 import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
 import fetchAsset from "../asset-source";
@@ -1520,6 +1521,47 @@ export class DecodeEngine {
 
     public async decodeItemBinary(settings: LoadSettings_T, id: number): Promise<ArrayBuffer> {
         return this.serializeTransfer(await this.decodeItem(settings, id));
+    }
+
+    public async decodeVehicle(settings: LoadSettings_T): Promise<DecodeLibrary> {
+        const [, cls] = await this.fetchScriptClass("LineageVehicle.PassengerShip");
+        const library = new DecodeLibrary(), builder = new DecodeLibraryBuilder(library, settings);
+
+        library.name = "PassengerShip";
+        builder.pullScriptClasses([cls]);
+
+        for (const name of ["StaticMesh", "StaticVehicleMast"]) {
+            let path: string;
+
+            for (let current = library.scriptClasses[cls.name]; current; current = library.scriptClasses[current.superClassId]) {
+                if (!(name in current.defaults)) continue;
+
+                path = current.defaults[name] as string;
+                break;
+            }
+
+            if (!path) throw new Error(`Vehicle '${cls.name}' has no '${name}'.`);
+
+            const [packageName, objectName] = splitObjectPath(path);
+            const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "StaticMesh"));
+            const entry = pkg.exports.find(entry => objectName.includes(".") ? pkg.getObjectPath(entry).toLowerCase() === path.toLowerCase() : entry.objectName.toLowerCase() === objectName.toLowerCase());
+
+            if (!entry) throw new Error(`Vehicle mesh '${path}' does not exist.`);
+
+            const mesh = builder.pullStaticMesh(pkg.fetchObject<UStaticMesh>(pkg.exports.indexOf(entry) + 1));
+
+            library.leafActors.push([{ ...mesh, name }]);
+        }
+
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+
+        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+
+        return library;
+    }
+
+    public async decodeVehicleBinary(settings: LoadSettings_T): Promise<ArrayBuffer> {
+        return this.serializeTransfer(await this.decodeVehicle(settings));
     }
 
     public decodeEffectTemplates(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = [], requiredSounds: boolean = true): Promise<DecodeLibrary> {

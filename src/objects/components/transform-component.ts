@@ -8,9 +8,11 @@ import { setScriptObjectProperty } from "./actor-ownership-component";
 import type AnimationComponent from "./animation-component";
 import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";
+import type CollidingMesh from "../colliding-mesh";
 import type RenderManager from "../../rendering/render-manager";
 import type { ICollidable } from "../objects";
 import type { Vector3Arr } from "@l2js/engine";
+import { ENetRole_T } from "../../assets/unreal/un-aactor";
 
 const tmpRotator = new Rotator();
 const tmpBasePosition = new Vector3();
@@ -18,21 +20,23 @@ const tmpBaseQuaternion = new Quaternion();
 const tmpBaseInverseQuaternion = new Quaternion();
 const tmpBoneMatrix = new Matrix4();
 const tmpLocation = new Vector3();
+const tmpRelativeMatrix = new Matrix4();
 
-export class TransformComponent extends ObjectComponent<BaseActor> {
+export class TransformComponent extends ObjectComponent<BaseActor | CollidingMesh> {
     public readonly componentName = "transform";
     protected readonly renderManager: RenderManager;
     protected base: (ICollidable & Object3D) = null;
-    protected readonly basedActors = new Set<ICollidable>();
+    protected readonly basedActors: Set<ICollidable>;
     protected readonly basePosition = new Vector3();
     protected readonly baseQuaternion = new Quaternion();
     protected readonly baseRelativePosition = new Vector3();
     protected readonly visitedBases = new Set<ICollidable>();
 
-    public constructor(renderManager: RenderManager) {
+    public constructor(renderManager: RenderManager, basedActors: Set<ICollidable> = new Set()) {
         super();
 
         this.renderManager = renderManager;
+        this.basedActors = basedActors;
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
@@ -76,8 +80,14 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
                 if (rotation.every((value, index) => value === oldRotation[index])) return true;
                 for (const actor of this.basedActors)
                     if (!(actor as BaseActor).scriptBase) throw new Error(`SetRotation with unboned attachments is not implemented for '${parent.scriptClassId}'.`);
-                if (!parent.getCollisionProfile().useCylinderCollision) throw new Error(`SetRotation without cylinder collision is not implemented for '${parent.scriptClassId}'.`);
-                if (this.base && !parent.scriptBase && !this.base.getCollisionProfile?.().worldGeometry) throw new Error(`SetRotation relative to a moving base is not implemented for '${parent.scriptClassId}'.`);
+
+                const physics = this.renderManager.getPhysicsManager(), profile = parent.getCollisionProfile();
+                if (!profile.useCylinderCollision) {
+                    if (!profile.isPawn) throw new Error(`SetRotation without a pawn source is not implemented for '${parent.scriptClassId}'.`);
+
+                    physics.rotateActor(parent, rotation);
+                    return true;
+                }
 
                 // Engine.dll MoveActor 0x85b4f4..0x85b584: cylinder rotation skips collision/SetZone.
                 parent.setUnrealScriptProperty("Rotation", rotation);
@@ -85,6 +95,7 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
                 tmpRotator.set(rotation[0], rotation[1], rotation[2]).toQuaternion(parent.quaternion);
                 parent.rotateZ(-Math.PI / 2);
                 parent.updateMatrixWorld(true);
+                this.updateRelativeRotation();
                 this.renderManager.needsUpdate = true;
                 return true;
             }
@@ -171,6 +182,14 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
 
         if (!base) return true;
 
+        const bone = parent.getUnrealScriptProperty("AttachmentBone"), profile = base.getCollisionProfile ? base.getCollisionProfile() : null;
+        if (profile && !profile.worldGeometry && !parent.scriptBase && (!bone || bone === "None") && !parent.getUnrealScriptProperty("bOnlyDrawIfAttached") && (!parent.getUnrealScriptProperty("bHardAttach") || parent.getUnrealScriptProperty("Role") === ENetRole_T.ROLE_Authority)) {
+            // AActor::SetBase 0x105006f9..0x10500740 stores world-center differences.
+            const location = parent.getUnrealScriptProperty("Location") as Vector3Arr, baseLocation = (base as BaseActor).getUnrealScriptProperty("Location") as Vector3Arr;
+            parent.setUnrealScriptProperty("RelativeLocation", location.map((value, index) => Math.fround(Math.fround(value) - Math.fround(baseLocation[index]))) as Vector3Arr);
+            this.updateRelativeRotation();
+        }
+
         if (base.addBasedActor) base.addBasedActor(parent);
 
         base.getWorldPosition(this.basePosition);
@@ -191,6 +210,24 @@ export class TransformComponent extends ObjectComponent<BaseActor> {
         this.base.getWorldPosition(tmpBasePosition);
         this.base.getWorldQuaternion(tmpBaseQuaternion);
         this.baseRelativePosition.copy(this.getParent().position).sub(tmpBasePosition).applyQuaternion(tmpBaseInverseQuaternion.copy(tmpBaseQuaternion).invert());
+    }
+
+    public updateRelativeRotation(): void {
+        const parent = this.getParent(), base = this.base as BaseActor | CollidingMesh;
+        const bone = parent.getUnrealScriptProperty("AttachmentBone");
+
+        if (!base || !base.getCollisionProfile || base.getCollisionProfile().worldGeometry || parent.scriptBase || bone && bone !== "None") return;
+
+        // AActor::UpdateRelativeRotation 0x104f53e0: bSelfRotation uses a zero base rotation.
+        const rotation = parent.getUnrealScriptProperty("Rotation") as Vector3Arr;
+        const baseRotation = parent.getUnrealScriptProperty("bSelfRotation") ? [0, 0, 0] : base.getUnrealScriptProperty("Rotation") as Vector3Arr;
+        tmpRotator.set(baseRotation[0], baseRotation[1], baseRotation[2]).rotateMatrix(tmpRelativeMatrix.identity(), true);
+        tmpRotator.setFromRotationMatrix(tmpRelativeMatrix);
+        const inversePitch = tmpRotator.pitch, inverseYaw = tmpRotator.yaw, inverseRoll = tmpRotator.roll;
+        tmpRotator.set(rotation[0], rotation[1], rotation[2]).rotateMatrix(tmpRelativeMatrix.identity());
+        tmpRotator.set(inversePitch, inverseYaw, inverseRoll).rotateMatrix(tmpRelativeMatrix);
+        tmpRotator.setFromRotationMatrix(tmpRelativeMatrix);
+        parent.setUnrealScriptProperty("RelativeRotation", [tmpRotator.pitch, tmpRotator.yaw, tmpRotator.roll]);
     }
 
     public attachObjectToBone(object: Object3D, boneNameOrIndex: string | number, absolute: boolean = false): boolean {

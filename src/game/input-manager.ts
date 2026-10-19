@@ -74,7 +74,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected readonly mousePosition = new Vector2();
     protected isMouseInViewport = false;
     protected mousePickDistance = 0;
-    protected mouseTarget: BaseActor = null;
+    protected mouseTarget: ICollidable = null;
     protected mouseCursor = 0;
     protected mousePickup: GroundPickup = null;
     protected lastMouseTargetTime = -Infinity;
@@ -117,8 +117,10 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.controls.orbit.onCameraInput = (action, yaw, pitch) => {
             const network = this.manGame.getComponent("network");
 
-            if (network.inWorld && (action === "release" || this.followPlayer && !this.isCameraLocked && (action === "wheel" || !this.manGame.getComponent("asset").playerController.scriptProperties.get("bCameraWalking"))))
+            if (network.inWorld && (action === "release" || this.followPlayer && !this.isCameraLocked && (action === "wheel" || !this.manGame.getComponent("asset").playerController.scriptProperties.get("bCameraWalking")))) {
+                if (action === "axis") network.game.recordCameraInput("press", 0, 0);
                 network.game.recordCameraInput(action, yaw, pitch);
+            }
         };
         this.controls.orbit.onCameraZoom = (direction, distance) => {
             if (!this.manGame.getComponent("network").inWorld || !this.followPlayer) return null;
@@ -590,10 +592,10 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         if (network.isInWorld()) {
             if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, event.shiftKey)) return;
-            if (physicsIntersection && (physicsIntersection.actor as any)?.isActor && network.requestAction(physicsIntersection.actor as any, event.shiftKey)) return;
+            if (physicsIntersection && network.requestAction(physicsIntersection.actor, event.shiftKey)) return;
             if (physicsIntersection) {
                 tmpMouseIntersection.copy(physicsIntersection.location);
-                network.requestMoveTo(tmpMouseIntersection);
+                network.requestMoveTo(tmpMouseIntersection, physicsIntersection.actor);
                 if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
             } else if (pickDistance > 0 && renderManager.player.isSwimmingMovement()) {
                 tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
@@ -624,7 +626,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         return this.mousePickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, this.mousePickDistance, player.getCollider(), player.getRigidbody(), true, this.manGame.getComponent("asset").playerController) : null;
     }
 
-    public getMouseTarget(): BaseActor { return this.mouseTarget; }
+    public getMouseTarget(): ICollidable { return this.mouseTarget; }
     public getMousePickup(): GroundPickup { return this.mousePickup; }
 
     public traceScreenPoint(clientX: number, clientY: number, target: Vector3): boolean {
@@ -648,7 +650,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         this.lastMouseTargetTime = now;
 
-        let actor: BaseActor = null;
+        let actor: ICollidable = null;
         let pickup: GroundPickup = null;
         let cursor = 0;
 
@@ -662,7 +664,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             const hit = this.traceMouse();
 
             pickup = network.getPickup(this.raycaster, hit ? hit.distance : this.mousePickDistance);
-            if (!pickup && hit && (hit.actor as any)?.isActor && hit.actor !== this.renderManager.player as ICollidable) actor = hit.actor as any as BaseActor;
+            if (!pickup && hit && hit.actor !== this.renderManager.player as ICollidable && network.getActorObjectId(hit.actor)) actor = hit.actor;
             cursor = pickup ? 3 : network.getMouseCursor(actor);
         }
 

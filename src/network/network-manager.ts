@@ -1,4 +1,6 @@
-import { LoopOnce, Raycaster, Vector3 } from "three";
+import type PawnMovementComponent from "../physics/components/pawn-movement-component";
+import type NProjectileComponent from "../physics/components/projectile-component";
+import { LoopOnce, Raycaster, Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
 import Player from "../player";
 import PawnAttackComponent, { type NAttackActionParam_T } from "../objects/components/pawn-attack-component";
@@ -11,10 +13,11 @@ import getCommandTokens from "./command-parser";
 import L2Lobby from "./l2-lobby";
 import L2ReplayFile from "./l2-replay-file";
 import { saveReplayFile } from "./replay-files";
+import Vehicle from "../objects/vehicle";
 import GroundPickup from "../objects/ground-pickup";
 import L2Dice from "../objects/l2-dice";
 import type { SectorObject } from "../objects/zone-object";
-import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
+import { getRotatorQuaternionElements, sinRotator } from "../assets/unreal/utils/rotator";
 import * as GamePackets from "./game-packets";
 import PawnFishingComponent, { FishingType_T } from "../objects/components/pawn-fishing-component";
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
@@ -27,6 +30,7 @@ import type { IEngineComponent } from "../game/components";
 import type GameManager from "../game/game-manager";
 import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
+import type { ICollidable } from "../objects/objects";
 import Radar, { type RadarState_T } from "../rendering/radar";
 
 type NetObjectKind_T = "user" | "player" | "npc";
@@ -70,6 +74,7 @@ type NetObject_T = {
     appearanceKey: string;
     speeds: GamePackets.Speeds_T;
     isRunning: boolean;
+    environment: number;
     isInCombat: boolean;
     waitType: GamePackets.WaitType_T;
     privateStoreType: GamePackets.PrivateStoreType_T;
@@ -80,10 +85,13 @@ type NetObject_T = {
     abnormalState: number;
     fishing: GamePackets.FishingState_T;
     skill?: NetSkill_T;
+    pendingFly: { origin: Vector3, destination: Vector3 };
+    pendingRotation: { direction: number, speed: number };
     pendingAttack: PendingAttack_T;
     pendingSkill: PendingSkill_T;
+    pendingTransientSkills: PendingSkill_T[];
 };
-type NetVehicle_T = { objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
+type NetVehicle_T = { actor: Vehicle, actorReady: Promise<void>, objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 type PetRemainTime_T = { maxTime: number, remainingTime: number };
 type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number, crest: HTMLCanvasElement, allyCrest: HTMLCanvasElement };
 
@@ -102,6 +110,8 @@ const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 41
 
 const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
 const tmpTeleportPosition = new Vector3();
+const tmpVehicleLocation = new Vector3();
+const tmpVehicleOrigin = new Vector3();
 const tmpEarthquakePosition = new Vector3();
 const tmpEarthquakeRotationAmplitude = new Vector3(0, 0.1, 0);
 const tmpEarthquakeRotationVelocity = new Vector3(0, 1000, 0);
@@ -313,6 +323,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getParent(): GameManager { return this.manGame; }
 
     public isInWorld() { return this.inWorld; }
+    public isWorldLoading() { return this.inWorld && this.ui.screen === "loading"; }
     public isPlayingReplay() { return !!this.game?.isPlayingReplay(); }
     public getReplayDeltaTime(deltaTime: number): number | null {
         if (!this.isPlayingReplay()) return deltaTime;
@@ -333,6 +344,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const user = this.objects.get(this.userId);
 
         return user ? user.selectedId : 0;
+    }
+
+    protected hasServerObject(objectId: number): boolean {
+        if (this.objects.has(objectId) || this.pickups.has(objectId) || this.doors.has(objectId)) return true;
+        for (const id of this.staticObjects.values()) if (id === objectId) return true;
+
+        return false;
     }
 
     public async showLogin(url: string) {
@@ -629,18 +647,33 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public requestRestartPoint(type: number) { this.game.requestRestartPoint(type); }
     public cancelTarget() { this.game.requestTargetCanceld(); }
 
-    public requestMoveTo(point: Vector3) {
+    public requestMoveTo(point: Vector3, actor: ICollidable = null) {
         const player = this.manGame.getComponent("render").player;
+
+        if (actor && (actor as Vehicle).isVehicle) {
+            this.requestMoveInVehicle(actor as Vehicle, point);
+            return;
+        }
 
         this.game.moveBackwardToLocation(point, player.position);
     }
 
-    public requestAction(actor: BaseActor, isShift: boolean = false) {
+    public getActorObjectId(actor: Object3D | null): number {
+        if (!actor) return 0;
         const object = this.findObjectByActor(actor);
+        if (object) return object.objectId;
 
-        if (!object) return false;
+        for (const [objectId, mover] of this.doors) if (mover === actor) return objectId;
 
-        this.game.action(object.objectId, this.manGame.getComponent("render").player.position, isShift);
+        const properties = (actor as any).scriptProperties;
+        return properties instanceof Map ? this.staticObjects.get(getProperty(actor as any, "L2ServerObjectRealID") as number) ?? 0 : 0;
+    }
+
+    public requestAction(actor: Object3D | null, isShift: boolean = false) {
+        const objectId = this.getActorObjectId(actor);
+        if (!objectId) return false;
+
+        this.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
 
         return true;
     }
@@ -670,7 +703,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public isMouseOverUI(x: number, y: number) { return this.ui ? this.ui.isMouseOver(x, y) : false; }
 
-    public getMouseCursor(actor: BaseActor): number {
+    public getMouseCursor(actor: Object3D): number {
         if (!this.inWorld) return 0;
 
         const object = actor ? this.findObjectByActor(actor) : null;
@@ -755,7 +788,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (this.gnoElapsed > 3) { this.gnoCategory = this.gnoElapsed = 0; this.gnoObjectId = -1; }
     }
 
-    protected findObjectByActor(actor: BaseActor): NetObject_T {
+    protected findObjectByActor(actor: Object3D): NetObject_T {
         for (const object of this.objects.values())
             if (object.actor === actor) return object;
 
@@ -792,7 +825,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (this.worldLevel) {
             const level = this.worldLevel;
 
-            render.player.setUnrealScriptProperty("Level", null);
+            if (render.player.scriptProperties) render.player.setUnrealScriptProperty("Level", null);
             render.setLevel(null);
             this.worldLevel = null;
             this.manGame.getComponent("asset").unloadAlwaysLoaded(render, `${level.index.x}_${level.index.y}`, level);
@@ -899,7 +932,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.shopPreviewItems = null;
         this.seedShop = null;
         this.cropProcure = null;
-        this.vehicles.clear();
+        for (const objectId of this.vehicles.keys()) this.removeVehicle(objectId);
         this.mounts.clear();
         this.observation = null;
         this.specialCamera = null;
@@ -1158,8 +1191,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.GetOnVehicle: this.onGetOnVehicle(packet); break;
             case GamePackets.GameServerPacket_T.GetOffVehicle: this.onGetOffVehicle(packet); break;
             case GamePackets.GameServerPacket_T.MoveToLocationInVehicle: this.onMoveToLocationInVehicle(packet); break;
-            case GamePackets.GameServerPacket_T.StopMoveInVehicle:
-            case GamePackets.GameServerPacket_T.ValidateLocationInVehicle: this.onStopMoveInVehicle(packet); break;
+            case GamePackets.GameServerPacket_T.StopMoveInVehicle: this.onStopMoveInVehicle(packet); break;
+            case GamePackets.GameServerPacket_T.ValidateLocationInVehicle: this.onValidateLocationInVehicle(packet); break;
             case GamePackets.GameServerPacket_T.Ride: this.onRide(packet); break;
             case GamePackets.GameServerPacket_T.FlyToLocation: this.onFlyToLocation(packet); break;
             case GamePackets.GameServerPacket_T.SpecialCamera: this.specialCamera = GamePackets.readSpecialCamera(packet); break;
@@ -1443,7 +1476,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, actorReady: null, resolveActor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingAttack: null, pendingSkill: null };
+        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, actorReady: null, resolveActor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, environment: null, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingFly: null, pendingRotation: null, pendingAttack: null, pendingSkill: null, pendingTransientSkills: [] };
 
         object.actorReady = new Promise(resolve => object.resolveActor = resolve);
         this.objects.set(objectId, object);
@@ -1457,6 +1490,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (speeds.airRunSpd !== undefined) actor.setAirSpeed((isRunning ? speeds.airRunSpd : speeds.airWalkSpd) * speeds.moveMultiplier);
         actor.setUnrealScriptProperty("AttackSpeedRate", speeds.attackSpeedMultiplier);
         actor.setUnrealScriptProperty("NonAttackSpeedRate", Math.fround(speeds.moveMultiplier)); // Engine 0x1047ab88: User+118 double to Pawn+5fc float.
+        actor.setUnrealScriptProperty("GroundMaxSpeed", Math.fround(speeds.runSpd));
+        actor.setUnrealScriptProperty("GroundMinSpeed", Math.fround(speeds.walkSpd));
+        actor.setUnrealScriptProperty("WaterMaxSpeed", Math.fround(speeds.swimRunSpd));
+        actor.setUnrealScriptProperty("WaterMinSpeed", Math.fround(speeds.swimWalkSpd));
+        if (speeds.airRunSpd !== undefined) {
+            actor.setUnrealScriptProperty("AirMaxSpeed", Math.fround(speeds.airRunSpd));
+            actor.setUnrealScriptProperty("AirMinSpeed", Math.fround(speeds.airWalkSpd));
+        }
         actor.setUnrealScriptProperty("GroundSpeed", Math.fround((isRunning ? speeds.runSpd : speeds.walkSpd) * Math.fround(speeds.moveMultiplier)));
         actor.setUnrealScriptProperty("WaterSpeed", Math.fround((isRunning ? speeds.swimRunSpd : speeds.swimWalkSpd) * Math.fround(speeds.moveMultiplier)));
         actor.setCollisionSize(speeds.collisionRadius, speeds.collisionHeight);
@@ -1737,7 +1778,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             paperdoll[slot] = itemId;
         }
         object.appearanceKey = this.getAppearanceKey(appearance);
-        this.userAppearanceLoad = this.loadAppearance(appearance, object.actor);
+        this.userAppearanceLoad = this.loadAppearance(appearance, this.riders.get(this.userId) || object.actor);
     }
 
     protected onEquipUpdate(packet: PacketReader) {
@@ -1794,7 +1835,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object || key === object.appearanceKey) return;
 
         object.appearanceKey = key;
-        if (object.actor) void this.loadAppearance(appearance, object.actor);
+        if (object.actor) void this.loadAppearance(appearance, this.riders.get(this.userId) || object.actor);
     }
 
     protected onDoorInfo(packet: PacketReader) {
@@ -2410,7 +2451,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 const targetId = this.getTargetId();
 
-                if (this.objects.has(targetId) || this.pickups.has(targetId)) {
+                if (this.hasServerObject(targetId)) {
                     const position = this.manGame.getComponent("render").player.position;
 
                     if (ctrl) this.game.attackRequest(targetId, position, shift);
@@ -2443,7 +2484,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case 6: {
                 const target = this.objects.get(this.getTargetId());
 
-                if (target && target.actor && (this.objects.has(target.selectedId) || this.pickups.has(target.selectedId)))
+                if (target && target.actor && this.hasServerObject(target.selectedId))
                     this.game.action(target.selectedId, this.manGame.getComponent("render").player.position, shift);
                 break;
             }
@@ -2665,6 +2706,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.userId = info.objectId;
         this.appearances.set(info.objectId, { ...info, paperdoll: info.paperdoll.slice() });
         object.heading = info.heading;
+        object.pendingRotation = null;
         setVector(object.position, info);
         object.name = info.name;
         object.title = info.title;
@@ -2684,7 +2726,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.isInCombat = info.isInCombat;
         object.speeds = info;
         object.cubics = info.cubics;
-        object.abnormalState = info.abnormalState;
         object.isRunning = this.isRunning;
         object.privateStoreType = info.privateStoreType;
 
@@ -2699,7 +2740,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         this.updateCubics(object);
-        this.updateAbnormalState(object);
+        this.updateAbnormalState(object, info.abnormalState);
         this.isMounted = info.mountType !== 0;
         this.updateMountable();
         this.ui.setInventoryOrderOwner(info.name, this.inventoryOrderNamespace);
@@ -2750,6 +2791,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             const wasDead = object.isDead;
             object.heading = info.heading;
+            object.pendingRotation = null;
             this.adjustPawnLocation(object, info);
             object.name = info.name;
             object.title = info.title;
@@ -2760,9 +2802,16 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             object.isDead = info.isAlikeDead;
             object.privateStoreType = info.privateStoreType;
             object.cubics = info.cubics;
-            object.abnormalState = info.abnormalState;
             this.updateCubics(object);
-            this.updateAbnormalState(object);
+            this.updateAbnormalState(object, info.abnormalState);
+
+            if (object.isDead) {
+                object.destination = null;
+                object.pendingFly = null;
+                object.pendingAttack = null;
+                object.pendingTransientSkills.length = 0;
+                this.stopSkill(object.objectId);
+            }
 
             if (object.actor) {
                 if (!info.mountType || this.riders.has(info.objectId)) this.applySpeeds(object.actor, info, info.isRunning);
@@ -2804,7 +2853,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         actor.position.copy(object.position);
 
         try {
-            await this.loadAppearance(info, actor);
+            let appearance: GamePackets.Appearance_T = info;
+
+            do {
+                object.appearanceKey = this.getAppearanceKey(appearance);
+                await this.loadAppearance(appearance, actor);
+                appearance = this.appearances.get(object.objectId);
+            } while (!object.isRemoved && this.getAppearanceKey(appearance) !== object.appearanceKey);
         } catch (e) {
             actor.release();
             object.resolveActor(null);
@@ -2818,7 +2873,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         render.addPawn(actor);
-        this.attachActor(object, actor, info);
+        this.attachActor(object, actor);
         const ride = this.mounts.get(object.objectId);
 
         if (ride) await this.enterRide(ride);
@@ -2981,14 +3036,22 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             object.title = info.title || this.ui.getStrings().npcTitles[info.npcId] || "";
             if (!info.name && info.npcId in this.ui.getStrings().npcTitleColors) object.titleColor = this.ui.getStrings().npcTitleColors[info.npcId];
             object.heading = info.heading;
+            object.pendingRotation = null;
             object.isRunning = info.isRunning;
             object.isInCombat = info.isInCombat;
             object.isDead = info.isAlikeDead;
             object.isSummon = info.isSummon;
             object.isAttackable = info.isAttackable;
             object.speeds = info;
-            object.abnormalState = info.abnormalState;
-            this.updateAbnormalState(object);
+            this.updateAbnormalState(object, info.abnormalState);
+
+            if (object.isDead) {
+                object.destination = null;
+                object.pendingFly = null;
+                object.pendingAttack = null;
+                object.pendingTransientSkills.length = 0;
+                this.stopSkill(object.objectId);
+            }
 
             if (object.actor) {
                 this.applySpeeds(object.actor, info, info.isRunning);
@@ -3043,17 +3106,19 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.npcSpawnCount--;
         this.npcSpawnWaiters.shift()?.();
 
-        if (info.runSpd <= 0) {
+        const speeds = object.speeds;
+
+        if (speeds.runSpd <= 0) {
             const groundSpeed = Number(actor.getUnrealScriptProperty("GroundSpeed"));
             const walkingPct = Number(actor.getUnrealScriptProperty("WalkingPct"));
             const waterSpeed = Number(actor.getUnrealScriptProperty("WaterSpeed"));
             const runSpeed = groundSpeed > 0 ? groundSpeed : 1;
             const walkPct = walkingPct > 0 ? walkingPct : 0.5;
 
-            info.runSpd = runSpeed;
-            info.walkSpd = runSpeed * walkPct;
-            info.swimRunSpd = waterSpeed > 0 ? waterSpeed : runSpeed;
-            info.swimWalkSpd = info.swimRunSpd * walkPct;
+            speeds.runSpd = runSpeed;
+            speeds.walkSpd = runSpeed * walkPct;
+            speeds.swimRunSpd = waterSpeed > 0 ? waterSpeed : runSpeed;
+            speeds.swimWalkSpd = speeds.swimRunSpd * walkPct;
         }
 
         if (!object.name) object.name = actor.name;
@@ -3062,28 +3127,44 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             return;
         }
 
-        this.attachActor(object, actor, info);
+        this.attachActor(object, actor);
         if (info.spawnType === 2 && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
     }
 
-    protected attachActor(object: NetObject_T, actor: BaseActor, info: GamePackets.CreatureInfo_T) {
+    protected attachActor(object: NetObject_T, actor: BaseActor) {
         object.actor = actor;
 
         actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
-        if (!(info as GamePackets.CharInfo_T).mountType) this.applySpeeds(actor, info, info.isRunning);
+        if (object.environment !== null) actor.setUnrealScriptProperty("Environment", object.environment);
+        if (!(object.speeds as GamePackets.CharInfo_T).mountType) this.applySpeeds(actor, object.speeds, object.isRunning);
         this.setIdleAnimation(object);
         actor.setRotationYaw(object.heading);
 
-        actor.teleportTo(object.position, true);
+        actor.teleportTo(object.pendingFly ? object.pendingFly.origin : object.position, true);
+        const vehicle = this.vehicles.get(this.getVehicleIdOf(object.objectId));
+
+        if (vehicle) {
+            actor.setUnrealScriptProperty("bGetOnVehicle", true);
+            this.placeVehicleRider(vehicle, object.objectId);
+        }
         this.updateCubics(object);
         this.updateAbnormalState(object);
-        if (object.destination) actor.goTo(object.destination);
+        if (object.pendingFly) {
+            if (object.kind === "user") actor.flyTo(object.pendingFly.destination);
+            else actor.addFlyTo(object.pendingFly.origin, object.pendingFly.destination);
+            object.pendingFly = null;
+        } else if (object.destination) actor.goTo(object.destination);
+        if (object.pendingRotation) {
+            actor.startRotating(object.pendingRotation.direction, object.pendingRotation.speed);
+            object.pendingRotation = null;
+        }
         if (object.isDead) actor.playDeathAnimation(() => { });
         if (object.objectId === this.getTargetId()) this.updateTarget();
         object.resolveActor(actor);
         this.flushPendingAttacks();
         this.flushPendingSkills();
         this.flushSkillTargets(object.objectId);
+        this.startFishing(object);
     }
 
     protected async onDice(info: GamePackets.Dice_T): Promise<void> {
@@ -3144,10 +3225,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const position = this.readLocation(packet);
         const pickup = this.pickups.get(objectId);
 
+        if (object) {
+            object.destination = null;
+            object.pendingFly = null;
+            setVector(object.position, position);
+        }
+
         if (object && object.actor) {
             const actor = object.actor;
 
-            object.destination = null;
             actor.stopMoving();
             this.adjustPawnLocation(object, position);
 
@@ -3177,13 +3263,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             if (object.pendingAttack?.hits.some(hit => hit.targetObjectId === objectId)) object.pendingAttack = null;
             if (object.pendingSkill?.targetObjectId === objectId) object.pendingSkill = null;
             if (object.pendingSkill) object.pendingSkill.associatedObjectIds = object.pendingSkill.associatedObjectIds.filter(id => id !== objectId);
+            for (let i = object.pendingTransientSkills.length - 1; i >= 0; i--) {
+                const pending = object.pendingTransientSkills[i];
+
+                if (pending.targetObjectId === objectId) object.pendingTransientSkills.splice(i, 1);
+                else pending.associatedObjectIds = pending.associatedObjectIds.filter(id => id !== objectId);
+            }
             if (object.skill) object.skill.associatedObjectIds = object.skill.associatedObjectIds.filter(id => id !== objectId);
         }
 
         if (wasTarget) this.updateTarget();
 
-        this.vehicles.delete(objectId);
+        this.removeVehicle(objectId);
         this.doors.delete(objectId);
+        for (const [realId, id] of this.staticObjects) if (id === objectId) this.staticObjects.delete(realId);
         for (const vehicle of this.vehicles.values()) vehicle.riders.delete(objectId);
         this.endRide(objectId);
         this.mounts.delete(objectId);
@@ -3247,21 +3340,34 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!object) return;
 
-        const destination = setVector(object.destination || (object.destination = new Vector3()), this.readLocation(packet));
+        const destination = setVector(new Vector3(), this.readLocation(packet));
+        object.pendingFly = null;
 
         setVector(object.position, this.readLocation(packet));
 
-        if (!object.actor || object.isDead) return;
+        if (object.isDead) return;
+
+        object.destination = destination;
+        object.pendingAttack = null;
+        this.stopSkill(object.objectId);
+
+        if (object.waitType === GamePackets.WaitType_T.WT_SITTING || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH || object.chairStaticObjectId) {
+            object.waitType = GamePackets.WaitType_T.WT_STANDING;
+            object.chairStaticObjectId = 0;
+            this.setIdleAnimation(object, false);
+        }
+
+        if (!object.actor) return;
 
         this.adjustPawnLocation(object, object.position);
 
         object.actor.goTo(destination);
     }
 
-    protected onMoveToPawn(packet: PacketReader) {
+    protected async onMoveToPawn(packet: PacketReader) {
         const objectId = packet.d(), targetId = packet.d();
         const distance = packet.d();
-        const current = this.readLocation(packet), position = { x: current.x, y: current.y, z: current.z }, destination = this.readLocation(packet);
+        const current = this.readLocation(packet), position = { x: current.x, y: current.y, z: current.z }, destination = setVector(new Vector3(), this.readLocation(packet));
         const object = this.objects.get(objectId);
         const target = this.objects.get(targetId);
 
@@ -3271,15 +3377,30 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (object.isDead) return;
 
-        if (target && target.actor && object.actor) {
-            this.adjustPawnLocation(object, object.position);
-            object.destination = null;
-            object.actor.goToActor(target.actor, Math.max(5, distance - Math.abs(destination.z - position.z)) - 5); // L2Character.moveToLocation: offset shrinks by |dz|, stops at offset - 5.
-            return;
+        object.pendingAttack = null;
+        this.stopSkill(object.objectId);
+
+        if (object.waitType === GamePackets.WaitType_T.WT_SITTING || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH || object.chairStaticObjectId) {
+            object.waitType = GamePackets.WaitType_T.WT_STANDING;
+            object.chairStaticObjectId = 0;
+            this.setIdleAnimation(object, false);
         }
 
-        setVector(object.destination || (object.destination = new Vector3()), destination);
-        if (object.actor) object.actor.goTo(object.destination);
+        object.pendingFly = null;
+        if (!target || !target.actor || !object.actor) {
+            object.destination = destination;
+            if (object.actor) object.actor.goTo(destination);
+            if (!target) return;
+
+            await Promise.all([object.actorReady, target.actorReady]);
+
+            if (object.destination !== destination || object.isRemoved || target.isRemoved || object.isDead || !object.actor || !target.actor) return;
+        }
+
+        this.adjustPawnLocation(object, object.position);
+        object.destination = null;
+        object.pendingFly = null;
+        object.actor.goToActor(target.actor, Math.max(5, distance - Math.abs(destination.z - position.z)) - 5); // L2Character.moveToLocation: offset shrinks by |dz|, stops at offset - 5.
     }
 
     protected onStopMove(packet: PacketReader) {
@@ -3289,7 +3410,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         setVector(object.position, this.readLocation(packet));
         object.heading = packet.d() & 0xffff;
+        object.pendingRotation = null;
         object.destination = null;
+        object.pendingFly = null;
 
         if (!object.actor || object.isDead) return;
 
@@ -3337,12 +3460,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         setVector(object.position, this.readLocation(packet));
         object.destination = null;
+        object.pendingFly = null;
+        object.pendingRotation = null;
+        this.stopSkill(object.objectId);
+        object.pendingAttack = null;
+        object.pendingTransientSkills.length = 0;
 
         if (object.actor) {
             if (object.actor.getUnrealScriptProperty("Controller")) {
                 object.actor.stopMove();
-                this.stopSkill(object.objectId);
-                object.pendingAttack = null;
             }
             tmpTeleportPosition.copy(object.position);
             tmpTeleportPosition.z = Math.fround(tmpTeleportPosition.z + Math.fround(object.speeds.collisionHeight) + 10);
@@ -3384,7 +3510,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const direction = packet.d(), speed = packet.d();
 
-        this.withActor(objectId, actor => actor.startRotating(direction, speed));
+        const object = this.objects.get(objectId);
+
+        if (!object) return;
+
+        if (object.actor) object.actor.startRotating(direction, speed);
+        else object.pendingRotation = { direction, speed };
     }
 
     protected onStopRotation(packet: PacketReader) {
@@ -3393,10 +3524,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining() > 0) packet.c();
 
-        this.withActor(objectId, (actor, object) => {
-            object.heading = heading & 65535;
-            actor.finishRotating(heading, speed);
-        });
+        const object = this.objects.get(objectId);
+
+        if (!object) return;
+
+        object.heading = heading & 65535;
+        object.pendingRotation = null;
+        if (object.actor) object.actor.finishRotating(heading, speed);
     }
 
     protected onAttack(packet: PacketReader) {
@@ -3409,7 +3543,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         for (let i = 0; i < count; i++) hits.push(this.readAttackHit(packet));
 
-        if (!attacker || attacker.isDead) return;
+        if (!attacker || attacker.isDead || hits[0].targetObjectId === attacker.objectId) return;
+
+        attacker.destination = null;
+        attacker.pendingFly = null;
+        if (attacker.actor) attacker.actor.stopMoving();
+        this.stopSkill(attacker.objectId);
 
         if (!attacker.actor || !hits[0].actionTarget) {
             attacker.pendingAttack = { hits, position: { x: position.x, y: position.y, z: position.z } };
@@ -3426,6 +3565,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         object.pendingAttack = null;
         object.pendingSkill = null;
+        object.pendingTransientSkills.length = 0;
     }
 
     protected readAttackHit(packet: PacketReader): NAttackActionParam_T {
@@ -3441,7 +3581,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         attacker.pendingAttack = null;
         this.adjustPawnLocation(attacker, position);
         attacker.destination = null;
-        this.stopSkill(attacker.objectId);
+        attacker.pendingFly = null;
         attacker.actor.getComponent<PawnAttackComponent>("pawnAttack").attackFromServer(hits);
         if (!attacker.isDead)
             for (const hit of hits) {
@@ -3486,13 +3626,22 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const isTransient = CUBIC_SKILLS.has(id) || this.ui.getStrings().skillCastStyles[`${id}:${level}`] === 0;
 
         if (!caster) return;
+        if (!isTransient) {
+            caster.pendingAttack = null;
+            caster.destination = null;
+            caster.pendingFly = null;
+            if (caster.actor) caster.actor.stopMoving();
+        }
 
         if (caster.actor === this.manGame.getComponent("render").player && !caster.isDead && (target ? target.actor : this.doors.has(targetObjectId)) && this.ui.getStrings().skillInfos[`${id}:${level}`])
             this.notifyMacroSkill(id, hitTime);
 
         if (!caster.actor || !target) {
             if (!isTransient) this.stopSkill(caster.objectId);
-            caster.pendingSkill = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
+            const pending = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
+
+            if (isTransient) caster.pendingTransientSkills.push(pending);
+            else caster.pendingSkill = pending;
             return;
         }
 
@@ -3514,11 +3663,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!isTransient) {
             caster.destination = null;
+            caster.pendingFly = null;
             this.manGame.getComponent("asset").stopPawnSkill(caster.actor);
             caster.skill = skill;
+            caster.pendingSkill = null;
         }
 
-        caster.pendingSkill = null;
         void this.castSkill(caster, target, skill, isTransient);
     }
 
@@ -3528,20 +3678,21 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const asset = this.manGame.getComponent("asset");
         const skill = asset.getPawnSkillRecord(actor, cast.id, cast.level);
         const attack = actor.getComponent<PawnAttackComponent>("pawnAttack");
-        const visual = skill.visual;
+        const visual = skill.visual, request = asset.getPawnSkillRequest(actor);
 
         if (!target.actor) skill.visual = null;
 
         if (!isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved) return;
 
         attack.castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (this.manGame.getCurrentTime() - cast.receivedTime) / 1000);
+        if (isTransient && visual?.transientRejected) this.stopSkill(caster.objectId);
 
         if (!skill.visual) {
             const [loaded, targetActor] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), target.actor || target.actorReady]);
 
-            if (!loaded || !targetActor || !isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved || caster.actor !== actor) return;
+            if (!loaded || !targetActor || !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) || caster.isRemoved || target.isRemoved || caster.actor !== actor || !attack.isAttached()) return;
 
-            if (isTransient && loaded.visual.transientRejected) this.stopSkill(caster.objectId);
+            if (isTransient && loaded.visual.transientRejected && request === asset.getPawnSkillRequest(actor)) this.stopSkill(caster.objectId);
 
             Object.assign(skill, { visual: loaded.visual, flyingTime: loaded.flyingTime, sounds: loaded.sounds, assets: loaded.assets });
             attack.setSkillTargets(cast.id, cast.associatedActors, target.actor);
@@ -3552,9 +3703,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected onMagicSkillLaunched(packet: PacketReader) {
         const caster = this.objects.get(packet.d());
-        const skillId = packet.d();
+        const skillId = packet.d(), level = packet.d();
 
-        packet.d();
         const count = packet.d(), objectIds: number[] = [];
 
         if (count < 0 || count > packet.getRemaining() / 4) throw new Error(`Invalid skill target count '${count}'.`);
@@ -3563,8 +3713,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!caster) return;
 
-        if (caster.pendingSkill && caster.pendingSkill.id === skillId) caster.pendingSkill.associatedObjectIds.push(...objectIds);
-        if (!caster.skill || caster.skill.id !== skillId) return;
+        if (caster.pendingSkill && caster.pendingSkill.id === skillId && caster.pendingSkill.level === level) caster.pendingSkill.associatedObjectIds.push(...objectIds);
+        for (let i = caster.pendingTransientSkills.length - 1; i >= 0; i--) {
+            const pending = caster.pendingTransientSkills[i];
+
+            if (pending.id !== skillId || pending.level !== level) continue;
+            pending.associatedObjectIds.push(...objectIds);
+            break;
+        }
+        if (!caster.skill || caster.skill.id !== skillId || caster.skill.level !== level) return;
 
         caster.skill.associatedObjectIds.push(...objectIds);
         if (caster.actor) this.applySkillTargets(caster);
@@ -3572,15 +3729,27 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected flushPendingSkills(targetObjectId?: number) {
         for (const caster of this.objects.values()) {
+            if (!caster.actor) continue;
+
             const pending = caster.pendingSkill;
 
-            if (!pending || targetObjectId !== undefined && pending.targetObjectId !== targetObjectId) continue;
+            if (pending && (targetObjectId === undefined || pending.targetObjectId === targetObjectId)) {
+                const target = this.objects.get(pending.targetObjectId);
 
-            const target = this.objects.get(pending.targetObjectId);
+                if (target) {
+                    caster.pendingSkill = null;
+                    this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
+                }
+            }
 
-            if (!caster.actor || !target) continue;
+            for (let i = 0; i < caster.pendingTransientSkills.length;) {
+                const pending = caster.pendingTransientSkills[i], target = this.objects.get(pending.targetObjectId);
 
-            this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
+                if (!target || targetObjectId !== undefined && pending.targetObjectId !== targetObjectId) { i++; continue; }
+
+                caster.pendingTransientSkills.splice(i, 1);
+                this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, true, pending.receivedTime, pending.associatedObjectIds);
+            }
         }
     }
 
@@ -3629,9 +3798,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!object) return;
 
         object.isDead = true;
+        object.pendingRotation = null;
+        object.pendingAttack = null;
+        object.pendingTransientSkills.length = 0;
         object.isInCombat = false;
         object.selectedId = 0; // OnDie 0x744e51 / 0x744e95 clears bAutoAttacking and SelectedActor.
         object.destination = null;
+        object.pendingFly = null;
         this.stopSkill(objectId);
 
         if (object.actor) object.actor.playDeathAnimation(() => { });
@@ -3658,6 +3831,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!object || object.isRunning === isRunning) return;
         object.isRunning = isRunning;
+        object.environment = environment;
         if (object.kind === "user") {
             this.isRunning = isRunning;
             this.ui.setRunning(isRunning);
@@ -3677,6 +3851,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!object) return;
 
+        object.destination = null;
+        object.pendingFly = null;
+        object.pendingAttack = null;
+        this.stopSkill(object.objectId);
         object.chairStaticObjectId = staticObjectId;
         object.waitType = GamePackets.WaitType_T.WT_SITTING;
         this.setIdleAnimation(object, false);
@@ -3685,6 +3863,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!actor) return;
 
+        actor.stopMoving();
         const animation = (actor.getUnrealScriptProperty("ChairSitAnimName") as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
 
         if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnChairSitPacket 0x10481e38..0x10481e8e.
@@ -3715,7 +3894,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         void component.setCubics(object.cubics);
     }
 
-    protected updateAbnormalState(object: NetObject_T) {
+    protected updateAbnormalState(object: NetObject_T, abnormalState: number = object.abnormalState) {
+        if (abnormalState & ~object.abnormalState & 0xc00) {
+            object.pendingAttack = null;
+            this.stopSkill(object.objectId);
+        }
+        object.abnormalState = abnormalState;
+
         const actor = object.actor;
 
         if (!actor) return;
@@ -3775,13 +3960,17 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         setVector(object.position, position);
         object.destination = null;
+        object.pendingFly = null;
 
         if (object.waitType === waitType) return;
+
+        if (waitType === GamePackets.WaitType_T.WT_SITTING && object.kind === "user") object.pendingRotation = null;
+        object.pendingAttack = null;
+        this.stopSkill(object.objectId);
 
         const actor = object.actor;
 
         if (actor) {
-            actor.stopAttack();
             actor.stopMoving();
             if (waitType === GamePackets.WaitType_T.WT_SITTING && object.kind === "user") actor.stopRotating();
             if (distanceXY(actor.position, object.position) > STOP_SNAP_DISTANCE) actor.teleportTo(object.position, true);
@@ -3911,9 +4100,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     protected setSelectedActor(object: NetObject_T, objectId: number) {
-        const target = this.objects.get(objectId);
-
-        if (target || this.pickups.has(objectId)) object.selectedId = objectId;
+        if (this.hasServerObject(objectId)) object.selectedId = objectId;
     }
 
     protected onTargetSelected(packet: PacketReader, isSelected: boolean) {
@@ -4172,12 +4359,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!this.inWorld || !source || index === targetIndex) return;
         if (![page, targetPage].every(value => Number.isInteger(value) && value >= 0 && value < 10) || ![slot, targetSlot].every(value => Number.isInteger(value) && value >= 0 && value < 12)) throw new Error(`Invalid shortcut move ${page}:${slot} -> ${targetPage}:${targetSlot}.`);
 
-        this.requestShortCutReg(source.type, targetIndex, source.id);
+        this.requestShortCutReg(source.type, targetIndex, source.id, source.characterType ?? 1);
         this.game.requestShortCutDel(index);
         this.shortcuts.delete(index);
         this.ui.removeShortCut(index);
 
-        if (target) this.requestShortCutReg(target.type, index, target.id);
+        if (target) this.requestShortCutReg(target.type, index, target.id, target.characterType ?? 1);
     }
 
     public useShortCut(page: number, slot: number, ctrl: boolean = false, shift: boolean = false) {
@@ -4516,16 +4703,56 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         let vehicle = this.vehicles.get(info.objectId);
 
         if (!vehicle) {
-            vehicle = { objectId: info.objectId, position: new Vector3(), heading: 0, destination: null, moveSpeed: 0, rotationSpeed: 0, isStarted: false, riders: new Map() };
+            vehicle = { actor: null, actorReady: null, objectId: info.objectId, position: new Vector3(), heading: 0, destination: null, moveSpeed: 0, rotationSpeed: 0, isStarted: false, riders: new Map() };
             this.vehicles.set(info.objectId, vehicle);
+            vehicle.actorReady = this.enterVehicle(vehicle);
         }
 
         setVector(vehicle.position, info);
         vehicle.heading = info.heading;
+        if (vehicle.actor) vehicle.actor.setLocation(vehicle.position, vehicle.heading);
 
         if (isStopped) vehicle.destination = null; // L2BoatInstance.sendInfo follows VehicleInfo with VehicleDeparture while moving.
 
-        for (const riderId of vehicle.riders.keys()) this.placeVehicleRider(vehicle, riderId);
+    }
+
+    protected async enterVehicle(vehicle: NetVehicle_T): Promise<void> {
+        const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
+        const library = await asset.loadVehicle();
+
+        if (this.vehicles.get(vehicle.objectId) !== vehicle) return;
+
+        const actor = new Vehicle(library, vehicle.objectId, render);
+        actor.setLocation(vehicle.position, vehicle.heading);
+        render.scene.add(actor);
+        const physics = this.manGame.getComponent("physics");
+        physics.registerSimulationObjects(actor);
+        if (render.getLevel()) {
+            const level = render.getLevel().levelInfoActor;
+            actor.setUnrealScriptProperty("Level", level as any);
+            physics.setPawnLevel(actor, level as any);
+            physics.setPawnZone(actor, false, true);
+            physics.setPawnVolumes(actor);
+        }
+        actor.beginPlay();
+        render.queueShaderCompile(actor);
+        render.needsUpdate = true;
+        vehicle.actor = actor;
+        for (const objectId of vehicle.riders.keys()) this.placeVehicleRider(vehicle, objectId);
+    }
+
+    protected removeVehicle(objectId: number): void {
+        const vehicle = this.vehicles.get(objectId);
+
+        if (!vehicle) return;
+
+        this.vehicles.delete(objectId);
+        if (!vehicle.actor) return;
+
+        this.manGame.getComponent("physics").unregisterSimulationObjects(vehicle.actor);
+        vehicle.actor.removeFromParent();
+        vehicle.actor.release();
+        this.manGame.getComponent("render").needsUpdate = true;
     }
 
     protected onVehicleDeparture(packet: PacketReader) {
@@ -4560,7 +4787,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 vehicle.destination = null;
             } else vehicle.position.lerp(vehicle.destination, step / distance);
 
-            for (const riderId of vehicle.riders.keys()) this.placeVehicleRider(vehicle, riderId);
+            if (vehicle.actor) vehicle.actor.setLocation(vehicle.position, vehicle.heading);
         }
     }
 
@@ -4573,12 +4800,23 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected placeVehicleRider(vehicle: NetVehicle_T, objectId: number) {
         const object = this.objects.get(objectId);
 
-        if (!object) return;
+        if (!object || !object.actor || objectId === this.userId || !vehicle.actor) return;
 
-        object.position.copy(vehicle.position); // L2BoatInstance.updatePosition puts every passenger on the boat's own XYZ.
+        const base = object.actor.getBaseActor();
+
+        if (base && (base as any).isVehicle) return;
+
+        const local = vehicle.riders.get(objectId), rotation = vehicle.actor.getUnrealScriptProperty("Rotation") as number[];
+        const sine = sinRotator(rotation[1]), cosine = sinRotator(rotation[1] + 16384);
+        const location = new Vector3(Math.fround(local.x * cosine - local.y * sine), Math.fround(local.x * sine + local.y * cosine), local.z).add(vehicle.actor.position);
+
+        // UGameEngine::OnGetOnVehicle 0x1047618d..0x104761e9 passes the center plus10 to FarMoveActor.
+        location.z += 10;
+        this.manGame.getComponent("physics").farMoveActor(object.actor, location);
+
+        object.position.copy(object.actor.position);
         object.destination = null;
-
-        if (object.actor) object.actor.teleportTo(object.position);
+        object.pendingFly = null;
     }
 
     protected getVehicleIdOf(objectId: number): number {
@@ -4588,13 +4826,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return 0;
     }
 
+    public getVehicleActor(objectId: number): Vehicle | null { return this.vehicles.get(objectId)?.actor || null; }
+
     protected onGetOnVehicle(packet: PacketReader) {
         const rider = GamePackets.readVehicleRider(packet);
         const vehicle = this.vehicles.get(rider.vehicleId);
 
+        this.withActor(rider.objectId, actor => actor.setUnrealScriptProperty("bGetOnVehicle", true)); // UGameEngine::OnGetOnVehicle 0x104760e2.
         if (!vehicle) return;
 
-        this.withActor(rider.objectId, actor => actor.setUnrealScriptProperty("bGetOnVehicle", true)); // FL2NetNotify 0x104760e2.
         this.setVehicleRider(vehicle, rider.objectId, rider);
         this.placeVehicleRider(vehicle, rider.objectId);
     }
@@ -4607,21 +4847,46 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (vehicle) vehicle.riders.delete(rider.objectId);
         if (!object) return;
 
-        if (object.actor) object.actor.setUnrealScriptProperty("bGetOnVehicle", false); // FL2NetNotify 0x10476264.
-        setVector(object.position, rider);
-        object.destination = null;
+        if (object.actor) object.actor.setUnrealScriptProperty("bGetOnVehicle", false); // UGameEngine::OnGetOffVehicle 0x10476264.
+        if (!object.actor || rider.objectId === this.userId || !vehicle || !vehicle.actor) return;
 
-        if (object.actor) object.actor.teleportTo(object.position, true);
+        this.manGame.getComponent("physics").farMoveActor(object.actor, setVector(new Vector3(), rider));
+        object.position.copy(object.actor.position);
+        object.destination = null;
+        object.pendingFly = null;
     }
 
     protected onMoveToLocationInVehicle(packet: PacketReader) {
         const move = GamePackets.readVehicleRiderMove(packet);
-        const vehicle = this.vehicles.get(move.vehicleId);
+        const vehicle = this.vehicles.get(move.vehicleId), object = this.objects.get(move.objectId);
 
-        if (vehicle) this.setVehicleRider(vehicle, move.objectId, move.destination);
+        if (!vehicle || !object || !object.actor) return;
+
+        object.destination = null;
+        object.actor.getComponent<PawnMovementComponent>("pawnMovement").moveInVehicle(move.vehicleId, setVector(new Vector3(), move.destination));
     }
 
     protected onStopMoveInVehicle(packet: PacketReader) {
+        const stop = GamePackets.readVehicleRiderStop(packet);
+        const vehicle = this.vehicles.get(stop.vehicleId), object = this.objects.get(stop.objectId);
+
+        if (!vehicle || !object || !object.actor) return;
+
+        const controller = object.actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (getProperty(controller, "bDead")) return;
+        // UGameEngine::OnStopMoveInVehicle 0x104767c0: local StopMove, no heading assignment.
+        if (stop.objectId === this.userId) {
+            object.destination = null;
+            object.actor.stopMoving();
+            return;
+        }
+
+        object.destination = null;
+        object.actor.getComponent<PawnMovementComponent>("pawnMovement").moveInVehicle(stop.vehicleId, setVector(new Vector3(), stop));
+    }
+
+    protected onValidateLocationInVehicle(packet: PacketReader) {
         const stop = GamePackets.readVehicleRiderStop(packet);
         const vehicle = this.vehicles.get(stop.vehicleId);
 
@@ -4687,6 +4952,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         rider.position.set(0, 0, rider.getComponent<any>("animation").getMeshes()[0].meshOrigin.z - rider.getCollisionHeight());
         rider.rotateZ(-Math.PI / 2);
 
+        mount.copyMovement(rider);
         rider.stopMoving();
         physics.removePawn(rider);
         rider.setUnrealScriptProperty("bRide", true);
@@ -4698,12 +4964,18 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         mount.setFlying(ride.mountType === GamePackets.MountType_T.WYVERN);
         this.riders.set(ride.objectId, rider);
         object.actor = mount;
+        for (const movement of physics.getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
+            movement.replaceTarget(rider, mount);
+            movement.getParent().findComponent<PawnAttackComponent>("pawnAttack")?.replaceTarget(rider, mount);
+        }
+        for (const projectile of physics.getPhysicsComponents<NProjectileComponent>("nProjectile")) projectile.replaceTarget(rider, mount);
         this.updateAbnormalState(object);
         mount.getComponent<NpcLifecycleComponent>("npcLifecycle").setControllerState(object.waitType, object.isInCombat);
+        if (object.environment !== null) mount.setUnrealScriptProperty("Environment", object.environment);
         this.applySpeeds(mount, object.speeds, object.isRunning);
         if (object.kind === "user") render.setPlayer(mount as Player);
         mount.playMovementAnimation("idle");
-        if (object.destination) mount.goTo(object.destination);
+        if (object.isDead) mount.playDeathAnimation(() => { });
     }
 
     protected endRide(objectId: number): void {
@@ -4714,7 +4986,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const render = this.manGame.getComponent("render"), mount = object.actor;
         const position = mount.position.clone(), heading = mount.getRotationYaw();
 
-        mount.stopMoving();
         mount.detachBoneObject(rider);
         mount.ridePawn = null;
         rider.setUnrealScriptProperty("bRide", false);
@@ -4725,11 +4996,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.updateAbnormalState(object);
         this.manGame.getComponent("physics").addPawn(rider);
         if (object.kind === "user") render.setPlayer(rider as Player);
-        render.removePawn(mount);
         this.applySpeeds(rider, object.speeds, object.isRunning);
+        if (object.environment !== null) rider.setUnrealScriptProperty("Environment", object.environment);
         rider.teleportTo(position, true);
         rider.setRotationYaw(heading);
         this.setIdleAnimation(object);
+        if (object.isDead) rider.playDeathAnimation(() => { });
+        else if (rider.getComponent<NpcLifecycleComponent>("npcLifecycle").isDead()) rider.revive();
+        if (!object.isDead) rider.copyMovement(mount);
+        for (const movement of this.manGame.getComponent("physics").getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
+            movement.replaceTarget(mount, rider);
+            movement.getParent().findComponent<PawnAttackComponent>("pawnAttack")?.replaceTarget(mount, rider);
+        }
+        for (const projectile of this.manGame.getComponent("physics").getPhysicsComponents<NProjectileComponent>("nProjectile")) projectile.replaceTarget(mount, rider);
+        render.removePawn(mount);
     }
 
     protected onFlyToLocation(packet: PacketReader) {
@@ -4738,10 +5018,26 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!object) return;
 
+        if (object.waitType === GamePackets.WaitType_T.WT_SITTING || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH || object.chairStaticObjectId) {
+            object.waitType = GamePackets.WaitType_T.WT_STANDING;
+            object.chairStaticObjectId = 0;
+            this.setIdleAnimation(object, false);
+        }
+
+        object.pendingAttack = null;
+        this.stopSkill(object.objectId);
+
+        if (object.isDead) return;
+
+        this.adjustPawnLocation(object, fly.origin);
+        object.pendingFly = object.actor ? null : { origin: setVector(new Vector3(), fly.origin), destination: setVector(new Vector3(), fly.destination) };
         setVector(object.position, fly.destination);
         object.destination = null;
 
-        if (object.actor) object.actor.teleportTo(object.position, true);
+        if (object.actor) {
+            if (object.kind === "user") object.actor.flyTo(object.position);
+            else object.actor.addFlyTo(setVector(tmpTeleportPosition, fly.origin), object.position);
+        }
     }
 
     protected clearKnownObjects() {
@@ -4749,7 +5045,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         for (const objectId of this.pickups.keys()) this.removeObject(objectId);
         this.manGame.getComponent("render").clearDice();
 
-        this.vehicles.clear();
+        for (const objectId of this.vehicles.keys()) this.removeVehicle(objectId);
     }
 
     protected placeObserver(position: GamePackets.Location_T, isObserving: boolean) {
@@ -4759,6 +5055,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.clearKnownObjects(); // L2PcInstance.enterObserverMode/leaveObserverMode drop the known list without DeleteObject.
         setVector(user.position, position);
         user.destination = null;
+        user.pendingFly = null;
         player.visible = !isObserving;
         player.teleportTo(user.position, true);
         this.manGame.getComponent("input").resetFollowCamera();
@@ -4840,7 +5137,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getSiegeDefenders() { return this.siegeDefenders; }
 
     public requestGetOnVehicle(vehicleId: number, position: GamePackets.Location_T) { if (this.inWorld && this.vehicles.has(vehicleId)) this.game.requestGetOnVehicle(vehicleId, position); }
-    public requestGetOffVehicle(position: GamePackets.Location_T) { if (this.inWorld && this.getVehicleId()) this.game.requestGetOffVehicle(this.getVehicleId(), position); }
+    public requestGetOffVehicle(vehicleId: number, position: GamePackets.Location_T) { if (this.inWorld) this.game.requestGetOffVehicle(vehicleId, position); }
     public observerReturn() { if (this.inWorld && this.observation) this.game.observerReturn(); }
     public requestSSQStatus(page: number) { if (this.inWorld) this.game.requestSSQStatus(page); }
     public requestSiegeAttackerList(castleId: number) { if (this.inWorld) this.game.requestSiegeAttackerList(castleId); }
@@ -4852,18 +5149,22 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public requestRecordInfo() { if (this.inWorld) this.game.requestRecordInfo(); }
     public requestShowMiniMap() { if (this.inWorld) this.game.requestShowMiniMap(); }
 
-    public requestMoveInVehicle(destination: GamePackets.Location_T) {
-        const vehicleId = this.getVehicleId();
+    public requestMoveInVehicle(vehicle: Vehicle, destination: Vector3) {
+        if (!this.inWorld) return;
 
-        if (!this.inWorld || !vehicleId) return;
+        const player = this.manGame.getComponent("render").player;
 
-        this.game.requestMoveToLocationInVehicle(vehicleId, destination, this.vehicles.get(vehicleId).riders.get(this.userId));
+        vehicle.getLocalLocation(destination, tmpVehicleLocation);
+        tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]);
+        vehicle.getLocalLocation(tmpVehicleOrigin, tmpVehicleOrigin);
+        this.game.requestMoveToLocationInVehicle(vehicle.getUnrealScriptProperty("L2ServerObjectID") as number, tmpVehicleLocation, tmpVehicleOrigin);
     }
 
-    public cannotMoveInVehicle(position: GamePackets.Location_T) {
-        const vehicleId = this.getVehicleId();
+    public cannotMoveInVehicle(vehicle: Vehicle, position: Vector3) {
+        if (!this.inWorld) return;
 
-        if (this.inWorld && vehicleId) this.game.cannotMoveAnymoreInVehicle(vehicleId, position, this.manGame.getComponent("render").player.getRotationYaw());
+        vehicle.getLocalLocation(position, tmpVehicleLocation);
+        this.game.cannotMoveAnymoreInVehicle(vehicle.getUnrealScriptProperty("L2ServerObjectID") as number, tmpVehicleLocation, this.manGame.getComponent("render").player.getRotationYaw());
     }
 
     protected onRecipeShopMsg(packet: PacketReader) {
@@ -5268,29 +5569,37 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (packet.getRemaining()) throw new Error("Invalid ExFishingStart payload.");
 
-        if (!object || !object.actor || object.actor.getUnrealScriptProperty("bFish")) return;
+        if (!object || object.fishing || object.actor && object.actor.getUnrealScriptProperty("bFish")) return;
+
+        object.fishing = { fishType, x, y, z, isFighting: false, time: 0, maxTime: 0, fishHp: 0, maxFishHp: 0, mode: 0, lureType: 0, isGoodUse: false, animation: 0, penalty: 0 };
+        this.startFishing(object);
+    }
+
+    protected startFishing(object: NetObject_T) {
+        const state = object.fishing;
+        if (!state || !object.actor) return;
 
         const render = this.manGame.getComponent("render");
         let component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
 
-        if (!component) component = object.actor.addComponent(new PawnFishingComponent(render));
-        void component.start(new Vector3(x, y, z), fishType, object.actor === render.player, this.ui.getScreenCanvas().width);
+        if (!component) component = object.actor.addComponent(new PawnFishingComponent(render, () => this.startFishingCombat(object)));
+        void component.start(new Vector3(state.x, state.y, state.z), state.fishType, object.actor === render.player, this.ui.getScreenCanvas().width);
         if (object.actor === render.player) this.ui.startFishing();
-        object.fishing = { fishType, x, y, z, isFighting: false, time: 0, fishHp: 0, maxFishHp: 0, mode: 0, lureType: 0, isGoodUse: false, animation: 0, penalty: 0 };
     }
 
     protected onFishingEnd(packet: PacketReader) {
         const object = this.objects.get(packet.d()), isWin = packet.c();
 
         if (isWin > 1 || packet.getRemaining()) throw new Error("Invalid ExFishingEnd payload.");
+        if (!object) return;
 
-        if (!object || !object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
+        object.fishing = null;
+        if (!object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
 
         const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
 
         if (component) component.end(isWin !== 0);
         if (object.actor === this.manGame.getComponent("render").player) this.ui.endFishing(isWin !== 0);
-        object.fishing = null;
     }
 
     protected onFishingStartCombat(packet: PacketReader) {
@@ -5300,14 +5609,23 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (packet.getRemaining()) throw new Error("Invalid ExFishingStartCombat payload.");
         if (!object || !object.fishing) return;
 
-        Object.assign(object.fishing, { isFighting: true, time, fishHp: maxFishHp, maxFishHp, mode, lureType });
-        if (!object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
-        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
-        const hasFloat = component && component.getFloat();
-        const wasBattle = object.actor.getUnrealScriptProperty("CurFishingType") === FishingType_T.FST_BATTLE;
+        Object.assign(object.fishing, { isFighting: true, time, maxTime: time, fishHp: maxFishHp, maxFishHp, mode, lureType });
+        this.startFishingCombat(object);
+    }
 
-        if (component) component.startCombat(mode);
-        if (hasFloat && !wasBattle && object.actor === this.manGame.getComponent("render").player) this.ui.startFishingCombat(maxFishHp, time, mode, lureType);
+    protected startFishingCombat(object: NetObject_T) {
+        const state = object.fishing;
+        if (!state || !state.isFighting || !object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
+
+        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
+        if (!component || !component.getFloat() || object.actor.getUnrealScriptProperty("CurFishingType") === FishingType_T.FST_BATTLE) return;
+
+        component.startCombat(state.mode);
+        component.updateCombat(state.mode, state.animation);
+        if (object.actor === this.manGame.getComponent("render").player) {
+            this.ui.startFishingCombat(state.maxFishHp, state.maxTime, state.mode, state.lureType);
+            this.ui.updateFishing(state.fishHp, state.time, state.isGoodUse, state.mode, state.animation, state.penalty);
+        }
     }
 
     protected onFishingHpRegen(packet: PacketReader) {
@@ -5452,7 +5770,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         } else if (currentTime - this.stuckCheckAt >= STUCK_INTERVAL) { // Server walks straight through whatever blocked us; CannotMoveAnymore makes it adopt our stop point.
             if (player.position.distanceTo(this.stuckPosition) < STUCK_DISTANCE) {
                 player.stopMoving();
-                this.game.cannotMoveAnymore(player.position, player.getRotationYaw());
+                const base = player.getBaseActor() as Vehicle;
+
+                if (base && base.isVehicle) this.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
+                else this.game.cannotMoveAnymore(player.position, player.getRotationYaw());
                 this.stuckCheckAt = 0;
             } else {
                 this.stuckCheckAt = currentTime;

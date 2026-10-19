@@ -17,7 +17,7 @@ import EnvInfo from "./env-info";
 import AudioManager from "../audio/audio-manager";
 import type AssetManager from "../assets/asset-manager";
 import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
-import { retainSharedTextureBuffer } from "../assets/decoders/texture-decoder";
+import { retainSharedTextureBuffer, setUseTrilinear, setTextureDetail } from "../assets/decoders/texture-decoder";
 import InstancedSpriteBatcher from "../objects/emitters/instanced-sprite-batcher";
 import type MovableObject from "../objects/movable-object";
 import type AgitStaticMeshActor from "../objects/agit-static-mesh-actor";
@@ -298,6 +298,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected pawnRange: number = null;
     protected pawnShadow = true;
+    protected renderDeco = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
     protected readonly pickups = new Set<GroundPickup>();
@@ -305,7 +306,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
-    protected lastRenderOrderSector: SectorObject | null = null;
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
@@ -381,7 +381,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.viewport = viewport;
         ColorManagement.enabled = false;
         this.renderer = new WebGLRenderer({
-            antialias: true,
+            antialias: false,
             preserveDrawingBuffer: true,
             premultipliedAlpha: false,
             logarithmicDepthBuffer: true,
@@ -1105,6 +1105,21 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public getDisplayGamma() { return this.displayGamma; }
 
+    public getAntiAliasingLevels() { return [0, 1, 2].filter(level => level * 2 <= this.renderer.capabilities.maxSamples); }
+
+    public setAntiAliasing(level: number) {
+        const target = this.displayGammaPass.getTarget(), samples = Math.min(level * 2, this.renderer.capabilities.maxSamples);
+        if (target.samples === samples) return;
+
+        target.dispose();
+        target.samples = samples;
+        if (this.viewportWindow) {
+            this.viewportWindow.target.dispose();
+            this.viewportWindow.target.samples = samples;
+        }
+        this.needsUpdate = true;
+    }
+
     protected wireEmitterVisibilityHandlers(): void {
         this.visualizer.setEmitterVisibilityHandlers(
             (uuid, visible) => this.setEmitterVisible(uuid, visible),
@@ -1332,18 +1347,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
     }
 
-    protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
-        if (activeSector === this.lastRenderOrderSector) return;
-
-        this.lastRenderOrderSector = activeSector;
-
-        this.sectors.forEach(row => row.forEach(sector => {
-            const order = sector === activeSector ? 0 : -1;
-            if (sector.staticMeshGroup) sector.staticMeshGroup.renderOrder = order;
-            if (sector.bspGroup) sector.bspGroup.renderOrder = order;
-        }));
-    }
-
     protected updatePawnVisibility(frustum = this.frustum): void {
         const inWorld = this.manGame.getComponent("network").isInWorld();
         const range = Math.fround(this.getPawnRange()) * CLIPPING_RANGE_SCALE;
@@ -1414,6 +1417,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
     public setPawnShadow(enabled: boolean) { this.pawnShadow = enabled; }
+
+    public setUseTrilinear(enabled: boolean) { setUseTrilinear(enabled); }
+
+    public setTextureDetail(detail: number) { setTextureDetail(this.renderer, detail); }
+
+    public setRenderDeco(enabled: boolean) {
+        this.renderDeco = enabled;
+        this.arrSceneSectors.forEach(sector => sector.setRenderDeco(enabled));
+    }
 
     protected updatePawnShadow(): void {
         const timeOfDay = this.environment.getTimeOfDay();
@@ -1614,7 +1626,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!auxiliary) {
             this.getPhysicsManager().setTriggerPosition(this.camera.position);
         }
-        this.updateSectorRenderOrder(activeSector);
 
         for (const sector of this.arrSceneSectors) {
             const isCameraInSector = activeSector === sector;
@@ -1736,6 +1747,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
                     const mesh = (child as any).instancedMesh;
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
+                } else if ((child as any).isVehicleMesh) {
+                    const vehicleSector = this.getSector(child.getWorldPosition(tmpPawnWorldPos));
+                    if (vehicleSector) (child as any).update(vehicleSector, this.environment, this.renderer);
                 } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting?.()) return;
                 else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment, this.renderer);
                 else (child as any).update(currentTime);
@@ -2196,6 +2210,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public setViewportWindowParam(location: Vector3, rotation: Quaternion, screenWidth: number) {
         this.clearViewportWindowParam();
         this.viewportWindow = new ViewportWindow(screenWidth);
+        this.viewportWindow.target.samples = this.displayGammaPass.getTarget().samples;
         this.modifyViewportWindowParam(location, rotation);
         return this.viewportWindow.target;
     }
@@ -2227,7 +2242,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const renderer = this.renderer;
         const mainFogId = this.activeFogId;
-        const mainRenderOrderSector = this.lastRenderOrderSector;
         const shadowActive = GLOBAL_UNIFORMS.shadowActive.value;
         viewport.capture(renderer, this.scene);
         try {
@@ -2282,7 +2296,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 this.updateEnvironment(this.camera, false);
             } finally {
                 this.activeFogId = mainFogId;
-                this.lastRenderOrderSector = mainRenderOrderSector;
                 try {
                     this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
                 } finally {
@@ -2304,7 +2317,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // i think bloom pass is only enabled when shader rendering used which is off by default
         // this.renderer.setRenderTarget(this.mainRenderTarget);
 
-        if (this.displayGammaEnabled) this.renderer.setRenderTarget(this.displayGammaPass.getTarget());
+        this.renderer.setRenderTarget(this.displayGammaEnabled || this.displayGammaPass.getTarget().samples > 0 ? this.displayGammaPass.getTarget() : null);
 
         // Render Sky (Background)
         this.renderer.clear();
@@ -2447,7 +2460,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         // this.renderer.setRenderTarget(null);
 
-        if (this.displayGammaEnabled) this.displayGammaPass.render(this.renderer);
+        if (this.displayGammaEnabled || this.displayGammaPass.getTarget().samples > 0) this.displayGammaPass.render(this.renderer, undefined, this.displayGammaEnabled);
 
         if (viewShakeActive) this.restoreViewShake();
     }
@@ -2527,6 +2540,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public addSector(sector: SectorObject) {
+        sector.setRenderDeco(this.renderDeco);
+
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
                 this.sectors.set(sector.index.x, new Map());
@@ -2548,7 +2563,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updateClanHallDecorations(sector);
         retainSectorResources(sector, sector);
         this.pawnLightingStates = new WeakMap();
-        this.lastRenderOrderSector = null;
 
         sector.worldBounds.setFromObject(sector);
         this.sectorBounds.push(sector.worldBounds);

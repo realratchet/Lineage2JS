@@ -2,6 +2,7 @@ import { AnimationAction } from "three";
 import { ObjectComponent } from "../../game/components";
 import { NPC_ENTER_EVENT } from "../../audio/components/sound-component";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
+import { PMoveType_T } from "../../assets/unreal/un-controller";
 import type { ScriptValue_T } from "../../ue-script/vm";
 import { MountType_T } from "../../network/game-packets";
 import type AnimationComponent from "./animation-component";
@@ -28,6 +29,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         if (rider) this.scriptController = rider.getComponent<NpcLifecycleComponent>("npcLifecycle").scriptController;
 
         this.getComponent<ScriptComponent>("script").getVM().initializeHost(this.scriptController);
+        this.scriptController.scriptProperties.set("MoveType", this.getComponent<PawnMovementComponent>("pawnMovement").isWalkingMovement() ? PMoveType_T.PMT_SLOW : PMoveType_T.PMT_FAST);
         this.scriptController.scriptProperties.set("WaitType", waitType);
         this.scriptController.scriptProperties.set("bAutoAttacking", isAutoAttacking);
         this.getParent().setUnrealScriptProperty("Controller", this.scriptController);
@@ -59,6 +61,8 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     }
 
     public spawnEnter(event: INpcEnterEvent): void {
+        if (this.isDying) return;
+
         this.dispatchEvent(NPC_ENTER_EVENT, event);
         this.getComponent<PawnMovementComponent>("pawnMovement").startEnterRise(event.isRise);
         this.getComponent<AnimationComponent>("animation").playEnter(event.animation);
@@ -91,6 +95,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
 
         this.isDying = true;
         this.deathAnimationFinishedHandler = onFinished;
+        parent.stopAttack();
         this.getComponent<PawnMovementComponent>("pawnMovement").setDying();
 
         if (script) {
@@ -113,9 +118,12 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         const parent = this.getParent();
 
         if (this.isDying) this.getComponent<PawnMovementComponent>("pawnMovement").setRevived();
+        if (this.isDeathFalling) this.getComponent<PawnMovementComponent>("pawnMovement").setPhysicsMode(EPhysics_T.PHYS_Flying);
 
         this.isDying = false;
         this.deathAnimationFinishedHandler = null;
+        this.deathSkyAnimation = null;
+        this.isDeathFalling = false;
         this.scriptController.scriptProperties.set("bDead", false);
 
         const animation = (parent.getUnrealScriptProperty("DeathStandAnimName") as string[])[parent.getUnrealScriptProperty("CurWeaponType") as number];

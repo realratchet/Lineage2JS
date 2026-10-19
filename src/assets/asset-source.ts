@@ -1,3 +1,4 @@
+import { cyrb53 } from "./unreal/utils/hash-cyrb";
 import InstallShieldCabinet from "./install-shield-cabinet";
 
 export type AssetFiles_T = [string, File][];
@@ -7,6 +8,7 @@ type AssetEntry_T = { path: string; read(): Promise<Blob | Uint8Array>; };
 const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
 
 let assetFiles: AssetFiles_T = null;
+let assetSourceId = "http";
 let assetIndex: Map<string, AssetEntry_T> = null;
 
 async function openCabinet(files: AssetFiles_T, header: [string, File]) {
@@ -57,10 +59,14 @@ function createAssetList(index: Map<string, AssetEntry_T>) {
 }
 
 export function getAssetFiles() { return assetFiles; }
+export function getAssetSourceId() { return assetSourceId; }
 
 export async function selectAssetFiles(files: AssetFiles_T): Promise<void> {
     assetIndex = await buildIndex(files);
     assetFiles = files;
+    const sources = files.map(([path, file]) => ({ path, size: file.size, modified: file.lastModified })).sort((a, b) => a.path.localeCompare(b.path));
+
+    assetSourceId = `files-${cyrb53(JSON.stringify(sources)).toString(16)}`;
 }
 
 export async function fetchAsset(path: string): Promise<Response> {

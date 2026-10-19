@@ -85,9 +85,7 @@ export class NCShortCutWnd extends NWnd { // NCShortCutWnd: NCConsole 0x10061d76
         this.layoutChildren();
 
         window.addEventListener("keydown", event => {
-            const target = event.target as HTMLElement;
-
-            if (!this.isVisible || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+            if (!this.isVisible) return;
 
             const match = /^F(\d+)$/.exec(event.key);
 

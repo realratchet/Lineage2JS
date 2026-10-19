@@ -271,6 +271,7 @@ export class SectorObject extends GameObject {
 
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
 
+    protected renderDeco = true;
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
@@ -1127,6 +1128,13 @@ export class SectorObject extends GameObject {
         return false;
     }
 
+    public setRenderDeco(enabled: boolean) {
+        if (this.renderDeco === enabled) return;
+
+        this.renderDeco = enabled;
+        this.visibilityCacheInitialized = false;
+    }
+
     public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false) {
         if (!auxiliary) this.updateLights(environment);
 
@@ -1604,7 +1612,7 @@ export class SectorObject extends GameObject {
                 }
 
                 const decorations = this.terrainRenderables.decorations.get(sector.terrainSegmentUuid);
-                if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible));
+                if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible, this.renderDeco));
             });
 
             if (groupKey === (batch as any).visibleGroupKey) continue;
@@ -1626,7 +1634,7 @@ export class SectorObject extends GameObject {
             if (isVisible) terrain.update?.(this, environment);
 
             const decorations = this.terrainRenderables.decorations.get(terrain.terrainSegmentUuid);
-            if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible));
+            if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible, this.renderDeco));
         }
     }
 

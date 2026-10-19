@@ -1,5 +1,5 @@
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
-import _decodeTexture from "./texture-decoder";
+import _decodeTexture, { copyTextureFiltering, copyTextureLOD, updateTextureFiltering } from "./texture-decoder";
 import { restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
 import { Color, CompressedCubeTexture, CubeTexture, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
@@ -209,8 +209,10 @@ function decodeCubemap(library: DecodeLibrary, info: MaterialContracts.ICubemapD
         }) as any, first.texture.format as THREE.CompressedPixelFormat)
         : new CubeTexture(faces.map(face => (face ?? fetchTexture(library, null)).texture));
 
-    if (isCompressed) texture.minFilter = first.texture.minFilter;
+    if (isCompressed) copyTextureFiltering(first.texture, texture);
+    else updateTextureFiltering(texture);
 
+    copyTextureLOD(first.texture, texture);
     texture.name = info.name ?? "Cubemap";
     texture.needsUpdate = true;
 

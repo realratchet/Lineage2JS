@@ -16,7 +16,7 @@ export type ClippingRangeConfig_T = {
 };
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
-export type GameConfig_T = { pawnShadow: boolean; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
+export type GameConfig_T = { antiAliasing: number; textureDetail: number; useTrilinear: boolean; renderDeco: boolean; pawnShadow: boolean; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
 export type AudioConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
 export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; minZoomingDist: number; maxZoomingDist: number; };
 
@@ -45,7 +45,7 @@ export class UConfigSystem extends BaseConfigFile {
 
     public audio: AudioConfig_T = { soundVolume: 0.8, musicVolume: 1, wavVoiceVolume: 0.6, oggVoiceVolume: 0.6 }; // ALAudio.dll Init 0x1000a1b4/0x1000a1e0/0x1000a20c/0x1000a238.
 
-    public game: GameConfig_T = { pawnShadow: true, useColorCursor: true, autoTrackingPawn: false, arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
+    public game: GameConfig_T = { antiAliasing: 0, textureDetail: 0, useTrilinear: true, renderDeco: true, pawnShadow: true, useColorCursor: true, autoTrackingPawn: false, arrowMode: true, showZoneTitle: true, systemMsgWnd: true, systemMsgWndDamage: true, systemMsgWndExpendableItem: true, transparencyMode: true, partyLooting: 0, enterChatting: false, oldChatting: true, myName: true, npcName: true, groupName: true, pledgeMemberName: true, partyMemberName: true, otherPCName: true }; // Core.dll GL2SystemMsgWnd and GIsTransparencyMode initialise to 1 when Option.ini has no key.
     public readonly definedGameKeys = new Set<keyof GameConfig_T>();
     public cameraViewHeightAdjust = 0;
     public useAutoTrackingPawn = false;
@@ -68,6 +68,32 @@ export class UConfigSystem extends BaseConfigFile {
         this.loadNumbers(fileContents, "Video", this.display, this.definedDisplayKeys);
 
         this.loadSection(fileContents, "Video", (key, value) => {
+            if (key.toLowerCase() === "antialiasing") {
+                const level = Number(value);
+                if (!Number.isInteger(level) || level < 0 || level > 2) throw new Error(`Invalid anti-aliasing '${value}'.`);
+
+                this.game.antiAliasing = level;
+                this.definedGameKeys.add("antiAliasing");
+                return;
+            }
+            if (key.toLowerCase() === "texturedetail") {
+                const detail = Number(value);
+                if (!Number.isInteger(detail)) throw new Error(`Invalid texture detail '${value}'.`);
+
+                this.game.textureDetail = Math.max(0, Math.min(2, detail));
+                this.definedGameKeys.add("textureDetail");
+                return;
+            }
+            if (key.toLowerCase() === "usetrilinear") {
+                this.game.useTrilinear = value.toLowerCase() === "true";
+                this.definedGameKeys.add("useTrilinear");
+                return;
+            }
+            if (key.toLowerCase() === "renderdeco") {
+                this.game.renderDeco = value.toLowerCase() === "true";
+                this.definedGameKeys.add("renderDeco");
+                return;
+            }
             if (key.toLowerCase() === "pawnshadow") {
                 this.game.pawnShadow = value.toLowerCase() === "true";
                 this.definedGameKeys.add("pawnShadow");

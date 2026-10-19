@@ -1,5 +1,6 @@
 import { BufferAttribute, CompressedArrayTexture, CompressedTexture, Material } from "three";
 import { getCanonicalStaticMaterialKey } from "./material-decoder";
+import { copyTextureFiltering, copyTextureLOD, getTextureLODBounds } from "./texture-decoder";
 
 type TextureEntry_T = { index: number; material: Material; texture: CompressedTexture };
 
@@ -27,7 +28,7 @@ export function batchStaticMeshTextures(object: any, indices: ArrayLike<number>)
         const compare = Object.create(material);
         compare.name = "";
         compare.uniforms = { ...material.uniforms, shDiffuse: { value: { ...data, map: { ...data.map, texture: null } } } };
-        const key = getCanonicalStaticMaterialKey(compare) + material.vertexShader + material.fragmentShader + JSON.stringify([texture.image.width, texture.image.height, texture.format, texture.type, texture.mipmaps.length, texture.wrapS, texture.wrapT, texture.minFilter, texture.magFilter, texture.anisotropy, texture.colorSpace, texture.flipY, texture.premultiplyAlpha]);
+        const key = getCanonicalStaticMaterialKey(compare) + material.vertexShader + material.fragmentShader + JSON.stringify([texture.image.width, texture.image.height, texture.format, texture.type, texture.mipmaps.length, texture.wrapS, texture.wrapT, texture.minFilter, texture.magFilter, texture.anisotropy, texture.colorSpace, texture.flipY, texture.premultiplyAlpha, getTextureLODBounds(texture)]);
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push({ index: i, material, texture });
     }
@@ -51,8 +52,8 @@ export function batchStaticMeshTextures(object: any, indices: ArrayLike<number>)
             const texture = new CompressedArrayTexture(mipmaps, first.image.width, first.image.height, textures.length, first.format, first.type);
             texture.wrapS = first.wrapS;
             texture.wrapT = first.wrapT;
-            texture.minFilter = first.minFilter;
-            texture.magFilter = first.magFilter;
+            copyTextureFiltering(first, texture);
+            copyTextureLOD(first, texture);
             texture.anisotropy = first.anisotropy;
             texture.colorSpace = first.colorSpace;
             texture.flipY = first.flipY;

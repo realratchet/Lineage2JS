@@ -8,9 +8,16 @@ const FRAGMENT_SHADER = "#version 300 es\nprecision highp float;out vec4 color;v
 
 type LightEntry_T = { flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
 
+function checkError(gl: WebGL2RenderingContext, phase: string): void {
+    const error = gl.getError();
+
+    if (error !== gl.NO_ERROR && !gl.isContextLost()) throw new Error(`Static lighting GL error ${error} (${phase}).`);
+}
+
 export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferGeometry, matrix: Matrix4, lights: LightEntry_T[], glow: Float32Array, target: Uint8ClampedArray, prepared: { offsets: Uint32Array, indices: Uint16Array | Uint32Array }): boolean {
     const gl = renderer.getContext() as WebGL2RenderingContext;
     if (gl.isContextLost()) return false;
+    checkError(gl, "before setup");
 
     const count = geometry.getAttribute("position").count;
     const { offsets, indices } = prepared;
@@ -89,6 +96,7 @@ export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferG
         texture(table, 4, 2, gl.RGBA32F, gl.RGBA, gl.FLOAT, "lights");
         gl.uniformMatrix4fv(gl.getUniformLocation(program, "matrix"), false, new Float32Array(matrix.elements));
         gl.uniform1ui(gl.getUniformLocation(program, "textureWidth"), width);
+        checkError(gl, "input upload");
         const output = gl.createBuffer();
         buffers.push(output);
         gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, output);
@@ -101,12 +109,12 @@ export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferG
         gl.drawArrays(gl.POINTS, 0, count);
         gl.endTransformFeedback();
         gl.disable(gl.RASTERIZER_DISCARD);
+        checkError(gl, "transform feedback");
         const values = new Uint32Array(count);
         // shortcut: read back while ambient and changing lights still update the CPU color buffer.
         gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, values);
         if (gl.isContextLost()) return false;
-        const error = gl.getError();
-        if (error !== gl.NO_ERROR) throw new Error(`Static lighting GL error ${error}.`);
+        checkError(gl, "readback");
         for (let i = 0; i < count; i++) {
             target[i * 3] = values[i] & 255;
             target[i * 3 + 1] = (values[i] >>> 8) & 255;

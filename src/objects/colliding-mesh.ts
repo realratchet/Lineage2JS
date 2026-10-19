@@ -8,10 +8,11 @@ import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, Static
 import buildCollisionModel from "../physics/collision-model";
 import StaticMeshActor from "./static-mesh-actor";
 import Actor from "./actor";
+import type BaseActor from "../base-actor";
 import type { default as UnScriptVM, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import { ScriptComponent, type ScriptObjectFactory_T } from "../game/script-component";
 import { setScriptObjectProperty } from "./components/actor-ownership-component";
-import { releaseTouching, type TouchActor_T } from "./components/transform-component";
+import { releaseTouching, type TouchActor_T, type TransformComponent } from "./components/transform-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -35,6 +36,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     protected readonly collisionActorCandidates: number[] = [];
     declare public scriptProperties: Map<string, ScriptValue_T>;
     declare public scriptClassId: string;
+    public scriptBase: BaseActor = null;
 
     protected colliderDesc: ColliderDesc;
     protected rigidbodyDesc: RigidBodyDesc;
@@ -200,6 +202,9 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T { return Actor.prototype.callUnrealNative.call(this, call); }
     public getBaseActor(): ICollidable | null { return Actor.prototype.getBaseActor.call(this); }
+    public setBase(actor: ICollidable | null): void {
+        if (this.getComponent<TransformComponent>("transform").setBase(actor)) setScriptObjectProperty(this, "Base", actor as any);
+    }
     public isPendingKill(): boolean { return Actor.prototype.isPendingKill.call(this); }
     public beginTouch(other: TouchActor_T): void { Actor.prototype.beginTouch.call(this, other); }
     public endTouch(other: TouchActor_T, noNotifySelf = false): void { Actor.prototype.endTouch.call(this, other, noNotifySelf); }
@@ -216,6 +221,13 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         const profile = actor.getCollisionProfile();
 
         switch (field.toLowerCase()) {
+            case "location":
+                if (actor !== this) return;
+
+                tmpPosition.fromArray(value as number[]);
+                if (this.parent) this.parent.worldToLocal(tmpPosition);
+                this.position.copy(tmpPosition);
+                return;
             case "bcollideactors": profile.collideActors = !!value; break;
             case "bcollideworld": profile.collideWorld = !!value; break;
             case "bblockactors": profile.blockActors = !!value; break;
@@ -317,6 +329,19 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     public getRigidbody(): RigidBody { return this.rigidbody; }
     public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
     public getCollisionRadius(): number { return this.collisionProfile.collisionRadius; }
+    public getCollisionHeight(): number { return this.collisionProfile.collisionHeight; }
+    public syncCollisionTransform(): void {
+        this.updateMatrixWorld(true);
+        this.getCollisionPrimitive();
+        if (!this.rigidbody) return;
+
+        this.rigidbody.setTranslation(this.getWorldPosition(tmpPosition), true);
+        this.rigidbody.setNextKinematicTranslation(tmpPosition);
+        this.collider.setTranslation(tmpPosition);
+        this.rigidbody.setRotation(this.getWorldQuaternion(tmpQuaternion), true);
+        this.rigidbody.setNextKinematicRotation(tmpQuaternion);
+        this.collider.setRotation(tmpQuaternion);
+    }
     public getBasedActors(): ReadonlySet<ICollidable> { return this.basedActors; }
     public addBasedActor(actor: ICollidable) { this.basedActors.add(actor); }
     public removeBasedActor(actor: ICollidable) { this.basedActors.delete(actor); }

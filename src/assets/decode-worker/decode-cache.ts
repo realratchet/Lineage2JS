@@ -1,5 +1,6 @@
 import { serializeLibrary, serializeLibraryBlob, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import { getAssetSourceId } from "../asset-source";
 import { openAssetCatalog, storeAssetCatalog } from "./asset-catalog";
 
 const CACHE_TTL_DAYS = 7;
@@ -35,7 +36,9 @@ function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
 async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
     const root = await navigator.storage.getDirectory();
 
-    return root.getDirectoryHandle(CACHE_DIR, { create });
+    const dir = await root.getDirectoryHandle(CACHE_DIR, { create });
+
+    return dir.getDirectoryHandle(getAssetSourceId(), { create });
 }
 
 async function getCachedFile(sectorName: string, settings: LoadSettings_T): Promise<File | null> {

@@ -85,8 +85,11 @@ export class CollisionOctree {
     protected queryTag: number = 0;
 
     public addActor(uuid: string, bounds: Box3, singleNode: boolean = false): void {
+        const actor: CollisionOctreeActor_T = this.actors.get(uuid) || { uuid, bounds: new Box3(), singleNode, nodes: [], queryTag: 0 };
         this.removeActor(uuid);
-        const actor: CollisionOctreeActor_T = { uuid, bounds: expandBounds(bounds, new Box3()), singleNode, nodes: [], queryTag: 0 };
+        expandBounds(bounds, actor.bounds);
+        actor.singleNode = singleNode;
+        actor.queryTag = 0;
         this.actors.set(uuid, actor);
         const { min, max } = actor.bounds;
         if (max.x < -WORLD_RADIUS || min.x > WORLD_RADIUS || max.y < -WORLD_RADIUS || min.y > WORLD_RADIUS || max.z < -WORLD_RADIUS || min.z > WORLD_RADIUS) {

@@ -1,5 +1,5 @@
 import RAPIER from "@dimforge/rapier3d";
-import { Object3D, Vector3 } from "three";
+import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
 import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T } from "./collision-world";
 import Player from "../player";
@@ -8,7 +8,9 @@ import NpcSimulationComponent from "./components/npc-simulation-component";
 import PawnMovementComponent from "./components/pawn-movement-component";
 import type { ScriptComponent } from "../game/script-component";
 
+import { pointPrimitive, queryPrimitive } from "./collision-primitive";
 import type BaseActor from "../base-actor";
+import type CollidingMesh from "../objects/colliding-mesh";
 import type PhysicsVolume from "../objects/physics-volume";
 import type Actor from "../objects/actor";
 import type Volume from "../objects/volume";
@@ -19,14 +21,26 @@ import type { SectorObject } from "../objects/zone-object";
 import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import type { ScriptHost_T, ScriptValue_T } from "../ue-script/vm";
 import type RenderManager from "../rendering/render-manager";
+import type TransformComponent from "../objects/components/transform-component";
+import Rotator from "../utils/rotator";
+import { EPhysics_T } from "../assets/unreal/un-aactor";
+import type { Vector3Arr } from "@l2js/engine";
 
 const arrMoverPawns: BaseActor[] = [];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
 const tmpZoneLocation = new Vector3();
 const tmpVolumeLocation = new Vector3();
 const tmpPlacementExtent = new Vector3();
+const tmpWaterHitStart = new Vector3();
+const tmpWaterHitEnd = new Vector3();
+const tmpWaterHitLocation = new Vector3();
+const zeroWaterExtent = new Vector3();
+const tmpAttachedLocation = new Vector3();
+const tmpAttachedBasePosition = new Vector3();
+const tmpAttachedBaseQuaternion = new Quaternion();
+const tmpActorRotation = new Rotator();
 
-function callZoneEvent(pawn: BaseActor | Actor, host: ScriptHost_T, name: string, args: ScriptValue_T[]): ScriptValue_T {
+function callZoneEvent(pawn: BaseActor | Actor | CollidingMesh, host: ScriptHost_T, name: string, args: ScriptValue_T[]): ScriptValue_T {
     const object = host as any;
 
     if (object.findComponent) return object.getComponent("script").call(name, args);
@@ -197,9 +211,9 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     }
 
     public updateDynamicEntries(currentTime: number): void { this.collisionWorld.updateDynamicEntries(currentTime); }
-    public updatePawnCollision(pawn: BaseActor): void { this.collisionWorld.updatePawnCollision(pawn); }
+    public updatePawnCollision(pawn: BaseActor | CollidingMesh): void { this.collisionWorld.updatePawnCollision(pawn); }
     public setCollision(pawn: BaseActor, collideActors?: boolean, blockActors?: boolean, blockPlayers?: boolean): void { this.collisionWorld.setCollision(pawn, collideActors, blockActors, blockPlayers); }
-    public setPawnLevel(pawn: BaseActor, level: ScriptHost_T | null): void {
+    public setPawnLevel(pawn: BaseActor | CollidingMesh, level: ScriptHost_T | null): void {
         if (!level) return this.collisionWorld.setPawnLevel(pawn, null);
         const sector = this.manGame.getComponent("render").getLoadedSectors().find(sector => sector.levelInfoActor === level);
         if (!sector) throw new Error(`Pawn '${pawn.name}' has an unregistered LevelInfo.`);
@@ -223,13 +237,32 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return hit;
     }
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.singleLineCheck(query); }
+    public rotateActor(pawn: BaseActor | CollidingMesh, rotation: Vector3Arr): void {
+        const physics = pawn.getUnrealScriptProperty("Physics"), profile = pawn.getCollisionProfile();
+
+        if (profile.collideActors && (physics === EPhysics_T.PHYS_Karma || physics === EPhysics_T.PHYS_KarmaRagDoll)) throw new Error(`MoveActor rotation of a Karma pawn is not implemented for '${pawn.name}'.`);
+
+        // ULevel::MoveActor 0x1058baaf..0x1058c5b9: zero-delta ordinary mesh pawn.
+        if (profile.collideActors) this.collisionWorld.removePawnCollision(pawn);
+        pawn.setUnrealScriptProperty("Rotation", rotation);
+        tmpActorRotation.set(rotation[0], rotation[1], rotation[2]).toQuaternion(pawn.quaternion);
+        (pawn as CollidingMesh).syncCollisionTransform();
+        pawn.getComponent<TransformComponent>("transform").updateRelativeRotation();
+        if (profile.collideActors) this.collisionWorld.updatePawnCollision(pawn);
+        if (this.collisionWorld.usesRapier()) this.physicsWorld.queryPipeline.update(this.physicsWorld.islands, this.physicsWorld.bodies, this.physicsWorld.colliders);
+        if (profile.collideActors || profile.collideWorld) {
+            this.collisionWorld.notifyMove(pawn, [], null, false);
+            this.setPawnZone(pawn);
+        }
+        this.manGame.getComponent("render").needsUpdate = true;
+    }
     public findSpot(extent: Vector3, location: Vector3): boolean { return this.collisionWorld.findSpot(extent, location); }
-    public farMoveActor(pawn: BaseActor, destination: Vector3, test: boolean = false): boolean {
+    public farMoveActor(pawn: BaseActor | CollidingMesh, destination: Vector3, test: boolean = false, noCheck: boolean = false, attached: boolean = false): boolean {
         if (pawn.getUnrealScriptProperty("bStatic") || !pawn.getUnrealScriptProperty("bMovable")) return false;
-        pawn.getComponent<PawnMovementComponent>("pawnMovement").resetPhysicInit(); // ULevel::FarMoveActor 0x85af66
+        const movement = pawn.findComponent<PawnMovementComponent>("pawnMovement");
+        if (movement) movement.resetPhysicInit(); // ULevel::FarMoveActor 0x85af66
+        else if (pawn.getCollisionProfile().isPawn) pawn.setUnrealScriptProperty("bPhysicInit", false);
         if (pawn.scriptBase) throw new Error(`FarMoveActor on bone attachments is not implemented for '${pawn.name}'.`);
-        for (const actor of pawn.getBasedActors())
-            if (!(actor as BaseActor).scriptBase) throw new Error(`FarMoveActor with unboned attachments is not implemented for '${pawn.name}'.`);
 
         const previous = pawn.getUnrealScriptProperty("Location") as number[];
         const location = new Vector3(Math.fround(destination.x), Math.fround(destination.y), Math.fround(destination.z));
@@ -238,26 +271,47 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const script = pawn.getComponent<ScriptComponent>("script");
 
         if (!level) throw new Error(`Pawn '${pawn.name}' has no owning level for FarMoveActor.`);
-        if (!profile.isPawn || !profile.useCylinderCollision) throw new Error(`FarMoveActor without a pawn cylinder is not implemented for '${pawn.name}'.`);
+        if (!profile.isPawn) throw new Error(`FarMoveActor without a pawn source is not implemented for '${pawn.name}'.`);
 
         this.collisionWorld.removePawnCollision(pawn);
         let result = true;
-        if (pawn.getUnrealScriptProperty("bCollideWorld") || pawn.getUnrealScriptProperty("bCollideWhenPlacing") && (level as any).getUnrealScriptProperty("NetMode") !== 3)
+        if (!noCheck && (pawn.getUnrealScriptProperty("bCollideWorld") || pawn.getUnrealScriptProperty("bCollideWhenPlacing") && (level as any).getUnrealScriptProperty("NetMode") !== 3))
             result = this.findSpot(tmpPlacementExtent.set(profile.collisionRadius, profile.collisionRadius, profile.collisionHeight), location);
-        if (result && !test) result = !this.collisionWorld.checkEncroachment(pawn, location, true, script.getVM());
+        if (result && !test && !noCheck) result = !this.collisionWorld.checkEncroachment(pawn, location, true, script.getVM());
         const current = pawn.getUnrealScriptProperty("Location") as number[];
         if (!test && previous.some((value, index) => value !== current[index])) return result;
 
         if (result) {
             if (!test) {
                 pawn.setUnrealScriptProperty("bJustTeleported", true);
-                pawn.setBase(null);
+                if (!attached) pawn.setBase(null);
+                for (const actor of pawn.getBasedActors()) {
+                    const child = actor as BaseActor | CollidingMesh;
+
+                    if (child.scriptBase) continue;
+
+                    const childLocation = child.getUnrealScriptProperty("Location") as number[], baseLocation = pawn.getUnrealScriptProperty("Location") as number[];
+                    tmpAttachedLocation.set(Math.fround(location.x + childLocation[0] - baseLocation[0]), Math.fround(location.y + childLocation[1] - baseLocation[1]), Math.fround(location.z + childLocation[2] - baseLocation[2]));
+                    this.farMoveActor(child, tmpAttachedLocation, false, true, true);
+                }
             }
             this.collisionWorld.removePawnCollision(pawn);
             pawn.setUnrealScriptProperty("Location", location.toArray());
-            pawn.getComponent<PawnMovementComponent>("pawnMovement").syncCollisionLocation();
+            if (movement) movement.syncCollisionLocation();
+            else (pawn as CollidingMesh).syncCollisionTransform();
+            if (!test)
+                for (const actor of pawn.getBasedActors()) {
+                    const child = actor as BaseActor | CollidingMesh;
+
+                    if (child.scriptBase || child.getBaseActor() !== pawn) continue;
+
+                    const transform = child.getComponent<TransformComponent>("transform");
+                    transform.updateBaseTransform(pawn.getWorldPosition(tmpAttachedBasePosition), pawn.getWorldQuaternion(tmpAttachedBaseQuaternion));
+                    transform.updateBaseRelativePosition();
+                }
         }
         this.collisionWorld.updatePawnCollision(pawn);
+        if (result && this.collisionWorld.usesRapier()) this.physicsWorld.queryPipeline.update(this.physicsWorld.islands, this.physicsWorld.bodies, this.physicsWorld.colliders);
         if (result) this.setPawnZone(pawn, test);
         if (!test) this.manGame.getComponent("render").needsUpdate = true;
         return result;
@@ -266,7 +320,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return this.collisionWorld.physicsVolumeLineCheck(start, end, source, sourceIsPawn);
     }
     public physicsVolumePointCheck(location: Vector3, volumes: PhysicsVolume[]): PhysicsVolume[] { return this.collisionWorld.physicsVolumePointCheck(location, volumes); }
-    public getPhysicsVolume(level: SectorObject, location: Vector3, actor: BaseActor | Actor, useTouching: boolean = false): PhysicsVolume {
+    public getPhysicsVolume(level: SectorObject, location: Vector3, actor: BaseActor | Actor | CollidingMesh, useTouching: boolean = false): PhysicsVolume {
         const main = this.manGame.getComponent("render").getLevel();
         let selected = (main || level).getDefaultPhysicsVolume();
 
@@ -284,9 +338,40 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         return selected;
     }
-    public updatePawnWaterHitEffect(pawn: BaseActor, volume: PhysicsVolume): void {
+    public updatePawnWaterHitEffect(owner: BaseActor | CollidingMesh, volume: PhysicsVolume): void {
         if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
-        pawn.getComponent<PawnMovementComponent>("pawnMovement").updateWaterHitEffect(volume, this.collisionWorld.getPhysicsVolumePrimitive(volume));
+
+        if (volume !== owner.getUnrealScriptProperty("FootVolume")) owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);
+        if (!volume.getUnrealScriptProperty("Brush")) return;
+        const primitive = this.collisionWorld.getPhysicsVolumePrimitive(volume);
+        if (!primitive) throw new Error(`Water volume '${volume.name}' has no registered primitive.`);
+
+        // APawn::UpdateWaterHitEffect 0x858010; shortcut: GL2UseHitWateEffect stays enabled until graphics settings expose it.
+        const location = owner.getUnrealScriptProperty("Location") as number[], height = owner.getCollisionHeight();
+        tmpWaterHitStart.set(Math.fround(location[0]), Math.fround(location[1]), Math.fround(location[2] + height + 20));
+        tmpWaterHitEnd.set(tmpWaterHitStart.x, tmpWaterHitStart.y, Math.fround(location[2] - height));
+        const hit = queryPrimitive(primitive, tmpWaterHitStart, tmpWaterHitEnd, zeroWaterExtent);
+        const time = hit ? Math.fround(Math.min(1, Math.max(0, hit.time - 0.5 / tmpWaterHitStart.distanceTo(tmpWaterHitEnd)))) : 1;
+
+        if (time === 0) {
+            owner.setUnrealScriptProperty("bSwimAfloat", false);
+            owner.setUnrealScriptProperty("HitLocation", [0, 0, 0]);
+            return;
+        }
+
+        owner.setUnrealScriptProperty("bSwimAfloat", true);
+        tmpWaterHitLocation.set(0, 0, 0);
+        if (hit) {
+            tmpWaterHitLocation.lerpVectors(tmpWaterHitStart, tmpWaterHitEnd, time);
+            tmpWaterHitLocation.set(Math.fround(tmpWaterHitLocation.x), Math.fround(tmpWaterHitLocation.y), Math.fround(tmpWaterHitLocation.z));
+        }
+        if (tmpWaterHitLocation.z - location[2] <= height * 0.8500000238418579) {
+            owner.setUnrealScriptProperty("HitLocation", [0, 0, 0]);
+            return;
+        }
+
+        if (pointPrimitive(primitive, tmpWaterHitLocation, zeroWaterExtent)) tmpWaterHitLocation.set(0, 0, 0);
+        owner.setUnrealScriptProperty("HitLocation", tmpWaterHitLocation.toArray());
     }
 
     public setActorZone(actor: Actor, test: boolean = false, forceRefresh: boolean = false): void {
@@ -336,7 +421,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         } else actor.setUnrealScriptProperty("PhysicsVolume", body as any);
     }
 
-    public setActorVolumes(actor: Actor | BaseActor, volumes: (PhysicsVolume | MusicVolume | Volume)[]): void {
+    public setActorVolumes(actor: Actor | BaseActor | CollidingMesh, volumes: (PhysicsVolume | MusicVolume | Volume)[]): void {
         const vm = actor.getComponent<ScriptComponent>("script").getVM();
 
         if (vm.invokeNative(actor, actor, 303, "IsA", ["LevelInfo"]) || vm.invokeNative(actor, actor, 303, "IsA", ["Volume"])) return;
@@ -372,7 +457,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return arrVolumes;
     }
 
-    public setPawnVolumes(pawn: BaseActor): void {
+    public setPawnVolumes(pawn: BaseActor | CollidingMesh): void {
         const render = this.manGame.getComponent("render"), owner = pawn.getUnrealScriptProperty("Level");
         const levels = render.getLoadedSectors(), level = levels.find(sector => sector.levelInfoActor === owner);
 
@@ -384,8 +469,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             if (attached !== level) this.setActorVolumes(pawn, this.getLevelVolumes(attached));
     }
 
-    public setPawnZone(pawn: BaseActor, test: boolean = false, forceRefresh: boolean = false): void {
-        if (pawn.isPendingDelete) return;
+    public setPawnZone(pawn: BaseActor | CollidingMesh, test: boolean = false, forceRefresh: boolean = false): void {
+        if (pawn.getUnrealScriptProperty("bPendingDelete")) return;
 
         const render = this.manGame.getComponent("render"), owner = pawn.getUnrealScriptProperty("Level");
         const level = render.getLoadedSectors().find(sector => sector.levelInfoActor === owner);
@@ -488,7 +573,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (actor.scriptVM && actor.scriptActor === null) actor.setScriptRuntime(actor.scriptVM, actor.scriptObjectFactory);
 
         const primitive = object.getCollisionPrimitive ? object.getCollisionPrimitive() : null;
-        const needsCollider = this.collisionWorld.usesRapier() || !primitive || primitive.kind === "cylinder" || (object as any).isMovableObject || (object as any).isRotatingObject;
+        const needsCollider = this.collisionWorld.usesRapier() || !primitive || primitive.kind === "cylinder" || (object as any).isMovableObject || (object as any).isRotatingObject || (object as any).isVehicle;
         const collider = needsCollider ? object.createCollider(this.physicsWorld) : null;
         const colliders = needsCollider ? object.getColliders ? object.getColliders() : [collider] : [];
 

@@ -22,6 +22,7 @@ export type ITextureDecodeInfo = IBaseMaterialDecodeInfo & {
     buffer: ArrayBuffer,
     wrapS?: TextureClampMode_T, wrapT?: TextureClampMode_T,
     width: number, height: number,
+    minLOD?: number, maxLOD?: number,
     detail?: string,
     detailScale: number,
     twoSided?: boolean,
@@ -72,6 +73,7 @@ export abstract class UTexture extends UMaterial {
     declare protected detailScale: number;
 
     declare protected lodSet: number;
+    declare protected MinLOD: number;
 
     public readonly mipmaps = new FArray(FMipmap);
 
@@ -110,6 +112,7 @@ export abstract class UTexture extends UMaterial {
             "bMasked": "isMasked",
 
             "LODSet": "lodSet",
+            "MinLOD": "MinLOD",
         });
     }
 
@@ -178,6 +181,16 @@ export abstract class UTexture extends UMaterial {
         if (totalMipCount === 0) return { materialType: "empty" };
 
         const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
+        let maxLOD = totalMipCount - 1;
+
+        // UTexture::PostLoad 0x106f7ee3..0x106f7f30.
+        for (let i = 0; i < totalMipCount; i++) {
+            const mip = this.mipmaps[i];
+            if (mip.sizeW < 64 || mip.sizeH < 64 && mip.sizeW < 256 && mip.sizeH < 256) {
+                maxLOD = i;
+                break;
+            }
+        }
 
         const firstMipmap = this.mipmaps[0];
         const lastMipmap = loadMipmaps ? this.mipmaps[totalMipCount - 1] : firstMipmap;
@@ -330,6 +343,8 @@ export abstract class UTexture extends UMaterial {
             buffer: decodedBuffer,
             width,
             height,
+            minLOD: loadMipmaps ? this.MinLOD ?? 0 : 0,
+            maxLOD: loadMipmaps ? maxLOD : 0,
             detail: builder.pullMaterial(this.detail),
             detailScale: this.detailScale ?? 8,
             wrapS: this.wrapS === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
