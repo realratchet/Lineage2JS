@@ -1,4 +1,4 @@
-import { selectAssetFiles, type AssetFiles_T } from "./assets/asset-source";
+import { selectAssetFiles, setServedAssets, type AssetFiles_T } from "./assets/asset-source";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
 
 function openHandleStore(mode: IDBTransactionMode) {
@@ -37,6 +37,11 @@ async function selectDirectory(handle: any) {
 }
 
 export async function pickAssetSource(): Promise<void> {
+    const servedResponse = await fetch("served-assets.json", { cache: "no-store" });
+
+    if (servedResponse.ok) setServedAssets(await servedResponse.json());
+    else if (servedResponse.status !== 404) throw new Error(`served-assets.json: ${servedResponse.statusText}`);
+
     if (!new URLSearchParams(location.search).has("diskAssets") && (await fetch("asset-list.json", { method: "HEAD" })).ok) return;
 
     const hasDirectoryPicker = "showDirectoryPicker" in window;

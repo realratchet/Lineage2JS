@@ -1218,7 +1218,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.loginWnd.setBusy(false);
         this.dialogBox.hide();
         this.yesNoDialogBox.hide();
-        this.messageWnd.show(this.nwindow.getSystemMessage(94));
+        this.messageWnd.show(`${this.nwindow.getSystemMessage(94)} | Lineage2JS by Ratchet`, "https://github.com/realratchet/Lineage2JS");
         this.show("login");
     }
 

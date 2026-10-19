@@ -6,7 +6,7 @@ import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
 import { refreshSoundBlobUris } from "./decode-cache";
 import getNpcBundleName from "./npc-bundle";
-import { getAssetFiles } from "../asset-source";
+import { getAssetFiles, getServedAssets } from "../asset-source";
 
 const cacheScript = { scriptClasses: new Map<string, any>(), scriptFunctions: new Map<string, any>(), scriptStates: new Map<string, any>() };
 const cacheSounds = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string }>();
@@ -185,7 +185,7 @@ export class DecodeWorkerClient {
             worker.onerror = event => this.onWorkerDead(i, new Error(`decode worker crashed: ${event.message ?? "unknown error"}`));
             worker.onmessageerror = () => this.onWorkerDead(i, new Error("decode worker message failed to deserialize"));
 
-            worker.postMessage({ type: "init", assetFiles: getAssetFiles() });
+            worker.postMessage({ type: "init", assetFiles: getAssetFiles(), servedAssets: getServedAssets() });
 
             this.slots.push(slot);
         }

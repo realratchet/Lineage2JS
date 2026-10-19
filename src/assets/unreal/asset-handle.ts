@@ -1,5 +1,5 @@
 import type { ILazyAssetHandle, IReadyAssetHandle } from "@l2js/core";
-import fetchAsset, { getAssetSourceId } from "../asset-source";
+import fetchAsset, { getAssetSourceId, isServedAsset } from "../asset-source";
 
 type FileSystemSyncAccessHandle_T = {
     read(buffer: BufferSource, options?: { at: number }): number;
@@ -56,6 +56,8 @@ async function uncachedFetch(path: string): Promise<IReadyAssetHandle> {
 }
 
 export async function fetchAssetHandle(path: string): Promise<ILazyAssetHandle> {
+    if (isServedAsset(path)) return uncachedFetch(path) as unknown as ILazyAssetHandle;
+
     if (globalThis.isSecureContext && navigator.storage?.getDirectory && navigator.locks)
         return fetchCached(path);
 
@@ -63,6 +65,8 @@ export async function fetchAssetHandle(path: string): Promise<ILazyAssetHandle> 
 }
 
 export async function fetchPackageSource(path: string): Promise<FileAssetSource> {
+    if (isServedAsset(path)) return null;
+
     if (!globalThis.isSecureContext || !(globalThis as any).WorkerGlobalScope || !navigator.storage?.getDirectory || !navigator.locks) return null;
 
     return (await fetchCached(path)).getSource();

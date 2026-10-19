@@ -13,6 +13,7 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
     protected readonly layer: NDomLayer;
     protected readonly back: HTMLDivElement;
     protected readonly textCanvas: HTMLCanvasElement;
+    protected readonly textLink: HTMLAnchorElement;
     protected text = "";
     protected screenWidth = 0;
 
@@ -27,7 +28,11 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
         this.textCanvas = document.createElement("canvas");
         this.textCanvas.className = "ndom-text ndom-absolute";
         layer.place(this.textCanvas, 0, 0);
-        this.element.appendChild(this.textCanvas);
+        this.textLink = document.createElement("a");
+        this.textLink.target = "_blank";
+        this.textLink.rel = "noopener noreferrer";
+        this.textLink.appendChild(this.textCanvas);
+        this.element.appendChild(this.textLink);
     }
 
     public placeOnScreen(screenWidth: number, screenHeight: number) { // NCGodWnd OnCreate 0x100912da / DefaultPosition 0x10090df0: (0, H-52, W, 52).
@@ -38,8 +43,11 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
         this.renderText();
     }
 
-    public show(text: string) {
+    public show(text: string, href?: string) {
         this.text = text;
+        if (href) this.textLink.href = href;
+        else this.textLink.removeAttribute("href");
+        this.textLink.setAttribute("aria-label", text);
         this.renderText();
         this.element.hidden = false;
     }

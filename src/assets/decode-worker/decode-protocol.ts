@@ -2,12 +2,12 @@ import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSet
 import type { ICharacterArmorSelection, ICharacterGroup, INpcDefinition, NpcSkillAttack_T, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 
 import type { TrueFont_T } from "../unreal/conf-files/un-conf-ttfont-info";
-import type { AssetFiles_T } from "../asset-source";
+import type { AssetFiles_T, ServedAssets_T } from "../asset-source";
 
 export type ForgetSharedTexturesMessage_T = { type: "forgetSharedTextures"; keys: string[] };
 export type ConfirmSharedTexturesMessage_T = { type: "confirmSharedTextures"; keys: string[] };
 
-export type InitMessage_T = { type: "init"; assetFiles: AssetFiles_T; };
+export type InitMessage_T = { type: "init"; assetFiles: AssetFiles_T; servedAssets: ServedAssets_T; };
 
 export type DecodeMessage_T = {
     type: "decode";

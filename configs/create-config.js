@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const webpack = require("webpack");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { initChunkerMiddleware } = require("./chunker-middleware");
@@ -30,9 +31,37 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
 
         const dirAssets = "assets-c4/";
         const plugins = [];
+        const servedAssets = { files: Object.create(null), version: "" };
         const dirThreeWasm = path.resolve(__dirname, "../node_modules/three-wasm/src");
 
         if (!isWorker) {
+            const servedPath = path.resolve(__dirname, "../served.txt");
+            const patterns = fs.existsSync(servedPath) ? fs.readFileSync(servedPath, "utf8").split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => new RegExp(line, "i")) : [];
+
+            if (patterns.length && fs.existsSync(dirAssets)) {
+                const hash = crypto.createHash("sha256");
+
+                for (const fname of Array.from(walkSync(dirAssets)).sort()) {
+                    const relPath = path.relative(dirAssets, fname).split(path.sep).join("/");
+
+                    if (!patterns.some(pattern => pattern.test(relPath))) continue;
+
+                    servedAssets.files[relPath.toLowerCase()] = relPath;
+                    hash.update(JSON.stringify(relPath));
+                    hash.update(fs.readFileSync(fname));
+                }
+
+                if (Object.keys(servedAssets.files).length) servedAssets.version = hash.digest("hex");
+            }
+
+            plugins.push({ apply(compiler) {
+                compiler.hooks.thisCompilation.tap("served-assets", compilation => {
+                    compilation.hooks.processAssets.tap({ name: "served-assets", stage: webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL }, () => {
+                        compilation.emitAsset("served-assets.json", new webpack.sources.RawSource(JSON.stringify(servedAssets)));
+                    });
+                });
+            } });
+
             if (!fs.existsSync(dirThreeWasm)) throw new Error(`three-wasm is not linked at '${dirThreeWasm}', run 'npm link ../three-wasm'.`);
 
             for (const name of ["Matrix4", "Euler"])
@@ -203,6 +232,20 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 } : false,
                 setupMiddlewares: (middlewares, devServer) => {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
+
+                    middlewares.unshift({ name: "served-assets", path: "/assets", middleware: (req, res, next) => {
+                        let assetPath;
+
+                        try { assetPath = decodeURIComponent(req.url.split("?")[0]).slice(1).toLowerCase(); }
+                        catch (e) { return res.sendStatus(400); }
+
+                        const file = servedAssets.files[assetPath];
+
+                        if (file) return res.sendFile(path.resolve(dirAssets, file));
+                        if (httpAssets) return next();
+
+                        res.sendStatus(404);
+                    } });
 
                     const reportFile = path.join(__dirname, "../sector-test-report.jsonl");
 
