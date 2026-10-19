@@ -280,6 +280,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         }
 
         this.invalidateBounds();
+        this.renderManager.invalidatePawnLighting(this.getParent());
     }
 
     protected invalidateBounds(): void {

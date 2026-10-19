@@ -37,6 +37,7 @@ export class L2Lobby {
     protected generation = 0;
     protected enterPromise: Promise<void> = null;
     protected backdropPlanes: [Object3D, Vector3][] = [];
+    protected isBackdropExpanded = false;
     protected readonly onResize: () => void;
 
     public constructor(game: GameManager, loadAppearance: AppearanceLoader_T) {
@@ -83,7 +84,7 @@ export class L2Lobby {
 
         render.skyRenderer.setSkyZone(skyZone);
         render.setHorizontalFov(50, 4 / 3);
-        this.backdropPlanes = ["StaticMeshActor1", "StaticMeshActor43", "StaticMeshActor90"].map(name => {
+        this.backdropPlanes = ["StaticMeshActor1", "StaticMeshActor43", "StaticMeshActor90"].map(name => { // widescreen fix
             const object = skyZone.getObjectByName(name);
 
             if (!object) throw new Error(`Lobby backdrop '${name}' is missing`);
@@ -97,7 +98,7 @@ export class L2Lobby {
 
     protected resizeBackdrop() {
         const render = this.manGame.getComponent("render");
-        const scale = Math.max(1, render.camera.aspect / (4 / 3));
+        const scale = this.isBackdropExpanded ? Math.max(1, render.camera.aspect / (4 / 3)) : 1;
 
         for (const [object, originalScale] of this.backdropPlanes) {
             object.scale.set(originalScale.x * scale, originalScale.y, originalScale.z * scale);
@@ -116,6 +117,7 @@ export class L2Lobby {
         this.clearPawns();
         window.removeEventListener("resize", this.onResize);
         this.backdropPlanes = [];
+        this.isBackdropExpanded = false;
         render.getEnvironment().setEntryMap(false);
         render.setLevel(null);
         render.skyRenderer.setSkyZone(null);
@@ -130,12 +132,16 @@ export class L2Lobby {
     }
 
     public showLogin() {
+        this.isBackdropExpanded = true;
+        this.resizeBackdrop();
         this.matinee.trigger("LogOn_Warp"); // MoveCameraByState 0x1042e9e0: to-state 2 fires LogOn_Warp, 4 fires Char_Select_Warp.
         void this.manGame.getComponent("render").audioManager.playMusic("assets/music/s28_f.ogg", true, true); // SetState 0x1042e1d0: state 2 plays S28_F.
     }
 
     public async showSelect(characters: Appearance_T[]) {
         const render = this.manGame.getComponent("render");
+        this.isBackdropExpanded = false;
+        this.resizeBackdrop();
         this.matinee.trigger("Char_Select_Warp");
         this.clearPawns();
         void render.audioManager.playMusic("assets/music/nt_oren.ogg", true, true); // SetState 0x1042e1d0: state 4 plays table 0x109f1348[1] NT_Oren.
@@ -203,6 +209,8 @@ export class L2Lobby {
     }
 
     public showCreate() {
+        this.isBackdropExpanded = true;
+        this.resizeBackdrop();
         this.clearPawns();
         this.createSelection = null;
         this.createStage = 0;
@@ -231,6 +239,11 @@ export class L2Lobby {
         if (generation !== this.generation) return actor.release();
         if (!isNew) return;
 
+        const height = actor.getCollisionHeight(), radius = actor.getCollisionRadius();
+        // SpawnDefaultCharacter 0x1042e6fb..0x1042e7cf traces Z+60 to the row before placement.
+        const hit = render.getPhysicsManager().singleLineCheck({ location: new Vector3(x, y, z + SPAWN_TRACE_HEIGHT), delta: new Vector3(0, 0, -SPAWN_TRACE_HEIGHT), extent: new Vector3(radius, radius, height), sourceActor: actor, sourceIsPlayer: false, sourceProfile: actor.getCollisionProfile(), ignorePawns: true, traceWorld: true });
+
+        actor.position.set(x, y, hit ? hit.location.z - height + 2.15 : z);
         render.addPawn(actor);
         actor.setRotationYaw(yaw);
     }
@@ -245,6 +258,8 @@ export class L2Lobby {
         this.createSelection = selection;
 
         if (selection.step === "race") {
+            this.isBackdropExpanded = false;
+            this.resizeBackdrop();
             this.triggerScene(race);
             this.createStage = 1;
             void this.manGame.getComponent("render").audioManager.playMusic(`assets/music/${RACE_MUSIC[selection.race].toLowerCase()}.ogg`, true, true);
