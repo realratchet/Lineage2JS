@@ -1,4 +1,4 @@
-import { Vector3 } from "three";
+import { Object3D, Vector3 } from "three";
 import BaseActor from "../base-actor";
 import MatineePlayer from "../rendering/camera/matinee-player";
 import type GameManager from "../game/game-manager";
@@ -36,10 +36,13 @@ export class L2Lobby {
     protected selected = -1;
     protected generation = 0;
     protected enterPromise: Promise<void> = null;
+    protected backdropPlanes: [Object3D, Vector3][] = [];
+    protected readonly onResize: () => void;
 
     public constructor(game: GameManager, loadAppearance: AppearanceLoader_T) {
         this.manGame = game;
         this.loadAppearance = loadAppearance;
+        this.onResize = this.resizeBackdrop.bind(this);
     }
 
     public isActive() { return !!this.sector; }
@@ -79,8 +82,30 @@ export class L2Lobby {
         if (!skyZone) throw new Error(`Lobby SkyZoneInfo is missing`);
 
         render.skyRenderer.setSkyZone(skyZone);
-        render.setHorizontalFov(50);
+        render.setHorizontalFov(50, 4 / 3);
+        this.backdropPlanes = ["StaticMeshActor1", "StaticMeshActor43", "StaticMeshActor90"].map(name => {
+            const object = skyZone.getObjectByName(name);
+
+            if (!object) throw new Error(`Lobby backdrop '${name}' is missing`);
+
+            return [object, object.scale.clone()];
+        });
+        this.resizeBackdrop();
+        window.addEventListener("resize", this.onResize);
         this.matinee = new MatineePlayer(render.camera, scenes);
+    }
+
+    protected resizeBackdrop() {
+        const render = this.manGame.getComponent("render");
+        const scale = Math.max(1, render.camera.aspect / (4 / 3));
+
+        for (const [object, originalScale] of this.backdropPlanes) {
+            object.scale.set(originalScale.x * scale, originalScale.y, originalScale.z * scale);
+            object.updateMatrix();
+            object.updateWorldMatrix(true, false);
+        }
+
+        render.needsUpdate = true;
     }
 
     public leave() {
@@ -89,6 +114,8 @@ export class L2Lobby {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
 
         this.clearPawns();
+        window.removeEventListener("resize", this.onResize);
+        this.backdropPlanes = [];
         render.getEnvironment().setEntryMap(false);
         render.setLevel(null);
         render.skyRenderer.setSkyZone(null);
