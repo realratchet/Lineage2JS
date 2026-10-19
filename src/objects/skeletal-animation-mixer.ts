@@ -1,6 +1,6 @@
 import { AnimationMixer, AnimationAction, KeyframeTrack, Object3D, NormalAnimationBlendMode, AdditiveAnimationBlendMode, InterpolateLinear, LinearInterpolant, Quaternion, QuaternionLinearInterpolant } from "three";
 
-type RootState_T = { object: Object3D, frame: number, count: number, checkedFrame: number, deferredFrame: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazyDurations: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
+type RootState_T = { object: Object3D, frame: number, count: number, checkedFrame: number, deferredFrame: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazyDurations: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
 type BindingState_T = { root: RootState_T, property: any, target: Object3D, frame: number, value: ArrayLike<number>, x: number, y: number, z: number, w: number, wasFast: boolean, isLazyBone: boolean, lazyVersion: number };
 type TrackResult_T = { frame: number, time: number, value: ArrayLike<number> };
 type ChannelState_T = { binding: BindingState_T, interpolant: any, constant: Float32Array, linearConstant: boolean, result: TrackResult_T, kind: number, index: number };
@@ -109,6 +109,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     protected readonly constantTracks = new WeakMap<KeyframeTrack, Float32Array>();
     protected readonly trackResults = new WeakMap<KeyframeTrack, TrackResult_T>();
     protected readonly arrBindingStates: BindingState_T[] = [];
+    protected readonly arrDeferredRoots: RootState_T[] = [];
     protected bindingVersion: number = 0;
     protected cachedBindingVersion: number = -1;
     protected frame: number = 0;
@@ -163,7 +164,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         const root = action.getRoot() as Object3D;
         let rootState = this.rootStates.get(root);
-        if (!rootState) this.rootStates.set(root, rootState = { object: root, frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, fastActions: [], fastTimes: [], slowActions: [], bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazyDurations: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
+        if (!rootState) this.rootStates.set(root, rootState = { object: root, frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, fastActions: [], fastTimes: [], slowActions: [], bindingCount: 0, bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazyDurations: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
         const channels: ChannelState_T[] = [], tracks = action.getClip().tracks;
 
         for (let i = 0; i < tracks.length; i++) {
@@ -255,7 +256,8 @@ export class SkeletalAnimationMixer extends AnimationMixer {
                 root.checkedFrame = frame;
                 if (!isRendered(object)) { // UE2 poses a skeletal mesh in GetFrame when it is drawn or a bone is asked for, animation time still ticks
                     root.deferredFrame = frame;
-                    root.fastActions.length = 0; root.fastTimes.length = 0; root.slowActions.length = 0; root.bindings.length = 0; root.bindingStates.length = 0;
+                    this.arrDeferredRoots.push(root);
+                    root.fastActions.length = 0; root.fastTimes.length = 0; root.slowActions.length = 0; root.bindingCount = 0;
                     cacheDeferredRoots.set(object, this);
                 }
             }
@@ -281,10 +283,17 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         for (let i = 0; i < mixer._nActiveBindings; i++) {
             const binding = mixer._bindings[i], state = states[i], root = state ? state.root : this.rootStates.get(binding.binding.rootNode);
             if (root && root.deferredFrame === frame) {
-                root.bindings.push(binding);
-                root.bindingStates.push(state);
+                const index = root.bindingCount++;
+                root.bindings[index] = binding;
+                root.bindingStates[index] = state;
             } else if (!isLazy(binding, state, frame)) this.applyBinding(binding, state, frame, accuIndex);
         }
+
+        for (const root of this.arrDeferredRoots) {
+            root.bindings.length = root.bindingCount;
+            root.bindingStates.length = root.bindingCount;
+        }
+        this.arrDeferredRoots.length = 0;
 
         return this;
     }

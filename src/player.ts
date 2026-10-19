@@ -1,4 +1,4 @@
-import { Vector3 } from "three";
+import { Object3D, Vector3 } from "three";
 import BaseActor from "./base-actor";
 import WaterEffectsComponent from "./physics/components/water-effects-component";
 import type RenderManager from "./rendering/render-manager";
@@ -23,7 +23,7 @@ export class Player extends BaseActor {
         return target;
     }
 
-    public addLandmark(position: Vector3, normal: Vector3): void { this.getComponent<LandmarkComponent>("landmark").addLandmark(position, normal); }
+    public addLandmark(position: Vector3, normal: Vector3, base: Object3D = null): void { this.getComponent<LandmarkComponent>("landmark").addLandmark(position, normal, base); }
     public deleteLandmark(immediate: boolean = true): void { this.getComponent<LandmarkComponent>("landmark").deleteLandmark(immediate); }
 }
 

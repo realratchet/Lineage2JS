@@ -209,10 +209,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public addBasedActor(actor: ICollidable) { this.getTransformComponent().addBasedActor(actor); }
     public removeBasedActor(actor: ICollidable) { this.getTransformComponent().removeBasedActor(actor); }
     public isInteractive(): boolean {
-        if (!this.renderManager.isSectorCollisionReady(this.getPosition())) return false;
-
         const owner = this.getParent();
 
+        if (owner.scriptBase) return owner.scriptBase.isInteractive();
+        if (!this.renderManager.isSectorCollisionReady(this.getPosition())) return false;
         if (!owner.scriptClassId) return false;
 
         const level = owner.getUnrealScriptProperty("Level"), main = this.renderManager.getLevel();
@@ -367,7 +367,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             const teleport = this.teleportLanding;
             this.teleportLanding = false;
 
-            this.physicsManager.farMoveActor(this.getParent(), this.findAdjustmentLocation(position, teleport));
+            this.physicsManager.farMoveActor(this.getParent(), this.findAdjustmentLocation(position, teleport), false, false, !!this.getBaseActor());
+            if (this.getBaseActor()) {
+                this.getTransformComponent().updateBaseRelativePosition();
+                this.getTransformComponent().updateRelativeLocation();
+            }
             position.copy(this.getPosition());
         }
 
@@ -601,7 +605,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
             if (desiredDistance > 0) remainingTime += timeTick * (1 - Math.min(1, actualDistance / desiredDistance));
 
-            this.setBase(null);
+            if (!(this.getBaseActor() as Vehicle)?.isVehicle || !this.getParent().getUnrealScriptProperty("bGetOnVehicle"))
+                this.setBase(null);
             this.isGrounded = false;
             this.physicsMode = "falling";
             this.velocity.z = 0;
@@ -871,7 +876,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected physFalling(position: Vector3, deltaTime: number, iterations: number = 0) {
         if (deltaTime < 0.0003 || iterations > 7) return;
 
-        this.setBase(null);
+        if (!(this.getBaseActor() as Vehicle)?.isVehicle || !this.getParent().getUnrealScriptProperty("bGetOnVehicle"))
+            this.setBase(null);
         tmpOldVelocity.copy(this.velocity);
         this.velocity.z = Math.max(-DEFAULT_VOLUME_TERMINAL_VELOCITY, this.velocity.z + DEFAULT_VOLUME_GRAVITY_Z * deltaTime);
         tmpMovement.addVectors(tmpOldVelocity, this.velocity).multiplyScalar(0.5 * deltaTime);
@@ -1151,7 +1157,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.sourceIsPlayer = !!(this.getParent() as any).isPlayer;
         query.sourceProfile = this.collisionProfile;
         query.ignoredActors = this.ignoredActors;
-        query.ignoreBases = true;
+        query.ignoreBases = false;
         query.ignorePawns = !query.sourceIsPlayer;
         query.zeroExtent = false;
 
@@ -1410,6 +1416,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public isLocomoting(): boolean { return this.actorState.locomotion; }
     public isWalkingMovement(): boolean { return this.isWalking; }
     public isSwimmingMovement(): boolean { return this.physicsMode === "swimming"; }
+    public isFlyingMovement(): boolean { return this.physicsMode === "flying"; }
     public getSpeed(): number { return this.velocity.length(); }
     public isUnderwaterMovement(): boolean {
         tmpWaterPosition.copy(this.getPosition()).addScaledVector(tmpUp, this.collisionHeight * 2);
@@ -1471,6 +1478,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public getRotationYaw(): number { return this.rotationYaw; }
     public syncRotationYaw(yaw: number): void { this.rotationYaw = yaw | 0; }
+    public addBaseRotation(yaw: number): void {
+        this.desiredRotationYaw = (this.desiredRotationYaw + yaw) & 65535;
+        this.oldRotationYaw += yaw;
+        if (this.keyboardRotationYaw !== null) this.keyboardRotationYaw = signedYaw(this.keyboardRotationYaw + yaw);
+    }
 
     public setAirSpeed(airSpeed: number) {
         if (!Number.isFinite(airSpeed) || airSpeed < 0) throw new Error(`Invalid pawn AirSpeed '${airSpeed}'.`);
@@ -1503,8 +1515,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.collider.setTranslation(primitive.center);
     }
 
-    public l2Teleport(position: Vector3) {
-        this.teleportTo(position, true);
+    public l2Teleport(position: Vector3, base: ICollidable = null) {
+        this.teleportTo(position, true, base);
         this.teleportLanding = this.adjustToFloor;
     }
 
@@ -1574,7 +1586,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public resetPhysicInit() { this.isPhysicInit = false; }
 
-    public teleportTo(position: Vector3, adjustToFloor: boolean = false) {
+    public teleportTo(position: Vector3, adjustToFloor: boolean = false, base: ICollidable = null) {
         this.vehicleId = 0;
         this.velocity.set(0, 0, 0);
         this.hasDesiredRotation = false;
@@ -1583,10 +1595,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.locomotion = false;
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
-        this.adjustLocation(position, adjustToFloor);
+        this.adjustLocation(position, adjustToFloor, base);
     }
 
-    public adjustLocation(position: Vector3, adjustToFloor: boolean = true) {
+    public adjustLocation(position: Vector3, adjustToFloor: boolean = true, base: ICollidable = null) {
         this.stopNMover();
         this.enterRiseTargetZ = null;
         this.enterRiseVelocity = 0;
@@ -1596,8 +1608,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.teleportLanding = false;
         this.isPhysicInit = false;
         this.validateLocationPending = false;
-        this.setBase(null);
         this.getPosition().copy(position);
+        this.setBase(base);
+        this.getTransformComponent().updateBaseRelativePosition();
+        this.getTransformComponent().updateRelativeLocation();
         this.isGrounded = false;
         if (!isFlying) {
             this.physicsMode = "falling";

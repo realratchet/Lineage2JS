@@ -218,6 +218,25 @@ export class LocalSpaceSkeleton extends Skeleton {
         return true;
     }
 
+    public transferAttachments(skeletons: readonly LocalSpaceSkeleton[]): void {
+        if (this.parents === null) this.claimBones();
+
+        for (const attachment of this.attachments.slice()) {
+            if (!attachment.usesBindMatrix) continue;
+
+            const name = this.bones[attachment.bone].name;
+            const skeleton = skeletons.find(skeleton => {
+                if (skeleton.parents === null) skeleton.claimBones();
+                return skeleton.ownsBones && skeleton.matchRefBone(name) >= 0;
+            });
+
+            if (!skeleton) throw new Error(`Replacement mesh has no attachment bone '${name}'.`);
+
+            this.detachObject(attachment.object);
+            skeleton.attachObject(attachment.object, name, !!attachment.absolute);
+        }
+    }
+
     public detachObject(object: Object3D): boolean {
         if (this.parents === null) this.claimBones();
 

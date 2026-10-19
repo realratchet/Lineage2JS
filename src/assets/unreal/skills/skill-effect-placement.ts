@@ -74,7 +74,7 @@ export class SkillEffectPlacement {
         for (let i = this.trailers.length - 1; i >= 0; i--) {
             const { effect, host, sameRotation, relative, offset } = this.trailers[i];
 
-            if (!this.host.isAlive(effect)) { this.trailers.splice(i, 1); continue; }
+            if (!this.host.isAlive(effect) || !this.host.isAlive(host)) { this.trailers.splice(i, 1); continue; }
 
             this.host.getPosition(host, tmpPosition, true);
             if (relative) {
@@ -98,6 +98,8 @@ export class SkillEffectPlacement {
         this.pawnLights.length = 0;
         this.trailers.length = 0;
     }
+
+    public hasPending(): boolean { return this.trailers.length > 0 || this.pawnLights.length > 0; }
 
     public cancelCastingLights(): void {
         // Engine.dll MagicStop 0x7b554f..0x7b5587 removes FNPawnLight type2 only.
@@ -146,6 +148,7 @@ export class SkillEffectPlacement {
         if (info.targetIsCaster !== undefined && (!target || info.targetIsCaster !== (target === caster))) return true;
         // Engine.dll 0x7a9288..0x7a928e: Siege Hammer exits before both shake and particle without a target.
         if (info.targetRequired === "phase" && !target) return false;
+        if (info.targetClass && (!target || !this.host.isA(target, info.targetClass, caster))) return false;
         // Engine.dll 0x7a8198..0x7a81be rejects null/non-Pawn/NPC targets before the arm effect and Shot sound.
         if (info.targetIsNpc !== undefined && (!target || !target.isActor || target.getUnrealScriptProperty("bNpc") !== info.targetIsNpc)) return false;
         // Engine.dll Explosion 0x78f7cd/0x78fa8d/0x78fab4: hit actor, projectile Owner, then TargetActor.
@@ -340,7 +343,7 @@ export class SkillEffectPlacement {
         if (info.scale === "cancelCasterRadius") scale *= 9 / radius;
         // Engine.dll Shot 0x7a8ed7..0x7a8ee9: target radius / 9, without the casting radius threshold.
         if (info.scale === "targetRadius") scale = this.host.getCollisionRadius(target) / 9;
-        const delay = info.hitDelay === undefined ? info.delay || 0 : Math.max(0, skill.hitTime + info.hitDelay);
+        const delay = info.hitDelay === undefined && info.hitDelayScale === undefined ? info.delay || 0 : Math.max(0, skill.hitTime * (info.hitDelayScale === undefined ? 1 : info.hitDelayScale) + (info.hitDelay || 0));
         this.host.setParticleScale(effect, scale);
         this.host.setParticleDelay(effect, delay);
 
@@ -512,7 +515,7 @@ export class SkillEffectPlacement {
         const hostIsPawn = !!attachHost.isActor;
         const radius = hostIsPawn ? this.host.getCollisionRadius(attachHost) : attachHost.scriptProperties.get("CollisionRadius") as number;
         const height = hostIsPawn ? this.host.getCollisionHeight(attachHost) : 0;
-        const sourceProjectile = !action.useCharacterRotation && !!this.host.getProjectile(source);
+        const sourceProjectile = !action.useCharacterRotation && this.host.isA(source, "engine.NProjectile", caster);
         let projectile = false;
         // Engine.dll 0x796c48..0x796c6b: multi-target Notify results bypass projectile initialization.
         if (action.phase === "shot" && initializeProjectile && this.host.isA(effect, "engine.NSkillProjectile", caster)) {

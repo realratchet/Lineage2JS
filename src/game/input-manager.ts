@@ -1,5 +1,6 @@
 import { Box3, Raycaster, Vector2, Vector3 } from "three";
 import { IEngineComponent } from "./components";
+import { getProperty, setProperty } from "../ue-script/vm";
 import { ZUpOrbitControls } from "../rendering/camera/controllers/zup-orbit-controls";
 import { ZUpPointerLockControls } from "../rendering/camera/controllers/zup-pointer-lock-controls";
 import type GameManager from "./game-manager";
@@ -50,7 +51,7 @@ function getBatchIntersectionActor(intersection: THREE.Intersection): { actorInd
 
 function isLandmarkSurface(actor: ICollidable | null): boolean {
     if (!actor) return false;
-    if ((actor as any).isTerrain || (actor as any).isStaticMeshActor) return true;
+    if ((actor as any).isTerrain || (actor as any).isStaticMeshActor || (actor as any).isVehicle) return true;
 
     const primitive = actor.getCollisionPrimitive ? actor.getCollisionPrimitive() : null;
 
@@ -276,6 +277,18 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public updateFollowPlayer(deltaTime: number): void {
+        const controller = this.manGame.getComponent("asset").playerController;
+
+        if (controller && getProperty(controller, "bUseHoldCamera")) {
+            const yaw = getProperty(controller, "CompensateYaw") as number, pitch = getProperty(controller, "CopmensatePitch") as number;
+
+            if (this.isOrbitControls && this.followPlayer && !this.isCameraLocked)
+                this.controls.orbit.rotate(yaw * Math.PI / 32768, pitch * Math.PI / 32768);
+            setProperty(controller, "CompensateYaw", 0);
+            setProperty(controller, "CopmensatePitch", 0);
+            setProperty(controller, "bUseHoldCamera", false);
+        }
+
         if (this.manGame.getComponent("network").game?.isPlayingReplay()) {
             const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
             const yaw = properties.get("ManuallyCameraYaw") as number, pitch = properties.get("ManuallyCameraPitch") as number;
@@ -596,8 +609,8 @@ export class InputManager implements IEngineComponent<GameManager> {
             if (physicsIntersection) {
                 tmpMouseIntersection.copy(physicsIntersection.location);
                 network.requestMoveTo(tmpMouseIntersection, physicsIntersection.actor);
-                if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
-            } else if (pickDistance > 0 && renderManager.player.isSwimmingMovement()) {
+                if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal, (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null);
+            } else if (pickDistance > 0 && (renderManager.player.isSwimmingMovement() || renderManager.player.isFlyingMovement())) {
                 tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
                 network.requestMoveTo(tmpMouseIntersection);
             }
@@ -608,7 +621,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         if (physicsIntersection) {
             tmpMouseIntersection.copy(physicsIntersection.location);
             renderManager.player.goTo(tmpMouseIntersection);
-            if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
+            if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal, (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null);
         } else if (pickDistance > 0) {
             tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
             renderManager.player.goTo(tmpMouseIntersection);
@@ -695,7 +708,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             const max = tmpPickBounds.max.getComponent(axis);
 
             if (Math.abs(delta) < 1e-12) {
-                if (start < min || start > max) return 0;
+                if (start < min || start > max) return this.renderManager.player.isFlyingMovement() ? this.renderManager.camera.far : 0;
                 continue;
             }
 
@@ -706,7 +719,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             near = Math.max(near, a);
             far = Math.min(far, b);
 
-            if (near > far) return 0;
+            if (near > far) return this.renderManager.player.isFlyingMovement() ? this.renderManager.camera.far : 0;
         }
 
         return far;

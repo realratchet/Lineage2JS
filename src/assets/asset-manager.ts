@@ -347,6 +347,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (this.userConfig.minZoomingDist !== null) playerController.scriptProperties.set("MinZoomingDist", this.userConfig.minZoomingDist);
         if (this.userConfig.maxZoomingDist !== null) playerController.scriptProperties.set("MaxZoomingDist", this.userConfig.maxZoomingDist);
         if ((playerController.scriptProperties.get("MinZoomingDist") as number) > (playerController.scriptProperties.get("MaxZoomingDist") as number)) throw new Error(`Invalid camera zoom limits.`);
+        // The comparison client's User.ini allows 10000; stock C4 CABs restrict it to 250.
+        playerController.scriptProperties.set("MaxZoomingDist", Math.max(10000, playerController.scriptProperties.get("MaxZoomingDist") as number));
         manRender.audioManager.setSoundVolume(this.userConfig.audio.soundVolume);
         manRender.audioManager.setMusicVolume(this.userConfig.audio.musicVolume);
         manRender.audioManager.setWavVoiceVolume(this.userConfig.audio.wavVoiceVolume);

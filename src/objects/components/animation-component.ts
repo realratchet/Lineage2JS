@@ -253,6 +253,18 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
 
     public setMeshes(meshes: Mesh[]): void {
         const parent = this.getParent();
+        const skeletons: LocalSpaceSkeleton[] = [];
+
+        for (const mesh of meshes) {
+            const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
+
+            if (skeleton && !skeletons.includes(skeleton)) skeletons.push(skeleton);
+        }
+        for (const mesh of this.meshes) {
+            const skeleton = (mesh as any).skeleton as LocalSpaceSkeleton;
+
+            if (skeleton && !skeletons.includes(skeleton)) skeleton.transferAttachments(skeletons);
+        }
 
         this.setSimulationEnabled(true);
         this.stop();

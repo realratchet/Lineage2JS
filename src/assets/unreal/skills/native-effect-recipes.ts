@@ -1,6 +1,10 @@
 import type { NativeEffectBinding_T } from "./native-effect-bindings";
 
 const nativeEffectRecipes = new Map<string, NativeEffectBinding_T>([
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79e9e8 / 0x7a3de7 / 0x7a9762 / 0x791ade.
+    ["s_boom_attack", { effects: ["LineageEffect.e_u060_a", "LineageEffect.m_u006_d", "LineageEffect.e_u060_b"], effectGroup: "boomAttack", soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79c74b / 0x7a3de7 / 0x7aed07 / 0x7902bf.
+    ["s_npc_spit_attack", { effects: ["LineageEffect.e_u072_a", "LineageEffect.e_u072_b"], effectGroup: "npcSpitAttack", soundPhases: ["shot", "explosion"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x7a13ed / 0x7a3de7 / 0x7a5035 / 0x791ade.
     ["s_drain_health", { effects: ["LineageEffect.s_u019_a", "LineageEffect.s_u019_b", "LineageEffect.s_u019_c"], effectGroup: "drainHealth", soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79c9b4 / 0x7a3de7 / 0x7a6d16 / 0x791ade.
@@ -81,6 +85,8 @@ const nativeEffectRecipes = new Map<string, NativeEffectBinding_T>([
     ["s_power_smash", { effects: ["LineageEffect.s_u010_b", "LineageEffect.s_u010_a", "LineageEffect.p_u004_a"], finalShotOnly: true, soundPhases: ["casting", "shot"], pending: "secondary weapon RibbonSet attachment" }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79e2c5 / 0x7a3de7 / 0x7ae49b / 0x791ade.
     ["s_power_strike", { effects: ["LineageEffect.s_u002_a", "LineageEffect.p_u004_a"], finalShotOnly: true, soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x79c74b / 0x7a3de7 / 0x7ae49b / 0x791ade.
+    ["s_npc_die_you_fool", { effects: ["LineageEffect.p_u004_a"], finalShotOnly: true, soundPhases: ["shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79e483 / 0x7a3de7 / 0x7a8ef6 / 0x791ade.
     ["s_recharge", { effects: ["LineageEffect.m_u022_a", "LineageEffect.m_u022_b"], soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79f5c8 / 0x7a3de7 / 0x7b0749 / 0x791ade.
@@ -105,6 +111,8 @@ const nativeEffectRecipes = new Map<string, NativeEffectBinding_T>([
     ["s_empower", { effects: ["LineageEffect.m_u016_a", "LineageEffect.m_u016_b"], soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79fe57 / 0x7a3de7 / 0x7ad91b / 0x791ade.
     ["s_haste", { effects: ["LineageEffect.m_u036_a", "LineageEffect.m_u036_b"], soundPhases: ["casting", "shot"] }],
+    // Engine.dll Init/PreShot/Shot/Explosion: 0x7a131a / 0x7a3de7 / 0x7a924f / 0x791ade.
+    ["s_npc_dark_heal", { effects: ["LineageEffect.m_u003_a", "LineageEffect.e_u001_a"], effectGroup: "darkHeal", soundPhases: ["casting"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x7a131a / 0x7a3de7 / 0x7afafb / 0x791ade.
     ["s_vampiric_touch", { effects: ["LineageEffect.m_u003_a", "LineageEffect.m_u003_c", "LineageEffect.m_u003_b"], soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79fabf / 0x7a3de7 / 0x7ac52a / 0x791ade.

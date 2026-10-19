@@ -93,6 +93,8 @@ import { blasterShot, stormShot, blasterExplosion, stormExplosion } from "./nati
 import sSonicBuster from "./native/s-sonic-buster";
 import sForceBuster from "./native/s-force-buster";
 import sEvadeShot from "./native/s-evade-shot";
+import sBoomAttack from "./native/s-boom-attack";
+import sNpcSpitAttack from "./native/s-npc-spit-attack";
 import type { NpcSkillEffectPhase_T } from "../un-pawn";
 
 export type NativeSkillEffect_T = {
@@ -106,6 +108,7 @@ export type NativeSkillEffect_T = {
     soundWithoutEffect?: boolean;
     targetIsCaster?: boolean;
     targetIsNpc?: boolean;
+    targetClass?: string;
     targetRequired?: "phase" | "position";
     hitActor?: boolean;
     hitActorIsMover?: boolean;
@@ -155,6 +158,7 @@ export type NativeSkillEffect_T = {
     scale?: number | "casterRadius" | "cancelCasterRadius" | "targetRadius";
     delay?: number;
     hitDelay?: number;
+    hitDelayScale?: number;
     offset?: [number, number, number];
     pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center" | "lastTarget", rotation?: "hit" | "targetDisplacement", radiusOffset?: number };
     pawnLightOnly?: boolean;
@@ -324,6 +328,15 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
 };
 
 const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> = {
+    boomAttack: {
+        "lineageeffect.e_u060_a": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.e_u060_a"),
+        "lineageeffect.m_u006_d": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.m_u006_d"),
+        "lineageeffect.e_u060_b": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.e_u060_b")
+    },
+    npcSpitAttack: {
+        "lineageeffect.e_u072_a": sNpcSpitAttack.filter(effect => effect.effectClass === "LineageEffect.e_u072_a"),
+        "lineageeffect.e_u072_b": sNpcSpitAttack.filter(effect => effect.effectClass === "LineageEffect.e_u072_b")
+    },
     drainHealth: {
         "lineageeffect.s_u019_a": drainEffects.filter(effect => effect.effectClass === "LineageEffect.s_u019_a"),
         "lineageeffect.s_u019_b": drainEffects.filter(effect => effect.effectClass === "LineageEffect.s_u019_b"),
@@ -340,6 +353,10 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
     seedWind: {
         "lineageeffect.m_u038_a": mU038,
         "lineageeffect.m_u022_b": nativeEffects["lineageeffect.m_u022_b"]
+    },
+    darkHeal: {
+        "lineageeffect.m_u003_a": nativeEffects["lineageeffect.m_u003_a"],
+        "lineageeffect.e_u001_a": [{ ...nativeEffects["lineageeffect.e_u001_a"][0], host: "target", owner: "target", targetClass: "Engine.Pawn" }]
     },
     heal: {
         "lineageeffect.m_u001_a": sHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_a"),

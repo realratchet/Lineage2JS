@@ -45,6 +45,8 @@ import type AnimationComponent from "../objects/components/animation-component";
 import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
+import type PawnAttackComponent from "../objects/components/pawn-attack-component";
+import type SkillVisualEffect from "@l2js/engine/skills/skill-visual-effect";
 import NPawnLightComponent from "./components/pawn-light-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
@@ -303,6 +305,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
     protected readonly pickups = new Set<GroundPickup>();
     protected readonly transientResources = new WeakMap<Object3D, Set<Disposable_T>>();
+    protected readonly retainedSkillVisuals = new Map<SkillVisualEffect, { effects: Object3D[], caster: BaseActor }>();
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
@@ -359,8 +362,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
 
-    protected getPhysicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
-    protected getInputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
+    public getPhysicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
+    public getInputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
@@ -1271,6 +1274,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public removePawn(pawn: BaseActor): void {
         if (!this.getPhysicsManager().removePawn(pawn)) return;
 
+        pawn.findComponent<PawnAttackComponent>("pawnAttack")?.detachSkillVisuals();
         pawn.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
         arrPawnEffects.length = 0;
         for (const effect of pawn.getScriptChildren()) arrPawnEffects.push(effect);
@@ -1285,6 +1289,30 @@ export class RenderManager implements IEngineComponent<GameManager> {
         else pawn.release();
 
         this.needsUpdate = true;
+    }
+
+    public retainSkillVisual(visual: SkillVisualEffect, effects: Object3D[], caster: BaseActor): void { this.retainedSkillVisuals.set(visual, { effects, caster }); }
+    public isRetainingSkillVisual(visual: SkillVisualEffect): boolean { return this.retainedSkillVisuals.has(visual); }
+    public replaceRetainedSkillTargets(actor: BaseActor, replacement: BaseActor): void {
+        for (const [visual, entry] of this.retainedSkillVisuals) {
+            if (replacement && entry.caster === actor) entry.caster = replacement;
+            visual.replaceTarget(actor, replacement);
+        }
+    }
+
+    public setRetainedSkillTargets(caster: BaseActor, skillId: number, actors: readonly BaseActor[]): void {
+        for (const [visual, entry] of this.retainedSkillVisuals)
+            if (entry.caster === caster) visual.setSkillTargets(skillId, actors);
+    }
+
+    public clearRetainedSkillVisuals(): void {
+        for (const [visual, { effects }] of this.retainedSkillVisuals) {
+            for (const effect of effects)
+                if (effect.parent) this.removeTransientEffect(effect);
+            visual.clear();
+            effects.length = 0;
+        }
+        this.retainedSkillVisuals.clear();
     }
 
     protected runDeferredMixerOperations(): void {
@@ -2074,6 +2102,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
+        for (const [visual, { effects }] of this.retainedSkillVisuals) {
+            visual.update(currentTime);
+            if (visual.hasActiveEffects() || effects.some(effect => effect.parent && (effect as Object3D & IObject).findComponent("nProjectile"))) continue;
+
+            visual.clear();
+            effects.length = 0;
+            this.retainedSkillVisuals.delete(visual);
+        }
         this.isRenderingFrame = this.isRendering && (this.isPersistentRendering || this.needsUpdate);
 
         if (!this.isRenderingFrame) return;

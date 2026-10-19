@@ -36,6 +36,7 @@ const tmpMatrix = new Matrix4();
 type RuntimeActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, any>, scriptClassId: string };
 
 export class SkillEffectHost implements SkillEffectHost_T {
+    protected scriptVM: UnScriptVM = null;
     protected readonly renderManager: RenderManager;
     protected readonly addEffectCallback: (effect: Object3D, owner: SkillActor_T | null) => void;
     protected readonly removeEffectCallback: (effect: Object3D) => void;
@@ -66,7 +67,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
     public isAlive(actor: SkillActor_T): boolean { return !!this.object(actor).parent; }
 
     public isA(actor: SkillActor_T, classId: string, caster: SkillActor_T): boolean {
-        const classes = (cacheEffectLibraries.get(actor) || (this.script(caster).getVM() as any).library).scriptClasses;
+        const classes = (cacheEffectLibraries.get(actor) || ((this.scriptVM || this.script(caster).getVM()) as any).library).scriptClasses;
 
         for (let cls = classes[actor.scriptClassId]; cls; cls = classes[cls.superClassId])
             if (cls.id.toLowerCase() === classId.toLowerCase()) return true;
@@ -99,8 +100,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public setRotation(actor: SkillActor_T, value: QuaternionArr): void { this.object(actor).quaternion.fromArray(value); }
-    public getCollisionRadius(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionRadius() : Number(actor.getUnrealScriptProperty("CollisionRadius")); }
-    public getCollisionHeight(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionHeight() : Number(actor.getUnrealScriptProperty("CollisionHeight")); }
+    public getCollisionRadius(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionRadius() : Number(actor.scriptProperties.get("CollisionRadius")); }
+    public getCollisionHeight(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionHeight() : Number(actor.scriptProperties.get("CollisionHeight")); }
 
     public getEffectTargetLocation(actor: SkillActor_T, out: Vector3Arr): Vector3Arr {
         this.actor(actor).getEffectTargetLocation(tmpPosition);
@@ -261,7 +262,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public executeProgram(caster: SkillActor_T, context: SkillScriptHost_T, program: IScriptFunctionDecodeInfo): boolean {
-        return !!this.script(caster).getVM().invoke(context, program);
+        if (!this.scriptVM) this.scriptVM = this.script(caster).getVM();
+        return !!this.scriptVM.invoke(context, program);
     }
 
     protected projectile(component: NProjectileComponent): SkillProjectile_T {

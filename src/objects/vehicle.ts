@@ -62,6 +62,14 @@ export class Vehicle extends CollidingMesh {
 
     public checkLoadingResource(): boolean { return false; }
     public beginPlay(): void { this.scriptComponent.beginPlay(); }
+    public tick(deltaTime: number): void { this.scriptComponent.tick(deltaTime); }
+
+    public startTrip(destination: Vector3, moveSpeed: number, rotationSpeed: number): void {
+        this.setUnrealScriptProperty("bTrip", true);
+        this.setUnrealScriptProperty("MoveSpeed", Math.fround(moveSpeed));
+        this.setUnrealScriptProperty("RotationSpeed", rotationSpeed);
+        this.setUnrealScriptProperty("TripTarget", destination.toArray());
+    }
 
     public getLocalLocation(location: Vector3, target: Vector3): Vector3 {
         const yaw = (this.getUnrealScriptProperty("Rotation") as number[])[1];

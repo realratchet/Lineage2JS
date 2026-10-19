@@ -1564,7 +1564,8 @@ function isPlayerPawn(actor: ScriptHost_T, vm: UnScriptVM): boolean {
     const controller = getTraceProperty(actor, "Controller");
     if (!controller) return false;
     if (typeof controller === "string") throw new Error(`Unresolved pawn Controller '${controller}'.`);
-    return isActorClass(controller, "PlayerController", vm) && !!getTraceProperty(controller, "Player");
+    const script = typeof (actor as any).findComponent === "function" ? (actor as BaseActor).findComponent<ScriptComponent>("script") : null;
+    return ((controller as any).isPlayerController || isActorClass(controller, "PlayerController", script ? script.getVM() : vm)) && !!getTraceProperty(controller, "Player");
 }
 
 function isEncroacher(actor: ScriptHost_T, vm: UnScriptVM): boolean {

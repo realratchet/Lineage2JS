@@ -288,7 +288,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.chatWnd.setOldChatting(asset.userConfig.game.oldChatting);
         this.chatWnd.setSystemMessageFilters(asset.userConfig.game.systemMsgWndDamage, asset.userConfig.game.systemMsgWndExpendableItem);
 
-        for (const type of ["keydown", "keyup", "mousedown"])
+        for (const type of ["keydown", "keyup", "mousedown", "mouseup", "mousemove"])
             window.addEventListener(type, (event: KeyboardEvent | MouseEvent) => {
                 this.inputCtrl = event.ctrlKey;
                 this.inputShift = event.shiftKey;
@@ -366,7 +366,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         window.addEventListener("pointermove", event => this.onSkillPointerMove(event), true);
         window.addEventListener("pointerup", event => this.onSkillPointerUp(event), true);
         window.addEventListener("pointercancel", event => this.onSkillPointerCancel(event), true);
-        window.addEventListener("blur", () => this.endSkillPointerDrag());
+        window.addEventListener("blur", () => {
+            this.inputCtrl = this.inputShift = false;
+            this.endSkillPointerDrag();
+        });
         window.addEventListener("keydown", event => {
             const target = event.target as HTMLElement;
 

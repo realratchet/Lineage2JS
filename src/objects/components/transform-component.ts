@@ -1,7 +1,7 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
-import { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import { getProperty, setProperty, ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
 import LocalSpaceSkeleton from "../local-space-skeleton";
 import { setScriptObjectProperty } from "./actor-ownership-component";
@@ -13,6 +13,8 @@ import type RenderManager from "../../rendering/render-manager";
 import type { ICollidable } from "../objects";
 import type { Vector3Arr } from "@l2js/engine";
 import { ENetRole_T } from "../../assets/unreal/un-aactor";
+import { pointPrimitive } from "../../physics/collision-primitive";
+import type { CollisionQuery_T } from "../../physics/collision-world";
 
 const tmpRotator = new Rotator();
 const tmpBasePosition = new Vector3();
@@ -21,6 +23,8 @@ const tmpBaseInverseQuaternion = new Quaternion();
 const tmpBoneMatrix = new Matrix4();
 const tmpLocation = new Vector3();
 const tmpRelativeMatrix = new Matrix4();
+const tmpOldBaseCoords = new Matrix4();
+const tmpNewBaseCoords = new Matrix4();
 
 export class TransformComponent extends ObjectComponent<BaseActor | CollidingMesh> {
     public readonly componentName = "transform";
@@ -31,6 +35,10 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
     protected readonly baseQuaternion = new Quaternion();
     protected readonly baseRelativePosition = new Vector3();
     protected readonly visitedBases = new Set<ICollidable>();
+    protected readonly basedMoveLocation = new Vector3();
+    protected readonly basedMoveDelta = new Vector3();
+    protected readonly basedMoveExtent = new Vector3();
+    protected readonly basedMoveQuery: CollisionQuery_T = { location: this.basedMoveLocation, delta: this.basedMoveDelta, extent: this.basedMoveExtent, sourceIsPlayer: false, ignorePawns: false, ignoreBases: true, zeroExtent: false };
 
     public constructor(renderManager: RenderManager, basedActors: Set<ICollidable> = new Set()) {
         super();
@@ -78,15 +86,14 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
                 const oldRotation = parent.getUnrealScriptProperty("Rotation") as Vector3Arr;
 
                 if (rotation.every((value, index) => value === oldRotation[index])) return true;
+                let hasAttachments = false;
                 for (const actor of this.basedActors)
-                    if (!(actor as BaseActor).scriptBase) throw new Error(`SetRotation with unboned attachments is not implemented for '${parent.scriptClassId}'.`);
-
+                    if (!(actor as BaseActor).scriptBase) { hasAttachments = true; break; }
                 const physics = this.renderManager.getPhysicsManager(), profile = parent.getCollisionProfile();
-                if (!profile.useCylinderCollision) {
+                if (!profile.useCylinderCollision || hasAttachments) {
                     if (!profile.isPawn) throw new Error(`SetRotation without a pawn source is not implemented for '${parent.scriptClassId}'.`);
 
-                    physics.rotateActor(parent, rotation);
-                    return true;
+                    return physics.rotateActor(parent, rotation);
                 }
 
                 // Engine.dll MoveActor 0x85b4f4..0x85b584: cylinder rotation skips collision/SetZone.
@@ -210,6 +217,125 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
         this.base.getWorldPosition(tmpBasePosition);
         this.base.getWorldQuaternion(tmpBaseQuaternion);
         this.baseRelativePosition.copy(this.getParent().position).sub(tmpBasePosition).applyQuaternion(tmpBaseInverseQuaternion.copy(tmpBaseQuaternion).invert());
+    }
+
+    public updateRelativeLocation(): void {
+        const parent = this.getParent(), base = this.base as BaseActor | CollidingMesh;
+        const bone = parent.getUnrealScriptProperty("AttachmentBone");
+
+        if (!base || !base.getUnrealScriptProperty || parent.scriptBase || bone && bone !== "None" || parent.getUnrealScriptProperty("bOnlyDrawIfAttached")) return;
+
+        // ULevel::MoveActor 0x1058c41d..0x1058c45c stores world-center differences.
+        const location = parent.getUnrealScriptProperty("Location") as Vector3Arr, baseLocation = base.getUnrealScriptProperty("Location") as Vector3Arr;
+        const relative = parent.getUnrealScriptProperty("RelativeLocation") as Vector3Arr;
+
+        for (let i = 0; i < 3; i++) relative[i] = Math.fround(Math.fround(location[i]) - Math.fround(baseLocation[i]));
+        parent.setUnrealScriptProperty("RelativeLocation", relative);
+    }
+
+    public checkBasedMovement(): void {
+        for (const entry of this.basedActors) {
+            const actor = entry as BaseActor;
+
+            if (actor.scriptBase) continue;
+            if (!actor.getCollisionProfile || !actor.getCollisionProfile().useCylinderCollision || !actor.findComponent<PawnMovementComponent>("pawnMovement")) throw new Error(`MoveActor attachment '${actor.name}' is not an ordinary cylinder pawn.`);
+            if (actor.getUnrealScriptProperty("bHardAttach") && !actor.getUnrealScriptProperty("bBlockActors") && !actor.getUnrealScriptProperty("bBlockPlayers")) throw new Error(`MoveActor HardRelMatrix is not implemented for '${actor.name}'.`);
+            actor.getComponent<TransformComponent>("transform").checkBasedMovement();
+        }
+    }
+
+    public moveBasedActors(oldLocation: Vector3Arr, oldRotation: Vector3Arr): boolean {
+        const parent = this.getParent(), physics = this.renderManager.getPhysicsManager();
+        const rotation = parent.getUnrealScriptProperty("Rotation") as Vector3Arr, location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
+        const changed = rotation.some((value, index) => value !== oldRotation[index]);
+        const deltaRotation = rotation.map((value, index) => (value & 0xfffc) - (oldRotation[index] & 0xfffc)) as Vector3Arr;
+        const delta = location.map((value, index) => Math.fround(Math.fround(value) - Math.fround(oldLocation[index]))) as Vector3Arr;
+        const script = parent.getComponent<ScriptComponent>("script"), vm = script.getVM();
+
+        for (const entry of this.basedActors) {
+            const actor = entry as BaseActor, movement = actor.findComponent<PawnMovementComponent>("pawnMovement");
+            if (actor.scriptBase && !movement) continue;
+            const controller = actor === this.renderManager.player ? this.renderManager.getParent().getComponent("asset").playerController : actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+            if (controller) {
+                if ((controller as any).isPlayerController || actor.getComponent<ScriptComponent>("script").getVM().invokeNative(actor, controller, 303, "IsA", ["PlayerController"])) {
+                    if (getProperty(controller, "ViewTarget") !== parent) {
+                        setProperty(controller, "bUseHoldCamera", true);
+                        setProperty(controller, "CompensateYaw", Math.fround((getProperty(controller, "CompensateYaw") as number) + deltaRotation[1]));
+                        setProperty(controller, "CopmensatePitch", Math.fround((getProperty(controller, "CopmensatePitch") as number) + deltaRotation[0]));
+                    } else setProperty(controller, "Rotation", (getProperty(controller, "Rotation") as Vector3Arr).map((value, index) => (value + deltaRotation[index]) | 0));
+                } else setProperty(controller, "Rotation", (getProperty(controller, "Rotation") as Vector3Arr).map((value, index) => (value + deltaRotation[index]) | 0));
+            }
+            const bone = actor.getUnrealScriptProperty("AttachmentBone");
+
+            if (!actor.scriptBase && (!bone || bone === "None")) {
+                this.basedMoveDelta.fromArray(delta);
+                if (changed) {
+                    // ULevel::MoveActor 0x1058bf5e..0x1058c0cb preserves these intermediate float stores.
+                    tmpRotator.set(oldRotation[0], oldRotation[1], oldRotation[2]).rotateMatrix(tmpOldBaseCoords.identity());
+                    tmpRotator.set(rotation[0], rotation[1], rotation[2]).rotateMatrix(tmpNewBaseCoords.identity());
+                    const a = tmpOldBaseCoords.elements, b = tmpNewBaseCoords.elements, relative = actor.getUnrealScriptProperty("RelativeLocation") as Vector3Arr;
+                    const x = a[1] * relative[1] + a[2] * relative[2] + a[0] * relative[0];
+                    const y = a[5] * relative[1] + a[6] * relative[2] + a[4] * relative[0];
+                    const z = a[9] * relative[1] + a[10] * relative[2] + a[8] * relative[0];
+                    const px = Math.fround(Math.fround(Math.fround(b[0] * x) + Math.fround(b[4] * y)) + Math.fround(b[8] * z));
+                    const py = Math.fround(Math.fround(Math.fround(b[1] * x) + Math.fround(b[5] * y)) + Math.fround(b[9] * z));
+                    this.basedMoveDelta.x = Math.fround(Math.fround(px - relative[0]) + delta[0]);
+                    this.basedMoveDelta.y = Math.fround(Math.fround(py - relative[1]) + delta[1]);
+                    this.basedMoveDelta.z = Math.fround(Math.fround(Math.fround(b[2] * x) + b[6] * y + b[10] * z - relative[2]) + delta[2]);
+                }
+                actor.setUnrealScriptProperty("OldRotYaw", Math.fround((actor.getUnrealScriptProperty("OldRotYaw") as number) + deltaRotation[1]));
+                actor.setUnrealScriptProperty("DesiredRotation", (actor.getUnrealScriptProperty("DesiredRotation") as Vector3Arr).map((value, index) => (value + deltaRotation[index]) | 0));
+                movement.addBaseRotation(deltaRotation[1]);
+                const childRotation = (actor.getUnrealScriptProperty("Rotation") as Vector3Arr).map((value, index) => (value + deltaRotation[index]) | 0) as Vector3Arr;
+                this.basedMoveLocation.fromArray(actor.getUnrealScriptProperty("Location") as Vector3Arr);
+                this.basedMoveExtent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), actor.getCollisionHeight());
+                this.basedMoveQuery.sourceActor = actor;
+                this.basedMoveQuery.sourceIsPlayer = !!(actor as any).isPlayer;
+                this.basedMoveQuery.sourceProfile = actor.getCollisionProfile();
+                this.basedMoveQuery.sourceCollider = actor.getCollider();
+                this.basedMoveQuery.sourceBody = actor.getRigidbody();
+                try { physics.moveActor(this.basedMoveQuery, actor, childRotation); }
+                finally {
+                    this.basedMoveQuery.sourceActor = null;
+                    this.basedMoveQuery.sourceProfile = null;
+                    this.basedMoveQuery.sourceCollider = null;
+                    this.basedMoveQuery.sourceBody = null;
+                }
+            }
+            this.basedMoveLocation.fromArray(actor.getUnrealScriptProperty("Location") as Vector3Arr);
+            this.basedMoveExtent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), actor.getCollisionHeight());
+            if (physics.isBlockedBy(actor, parent, vm) && pointPrimitive(parent.getCollisionPrimitive(), this.basedMoveLocation, this.basedMoveExtent) && script.call("EncroachingOn", [actor])) return false;
+            if (actor.getBaseActor() === parent) actor.getComponent<TransformComponent>("transform").updateBaseTransform(parent.getWorldPosition(tmpBasePosition), parent.getWorldQuaternion(tmpBaseQuaternion));
+        }
+        return true;
+    }
+
+    public rollbackBasedActors(delta: Vector3Arr): void {
+        const parent = this.getParent(), physics = this.renderManager.getPhysicsManager();
+
+        // ULevel::MoveActor 0x1058c2de..0x1058c36c reverses translation with test=true, preserving child rotation.
+        for (const entry of this.basedActors) {
+            const actor = entry as BaseActor;
+
+            if (actor.scriptBase) continue;
+            this.basedMoveLocation.fromArray(actor.getUnrealScriptProperty("Location") as Vector3Arr);
+            this.basedMoveDelta.set(-delta[0], -delta[1], -delta[2]);
+            this.basedMoveExtent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), actor.getCollisionHeight());
+            this.basedMoveQuery.sourceActor = actor;
+            this.basedMoveQuery.sourceIsPlayer = !!(actor as any).isPlayer;
+            this.basedMoveQuery.sourceProfile = actor.getCollisionProfile();
+            this.basedMoveQuery.sourceCollider = actor.getCollider();
+            this.basedMoveQuery.sourceBody = actor.getRigidbody();
+            try { physics.moveActor(this.basedMoveQuery, actor, actor.getUnrealScriptProperty("Rotation") as Vector3Arr, true); }
+            finally {
+                this.basedMoveQuery.sourceActor = null;
+                this.basedMoveQuery.sourceProfile = null;
+                this.basedMoveQuery.sourceCollider = null;
+                this.basedMoveQuery.sourceBody = null;
+            }
+            if (actor.getBaseActor() === parent) actor.getComponent<TransformComponent>("transform").updateBaseTransform(parent.getWorldPosition(tmpBasePosition), parent.getWorldQuaternion(tmpBaseQuaternion));
+        }
     }
 
     public updateRelativeRotation(): void {

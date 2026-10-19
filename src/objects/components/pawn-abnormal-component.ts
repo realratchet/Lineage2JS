@@ -1,9 +1,9 @@
 import type { DecodeLibrary } from "@l2js/engine";
 import type { Material, Mesh } from "three";
-import { GameObject, ObjectComponent } from "../../game/components";
+import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, GameObject, ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
-import type AnimationComponent from "./animation-component";
+import { MESHES_CHANGED_EVENT, type default as AnimationComponent } from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
 
@@ -33,6 +33,14 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
         super();
 
         this.renderManager = renderManager;
+    }
+
+    public onEvent(type: string): ComponentEventResult_T<void> {
+        if (type !== MESHES_CHANGED_EVENT || !this.npcSkins.length) return COMPONENT_EVENT_NOT_HANDLED;
+
+        this.restoreNpcSkins();
+        void this.setAbnormalState(this.abnormalState);
+        return COMPONENT_EVENT_NOT_HANDLED;
     }
 
     public async setAbnormalState(abnormalState: number): Promise<void> {

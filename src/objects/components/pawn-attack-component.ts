@@ -153,15 +153,14 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public onDetach(): void {
-        for (const effect of this.transientEffects)
-            if (effect.parent) this.renderManager.removeTransientEffect(effect);
-        this.transientEffects.length = 0;
-        this.transientSkillEffects.clear();
-        for (const effect of this.attackEffects)
-            if (effect.parent) this.renderManager.removeTransientEffect(effect);
-
-        this.skillEffects.clear();
-        this.attackEffects.length = 0;
+        this.detachSkillVisuals();
+        for (const [visual, effects] of [[this.transientSkillEffects, this.transientEffects], [this.skillEffects, this.attackEffects]] as const) {
+            if (this.renderManager.isRetainingSkillVisual(visual)) continue;
+            for (const effect of effects)
+                if (effect.parent) this.renderManager.removeTransientEffect(effect);
+            effects.length = 0;
+            visual.clear();
+        }
         this.bowProjectile = null;
         this.target = null;
         this.requestedTarget = null;
@@ -179,6 +178,23 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.pendingPreShot = false;
         this.pendingShot = null;
         this.isActive = false;
+    }
+
+    public detachSkillVisuals(): void {
+        const caster = this.getParent();
+
+        if (this.bowProjectile?.parent) this.renderManager.removeTransientEffect(this.bowProjectile);
+        this.bowProjectile = null;
+
+        for (const [visual, effects] of [[this.skillEffects, this.attackEffects], [this.transientSkillEffects, this.transientEffects]] as const) {
+            if (this.renderManager.isRetainingSkillVisual(visual)) continue;
+            visual.detachCaster(caster);
+            if (!visual.hasActiveEffects() && !effects.some(effect => (effect as Object3D & IObject).findComponent("nProjectile"))) continue;
+
+            this.renderManager.retainSkillVisual(visual, effects, caster);
+            for (const effect of effects)
+                if ((visual.ownsProjectile(effect as any) || (effect as Object3D & IObject).findComponent("nProjectile")) && (effect as any).scriptOwner === caster) caster.loseScriptChild(effect);
+        }
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<void> {
@@ -683,7 +699,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
                 const target = properties.get("TargetActor") as BaseActor;
 
                 // Engine.dll ANProjectile::processHitWall 0x78d5b0: physical impact sounds/light are deferred until arrival.
-                if (!hitActor || impactActor !== target || param?.isMiss) return false;
+                if (!properties.get("Owner") || !hitActor || impactActor !== target || param?.isMiss) return false;
 
                 this.actionAttack(target, param);
                 // APawn::AttackedNotify 0x105ee8c5..0x105eeed1; physical BowAttackProcess uses ActionID 2.

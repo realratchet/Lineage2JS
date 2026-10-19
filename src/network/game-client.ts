@@ -227,8 +227,8 @@ export class GameClient {
         this.send(this.write(GamePackets.GameClientPacket_T.MoveBackwardToLocation).d(Math.round(target.x)).d(Math.round(target.y)).d(Math.round(target.z)).d(Math.round(origin.x)).d(Math.round(origin.y)).d(Math.round(origin.z)).d(1));
     }
 
-    public validatePosition(position: GamePackets.Location_T, heading: number) {
-        this.send(this.write(GamePackets.GameClientPacket_T.ValidatePosition).d(Math.round(position.x)).d(Math.round(position.y)).d(Math.round(position.z)).d(heading).d(0));
+    public validatePosition(position: GamePackets.Location_T, heading: number, vehicleId: number = 0) {
+        this.send(this.write(GamePackets.GameClientPacket_T.ValidatePosition).d(Math.trunc(position.x)).d(Math.trunc(position.y)).d(Math.trunc(position.z)).d(heading).d(vehicleId));
     }
 
     public cannotMoveAnymore(position: GamePackets.Location_T, heading: number) {

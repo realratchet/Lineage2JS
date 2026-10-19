@@ -286,6 +286,7 @@ export class BaseActor extends GameObject implements ICollidable {
         if (this.isPendingDelete) return;
 
         this.isPendingDelete = true;
+        this.renderManager.replaceRetainedSkillTargets(this, null);
         for (const movement of this.renderManager.getPhysicsManager().getPhysicsComponents<PawnMovementComponent>("pawnMovement"))
             movement.replaceTarget(this, null);
         for (const projectile of this.renderManager.getPhysicsManager().getPhysicsComponents<NProjectileComponent>("nProjectile"))
@@ -350,6 +351,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public isLocomoting(): boolean { return this.movementComponent.isLocomoting(); }
     public isWalkingMovement(): boolean { return this.movementComponent.isWalkingMovement(); }
     public isSwimmingMovement(): boolean { return this.movementComponent.isSwimmingMovement(); }
+    public isFlyingMovement(): boolean { return this.movementComponent.isFlyingMovement(); }
     public getSpeed(): number { return this.movementComponent.getSpeed(); }
     public isUnderwaterMovement(): boolean { return this.movementComponent.isUnderwaterMovement(); }
     public setFlying(isFlying: boolean): void { this.movementComponent.setFlying(isFlying); }
@@ -362,7 +364,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public resetRotationYaw(yaw: number): void { this.movementComponent.resetRotationYaw(yaw); }
     public getRotationYaw(): number { return this.movementComponent.getRotationYaw(); }
     public setCollisionSize(collisionRadius: number, collisionHeight: number): void { this.movementComponent.setCollisionSize(collisionRadius, collisionHeight); }
-    public l2Teleport(position: Vector3): void { this.movementComponent.l2Teleport(position); }
+    public l2Teleport(position: Vector3, base: ICollidable = null): void { this.movementComponent.l2Teleport(position, base); }
     public teleportTo(position: Vector3, adjustToFloor: boolean = false): void { this.movementComponent.teleportTo(position, adjustToFloor); }
     public adjustLocation(position: Vector3): void { this.movementComponent.adjustLocation(position); }
 

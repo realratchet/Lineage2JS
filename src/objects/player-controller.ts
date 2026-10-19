@@ -7,6 +7,7 @@ export class PlayerController implements ScriptHost_T {
     protected readonly scriptVM: UnScriptVM;
 
     public constructor(library: DecodeLibrary) {
+        (this as any).isPlayerController = true;
         this.scriptClassId = Object.keys(library.scriptClasses).find(id => id.toLowerCase() === "engine.lineageplayercontroller");
 
         if (!this.scriptClassId) throw new Error("UnrealScript class 'Engine.LineagePlayerController' is missing.");

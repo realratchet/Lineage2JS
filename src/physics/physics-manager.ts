@@ -19,7 +19,7 @@ import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
 import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
-import type { ScriptHost_T, ScriptValue_T } from "../ue-script/vm";
+import type { default as UnScriptVM, ScriptHost_T, ScriptValue_T } from "../ue-script/vm";
 import type RenderManager from "../rendering/render-manager";
 import type TransformComponent from "../objects/components/transform-component";
 import Rotator from "../utils/rotator";
@@ -219,35 +219,80 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (!sector) throw new Error(`Pawn '${pawn.name}' has an unregistered LevelInfo.`);
         this.collisionWorld.setPawnLevel(pawn, sector.physicsVolumeActors);
     }
-    public moveActor(query: CollisionQuery_T, pawn: BaseActor = null): CheckResult_T | null {
+    public moveActor(query: CollisionQuery_T, pawn: BaseActor = null, rotation: Vector3Arr = null, test: boolean = false): CheckResult_T | null {
         if (!pawn) return this.collisionWorld.moveActor(query);
 
-        // shortcut: ordinary pawn translation; port native rotation/attachment/encroacher branches before routing them here.
+        const hasMovement = query.delta.lengthSq() !== 0;
+        const oldRotation = rotation ? pawn.getUnrealScriptProperty("Rotation") as Vector3Arr : null;
+        if (!hasMovement && (!rotation || rotation.every((value, index) => value === oldRotation[index]))) return null;
+
+        // shortcut: ordinary cylinder pawn movement, extend before mesh or encroacher translation.
+        const transform = pawn.getComponent<TransformComponent>("transform"), hasBasedActors = !test && transform.getBasedActors().size > 0;
+        const oldLocation = hasBasedActors ? pawn.getUnrealScriptProperty("Location") as Vector3Arr : null;
+        const previousRotation = hasBasedActors ? oldRotation || pawn.getUnrealScriptProperty("Rotation") as Vector3Arr : null;
+        if (hasBasedActors) transform.checkBasedMovement();
         const contacts: ActorLineHit_T[] = [];
-        const notify = query.delta.lengthSq() !== 0 && (query.sourceProfile.collideActors || query.sourceProfile.collideWorld);
+        const notify = !test && hasMovement && (query.sourceProfile.collideActors || query.sourceProfile.collideWorld);
         const location = query.location, ignoreBases = query.ignoreBases;
         let hit = this.collisionWorld.moveActor(query, notify ? contacts : null);
         if (hit) hit = { ...hit, location: hit.location.clone(), normal: hit.normal.clone() };
         pawn.setUnrealScriptProperty("Location", location.toArray());
+        if (rotation) this.setActorRotation(pawn, rotation);
+        if (hasBasedActors && !transform.moveBasedActors(oldLocation, previousRotation)) {
+            const delta = (pawn.getUnrealScriptProperty("Location") as Vector3Arr).map((value, index) => Math.fround(value - oldLocation[index])) as Vector3Arr;
+            pawn.setUnrealScriptProperty("Location", oldLocation);
+            this.setActorRotation(pawn, previousRotation);
+            transform.rollbackBasedActors(delta);
+            location.fromArray(pawn.getUnrealScriptProperty("Location") as Vector3Arr);
+            return hit;
+        }
+        if (!test) {
+            if (hasMovement || hasBasedActors) transform.updateRelativeLocation();
+            if (rotation && (!hasMovement && !hasBasedActors || !pawn.getUnrealScriptProperty("bOnlyDrawIfAttached"))) transform.updateRelativeRotation();
+        }
         if (notify) {
             this.collisionWorld.notifyMove(pawn, contacts, hit, ignoreBases);
             this.setPawnZone(pawn);
         }
+        if (test) this.setPawnZone(pawn, true);
         location.fromArray(pawn.getUnrealScriptProperty("Location") as number[]);
         return hit;
     }
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.singleLineCheck(query); }
-    public rotateActor(pawn: BaseActor | CollidingMesh, rotation: Vector3Arr): void {
+    public isBlockedBy(source: ScriptHost_T, target: ScriptHost_T, vm: UnScriptVM): boolean { return this.collisionWorld.isBlockedBy(source, target, vm); }
+    protected setActorRotation(pawn: BaseActor | CollidingMesh, rotation: Vector3Arr): void {
+        pawn.setUnrealScriptProperty("Rotation", rotation);
+        tmpActorRotation.set(rotation[0], rotation[1], rotation[2]).toQuaternion(pawn.quaternion);
+        const movement = pawn.findComponent<PawnMovementComponent>("pawnMovement");
+        if (movement) {
+            movement.syncRotationYaw(rotation[1]);
+            pawn.rotateZ(-Math.PI / 2);
+            pawn.updateMatrixWorld(true);
+            movement.syncCollisionLocation();
+        } else (pawn as CollidingMesh).syncCollisionTransform();
+    }
+    public rotateActor(pawn: BaseActor | CollidingMesh, rotation: Vector3Arr): boolean {
         const physics = pawn.getUnrealScriptProperty("Physics"), profile = pawn.getCollisionProfile();
 
         if (profile.collideActors && (physics === EPhysics_T.PHYS_Karma || physics === EPhysics_T.PHYS_KarmaRagDoll)) throw new Error(`MoveActor rotation of a Karma pawn is not implemented for '${pawn.name}'.`);
+        const transform = pawn.getComponent<TransformComponent>("transform");
+        transform.checkBasedMovement();
+        const oldRotation = pawn.getUnrealScriptProperty("Rotation") as Vector3Arr, location = pawn.getUnrealScriptProperty("Location") as Vector3Arr;
 
         // ULevel::MoveActor 0x1058baaf..0x1058c5b9: zero-delta ordinary mesh pawn.
         if (profile.collideActors) this.collisionWorld.removePawnCollision(pawn);
-        pawn.setUnrealScriptProperty("Rotation", rotation);
-        tmpActorRotation.set(rotation[0], rotation[1], rotation[2]).toQuaternion(pawn.quaternion);
-        (pawn as CollidingMesh).syncCollisionTransform();
-        pawn.getComponent<TransformComponent>("transform").updateRelativeRotation();
+        this.setActorRotation(pawn, rotation);
+        if (transform.getBasedActors().size > 0 && !transform.moveBasedActors(location, oldRotation)) {
+            this.setActorRotation(pawn, oldRotation);
+            if (profile.collideActors) this.collisionWorld.updatePawnCollision(pawn);
+            transform.rollbackBasedActors([0, 0, 0]);
+            if (this.collisionWorld.usesRapier()) this.physicsWorld.queryPipeline.update(this.physicsWorld.islands, this.physicsWorld.bodies, this.physicsWorld.colliders);
+            return false;
+        }
+        if (!pawn.getUnrealScriptProperty("bOnlyDrawIfAttached")) {
+            transform.updateRelativeLocation();
+            transform.updateRelativeRotation();
+        }
         if (profile.collideActors) this.collisionWorld.updatePawnCollision(pawn);
         if (this.collisionWorld.usesRapier()) this.physicsWorld.queryPipeline.update(this.physicsWorld.islands, this.physicsWorld.bodies, this.physicsWorld.colliders);
         if (profile.collideActors || profile.collideWorld) {
@@ -255,6 +300,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             this.setPawnZone(pawn);
         }
         this.manGame.getComponent("render").needsUpdate = true;
+        return true;
     }
     public findSpot(extent: Vector3, location: Vector3): boolean { return this.collisionWorld.findSpot(extent, location); }
     public farMoveActor(pawn: BaseActor | CollidingMesh, destination: Vector3, test: boolean = false, noCheck: boolean = false, attached: boolean = false): boolean {

@@ -67,6 +67,8 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
     public update(currentTime: number): void {
         this.lastTime = currentTime;
+        for (const actor of this.projectileCasts.keys())
+            if (!this.host.isAlive(actor)) this.projectileCasts.delete(actor);
         this.placement.update();
         for (let i = this.firecrackers.length - 1; i >= 0; i--)
             if (!this.firecrackers[i].update(currentTime)) this.firecrackers.splice(i, 1);
@@ -83,11 +85,32 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
             if (pending.dueTime > currentTime) continue;
             this.pendingSounds.splice(i, 1);
-            this.host.playSkillSound(pending.pawn, pending.sound, undefined, pending.assets);
+            if (this.host.isAlive(pending.pawn)) this.host.playSkillSound(pending.pawn, pending.sound, undefined, pending.assets);
         }
     }
 
     public hasPending(): boolean { return this.pendingEffects.length > 0 || this.pendingSounds.length > 0; }
+
+    public hasActiveEffects(): boolean { return this.projectileCasts.size > 0 || this.hasPending() || this.placement.hasPending(); }
+    public ownsProjectile(actor: SkillActor_T): boolean { return this.projectileCasts.has(actor); }
+
+    public detachCaster(caster: SkillActor_T): void {
+        for (const actor of this.preparedProjectiles) {
+            this.projectileCasts.delete(actor);
+            if (this.host.isAlive(actor)) this.host.removeEffect(actor);
+        }
+        for (const actor of this.castingEffects)
+            if (!this.projectileCasts.has(actor) && this.host.isAlive(actor)) this.host.removeEffect(actor);
+        this.preparedProjectiles.length = 0;
+        this.castingEffects.length = 0;
+        this.placement.cancelCastingLights();
+        for (let i = this.pendingEffects.length - 1; i >= 0; i--)
+            if (this.pendingEffects[i].phase !== "explosion") this.pendingEffects.splice(i, 1);
+        for (let i = this.pendingSounds.length - 1; i >= 0; i--)
+            if (this.pendingSounds[i].pawn === caster) this.pendingSounds.splice(i, 1);
+        for (const action of this.firecrackers) action.clear();
+        this.firecrackers.length = 0;
+    }
 
     public finish(): void {
         this.pendingEffects.length = 0;
@@ -456,7 +479,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             // Engine.dll 0x795e94..0x795ebe / 0x796a11 / 0x796ca8.
             if (phase === "explosion" && (!target?.isActor || !frame.lastEffect)) return;
             for (const sound of skill.sounds)
-                if (sound.phase === phase) this.host.playSkillSound(caster, sound, phase === "explosion" ? target : caster, skill.assets);
+                if (sound.phase === phase) this.host.playSkillSound(phase === "explosion" ? target : caster, sound, undefined, skill.assets);
             return;
         }
         // Engine.dll 0x7b0e26..0x7b0e33.

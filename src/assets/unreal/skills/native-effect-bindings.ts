@@ -79,6 +79,10 @@ nativeEffectBindings.set("s_npc_burn", { effects: ["LineageEffect.m_u019_a", "Li
 for (const name of ["s_npc_sleep", "s_self_range_sleep_boss_a", "s_sleep_boss_a_7"])
     nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u018_a", "LineageEffect.m_u018_b"], soundPhases: ["casting", "shot"] });
 
+// Engine.dll IDs4660/4661: Init0x7a131a, PreShot0x7a3de7, Shot0x7b0749, Explosion0x791ade.
+for (const name of ["s_sleep_4660", "s_sleep_4661"])
+    nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u003_a", "LineageEffect.m_u018_b"], soundPhases: ["casting", "shot"] });
+
 // Engine.dll Init 0x79fd84; Shot 0x7af786 -> 0x7af84c -> 0x7ac0c6.
 for (const name of ["s_npc_hold", "s_range_hold_boss_a"])
     nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u013_a", "LineageEffect.m_u013_c"], soundPhases: ["casting", "shot"] });
@@ -237,7 +241,7 @@ for (const name of ["s_nurka_fire", "s_npc_blaze", "s_npc_prominence", "s_npc_bl
     nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u006_a", "LineageEffect.m_u006_b", "LineageEffect.m_u006_c", "LineageEffect.m_u006_e"], soundPhases: ["casting", "shot", "explosion"], finalShotOnly: true, pending: "retail visual/timing, no-hit-actor and collision verification; individual suffix variants" });
 
 // Engine.dll Init 0x7a02f2; Shot 0x7ac80f; Explosion 0x78f3fe -> 0x791295.
-for (const name of ["s_npc_flame_strike", "s_npc_flame_strike_for_slow"])
+for (const name of ["s_npc_flame_strike", "s_npc_flame_strike_for_slow", "s_gludio_flame", "s_aden_flame"])
     nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u006_a", "LineageEffect.m_u006_b", "LineageEffect.m_u006_c", "LineageEffect.m_u006_e", "LineageEffect.m_u006_d"], effectGroup: "flameStrike", soundPhases: ["casting", "shot", "explosion"], finalShotOnly: true, pending: "retail visual/timing, secondary targets, no-hit-actor and collision verification; individual NPC variants" });
 
 // Engine.dll Init 0x7a131a; Shot 0x7a99b2..0x7a9bc5; PreShot returns at 0x7a3de7.
@@ -309,13 +313,15 @@ nativeEffectBindings.set("s_npc_double_wind_of_hand", { effects: ["LineageEffect
 nativeEffectBindings.set("s_npc_beam_curve", { effects: ["LineageEffect.e_u034_a", "LineageEffect.e_u034_b", "LineageEffect.e_u034_c"], soundPhases: ["shot", "explosion"], pending: "retail visual/timing and no-hit-actor parity" });
 
 // Engine.dll Init 0x79e65e selector 2 -> 0x7a1220; Shot 0x7a95de selector 7 -> 0x7acbd0.
-nativeEffectBindings.set("s_npc_beam_straight", { effects: ["LineageEffect.s_u010_a", "LineageEffect.e_u034_a", "LineageEffect.e_u034_b", "LineageEffect.e_u034_c"], soundPhases: ["casting", "shot", "explosion"], pending: "retail visual/timing and no-hit-actor parity" });
+for (const name of ["s_npc_beam_straight", "s_npc_straight_beam_cannon_slow"])
+    nativeEffectBindings.set(name, { effects: ["LineageEffect.s_u010_a", "LineageEffect.e_u034_a", "LineageEffect.e_u034_b", "LineageEffect.e_u034_c"], soundPhases: ["casting", "shot", "explosion"], pending: "retail visual/timing and no-hit-actor parity" });
 
 // Engine.dll Shot 0x7abd55 table index 5 -> 0x7acbd0; Explosion 0x790d19.
 nativeEffectBindings.set("s_npc_beam_straight_magic_only", { effects: ["LineageEffect.e_u034_a", "LineageEffect.e_u034_b", "LineageEffect.e_u034_c"], soundPhases: ["shot", "explosion"], pending: "retail visual/timing and no-hit-actor parity" });
 
 // Engine.dll Shot 0x7abd55 table index 2 -> 0x7acd4d; Explosion 0x790d19.
-nativeEffectBindings.set("s_npc_beam_curve_magic_only", { effects: ["LineageEffect.e_u034_a", "LineageEffect.e_u034_b", "LineageEffect.e_u034_c"], effectGroup: "npcBeamCurveMagicOnly", soundPhases: ["shot", "explosion"], pending: "retail visual/timing and no-hit-actor parity" });
+for (const name of ["s_npc_beam_curve_magic_only", "s_npc_curve_beam_cannon_slow"])
+    nativeEffectBindings.set(name, { effects: ["LineageEffect.e_u034_a", "LineageEffect.e_u034_b", "LineageEffect.e_u034_c"], effectGroup: "npcBeamCurveMagicOnly", soundPhases: ["shot", "explosion"], pending: "retail visual/timing and no-hit-actor parity" });
 
 // Engine.dll Init selector 0x7a2163 -> 0x79f76e; Shot selector 0x7b14ca -> 0x7aef96.
 nativeEffectBindings.set("s_npc_life_chant", { effects: ["LineageEffect.m_u024_a", "LineageEffect.m_u024_b", "LineageEffect.m_u024_c"], soundPhases: ["casting", "shot"], pending: "retail visual/timing, multi-target and individual NPC verification" });
