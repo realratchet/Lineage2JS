@@ -6,6 +6,7 @@ import { isSkinImageUrl, type SkinTextures } from "./skin-textures";
 type UIImage_T = { frames: ImageBitmap[], frameTime: number };
 type Glyph_T = { u: number, v: number, w: number, h: number };
 type BitmapFont_T = { texture: string, glyphs: Map<number, Glyph_T>, lineHeight: number };
+type RasterFont_T = { atlas: HTMLCanvasElement, glyphs: Map<number, Glyph_T> };
 
 export enum FontType_T { SMALL, LARGE } // Engine.dll FontType: 0 SmallFont-r (all regular UI text), 1 LargeFont-r (nameplates).
 
@@ -47,6 +48,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     protected readonly pending = new Map<string, Promise<void>>();
     protected readonly fonts = new Map<FontType_T, BitmapFont_T>();
     protected readonly tinted = new Map<string, HTMLCanvasElement>();
+    protected readonly cacheRasterFonts = new Map<string, RasterFont_T>();
     protected originX = 0;
     protected originY = 0;
     public scale = 1;
@@ -67,6 +69,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         const ratio = window.devicePixelRatio || 1;
 
         this.scale = ratio * this.uiScale;
+        this.cacheRasterFonts.clear();
         this.cssScale = this.uiScale;
         this.width = Math.floor(width / this.cssScale);
         this.height = Math.floor(height / this.cssScale);
@@ -445,14 +448,66 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         if (line) drawLine();
     }
 
+    protected getRasterFont(font: BitmapFont_T, color: number, scale: number): RasterFont_T {
+        const key = `${font.texture}:${color & 0xffffff}:${scale}`;
+        const cached = this.cacheRasterFonts.get(key);
+
+        if (cached) return cached;
+
+        const source = this.getTintedImage(font.texture, color);
+        const glyphs = new Map<number, Glyph_T>();
+        const arrGlyphs = [...font.glyphs];
+        const cellW = Math.max(...arrGlyphs.map(([, glyph]) => Math.round(glyph.w * scale))) + 2;
+        const cellH = Math.max(...arrGlyphs.map(([, glyph]) => Math.round(glyph.h * scale))) + 2;
+        const atlas = document.createElement("canvas");
+
+        atlas.width = cellW * 32;
+        atlas.height = cellH * Math.ceil(arrGlyphs.length / 32);
+
+        const context = atlas.getContext("2d");
+
+        context.imageSmoothingQuality = "high";
+        arrGlyphs.forEach(([code, glyph], index) => {
+            const u = index % 32 * cellW + 1, v = Math.floor(index / 32) * cellH + 1;
+            const w = Math.max(1, Math.round(glyph.w * scale)), h = Math.max(1, Math.round(glyph.h * scale));
+
+            context.drawImage(source, glyph.u, glyph.v, glyph.w, glyph.h, u, v, w, h);
+            glyphs.set(code, { u, v, w, h });
+        });
+
+        if (scale < 1) {
+            const pixels = context.getImageData(0, 0, atlas.width, atlas.height);
+
+            for (let i = 3; i < pixels.data.length; i += 4)
+                pixels.data[i] = 255 * Math.pow(pixels.data[i] / 255, 0.75);
+
+            context.putImageData(pixels, 0, 0);
+        }
+
+        const raster = { atlas, glyphs };
+
+        this.cacheRasterFonts.set(key, raster);
+        return raster;
+    }
+
     public renderText(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: FontType_T = FontType_T.SMALL) { // Engine.dll DrawNormalText 0x10527880: one 1:1 quad per glyph, pen advances by the glyph width.
         const font = this.fonts.get(type);
-        const atlas = this.getTintedImage(font.texture, color);
-        const startX = Math.trunc(x);
-        let penX = startX, penY = Math.trunc(y);
+        const transform = this.uiScale < 1 ? context.getTransform() : null;
+        const raster = transform && Math.abs(transform.a - this.scale) < 1e-6 && transform.a === transform.d && !transform.b && !transform.c ? this.getRasterFont(font, color, this.scale) : null;
+        const atlas = raster ? raster.atlas : this.getTintedImage(font.texture, color);
+        const startX = Math.trunc(x), startY = Math.trunc(y);
+        const originX = raster ? Math.round(startX * transform.a + transform.e) : 0;
+        const originY = raster ? Math.round(startY * transform.d + transform.f) : 0;
+        let penX = startX, penY = startY;
 
-        context.imageSmoothingEnabled = true;
+        if (context.canvas.style.imageRendering !== "auto") context.canvas.style.imageRendering = "auto";
+        if (raster && context.canvas !== this.element && context.canvas.style.width) {
+            context.canvas.style.width = `${context.canvas.width / this.scale}px`;
+            context.canvas.style.height = `${context.canvas.height / this.scale}px`;
+        }
+        context.imageSmoothingEnabled = !raster;
         context.globalAlpha = ((color >>> 24) & 0xff) / 255;
+        if (raster) context.resetTransform();
 
         for (let i = 0; i < text.length; i++) {
             const code = text.charCodeAt(i);
@@ -469,11 +524,19 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
 
             if (!glyph) continue;
 
-            context.drawImage(atlas, glyph.u, glyph.v, glyph.w, glyph.h, penX, penY, glyph.w, glyph.h);
+            if (raster) {
+                const scaled = raster.glyphs.get(code);
+
+                context.drawImage(atlas, scaled.u, scaled.v, scaled.w, scaled.h, originX + Math.round((penX - startX) * transform.a), originY + Math.round((penY - startY) * transform.d), scaled.w, scaled.h);
+            } else context.drawImage(atlas, glyph.u, glyph.v, glyph.w, glyph.h, penX, penY, glyph.w, glyph.h);
             penX += glyph.w;
         }
 
         context.globalAlpha = 1;
+        if (raster) {
+            context.setTransform(transform);
+            context.imageSmoothingEnabled = true;
+        }
     }
 
     public drawText(x: number, y: number, color: number, text: string, type: FontType_T = FontType_T.SMALL) {
