@@ -4,7 +4,7 @@ import nativeEffectDispatch from "./native-effect-dispatch";
 import nativeEffectHandlers from "./native-effect-handlers";
 import nativeEffectRecipes from "./native-effect-recipes";
 
-export type NativeEffectBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, associatedActors?: boolean, pending?: string, firecracker?: 1 | 2 | 3, echoCrystal?: boolean };
+export type NativeEffectBinding_T = { effects: string[], effectGroup?: string, soundPhases: NpcSkillEffectPhase_T[], finalShotOnly?: boolean, rejectTransient?: boolean, transientSound?: boolean, associatedActors?: boolean, pending?: string, firecracker?: 1 | 2 | 3, echoCrystal?: boolean, transient?: NativeEffectBinding_T };
 
 const nativeEffectBindings = new Map<string, NativeEffectBinding_T>([
     // Engine.dll OnReceiveMagicSkillUse 0x75086c; Init 0x7a16f9; Shot 0x7b0d96.
@@ -29,6 +29,15 @@ for (const [name, type] of [["e_fairy_firecracker", 1], ["e_firecracker", 2], ["
 
 // Engine.dll SpawnNTransientEffect 0x104c9063/0x104c9e32; sound duration0x104ca91e.
 nativeEffectBindings.set("e_echo_crystal", { effects: [], soundPhases: ["casting"], echoCrystal: true });
+
+// Engine.dll SpawnNTransientEffect ID4353 ->0x104ca274; normal phases remain empty.
+nativeEffectBindings.set("s_bless_shield_4353", { effects: [], soundPhases: [], transient: { effects: ["LineageEffect.m_u044_b"], effectGroup: "blessShieldTransient", soundPhases: ["casting"] } });
+
+// Engine.dll SpawnNTransientEffect ID4135 ->0x104c9fec; normal phases remain empty.
+nativeEffectBindings.set("s_npc_baium_heal", { effects: [], soundPhases: [], transient: { effects: ["LineageEffect.m_u001_a", "LineageEffect.m_u001_b"], effectGroup: "baiumHealTransient", soundPhases: ["casting"] } });
+
+// Engine.dll ID4398 ->0x104ca45c: NPC exclusion, SpawnSkillEffect mode1; edi remains0 at the sound gate0x104ca7fc.
+nativeEffectBindings.set("s_bless_shield_4398", { effects: [], soundPhases: [], transient: { effects: ["LineageEffect.m_u044_b"], effectGroup: "blessShieldNpcExcludedTransient", soundPhases: [], transientSound: false } });
 
 // Engine.dll Init 0x79f9ec; Shot 0x7ac0d5 requires AssociatedActor.Num(); primary target branch0x7ac1ab.
 for (const name of ["s_zaken_tel_pc", "s_zaken_range_tel_pc"])
@@ -184,7 +193,7 @@ for (const name of ["s_npc_twister", "s_twister_boss_a", "s_npc_twister_for_slow
 nativeEffectBindings.set("s_npc_twister_magic_only", { effects: ["LineageEffect.m_u026_a", "LineageEffect.m_u026_b", "LineageEffect.m_u026_c", "LineageEffect.m_u026_d"], soundPhases: ["casting", "shot", "explosion"], pending: "retail visual/timing, no-hit-actor, collision and individual NPC verification" });
 
 // Engine.dll Shot 0x7b0e38 skips PlaySkillSound at 0x7b0e33; Init/PreShot also return without effects or sound.
-nativeEffectBindings.set("s_antaras_fear", { effects: [], soundPhases: [], pending: "full retail parity" });
+nativeEffectBindings.set("s_antaras_fear", { effects: [], soundPhases: [], rejectTransient: true, pending: "full retail parity" });
 
 // Engine.dll APawn::SkillEffectShot 0x7a9bc8.
 nativeEffectBindings.set("s_antaras_jump", { effects: ["LineageEffect.e_u043_a"], soundPhases: ["shot"] });
@@ -243,6 +252,10 @@ for (const name of ["s_nurka_fire", "s_npc_blaze", "s_npc_prominence", "s_npc_bl
 // Engine.dll Init 0x7a02f2; Shot 0x7ac80f; Explosion 0x78f3fe -> 0x791295.
 for (const name of ["s_npc_flame_strike", "s_npc_flame_strike_for_slow", "s_gludio_flame", "s_aden_flame"])
     nativeEffectBindings.set(name, { effects: ["LineageEffect.m_u006_a", "LineageEffect.m_u006_b", "LineageEffect.m_u006_c", "LineageEffect.m_u006_e", "LineageEffect.m_u006_d"], effectGroup: "flameStrike", soundPhases: ["casting", "shot", "explosion"], finalShotOnly: true, pending: "retail visual/timing, secondary targets, no-hit-actor and collision verification; individual NPC variants" });
+
+// Engine.dll numeric dispatch: 4043=4026, 4133=1011, 4144=4063 in all four phases; their transient handlers reject.
+for (const [name, binding] of [["s_partisan_flame", nativeEffectBindings.get("s_gludio_flame")], ["s_angel_heal", nativeEffectRecipes.get("s_heal")], ["s_mimic_strong_attack", nativeEffectBindings.get("s_orphen_strike")]] as const)
+    nativeEffectBindings.set(name, { ...binding, transient: { effects: [], soundPhases: [], rejectTransient: true } });
 
 // Engine.dll Init 0x7a131a; Shot 0x7a99b2..0x7a9bc5; PreShot returns at 0x7a3de7.
 nativeEffectBindings.set("s_npc_corpse_burst6", { effects: ["LineageEffect.m_u003_a", "LineageEffect.m_u006_e", "LineageEffect.m_u006_d"], effectGroup: "corpseBurst", soundPhases: ["casting", "shot"], pending: "retail visual/timing, secondary targets, corpse targeting and individual suffix verification" });
@@ -334,31 +347,31 @@ nativeEffectBindings.set("s_clan_acumen_empower_berserker3", { effects: ["Lineag
 
 // Engine.dll Init 0x7a1309, Shot 0x7af772, PreShot 0x7a43ac and Explosion 0x7916c2 reach default returns.
 for (const name of ["s_clan_damage_shield3", "s_npc_weakness_strike8", "s_npc_hold_strike8", "s_npc_poison_strike8"])
-    nativeEffectBindings.set(name, { effects: [], soundPhases: [], pending: "native phases have no particles or sound; hit/status reactions and full retail parity unverified" });
+    nativeEffectBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true, pending: "native phases have no particles or sound; hit/status reactions and full retail parity unverified" });
 
 // Engine.dll Init selectors 0x7a2304..0x7a2306 -> 0x79c74b; PreShot 0x7a43ac, Shot 0x7b1680 and Explosion 0x7916c2 reach empty returns.
 for (const name of ["s_balakas_lava_skin", "s_balakas_trample", "s_balakas_trample_4682"])
-    nativeEffectBindings.set(name, { effects: [], soundPhases: [], pending: "native phases have no particles or sound; hit/buff/status visuals and full retail parity unverified" });
+    nativeEffectBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true, pending: "native phases have no particles or sound; hit/buff/status visuals and full retail parity unverified" });
 
 // Engine.dll Init 0x7a18a3/0x7a18ae; PreShot 0x7a43ac/0x7a4628; Shot 0x7af772/0x7b1680; Explosion 0x7918ca/0x7918d5, zero sound actor at 0x78ddd2/0x791afb.
 for (const name of ["s_power_shot_boss_a_1c_1", "s_stun_shot_boss_a_2b_1", "s_spear_attack_boss_a_2b_7", "s_spear_attack_boss_a_1b_4", "s_spear_attack_boss_a_1c_2"])
-    nativeEffectBindings.set(name, { effects: [], soundPhases: [], pending: "native phases have no particles or sound; full retail animation/timing and target reactions unverified" });
+    nativeEffectBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true, pending: "native phases have no particles or sound; full retail animation/timing and target reactions unverified" });
 
 // Engine.dll Init 0x7a1309/0x7a1314; PreShot 0x7a43ac; Shot 0x7af772 or selector9 ->0x7b1680 ->0x7b0e38; Explosion 0x7916c2/0x791afb.
 for (const name of ["s_npc_sonic_storm9", "s_npc_range_hit_down9", "s_npc_hex_shock9", "s_clan_berserker_might3", "s_npc_avoid_debuff9", "s_range_weakness9", "s_clan_berserker_haste2", "s_clan_acumen_shield3", "s_range_slow_strike3", "s_npc_hex_storm6", "s_clan_focus_acumen3", "s_npc_weakness_blaze_magic_only9"])
-    nativeEffectBindings.set(name, { effects: [], soundPhases: [], pending: "native phases have no particles or sound; hit/status reactions and full retail animation/timing unverified" });
+    nativeEffectBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true, pending: "native phases have no particles or sound; hit/status reactions and full retail animation/timing unverified" });
 
 // Engine.dll SpawnNTransientEffect 0x79a59f -> 0x79a7e1 skips success and sound; NActionStop 0x750773.
 for (const name of ["s_balakas_tail_stomp", "s_balakas_tail_stomp_4687", "s_quest_boss_big_body1", "s_quest_boss_dispel_big_body1", "s_super_haste"])
     nativeEffectBindings.set(name, { effects: [], soundPhases: [], rejectTransient: true });
 
 // Engine.dll Init 0x79eac7 ->0x79c74b; PreShot selector0x7a45dc=1; Shot0x7b14f5=31; Explosion0x791dcf=9 (sound actor remains null).
-nativeEffectBindings.set("s_soulless_mp_dot", { effects: [], soundPhases: [], pending: "zero-duration preview animation and retail packet timing; native phases have no particles or sound" });
+nativeEffectBindings.set("s_soulless_mp_dot", { effects: [], soundPhases: [], rejectTransient: true, pending: "zero-duration preview animation and retail packet timing; native phases have no particles or sound" });
 
 const collisionBindings = new Map<string, NativeEffectBinding_T>([
     // Engine.dll Init0x79f5c8 and Shot0x7b0749 share the Sleep recipe; exported dispatch separates the empty Hate branch.
     ["s_npc_hate", nativeEffectBindings.get("s_npc_sleep")],
-    ["e_none", { effects: [], soundPhases: [], pending: "zero-duration preview animation and retail packet timing; native phases have no particles or sound" }],
+    ["e_rejected_transient", { effects: [], soundPhases: [], rejectTransient: true, pending: "zero-duration preview animation and retail packet timing; native phases have no particles or sound" }],
     ["s_bow", nativeEffectBindings.get("s_npc_bow_attack")],
     ["s_boss_stun_shot", nativeEffectBindings.get("s_stun_shot_boss_a_2c_1")],
     // Engine.dll Init 0x7a1220, PreShot 0x7a3de7, Shot 0x7af576, Explosion 0x7918db.
@@ -396,7 +409,7 @@ for (const name of ["s_fake_death", "s_arcane_power", "s_soul_cry", "s_life_cubi
 nativeEffectBindings.set("s_fake_petrificiation", { effects: [], soundPhases: [], rejectTransient: true });
 
 // Engine.dll ID4620: Init0x79c74b, PreShot0x7a3de7, Shot0x7b0e38, Explosion0x791ade.
-nativeEffectBindings.set("s_paralysis_4620", { effects: [], soundPhases: [] });
+nativeEffectBindings.set("s_paralysis_4620", { effects: [], soundPhases: [], rejectTransient: true });
 
 export function getNativeEffectBinding(id: number): NativeEffectBinding_T {
     const name = nativeEffectIds.get(id), dispatch = nativeEffectDispatch.get(name);

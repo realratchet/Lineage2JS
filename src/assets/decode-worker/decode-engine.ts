@@ -1916,7 +1916,7 @@ export class DecodeEngine {
         const visualEffect = attack.visualEffect;
 
         const library = new DecodeLibrary();
-        const key = visualEffect.toLowerCase() === "none" ? JSON.stringify([id, attack.name]) : visualEffect.toLowerCase();
+        const key = visualEffect.toLowerCase() === "none" ? JSON.stringify([id, attack.name, attack.castStyle === 0]) : visualEffect.toLowerCase();
         const assets = await this.getStoredAssets("skill_visuals", key, settings, () => this.decodeSkillAssets(settings, { ...attack, sounds: [] }));
         const prepared = assets.npcSkillAttacks[0];
 

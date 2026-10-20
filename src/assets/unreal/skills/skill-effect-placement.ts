@@ -252,7 +252,7 @@ export class SkillEffectPlacement {
         if (effect && info.attach === "trail" && info.position === undefined) {
             const pivot = effect.scriptProperties.get("TrailerPrePivot");
             // Engine.dll SpawnSkillEffect 0x79841e..0x798443: location mode 1 negates scaled mesh Origin.Z; 0x7983de skips it for a null host.
-            if (!info.templatePivot) pivot[2] = -getPawnMeshHeight(this.host, effectHost);
+            if (!info.templatePivot) pivot[2] = info.trailerPrePivot === "casterFeet" ? -this.host.getCollisionHeight(caster) : -getPawnMeshHeight(this.host, effectHost);
             tmpPosition[2] += this.host.getCollisionHeight(effectHost);
             if (effect.scriptProperties.get("bTrailerPrePivot")) FVector.addElements(tmpPosition, pivot, tmpPosition);
         } else if (info.position === "center") tmpPosition[2] += this.host.getCollisionHeight(effectHost);
@@ -343,6 +343,7 @@ export class SkillEffectPlacement {
         if (info.scale === "cancelCasterRadius") scale *= 9 / radius;
         // Engine.dll Shot 0x7a8ed7..0x7a8ee9: target radius / 9, without the casting radius threshold.
         if (info.scale === "targetRadius") scale = this.host.getCollisionRadius(target) / 9;
+        if (info.scale === "casterCollisionRadius") scale = radius / 9;
         const delay = info.hitDelay === undefined && info.hitDelayScale === undefined ? info.delay || 0 : Math.max(0, skill.hitTime * (info.hitDelayScale === undefined ? 1 : info.hitDelayScale) + (info.hitDelay || 0));
         this.host.setParticleScale(effect, scale);
         this.host.setParticleDelay(effect, delay);

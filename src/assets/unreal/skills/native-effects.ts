@@ -47,6 +47,7 @@ import mU016 from "./native/m-u016";
 import mU006, { shotEffects as mU006Shot, explosionEffects as mU006Explosion } from "./native/m-u006";
 import sRecharge from "./native/s-recharge";
 import sHealQueenAnt from "./native/s-heal-queen-ant";
+import sNpcBaiumHeal from "./native/s-npc-baium-heal";
 import sGreaterHeal from "./native/s-greater-heal";
 import sTeleportPc from "./native/s-teleport-pc";
 import mU021 from "./native/m-u021";
@@ -54,7 +55,7 @@ import mU024 from "./native/m-u024";
 import mU034 from "./native/m-u034";
 import mU023 from "./native/m-u023";
 import mU030 from "./native/m-u030";
-import mU044 from "./native/m-u044";
+import mU044, { transientEffects as mU044Transient, npcExcludedTransientEffects as mU044NpcExcludedTransient } from "./native/m-u044";
 import mU038 from "./native/m-u038";
 import mU026 from "./native/m-u026";
 import eU802 from "./native/e-u802";
@@ -155,7 +156,7 @@ export type NativeSkillEffect_T = {
     useSkillSpeed?: boolean | "sourceOwner" | "sourceTarget" | "target";
     speedRate?: number;
     adjustParticleLife?: boolean | "shotTime";
-    scale?: number | "casterRadius" | "cancelCasterRadius" | "targetRadius";
+    scale?: number | "casterRadius" | "cancelCasterRadius" | "casterCollisionRadius" | "targetRadius";
     delay?: number;
     hitDelay?: number;
     hitDelayScale?: number;
@@ -164,7 +165,7 @@ export type NativeSkillEffect_T = {
     pawnLightOnly?: boolean;
     attackSounds?: boolean | "critical";
     viewShake?: { type?: "damage" | "upDown", duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, direction: "random" | "y" | "fixedY", rotationAmplitude: number, rotationVelocity: number, positionAmplitude: [number, number, number], strength: number, range: number, ownerRequired?: boolean, event?: { name: string, radius: number } };
-    trailerPrePivot?: "casterMeshOrigin" | { meshOriginScale: number, radiusOffset?: number };
+    trailerPrePivot?: "casterMeshOrigin" | "casterFeet" | { meshOriginScale: number, radiusOffset?: number };
     projectile?: { target: "caster" | "target", speed?: number, acceleration?: number, path?: [number, number, number][], interpolation?: number, hermite?: { duration: number, tangentScale: number, finalDirectionZ: number } };
 };
 
@@ -328,6 +329,16 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
 };
 
 const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> = {
+    baiumHealTransient: {
+        "lineageeffect.m_u001_a": sNpcBaiumHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_a"),
+        "lineageeffect.m_u001_b": sNpcBaiumHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_b")
+    },
+    blessShieldTransient: {
+        "lineageeffect.m_u044_b": mU044Transient
+    },
+    blessShieldNpcExcludedTransient: {
+        "lineageeffect.m_u044_b": mU044NpcExcludedTransient
+    },
     boomAttack: {
         "lineageeffect.e_u060_a": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.e_u060_a"),
         "lineageeffect.m_u006_d": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.m_u006_d"),

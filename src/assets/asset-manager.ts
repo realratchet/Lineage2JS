@@ -731,7 +731,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
     protected async getSkillVisual(record: NpcSkillAttack_T, urgent: boolean): Promise<NpcSkillAttack_T> {
         const { id, level } = record;
-        const key = record.visualEffect.toLowerCase() === "none" ? JSON.stringify([id, record.name]) : record.visualEffect.toLowerCase();
+        const key = record.visualEffect.toLowerCase() === "none" ? JSON.stringify([id, record.name, record.castStyle === 0]) : record.visualEffect.toLowerCase();
 
         if (urgent || !this.cacheSkillVisuals.has(key)) this.cacheSkillVisuals.set(key, this.decodeWorker.decodeSkill(this.loadSettings, id, level, urgent, Object.assign({}, record, { visual: null, assets: undefined })));
 

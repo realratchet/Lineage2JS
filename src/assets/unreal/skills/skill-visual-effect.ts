@@ -190,7 +190,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
                 if (!projectile) this.notify("explosion", currentTime + skill.flyingTime * 1000, cast);
                 for (const sound of skill.sounds)
-                    if (sound.phase === "casting") this.host.playSkillSound(cast.caster, sound, undefined, skill.assets);
+                    if (sound.phase === "casting" && skill.visual.transientSound !== false) this.host.playSkillSound(cast.caster, sound, undefined, skill.assets);
                 return true;
             }
             if (!skill.visual.transientRejected) throw new Error(`Native transient effect '${skill.name}' is not implemented.`);

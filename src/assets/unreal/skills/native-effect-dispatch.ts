@@ -11,7 +11,7 @@ const nativeEffectDispatch = new Map<string, string>([
     // Init / PreShot / Shot / Explosion: 0x79f5c8 / 0x7a3de7 / 0x7b0749 / 0x791ade.
     ["s_npc_hate", "s_npc_hate"],
     // Init / PreShot / Shot / Explosion: 0x79c74b / 0x7a3de7 / 0x7b0e38 / 0x791ade.
-    ["s_npc_hate_4663", "e_none"],
+    ["s_npc_hate_4663", "e_rejected_transient"],
 ]);
 
 export default nativeEffectDispatch;

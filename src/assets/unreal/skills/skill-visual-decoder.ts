@@ -3,7 +3,7 @@ import type { USkillVisualEffect, FSkillActionInfo, USkillActionLocateEffect } f
 import DecodeLibrary from "../decode-library";
 import type { NpcSkillAttack_T, NpcSkillAttachOn_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T } from "../un-pawn";
 import getNativeEffect from "./native-effects";
-import { getNativeEffectBinding } from "./native-effect-bindings";
+import { getNativeEffectBinding, type NativeEffectBinding_T } from "./native-effect-bindings";
 import createSkillVisualDefinition from "./skill-visual-definition";
 import UConfigLocalization from "../conf-files/un-conf-localization";
 
@@ -95,7 +95,8 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
 
         // Engine.dll SetMagicInfo 0x79b45e; MagicProcess 0x7b4f65 branches on the resolved object.
         const soulshot = visual ? null : await getSoulShotEffects(attack.id);
-        const native = visual ? null : soulshot ? { effects: [], soundPhases: ["casting"] as NpcSkillEffectPhase_T[] } : getNativeEffectBinding(attack.id);
+        const binding: NativeEffectBinding_T = visual ? null : soulshot ? { effects: [], soundPhases: ["casting"] as NpcSkillEffectPhase_T[] } : getNativeEffectBinding(attack.id);
+        const native = attack.castStyle === 0 && binding?.transient ? binding.transient : binding;
 
         if (!visual && !native)
             throw new Error(`Skill '${attack.id}:${attack.level}' (${attack.name}) has no resolved visual or implemented native recipe.`);

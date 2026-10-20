@@ -400,7 +400,7 @@ export class DecodeWorkerClient {
     }
 
     public decodeSkill(settings: LoadSettings_T, id: number, level: number, urgent: boolean = false, record: import("@l2js/engine/contracts/pawn").NpcSkillAttack_T = null): Promise<DecodeLibrary> {
-        const visual = record ? record.visualEffect.toLowerCase() === "none" ? JSON.stringify([id, record.name]) : record.visualEffect.toLowerCase() : `${id}:${level}`;
+        const visual = record ? record.visualEffect.toLowerCase() === "none" ? JSON.stringify([id, record.name, record.castStyle === 0]) : record.visualEffect.toLowerCase() : `${id}:${level}`;
         const key = `${visual}:${settings.rgbaTextures !== false ? "rgba" : "native"}`;
 
         if (!this.cacheSkillLibraries.has(key)) this.cacheSkillLibraries.set(key, this.loadSkill(settings, id, level, urgent, record, key));

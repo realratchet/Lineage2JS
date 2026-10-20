@@ -181,7 +181,7 @@ const nativeEffectRecipes = new Map<string, NativeEffectBinding_T>([
     ["s_armor_crush", { effects: ["LineageEffect.s_u513_a", "LineageEffect.s_u513_b", "LineageEffect.s_u513_c"], soundPhases: ["casting", "shot"] }],
 ]);
 
-// Engine.dll SpawnNTransientEffect 0x104c9309..0x104ca7e1 returns false without an effect or sound.
+// Engine.dll SpawnNTransientEffect: edi=0 at 0x104ca7e1 skips sound and returns0 at 0x104ca933.
 nativeEffectRecipes.set("e_rejected_transient", { effects: [], soundPhases: [], rejectTransient: true });
 
 export default nativeEffectRecipes;
