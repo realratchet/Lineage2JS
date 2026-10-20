@@ -48,7 +48,8 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             opacity: new Uniform(1),
             uvTransform: new Uniform(new Matrix3()),
             transformSpecular: new Uniform(null),
-            uvs: new Uniform(info.uvs)
+            uvsSize: new Uniform(info.uvs.size),
+            uvsMap: new Uniform(info.uvs.texture)
         });
 
         const splitFragmentShader = FRAGMENT_SHADER.split("\n");
@@ -64,9 +65,6 @@ export class MeshTerrainMaterial extends ShaderMaterial {
 
         const paramsCode: string[] = [], layerCode: string[] = [];
 
-        let needsPreamble = false;
-        let needsOpacityPreamble = false;
-
         let isFirst = false;
 
         if (isOverlay) layerCode.push(`${ws}vec3 overlayColor = vec3(0.0);`, `${ws}float overlayAlpha = 0.0;`, "");
@@ -74,24 +72,21 @@ export class MeshTerrainMaterial extends ShaderMaterial {
         layerIndices.forEach(i => {
             const layer = info.layers[i];
 
-            needsPreamble = true;
-
-            const u = uniforms[`layer${i}`] = new Uniform({ map: {}, alphaMap: {} });
-
             defines[`USE_LAYER_${i}`] = "";
 
 
-            needsOpacityPreamble = true;
             defines[`USE_LAYER_${i}_OPACITY`] = "";
 
-            layerCode.push(`${ws}layerMask = texture2D(layer${i}.alphaMap.texture, vUv[MASK_UV_INDEX]);`);
-            paramsCode.push(`${wsParams}uniform MaskedLayerData layer${i};`);
+            layerCode.push(`${ws}layerMask = texture2D(layer${i}AlphaMap, vUv[MASK_UV_INDEX]);`);
+            paramsCode.push(`${wsParams}uniform sampler2D layer${i}Map;`, `${wsParams}uniform sampler2D layer${i}AlphaMap;`);
 
-            Object.assign(u.value.alphaMap, layer.alphaMap.uniforms.map);
+            uniforms[`layer${i}Map`] = new Uniform(layer.map.uniforms.map.texture);
+            uniforms[`layer${i}AlphaMap`] = new Uniform(layer.alphaMap.uniforms.map.texture);
+
             layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
             layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
-            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}.map.texture, vUv[${i + 1}]).rgb, layerMask.r);`)
+            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}Map, vUv[${i + 1}]).rgb, layerMask.r);`)
             if (isOverlay) {
                 layerCode.push(`${ws}overlayColor = layer.rgb * layer.a + overlayColor * (1.0 - layer.a);`);
                 layerCode.push(`${ws}overlayAlpha = layer.a + overlayAlpha * (1.0 - layer.a);`);
@@ -105,35 +100,7 @@ export class MeshTerrainMaterial extends ShaderMaterial {
 
             layer.map.uniforms.map.texture.premultiplyAlpha = true;
             layer.map.uniforms.map.texture.needsUpdate = true;
-
-            Object.assign(u.value.map, layer.map.uniforms.map);
         });
-
-        if (needsPreamble) {
-            const preamble = [
-                `${wsParams}struct TextureData {`,
-                `${wsParams}    sampler2D texture;`,
-                `${wsParams}    vec2 size;`,
-                `${wsParams}};`,
-                "",
-                `${wsParams}struct LayerData {`,
-                `${wsParams}    TextureData map;`,
-                `${wsParams}};`,
-                ""
-            ];
-
-            if (needsOpacityPreamble) {
-                preamble.push(
-                    `${wsParams}struct MaskedLayerData {`,
-                    `${wsParams}    TextureData map;`,
-                    `${wsParams}    TextureData alphaMap;`,
-                    `${wsParams}};`,
-                    ""
-                );
-            }
-
-            paramsCode.unshift(...preamble);
-        }
 
         if (isOverlay) layerCode.push(`${ws}texelDiffuse = vec4(overlayAlpha > 0.0 ? overlayColor / overlayAlpha : vec3(0.0), overlayAlpha);`);
 

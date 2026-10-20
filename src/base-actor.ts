@@ -219,7 +219,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public isInteractive(): boolean { return this.movementComponent.isInteractive(); }
 
     public checkLoadingResource(includeZero = true): boolean {
-        if (!this.scriptComponent || !this.renderManager.manGame.getComponent("network").isInWorld()) return false;
+        if (!this.scriptComponent || !this.renderManager.manGame.getComponent("network")?.isInWorld()) return false;
         if (this.ridePawn || this.getUnrealScriptProperty("RidePawn") || this.getUnrealScriptProperty("bRide") || this.getUnrealScriptProperty("DrawType") === EDrawType_T.DT_Custom) return false;
         // FNActorResourceLoader::CheckLoadingResource 0x769050..0x769190; browser world runs normal network-client mode.
         const count = this.getUnrealScriptProperty("LoadingResourceRef") as number;

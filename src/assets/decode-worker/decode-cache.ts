@@ -148,11 +148,15 @@ export async function storeCachedLibraryDurable(sectorName: string, settings: Lo
         return navigator.locks.request(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
     }
 
-    const bytes = serializeLibraryBlob(library, seekable);
+    return navigator.locks.request(cacheFileName(sectorName, settings), async () => {
+        if ((sectorName === "npc_npcs" || sectorName === "npc_monsters") && await getCachedFile(sectorName, settings)) return 0;
 
-    await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
+        const bytes = serializeLibraryBlob(library, seekable);
 
-    return bytes.size;
+        await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
+
+        return bytes.size;
+    });
 }
 
 export async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {

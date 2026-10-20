@@ -27,7 +27,7 @@ export function batchStaticMeshTextures(object: any, indices: ArrayLike<number>)
 
         const compare = Object.create(material);
         compare.name = "";
-        compare.uniforms = { ...material.uniforms, shDiffuse: { value: { ...data, map: { ...data.map, texture: null } } } };
+        compare.uniforms = { ...material.uniforms, shDiffuse: { value: { ...data, map: { ...data.map, texture: null } } }, shDiffuseMap: { value: null } };
         const key = getCanonicalStaticMaterialKey(compare) + material.vertexShader + material.fragmentShader + JSON.stringify([texture.image.width, texture.image.height, texture.format, texture.type, texture.mipmaps.length, texture.wrapS, texture.wrapT, texture.minFilter, texture.magFilter, texture.anisotropy, texture.colorSpace, texture.flipY, texture.premultiplyAlpha, getTextureLODBounds(texture)]);
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push({ index: i, material, texture });
@@ -60,11 +60,11 @@ export function batchStaticMeshTextures(object: any, indices: ArrayLike<number>)
             texture.premultiplyAlpha = first.premultiplyAlpha;
             texture.needsUpdate = true;
             const material = group[0].material.clone() as any;
-            if (!material.vertexShader.includes("void main() {") || !material.fragmentShader.includes("texture2D(shDiffuse.map.texture, UV_DIFFUSE)")) throw new Error(`Material '${material.name}' has no diffuse array shader path.`);
+            if (!material.vertexShader.includes("void main() {") || !material.fragmentShader.includes("texture2D(shDiffuseMap, UV_DIFFUSE)")) throw new Error(`Material '${material.name}' has no diffuse array shader path.`);
 
             material.uniforms.batchDiffuse = { value: texture };
             material.vertexShader = `attribute float batchLayer; flat varying float vBatchLayer;\n${material.vertexShader.replace("void main() {", "void main() { vBatchLayer=batchLayer;")}`;
-            material.fragmentShader = `uniform highp sampler2DArray batchDiffuse; flat varying float vBatchLayer;\n${material.fragmentShader.replace("texture2D(shDiffuse.map.texture, UV_DIFFUSE)", "texture(batchDiffuse, vec3(UV_DIFFUSE, vBatchLayer))")}`;
+            material.fragmentShader = `uniform highp sampler2DArray batchDiffuse; flat varying float vBatchLayer;\n${material.fragmentShader.replace("texture2D(shDiffuseMap, UV_DIFFUSE)", "texture(batchDiffuse, vec3(UV_DIFFUSE, vBatchLayer))")}`;
             for (const entry of group) {
                 remap.set(entry.index, group[0].index);
                 layers.set(entry.index, textures.indexOf(entry.texture));

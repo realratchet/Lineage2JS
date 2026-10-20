@@ -66,12 +66,8 @@ varying vec4 vShadowCoord;
 // #endif
 
 #ifdef USE_UV_TEXTURE
-    struct TextureData {
-        sampler2D texture;
-        vec2 size;
-    };
-
-    uniform TextureData uvs;
+    uniform vec2 uvsSize;
+    uniform sampler2D uvsMap;
     uniform mat3 uvTransform;
     uniform sampler2D tex;
     
@@ -139,13 +135,13 @@ void main() {
     #include <fog_vertex>
 
     #ifdef USE_UV_TEXTURE
-        float u = (terrainIndex + 0.5) / uvs.size.x;
+        float u = (terrainIndex + 0.5) / uvsSize.x;
 
         #pragma unroll_loop_start
         for(int i = 0; i < UV_COUNT; i++) {
-            float v = (float(i) + 0.5) / float(uvs.size.y);
+            float v = (float(i) + 0.5) / float(uvsSize.y);
 
-            vUv[i] = (uvTransform * vec3(texture2D(uvs.texture, vec2(u, v)).xy, 1.0)).xy;
+            vUv[i] = (uvTransform * vec3(texture2D(uvsMap, vec2(u, v)).xy, 1.0)).xy;
         }
         #pragma unroll_loop_end
     #endif

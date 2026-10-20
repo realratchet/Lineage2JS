@@ -1262,7 +1262,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.hasDesiredRotation = true;
     }
 
-    protected checkAnimationState(deltaTime: number) {
+    public checkAnimationState(deltaTime: number) {
         // APawn::UpdateMovementAnimation 0x8bbfdf..0x8bc0f2; OldRotYaw writer 0x8bc5ed.
         const yawChange = this.rotationYaw - this.oldRotationYaw;
         const isTurning = Math.abs(deltaTime === 0 ? yawChange : yawChange / (deltaTime * 1000)) > 1;

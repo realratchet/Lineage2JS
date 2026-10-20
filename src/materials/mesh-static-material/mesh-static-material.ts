@@ -85,6 +85,8 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 
         defines["USE_UV"] = "";
         defines[`USE_MAP_${defName}`] = "";
+        uniforms[`${name}Map`] = new Uniform(parameters.uniforms.map.texture);
+        uniforms[name].value.mapSize = parameters.uniforms.map.size;
 
         if (parameters.uvIndex === 1) {
             defines["USE_UV1"] = "";
@@ -627,6 +629,10 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         super.copy(copySource);
         Object.assign(this.uniforms, proceduralUniforms);
         appendGlobalUniforms(this.uniforms);
+
+        for (const [name, uniform] of Object.entries(this.uniforms))
+            if (this.uniforms[`${name}Map`] && !proceduralUniforms[`${name}Map`]) this.uniforms[`${name}Map`].value = uniform.value.map.texture;
+
         this.sprites = source.sprites;
         this.arrLightmaps = source.arrLightmaps;
         this.spriteEntries = source.spriteEntries;
@@ -656,6 +662,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             const activeFrame = sprites[activeFrameIndex];
 
             uniform.value.map = activeFrame;
+            uniform.value.mapSize = activeFrame.size;
+            this.uniforms[`${k}Map`].value = activeFrame.texture;
         }
     }
 }

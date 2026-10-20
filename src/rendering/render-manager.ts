@@ -294,6 +294,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly arrViewportBatchEmitters: any[] = [];
+    protected readonly arrVisibleNameplates: Object3D[] = [];
+    protected readonly arrNameplateWorldRoots: Object3D[] = [];
+    protected readonly arrNameplateDepthMaterials: THREE.Material[] = [];
+    protected readonly arrNameplateDepthColorWrites: boolean[] = [];
+    protected readonly nameplateDepthMaterials = new Set<THREE.Material>();
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
@@ -2505,7 +2510,63 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const frame = LocalSpaceSkeleton.renderFrame;
         LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
         try {
-            this.renderer.render(this.scene, this.camera);
+            const arrNames = this.arrVisibleNameplates, arrRoots = this.arrNameplateWorldRoots;
+            const arrMaterials = this.arrNameplateDepthMaterials, arrColorWrites = this.arrNameplateDepthColorWrites;
+            const materials = this.nameplateDepthMaterials;
+
+            arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
+            materials.clear();
+            this.scene.children.forEach(object => {
+                if (object.visible && (object as any).isNameplate && (object as Sprite).material.visible) arrNames.push(object);
+            });
+            if (!arrNames.length) {
+                this.renderer.render(this.scene, this.camera);
+                return;
+            }
+
+            try {
+                arrNames.forEach(object => object.visible = false);
+                this.renderer.render(this.scene, this.camera);
+                const saveMaterial = (material: THREE.Material) => {
+                    if (!material || !material.visible || materials.has(material)) return;
+
+                    materials.add(material);
+                    arrMaterials.push(material);
+                    arrColorWrites.push(material.colorWrite);
+                    if (material.transparent || !material.depthWrite) material.visible = false;
+                    else material.colorWrite = false;
+                };
+                this.scene.traverseVisible(object => {
+                    const value = (object as any).material;
+                    if (!value) return;
+
+                    if (Array.isArray(value)) value.forEach(saveMaterial);
+                    else saveMaterial(value);
+                });
+                this.renderer.clearDepth();
+                this.renderer.render(this.scene, this.camera);
+                arrMaterials.forEach((material, index) => {
+                    material.colorWrite = arrColorWrites[index];
+                    material.visible = true;
+                });
+                this.scene.children.forEach(object => {
+                    if (!object.visible) return;
+
+                    arrRoots.push(object);
+                    object.visible = false;
+                });
+                arrNames.forEach(object => object.visible = true);
+                this.renderer.render(this.scene, this.camera);
+            } finally {
+                arrMaterials.forEach((material, index) => {
+                    material.colorWrite = arrColorWrites[index];
+                    material.visible = true;
+                });
+                arrRoots.forEach(object => object.visible = true);
+                arrNames.forEach(object => object.visible = true);
+                arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
+                materials.clear();
+            }
         } finally {
             LocalSpaceSkeleton.renderFrame = frame;
         }

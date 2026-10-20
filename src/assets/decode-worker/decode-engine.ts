@@ -59,7 +59,7 @@ type CharacterHairPieces_T = Map<number, Map<number, [string, string][]>>;
 type CharacterPartPaths_T = [string, string];
 type NpcBundleEntry_T = { meshIndex: number, materials: string, scriptClassId: string | null, effectSpawnBoneIndex: number | null, damageEffect: string | null };
 type NpcBundleManifest_T = { actors: Record<number, NpcBundleEntry_T> };
-type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T, dirty?: boolean, settings?: LoadSettings_T };
+type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T };
 type SkillTables_T = { skills: Record<string, any>[], names: Record<string, any>[], sounds: Record<string, any>[], skillRows: Map<string, Record<string, any>[]>, nameRows: Map<string, Record<string, any>>, soundRows: Map<string, Record<string, any>> };
 type StoredAssets_T = { entries: Record<string, any>, seekable: SeekableLibrary_T | null, settings: LoadSettings_T, dirty: boolean };
 
@@ -1195,8 +1195,6 @@ export class DecodeEngine {
             bundle.library.pawnActors.push(mesh);
         }
         (bundle.library as any).npcBundle.actors[npcId] = { ...entry, meshIndex };
-        bundle.settings = settings;
-        bundle.dirty = true;
     }
 
     protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean, equipment: INpcEquipment | null): Promise<DecodeLibrary> {
@@ -2032,19 +2030,6 @@ export class DecodeEngine {
     }
 
     public async flushStoredAssets(): Promise<void> {
-        for (const [name, bundle] of this.cacheNpcBundles) {
-            if (!bundle.dirty) continue;
-
-            await DecodeCache.storeCachedLibraryDurable(name, bundle.settings, bundle.library, bundle.seekable);
-            const seekable = await DecodeCache.openCachedLibrary(name, bundle.settings);
-
-            if (seekable) {
-                bundle.library = seekable.library as DecodeLibrary;
-                bundle.seekable = seekable;
-            }
-            bundle.dirty = false;
-        }
-
         for (const [name, bundle] of this.cacheStoredAssets) {
             if (!bundle.dirty) continue;
 
@@ -2063,6 +2048,8 @@ export class DecodeEngine {
             }
             bundle.dirty = false;
         }
+
+        this.cacheNpcBundles.clear();
     }
 
     protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number, equipment: ICharacterEquipment, hairVariant: number): Promise<DecodeLibrary> {

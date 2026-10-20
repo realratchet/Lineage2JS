@@ -74,10 +74,12 @@ uniform float opacity;
 #endif
 
 #if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_MATERIAL2) || defined(USE_MAP_DETAIL))
-    struct TextureData {
-        sampler2D texture;
-        vec2 size;
-    };
+    uniform sampler2D shDiffuseMap;
+    uniform sampler2D shOpacityMap;
+    uniform sampler2D shSpecularMap;
+    uniform sampler2D shSpecularMaskMap;
+    uniform sampler2D shDetailMap;
+    uniform sampler2D shMaterial2Map;
 
     #define MAX_TRANSFORM_STAGES 2
 
@@ -131,7 +133,7 @@ uniform float opacity;
         #endif
 
         struct DetailData {
-            TextureData map;
+            vec2 mapSize;
             float scale;
             #ifdef USE_MAP_DETAIL_TRANSFORM
                 #if USE_MAP_DETAIL_TRANSFORM != ENVMAP && USE_MAP_DETAIL_TRANSFORM != ENVMAPWORLD
@@ -195,7 +197,7 @@ uniform float opacity;
                 FadeData fadeColors;
             #endif
             #ifdef USE_MAP_DIFFUSE
-                TextureData map;
+                vec2 mapSize;
 
                 #if defined(USE_MAP_DIFFUSE_TRANSFORM) && USE_MAP_DIFFUSE_TRANSFORM != ENVMAP && USE_MAP_DIFFUSE_TRANSFORM != ENVMAPWORLD
                 TransformDiffuseData transform;
@@ -257,7 +259,7 @@ uniform float opacity;
 
         struct OpacityData {
             #ifdef USE_MAP_OPACITY
-                TextureData map;
+                vec2 mapSize;
             #endif
             #if defined(USE_MAP_OPACITY_TRANSFORM) && USE_MAP_OPACITY_TRANSFORM != ENVMAP && USE_MAP_OPACITY_TRANSFORM != ENVMAPWORLD
                 TransformOpacityData transform;
@@ -322,7 +324,7 @@ uniform float opacity;
             #endif
 
             #ifdef USE_MAP_SPECULAR
-                TextureData map;
+                vec2 mapSize;
             #endif
 
             #if defined(USE_MAP_SPECULAR_TRANSFORM) && USE_MAP_SPECULAR_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_TRANSFORM != ENVMAPWORLD
@@ -384,7 +386,7 @@ uniform float opacity;
 
         struct SpecularMaskData {
             #ifdef USE_MAP_SPECULAR_MASK
-                TextureData map;
+                vec2 mapSize;
             #endif
             #if defined(USE_MAP_SPECULAR_MASK_TRANSFORM) && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAPWORLD
                 TransformSpecularMaskData transform;
@@ -447,7 +449,7 @@ uniform float opacity;
                 FadeData fadeColors;
             #endif
             #ifdef USE_MAP_MATERIAL2
-                TextureData map;
+                vec2 mapSize;
 
                 #ifdef USE_MAP_MATERIAL2_TRANSFORM
                 TransformMaterial2Data transform;
@@ -604,7 +606,7 @@ void main() {
                 diffuseColor.a *= texelDiffuse.a;
             #endif
         #elif defined(USE_MAP_DIFFUSE)
-            vec4 texelDiffuse = texture2D(shDiffuse.map.texture, UV_DIFFUSE);
+            vec4 texelDiffuse = texture2D(shDiffuseMap, UV_DIFFUSE);
             // texelDiffuse = mapTexelToLinear(texelDiffuse);
             diffuseColor.rgb *= texelDiffuse.rgb;
 
@@ -616,9 +618,9 @@ void main() {
 
     #ifdef USE_DETAIL
         #ifdef USE_MAP_DETAIL_TRANSFORM
-            diffuseColor.rgb *= texture2D(shDetail.map.texture, UV_DETAIL).rgb * 2.0;
+            diffuseColor.rgb *= texture2D(shDetailMap, UV_DETAIL).rgb * 2.0;
         #else
-            diffuseColor.rgb *= texture2D(shDetail.map.texture, UV_DETAIL * shDetail.scale).rgb * 2.0;
+            diffuseColor.rgb *= texture2D(shDetailMap, UV_DETAIL * shDetail.scale).rgb * 2.0;
         #endif
     #endif
 
@@ -639,14 +641,14 @@ void main() {
                 color2 = textureCube(shMaterial2Cube, shMaterial2CubeTransform * envMapDirection);
             #endif
             #ifdef USE_MAP_MATERIAL2
-                color2 = texture2D(shMaterial2.map.texture, UV_MATERIAL2);
+                color2 = texture2D(shMaterial2Map, UV_MATERIAL2);
             #endif
         #endif
         
         float maskVal = 1.0;
         #ifdef USE_SPECULAR
             #ifdef USE_MAP_SPECULAR
-                 maskVal = texture2D(shSpecular.map.texture, UV_SPECULAR).g;
+                 maskVal = texture2D(shSpecularMap, UV_SPECULAR).g;
             #endif
         #endif
         
@@ -675,7 +677,7 @@ void main() {
 
     #ifdef USE_OPACITY
         #ifdef USE_MAP_OPACITY
-            vec4 texelOpacity = texture2D(shOpacity.map.texture, UV_OPACITY);
+            vec4 texelOpacity = texture2D(shOpacityMap, UV_OPACITY);
             
             diffuseColor.a *= texelOpacity.a;
         #endif
@@ -768,14 +770,14 @@ void main() {
                 #endif
                 specularColor = textureCube(shSpecularCube, shSpecularCubeTransform * envMapDirection).rgb;
             #elif defined(USE_MAP_SPECULAR)
-                vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
+                vec4 texelSpecular = texture2D(shSpecularMap, UV_SPECULAR);
                 specularColor = texelSpecular.rgb;
             #endif
         #endif
 
         
         #ifdef USE_MAP_SPECULAR_MASK
-            vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, UV_SPECULAR_MASK);
+            vec4 texelSpecularMask = texture2D(shSpecularMaskMap, UV_SPECULAR_MASK);
             #ifdef USE_SELF_ILLUMINATION
                 // D3DTOP_BLENDCURRENTALPHA over CURRENT, which is indirectDiffuse here - directDiffuse is 0 unlit
                 reflectedLight.indirectDiffuse = mix(reflectedLight.indirectDiffuse, specularColor, texelSpecularMask.a);

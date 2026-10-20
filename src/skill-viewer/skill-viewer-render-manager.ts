@@ -6,6 +6,7 @@ import type { NPawnLightComponent } from "../rendering/components/pawn-light-com
 import type BaseActor from "../base-actor";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 
 // 127 = 1.0 in the Modulate2X domain, same as unlit meshes in LitSkinnedMesh
 const viewerZone = { ambient: [127, 127, 127], isSunAffected: false };
@@ -26,6 +27,23 @@ export class SkillViewerRenderManager extends RenderManager {
         GLOBAL_UNIFORMS.fogNear.value = 1e7;
         GLOBAL_UNIFORMS.fogFar.value = 2e7;
         (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(0.5, 0.5, 0.5);
+    }
+
+    protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
+        for (const component of this.pawnRenderables) {
+            component.tickActorView(deltaTime / 1000);
+            component.getParent().getComponent<PawnMovementComponent>("pawnMovement").checkAnimationState(deltaTime / 1000);
+            component.getParent().updatePresentation(currentTime, deltaTime / 1000);
+        }
+    }
+
+    protected updatePawnVisibility(frustum = this.frustum): void {
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent();
+
+            pawn.visible = (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            if (pawn.visible) component.createSkin();
+        }
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {

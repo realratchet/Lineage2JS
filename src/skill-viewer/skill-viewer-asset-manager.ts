@@ -43,6 +43,8 @@ export class SkillViewerAssetManager extends AssetManager {
     public setEnterEventEnabled(enabled: boolean): void { this.decodeWorker.setEnterEventEnabled(enabled); }
 
     public releaseUsedLibraries(renderManager: RenderManager): void {
+        this.cacheNpcLibraries.clear();
+
         for (const library of this.decodeWorker.takeUsedLibraries())
             for (const sound of library.soundBlobCache.values()) {
                 const uri = getMintedSoundUri(sound);

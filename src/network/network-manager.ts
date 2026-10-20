@@ -1412,6 +1412,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const object = this.findObjectByActor(actor);
 
+        if (object && object.kind === "user" || this.riders.get(this.userId) === actor)
+            actor.setUnrealScriptProperty("CanIngnoreCollision", false);
+
         if (object) {
             actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
             this.applySpeeds(actor, object.speeds, object.isRunning);
@@ -2723,6 +2726,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.privateStoreType = info.privateStoreType;
 
         player.setUnrealScriptProperty("bNpc", false);
+        player.setUnrealScriptProperty("CanIngnoreCollision", false);
         if (!info.mountType || this.riders.has(info.objectId)) this.applySpeeds(object.actor, info, this.isRunning);
         object.actor.setRotationYaw(info.heading);
         this.setIdleAnimation(object, false);
