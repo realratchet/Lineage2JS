@@ -1,3 +1,4 @@
+import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
@@ -321,7 +322,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         this.collisionWorld.removePawnCollision(pawn);
         let result = true;
-        if (!noCheck && (pawn.getUnrealScriptProperty("bCollideWorld") || pawn.getUnrealScriptProperty("bCollideWhenPlacing") && (level as any).getUnrealScriptProperty("NetMode") !== 3))
+        if (!noCheck && (pawn.getUnrealScriptProperty("bCollideWorld") || pawn.getUnrealScriptProperty("bCollideWhenPlacing") && (level as any).getUnrealScriptProperty("NetMode") !== ENetMode_T.NM_Client))
             result = this.findSpot(tmpPlacementExtent.set(profile.collisionRadius, profile.collisionRadius, profile.collisionHeight), location);
         if (result && !test && !noCheck) result = !this.collisionWorld.checkEncroachment(pawn, location, true, script.getVM());
         const current = pawn.getUnrealScriptProperty("Location") as number[];

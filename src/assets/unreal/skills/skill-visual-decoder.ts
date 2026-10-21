@@ -1,5 +1,5 @@
 import type { APackage } from "@l2js/core";
-import type { USkillVisualEffect, FSkillActionInfo, USkillActionLocateEffect } from "../un-skill-visual-effect";
+import { EAttachMethod_T, type USkillVisualEffect, type FSkillActionInfo, type USkillActionLocateEffect } from "../un-skill-visual-effect";
 import DecodeLibrary from "../decode-library";
 import type { NpcSkillAttack_T, NpcSkillAttachOn_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T } from "../un-pawn";
 import getNativeEffect from "./native-effects";
@@ -61,14 +61,14 @@ function splitGroupedObjectPath(path: string): [string, string, string] {
     return [parts[0], parts[1], parts[2]];
 }
 
-function getAttachOn(attachOn: number): NpcSkillAttachOn_T {
+function getAttachOn(attachOn: EAttachMethod_T): NpcSkillAttachOn_T {
     switch (attachOn) {
-        case 0: return "none";
-        case 1: return "rightHand";
-        case 2: return "leftHand";
-        case 3: return "boneSpecified";
-        case 4: return "aliasSpecified";
-        case 5: return "trail";
+        case EAttachMethod_T.EAM_None: return "none";
+        case EAttachMethod_T.EAM_RH: return "rightHand";
+        case EAttachMethod_T.EAM_LH: return "leftHand";
+        case EAttachMethod_T.EAM_BoneSpecified: return "boneSpecified";
+        case EAttachMethod_T.EAM_AliasSpecified: return "aliasSpecified";
+        case EAttachMethod_T.EAM_Trail: return "trail";
         default: throw new Error(`Skill action AttachOn '${attachOn}' is not implemented.`);
     }
 }

@@ -1,3 +1,4 @@
+import { WeaponType } from "../../assets/unreal/un-pawn";
 import { Mesh, SkinnedMesh } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { MESHES_CHANGED_EVENT } from "./animation-component";
@@ -61,7 +62,7 @@ export class HairSimulationComponent extends ObjectComponent<BaseActor> {
         const isMoving = this.movementComponent.getVelocity().lengthSq() > 0;
         const isRunning = this.movementComponent.isRunning();
         const isDying = this.movementComponent.isDying();
-        const isBowRunning = weaponType === 5 && isRunning;
+        const isBowRunning = weaponType === WeaponType.WT_BOW && isRunning;
         const isSpecialAttack = lowerName.startsWith("spatk01_") || lowerName.startsWith("spatk02_");
 
         for (const simulation of this.simulations) simulation.update(deltaTime, animationName, animationFrame, 0, attackEffectFrame, attackEndEffectFrame, isMoving, isRunning, isDying, isBowRunning, isSpecialAttack);

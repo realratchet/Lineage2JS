@@ -8,6 +8,8 @@ export class Nameplate extends Sprite {
     protected nameColor = 0;
     protected titleColor = 0;
     protected bracket: string = null;
+    protected crest: HTMLCanvasElement = null;
+    protected allyCrest: HTMLCanvasElement = null;
     public width = 0;
     public height = 0;
 
@@ -32,20 +34,23 @@ export class Nameplate extends Sprite {
         return texture;
     }
 
-    public update(canvas: NWindowCanvas, name: string, title: string, nameColor: number, titleColor: number, bracket: string) {
-        if (name === this.nameText && title === this.titleText && nameColor === this.nameColor && titleColor === this.titleColor && bracket === this.bracket) return;
+    public update(canvas: NWindowCanvas, name: string, title: string, nameColor: number, titleColor: number, bracket: string, crest: HTMLCanvasElement = null, allyCrest: HTMLCanvasElement = null) {
+        if (name === this.nameText && title === this.titleText && nameColor === this.nameColor && titleColor === this.titleColor && bracket === this.bracket && crest === this.crest && allyCrest === this.allyCrest) return;
 
         this.nameText = name;
         this.titleText = title;
         this.nameColor = nameColor;
         this.titleColor = titleColor;
         this.bracket = bracket;
+        this.crest = crest;
+        this.allyCrest = allyCrest;
 
         const nameWidth = canvas.measureText(name, FontType_T.LARGE), lineHeight = canvas.getLineHeight(FontType_T.LARGE);
+        const crestWidth = (crest ? 16 : 0) + (allyCrest ? 8 : 0);
         const top = title ? -lineHeight * 2 : -16;
         const bottom = Math.max(0, lineHeight - 15);
 
-        this.width = Math.max(nameWidth + (bracket ? 38 : 0), title ? canvas.measureText(title, FontType_T.LARGE) : 0);
+        this.width = Math.max(nameWidth + crestWidth + (bracket ? 38 + (crest ? 4 : 0) : 0), title ? canvas.measureText(title, FontType_T.LARGE) : 0);
         this.height = bottom - top;
         const isResized = this.canvas.width !== this.width || this.canvas.height !== this.height;
 
@@ -53,15 +58,17 @@ export class Nameplate extends Sprite {
         this.canvas.height = this.height;
         this.center.set(this.width ? 1 - Math.trunc(this.width / 2) / this.width : 0.5, bottom / this.height);
 
-        const context = this.canvas.getContext("2d"), nameX = Math.trunc(this.width / 2) - Math.trunc(nameWidth / 2);
+        const context = this.canvas.getContext("2d"), crestX = Math.trunc(this.width / 2) - Math.trunc((nameWidth + crestWidth) / 2), nameX = crestX + crestWidth;
 
         context.imageSmoothingEnabled = false;
+        if (allyCrest) context.drawImage(allyCrest, 0, 4, 8, 12, crestX, -14 - top, 8, 12);
+        if (crest) context.drawImage(crest, 0, 4, 16, 12, crestX + (allyCrest ? 8 : 0), -14 - top, 16, 12);
         canvas.renderText(context, nameX, -15 - top, nameColor, name, FontType_T.LARGE);
         if (title) canvas.renderText(context, Math.trunc(this.width / 2) - Math.trunc(canvas.measureText(title, FontType_T.LARGE) / 2), -lineHeight * 2 - top, titleColor, title, FontType_T.LARGE);
         if (bracket) {
             const texture = canvas.getTexture(bracket);
 
-            context.drawImage(texture, 0, 0, 19, 16, nameX - 19, -16 - top, 19, 16);
+            context.drawImage(texture, 0, 0, 19, 16, crestX - 19 - (crest ? 2 : 0), -16 - top, 19, 16);
             context.drawImage(texture, 0, 0, 19, 16, nameX + nameWidth, -16 - top, 19, 16);
         }
         if (isResized) {

@@ -1,7 +1,7 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
-import type { SSQStatus_T, SSQRecord_T, SSQFestival_T, SSQSealStatus_T, SSQSealPrediction_T } from "../network/game-packets";
+import { SSQPage_T, type SSQStatus_T, type SSQRecord_T, type SSQFestival_T, type SSQSealStatus_T, type SSQSealPrediction_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.SSQWnd.SSQ_back";
@@ -23,6 +23,7 @@ const TEX_DOWN = "L2UI_CH3.QuestWnd.QuestWndDownBtn";
 const TEX_UP = "L2UI_CH3.QuestWnd.QuestWndUpBtn";
 const TEX_SELECT = SKIN_SLOTS.listSelect;
 const TEX_SELECT_END = SKIN_SLOTS.listSelectEnd;
+const arrStatusPages = [SSQPage_T.RECORD, SSQPage_T.FESTIVAL, SSQPage_T.SEALS];
 const GRAY = 0xff808080;
 const WHITE = 0xffdcdcdc;
 const GOLD = 0xffb09b79;
@@ -30,7 +31,7 @@ const GOLD = 0xffb09b79;
 export class NCSSQMainBoard {
     public static getTextures() { return [TEX_BACK, TEX_RECORD, TEX_PROJECTION, TEX_LIST, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_TAB, TEX_TAB_SELECTED, TEX_TEXT_BACK, ...arrBars, ...arrSealBars, ...arrPanels, ...[1, 2, 3].map(index => `${TEX_TEXT}${index}`), TEX_PLUS, TEX_MINUS, TEX_DOWN, TEX_UP, TEX_SELECT, TEX_SELECT_END, ...NCFrameCtrl.getTextures(), ...NDOM_SCROLL_TEXTURES]; }
     public readonly element: HTMLDivElement;
-    public onRequest: (page: number) => void = null;
+    public onRequest: (page: SSQPage_T) => void = null;
     protected readonly pages: HTMLDivElement[] = [];
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly content: HTMLDivElement;
@@ -83,20 +84,20 @@ export class NCSSQMainBoard {
                 list.content.style.width = index === 1 ? "224px" : "222px";
                 list.content.style.overflow = "hidden";
                 this.lists.push(list);
-                this.button(page, 91, 324, manager.getSysString(938), () => this.request(index + 1));
+                this.button(page, 91, 324, manager.getSysString(938), () => this.request(arrStatusPages[index]));
             }
         }
         this.select(0);
         this.recordBack = layer.tile(this.pages[0], 0, 0, 256, 353, 0, 0, 256, 353, TEX_RECORD);
         this.content = layer.createWindow(0, 0, 256, 324, this.pages[0]);
         this.content.style.overflow = "hidden";
-        this.button(this.pages[0], 51, 324, manager.getSysString(938), () => this.request(this.isProjection ? 4 : 1));
+        this.button(this.pages[0], 51, 324, manager.getSysString(938), () => this.request(this.isProjection ? SSQPage_T.PREDICTION : SSQPage_T.RECORD));
         this.projectionButton = this.button(this.pages[0], 131, 324, manager.getSysString(937), () => {
             this.isProjection = !this.isProjection;
             this.projectionButton.setLabel(manager.getSysString(this.isProjection ? 939 : 937));
             this.projectionButton.setAttribute("aria-label", manager.getSysString(this.isProjection ? 939 : 937));
             this.paintRecord();
-            this.request(this.isProjection ? 4 : 1);
+            this.request(this.isProjection ? SSQPage_T.PREDICTION : SSQPage_T.RECORD);
         });
     }
 
@@ -130,7 +131,7 @@ export class NCSSQMainBoard {
 
     public show(status: SSQStatus_T) {
         switch (status.page) {
-            case 1:
+            case SSQPage_T.RECORD:
                 this.setVisible(false);
                 this.period = status.period;
                 this.record = status.record;
@@ -142,7 +143,7 @@ export class NCSSQMainBoard {
                 this.layer.activate(this.element);
                 this.element.focus();
                 break;
-            case 2:
+            case SSQPage_T.FESTIVAL:
                 this.festivalPeriod = status.period;
                 this.festivals = status.festivals;
                 this.expandedFestivals.clear();
@@ -152,7 +153,7 @@ export class NCSSQMainBoard {
                 this.selectedFestivalGroup = -1;
                 this.paintFestivals();
                 break;
-            case 3:
+            case SSQPage_T.SEALS:
                 this.seals = status.seals;
                 this.retainLimit = status.retainLimit;
                 this.claimLimit = status.claimLimit;
@@ -160,7 +161,7 @@ export class NCSSQMainBoard {
                 this.selectedSeal = -1;
                 this.paintSeals();
                 break;
-            case 4:
+            case SSQPage_T.PREDICTION:
                 this.predictedWinner = status.predictedWinner;
                 this.predictions = status.predictions;
                 if (this.isProjection) this.paintRecord();
@@ -169,7 +170,7 @@ export class NCSSQMainBoard {
         }
     }
 
-    protected request(page: number) { if (this.onRequest) this.onRequest(page); }
+    protected request(page: SSQPage_T) { if (this.onRequest) this.onRequest(page); }
     protected select(index: number) {
         this.selected = index;
         this.pages.forEach((page, i) => { page.hidden = i !== index; });
@@ -180,7 +181,7 @@ export class NCSSQMainBoard {
         if (index === 0 || this.requested.has(index)) return;
 
         this.requested.add(index);
-        this.request(index + 1);
+        this.request(arrStatusPages[index]);
     }
     protected cabal(cabal: number) { return this.layer.getManager().getSysString(cabal === 1 ? 814 : cabal === 2 ? 815 : 27); }
     protected seal(seal: number) { return this.layer.getManager().getSysString(seal >= 1 && seal <= 3 ? 815 + seal : 27); }

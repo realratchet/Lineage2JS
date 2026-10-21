@@ -4,11 +4,19 @@ export const PROTOCOL_REVISION = 660;
 export const NPC_ID_OFFSET = 1000000;
 
 export type SkillEntry_T = { id: number, level: number, isPassive: boolean };
+export enum AbnormalEffect_T { ABNORMAL_EFFECT_BLEEDING = 0x1, ABNORMAL_EFFECT_POISON = 0x2, ABNORMAL_EFFECT_UNKNOWN_3 = 0x4, ABNORMAL_EFFECT_UNKNOWN_4 = 0x8, ABNORMAL_EFFECT_UNKNOWN_5 = 0x10, ABNORMAL_EFFECT_UNKNOWN_6 = 0x20, ABNORMAL_EFFECT_STUN = 0x40, ABNORMAL_EFFECT_SLEEP = 0x80, ABNORMAL_EFFECT_MUTED = 0x100, ABNORMAL_EFFECT_ROOT = 0x200, ABNORMAL_EFFECT_HOLD_1 = 0x400, ABNORMAL_EFFECT_HOLD_2 = 0x800, ABNORMAL_EFFECT_UNKNOWN_13 = 0x1000, ABNORMAL_EFFECT_BIG_HEAD = 0x2000, ABNORMAL_EFFECT_FLAME = 0x4000, ABNORMAL_EFFECT_TEXTURE_CHANGE = 0x8000, ABNORMAL_EFFECT_GROW = 0x10000 } // L2Character.ABNORMAL_EFFECT_*; unknown states retain the server names.
+
 export type AbnormalStatus_T = { id: number, level: number, duration: number };
 export type QuestState_T = { id: number, condition: number };
 export type HennaSymbol_T = { symbolId: number, itemId: number };
 export type HennaStatus_T = { stats: number[], slots: number, symbols: HennaSymbol_T[] };
-export type MacroCommand_T = { index: number, type: number, data1: number, data2: number, command: string };
+export enum MacroCommandType_T { SKILL = 1, ACTION = 2, CHAT = 3, SHORTCUT = 4, ITEM = 5, DELAY = 6 }
+export enum InventoryChange_T { ADD = 1, MODIFY = 2, REMOVE = 3 }
+export enum TradeChange_T { ADD = 1, REMOVE = 2, MODIFY = 3 }
+export enum MacroListChange_T { DELETE = 0, UPDATE = 2 }
+export enum RadarAction_T { ADD, REMOVE, CLEAR }
+export enum RadarType_T { RADAR, MAP, BOTH }
+export type MacroCommand_T = { index: number, type: MacroCommandType_T, data1: number, data2: number, command: string };
 export type Macro_T = { id: number, name: string, description: string, acronym: string, icon: number, commands: MacroCommand_T[] };
 export type FriendEntry_T = { objectId: number, name: string, isOnline: boolean };
 export type ShowBoardPart_T = { show: boolean, actions: string[], content: string };
@@ -1228,12 +1236,14 @@ export type TownMap_T = { texture: string, x: number, y: number };
 export type MonRaceRunner_T = { objectId: number, npcId: number, origin: Location_T, destination: Location_T, collisionHeight: number, collisionRadius: number, unknown: number, speeds: number[], trailer: number };
 export type MonRaceInfo_T = { unknown1: number, unknown2: number, runners: MonRaceRunner_T[] };
 export type Dice_T = Location_T & { objectId: number, itemId: number, number: number };
+export enum SSQPage_T { RECORD = 1, FESTIVAL = 2, SEALS = 3, PREDICTION = 4 }
+
 export type SSQCabalScore_T = { stoneScore: number, festivalScore: number, totalScore: number, percent: number };
 export type SSQRecord_T = { cycle: number, periodMessageId: number, periodEndMessageId: number, playerCabal: number, playerSeal: number, stoneContribution: number, ancientAdena: number, dusk: SSQCabalScore_T, dawn: SSQCabalScore_T };
 export type SSQFestival_T = { groupId: number, id: number, levelScore: number, duskScore: number, duskMembers: string[], dawnScore: number, dawnMembers: string[] };
 export type SSQSealStatus_T = { id: number, owner: number, duskPercent: number, dawnPercent: number };
 export type SSQSealPrediction_T = { id: number, cabal: number, messageId: number, unknown: number };
-export type SSQStatus_T = { page: 1, period: number, record: SSQRecord_T } | { page: 2, period: number, groups: number[], festivals: SSQFestival_T[] } | { page: 3, period: number, retainLimit: number, claimLimit: number, seals: SSQSealStatus_T[] } | { page: 4, period: number, predictedWinner: number, predictions: SSQSealPrediction_T[] };
+export type SSQStatus_T = { page: SSQPage_T.RECORD, period: number, record: SSQRecord_T } | { page: SSQPage_T.FESTIVAL, period: number, groups: number[], festivals: SSQFestival_T[] } | { page: SSQPage_T.SEALS, period: number, retainLimit: number, claimLimit: number, seals: SSQSealStatus_T[] } | { page: SSQPage_T.PREDICTION, period: number, predictedWinner: number, predictions: SSQSealPrediction_T[] };
 export type ClanHallDecoration_T = { clanHallId: number, status: Uint8Array, restoreHp: number, restoreMp: number[], restoreExp: number, teleport: number, unknown: number, curtains: number, itemCreate: number, support: number[], frontPlatform: number, itemCreate2: number, trailer: number[] };
 export type SiegeInfo_T = { castleId: number, ownerPrivileges: number, ownerId: number, ownerName: string, ownerLeaderName: string, ownerAllyId: number, ownerAllyName: string, serverTime: number, siegeTime: number, choices: number };
 export type SiegeClan_T = { clanId: number, name: string, leaderName: string, crestId: number, signedTime: number, type: number, allyId: number, allyName: string, allyLeaderName: string, allyCrestId: number };
@@ -1334,14 +1344,14 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
     const page = packet.c(), period = packet.c();
 
     switch (page) {
-        case 1: {
+        case SSQPage_T.RECORD: {
             const cycle = packet.d(), periodMessageId = packet.d(), periodEndMessageId = packet.d();
             const playerCabal = packet.c(), playerSeal = packet.c(), stoneContribution = packet.d(), ancientAdena = packet.d();
             const dusk = readSSQCabalScore(packet), dawn = readSSQCabalScore(packet);
 
-            return { page: 1, period, record: { cycle, periodMessageId, periodEndMessageId, playerCabal, playerSeal, stoneContribution, ancientAdena, dusk, dawn } };
+            return { page: SSQPage_T.RECORD, period, record: { cycle, periodMessageId, periodEndMessageId, playerCabal, playerSeal, stoneContribution, ancientAdena, dusk, dawn } };
         }
-        case 2: {
+        case SSQPage_T.FESTIVAL: {
             const groupCount = packet.c(), groups: number[] = [], festivals: SSQFestival_T[] = [];
 
             if (groupCount > packet.getRemaining() / 2) throw new Error(`Invalid SSQStatus festival group count '${groupCount}'.`);
@@ -1360,9 +1370,9 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
                 }
             }
 
-            return { page: 2, period, groups, festivals };
+            return { page: SSQPage_T.FESTIVAL, period, groups, festivals };
         }
-        case 3: {
+        case SSQPage_T.SEALS: {
             const retainLimit = packet.c(), claimLimit = packet.c(), count = packet.c();
 
             if (count > packet.getRemaining() / 4) throw new Error(`Invalid SSQStatus seal count '${count}'.`);
@@ -1371,9 +1381,9 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
 
             for (let i = 0; i < count; i++) seals.push({ id: packet.c(), owner: packet.c(), duskPercent: packet.c(), dawnPercent: packet.c() });
 
-            return { page: 3, period, retainLimit, claimLimit, seals };
+            return { page: SSQPage_T.SEALS, period, retainLimit, claimLimit, seals };
         }
-        case 4: {
+        case SSQPage_T.PREDICTION: {
             const predictedWinner = packet.c(), count = packet.c();
 
             if (count > packet.getRemaining() / 6) throw new Error(`Invalid SSQStatus prediction count '${count}'.`);
@@ -1382,7 +1392,7 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
 
             for (let i = 0; i < count; i++) predictions.push({ id: packet.c(), cabal: packet.c(), messageId: packet.h(), unknown: packet.h() });
 
-            return { page: 4, period, predictedWinner, predictions };
+            return { page: SSQPage_T.PREDICTION, period, predictedWinner, predictions };
         }
         default: throw new Error(`Unknown SSQStatus page '${page}'.`);
     }

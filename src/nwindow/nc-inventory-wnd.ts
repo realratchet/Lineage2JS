@@ -37,15 +37,17 @@ export type InventoryEntry_T = { objectId: number, itemId: number, name: string,
 type ItemLine_T = { label: string, value: string, color?: number };
 type InventoryInput_T = { pressed: number, hovered: number, selected: number, isArmed: boolean, isDoubleClick: boolean, isReleaseBlocked: boolean };
 
+enum ItemWeaponType_T { Sword = 1, Blunt = 2, Dagger = 3, Pole = 4, Fist = 5, Bow = 6, Etc = 7, Dual = 8 };
+
 function getWeaponEnchant(enchant: number) { return enchant > 3 ? enchant * 2 - 3 : enchant; } // 0x1006b690
 function getArmorEnchant(enchant: number) { return enchant > 3 ? enchant * 3 - 6 : enchant; } // 0x1006b6a0
 
 function getWeaponTable(weaponType: number, bodyPart: number) { // 0x100741b0 jump table
     switch (weaponType) {
-        case 1: case 2: return bodyPart === SLOT_LR_HAND ? 1 : 0;
-        case 3: case 4: case 7: return 0;
-        case 5: case 8: return 1;
-        case 6: return 2;
+        case ItemWeaponType_T.Sword: case ItemWeaponType_T.Blunt: return bodyPart === SLOT_LR_HAND ? 1 : 0;
+        case ItemWeaponType_T.Dagger: case ItemWeaponType_T.Pole: case ItemWeaponType_T.Etc: return 0;
+        case ItemWeaponType_T.Fist: case ItemWeaponType_T.Dual: return 1;
+        case ItemWeaponType_T.Bow: return 2;
         default: return -1;
     }
 }
@@ -790,8 +792,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         const manager = this.layer.getManager(), bodyPart = item.bodyPart;
 
         switch (item.itemClass) {
-            case 0: return bodyPart === SLOT_R_HAND || bodyPart === SLOT_L_HAND ? manager.getSysString(242) : bodyPart === SLOT_LR_HAND ? manager.getSysString(243) : "";
-            case 1: {
+            case ItemType2_T.TYPE2_WEAPON: return bodyPart === SLOT_R_HAND || bodyPart === SLOT_L_HAND ? manager.getSysString(242) : bodyPart === SLOT_LR_HAND ? manager.getSysString(243) : "";
+            case ItemType2_T.TYPE2_SHIELD_ARMOR: {
                 switch (bodyPart) {
                     case SLOT_UNDERWEAR: return manager.getSysString(229);
                     case SLOT_HEAD: return manager.getSysString(230);
@@ -808,9 +810,9 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
                     default: return "";
                 }
             }
-            case 2: return bodyPart & SLOT_EARS ? manager.getSysString(237) : bodyPart & SLOT_NECK ? manager.getSysString(238) : bodyPart & SLOT_FINGERS ? manager.getSysString(239) : "";
-            case 3: return manager.getSysString(240);
-            case 4: return manager.getSysString(241);
+            case ItemType2_T.TYPE2_ACCESSORY: return bodyPart & SLOT_EARS ? manager.getSysString(237) : bodyPart & SLOT_NECK ? manager.getSysString(238) : bodyPart & SLOT_FINGERS ? manager.getSysString(239) : "";
+            case ItemType2_T.TYPE2_QUEST: return manager.getSysString(240);
+            case ItemType2_T.TYPE2_MONEY: return manager.getSysString(241);
             default: return "";
         }
     }
@@ -843,7 +845,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         if (context & 0x800 && info.consumeType >= 1 && info.consumeType <= 3 && item.maxCount > 0) line(808, item.maxCount.toLocaleString("en-US"));
 
         switch (item.itemClass) {
-            case 0: {
+            case ItemType2_T.TYPE2_WEAPON: {
                 const weaponTypes = [0, 43, 44, 45, 46, 47, 48, 49, 504], table = getWeaponTable(info.weaponType, item.bodyPart), enchant = getWeaponEnchant(item.enchant);
                 const speed = info.speed < 260 ? 310 : info.speed < 309 ? 309 : info.speed < 352 ? 308 : info.speed < 406 ? 307 : 306; // 0x1006afc0
 
@@ -861,7 +863,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
                 if (!isMultiSell && info.mpConsume) line(320, info.mpConsume);
                 break;
             }
-            case 1:
+            case ItemType2_T.TYPE2_SHIELD_ARMOR:
                 if (item.bodyPart & (SLOT_R_HAND | SLOT_L_HAND)) {
                     if (isMultiSell) lines.push({ label: null, value: this.getSlotName(item) });
                     line(95, defence(info.shieldPDef));
@@ -877,13 +879,13 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
                 line(52, info.weight);
                 break;
-            case 2:
+            case ItemType2_T.TYPE2_ACCESSORY:
                 lines.push({ label: null, value: this.getSlotName(item) });
                 line(99, defence(info.mDef));
                 line(52, info.weight);
                 break;
-            case 3: lines.push({ label: null, value: this.getSlotName(item) }); break;
-            case 5:
+            case ItemType2_T.TYPE2_QUEST: lines.push({ label: null, value: this.getSlotName(item) }); break;
+            case ItemType2_T.TYPE2_OTHER:
                 if (isMultiSell) {
                     line(52, info.weight);
                     break;

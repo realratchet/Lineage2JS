@@ -1,3 +1,4 @@
+import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Box3, Euler, LoopOnce, Object3D, Quaternion, Sphere, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T } from "../../game/components";
@@ -1287,7 +1288,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         const parent = this.getParent(), level = parent.getUnrealScriptProperty("Level") as ScriptHost_T, isMoving = this.velocity.lengthSq() > 0;
 
-        if (parent.scriptClassId && (!level || getProperty(level, "NetMode") !== 1)) {
+        if (parent.scriptClassId && (!level || getProperty(level, "NetMode") !== ENetMode_T.NM_DedicatedServer)) {
             const controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
             const arrReservedMovePoint = controller && getProperty(controller, "ReservedMovePoint") as ScriptValue_T[];
 

@@ -416,7 +416,7 @@ export class GameClient {
     }
 
     public observerReturn() { this.send(this.write(GamePackets.GameClientPacket_T.ObserverReturn)); }
-    public requestSSQStatus(page: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSSQStatus).c(page)); }
+    public requestSSQStatus(page: GamePackets.SSQPage_T) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSSQStatus).c(page)); }
     public requestSiegeAttackerList(castleId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSiegeAttackerList).d(castleId)); }
     public requestSiegeDefenderList(castleId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestSiegeDefenderList).d(castleId)); }
     public requestJoinSiege(castleId: number, isAttacker: boolean, isJoining: boolean) { this.send(this.write(GamePackets.GameClientPacket_T.RequestJoinSiege).d(castleId).d(isAttacker ? 1 : 0).d(isJoining ? 1 : 0)); }

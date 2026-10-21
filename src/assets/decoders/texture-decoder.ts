@@ -1,3 +1,4 @@
+import { DDSConstants } from "@l2js/engine/dds/dds-constants";
 import { WebGLRenderer, CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, NearestMipmapNearestFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import type { DecodeLibrary } from "@l2js/engine";
@@ -172,11 +173,11 @@ function decodeDDS(buffer: ArrayBuffer, preferCompressed: boolean = false): THRE
         let rgbaData: Uint8Array | null = null;
         const input = new Uint8Array(buffer, dataOffset);
 
-        if (fourCC === 0x31545844) { // DXT1
+        if (fourCC === DDSConstants.FOURCC_DXT1) { // DXT1
             rgbaData = dxt1ToRgba(width, height, input);
-        } else if (fourCC === 0x33545844) { // DXT3
+        } else if (fourCC === DDSConstants.FOURCC_DXT3) { // DXT3
             rgbaData = dxt3ToRgba(width, height, input);
-        } else if (fourCC === 0x35545844) { // DXT5
+        } else if (fourCC === DDSConstants.FOURCC_DXT5) { // DXT5
             rgbaData = dxt5ToRgba(width, height, input);
         }
 
@@ -320,11 +321,11 @@ export function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
             const dataOffset = 128; // DDS header size
             const input = new Uint8Array(info.buffer, dataOffset);
 
-            if (fourCC === 0x31545844) { // DXT1
+            if (fourCC === DDSConstants.FOURCC_DXT1) { // DXT1
                 rgbaData = dxt1ToRgba(width, height, input);
-            } else if (fourCC === 0x33545844) { // DXT3
+            } else if (fourCC === DDSConstants.FOURCC_DXT3) { // DXT3
                 rgbaData = dxt3ToRgba(width, height, input);
-            } else if (fourCC === 0x35545844) { // DXT5
+            } else if (fourCC === DDSConstants.FOURCC_DXT5) { // DXT5
                 rgbaData = dxt5ToRgba(width, height, input);
             } else {
                 console.warn(`Unsupported DDS FourCC for B64 decode: ${fourCC}`);

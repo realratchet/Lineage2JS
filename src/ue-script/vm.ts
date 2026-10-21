@@ -1159,6 +1159,24 @@ export class UnScriptVM {
             return undefined;
         }
 
+        if (index === 258) {
+            let classId = args[0] as string;
+            const parentId = args[1] as string;
+
+            if (!parentId) return false;
+            if (!this.library.scriptClasses[parentId]) throw new Error(`UnrealScript class '${parentId}' is not in the decode library`);
+
+            while (classId) {
+                const cls = this.library.scriptClasses[classId];
+
+                if (!cls) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
+                if (classId === parentId) return true;
+                classId = cls.superClassId;
+            }
+
+            return false;
+        }
+
         if (index === 303) {
             const className = (args[0] as string).toLowerCase();
             const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;

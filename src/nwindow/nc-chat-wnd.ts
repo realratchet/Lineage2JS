@@ -1,3 +1,4 @@
+import { Say2_T } from "../network/game-packets";
 import NWnd, { type NMouseEvent_T } from "./nwnd";
 import NCButton from "./nc-button";
 import NCEditBox from "./nc-edit-box";
@@ -24,19 +25,19 @@ const DEFAULT_COLOR = 0xffdcdcdc;
 
 type ChatListFilter_T = { types: number[], hasSystem: boolean };
 
-const TABS: [number, number, string][] = [[144, 0, ""], [355, 8, "+"], [188, 3, "#"], [128, 4, "@"], [559, 9, "$"]]; // 0x1005b245..0x1005b2f1 tab sysstring labels; send type per tab from jump table 0x1005a338.
+const TABS: [number, number, string][] = [[144, Say2_T.ALL, ""], [355, Say2_T.TRADE, "+"], [188, Say2_T.PARTY, "#"], [128, Say2_T.CLAN, "@"], [559, Say2_T.ALLIANCE, "$"]]; // 0x1005b245..0x1005b2f1 tab sysstring labels; send type per tab from jump table 0x1005a338.
 
 const DEFAULT_LIST_FILTERS: ChatListFilter_T[] = [ // Per-list enable flags +0x250..+0x270 and system flag +0x244 are not decoded; these are the defaults per tab.
-    { types: [0, 1, 2, 3, 4, 8, 9, 17], hasSystem: true },
-    { types: [8], hasSystem: false },
-    { types: [3], hasSystem: false },
-    { types: [4], hasSystem: false },
-    { types: [9], hasSystem: false }
+    { types: [Say2_T.ALL, Say2_T.SHOUT, Say2_T.TELL, Say2_T.PARTY, Say2_T.CLAN, Say2_T.TRADE, Say2_T.ALLIANCE, Say2_T.HERO_VOICE], hasSystem: true },
+    { types: [Say2_T.TRADE], hasSystem: false },
+    { types: [Say2_T.PARTY], hasSystem: false },
+    { types: [Say2_T.CLAN], hasSystem: false },
+    { types: [Say2_T.ALLIANCE], hasSystem: false }
 ];
 
-const CHAT_COLORS: { [type: number]: [number, number] } = { 1: [0xffff7200, 1], 2: [0xffff00ff, 2], 3: [0xff00ff00, 3], 4: [0xff7d77ff, 4], 6: [0xff80ffff, 6], 7: [0xff80ffff, 7], 8: [0xffeaa5f5, 8], 9: [0xff77ff99, 9], 10: [0xff80ffff, 10], 11: [0xffff7200, 1], 14: [0xffdcdcdc, 14], 15: [0xffffe87b, 15], 16: [0xff7b7df2, 16], 17: [0xff408cff, 17], 18: [0xff00ffff, 18] }; // NConsoleWnd 0x1007d200: [color, routed type]; anything missing takes the default branch 0x1007d352 (0xffdcdcdc, type 0).
+const CHAT_COLORS: { [type: number]: [number, number] } = { [Say2_T.SHOUT]: [0xffff7200, Say2_T.SHOUT], [Say2_T.TELL]: [0xffff00ff, Say2_T.TELL], [Say2_T.PARTY]: [0xff00ff00, Say2_T.PARTY], [Say2_T.CLAN]: [0xff7d77ff, Say2_T.CLAN], [Say2_T.PETITION_PLAYER]: [0xff80ffff, Say2_T.PETITION_PLAYER], [Say2_T.PETITION_GM]: [0xff80ffff, Say2_T.PETITION_GM], [Say2_T.TRADE]: [0xffeaa5f5, Say2_T.TRADE], [Say2_T.ALLIANCE]: [0xff77ff99, Say2_T.ALLIANCE], [Say2_T.ANNOUNCEMENT]: [0xff80ffff, Say2_T.ANNOUNCEMENT], 11: [0xffff7200, Say2_T.SHOUT], [Say2_T.PARTYROOM_ALL]: [0xffdcdcdc, Say2_T.PARTYROOM_ALL], [Say2_T.PARTYROOM_COMMANDER]: [0xffffe87b, Say2_T.PARTYROOM_COMMANDER], [Say2_T.CHANNEL_ALL]: [0xff7b7df2, Say2_T.CHANNEL_ALL], [Say2_T.HERO_VOICE]: [0xff408cff, Say2_T.HERO_VOICE], [Say2_T.CRITICAL_ANNOUNCE]: [0xff00ffff, Say2_T.CRITICAL_ANNOUNCE] }; // NConsoleWnd 0x1007d200: [color, routed type]; anything missing takes the default branch 0x1007d352 (0xffdcdcdc, type 0).
 
-const CHAT_PREFIXES = new Map<string, number>([["~", 0], ["～", 0], ["!", 1], ["！", 1], ["\"", 2], ["”", 2], ["#", 3], ["＃", 3], ["@", 4], ["＠", 4], ["&", 6], ["＆", 6], ["*", 7], ["＊", 7], ["+", 8], ["＋", 8], ["$", 9], ["＄", 9], ["%", 17], ["％", 17]]); // Prefix table 0x1023dbb8 (ASCII, fullwidth per type).
+const CHAT_PREFIXES = new Map<string, number>([["~", Say2_T.ALL], ["～", Say2_T.ALL], ["!", Say2_T.SHOUT], ["！", Say2_T.SHOUT], ["\"", Say2_T.TELL], ["”", Say2_T.TELL], ["#", Say2_T.PARTY], ["＃", Say2_T.PARTY], ["@", Say2_T.CLAN], ["＠", Say2_T.CLAN], ["&", Say2_T.PETITION_PLAYER], ["＆", Say2_T.PETITION_PLAYER], ["*", Say2_T.PETITION_GM], ["＊", Say2_T.PETITION_GM], ["+", Say2_T.TRADE], ["＋", Say2_T.TRADE], ["$", Say2_T.ALLIANCE], ["＄", Say2_T.ALLIANCE], ["%", Say2_T.HERO_VOICE], ["％", Say2_T.HERO_VOICE]]); // Prefix table 0x1023dbb8 (ASCII, fullwidth per type).
 
 class NCResizeFrame extends NWnd { // NCResizeFrame 0xf007 (0x1005aab6): drag feeds OnResizeWnd; dragging up grows the window.
     protected readonly owner: NCChatWnd;
@@ -170,30 +171,30 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
     public isInputFocused() { return this.editBox.isFocused(); }
 
     public addCreatureSay(name: string, text: string, type: number) { // NConsoleWnd 0x1007d200 -> NCConsole 0x1005d580 "%s: %s" (0x101ad5e8).
-        const [color, routed] = CHAT_COLORS[type] || [DEFAULT_COLOR, 0];
+        const [color, routed] = CHAT_COLORS[type] || [DEFAULT_COLOR, Say2_T.ALL];
 
-        if (routed === 6 || routed === 7 || routed === 14 || routed === 15 || routed === 16) return; // 0x1005d5e9..0x1005d622: 6/7 go to the petition window, 14 to the party room, 15/16 to [+0x264].
+        if (routed === Say2_T.PETITION_PLAYER || routed === Say2_T.PETITION_GM || routed === Say2_T.PARTYROOM_ALL || routed === Say2_T.PARTYROOM_COMMANDER || routed === Say2_T.CHANNEL_ALL) return; // 0x1005d5e9..0x1005d622: 6/7 go to the petition window, 14 to the party room, 15/16 to [+0x264].
 
-        const sender = routed === 10 ? this.manager.getSysString(328) : name;
+        const sender = routed === Say2_T.ANNOUNCEMENT ? this.manager.getSysString(328) : name;
 
-        this.addChat(routed === 18 ? text : `${sender}: ${text}`, color, routed);
+        this.addChat(routed === Say2_T.CRITICAL_ANNOUNCE ? text : `${sender}: ${text}`, color, routed);
     }
 
-    public addSystemMessage(text: string, color: number, group: number = 0) { this.addChat(text, color, 5, group); } // NWindow 0x10081af2 -> 0x1005c2b0 forwards record+0x10.
+    public addSystemMessage(text: string, color: number, group: number = 0) { this.addChat(text, color, Say2_T.GM, group); } // NWindow 0x10081af2 -> 0x1005c2b0 forwards record+0x10.
 
     protected addChat(text: string, color: number, type: number, group: number = 0) { // AddChat 0x10052f40, case table 0x10053920 / 0x100538f4; 11..16 and > 18 are dropped.
         switch (type) {
-            case 6: case 7: case 10: case 18:
+            case Say2_T.PETITION_PLAYER: case Say2_T.PETITION_GM: case Say2_T.ANNOUNCEMENT: case Say2_T.CRITICAL_ANNOUNCE:
                 for (const list of this.lists) list.addString(text, color);
                 break;
-            case 5:
+            case Say2_T.GM:
                 for (let i = 0; i < this.lists.length; i++)
                     if (DEFAULT_LIST_FILTERS[i].hasSystem) this.lists[i].addString(text, color);
 
                 if (group !== 3 && group !== 7 || group === 3 && this.systemMsgWndDamage || group === 7 && this.systemMsgWndExpendableItem)
                     this.systemPane.addString(text, color);
                 break;
-            case 0: case 1: case 2: case 3: case 4: case 8: case 9: case 17:
+            case Say2_T.ALL: case Say2_T.SHOUT: case Say2_T.TELL: case Say2_T.PARTY: case Say2_T.CLAN: case Say2_T.TRADE: case Say2_T.ALLIANCE: case Say2_T.HERO_VOICE:
                 for (let i = 0; i < this.lists.length; i++)
                     if (DEFAULT_LIST_FILTERS[i].types.includes(type)) this.lists[i].addString(text, color);
                 break;
@@ -239,9 +240,9 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
 
         const first = line.charAt(0);
         const hasPrefix = CHAT_PREFIXES.has(first);
-        const type = first === "＂" ? 2 : hasPrefix ? CHAT_PREFIXES.get(first) : this.oldChatting ? 0 : TABS[this.tabControl.selected][1];
+        const type = first === "＂" ? Say2_T.TELL : hasPrefix ? CHAT_PREFIXES.get(first) : this.oldChatting ? Say2_T.ALL : TABS[this.tabControl.selected][1];
 
-        if (type === 2) return this.sendTell(line);
+        if (type === Say2_T.TELL) return this.sendTell(line);
 
         const text = hasPrefix ? line.slice(1) : line;
 
@@ -256,10 +257,10 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
 
         if (!this.onSend) return;
 
-        if (length === 0) return this.onSend(line, 2, "");
+        if (length === 0) return this.onSend(line, Say2_T.TELL, "");
         if (rest.length <= length + 1) return;
 
-        this.onSend(rest.slice(length + 1), 2, rest.slice(0, length));
+        this.onSend(rest.slice(length + 1), Say2_T.TELL, rest.slice(0, length));
     }
 
     public onResizeWnd(delta: number, save = true) { // OnResizeWnd 0x10054d50: 15 px steps, 187 <= H <= 502, grows upward; the delta resets either way.

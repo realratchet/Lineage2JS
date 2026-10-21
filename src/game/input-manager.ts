@@ -1,3 +1,4 @@
+import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 import { Box3, Raycaster, Vector2, Vector3 } from "three";
 import { IEngineComponent } from "./components";
 import { getProperty, setProperty } from "../ue-script/vm";
@@ -120,15 +121,16 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.controls.orbit.target.copy(renderManager.cameraTarget);
         this.controls.orbit.update();
         this.controls.orbit.onCameraInput = (action, yaw, pitch) => {
+            if (action === "axis" && (yaw !== 0 || pitch !== 0)) this.rightMouseDownTime = -Infinity;
             const network = this.manGame.getComponent("network");
 
-            if (network.inWorld && (action === "release" || this.followPlayer && !this.isCameraLocked && (action === "wheel" || !this.manGame.getComponent("asset").playerController.scriptProperties.get("bCameraWalking")))) {
-                if (action === "axis") network.game.recordCameraInput("press", 0, 0);
-                network.game.recordCameraInput(action, yaw, pitch);
+            if (network.isInWorld() && (action === "release" || this.followPlayer && !this.isCameraLocked && (action === "wheel" || !this.manGame.getComponent("asset").playerController.scriptProperties.get("bCameraWalking")))) {
+                if (action === "axis") network.getGameClient().recordCameraInput("press", 0, 0);
+                network.getGameClient().recordCameraInput(action, yaw, pitch);
             }
         };
         this.controls.orbit.onCameraZoom = (direction, distance) => {
-            if (!this.manGame.getComponent("network").inWorld || !this.followPlayer) return null;
+            if (!this.manGame.getComponent("network").isInWorld() || !this.followPlayer) return null;
 
             const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
 
@@ -221,6 +223,8 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("ManuallyCameraYaw", 0);
         properties.set("ManuallyCameraPitch", 0);
         properties.set("CurFixedDefaultCameraNo", scene.fixedCamera);
+        properties.set("bCameraMovingToDefault", false);
+        if (scene.firstPerson) render.player.setUnrealScriptProperty("bHidden", true);
         render.player.getCameraTargetPosition(this.controls.orbit.target);
         dirForward.set(Math.cos(yaw) * Math.cos(pitch), Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch));
         render.camera.position.copy(this.controls.orbit.target).addScaledVector(dirForward, -(scene.zoom + 250));
@@ -256,32 +260,33 @@ export class InputManager implements IEngineComponent<GameManager> {
         const { key, action, amount } = instruction, properties = this.manGame.getComponent("asset").playerController.scriptProperties;
 
         switch (key) {
-            case 33:
-            case 34:
-            case 36:
-                if (action === 1) this.setFixedDefaultCamera(key === 33 ? -1 : key === 34 ? 1 : 0);
+            case EInputKey_T.IK_PageUp:
+            case EInputKey_T.IK_PageDown:
+            case EInputKey_T.IK_Home:
+                if (action === EInputAction_T.IST_Press) this.setFixedDefaultCamera(key === EInputKey_T.IK_PageUp ? -1 : key === EInputKey_T.IK_PageDown ? 1 : 0);
                 break;
-            case 2:
-                if (action === 1) this.rightMouseDownTime = performance.now();
-                else if (action === 3) {
+            case EInputKey_T.IK_RightMouse:
+                if (action === EInputAction_T.IST_Press) this.rightMouseDownTime = performance.now();
+                else if (action === EInputAction_T.IST_Release) {
                     if (Math.fround(performance.now() - this.rightMouseDownTime) <= 200) this.setFixedDefaultCamera(0);
                     this.rightMouseDownTime = -Infinity;
                 }
-                if (action === 3 || !properties.get("bDisableCameraManuallyRotating")) properties.set("bCameraManuallyRotating", action === 1);
+                if (action === EInputAction_T.IST_Release || !properties.get("bDisableCameraManuallyRotating")) properties.set("bCameraManuallyRotating", action === EInputAction_T.IST_Press);
                 break;
-            case 228:
-            case 229:
+            case EInputKey_T.IK_MouseX:
+            case EInputKey_T.IK_MouseY:
                 if (!properties.get("bCameraManuallyRotating") || properties.get("bCameraWalking") && properties.get("CameraModeTarget")) return;
-                const name = key === 228 ? "ManuallyCameraYaw" : "ManuallyCameraPitch";
+                if (amount !== 0) this.rightMouseDownTime = -Infinity;
+                const name = key === EInputKey_T.IK_MouseX ? "ManuallyCameraYaw" : "ManuallyCameraPitch";
 
                 properties.set(name, Math.fround((properties.get(name) as number) + Math.trunc(amount * 3600 * Math.fround(0.01))));
                 break;
-            case 236:
-            case 237:
-                if (action !== 1) return;
+            case EInputKey_T.IK_MouseWheelUp:
+            case EInputKey_T.IK_MouseWheelDown:
+                if (action !== EInputAction_T.IST_Press) return;
                 const orbit = this.controls.orbit;
 
-                orbit.unclippedDistance = orbit.onCameraZoom(key === 236 ? -1 : 1, orbit.unclippedDistance || this.renderManager.camera.position.distanceTo(orbit.target));
+                orbit.unclippedDistance = orbit.onCameraZoom(key === EInputKey_T.IK_MouseWheelUp ? -1 : 1, orbit.unclippedDistance || this.renderManager.camera.position.distanceTo(orbit.target));
                 orbit.update();
                 break;
             default: throw new Error(`Replay camera key '${key}' is not implemented.`);
@@ -321,7 +326,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             setProperty(controller, "bUseHoldCamera", false);
         }
 
-        if (this.manGame.getComponent("network").game?.isPlayingReplay()) {
+        if (this.manGame.getComponent("network").getGameClient()?.isPlayingReplay()) {
             const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
             const yaw = properties.get("ManuallyCameraYaw") as number, pitch = properties.get("ManuallyCameraPitch") as number;
 
@@ -492,7 +497,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         if (event.code === "PageUp" || event.code === "PageDown" || event.code === "Home") {
             if (this.manGame.getComponent("network").isInWorld() && this.followPlayer) {
                 event.preventDefault();
-                if (this.isOrbitControls && !this.isCameraLocked) this.manGame.getComponent("network").game.recordCameraKey(event.code === "PageUp" ? 33 : event.code === "PageDown" ? 34 : 36, event.repeat ? 2 : 1);
+                if (this.isOrbitControls && !this.isCameraLocked) this.manGame.getComponent("network").getGameClient().recordCameraKey(event.code === "PageUp" ? EInputKey_T.IK_PageUp : event.code === "PageDown" ? EInputKey_T.IK_PageDown : EInputKey_T.IK_Home, event.repeat ? EInputAction_T.IST_Hold : EInputAction_T.IST_Press);
                 if (!event.repeat) this.setFixedDefaultCamera(event.code === "PageUp" ? -1 : event.code === "PageDown" ? 1 : 0);
             }
             return;
@@ -609,7 +614,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             const target = event.target as HTMLElement, network = this.manGame.getComponent("network");
 
             if (!event.defaultPrevented && !event.altKey && !event.ctrlKey && !event.metaKey && target.tagName !== "INPUT" && target.tagName !== "TEXTAREA" && !target.isContentEditable && network.isInWorld() && this.followPlayer && this.isOrbitControls && !this.isCameraLocked)
-                network.game.recordCameraKey(event.code === "PageUp" ? 33 : event.code === "PageDown" ? 34 : 36, 3);
+                network.getGameClient().recordCameraKey(event.code === "PageUp" ? EInputKey_T.IK_PageUp : event.code === "PageDown" ? EInputKey_T.IK_PageDown : EInputKey_T.IK_Home, EInputAction_T.IST_Release);
             return;
         }
         switch (event.key.toLowerCase()) {

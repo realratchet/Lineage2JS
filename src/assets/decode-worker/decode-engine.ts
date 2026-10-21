@@ -1,3 +1,4 @@
+import { DDSConstants } from "../unreal/dds/dds-constants";
 import type { APackage, UClass } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
 import AssetLoader from "../asset-loader";
@@ -383,9 +384,9 @@ function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: n
     const input = new Uint8Array(info.buffer, 128);
 
     switch (fourCC) {
-        case 0x31545844: return { width, height, buffer: dxt1ToRgba(width, height, input).buffer as ArrayBuffer };
-        case 0x33545844: return { width, height, buffer: dxt3ToRgba(width, height, input).buffer as ArrayBuffer };
-        case 0x35545844: return { width, height, buffer: dxt5ToRgba(width, height, input).buffer as ArrayBuffer };
+        case DDSConstants.FOURCC_DXT1: return { width, height, buffer: dxt1ToRgba(width, height, input).buffer as ArrayBuffer };
+        case DDSConstants.FOURCC_DXT3: return { width, height, buffer: dxt3ToRgba(width, height, input).buffer as ArrayBuffer };
+        case DDSConstants.FOURCC_DXT5: return { width, height, buffer: dxt5ToRgba(width, height, input).buffer as ArrayBuffer };
         default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
     }
 }

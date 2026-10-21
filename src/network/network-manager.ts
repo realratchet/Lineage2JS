@@ -1,584 +1,106 @@
-import type PawnMovementComponent from "../physics/components/pawn-movement-component";
-import type NProjectileComponent from "../physics/components/projectile-component";
-import type AnimationComponent from "../objects/components/animation-component";
-import { LoopOnce, Raycaster, Vector3, type Object3D } from "three";
+import NetworkSession, { GMTransferPhase_T } from "./network-session";
+import NetworkActors, { type NetObject_T } from "./network-actors";
+import NetworkMovement, { tmpVehicleOrigin } from "./network-movement";
+import NetworkCombat from "./network-combat";
+import NetworkItems from "./network-items";
+import NetworkCommunity from "./network-community";
+import { Raycaster, Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
-import Player from "../player";
-import PawnAttackComponent, { type NAttackActionParam_T } from "../objects/components/pawn-attack-component";
-import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
-import { CHARACTER_FULL_ARMOR_SLOT, CHARACTER_ALLDRESS_SLOT } from "@l2js/engine/datafile/schema/armorgrp.schema";
-import LoginClient, { type SessionKey_T } from "./login-client";
-import GameClient, { type CharacterCreate_T } from "./game-client";
+import type { CharacterCreate_T } from "./game-client";
 import type { GameGUI_T, Nameplate_T } from "../nwindow/nconsole-wnd";
-import getCommandTokens from "./command-parser";
-import L2Lobby from "./l2-lobby";
-import L2ReplayFile from "./l2-replay-file";
-import { saveReplayFile } from "./replay-files";
+import getCommandTokens, { CommandType_T, ActionType_T } from "./command-parser";
+import MacroExecutor from "./macro-executor";
 import Vehicle from "../objects/vehicle";
 import GroundPickup from "../objects/ground-pickup";
-import L2Dice from "../objects/l2-dice";
-import type { SectorObject } from "../objects/zone-object";
-import { getRotatorQuaternionElements, sinRotator } from "../assets/unreal/utils/rotator";
 import * as GamePackets from "./game-packets";
-import PawnFishingComponent, { FishingType_T } from "../objects/components/pawn-fishing-component";
+import PawnFishingComponent from "../objects/components/pawn-fishing-component";
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component";
-import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
-import { getProperty, type ScriptHost_T } from "../ue-script/vm";
+import { getProperty } from "../ue-script/vm";
 import PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { IEngineComponent } from "../game/components";
 import type GameManager from "../game/game-manager";
-import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
 import type { ICollidable } from "../objects/objects";
-import Radar, { type RadarState_T } from "../rendering/radar";
+import { getDistance } from "./network-location";
 
-type NetObjectKind_T = "user" | "player" | "npc";
-type MacroRow_T = { command: GamePackets.Macro_T["commands"][number], duration: number, start: number, elapsed: number };
-type MacroExecution_T = { macro: GamePackets.Macro_T, active: boolean, current: number, rows: MacroRow_T[] };
-type NetSkill_T = { id: number, level: number, hitTime: number, receivedTime: number, associatedActors: BaseActor[], associatedObjectIds: number[] };
-type PendingAttack_T = { hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T };
-type PendingSkill_T = { targetObjectId: number, id: number, level: number, hitTime: number, receivedTime: number, position: GamePackets.Location_T, isTransient: boolean, associatedObjectIds: number[] };
-
-type NetObject_T = {
-    objectId: number;
-    npcId: number;
-    selectedId: number;
-    clanId: number;
-    clanCrestId: number;
-    allyId: number;
-    allyCrestId: number;
-    kind: NetObjectKind_T;
-    actor: BaseActor;
-    actorReady: Promise<BaseActor>;
-    resolveActor: (actor: BaseActor) => void;
-    isRemoved: boolean;
-    position: Vector3;
-    destination: Vector3;
-    heading: number;
-    name: string;
-    title: string;
-    curHp: number;
-    maxHp: number;
-    curMp: number;
-    maxMp: number;
-    levelDifference: number;
-    karma: number;
-    pvpFlag: number;
-    recommendations: number;
-    nameColor: number;
-    titleColor: number;
-    isSummon: boolean;
-    isAttackable: boolean;
-    isDead: boolean;
-    appearanceKey: string;
-    speeds: GamePackets.Speeds_T;
-    isRunning: boolean;
-    environment: number;
-    isInCombat: boolean;
-    waitType: GamePackets.WaitType_T;
-    privateStoreType: GamePackets.PrivateStoreType_T;
-    chatMessage: string;
-    chatTime: number;
-    chairStaticObjectId: number;
-    cubics: number[];
-    abnormalState: number;
-    fishing: GamePackets.FishingState_T;
-    skill?: NetSkill_T;
-    pendingFly: { origin: Vector3, destination: Vector3 };
-    pendingVehicleMove: { vehicleId: number, position: Vector3 };
-    pendingRotation: { direction: number, speed: number };
-    pendingAttack: PendingAttack_T;
-    pendingSkill: PendingSkill_T;
-    pendingTransientSkills: PendingSkill_T[];
-};
-type NetVehicle_T = { actor: Vehicle, actorReady: Promise<void>, objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
-type PetRemainTime_T = { maxTime: number, remainingTime: number };
-type PledgeInfo_T = { name: string, allyName: string, crestId: number, allyId: number, allyCrestId: number, unknown: number, crest: HTMLCanvasElement, allyCrest: HTMLCanvasElement };
-
-const MYSTIC_BODY_CLASS_IDS = new Set([10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 38, 39, 40, 41, 42, 43, 49, 50, 51, 52, 94, 95, 96, 97, 98, 103, 104, 105, 110, 111, 112, 115, 116]); // ClassId.isMage excludes orcMage (49), which uses the Shaman body.
 const VALIDATE_POSITION_INTERVAL = 1000;
+
 const STUCK_INTERVAL = 600;
+
 const STUCK_DISTANCE = 2;
-const NAMEPLATE_DISTANCE = 1000;
-const CHAT_BALLOON_TIME = 6000; // NCConsole 0x1005f070: 1 s timer, the balloon is cleared on the sixth tick.
+
 const STOP_SNAP_DISTANCE = 32;
-const GAME_TIME_SCALE = 1 / 6; // GameTimeController: one in-game day lasts four real hours.
-const NETWORK_BOW_RANGE = 2000;
-const NPC_SPAWN_CONCURRENCY = 8;
-const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 4165, 4166]);
-
-const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
-const tmpTeleportPosition = new Vector3();
-const tmpVehicleLocation = new Vector3();
-const tmpVehicleOrigin = new Vector3();
-const tmpEarthquakePosition = new Vector3();
-const tmpEarthquakeRotationAmplitude = new Vector3(0, 0.1, 0);
-const tmpEarthquakeRotationVelocity = new Vector3(0, 1000, 0);
-const tmpEarthquakePositionAmplitude = new Vector3();
-
-function setVector(target: Vector3, location: GamePackets.Location_T): Vector3 { return target.set(location.x, location.y, location.z); }
-
-
-function getDistance(a: Vector3, b: Vector3): number {
-    const x = Math.fround(Math.fround(a.x) - Math.fround(b.x)), y = Math.fround(Math.fround(a.y) - Math.fround(b.y)), z = Math.fround(Math.fround(a.z) - Math.fround(b.z));
-
-    return Math.fround(Math.sqrt(x * x + y * y + z * z));
-}
-
-type GMServerTransfer_T = { phase: number, lastPhase: number, serverId: number, position: GamePackets.Location_T, selectedSlot: number, error: string };
 
 export class NetworkManager implements IEngineComponent<GameManager> {
+    public readonly session = new NetworkSession(this);
+    public readonly actors = new NetworkActors(this);
+    public readonly movement = new NetworkMovement(this);
+    public readonly combat = new NetworkCombat(this);
+    public readonly items = new NetworkItems(this);
+    public readonly community = new NetworkCommunity(this);
     protected manGame: GameManager;
-    protected ui: GameGUI_T = null;
-    protected login: LoginClient = null;
-    protected lobby: L2Lobby = null;
-    protected loginUrl: string = null;
-    protected gameServerUrl: string = null;
-    protected game: GameClient = null;
-    protected account: string = null;
-    protected loginAccount: string = null;
-    protected loginPassword: string = null;
-    protected gmTransfer: GMServerTransfer_T = null;
-    protected sessionKey: SessionKey_T = null;
-    protected characters: GamePackets.CharSelectEntry_T[] = [];
-    protected templates: GamePackets.CharTemplate_T[] = [];
-    protected charGroups: ICharacterGroup[] = null;
-    protected readonly objects = new Map<number, NetObject_T>();
-    protected readonly doors = new Map<number, MovableObject>();
-    protected readonly doorPositions = new Map<number, number>();
-    protected readonly staticObjects = new Map<number, number>();
-    protected readonly appearances = new Map<number, GamePackets.Appearance_T>();
-    protected readonly pickups = new Map<number, GroundPickup>();
+    public ui: GameGUI_T = null;
     protected gnoCategory = 0;
     protected gnoObjectId = -1;
     protected gnoElapsed = 0;
     protected nextTargetLock = false;
-    protected readonly npcNames = new Map<number, string>();
-    protected readonly shortcuts = new Map<number, GamePackets.ShortCut_T>();
-    protected readonly autoSoulShots = new Set<number>();
-    protected readonly inventory = new Map<number, GamePackets.InventoryItem_T>();
-    protected inventoryOrderNamespace = 0;
-    protected readonly appearanceLoads = new WeakMap<BaseActor, Promise<void>>();
-    protected readonly bodyKeys = new WeakMap<BaseActor, string>();
-    protected readonly appearanceRequests = new WeakMap<BaseActor, number>();
-    protected storageMaxCount: GamePackets.StorageMaxCount_T = null;
-    protected readonly skills = new Map<number, GamePackets.SkillEntry_T>();
-    protected readonly questStates = new Map<number, GamePackets.QuestState_T>();
-    protected hennaStatus: GamePackets.HennaStatus_T = null;
-    protected isMacroListComplete = true;
-    protected macroListReceived = 0;
-    protected readonly macros = new Map<number, GamePackets.Macro_T>();
-    protected readonly macroExecutions = new Map<number, MacroExecution_T>();
-    protected readonly friends = new Map<number, GamePackets.FriendEntry_T>();
-    protected readonly partyMembers = new Map<number, GamePackets.PartyMember_T>();
-    protected partyInvite: GamePackets.PartyInvite_T = null;
-    protected pledgeInvite: GamePackets.PledgeInvite_T = null;
-    protected friendInvite: GamePackets.FriendInvite_T = null;
-    protected partyJoinResult = -1;
-    protected pledgeJoinId = 0;
-    protected clanInfo: GamePackets.ClanInfo_T = null;
-    protected readonly pledgeInfos = new Map<number, PledgeInfo_T>();
-    protected readonly clanMembers = new Map<string, GamePackets.ClanMember_T>();
-    protected aquireSkillFishing = false;
-    protected aquireSkills: GamePackets.AquireSkillEntry_T[] = [];
-    protected aquireSkillInfo: GamePackets.AquireSkillInfo_T = null;
-    protected tradePartnerId = 0;
-    protected tradeRequestId = 0;
-    protected readonly tradeOwnItems: GamePackets.TradeItem_T[] = [];
-    protected readonly tradeOtherItems: GamePackets.TradeItem_T[] = [];
-    protected readonly tradeAvailableItems: GamePackets.TradeItem_T[] = [];
-    protected tradeDone = 0;
-    protected shopSellMoney = 0;
-    protected shopSellNpcId = 0;
-    protected readonly shopSellItems: GamePackets.ShopItem_T[] = [];
-    protected shopBuyMoney = 0;
-    protected shopBuyListId = 0;
-    protected readonly shopBuyItems: GamePackets.ShopItem_T[] = [];
-    protected partyLeaderId = 0;
-    protected partyLootDistribution = 0;
-    protected etcStatus: { charges: number, weightPenalty: number, messageRefusal: number, dangerArea: number, expertisePenalty: number } = null;
-    protected signsSky = 0;
-    protected petStatusType = -1;
-    protected deletedPetId = 0;
-    protected petInfo: GamePackets.PetStatus_T = { objectId: -1, npcId: -GamePackets.NPC_ID_OFFSET, name: "", x: 0, y: 0, z: 0, statusType: 0, curFood: 0, maxFood: 0, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, field42: 0, level: 0, exp: 0, minExp: 0, nextExp: 0, weight: 0, maxWeight: 0, pAtk: 0, pDef: 0, mAtk: 0, mDef: 0, accuracy: 0, evasion: 0, critical: 0, speed: 0, attackSpeed: 0, castSpeed: 0, field60: 0, isMountable: false, soulshotsUsed: 0, spiritshotsUsed: 0 };
-    protected isMounted = false;
-    protected npcSpawnCount = 0;
-    protected readonly npcSpawnWaiters: (() => void)[] = [];
-    protected readonly petInventory = new Map<number, GamePackets.InventoryItem_T>();
-    protected petRemainTime: PetRemainTime_T = null;
-    protected readonly abnormalStatuses: GamePackets.AbnormalStatus_T[] = [];
-    protected shortBuff: GamePackets.AbnormalStatus_T = null;
-    protected userId = 0;
-    protected userInfo: GamePackets.UserInfo_T = null;
-    protected selectedSlot = -1;
-    protected inWorld = false;
-    protected worldLevel: SectorObject = null;
-    protected teleportGeneration = 0;
-    protected teleportInfoPending = false;
-    protected isRunning = true;
-    protected lastValidateAt = 0;
-    protected wasMoving = false;
-    protected readonly stuckPosition = new Vector3();
-    protected skillListLoad: Promise<void> = null;
-    protected resolveSkillList: () => void = null;
-    protected userAppearanceLoad: Promise<void> = null;
-    protected worldLoad: Promise<void> = null;
-    protected replayLoading = false;
+    public readonly macroExecutor = new MacroExecutor(this, this.items.macros, this.actors.objects, this.items.shortcuts);
     protected nextTick: Promise<void> = null;
     protected resolveNextTick: () => void = null;
-    protected allyInvite: GamePackets.AllyInvite_T = null;
-    protected pledgePower = new Uint8Array(32);
-    protected pledgeWarStart: GamePackets.PledgeWar_T = null;
-    protected pledgeWarStop: GamePackets.PledgeWar_T = null;
-    protected pledgeWarSurrender: GamePackets.PledgeWar_T = null;
-    protected readonly pledgeCrests = new Map<number, Uint8Array>();
-    protected readonly pledgeLargeCrests = new Map<number, Uint8Array>();
-    protected readonly clanLargeCrestIds = new Map<number, number>();
-    protected readonly allyCrests = new Map<number, Uint8Array>();
-    protected warehouseDeposit: GamePackets.WarehouseList_T = null;
-    protected warehouseWithdraw: GamePackets.WarehouseList_T = null;
-    protected privateStoreManageSell: GamePackets.PrivateStoreManageSell_T = null;
-    protected privateStoreSell: GamePackets.PrivateStoreSellList_T = null;
-    protected privateStoreManageBuy: GamePackets.PrivateStoreManageBuy_T = null;
-    protected privateStoreBuy: GamePackets.PrivateStoreBuyList_T = null;
-    protected readonly privateStoreSellMsgs = new Map<number, string>();
-    protected readonly privateStoreBuyMsgs = new Map<number, string>();
-    protected readonly packageTargets = new Map<number, string>();
-    protected packageSendable: GamePackets.PackageSendableList_T = null;
-    protected multiSell: GamePackets.MultiSellList_T = null;
-    protected shopPreview: GamePackets.ShopPreviewList_T = null;
-    protected shopPreviewItems: number[] = null;
-    protected seedShop: GamePackets.BuyListSeed_T = null;
-    protected cropProcure: GamePackets.SellListProcure_T = null;
-    protected readonly vehicles = new Map<number, NetVehicle_T>();
-    protected readonly mounts = new Map<number, GamePackets.Ride_T>();
-    protected readonly riders = new Map<number, BaseActor>();
-    protected observation: GamePackets.Location_T = null;
-    protected specialCamera: GamePackets.SpecialCamera_T = null;
-    protected cameraMode = 0;
-    protected questArrowDestination: GamePackets.Location_T = null;
-    protected readonly mapMarkers: GamePackets.Location_T[] = [];
-    protected readonly radarMarkers: GamePackets.Location_T[] = [];
-    protected readonly radarState: RadarState_T = { party: [], target: null, markers: this.radarMarkers };
-    protected readonly partyPositions = new Map<number, GamePackets.Location_T>();
-    protected townMap: GamePackets.TownMap_T = null;
-    protected calculatorId = 0;
-    protected xmasSealItemId = 0;
-    protected dice: GamePackets.Dice_T = null;
-    protected monRace: GamePackets.MonRaceInfo_T = null;
-    protected readonly ssqStatus = new Map<number, GamePackets.SSQStatus_T>();
-    protected readonly clanHallDecoration = new Map<number, GamePackets.ClanHallDecoration_T>();
-    protected siegeInfo: GamePackets.SiegeInfo_T = null;
-    protected siegeAttackers: GamePackets.SiegeClanList_T = null;
-    protected siegeDefenders: GamePackets.SiegeClanList_T = null;
-    protected recipeBook: GamePackets.RecipeBook_T = null;
-    protected recipeItemMakeInfo: GamePackets.RecipeItemMakeInfo_T = null;
-    protected recipeShopManageList: GamePackets.RecipeShopManageList_T = null;
-    protected recipeShopSellList: GamePackets.RecipeShopSellList_T = null;
-    protected recipeShopItemInfo: GamePackets.RecipeShopItemInfo_T = null;
-    protected readonly recipeShopMessages = new Map<number, string>();
-    protected hennaEquipList: GamePackets.HennaEquipList_T = null;
-    protected hennaItemInfo: GamePackets.HennaItemInfo_T = null;
-    protected partyMatchRooms: GamePackets.PartyMatchRoom_T[] = [];
-    protected partyMatchPage = 1;
-    protected partyMatchDetail: GamePackets.PartyMatchDetail_T = null;
-    protected readonly partyEffects = new Map<number, GamePackets.PartySpelled_T>();
-    protected readonly tutorialQuestionMarks = new Set<number>();
-    protected tutorialClientEvents = 0;
-    protected gmCharacterInfo: GamePackets.GMViewCharacterInfo_T = null;
-    protected gmPledgeInfo: GamePackets.GMViewPledgeInfo_T = null;
-    protected gmSkillInfo: GamePackets.GMViewSkillInfo_T = null;
-    protected gmQuestList: GamePackets.GMViewQuestList_T = null;
-    protected gmItemList: GamePackets.GMViewItemList_T = null;
-    protected gmWarehouseList: GamePackets.GMViewWarehouseWithdrawList_T = null;
-    protected gmHennaStatus: GamePackets.HennaStatus_T = null;
-    protected readonly snoops = new Map<number, GamePackets.Snoop_T[]>();
-    protected enchantSkills: GamePackets.EnchantSkill_T[] = [];
-    protected enchantSkillInfo: GamePackets.EnchantSkillInfo_T = null;
-    protected eventMatchMessageType = -1;
-    protected questMarkId = 0;
-    protected hasNewMail = false;
-    protected heroes: GamePackets.HeroEntry_T[] = [];
-    protected partyRoomMode = -1;
-    protected readonly partyRoomMembers = new Map<number, GamePackets.PartyRoomMember_T>();
-    protected isInCommandChannel = false;
-    protected commandChannel: GamePackets.CommandChannelInfo_T = null;
-    protected commandChannelInviter: string = null;
-    protected olympiadMode = 0;
-    protected readonly olympiadUsers = new Map<number, GamePackets.OlympiadUserInfo_T>();
-    protected readonly olympiadEffects = new Map<number, GamePackets.AbnormalStatus_T[]>();
-    protected manors: GamePackets.ManorEntry_T[] = [];
-    protected manorSeedInfo: GamePackets.ManorSeedInfo_T = null;
-    protected manorCropInfo: GamePackets.ManorCropInfo_T = null;
-    protected manorDefaultCrops: GamePackets.ManorDefaultCrop_T[] = [];
-    protected manorSeedSettings: GamePackets.ManorSeedSettings_T = null;
-    protected manorCropSettings: GamePackets.ManorCropSettings_T = null;
-    protected manorSellCrops: GamePackets.ManorSellCropList_T = null;
-    protected manorProcureCropDetail: GamePackets.ManorProcureCropDetail_T = null;
-    protected stuckCheckAt = 0;
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
     public getParent(): GameManager { return this.manGame; }
+    public getGameClient() { return this.session.game; }
+    public isInWorld() { return this.actors.inWorld; }
+    public isWorldLoading() { return this.actors.inWorld && this.ui.screen === "loading"; }
+    public isPlayingReplay() { return !!this.session.game?.isPlayingReplay(); }
 
-    public isInWorld() { return this.inWorld; }
-    public isWorldLoading() { return this.inWorld && this.ui.screen === "loading"; }
-    public isPlayingReplay() { return !!this.game?.isPlayingReplay(); }
     public getReplayDeltaTime(deltaTime: number): number | null {
         if (!this.isPlayingReplay()) return deltaTime;
-        if (this.game.isReplayPaused()) return null;
+        if (this.session.game.isReplayPaused()) return null;
 
-        return Math.fround(Math.fround(deltaTime / 1000) * (this.replayLoading ? 1 : this.game.getReplayPlaySpeed())) * 1000;
+        return Math.fround(Math.fround(deltaTime / 1000) * (this.session.replayLoading ? 1 : this.session.game.getReplayPlaySpeed())) * 1000;
     }
+
     public inputReplay(key: number, action: number): boolean {
         if (!this.isPlayingReplay()) return false;
-        if (key !== 27) return this.game.inputReplay(key, action);
+        if (key !== 27) return this.session.game.inputReplay(key, action);
         if (action !== 1 && action !== 3) return false;
-        if (action === 3) void this.stopReplayPlayback();
+        if (action === 3) void this.session.stopReplayPlayback();
 
         return true;
     }
 
-    protected getTargetId() {
-        const user = this.objects.get(this.userId);
+    public getTargetId() {
+        const user = this.actors.objects.get(this.actors.userId);
 
         return user ? user.selectedId : 0;
     }
 
-    protected hasServerObject(objectId: number): boolean {
-        if (this.objects.has(objectId) || this.pickups.has(objectId) || this.doors.has(objectId)) return true;
-        for (const id of this.staticObjects.values()) if (id === objectId) return true;
+    public showLogin(url: string) { return this.session.showLogin(url); }
+    public connectLogin(account: string, password: string) { return this.session.connectLogin(account, password); }
+    public cancelLogin() { return this.session.cancelLogin(); }
+    public connectGame(serverId: number) { return this.session.connectGame(serverId); }
+    public relogin() { return this.session.relogin(); }
+    public pickLobbyPawn(actor: BaseActor) { return this.session.pickLobbyPawn(actor); }
+    public previewCharacter(index: number) { return this.session.previewCharacter(index); }
+    public cancelCreate() { return this.session.cancelCreate(); }
+    public previewCreate(selection: PawnCreateSelection_T) { return this.session.previewCreate(selection); }
+    public rotateCreatePreview(direction: number) { return this.session.rotateCreatePreview(direction); }
+    public zoomCreatePreview(isIn: boolean) { return this.session.zoomCreatePreview(isIn); }
+    public selectCharacter(slot: number) { return this.session.selectCharacter(slot); }
+    public startGMServerTransfer(serverId: number) { return this.session.startGMServerTransfer(serverId); }
+    public requestNewCharacter() { return this.session.requestNewCharacter(); }
+    public createCharacter(info: CharacterCreate_T) { return this.session.createCharacter(info); }
+    public deleteCharacter(slot: number) { return this.session.deleteCharacter(slot); }
+    public restoreCharacter(slot: number) { return this.session.restoreCharacter(slot); }
 
-        return false;
-    }
+    public say(text: string, type: GamePackets.Say2_T, target: string = null) { this.session.game.say2(text, type, target); }
 
-    public async showLogin(url: string) {
-        this.loginUrl = url;
-
-        const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
-
-        asset.setStreaming(render, false);
-
-        if (!this.ui) {
-            this.ui = this.manGame.getComponent("gui");
-            this.ui.create();
-            this.lobby = new L2Lobby(this.manGame, (appearance, actor) => this.loadAppearance(appearance, actor));
-
-            await this.ui.setStrings(await asset.getGameStrings());
-
-            void this.loadNpcNames();
-            void this.loadRadar();
-
-            await Promise.all([this.ui.createScreens(), this.lobby.enter(this.ui.getStrings().logonSpots), asset.precacheCharacters()]);
-        } else await this.lobby.enter(this.ui.getStrings().logonSpots);
-
-        this.lobby.showLogin();
-        this.ui.showLogin();
-    }
-
-    protected async loadRadar() {
-        const render = this.manGame.getComponent("render");
-
-        render.radar.setMeshes(await this.manGame.getComponent("asset").loadSkeletalMeshes("LineageDecos", Radar.getMeshNames()));
-        render.radar.getState = () => this.getRadarState();
-        const asset = this.manGame.getComponent("asset"), library = await asset.loadQuestEffects();
-
-        render.questArrow.createEffect = path => asset.createScriptObject(render, library, path);
-        render.questArrow.canDraw = () => this.inWorld && !this.isObserving();
-        render.questArrow.getDestination = () => this.ui.isQuestArrowEnabled() ? this.questArrowDestination : null;
-        render.questArrow.onArrival = () => { this.questArrowDestination = null; this.radarMarkers.length = 0; this.mapMarkers.length = 0; this.ui.setMapMarkers(this.mapMarkers); };
-    }
-
-    protected getRadarState(): RadarState_T { // DrawRadarBack 0x7FE54A: party members by GetUser actor, else the PartyMemberPosition XY; target is Controller.SelectedActor.
-        const state = this.radarState, target = this.objects.get(this.getTargetId());
-
-        state.party.length = 0;
-
-        for (const objectId of this.partyMembers.keys()) {
-            const object = this.objects.get(objectId);
-
-            if (objectId === this.userId) continue;
-            if (object && object.actor) state.party.push(object.actor.position);
-            else if (this.partyPositions.has(objectId)) state.party.push(this.partyPositions.get(objectId));
-        }
-
-        state.target = target && target.actor ? target.actor.position : null;
-
-        return state;
-    }
-
-    protected async loadNpcNames() {
-        for (const npc of await this.manGame.getComponent("render").listNpcs()) this.npcNames.set(npc.id, npc.name);
-    }
-
-    public async connectLogin(account: string, password: string) {
-        if (this.game?.isPlayingReplay()) throw new Error(`Cannot log in during replay playback.`);
-        this.gmTransfer = null;
-        if (this.login) this.login.close();
-
-        this.loginAccount = account;
-        this.loginPassword = password;
-        const login = this.login = new LoginClient();
-        this.account = account.toLowerCase();
-        this.ui.setLoginBusy(true);
-
-        try {
-            const servers = await login.login(this.loginUrl, account, password);
-
-            if (this.login !== login) return;
-            this.ui.showServers(servers, login.lastServerId);
-        } catch (e) {
-            if (this.login !== login) return;
-            this.ui.showLogin();
-            this.ui.showMessage(this.getLoginErrorMessage(e));
-        }
-    }
-
-    public cancelLogin() {
-        this.gmTransfer = null;
-        const login = this.login;
-
-        this.login = null;
-        if (login) login.close();
-        this.ui.showLogin();
-    }
-
-    public async connectGame(serverId: number) {
-        const login = this.login, transfer = this.gmTransfer;
-        const server = login.servers.find(entry => entry.id === serverId);
-
-        try {
-            const key = await login.selectServer(server.id);
-
-            if (this.login !== login || this.gmTransfer !== transfer) return;
-            this.sessionKey = key;
-            this.ui.setCrestServer(server.id);
-            const game = this.game = new GameClient();
-
-            game.onPacket = (opcode, packet) => { if (this.game === game) this.onPacket(opcode, packet); };
-            game.onClose = (code, reason) => { if (this.game === game) void this.onDisconnected(`Game server closed the connection (${code}${reason ? ` ${reason}` : ""}).`); };
-
-            this.gameServerUrl = login.getGameServerUrl(server);
-            await game.connect(this.gameServerUrl);
-        } catch (e) {
-            if (this.login !== login || this.gmTransfer !== transfer) return;
-            if (transfer) transfer.error = (e as Error).message;
-            this.ui.showLogin();
-            this.ui.showMessage(this.getLoginErrorMessage(e));
-        }
-    }
-
-    protected getLoginErrorMessage(e: any): string {
-        if (!e.systemMessageIds) return e.message;
-
-        return e.systemMessageIds.map((id: number) => this.ui.getSystemMessage(id)).join(" ");
-    }
-
-    public relogin() {
-        this.game.close();
-        this.game = null;
-        this.lobby.showLogin();
-        this.ui.showLogin();
-    }
-
-    public pickLobbyPawn(actor: BaseActor) {
-        if (!this.lobby || !this.ui.isLobbyVisible()) return;
-
-        const index = this.lobby.getPawnIndex(actor);
-
-        if (index >= 0) this.ui.pickCharacter(index);
-    }
-
-    public previewCharacter(index: number) {
-        if (this.gmTransfer) this.gmTransfer.selectedSlot = index;
-        this.lobby.select(index);
-        this.ui.setSelectedCharacter(index);
-    }
-
-    public cancelCreate() {
-        this.ui.showCharacters(this.characters);
-        void this.lobby.showSelect(this.characters);
-    }
-
-    public previewCreate(selection: PawnCreateSelection_T) { void this.lobby.previewCreate(selection); }
-    public rotateCreatePreview(direction: number) { this.lobby.rotateCreate(direction); }
-    public zoomCreatePreview(isIn: boolean) { this.lobby.zoomCreate(isIn); }
-
-    public selectCharacter(slot: number) {
-        const character = this.characters[slot];
-
-        if (slot < 0 || slot >= 7 || !character || character.deleteSeconds > 0 || character.isDeletionMarked) return;
-        if (character.name && !this.ui.getScreenCanvas().hasGlyphs(character.name)) { this.ui.showMessage(this.ui.getSystemMessage(205)); return; }
-
-        this.selectedSlot = slot;
-        this.ui.showLoading();
-        this.game.characterSelected(slot, this.gmTransfer ? this.gmTransfer.position : null);
-    }
-
-    public startGMServerTransfer(serverId: number) {
-        if (!this.inWorld) return;
-        if (this.loginAccount === null || this.loginPassword === null) throw new Error(`GM server transfer has no saved authentication.`);
-        const position = this.manGame.getComponent("render").player.position;
-
-        this.gmTransfer = { phase: 1, lastPhase: 0, serverId, position: { x: Math.fround(position.x), y: Math.fround(position.y), z: Math.fround(position.z) }, selectedSlot: -1, error: null };
-    }
-
-    protected tickGMServerTransfer() {
-        const transfer = this.gmTransfer;
-
-        if (!transfer || transfer.error || transfer.phase === transfer.lastPhase) return;
-        transfer.lastPhase = transfer.phase;
-        switch (transfer.phase) {
-            case 1: transfer.phase = 2; break;
-            case 2: this.game.requestRestart(); break;
-            case 3: void this.reconnectGMServer(transfer); break;
-            case 4: break;
-            case 5:
-                if (transfer.serverId > 0 && this.login.servers.some(server => server.id === transfer.serverId)) void this.connectGame(transfer.serverId);
-                break;
-            case 6:
-                this.selectCharacter(transfer.selectedSlot);
-                transfer.phase = 7;
-                this.gmTransfer = null;
-                break;
-            case 7: this.gmTransfer = null; break;
-            default: throw new Error(`Invalid GM transfer phase ${transfer.phase}.`);
-        }
-    }
-
-    protected async reconnectGMServer(transfer: GMServerTransfer_T) {
-        this.game.logout();
-        this.game.onClose = null;
-        this.game.close();
-        this.game = null;
-        this.login.close();
-        const login = this.login = new LoginClient();
-
-        login.onLoginOk = async () => {
-            if (this.gmTransfer !== transfer || transfer.phase !== 3) return;
-            transfer.phase = 4;
-            await this.waitNextTick();
-        };
-        try {
-            await login.login(this.loginUrl, this.loginAccount, this.loginPassword);
-            if (this.gmTransfer === transfer && transfer.phase === 4) transfer.phase = 5;
-        } catch (e) {
-            if (this.gmTransfer !== transfer) return;
-            transfer.error = (e as Error).message;
-            this.ui.showLogin();
-            this.ui.showMessage(transfer.error);
-        }
-    }
-
-    public requestNewCharacter() { this.game.newCharacter(); }
-    public createCharacter(info: CharacterCreate_T) { this.game.characterCreate(info); }
-    public deleteCharacter(slot: number) { this.game.characterDelete(slot); }
-    public restoreCharacter(slot: number) { this.game.characterRestore(slot); }
-
-    public say(text: string, type: GamePackets.Say2_T, target: string = null) { this.game.say2(text, type, target); }
     public execCommand(text: string, isShift: boolean = false) {
-        if (!this.inWorld) return;
+        if (!this.actors.inWorld) return;
         if (text.startsWith("//")) { this.sendBypassBuildCmd(text.slice(2)); return; }
         if (!text.startsWith("/")) return;
 
@@ -590,14 +112,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const type = Number(entry[0]);
 
         switch (type) {
-            case 4: case 5: this.game.changeWaitType(type === 5); break;
-            case 6: case 7: this.game.changeMoveType(type === 7); break;
-            case 8: case 9: case 10: this.useAction(2, type === 9, type === 10); break;
-            case 11: this.useAction(3); break;
-            case 13: this.useAction(4, false, isShift); break;
-            case 14: this.useAction(5, false, isShift); break;
-            case 15: this.useAction(6, false, isShift); break;
-            case 12: {
+            case CommandType_T.sit: case CommandType_T.stand: this.session.game.changeWaitType(type === CommandType_T.stand); break;
+            case CommandType_T.walk: case CommandType_T.run: this.session.game.changeMoveType(type === CommandType_T.run); break;
+            case CommandType_T.attack: case CommandType_T.attackforce: case CommandType_T.attackstand: this.useAction(2, type === CommandType_T.attackforce, type === CommandType_T.attackstand); break;
+            case CommandType_T.trade: this.useAction(3); break;
+            case CommandType_T.targetnext: this.useAction(4, false, isShift); break;
+            case CommandType_T.pickup: this.useAction(5, false, isShift); break;
+            case CommandType_T.assist: this.useAction(6, false, isShift); break;
+            case CommandType_T.target: {
                 if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]); break; }
 
                 const name = tokens.slice(1).join(" ").toLowerCase();
@@ -605,7 +127,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 if (!name) break;
 
-                for (const object of this.objects.values()) {
+                for (const object of this.actors.objects.values()) {
                     if (object.name.toLowerCase() !== name) continue;
 
                     target = object;
@@ -615,79 +137,80 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 if (target && target.actor && this.manGame.getComponent("render").player) this.requestAction(target.actor, isShift);
                 break;
             }
-            case 20: this.ui.openPartyMatch(); break;
-            case 21: case 22: case 23: this.game.requestSocialAction(type - 19); break;
-            case 46: case 47: case 48: case 49: case 50: case 51: this.game.requestSocialAction(type - 41); break;
-            case 54: case 55: case 56: this.game.requestSocialAction(type - 43); break;
-            case 57: this.useAction(0, this.ui.getInputModifiers()[0], isShift); break;
-            case 103: this.startReplayRecording(); break;
-            case 104: this.stopReplayRecording(); break;
-            case 105: this.useAction(55); break;
-            case 24: case 25: case 26: {
+            case CommandType_T.partymatching: this.ui.openPartyMatch(); break;
+            case CommandType_T.socialhello: case CommandType_T.socialvictory: case CommandType_T.socialcharge: this.session.game.requestSocialAction(type - 19); break;
+            case CommandType_T.socialno: case CommandType_T.socialyes: case CommandType_T.socialbow: case CommandType_T.socialunaware: case CommandType_T.socialwaitinga: case CommandType_T.sociallaugh: this.session.game.requestSocialAction(type - 41); break;
+            case CommandType_T.socialapplause: case CommandType_T.socialdance: case CommandType_T.socialsad: this.session.game.requestSocialAction(type - 43); break;
+            case CommandType_T.sitstand: this.useAction(0, this.ui.getInputModifiers()[0], isShift); break;
+            case CommandType_T.start_videorecording: this.session.startReplayRecording(); break;
+            case CommandType_T.end_videorecording: this.session.stopReplayRecording(); break;
+            case CommandType_T.startend_videorecording: this.useAction(55); break;
+            case CommandType_T.useskill: case CommandType_T.useskillforce: case CommandType_T.useskillstand: {
                 if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]); break; }
 
                 const id = strings.skillCommands[tokens.slice(1).join(" ").toLowerCase()];
 
-                if (id) this.game.requestMagicSkillUse(id, type === 25, type === 26);
+                if (id) this.session.game.requestMagicSkillUse(id, type === CommandType_T.useskillforce, type === CommandType_T.useskillstand);
                 break;
             }
-            case 27: case 28: case 29: {
+            case CommandType_T.useshortcut: case CommandType_T.useshortcutforce: case CommandType_T.useshortcutstand: {
                 const page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
 
-                if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12) this.useShortCut(page - 1, slot - 1, type === 28, type === 29);
+                if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12) this.items.useShortCut(page - 1, slot - 1, type === CommandType_T.useshortcutforce, type === CommandType_T.useshortcutstand);
                 break;
             }
-            case 0: case 52: case 77: case 81: case 88: case 89: case 90: case 93: case 96: case 97: case 100: case 109: this.game.requestUserCommand(type); break;
+            case CommandType_T.loc: case CommandType_T.unstuck: case CommandType_T.Time: case CommandType_T.partyinfo: case CommandType_T.enemylist: case CommandType_T.attackerlist: case CommandType_T.clanwarlist: case CommandType_T.channeldelete: case CommandType_T.channelleave: case CommandType_T.channelinfo: case CommandType_T.clanpenalty: case CommandType_T["View Current Results"]: this.session.game.requestUserCommand(type); break;
             default: debugger; break;
         }
     }
-    public sendBypassBuildCmd(command: string) { this.game.sendBypassBuildCmd(command); }
-    public bypass(command: string) { this.game.requestBypassToServer(command); }
-    public link(link: string) { this.game.requestLinkHtml(link); }
-    public requestRestartPoint(type: number) { this.game.requestRestartPoint(type); }
-    public cancelTarget() { this.game.requestTargetCanceld(); }
+
+    public sendBypassBuildCmd(command: string) { this.session.game.sendBypassBuildCmd(command); }
+    public bypass(command: string) { this.session.game.requestBypassToServer(command); }
+    public link(link: string) { this.session.game.requestLinkHtml(link); }
+    public requestRestartPoint(type: number) { this.session.game.requestRestartPoint(type); }
+    public cancelTarget() { this.session.game.requestTargetCanceld(); }
 
     public requestMoveTo(point: Vector3, actor: ICollidable = null) {
         const player = this.manGame.getComponent("render").player;
 
         if (actor && (actor as Vehicle).isVehicle) {
-            this.requestMoveInVehicle(actor as Vehicle, point);
+            this.movement.requestMoveInVehicle(actor as Vehicle, point);
             return;
         }
 
-        this.game.moveBackwardToLocation(point, player.position);
+        this.session.game.moveBackwardToLocation(point, player.position);
     }
 
     public getActorObjectId(actor: Object3D | null): number {
         if (!actor) return 0;
-        const object = this.findObjectByActor(actor);
+        const object = this.actors.findObjectByActor(actor);
         if (object) return object.objectId;
 
-        for (const [objectId, mover] of this.doors) if (mover === actor) return objectId;
+        for (const [objectId, mover] of this.actors.doors) if (mover === actor) return objectId;
 
         const properties = (actor as any).scriptProperties;
-        return properties instanceof Map ? this.staticObjects.get(getProperty(actor as any, "L2ServerObjectRealID") as number) ?? 0 : 0;
+        return properties instanceof Map ? this.actors.staticObjects.get(getProperty(actor as any, "L2ServerObjectRealID") as number) ?? 0 : 0;
     }
 
     public requestAction(actor: Object3D | null, isShift: boolean = false) {
         const objectId = this.getActorObjectId(actor);
         if (!objectId) return false;
 
-        this.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
+        this.session.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
 
         return true;
     }
 
     public requestPetAction(objectId: number, isShift: boolean) {
-        if (objectId <= 0 || !this.objects.get(this.userId)) return;
+        if (objectId <= 0 || !this.actors.objects.get(this.actors.userId)) return;
 
-        this.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
+        this.session.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
     }
 
     public getPickup(raycaster: Raycaster, maxDistance: number): GroundPickup {
         let nearest: GroundPickup = null;
 
-        for (const pickup of this.pickups.values()) {
+        for (const pickup of this.actors.pickups.values()) {
             for (let part = pickup; part; part = part.getNextPickup()) {
                 const distance = part.getPickDistance(raycaster);
 
@@ -704,9 +227,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public isMouseOverUI(x: number, y: number) { return this.ui ? this.ui.isMouseOver(x, y) : false; }
 
     public getMouseCursor(actor: Object3D): number {
-        if (!this.inWorld) return 0;
+        if (!this.actors.inWorld) return 0;
 
-        const object = actor ? this.findObjectByActor(actor) : null;
+        const object = actor ? this.actors.findObjectByActor(actor) : null;
 
         if (actor && !object) return 0;
         if (this.ui.getInputModifiers()[0]) return 1;
@@ -730,12 +253,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         if (!nearest) return false;
 
-        this.game.action(nearest.objectId, this.manGame.getComponent("render").player.position, isShift);
+        this.session.game.action(nearest.objectId, this.manGame.getComponent("render").player.position, isShift);
         return true;
     }
 
-    protected getNextEnemy(radius: number, excluded: number): NetObject_T { // Engine 0x10421350.
-        const player = this.objects.get(this.userId);
+    public getNextEnemy(radius: number, excluded: number): NetObject_T { // Engine 0x10421350.
+        const player = this.actors.objects.get(this.actors.userId);
 
         if (!player || !player.actor) return null;
         if (this.gnoCategory !== 2) {
@@ -744,12 +267,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.gnoElapsed = 0;
         }
 
-        const previous = this.objects.get(this.gnoObjectId);
+        const previous = this.actors.objects.get(this.gnoObjectId);
         const distance = previous && previous.actor ? getDistance(previous.actor.position, player.actor.position) : -1;
         const lower = distance > 0 ? distance : 0;
         let nearest: NetObject_T = null, next: NetObject_T = null, nearestDistance = radius, nextDistance = radius;
 
-        for (const object of this.objects.values()) {
+        for (const object of this.actors.objects.values()) {
             if (!object.isAttackable || object.isDead || !object.actor || object.objectId === excluded) continue;
 
             const distance = getDistance(object.actor.position, player.actor.position);
@@ -765,14 +288,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return result;
     }
 
-    protected getNearestItem(radius: number, excluded: number, sourceId: number = this.userId): GroundPickup { // Engine 0x104211c0 / pet 0x103f9980.
-        const player = this.objects.get(sourceId);
+    protected getNearestItem(radius: number, excluded: number, sourceId: number = this.actors.userId): GroundPickup { // Engine 0x104211c0 / pet 0x103f9980.
+        const player = this.actors.objects.get(sourceId);
 
         if (!player || !player.actor) return null;
 
         let nearest: GroundPickup = null, nearestDistance = radius;
 
-        for (const pickup of this.pickups.values()) {
+        for (const pickup of this.actors.pickups.values()) {
             if (pickup.objectId === excluded) continue;
 
             const distance = getDistance(pickup.position, player.actor.position);
@@ -788,54 +311,38 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (this.gnoElapsed > 3) { this.gnoCategory = this.gnoElapsed = 0; this.gnoObjectId = -1; }
     }
 
-    protected findObjectByActor(actor: Object3D): NetObject_T {
-        for (const object of this.objects.values())
-            if (object.actor === actor) return object;
-
-        return null;
-    }
-
-    protected async onDisconnected(reason: string) {
-        if (this.gmTransfer) this.gmTransfer.error = reason;
-        this.leaveWorld();
-        this.game = null;
-        this.ui.showMessage(reason);
-        await this.showLogin(this.loginUrl);
-        this.ui.showMessage(reason);
-    }
-
-    protected leaveWorld() {
+    public leaveWorld() {
         const render = this.manGame.getComponent("render");
 
-        this.stopReplayRecording();
-        this.worldLoad = null;
-        for (const objectId of this.riders.keys()) this.endRide(objectId);
+        this.session.stopReplayRecording();
+        this.actors.worldLoad = null;
+        for (const objectId of this.movement.riders.keys()) this.movement.endRide(objectId);
 
         render.clearViewportWindowParam();
         render.setZoneMusicEnabled(false);
 
-        for (const object of this.objects.values()) {
+        for (const object of this.actors.objects.values()) {
             object.isRemoved = true;
             object.resolveActor(null);
 
             if (object.actor && object.kind !== "user") render.removePawn(object.actor);
         }
 
-        this.objects.clear();
+        this.actors.objects.clear();
         render.clearRetainedSkillVisuals();
-        if (this.worldLevel) {
-            const level = this.worldLevel;
+        if (this.actors.worldLevel) {
+            const level = this.actors.worldLevel;
 
             if (render.player.scriptProperties) render.player.setUnrealScriptProperty("Level", null);
             render.setLevel(null);
-            this.worldLevel = null;
+            this.actors.worldLevel = null;
             this.manGame.getComponent("asset").unloadAlwaysLoaded(render, `${level.index.x}_${level.index.y}`, level);
         }
-        this.doors.clear();
-        this.doorPositions.clear();
-        this.staticObjects.clear();
-        this.appearances.clear();
-        this.userInfo = null;
+        this.actors.doors.clear();
+        this.actors.doorPositions.clear();
+        this.actors.staticObjects.clear();
+        this.actors.appearances.clear();
+        this.actors.userInfo = null;
         const cubics = render.player.findComponent<PawnCubicComponent>("pawnCubic");
 
         if (cubics) render.player.removeComponent(cubics);
@@ -845,456 +352,456 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const fishing = render.player.findComponent<PawnFishingComponent>("pawnFishing");
 
         if (fishing) render.player.removeComponent(fishing);
-        for (const pickup of this.pickups.values()) render.removePickup(pickup);
-        this.pickups.clear();
+        for (const pickup of this.actors.pickups.values()) render.removePickup(pickup);
+        this.actors.pickups.clear();
         render.clearDice();
         this.gnoCategory = this.gnoElapsed = 0;
         this.gnoObjectId = -1;
-        this.inventory.clear();
-        this.shortcuts.clear();
-        this.autoSoulShots.clear();
+        this.items.inventory.clear();
+        this.items.shortcuts.clear();
+        this.items.autoSoulShots.clear();
         this.ui.clearShortCuts();
         this.ui.setInventory([]);
-        this.skills.clear();
+        this.items.skills.clear();
         this.ui.setSkills([]);
-        this.questStates.clear();
+        this.items.questStates.clear();
         this.ui.setQuestStates([]);
-        this.hennaStatus = null;
+        this.items.hennaStatus = null;
         this.ui.setHenna(null);
-        this.isMacroListComplete = true;
-        this.macroListReceived = 0;
-        this.macros.clear();
-        this.macroExecutions.clear();
+        this.items.isMacroListComplete = true;
+        this.items.macroListReceived = 0;
+        this.items.macros.clear();
+        this.macroExecutor.clear();
         this.ui.setMacros([]);
-        this.friends.clear();
-        this.partyMembers.clear();
-        this.partyPositions.clear();
-        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
-        this.partyInvite = null;
-        this.pledgeInvite = null;
-        this.friendInvite = null;
-        this.partyJoinResult = -1;
-        this.pledgeJoinId = 0;
-        this.partyLeaderId = 0;
-        this.partyLootDistribution = 0;
-        this.clanInfo = null;
-        this.pledgeInfos.clear();
-        this.clanMembers.clear();
+        this.community.friends.clear();
+        this.community.partyMembers.clear();
+        this.community.partyPositions.clear();
+        this.ui.setMapPartyMembers(this.community.partyMembers, this.community.partyPositions, this.actors.userId);
+        this.community.partyInvite = null;
+        this.community.pledgeInvite = null;
+        this.community.friendInvite = null;
+        this.community.partyJoinResult = -1;
+        this.community.pledgeJoinId = 0;
+        this.community.partyLeaderId = 0;
+        this.community.partyLootDistribution = 0;
+        this.community.clanInfo = null;
+        this.community.pledgeInfos.clear();
+        this.community.clanMembers.clear();
         this.ui.setClan(null);
         this.ui.clearClanMembers();
-        this.aquireSkillFishing = false;
-        this.aquireSkills = [];
-        this.aquireSkillInfo = null;
-        this.tradePartnerId = 0;
-        this.tradeRequestId = 0;
-        this.tradeOwnItems.length = 0;
-        this.tradeOtherItems.length = 0;
-        this.tradeAvailableItems.length = 0;
-        this.tradeDone = 0;
-        this.shopSellMoney = 0;
-        this.shopSellNpcId = 0;
-        this.shopSellItems.length = 0;
-        this.shopBuyMoney = 0;
-        this.shopBuyListId = 0;
-        this.shopBuyItems.length = 0;
-        this.storageMaxCount = null;
-        this.etcStatus = null;
-        this.signsSky = 0;
-        this.petStatusType = -1;
-        this.deletedPetId = 0;
-        Object.assign(this.petInfo, { objectId: -1, name: "", field60: 0, isMountable: false });
-        this.isMounted = false;
+        this.items.aquireSkillFishing = false;
+        this.items.aquireSkills = [];
+        this.items.aquireSkillInfo = null;
+        this.items.tradePartnerId = 0;
+        this.items.tradeRequestId = 0;
+        this.items.tradeOwnItems.length = 0;
+        this.items.tradeOtherItems.length = 0;
+        this.items.tradeAvailableItems.length = 0;
+        this.items.tradeDone = 0;
+        this.items.shopSellMoney = 0;
+        this.items.shopSellNpcId = 0;
+        this.items.shopSellItems.length = 0;
+        this.items.shopBuyMoney = 0;
+        this.items.shopBuyListId = 0;
+        this.items.shopBuyItems.length = 0;
+        this.items.storageMaxCount = null;
+        this.items.etcStatus = null;
+        this.community.signsSky = 0;
+        this.actors.petStatusType = -1;
+        this.actors.deletedPetId = 0;
+        Object.assign(this.actors.petInfo, { objectId: -1, name: "", field60: 0, isMountable: false });
+        this.movement.isMounted = false;
         this.ui.setMountable(false);
-        this.petInventory.clear();
-        this.petRemainTime = null;
-        this.abnormalStatuses.length = 0;
-        this.shortBuff = null;
-        this.allyInvite = null;
-        this.pledgePower = new Uint8Array(32);
-        this.pledgeWarStart = null;
-        this.pledgeWarStop = null;
-        this.pledgeWarSurrender = null;
-        this.pledgeCrests.clear();
-        this.pledgeLargeCrests.clear();
-        this.clanLargeCrestIds.clear();
-        this.allyCrests.clear();
-        this.warehouseDeposit = null;
-        this.warehouseWithdraw = null;
-        this.privateStoreManageSell = null;
-        this.privateStoreSell = null;
-        this.privateStoreManageBuy = null;
-        this.privateStoreBuy = null;
-        this.privateStoreSellMsgs.clear();
-        this.privateStoreBuyMsgs.clear();
-        this.packageTargets.clear();
-        this.packageSendable = null;
-        this.multiSell = null;
-        this.shopPreview = null;
-        this.shopPreviewItems = null;
-        this.seedShop = null;
-        this.cropProcure = null;
-        for (const objectId of this.vehicles.keys()) this.removeVehicle(objectId);
-        this.mounts.clear();
-        this.observation = null;
-        this.specialCamera = null;
-        this.cameraMode = 0;
-        this.questArrowDestination = null;
+        this.items.petInventory.clear();
+        this.actors.petRemainTime = null;
+        this.items.abnormalStatuses.length = 0;
+        this.items.shortBuff = null;
+        this.community.allyInvite = null;
+        this.community.pledgePower = new Uint8Array(32);
+        this.community.pledgeWarStart = null;
+        this.community.pledgeWarStop = null;
+        this.community.pledgeWarSurrender = null;
+        this.community.pledgeCrests.clear();
+        this.community.pledgeLargeCrests.clear();
+        this.community.clanLargeCrestIds.clear();
+        this.community.allyCrests.clear();
+        this.items.warehouseDeposit = null;
+        this.items.warehouseWithdraw = null;
+        this.items.privateStoreManageSell = null;
+        this.items.privateStoreSell = null;
+        this.items.privateStoreManageBuy = null;
+        this.items.privateStoreBuy = null;
+        this.items.privateStoreSellMsgs.clear();
+        this.items.privateStoreBuyMsgs.clear();
+        this.items.packageTargets.clear();
+        this.items.packageSendable = null;
+        this.items.multiSell = null;
+        this.items.shopPreview = null;
+        this.items.shopPreviewItems = null;
+        this.items.seedShop = null;
+        this.items.cropProcure = null;
+        for (const objectId of this.movement.vehicles.keys()) this.movement.removeVehicle(objectId);
+        this.movement.mounts.clear();
+        this.movement.observation = null;
+        this.movement.specialCamera = null;
+        this.movement.cameraMode = 0;
+        this.community.questArrowDestination = null;
         this.manGame.getComponent("render").questArrow.reset();
-        this.mapMarkers.length = 0;
-        this.ui.setMapMarkers(this.mapMarkers);
-        this.radarMarkers.length = 0;
-        this.townMap = null;
-        this.calculatorId = 0;
-        this.xmasSealItemId = 0;
-        this.dice = null;
-        this.monRace = null;
-        this.ssqStatus.clear();
-        this.clanHallDecoration.clear();
-        this.siegeInfo = null;
-        this.siegeAttackers = null;
-        this.siegeDefenders = null;
+        this.community.mapMarkers.length = 0;
+        this.ui.setMapMarkers(this.community.mapMarkers);
+        this.community.radarMarkers.length = 0;
+        this.community.townMap = null;
+        this.community.calculatorId = 0;
+        this.community.xmasSealItemId = 0;
+        this.actors.dice = null;
+        this.community.monRace = null;
+        this.community.ssqStatus.clear();
+        this.community.clanHallDecoration.clear();
+        this.community.siegeInfo = null;
+        this.community.siegeAttackers = null;
+        this.community.siegeDefenders = null;
         this.manGame.getComponent("render").player.visible = true;
-        this.recipeBook = null;
-        this.recipeItemMakeInfo = null;
-        this.recipeShopManageList = null;
-        this.recipeShopSellList = null;
-        this.recipeShopItemInfo = null;
-        this.recipeShopMessages.clear();
-        this.hennaEquipList = null;
-        this.hennaItemInfo = null;
-        this.partyMatchRooms = [];
-        this.partyMatchPage = 1;
-        this.partyMatchDetail = null;
-        this.partyEffects.clear();
-        this.tutorialQuestionMarks.clear();
-        this.tutorialClientEvents = 0;
-        this.gmCharacterInfo = null;
-        this.gmPledgeInfo = null;
-        this.gmSkillInfo = null;
-        this.gmQuestList = null;
-        this.gmItemList = null;
-        this.gmWarehouseList = null;
-        this.gmHennaStatus = null;
-        this.snoops.clear();
-        this.enchantSkills = [];
-        this.enchantSkillInfo = null;
-        this.eventMatchMessageType = -1;
-        this.questMarkId = 0;
-        this.hasNewMail = false;
-        this.heroes = [];
-        this.partyRoomMode = -1;
-        this.partyRoomMembers.clear();
-        this.isInCommandChannel = false;
-        this.commandChannel = null;
+        this.items.recipeBook = null;
+        this.items.recipeItemMakeInfo = null;
+        this.items.recipeShopManageList = null;
+        this.items.recipeShopSellList = null;
+        this.items.recipeShopItemInfo = null;
+        this.items.recipeShopMessages.clear();
+        this.items.hennaEquipList = null;
+        this.items.hennaItemInfo = null;
+        this.community.partyMatchRooms = [];
+        this.community.partyMatchPage = 1;
+        this.community.partyMatchDetail = null;
+        this.community.partyEffects.clear();
+        this.community.tutorialQuestionMarks.clear();
+        this.community.tutorialClientEvents = 0;
+        this.community.gmCharacterInfo = null;
+        this.community.gmPledgeInfo = null;
+        this.community.gmSkillInfo = null;
+        this.community.gmQuestList = null;
+        this.community.gmItemList = null;
+        this.community.gmWarehouseList = null;
+        this.community.gmHennaStatus = null;
+        this.community.snoops.clear();
+        this.items.enchantSkills = [];
+        this.items.enchantSkillInfo = null;
+        this.community.eventMatchMessageType = -1;
+        this.community.questMarkId = 0;
+        this.community.hasNewMail = false;
+        this.community.heroes = [];
+        this.community.partyRoomMode = -1;
+        this.community.partyRoomMembers.clear();
+        this.community.isInCommandChannel = false;
+        this.community.commandChannel = null;
         this.ui.closeCommandChannel();
-        this.commandChannelInviter = null;
-        this.olympiadMode = 0;
-        this.olympiadUsers.clear();
-        this.olympiadEffects.clear();
-        this.manors = [];
-        this.manorSeedInfo = null;
-        this.manorCropInfo = null;
-        this.manorDefaultCrops = [];
-        this.manorSeedSettings = null;
-        this.manorCropSettings = null;
-        this.manorSellCrops = null;
-        this.manorProcureCropDetail = null;
+        this.community.commandChannelInviter = null;
+        this.community.olympiadMode = 0;
+        this.community.olympiadUsers.clear();
+        this.community.olympiadEffects.clear();
+        this.items.manors = [];
+        this.items.manorSeedInfo = null;
+        this.items.manorCropInfo = null;
+        this.items.manorDefaultCrops = [];
+        this.items.manorSeedSettings = null;
+        this.items.manorCropSettings = null;
+        this.items.manorSellCrops = null;
+        this.items.manorProcureCropDetail = null;
         this.ui.hideWorld();
-        this.inWorld = false;
-        this.teleportGeneration++;
-        this.teleportInfoPending = false;
-        this.userId = 0;
+        this.actors.inWorld = false;
+        this.actors.teleportGeneration++;
+        this.actors.teleportInfoPending = false;
+        this.actors.userId = 0;
     }
 
-    protected onPacket(opcode: GamePackets.GameServerPacket_T, packet: PacketReader) {
+    public onPacket(opcode: GamePackets.GameServerPacket_T, packet: PacketReader) {
         switch (opcode) {
             case GamePackets.GameServerPacket_T.KeyPacket:
-                this.inventoryOrderNamespace = packet.d(); // Engine 0x103fe0ba, NWindow 0x10065d4d.
-                this.game.authLogin(this.account, this.sessionKey);
+                this.items.inventoryOrderNamespace = packet.d(); // Engine 0x103fe0ba, NWindow 0x10065d4d.
+                this.session.game.authLogin(this.session.account, this.session.sessionKey);
                 break;
             case GamePackets.GameServerPacket_T.AuthLoginFail: {
                 const message = `Game server refused the session (reason ${packet.d()}).`;
 
-                if (this.gmTransfer) this.gmTransfer.error = message;
+                if (this.session.gmTransfer) this.session.gmTransfer.error = message;
                 this.ui.showMessage(message);
                 break;
             }
             case GamePackets.GameServerPacket_T.CharSelectInfo:
-                this.login.close();
-                this.characters = GamePackets.readCharSelectInfo(packet).slice(0, 7);
-                void this.showLobby();
+                this.session.login.close();
+                this.session.characters = GamePackets.readCharSelectInfo(packet).slice(0, 7);
+                void this.session.showLobby();
                 break;
             case GamePackets.GameServerPacket_T.CharTemplates:
-                this.templates = GamePackets.readCharTemplates(packet);
-                this.ui.showCreateCharacter(this.templates);
-                this.lobby.showCreate();
+                this.session.templates = GamePackets.readCharTemplates(packet);
+                this.ui.showCreateCharacter(this.session.templates);
+                this.session.lobby.showCreate();
                 break;
-            case GamePackets.GameServerPacket_T.CharCreateOk: this.onCharCreateOk(packet); break;
+            case GamePackets.GameServerPacket_T.CharCreateOk: this.session.onCharCreateOk(packet); break;
             case GamePackets.GameServerPacket_T.CharCreateFail: this.ui.showMessage(this.ui.getSystemMessage([128, 77, 79, 80, 204][packet.d()])); break; // NWindow 0x100658f0
-            case GamePackets.GameServerPacket_T.CharDeleteOk: this.onCharDeleteOk(packet); break;
+            case GamePackets.GameServerPacket_T.CharDeleteOk: this.session.onCharDeleteOk(packet); break;
             case GamePackets.GameServerPacket_T.CharDeleteFail: this.ui.showMessage(this.ui.getSystemMessage([undefined, 306, 541, 540][packet.d()])); break; // NWindow 0x10065b40
-            case GamePackets.GameServerPacket_T.ActionFailed: this.onActionFailed(); break;
-            case GamePackets.GameServerPacket_T.CharSelected: this.onCharSelected(packet); break;
-            case GamePackets.GameServerPacket_T.UserInfo: this.onUserInfo(packet); break;
-            case GamePackets.GameServerPacket_T.ItemList: this.onItemList(packet); break;
-            case GamePackets.GameServerPacket_T.InventoryUpdate: this.onInventoryUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.TradeStart: this.onTradeStart(packet); break;
-            case GamePackets.GameServerPacket_T.TradeOwnAdd: this.onTradeOwnAdd(packet); break;
-            case GamePackets.GameServerPacket_T.TradeOtherAdd: this.onTradeOtherAdd(packet); break;
-            case GamePackets.GameServerPacket_T.SendTradeDone: this.onSendTradeDone(packet); break;
-            case GamePackets.GameServerPacket_T.SendTradeRequest: this.onSendTradeRequest(packet); break;
-            case GamePackets.GameServerPacket_T.TradeUpdate: this.onTradeUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.SkillList: this.onSkillList(packet); break;
-            case GamePackets.GameServerPacket_T.SkillCoolTime: this.onSkillCoolTime(packet); break;
-            case GamePackets.GameServerPacket_T.QuestList: this.onQuestList(packet); break;
-            case GamePackets.GameServerPacket_T.HennaInfo: this.onHennaInfo(packet); break;
-            case GamePackets.GameServerPacket_T.SendMacroList: this.onSendMacroList(packet); break;
-            case GamePackets.GameServerPacket_T.EtcStatusUpdate: this.onEtcStatusUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.SignsSky: this.onSignsSky(packet); break;
-            case GamePackets.GameServerPacket_T.FriendList: this.onFriendList(packet); break;
-            case GamePackets.GameServerPacket_T.FriendRecvMsg: this.onFriendRecvMsg(packet); break;
-            case GamePackets.GameServerPacket_T.MagicEffectIcons: this.onMagicEffectIcons(packet); break;
-            case GamePackets.GameServerPacket_T.ShortBuffStatusUpdate: this.onShortBuffStatusUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.CharInfo: this.onCharInfo(packet); break;
-            case GamePackets.GameServerPacket_T.NpcInfo: this.onNpcInfo(packet); break;
-            case GamePackets.GameServerPacket_T.PetInfo: this.onPetInfo(packet); break;
-            case GamePackets.GameServerPacket_T.PetItemList: this.onPetItemList(packet); break;
-            case GamePackets.GameServerPacket_T.PetInventoryUpdate: this.onPetInventoryUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.PetStatusUpdate: this.onPetStatusUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.PetDelete: this.onPetDelete(packet); break;
-            case GamePackets.GameServerPacket_T.SpawnItem: void this.onSpawnItem(packet, false); break;
-            case GamePackets.GameServerPacket_T.DropItem: void this.onSpawnItem(packet, true); break;
-            case GamePackets.GameServerPacket_T.GetItem: this.onGetItem(packet); break;
-            case GamePackets.GameServerPacket_T.DeleteObject: this.removeObject(packet.d()); break;
-            case GamePackets.GameServerPacket_T.CharMoveToLocation: this.onMoveToLocation(packet); break;
-            case GamePackets.GameServerPacket_T.MoveToPawn: this.onMoveToPawn(packet); break;
-            case GamePackets.GameServerPacket_T.StopMove: this.onStopMove(packet); break;
-            case GamePackets.GameServerPacket_T.ValidateLocation: this.onValidateLocation(packet); break;
-            case GamePackets.GameServerPacket_T.BeginRotation: this.onBeginRotation(packet); break;
-            case GamePackets.GameServerPacket_T.StopRotation: this.onStopRotation(packet); break;
-            case GamePackets.GameServerPacket_T.TeleportToLocation: this.onTeleport(packet); break;
-            case GamePackets.GameServerPacket_T.Attack: this.onAttack(packet); break;
-            case GamePackets.GameServerPacket_T.MagicSkillUse: this.onMagicSkillUse(packet); break;
+            case GamePackets.GameServerPacket_T.ActionFailed: this.combat.onActionFailed(); break;
+            case GamePackets.GameServerPacket_T.CharSelected: this.session.onCharSelected(packet); break;
+            case GamePackets.GameServerPacket_T.UserInfo: this.actors.onUserInfo(packet); break;
+            case GamePackets.GameServerPacket_T.ItemList: this.items.onItemList(packet); break;
+            case GamePackets.GameServerPacket_T.InventoryUpdate: this.items.onInventoryUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.TradeStart: this.items.onTradeStart(packet); break;
+            case GamePackets.GameServerPacket_T.TradeOwnAdd: this.items.onTradeOwnAdd(packet); break;
+            case GamePackets.GameServerPacket_T.TradeOtherAdd: this.items.onTradeOtherAdd(packet); break;
+            case GamePackets.GameServerPacket_T.SendTradeDone: this.items.onSendTradeDone(packet); break;
+            case GamePackets.GameServerPacket_T.SendTradeRequest: this.items.onSendTradeRequest(packet); break;
+            case GamePackets.GameServerPacket_T.TradeUpdate: this.items.onTradeUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.SkillList: this.items.onSkillList(packet); break;
+            case GamePackets.GameServerPacket_T.SkillCoolTime: this.items.onSkillCoolTime(packet); break;
+            case GamePackets.GameServerPacket_T.QuestList: this.items.onQuestList(packet); break;
+            case GamePackets.GameServerPacket_T.HennaInfo: this.items.onHennaInfo(packet); break;
+            case GamePackets.GameServerPacket_T.SendMacroList: this.items.onSendMacroList(packet); break;
+            case GamePackets.GameServerPacket_T.EtcStatusUpdate: this.items.onEtcStatusUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.SignsSky: this.community.onSignsSky(packet); break;
+            case GamePackets.GameServerPacket_T.FriendList: this.community.onFriendList(packet); break;
+            case GamePackets.GameServerPacket_T.FriendRecvMsg: this.community.onFriendRecvMsg(packet); break;
+            case GamePackets.GameServerPacket_T.MagicEffectIcons: this.items.onMagicEffectIcons(packet); break;
+            case GamePackets.GameServerPacket_T.ShortBuffStatusUpdate: this.items.onShortBuffStatusUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.CharInfo: this.actors.onCharInfo(packet); break;
+            case GamePackets.GameServerPacket_T.NpcInfo: this.actors.onNpcInfo(packet); break;
+            case GamePackets.GameServerPacket_T.PetInfo: this.actors.onPetInfo(packet); break;
+            case GamePackets.GameServerPacket_T.PetItemList: this.items.onPetItemList(packet); break;
+            case GamePackets.GameServerPacket_T.PetInventoryUpdate: this.items.onPetInventoryUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.PetStatusUpdate: this.actors.onPetStatusUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.PetDelete: this.actors.onPetDelete(packet); break;
+            case GamePackets.GameServerPacket_T.SpawnItem: void this.actors.onSpawnItem(packet, false); break;
+            case GamePackets.GameServerPacket_T.DropItem: void this.actors.onSpawnItem(packet, true); break;
+            case GamePackets.GameServerPacket_T.GetItem: this.actors.onGetItem(packet); break;
+            case GamePackets.GameServerPacket_T.DeleteObject: this.actors.removeObject(packet.d()); break;
+            case GamePackets.GameServerPacket_T.CharMoveToLocation: this.movement.onMoveToLocation(packet); break;
+            case GamePackets.GameServerPacket_T.MoveToPawn: this.movement.onMoveToPawn(packet); break;
+            case GamePackets.GameServerPacket_T.StopMove: this.movement.onStopMove(packet); break;
+            case GamePackets.GameServerPacket_T.ValidateLocation: this.movement.onValidateLocation(packet); break;
+            case GamePackets.GameServerPacket_T.BeginRotation: this.movement.onBeginRotation(packet); break;
+            case GamePackets.GameServerPacket_T.StopRotation: this.movement.onStopRotation(packet); break;
+            case GamePackets.GameServerPacket_T.TeleportToLocation: this.movement.onTeleport(packet); break;
+            case GamePackets.GameServerPacket_T.Attack: this.combat.onAttack(packet); break;
+            case GamePackets.GameServerPacket_T.MagicSkillUse: this.combat.onMagicSkillUse(packet); break;
             case GamePackets.GameServerPacket_T.MagicSkillCanceld: {
-                const objectId = packet.d(), object = this.objects.get(objectId);
+                const objectId = packet.d(), object = this.actors.objects.get(objectId);
 
-                if (object && object.actor === this.manGame.getComponent("render").player) this.notifyMacroSkill(0, 1);
-                this.stopSkill(objectId);
+                if (object && object.actor === this.manGame.getComponent("render").player) this.macroExecutor.notifySkill(0, 1);
+                this.combat.stopSkill(objectId);
                 break;
             }
-            case GamePackets.GameServerPacket_T.MagicSkillLaunched: this.onMagicSkillLaunched(packet); break;
-            case GamePackets.GameServerPacket_T.Die: this.onDie(packet); break;
-            case GamePackets.GameServerPacket_T.Revive: this.onRevive(packet.d()); break;
-            case GamePackets.GameServerPacket_T.Earthquake: void this.onEarthquake(packet); break;
-            case GamePackets.GameServerPacket_T.ChangeMoveType: this.onChangeMoveType(packet.d(), packet.d() !== 0, packet.d()); break;
-            case GamePackets.GameServerPacket_T.ChangeWaitType: this.onChangeWaitType(packet); break;
-            case GamePackets.GameServerPacket_T.ChairSit: this.onChairSit(packet); break;
-            case GamePackets.GameServerPacket_T.AutoAttackStart: this.onCombatState(packet.d(), true); break;
-            case GamePackets.GameServerPacket_T.AutoAttackStop: this.onCombatState(packet.d(), false); break;
-            case GamePackets.GameServerPacket_T.SocialAction: this.onSocialAction(packet.d(), packet.d()); break;
+            case GamePackets.GameServerPacket_T.MagicSkillLaunched: this.combat.onMagicSkillLaunched(packet); break;
+            case GamePackets.GameServerPacket_T.Die: this.combat.onDie(packet); break;
+            case GamePackets.GameServerPacket_T.Revive: this.combat.onRevive(packet.d()); break;
+            case GamePackets.GameServerPacket_T.Earthquake: void this.combat.onEarthquake(packet); break;
+            case GamePackets.GameServerPacket_T.ChangeMoveType: this.movement.onChangeMoveType(packet.d(), packet.d() !== 0, packet.d()); break;
+            case GamePackets.GameServerPacket_T.ChangeWaitType: this.combat.onChangeWaitType(packet); break;
+            case GamePackets.GameServerPacket_T.ChairSit: this.movement.onChairSit(packet); break;
+            case GamePackets.GameServerPacket_T.AutoAttackStart: this.combat.onCombatState(packet.d(), true); break;
+            case GamePackets.GameServerPacket_T.AutoAttackStop: this.combat.onCombatState(packet.d(), false); break;
+            case GamePackets.GameServerPacket_T.SocialAction: this.combat.onSocialAction(packet.d(), packet.d()); break;
             case GamePackets.GameServerPacket_T.MyTargetSelected: {
                 const targetId = packet.d(), levelDifference = (packet.h() << 16) >> 16;
 
                 this.nextTargetLock = false;
-                this.setTarget(targetId, levelDifference);
-                this.notifyMacroCommand([12, 13, 15], Math.fround(0.001));
+                this.combat.setTarget(targetId, levelDifference);
+                this.macroExecutor.notifyCommand([CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist], Math.fround(0.001));
                 break;
             }
-            case GamePackets.GameServerPacket_T.PartyMemberPosition: this.onPartyMemberPosition(packet); break;
-            case GamePackets.GameServerPacket_T.TargetSelected: this.onTargetSelected(packet, true); break;
-            case GamePackets.GameServerPacket_T.TargetUnselected: this.onTargetSelected(packet, false); break;
-            case GamePackets.GameServerPacket_T.StatusUpdate: this.onStatusUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.CreatureSay: this.onCreatureSay(packet); break;
-            case GamePackets.GameServerPacket_T.EquipUpdate: this.onEquipUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.DoorInfo: this.onDoorInfo(packet); break;
-            case GamePackets.GameServerPacket_T.DoorStatusUpdate: this.onDoorStatusUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.PartySmallWindowAll: this.onPartySmallWindowAll(packet); break;
-            case GamePackets.GameServerPacket_T.PartySmallWindowAdd: this.onPartySmallWindowAdd(packet); break;
-            case GamePackets.GameServerPacket_T.PartySmallWindowDeleteAll: this.onPartySmallWindowDeleteAll(packet); break;
-            case GamePackets.GameServerPacket_T.PartySmallWindowDelete: this.onPartySmallWindowDelete(packet); break;
-            case GamePackets.GameServerPacket_T.PartySmallWindowUpdate: this.onPartySmallWindowUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.AskJoinPledge: this.onAskJoinPledge(packet); break;
-            case GamePackets.GameServerPacket_T.JoinPledge: this.onJoinPledge(packet); break;
-            case GamePackets.GameServerPacket_T.AskJoinParty: this.onAskJoinParty(packet); break;
-            case GamePackets.GameServerPacket_T.JoinParty: this.onJoinParty(packet); break;
-            case GamePackets.GameServerPacket_T.AskJoinFriend: this.onAskJoinFriend(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeShowMemberListAll: this.onPledgeShowMemberListAll(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeShowMemberListUpdate: this.onPledgeShowMemberListUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeShowMemberListAdd: this.onPledgeShowMemberListAdd(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeShowMemberListDelete: this.onPledgeShowMemberListDelete(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeShowMemberListDeleteAll: this.onPledgeShowMemberListDeleteAll(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeInfo: this.onPledgeInfo(packet); break;
-            case GamePackets.GameServerPacket_T.ServerObjectInfo: this.onServerObjectInfo(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeShowInfoUpdate: this.onPledgeShowInfoUpdate(packet); break;
-            case GamePackets.GameServerPacket_T.AquireSkillList: this.onAquireSkillList(packet); break;
-            case GamePackets.GameServerPacket_T.AquireSkillInfo: this.onAquireSkillInfo(packet); break;
-            case GamePackets.GameServerPacket_T.AquireSkillDone: this.onAquireSkillDone(packet); break;
-            case GamePackets.GameServerPacket_T.NpcSay: this.onNpcSay(packet); break;
-            case GamePackets.GameServerPacket_T.PetStatusShow: this.onPetStatusShow(packet); break;
-            case GamePackets.GameServerPacket_T.SetSummonRemainTime: this.onSetSummonRemainTime(packet); break;
-            case GamePackets.GameServerPacket_T.SellList: this.onSellList(packet); break;
-            case GamePackets.GameServerPacket_T.BuyList: this.onBuyList(packet); break;
-            case GamePackets.GameServerPacket_T.PlaySound: void this.onPlaySound(packet); break;
-            case GamePackets.GameServerPacket_T.StaticObject: this.onStaticObject(packet); break;
+            case GamePackets.GameServerPacket_T.PartyMemberPosition: this.community.onPartyMemberPosition(packet); break;
+            case GamePackets.GameServerPacket_T.TargetSelected: this.combat.onTargetSelected(packet, true); break;
+            case GamePackets.GameServerPacket_T.TargetUnselected: this.combat.onTargetSelected(packet, false); break;
+            case GamePackets.GameServerPacket_T.StatusUpdate: this.community.onStatusUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.CreatureSay: this.community.onCreatureSay(packet); break;
+            case GamePackets.GameServerPacket_T.EquipUpdate: this.items.onEquipUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.DoorInfo: this.actors.onDoorInfo(packet); break;
+            case GamePackets.GameServerPacket_T.DoorStatusUpdate: this.actors.onDoorStatusUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.PartySmallWindowAll: this.community.onPartySmallWindowAll(packet); break;
+            case GamePackets.GameServerPacket_T.PartySmallWindowAdd: this.community.onPartySmallWindowAdd(packet); break;
+            case GamePackets.GameServerPacket_T.PartySmallWindowDeleteAll: this.community.onPartySmallWindowDeleteAll(packet); break;
+            case GamePackets.GameServerPacket_T.PartySmallWindowDelete: this.community.onPartySmallWindowDelete(packet); break;
+            case GamePackets.GameServerPacket_T.PartySmallWindowUpdate: this.community.onPartySmallWindowUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.AskJoinPledge: this.community.onAskJoinPledge(packet); break;
+            case GamePackets.GameServerPacket_T.JoinPledge: this.community.onJoinPledge(packet); break;
+            case GamePackets.GameServerPacket_T.AskJoinParty: this.community.onAskJoinParty(packet); break;
+            case GamePackets.GameServerPacket_T.JoinParty: this.community.onJoinParty(packet); break;
+            case GamePackets.GameServerPacket_T.AskJoinFriend: this.community.onAskJoinFriend(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeShowMemberListAll: this.community.onPledgeShowMemberListAll(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeShowMemberListUpdate: this.community.onPledgeShowMemberListUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeShowMemberListAdd: this.community.onPledgeShowMemberListAdd(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeShowMemberListDelete: this.community.onPledgeShowMemberListDelete(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeShowMemberListDeleteAll: this.community.onPledgeShowMemberListDeleteAll(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeInfo: this.community.onPledgeInfo(packet); break;
+            case GamePackets.GameServerPacket_T.ServerObjectInfo: this.actors.onServerObjectInfo(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeShowInfoUpdate: this.community.onPledgeShowInfoUpdate(packet); break;
+            case GamePackets.GameServerPacket_T.AquireSkillList: this.items.onAquireSkillList(packet); break;
+            case GamePackets.GameServerPacket_T.AquireSkillInfo: this.items.onAquireSkillInfo(packet); break;
+            case GamePackets.GameServerPacket_T.AquireSkillDone: this.items.onAquireSkillDone(packet); break;
+            case GamePackets.GameServerPacket_T.NpcSay: this.community.onNpcSay(packet); break;
+            case GamePackets.GameServerPacket_T.PetStatusShow: this.actors.onPetStatusShow(packet); break;
+            case GamePackets.GameServerPacket_T.SetSummonRemainTime: this.actors.onSetSummonRemainTime(packet); break;
+            case GamePackets.GameServerPacket_T.SellList: this.items.onSellList(packet); break;
+            case GamePackets.GameServerPacket_T.BuyList: this.items.onBuyList(packet); break;
+            case GamePackets.GameServerPacket_T.PlaySound: void this.combat.onPlaySound(packet); break;
+            case GamePackets.GameServerPacket_T.StaticObject: this.movement.onStaticObject(packet); break;
             case GamePackets.GameServerPacket_T.ShowMiniMap: this.ui.showMap(packet.d()); break;
             case GamePackets.GameServerPacket_T.TutorialShowHtml: this.ui.showHtml(packet.S()); break;
             case GamePackets.GameServerPacket_T.TutorialCloseHtml: this.ui.hideHtml(); break;
-            case GamePackets.GameServerPacket_T.NicknameChanged: this.onNicknameChanged(packet); break;
-            case GamePackets.GameServerPacket_T.PledgeStatusChanged: this.onPledgeStatusChanged(packet); break;
-            case GamePackets.GameServerPacket_T.RelationChanged: this.onRelationChanged(packet); break;
+            case GamePackets.GameServerPacket_T.NicknameChanged: this.community.onNicknameChanged(packet); break;
+            case GamePackets.GameServerPacket_T.PledgeStatusChanged: this.community.onPledgeStatusChanged(packet); break;
+            case GamePackets.GameServerPacket_T.RelationChanged: this.community.onRelationChanged(packet); break;
             case GamePackets.GameServerPacket_T.SetupGauge: this.ui.setupGauge(packet.d(), packet.d(), packet.d()); break;
-            case GamePackets.GameServerPacket_T.ShowBoard: this.onShowBoard(packet); break;
-            case GamePackets.GameServerPacket_T.ChooseInventoryItem: this.onChooseInventoryItem(packet); break;
-            case GamePackets.GameServerPacket_T.EnchantResult: this.onEnchantResult(packet); break;
-            case GamePackets.GameServerPacket_T.SystemMessage: this.onSystemMessage(packet); break;
-            case GamePackets.GameServerPacket_T.ConfirmDlg: this.onConfirmDlg(packet); break;
-            case GamePackets.GameServerPacket_T.NpcHtmlMessage: this.onNpcHtmlMessage(packet); break;
+            case GamePackets.GameServerPacket_T.ShowBoard: this.community.onShowBoard(packet); break;
+            case GamePackets.GameServerPacket_T.ChooseInventoryItem: this.items.onChooseInventoryItem(packet); break;
+            case GamePackets.GameServerPacket_T.EnchantResult: this.items.onEnchantResult(packet); break;
+            case GamePackets.GameServerPacket_T.SystemMessage: this.community.onSystemMessage(packet); break;
+            case GamePackets.GameServerPacket_T.ConfirmDlg: this.community.onConfirmDlg(packet); break;
+            case GamePackets.GameServerPacket_T.NpcHtmlMessage: this.community.onNpcHtmlMessage(packet); break;
             case GamePackets.GameServerPacket_T.ShortCutInit:
-                this.shortcuts.clear();
+                this.items.shortcuts.clear();
                 this.ui.clearShortCuts();
 
-                for (let i = 0, count = packet.d(); i < count; i++) this.setShortCut(GamePackets.readShortCut(packet));
+                for (let i = 0, count = packet.d(); i < count; i++) this.items.setShortCut(GamePackets.readShortCut(packet));
                 break;
-            case GamePackets.GameServerPacket_T.ShortCutRegister: this.setShortCut(GamePackets.readShortCut(packet)); break;
-            case GamePackets.GameServerPacket_T.ManagePledgePower: this.onManagePledgePower(packet); break;
-            case GamePackets.GameServerPacket_T.StartPledgeWar: this.pledgeWarStart = GamePackets.readPledgeWar(packet, true); break;
-            case GamePackets.GameServerPacket_T.StopPledgeWar: this.pledgeWarStop = GamePackets.readPledgeWar(packet, false); break;
-            case GamePackets.GameServerPacket_T.SurrenderPledgeWar: this.pledgeWarSurrender = GamePackets.readPledgeWar(packet, false); break;
-            case GamePackets.GameServerPacket_T.PledgeCrest: this.onPledgeCrest(packet); break;
-            case GamePackets.GameServerPacket_T.AskJoinAlly: this.onAskJoinAlly(packet); break;
-            case GamePackets.GameServerPacket_T.AllyCrest: this.onAllyCrest(packet); break;
-            case GamePackets.GameServerPacket_T.WareHouseDepositList: this.warehouseDeposit = GamePackets.readWarehouseList(packet); this.ui.showWarehouse(false, this.warehouseDeposit); break;
-            case GamePackets.GameServerPacket_T.WareHouseWithdrawalList: this.warehouseWithdraw = GamePackets.readWarehouseList(packet); this.ui.showWarehouse(true, this.warehouseWithdraw); break;
-            case GamePackets.GameServerPacket_T.WareHouseDone: this.onWareHouseDone(packet); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreManageListSell: this.onPrivateStoreManageListSell(packet); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreListSell: this.privateStoreSell = GamePackets.readPrivateStoreListSell(packet); this.ui.showPrivateStoreSell(this.privateStoreSell); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreMsgSell: this.onPrivateStoreMsg(packet, this.privateStoreSellMsgs); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreManageListBuy: this.onPrivateStoreManageListBuy(packet); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreListBuy: this.privateStoreBuy = GamePackets.readPrivateStoreListBuy(packet); this.ui.showPrivateStoreBuy(this.privateStoreBuy); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreMsgBuy: this.onPrivateStoreMsg(packet, this.privateStoreBuyMsgs); break;
-            case GamePackets.GameServerPacket_T.PackageToList: this.onPackageToList(packet); break;
-            case GamePackets.GameServerPacket_T.PackageSendableList: this.packageSendable = GamePackets.readPackageSendableList(packet); this.ui.showPackage(this.packageSendable); break;
-            case GamePackets.GameServerPacket_T.MultiSellList: this.onMultiSellList(packet); break;
-            case GamePackets.GameServerPacket_T.ShopPreviewList: this.shopPreview = GamePackets.readShopPreviewList(packet); this.ui.showPreviewShop(this.shopPreview); break;
-            case GamePackets.GameServerPacket_T.ShopPreviewInfo: this.onShopPreviewInfo(packet); break;
+            case GamePackets.GameServerPacket_T.ShortCutRegister: this.items.setShortCut(GamePackets.readShortCut(packet)); break;
+            case GamePackets.GameServerPacket_T.ManagePledgePower: this.community.onManagePledgePower(packet); break;
+            case GamePackets.GameServerPacket_T.StartPledgeWar: this.community.pledgeWarStart = GamePackets.readPledgeWar(packet, true); break;
+            case GamePackets.GameServerPacket_T.StopPledgeWar: this.community.pledgeWarStop = GamePackets.readPledgeWar(packet, false); break;
+            case GamePackets.GameServerPacket_T.SurrenderPledgeWar: this.community.pledgeWarSurrender = GamePackets.readPledgeWar(packet, false); break;
+            case GamePackets.GameServerPacket_T.PledgeCrest: this.community.onPledgeCrest(packet); break;
+            case GamePackets.GameServerPacket_T.AskJoinAlly: this.community.onAskJoinAlly(packet); break;
+            case GamePackets.GameServerPacket_T.AllyCrest: this.community.onAllyCrest(packet); break;
+            case GamePackets.GameServerPacket_T.WareHouseDepositList: this.items.warehouseDeposit = GamePackets.readWarehouseList(packet); this.ui.showWarehouse(false, this.items.warehouseDeposit); break;
+            case GamePackets.GameServerPacket_T.WareHouseWithdrawalList: this.items.warehouseWithdraw = GamePackets.readWarehouseList(packet); this.ui.showWarehouse(true, this.items.warehouseWithdraw); break;
+            case GamePackets.GameServerPacket_T.WareHouseDone: this.items.onWareHouseDone(packet); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreManageListSell: this.items.onPrivateStoreManageListSell(packet); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreListSell: this.items.privateStoreSell = GamePackets.readPrivateStoreListSell(packet); this.ui.showPrivateStoreSell(this.items.privateStoreSell); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreMsgSell: this.items.onPrivateStoreMsg(packet, this.items.privateStoreSellMsgs); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreManageListBuy: this.items.onPrivateStoreManageListBuy(packet); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreListBuy: this.items.privateStoreBuy = GamePackets.readPrivateStoreListBuy(packet); this.ui.showPrivateStoreBuy(this.items.privateStoreBuy); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreMsgBuy: this.items.onPrivateStoreMsg(packet, this.items.privateStoreBuyMsgs); break;
+            case GamePackets.GameServerPacket_T.PackageToList: this.items.onPackageToList(packet); break;
+            case GamePackets.GameServerPacket_T.PackageSendableList: this.items.packageSendable = GamePackets.readPackageSendableList(packet); this.ui.showPackage(this.items.packageSendable); break;
+            case GamePackets.GameServerPacket_T.MultiSellList: this.items.onMultiSellList(packet); break;
+            case GamePackets.GameServerPacket_T.ShopPreviewList: this.items.shopPreview = GamePackets.readShopPreviewList(packet); this.ui.showPreviewShop(this.items.shopPreview); break;
+            case GamePackets.GameServerPacket_T.ShopPreviewInfo: this.items.onShopPreviewInfo(packet); break;
             case GamePackets.GameServerPacket_T.BuyListSeed:
-                this.seedShop = GamePackets.readBuyListSeed(packet);
-                this.ui.showManorShop(this.seedShop, false);
+                this.items.seedShop = GamePackets.readBuyListSeed(packet);
+                this.ui.showManorShop(this.items.seedShop, false);
                 break;
             case GamePackets.GameServerPacket_T.SellListProcure:
-                this.cropProcure = GamePackets.readSellListProcure(packet);
-                this.ui.showManorShop(this.cropProcure, true);
+                this.items.cropProcure = GamePackets.readSellListProcure(packet);
+                this.ui.showManorShop(this.items.cropProcure, true);
                 break;
-            case GamePackets.GameServerPacket_T.VehicleInfo: this.onVehicleLocation(packet, true); break;
-            case GamePackets.GameServerPacket_T.OnVehicleCheckLocation: this.onVehicleLocation(packet, false); break;
-            case GamePackets.GameServerPacket_T.VehicleDeparture: this.onVehicleDeparture(packet); break;
-            case GamePackets.GameServerPacket_T.VehicleStarted: this.onVehicleStarted(packet); break;
-            case GamePackets.GameServerPacket_T.GetOnVehicle: this.onGetOnVehicle(packet); break;
-            case GamePackets.GameServerPacket_T.GetOffVehicle: this.onGetOffVehicle(packet); break;
-            case GamePackets.GameServerPacket_T.MoveToLocationInVehicle: this.onMoveToLocationInVehicle(packet); break;
-            case GamePackets.GameServerPacket_T.StopMoveInVehicle: this.onStopMoveInVehicle(packet); break;
-            case GamePackets.GameServerPacket_T.ValidateLocationInVehicle: this.onValidateLocationInVehicle(packet); break;
-            case GamePackets.GameServerPacket_T.Ride: this.onRide(packet); break;
-            case GamePackets.GameServerPacket_T.FlyToLocation: this.onFlyToLocation(packet); break;
-            case GamePackets.GameServerPacket_T.SpecialCamera: this.specialCamera = GamePackets.readSpecialCamera(packet); break;
-            case GamePackets.GameServerPacket_T.NormalCamera: this.specialCamera = null; break; // OnNormalCamera 0x7473c0 -> ReleaseSpecialViewTarget.
-            case GamePackets.GameServerPacket_T.CameraMode: this.cameraMode = packet.d(); break;
-            case GamePackets.GameServerPacket_T.ObservationMode: this.onObservationMode(packet); break;
-            case GamePackets.GameServerPacket_T.ObservationReturn: this.onObservationReturn(packet); break;
-            case GamePackets.GameServerPacket_T.RadarControl: this.onRadarControl(packet); break;
-            case GamePackets.GameServerPacket_T.ShowTownMap: this.townMap = GamePackets.readTownMap(packet); this.ui.showTownMap(this.townMap); break;
-            case GamePackets.GameServerPacket_T.ShowCalculator: this.calculatorId = packet.d(); break;
-            case GamePackets.GameServerPacket_T.ShowXMasSeal: this.xmasSealItemId = packet.d(); break;
+            case GamePackets.GameServerPacket_T.VehicleInfo: this.movement.onVehicleLocation(packet, true); break;
+            case GamePackets.GameServerPacket_T.OnVehicleCheckLocation: this.movement.onVehicleLocation(packet, false); break;
+            case GamePackets.GameServerPacket_T.VehicleDeparture: this.movement.onVehicleDeparture(packet); break;
+            case GamePackets.GameServerPacket_T.VehicleStarted: this.movement.onVehicleStarted(packet); break;
+            case GamePackets.GameServerPacket_T.GetOnVehicle: this.movement.onGetOnVehicle(packet); break;
+            case GamePackets.GameServerPacket_T.GetOffVehicle: this.movement.onGetOffVehicle(packet); break;
+            case GamePackets.GameServerPacket_T.MoveToLocationInVehicle: this.movement.onMoveToLocationInVehicle(packet); break;
+            case GamePackets.GameServerPacket_T.StopMoveInVehicle: this.movement.onStopMoveInVehicle(packet); break;
+            case GamePackets.GameServerPacket_T.ValidateLocationInVehicle: this.movement.onValidateLocationInVehicle(packet); break;
+            case GamePackets.GameServerPacket_T.Ride: this.movement.onRide(packet); break;
+            case GamePackets.GameServerPacket_T.FlyToLocation: this.movement.onFlyToLocation(packet); break;
+            case GamePackets.GameServerPacket_T.SpecialCamera: this.movement.specialCamera = GamePackets.readSpecialCamera(packet); break;
+            case GamePackets.GameServerPacket_T.NormalCamera: this.movement.specialCamera = null; break; // OnNormalCamera 0x7473c0 -> ReleaseSpecialViewTarget.
+            case GamePackets.GameServerPacket_T.CameraMode: this.movement.cameraMode = packet.d(); break;
+            case GamePackets.GameServerPacket_T.ObservationMode: this.movement.onObservationMode(packet); break;
+            case GamePackets.GameServerPacket_T.ObservationReturn: this.movement.onObservationReturn(packet); break;
+            case GamePackets.GameServerPacket_T.RadarControl: this.community.onRadarControl(packet); break;
+            case GamePackets.GameServerPacket_T.ShowTownMap: this.community.townMap = GamePackets.readTownMap(packet); this.ui.showTownMap(this.community.townMap); break;
+            case GamePackets.GameServerPacket_T.ShowCalculator: this.community.calculatorId = packet.d(); break;
+            case GamePackets.GameServerPacket_T.ShowXMasSeal: this.community.xmasSealItemId = packet.d(); break;
             case GamePackets.GameServerPacket_T.Dice:
-                this.dice = GamePackets.readDice(packet);
-                void this.onDice(this.dice);
+                this.actors.dice = GamePackets.readDice(packet);
+                void this.actors.onDice(this.actors.dice);
                 break;
-            case GamePackets.GameServerPacket_T.MonRaceInfo: this.monRace = GamePackets.readMonRaceInfo(packet); break;
-            case GamePackets.GameServerPacket_T.SSQStatus: this.onSSQStatus(packet); break;
+            case GamePackets.GameServerPacket_T.MonRaceInfo: this.community.monRace = GamePackets.readMonRaceInfo(packet); break;
+            case GamePackets.GameServerPacket_T.SSQStatus: this.community.onSSQStatus(packet); break;
             case GamePackets.GameServerPacket_T.ClanHallDecoration: {
                 const info = GamePackets.readClanHallDecoration(packet);
-                this.clanHallDecoration.set(info.clanHallId, info);
+                this.community.clanHallDecoration.set(info.clanHallId, info);
                 this.manGame.getComponent("render").updateClanHallDecorations();
                 break;
             }
-            case GamePackets.GameServerPacket_T.SiegeInfo: this.siegeInfo = GamePackets.readSiegeInfo(packet); break;
-            case GamePackets.GameServerPacket_T.SiegeAttackerList: this.siegeAttackers = GamePackets.readSiegeClanList(packet, false); break;
-            case GamePackets.GameServerPacket_T.SiegeDefenderList: this.siegeDefenders = GamePackets.readSiegeClanList(packet, true); break;
-            case GamePackets.GameServerPacket_T.GameGuardQuery: this.onGameGuardQuery(packet); break;
-            case GamePackets.GameServerPacket_T.RecipeBookItemList: this.recipeBook = GamePackets.readRecipeBookItemList(packet); this.ui.showRecipeBook(this.recipeBook); break;
-            case GamePackets.GameServerPacket_T.RecipeItemMakeInfo: this.recipeItemMakeInfo = GamePackets.readRecipeItemMakeInfo(packet); this.ui.showRecipeManufacture(this.recipeItemMakeInfo); break;
-            case GamePackets.GameServerPacket_T.RecipeShopManageList: this.recipeShopManageList = GamePackets.readRecipeShopManageList(packet); this.ui.showRecipeShopManage(this.recipeShopManageList); break;
-            case GamePackets.GameServerPacket_T.RecipeShopSellList: this.recipeShopSellList = GamePackets.readRecipeShopSellList(packet); this.ui.showRecipeShopSellList(this.recipeShopSellList); break;
-            case GamePackets.GameServerPacket_T.RecipeShopItemInfo: this.recipeShopItemInfo = GamePackets.readRecipeShopItemInfo(packet); this.ui.showRecipeShopItemInfo(this.recipeShopItemInfo); break;
-            case GamePackets.GameServerPacket_T.RecipeShopMsg: this.onRecipeShopMsg(packet); break;
-            case GamePackets.GameServerPacket_T.HennaEquipList: this.hennaEquipList = GamePackets.readHennaEquipList(packet); this.ui.showHennaList(this.hennaEquipList); break;
-            case GamePackets.GameServerPacket_T.HennaItemInfo: this.hennaItemInfo = GamePackets.readHennaItemInfo(packet); this.ui.showHennaInfo(this.hennaItemInfo); break;
+            case GamePackets.GameServerPacket_T.SiegeInfo: this.community.siegeInfo = GamePackets.readSiegeInfo(packet); break;
+            case GamePackets.GameServerPacket_T.SiegeAttackerList: this.community.siegeAttackers = GamePackets.readSiegeClanList(packet, false); break;
+            case GamePackets.GameServerPacket_T.SiegeDefenderList: this.community.siegeDefenders = GamePackets.readSiegeClanList(packet, true); break;
+            case GamePackets.GameServerPacket_T.GameGuardQuery: this.community.onGameGuardQuery(packet); break;
+            case GamePackets.GameServerPacket_T.RecipeBookItemList: this.items.recipeBook = GamePackets.readRecipeBookItemList(packet); this.ui.showRecipeBook(this.items.recipeBook); break;
+            case GamePackets.GameServerPacket_T.RecipeItemMakeInfo: this.items.recipeItemMakeInfo = GamePackets.readRecipeItemMakeInfo(packet); this.ui.showRecipeManufacture(this.items.recipeItemMakeInfo); break;
+            case GamePackets.GameServerPacket_T.RecipeShopManageList: this.items.recipeShopManageList = GamePackets.readRecipeShopManageList(packet); this.ui.showRecipeShopManage(this.items.recipeShopManageList); break;
+            case GamePackets.GameServerPacket_T.RecipeShopSellList: this.items.recipeShopSellList = GamePackets.readRecipeShopSellList(packet); this.ui.showRecipeShopSellList(this.items.recipeShopSellList); break;
+            case GamePackets.GameServerPacket_T.RecipeShopItemInfo: this.items.recipeShopItemInfo = GamePackets.readRecipeShopItemInfo(packet); this.ui.showRecipeShopItemInfo(this.items.recipeShopItemInfo); break;
+            case GamePackets.GameServerPacket_T.RecipeShopMsg: this.items.onRecipeShopMsg(packet); break;
+            case GamePackets.GameServerPacket_T.HennaEquipList: this.items.hennaEquipList = GamePackets.readHennaEquipList(packet); this.ui.showHennaList(this.items.hennaEquipList); break;
+            case GamePackets.GameServerPacket_T.HennaItemInfo: this.items.hennaItemInfo = GamePackets.readHennaItemInfo(packet); this.ui.showHennaInfo(this.items.hennaItemInfo); break;
             case GamePackets.GameServerPacket_T.HennaUnequipList: this.ui.showHennaList(GamePackets.readHennaEquipList(packet), true); break;
             case GamePackets.GameServerPacket_T.HennaUnequipInfo: this.ui.showHennaInfo(GamePackets.readHennaItemInfo(packet), true); break;
             case GamePackets.GameServerPacket_T.PartyMatchList: {
                 const list = GamePackets.readPartyMatchList(packet);
 
-                this.partyMatchRooms = list.rooms;
-                this.partyMatchPage = list.page;
+                this.community.partyMatchRooms = list.rooms;
+                this.community.partyMatchPage = list.page;
                 this.ui.showPartyMatchList(list);
                 break;
             }
             case GamePackets.GameServerPacket_T.PartyMatchDetail:
-                this.partyMatchDetail = GamePackets.readPartyMatchDetail(packet);
-                this.ui.showPartyMatchDetail(this.partyMatchDetail);
+                this.community.partyMatchDetail = GamePackets.readPartyMatchDetail(packet);
+                this.ui.showPartyMatchDetail(this.community.partyMatchDetail);
                 break;
-            case GamePackets.GameServerPacket_T.PartySpelled: this.onPartySpelled(packet); break;
-            case GamePackets.GameServerPacket_T.TutorialShowQuestionMark: this.tutorialQuestionMarks.add(packet.d()); break;
-            case GamePackets.GameServerPacket_T.TutorialEnableClientEvent: this.tutorialClientEvents = packet.d(); break;
-            case GamePackets.GameServerPacket_T.GMViewCharacterInfo: this.gmCharacterInfo = GamePackets.readGMViewCharacterInfo(packet); this.updateGMCharacterInfo(); break;
-            case GamePackets.GameServerPacket_T.GMViewPledgeInfo: this.gmPledgeInfo = GamePackets.readGMViewPledgeInfo(packet); this.ui.setGMPledgeInfo(this.gmPledgeInfo); break;
-            case GamePackets.GameServerPacket_T.GMViewSkillInfo: this.gmSkillInfo = GamePackets.readGMViewSkillInfo(packet); this.ui.setGMSkillInfo(this.gmSkillInfo); break;
-            case GamePackets.GameServerPacket_T.GMViewQuestList: this.gmQuestList = GamePackets.readGMViewQuestList(packet); this.ui.setGMQuestList(this.gmQuestList); break;
-            case GamePackets.GameServerPacket_T.GMViewItemList: this.gmItemList = GamePackets.readGMViewItemList(packet); this.ui.setGMInventoryInfo(this.gmItemList); break;
-            case GamePackets.GameServerPacket_T.GMViewWarehouseWithdrawList: this.gmWarehouseList = GamePackets.readGMViewWarehouseWithdrawList(packet); this.ui.setGMWarehouseInfo(this.gmWarehouseList); break;
-            case GamePackets.GameServerPacket_T.GMViewHennaInfo: this.gmHennaStatus = GamePackets.readGMViewHennaInfo(packet); break;
-            case GamePackets.GameServerPacket_T.Snoop: this.onSnoop(packet); break;
+            case GamePackets.GameServerPacket_T.PartySpelled: this.community.onPartySpelled(packet); break;
+            case GamePackets.GameServerPacket_T.TutorialShowQuestionMark: this.community.tutorialQuestionMarks.add(packet.d()); break;
+            case GamePackets.GameServerPacket_T.TutorialEnableClientEvent: this.community.tutorialClientEvents = packet.d(); break;
+            case GamePackets.GameServerPacket_T.GMViewCharacterInfo: this.community.gmCharacterInfo = GamePackets.readGMViewCharacterInfo(packet); this.community.updateGMCharacterInfo(); break;
+            case GamePackets.GameServerPacket_T.GMViewPledgeInfo: this.community.gmPledgeInfo = GamePackets.readGMViewPledgeInfo(packet); this.ui.setGMPledgeInfo(this.community.gmPledgeInfo); break;
+            case GamePackets.GameServerPacket_T.GMViewSkillInfo: this.community.gmSkillInfo = GamePackets.readGMViewSkillInfo(packet); this.ui.setGMSkillInfo(this.community.gmSkillInfo); break;
+            case GamePackets.GameServerPacket_T.GMViewQuestList: this.community.gmQuestList = GamePackets.readGMViewQuestList(packet); this.ui.setGMQuestList(this.community.gmQuestList); break;
+            case GamePackets.GameServerPacket_T.GMViewItemList: this.community.gmItemList = GamePackets.readGMViewItemList(packet); this.ui.setGMInventoryInfo(this.community.gmItemList); break;
+            case GamePackets.GameServerPacket_T.GMViewWarehouseWithdrawList: this.community.gmWarehouseList = GamePackets.readGMViewWarehouseWithdrawList(packet); this.ui.setGMWarehouseInfo(this.community.gmWarehouseList); break;
+            case GamePackets.GameServerPacket_T.GMViewHennaInfo: this.community.gmHennaStatus = GamePackets.readGMViewHennaInfo(packet); break;
+            case GamePackets.GameServerPacket_T.Snoop: this.community.onSnoop(packet); break;
             case GamePackets.GameServerPacket_T.Extended:
                 switch (packet.h()) {
-                    case GamePackets.GameServerExPacket_T.ExAutoSoulShot: this.onAutoSoulShot(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExStorageMaxCount: this.onStorageMaxCount(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExPledgeCrestLarge: this.onPledgeCrestLarge(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExEventMatchMessage: this.onEventMatchMessage(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExPartyRoomMember: this.onPartyRoomMember(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExClosePartyRoom: this.onClosePartyRoom(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExManagePartyRoomMember: this.onManagePartyRoomMember(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExFishingStart: this.onFishingStart(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExFishingEnd: this.onFishingEnd(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExFishingStartCombat: this.onFishingStartCombat(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExFishingHpRegen: this.onFishingHpRegen(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExAutoSoulShot: this.items.onAutoSoulShot(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExStorageMaxCount: this.items.onStorageMaxCount(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExPledgeCrestLarge: this.community.onPledgeCrestLarge(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExEventMatchMessage: this.community.onEventMatchMessage(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExPartyRoomMember: this.community.onPartyRoomMember(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExClosePartyRoom: this.community.onClosePartyRoom(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExManagePartyRoomMember: this.community.onManagePartyRoomMember(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExFishingStart: this.combat.onFishingStart(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExFishingEnd: this.combat.onFishingEnd(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExFishingStartCombat: this.combat.onFishingStartCombat(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExFishingHpRegen: this.combat.onFishingHpRegen(packet); break;
                     case GamePackets.GameServerExPacket_T.ExEnchantSkillList:
-                        this.enchantSkills = GamePackets.readEnchantSkillList(packet);
-                        this.ui.showEnchantSkillList(this.enchantSkills);
+                        this.items.enchantSkills = GamePackets.readEnchantSkillList(packet);
+                        this.ui.showEnchantSkillList(this.items.enchantSkills);
                         break;
                     case GamePackets.GameServerExPacket_T.ExEnchantSkillInfo:
-                        this.enchantSkillInfo = GamePackets.readEnchantSkillInfo(packet);
-                        this.ui.showEnchantSkillInfo(this.enchantSkillInfo);
+                        this.items.enchantSkillInfo = GamePackets.readEnchantSkillInfo(packet);
+                        this.ui.showEnchantSkillInfo(this.items.enchantSkillInfo);
                         break;
                     case GamePackets.GameServerExPacket_T.ExQuestInfo: if (packet.getRemaining()) throw new Error("Invalid ExQuestInfo payload."); break;
-                    case GamePackets.GameServerExPacket_T.ExShowQuestMark: this.onShowQuestMark(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExSendManorList: this.manors = GamePackets.readManorList(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSeedInfo: this.manorSeedInfo = GamePackets.readShowSeedInfo(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowCropInfo: this.manorCropInfo = GamePackets.readShowCropInfo(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowManorDefaultInfo: this.manorDefaultCrops = GamePackets.readShowManorDefaultInfo(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSeedSetting: this.manorSeedSettings = GamePackets.readShowSeedSetting(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowCropSetting: this.manorCropSettings = GamePackets.readShowCropSetting(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSellCropList: this.manorSellCrops = GamePackets.readShowSellCropList(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowProcureCropDetail: this.manorProcureCropDetail = GamePackets.readShowProcureCropDetail(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExHeroList: this.heroes = GamePackets.readHeroList(packet); this.ui.showHeroList(this.heroes); break;
-                    case GamePackets.GameServerExPacket_T.ExOpenMPCC: this.onOpenMPCC(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExCloseMPCC: this.onCloseMPCC(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExAskJoinMPCC: this.onAskJoinMPCC(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExMultiPartyCommandChannelInfo: this.commandChannel = GamePackets.readCommandChannelInfo(packet); this.ui.setCommandChannelInfo(this.commandChannel); break;
-                    case GamePackets.GameServerExPacket_T.ExOlympiadUserInfo: { const info = GamePackets.readOlympiadUserInfo(packet); this.olympiadUsers.set(info.objectId, info); this.ui.setOlympiadUserInfo(info); break; }
-                    case GamePackets.GameServerExPacket_T.ExOlympiadSpelledInfo: { const info = GamePackets.readOlympiadSpelledInfo(packet); this.olympiadEffects.set(info.objectId, info.effects); this.ui.setOlympiadEffects(info.objectId, info.effects); break; }
-                    case GamePackets.GameServerExPacket_T.ExOlympiadMode: this.onOlympiadMode(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExOlympiadMatchEnd: this.onOlympiadMatchEnd(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExMailArrived: this.onMailArrived(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowQuestMark: this.community.onShowQuestMark(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExSendManorList: this.items.manors = GamePackets.readManorList(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowSeedInfo: this.items.manorSeedInfo = GamePackets.readShowSeedInfo(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowCropInfo: this.items.manorCropInfo = GamePackets.readShowCropInfo(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowManorDefaultInfo: this.items.manorDefaultCrops = GamePackets.readShowManorDefaultInfo(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowSeedSetting: this.items.manorSeedSettings = GamePackets.readShowSeedSetting(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowCropSetting: this.items.manorCropSettings = GamePackets.readShowCropSetting(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowSellCropList: this.items.manorSellCrops = GamePackets.readShowSellCropList(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowProcureCropDetail: this.items.manorProcureCropDetail = GamePackets.readShowProcureCropDetail(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExHeroList: this.community.heroes = GamePackets.readHeroList(packet); this.ui.showHeroList(this.community.heroes); break;
+                    case GamePackets.GameServerExPacket_T.ExOpenMPCC: this.community.onOpenMPCC(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExCloseMPCC: this.community.onCloseMPCC(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExAskJoinMPCC: this.community.onAskJoinMPCC(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExMultiPartyCommandChannelInfo: this.community.commandChannel = GamePackets.readCommandChannelInfo(packet); this.ui.setCommandChannelInfo(this.community.commandChannel); break;
+                    case GamePackets.GameServerExPacket_T.ExOlympiadUserInfo: { const info = GamePackets.readOlympiadUserInfo(packet); this.community.olympiadUsers.set(info.objectId, info); this.ui.setOlympiadUserInfo(info); break; }
+                    case GamePackets.GameServerExPacket_T.ExOlympiadSpelledInfo: { const info = GamePackets.readOlympiadSpelledInfo(packet); this.community.olympiadEffects.set(info.objectId, info.effects); this.ui.setOlympiadEffects(info.objectId, info.effects); break; }
+                    case GamePackets.GameServerExPacket_T.ExOlympiadMode: this.community.onOlympiadMode(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExOlympiadMatchEnd: this.community.onOlympiadMatchEnd(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExMailArrived: this.community.onMailArrived(packet); break;
                 }
                 break;
             case GamePackets.GameServerPacket_T.SunRise: this.manGame.getComponent("render").getEnvironment().setTimeOfDay(7); break; // Engine 0x103f1660: OnReceiveServerTime(420).
@@ -1304,4514 +811,361 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     this.ui.saveInventoryOrder();
                     this.ui.clearQuestLocation();
                     this.leaveWorld();
-                    if (this.gmTransfer && this.gmTransfer.phase === 2) this.gmTransfer.phase = 3;
+                    if (this.session.gmTransfer && this.session.gmTransfer.phase === GMTransferPhase_T.Restart) this.session.gmTransfer.phase = GMTransferPhase_T.Reconnect;
                 }
                 break;
             case GamePackets.GameServerPacket_T.LeaveWorld:
             case GamePackets.GameServerPacket_T.ServerClose:
-                this.game.close();
-                void this.onDisconnected(opcode === GamePackets.GameServerPacket_T.LeaveWorld ? "Logged out." : "Server closed the session.");
+                this.session.game.close();
+                void this.session.onDisconnected(opcode === GamePackets.GameServerPacket_T.LeaveWorld ? "Logged out." : "Server closed the session.");
                 break;
         }
     }
 
-    protected getMeshType(appearance: GamePackets.Appearance_T): number { // User::GetMeshType 0x736020, stored as Pawn.CharClassID.
-        const { race, classId } = appearance, sex = appearance.sex !== 0 ? 1 : 0;
+    public getDoorPosition(mover: MovableObject): number { return this.actors.getDoorPosition(mover); }
 
-        switch (race) {
-            case GamePackets.Race_T.HUMAN:
-                if (classId <= 9 || classId >= 88 && classId <= 93) return sex;
-                if (classId <= 17 || classId >= 94 && classId <= 98) return 8 + sex;
-                return 5;
-            case GamePackets.Race_T.ELF: return 6 + sex;
-            case GamePackets.Race_T.DARK_ELF: return 2 + sex;
-            case GamePackets.Race_T.ORC:
-                if (classId >= 44 && classId <= 48 || classId >= 113 && classId <= 114) return 10 + sex;
-                if (classId >= 49 && classId <= 52 || classId >= 115 && classId <= 116) return 12 + sex;
-                return 5;
-            case GamePackets.Race_T.DWARF: return 4 + sex;
-            default: return 5;
-        }
-    }
+    public requestSkillList() { return this.items.requestSkillList(); }
 
-    protected getCharacterIndex(appearance: GamePackets.Appearance_T): number {
-        const isMystic = MYSTIC_BODY_CLASS_IDS.has(appearance.classId);
-        let body: string;
+    public useSkill(id: number, ctrl: boolean = false, shift: boolean = false) { return this.combat.useSkill(id, ctrl, shift); }
 
-        switch (appearance.race) {
-            case GamePackets.Race_T.HUMAN: body = isMystic ? "Magic" : "Fighter"; break;
-            case GamePackets.Race_T.ELF: body = "Elf"; break;
-            case GamePackets.Race_T.DARK_ELF: body = "DarkElf"; break;
-            case GamePackets.Race_T.ORC: body = isMystic ? "Shaman" : "Orc"; break;
-            case GamePackets.Race_T.DWARF: body = "Dwarf"; break;
-            default: throw new Error(`Unknown race '${appearance.race}'.`);
-        }
-
-        const name = (appearance.sex === 0 ? "M" : "F") + body;
-        const group = this.charGroups.find(group => group.name === name);
-
-        if (!group) throw new Error(`No character group named '${name}'.`);
-
-        return group.index;
-    }
-
-    protected onCharCreateOk(packet: PacketReader) {
-        if (packet.d() !== 1 || packet.getRemaining()) throw new Error("Invalid CharCreateOk payload.");
-    }
-
-    protected onCharDeleteOk(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid CharDeleteOk payload.");
-    }
-
-    protected getArmor(paperdoll: number[]): ICharacterArmorSelection {
-        return { chest: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], legs: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], gloves: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], boots: paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET] };
-    }
-
-    protected getAppearanceKey(appearance: GamePackets.Appearance_T) {
-        const paperdoll = appearance.paperdoll;
-
-        return [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, appearance.enchantLevel, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
-    }
-
-    protected loadAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor): Promise<void> {
-        const load = this.applyAppearance(appearance, actor);
-
-        this.appearanceLoads.set(actor, load);
-
-        return load;
-    }
-
-    protected async applyAppearance(appearance: GamePackets.Appearance_T, actor: BaseActor) {
-        const asset = this.manGame.getComponent("asset");
-        const paperdoll = appearance.paperdoll;
-        const bodyKey = [appearance.race, appearance.sex, appearance.classId, appearance.face, appearance.hairStyle, appearance.hairColor, paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LEGS], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR]].join(":");
-        const isEquipmentOnly = this.bodyKeys.get(actor) === bodyKey;
-        const request = (this.appearanceRequests.get(actor) || 0) + 1;
-
-        this.appearanceRequests.set(actor, request);
-
-        if (!isEquipmentOnly) this.bodyKeys.delete(actor);
-        if (!this.charGroups) this.charGroups = await asset.getCharGroups();
-
-        const index = this.getCharacterIndex(appearance);
-        const group = this.charGroups.find(group => group.index === index);
-
-        actor.charClassId = this.getMeshType(appearance);
-        const hairStyle = group.hairStyles.includes(appearance.hairStyle) ? appearance.hairStyle : group.hairStyles[0];
-        const colours = group.hairColours[hairStyle];
-
-        const equipment = { enchantLevel: appearance.enchantLevel, rightHand: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND] || appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND], leftHand: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND], head: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HEAD], hair: appearance.paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_HAIR] };
-
-        if (isEquipmentOnly) await asset.loadCharacterEquipment(this.manGame.getComponent("render"), actor, index, hairStyle, equipment);
-        else {
-            await asset.loadCharacter(this.manGame.getComponent("render"), index, Math.min(appearance.face, group.faceVariants - 1), hairStyle, colours.includes(appearance.hairColor) ? appearance.hairColor : colours[0], this.getArmor(appearance.paperdoll), actor, equipment);
-
-            if (this.appearanceRequests.get(actor) === request) this.bodyKeys.set(actor, bodyKey);
-        }
-
-        const object = this.findObjectByActor(actor);
-
-        if (object && object.kind === "user" || this.riders.get(this.userId) === actor)
-            actor.setUnrealScriptProperty("CanIngnoreCollision", false);
-
-        if (object) {
-            actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
-            this.applySpeeds(actor, object.speeds, object.isRunning);
-            this.setIdleAnimation(object);
-            this.applyPartyMember(object);
-        }
-
-        for (const [objectId, rider] of this.riders) {
-            if (rider !== actor) continue;
-
-            const mount = this.objects.get(objectId).actor;
-
-            mount.playMovementAnimation(mount.isLocomoting() ? "running" : "idle");
-        }
-
-
-    }
-
-    protected onCharSelected(packet: PacketReader) {
-        const selected = GamePackets.readCharSelected(packet);
-        const entry = this.characters[this.selectedSlot];
-        const render = this.manGame.getComponent("render");
-        const environment = render.getEnvironment();
-
-        environment.setTimeOfDay(selected.gameTime / 60);
-        environment.setTimeScale(GAME_TIME_SCALE);
-
-        this.lobby.leave();
-        render.player.teleportTo(setVector(new Vector3(), selected), true);
-        this.manGame.getComponent("input").resetFollowCamera();
-
-        void this.enterWorld(entry);
-    }
-
-    protected async enterWorld(entry: GamePackets.Appearance_T) {
-        const render = this.manGame.getComponent("render");
-        const asset = this.manGame.getComponent("asset");
-        const physics = this.manGame.getComponent("physics");
-        const generation = this.teleportGeneration;
-        const [x, y] = render.getSectorId(render.player.position);
-
-        asset.setStreaming(render, false);
-        const level = await asset.setAlwaysLoaded(render, `${x}_${y}`);
-
-        if (generation !== this.teleportGeneration) {
-            asset.unloadAlwaysLoaded(render, `${x}_${y}`, level);
-            return;
-        }
-
-        this.worldLevel = level;
-        render.setLevel(level);
-        asset.setStreaming(render, true);
-
-        await this.loadAppearance(entry, render.player);
-
-        if (generation !== this.teleportGeneration) return;
-
-        render.player.setUnrealScriptProperty("Level", level.levelInfoActor as any);
-        physics.setPawnZone(render.player, false, true);
-        physics.setPawnVolumes(render.player);
-        this.userAppearanceLoad = null;
-        if (this.game.isPlayingReplay()) this.skillListLoad = this.resolveSkillList = null;
-        else this.skillListLoad = new Promise(resolve => this.resolveSkillList = resolve);
-        this.game.enterWorld();
-        this.game.requestSkillList();
-        this.game.requestSkillCoolTime();
-    }
-
-    protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, actorReady: null, resolveActor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, environment: null, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingFly: null, pendingVehicleMove: null, pendingRotation: null, pendingAttack: null, pendingSkill: null, pendingTransientSkills: [] };
-
-        object.actorReady = new Promise(resolve => object.resolveActor = resolve);
-        this.objects.set(objectId, object);
-        this.flushPendingSkills(objectId);
-
-        return object;
-    }
-
-    protected applySpeeds(actor: BaseActor, speeds: GamePackets.Speeds_T, isRunning: boolean) {
-        actor.setMovementSpeeds(speeds.runSpd * speeds.moveMultiplier, speeds.walkSpd * speeds.moveMultiplier, speeds.swimRunSpd * speeds.moveMultiplier);
-        if (speeds.airRunSpd !== undefined) actor.setAirSpeed((isRunning ? speeds.airRunSpd : speeds.airWalkSpd) * speeds.moveMultiplier);
-        actor.setUnrealScriptProperty("AttackSpeedRate", speeds.attackSpeedMultiplier);
-        actor.setUnrealScriptProperty("NonAttackSpeedRate", Math.fround(speeds.moveMultiplier)); // Engine 0x1047ab88: User+118 double to Pawn+5fc float.
-        actor.setUnrealScriptProperty("GroundMaxSpeed", Math.fround(speeds.runSpd));
-        actor.setUnrealScriptProperty("GroundMinSpeed", Math.fround(speeds.walkSpd));
-        actor.setUnrealScriptProperty("WaterMaxSpeed", Math.fround(speeds.swimRunSpd));
-        actor.setUnrealScriptProperty("WaterMinSpeed", Math.fround(speeds.swimWalkSpd));
-        if (speeds.airRunSpd !== undefined) {
-            actor.setUnrealScriptProperty("AirMaxSpeed", Math.fround(speeds.airRunSpd));
-            actor.setUnrealScriptProperty("AirMinSpeed", Math.fround(speeds.airWalkSpd));
-        }
-        actor.setUnrealScriptProperty("GroundSpeed", Math.fround((isRunning ? speeds.runSpd : speeds.walkSpd) * Math.fround(speeds.moveMultiplier)));
-        actor.setUnrealScriptProperty("WaterSpeed", Math.fround((isRunning ? speeds.swimRunSpd : speeds.swimWalkSpd) * Math.fround(speeds.moveMultiplier)));
-        actor.setCollisionSize(speeds.collisionRadius, speeds.collisionHeight);
-        if (speeds.originalCollisionRadius !== undefined) {
-            actor.setUnrealScriptProperty("OriCollisionRadius", Math.fround(speeds.originalCollisionRadius));
-            actor.setUnrealScriptProperty("OriCollisionHeight", Math.fround(speeds.originalCollisionHeight));
-        }
-        actor.setWalking(!isRunning);
-    }
-
-    protected onItemList(packet: PacketReader) {
-        const showWindow = packet.h() !== 0;
-
-        this.inventory.clear();
-
-        for (let i = 0, count = packet.h(); i < count; i++) {
-            const item = GamePackets.readInventoryItem(packet);
-
-            this.inventory.set(item.objectId, item);
-        }
-
-        this.updateInventory(showWindow, true);
-    }
-
-    protected onInventoryUpdate(packet: PacketReader) {
-        for (let i = 0, count = packet.h(); i < count; i++) {
-            const change = packet.h();
-            const item = GamePackets.readInventoryItem(packet);
-
-            this.ui.updateInventoryOrder(change, item);
-
-            switch (change) {
-                case 1:
-                case 2: this.inventory.set(item.objectId, item); break;
-                case 3: this.inventory.delete(item.objectId); break;
-                default: throw new Error(`Unknown inventory change '${change}'.`);
-            }
-        }
-
-        this.updateInventory();
-    }
-
-    protected readShopItem(packet: PacketReader, hasPrice: boolean, allowZeroObject: boolean, allowZeroCount: boolean): GamePackets.ShopItem_T {
-        const type1 = packet.h(), objectId = packet.d(), itemId = packet.d(), count = packet.d(), type2 = packet.h();
-
-        packet.h();
-
-        const bodyPart = packet.d(), enchantLevel = packet.h();
-
-        packet.h();
-
-        const customType2 = packet.h(), price = hasPrice ? packet.d() : 0;
-
-        if (objectId < (allowZeroObject ? 0 : 1) || itemId <= 0 || count < (allowZeroCount ? 0 : 1) || price < 0)
-            throw new Error(`Invalid shop item '${itemId}'.`);
-
-        return { type1, objectId, itemId, count, type2, bodyPart, enchantLevel, customType2, price };
-    }
-
-    protected onSellList(packet: PacketReader) {
-        const money = packet.d(), npcId = packet.d(), count = packet.h();
-
-        if (money < 0 || npcId < 0 || count > Math.trunc(packet.getRemaining() / 32)) throw new Error(`Invalid SellList count '${count}'.`);
-
-        const items: GamePackets.ShopItem_T[] = [];
-        for (let i = 0; i < count; i++) items.push(this.readShopItem(packet, true, false, false));
-        if (packet.getRemaining()) throw new Error("Invalid SellList trailing data.");
-
-        this.shopSellMoney = money;
-        this.shopSellNpcId = npcId;
-        this.shopSellItems.length = 0;
-        this.shopSellItems.push(...items);
-        this.ui.showShop(true, money, items);
-    }
-
-    protected onBuyList(packet: PacketReader) {
-        const money = packet.d(), listId = packet.d(), count = packet.h();
-
-        if (money < 0 || listId < 0 || count > Math.trunc(packet.getRemaining() / 32)) throw new Error(`Invalid BuyList count '${count}'.`);
-
-        const items: GamePackets.ShopItem_T[] = [];
-        for (let i = 0; i < count; i++) items.push(this.readShopItem(packet, true, true, true));
-        if (packet.getRemaining()) throw new Error("Invalid BuyList trailing data.");
-
-        this.shopBuyMoney = money;
-        this.shopBuyListId = listId;
-        this.shopBuyItems.length = 0;
-        this.shopBuyItems.push(...items);
-        this.ui.showShop(false, money, items);
-    }
-
-    protected readTradeItem(packet: PacketReader, hasTradeType: boolean): GamePackets.TradeItem_T {
-        const tradeType = hasTradeType ? packet.h() : 0;
-        const type1 = packet.h(), objectId = packet.d(), itemId = packet.d(), count = packet.d(), type2 = packet.h();
-
-        packet.h();
-
-        const bodyPart = packet.d(), enchantLevel = packet.h();
-
-        packet.h();
-
-        const customType2 = packet.h();
-
-        if (objectId <= 0 || itemId <= 0 || count < 0 || count === 0 && !hasTradeType || hasTradeType && tradeType !== 1 && tradeType !== 2 && tradeType !== 3)
-            throw new Error(`Invalid trade item '${itemId}'.`);
-
-        return { tradeType, type1, objectId, itemId, count, initialCount: count, type2, bodyPart, enchantLevel, customType2 };
-    }
-
-    protected readTradeItems(packet: PacketReader, count: number, hasTradeType: boolean): GamePackets.TradeItem_T[] {
-        const size = hasTradeType ? 30 : 28;
-
-        if (count < 0 || count > Math.trunc(packet.getRemaining() / size)) throw new Error(`Invalid trade item count '${count}'.`);
-
-        const items: GamePackets.TradeItem_T[] = [];
-        for (let i = 0; i < count; i++) items.push(this.readTradeItem(packet, hasTradeType));
-
-        return items;
-    }
-
-    protected addTradeItems(target: GamePackets.TradeItem_T[], items: GamePackets.TradeItem_T[], mode: number) {
-        const infos = this.ui.getStrings().itemInfos;
-
-        for (const item of items) {
-            if (target.length >= 160) continue;
-
-            const previous = target.find(entry => entry.objectId === item.objectId);
-            const consumeType = previous ? infos[previous.itemId].consumeType : 0;
-
-            if (previous && consumeType >= 1 && consumeType <= 3) previous.count += item.count;
-            else target.push(item);
-            this.ui.recalculateTradeRows(mode, target.length);
-        }
-    }
-
-    protected onTradeStart(packet: PacketReader) {
-        const partnerId = packet.d(), count = packet.h(), items = this.readTradeItems(packet, count, false);
-
-        if (partnerId <= 0 || packet.getRemaining()) throw new Error("Invalid TradeStart payload.");
-
-        this.tradePartnerId = partnerId;
-        this.tradeRequestId = 0;
-        this.tradeOwnItems.length = 0;
-        this.tradeOtherItems.length = 0;
-        this.tradeAvailableItems.length = 0;
-        this.tradeDone = 0;
-
-        const own = this.objects.get(this.userId), other = this.objects.get(partnerId);
-
-        this.ui.startTrade(own ? own.name : null, other ? other.name : null);
-
-        if (!own || !other) this.game.tradeDone(false);
-        this.addTradeItems(this.tradeAvailableItems, items, 0);
-        this.ui.setTradeItems(0, this.tradeAvailableItems, null);
-    }
-
-    protected onTradeOwnAdd(packet: PacketReader) {
-        const items = this.readTradeItems(packet, packet.h(), false);
-
-        if (packet.getRemaining()) throw new Error("Invalid TradeOwnAdd trailing data.");
-
-        this.addTradeItems(this.tradeOwnItems, items, 1);
-        this.ui.setTradeItems(1, this.tradeOwnItems, null);
-    }
-
-    protected onTradeOtherAdd(packet: PacketReader) {
-        const items = this.readTradeItems(packet, packet.h(), false);
-
-        if (packet.getRemaining()) throw new Error("Invalid TradeOtherAdd trailing data.");
-
-        this.addTradeItems(this.tradeOtherItems, items, 2);
-        this.ui.setTradeItems(2, this.tradeOtherItems, null);
-    }
-
-    protected onTradeUpdate(packet: PacketReader) {
-        const items = this.readTradeItems(packet, packet.h(), true);
-
-        if (packet.getRemaining()) throw new Error("Invalid TradeUpdate trailing data.");
-
-        for (const item of items) {
-            if (item.tradeType === 1) {
-                this.addTradeItems(this.tradeAvailableItems, [item], 0);
-                continue;
-            }
-
-            const index = this.tradeAvailableItems.findIndex(entry => entry.objectId === item.objectId);
-
-            if (index < 0) continue;
-
-            if (item.tradeType === 3) this.tradeAvailableItems[index] = item;
-            else this.tradeAvailableItems.splice(index, 1);
-        }
-
-        this.ui.setTradeItems(0, this.tradeAvailableItems, null);
-    }
-
-    protected onSendTradeRequest(packet: PacketReader) {
-        const senderId = packet.d();
-
-        if (senderId <= 0 || packet.getRemaining()) throw new Error("Invalid SendTradeRequest payload.");
-
-        const sender = this.objects.get(senderId);
-
-        if (!sender) {
-            this.game.answerTradeRequest(false);
-            return;
-        }
-
-        this.ui.showTradeInvite(sender.name, isAccepted => this.answerTradeRequest(isAccepted));
-        this.tradeRequestId = senderId;
-    }
-
-    protected onSendTradeDone(packet: PacketReader) {
-        const result = packet.d();
-
-        if (packet.getRemaining()) throw new Error("Invalid SendTradeDone payload.");
-
-        this.tradeDone = result;
-        this.tradePartnerId = 0;
-        this.tradeRequestId = 0;
-        this.tradeAvailableItems.length = 0;
-        this.tradeOwnItems.length = 0;
-        this.tradeOtherItems.length = 0;
-        this.ui.finishTrade();
-    }
-
-    protected onWareHouseDone(packet: PacketReader) {
-        const result = packet.d();
-
-        if (packet.getRemaining()) throw new Error("Invalid WareHouseDone payload.");
-        if (result !== 0) return;
-
-        const strings = this.ui.getStrings();
-
-        this.ui.addSystemMessage(strings.systemMessages[307], strings.systemMessageColors[307]);
-        this.playSystemMessageSound(307);
-    }
-
-    protected onShopPreviewInfo(packet: PacketReader) {
-        this.shopPreviewItems = GamePackets.readShopPreviewInfo(packet);
-        const object = this.objects.get(this.userId), appearance = this.appearances.get(this.userId);
-
-        if (!object || !object.actor || !appearance) return;
-
-        const paperdoll = appearance.paperdoll;
-        const slots = [GamePackets.Paperdoll_T.PAPERDOLL_HEAD, GamePackets.Paperdoll_T.PAPERDOLL_RHAND, GamePackets.Paperdoll_T.PAPERDOLL_LHAND, GamePackets.Paperdoll_T.PAPERDOLL_GLOVES, GamePackets.Paperdoll_T.PAPERDOLL_FEET, GamePackets.Paperdoll_T.PAPERDOLL_LEGS, GamePackets.Paperdoll_T.PAPERDOLL_CHEST, GamePackets.Paperdoll_T.PAPERDOLL_UNDER, GamePackets.Paperdoll_T.PAPERDOLL_LRHAND, GamePackets.Paperdoll_T.PAPERDOLL_HAIR];
-
-        for (const slot of slots) {
-            const itemId = this.shopPreviewItems[slot];
-
-            if (!itemId) continue;
-
-            switch (slot) {
-                case GamePackets.Paperdoll_T.PAPERDOLL_RHAND:
-                case GamePackets.Paperdoll_T.PAPERDOLL_LHAND:
-                    if (paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND]) {
-                        paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LRHAND] = 0;
-                        paperdoll[slot === GamePackets.Paperdoll_T.PAPERDOLL_RHAND ? GamePackets.Paperdoll_T.PAPERDOLL_LHAND : GamePackets.Paperdoll_T.PAPERDOLL_RHAND] = 0;
-                    }
-                    break;
-                case GamePackets.Paperdoll_T.PAPERDOLL_GLOVES:
-                case GamePackets.Paperdoll_T.PAPERDOLL_FEET:
-                case GamePackets.Paperdoll_T.PAPERDOLL_LEGS: {
-                    const chest = paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST];
-                    const bodyPart = chest > 0 ? this.ui.getStrings().itemInfos[chest].bodyPart : 0;
-
-                    if (bodyPart === CHARACTER_ALLDRESS_SLOT) {
-                        paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_GLOVES] = paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_FEET] = 0;
-                        if (slot !== GamePackets.Paperdoll_T.PAPERDOLL_LEGS) paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST] = 0;
-                    } else if (slot === GamePackets.Paperdoll_T.PAPERDOLL_LEGS && bodyPart === CHARACTER_FULL_ARMOR_SLOT) paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_CHEST] = 0;
-                    break;
-                }
-                case GamePackets.Paperdoll_T.PAPERDOLL_LRHAND:
-                    paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_RHAND] = paperdoll[GamePackets.Paperdoll_T.PAPERDOLL_LHAND] = 0;
-                    break;
-            }
-            if (slot === GamePackets.Paperdoll_T.PAPERDOLL_RHAND || slot === GamePackets.Paperdoll_T.PAPERDOLL_LRHAND) appearance.enchantLevel = 0;
-            paperdoll[slot] = itemId;
-        }
-        object.appearanceKey = this.getAppearanceKey(appearance);
-        this.userAppearanceLoad = this.loadAppearance(appearance, this.riders.get(this.userId) || object.actor);
-    }
-
-    protected onEquipUpdate(packet: PacketReader) {
-        const change = packet.d(), itemObjectId = packet.d(), bodyPart = packet.d();
-
-        if (bodyPart <= 0 || bodyPart > 0xffff) throw new Error(`Invalid equipment body part '${bodyPart}'.`);
-
-        const appearance = this.appearances.get(this.userId);
-
-        if (!appearance) return;
-
-        const item = this.inventory.get(itemObjectId);
-
-        if (change !== 0 && !item) return;
-
-        const slots: GamePackets.Paperdoll_T[] = [];
-        for (let slot = 0; slot < 16; slot++)
-            if (bodyPart & (1 << slot)) slots.push(slot as GamePackets.Paperdoll_T);
-
-        const isHand = slots.includes(GamePackets.Paperdoll_T.PAPERDOLL_RHAND) || slots.includes(GamePackets.Paperdoll_T.PAPERDOLL_LRHAND);
-
-        if (isHand) {
-            slots.length = 0;
-            slots.push(GamePackets.Paperdoll_T.PAPERDOLL_RHAND, GamePackets.Paperdoll_T.PAPERDOLL_LRHAND);
-        }
-
-        if (change === 0) {
-            if (!item) for (const slot of slots) appearance.paperdoll[slot] = 0;
-            else if (isHand) {
-                for (const slot of slots)
-                    if (appearance.paperdoll[slot] === item.itemId) appearance.paperdoll[slot] = 0;
-            } else {
-                const slot = slots.find(slot => appearance.paperdoll[slot] === item.itemId) ?? slots[0];
-                appearance.paperdoll[slot] = 0;
-            }
-        } else {
-            if (isHand) for (const slot of slots) appearance.paperdoll[slot] = item.itemId;
-            else {
-                const slot = slots.find(slot => !appearance.paperdoll[slot]) ?? slots[0];
-                appearance.paperdoll[slot] = item.itemId;
-            }
-        }
-
-        if (item) {
-            item.isEquipped = change !== 0;
-        }
-        if (isHand)
-            appearance.enchantLevel = change === 0 ? 0 : item.enchantLevel;
-
-        this.updateInventory();
-
-        const object = this.objects.get(this.userId), key = this.getAppearanceKey(appearance);
-
-        if (!object || key === object.appearanceKey) return;
-
-        object.appearanceKey = key;
-        if (object.actor) void this.loadAppearance(appearance, this.riders.get(this.userId) || object.actor);
-    }
-
-    protected onDoorInfo(packet: PacketReader) {
-        const objectId = packet.d(), doorId = packet.d();
-
-        if (objectId <= 0 || doorId <= 0 || packet.getRemaining()) throw new Error("Invalid DoorInfo payload.");
-
-        const mover = this.manGame.getComponent("render").findMovableByRealId(doorId);
-        if (mover) this.doors.set(objectId, mover);
-    }
-
-    protected onDoorStatusUpdate(packet: PacketReader) {
-        const objectId = packet.d(), isOpen = packet.d(), damage = packet.d(), showHp = packet.d(), doorId = packet.d(), maxHp = packet.d(), currentHp = packet.d();
-
-        if (objectId <= 0 || (isOpen !== 0 && isOpen !== 1) || damage < 0 || (showHp !== 0 && showHp !== 1) || doorId <= 0 || maxHp < 0 || currentHp < 0 || currentHp > maxHp || packet.getRemaining())
-            throw new Error("Invalid DoorStatusUpdate payload.");
-
-        const mover = this.manGame.getComponent("render").findMovableByRealId(doorId);
-
-        this.doorPositions.set(doorId, isOpen === 0 ? 1 : 0);
-        if (mover) mover.setPosition(isOpen === 0 ? 1 : 0);
-    }
-
-    public getDoorPosition(mover: MovableObject): number { return this.doorPositions.get((mover as any).scriptProperties?.get("L2ServerObjectRealID")); }
-
-    protected updateInventory(showWindow: boolean = false, isFull: boolean = false) {
-        this.ui.setInventory([...this.inventory.values()], showWindow, isFull);
-
-        for (const shortcut of this.shortcuts.values())
-            if (shortcut.type === GamePackets.ShortCutType_T.TYPE_ITEM) this.setShortCut(shortcut);
-    }
-
-    protected onSkillList(packet: PacketReader) {
-        const count = packet.d();
-
-        if (count < 0 || count > Math.trunc(packet.getRemaining() / 12)) throw new Error(`Invalid SkillList count ${count}.`);
-
-        this.skills.clear();
-        for (let i = 0; i < count; i++) {
-            const isPassive = packet.d() !== 0, level = packet.d(), id = packet.d();
-
-            this.skills.set(id, { id, level, isPassive });
-        }
-        this.ui.setSkills([...this.skills.values()]);
-        void this.preloadSkills();
-
-        if (this.resolveSkillList) this.resolveSkillList();
-        this.resolveSkillList = null;
-    }
-
-    protected async preloadSkills() {
-        const asset = this.manGame.getComponent("asset"), player = this.manGame.getComponent("render").player;
-
-        for (const skill of this.skills.values()) {
-            if (skill.isPassive) continue;
-
-            await asset.preloadPawnSkill(player, skill.id, skill.level);
-        }
-    }
-
-    protected onAquireSkillList(packet: PacketReader) {
-        const fishing = packet.d(), count = packet.d();
-
-        if (fishing !== 0 && fishing !== 1 || count < 0 || count > Math.trunc(packet.getRemaining() / 20)) throw new Error(`Invalid AquireSkillList payload (count ${count}).`);
-
-        const skills: GamePackets.AquireSkillEntry_T[] = [];
-        for (let i = 0; i < count; i++) skills.push({ id: packet.d(), nextLevel: packet.d(), maxLevel: packet.d(), spCost: packet.d(), requirements: packet.d() });
-        if (packet.getRemaining()) throw new Error("Invalid AquireSkillList trailing data.");
-
-        this.aquireSkillFishing = fishing !== 0;
-        this.aquireSkills = skills;
-        this.ui.showAquireSkillList(skills, fishing);
-    }
-
-    protected onAquireSkillInfo(packet: PacketReader) {
-        const id = packet.d(), level = packet.d(), spCost = packet.d(), mode = packet.d(), count = packet.d();
-
-        if (count < 0 || count > Math.trunc(packet.getRemaining() / 16)) throw new Error(`Invalid AquireSkillInfo payload (count ${count}).`);
-
-        const requirements: GamePackets.AquireSkillRequirement_T[] = [];
-        for (let i = 0; i < count; i++) requirements.push({ type: packet.d(), itemId: packet.d(), count: packet.d(), unknown: packet.d() });
-        if (packet.getRemaining()) throw new Error("Invalid AquireSkillInfo trailing data.");
-
-        this.aquireSkillInfo = { id, level, spCost, mode, requirements };
-        this.ui.showAquireSkillInfo(this.aquireSkillInfo);
-    }
-
-    protected onAquireSkillDone(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid AquireSkillDone payload.");
-
-        this.aquireSkills = [];
-        this.aquireSkillInfo = null;
-        this.ui.hideTrainWnd();
-    }
-
-    protected onQuestList(packet: PacketReader) {
-        const count = packet.h();
-
-        if (count > Math.trunc(packet.getRemaining() / 8)) throw new Error(`Invalid QuestList count ${count}.`);
-
-        this.questStates.clear();
-        const states: GamePackets.QuestState_T[] = [];
-
-        for (let i = 0; i < count; i++) {
-            const id = packet.d(), condition = packet.d();
-            const state = { id, condition };
-
-            this.questStates.set(id, state);
-            states.push(state);
-        }
-        if (packet.getRemaining()) {
-            const itemCount = packet.h();
-
-            if (itemCount > Math.trunc(packet.getRemaining() / 16)) throw new Error(`Invalid QuestList item count ${itemCount}.`);
-            packet.skip(itemCount * 16);
-        }
-        if (packet.getRemaining()) throw new Error("Invalid QuestList trailing data.");
-        this.ui.setQuestStates(states);
-    }
-
-    protected onHennaInfo(packet: PacketReader) {
-        const stats: number[] = [];
-
-        for (let i = 0; i < 6; i++) stats.push(packet.c() << 24 >> 24);
-
-        const slots = packet.d(), count = packet.d();
-
-        if (slots < 0 || count < 0 || count > Math.trunc(packet.getRemaining() / 8)) throw new Error(`Invalid HennaInfo count ${count}.`);
-
-        const symbols = [];
-        for (let i = 0; i < count; i++) symbols.push({ symbolId: packet.d(), itemId: packet.d() });
-
-        this.hennaStatus = { stats, slots, symbols };
-        this.ui.setHenna(this.hennaStatus);
-    }
-
-    protected onSendMacroList(packet: PacketReader) {
-        const type = packet.c(), id = packet.d(), total = packet.c(), count = packet.c();
-        const macros: GamePackets.Macro_T[] = [];
-
-        if (total > 127 || count > 100) throw new Error(`Invalid SendMacroList count ${total}:${count}.`);
-
-        for (let i = 0; i < count; i++) {
-            const id = packet.d(), name = packet.S(), description = packet.S(), acronym = packet.S(), icon = packet.c(), commandCount = packet.c();
-
-            if (commandCount > 12) throw new Error(`Invalid macro command count ${commandCount}.`);
-
-            const commands = [];
-            for (let j = 0; j < commandCount; j++) commands.push({ index: packet.c(), type: packet.c(), data1: packet.d(), data2: packet.c(), command: packet.S() });
-
-            macros.push({ id, name, description, acronym, icon, commands });
-        }
-
-        if (packet.getRemaining() || total > 0 && count === 0) throw new Error(`Invalid SendMacroList payload.`);
-
-        if (this.isMacroListComplete) {
-            this.macros.clear();
-            this.macroExecutions.clear();
-            this.macroListReceived = 0;
-            this.isMacroListComplete = false;
-        }
-
-        for (const macro of macros) {
-            this.macros.set(macro.id, macro);
-            this.macroListReceived++;
-        }
-
-        if (this.macroListReceived < total) return;
-
-        this.isMacroListComplete = true;
-        this.ui.setMacros(Array.from(this.macros.values()));
-        for (const shortcut of this.shortcuts.values()) {
-            if (shortcut.type !== GamePackets.ShortCutType_T.TYPE_MACRO) continue;
-
-            if (type === 0 && shortcut.id === id) this.deleteShortCut(Math.trunc(shortcut.slot / 12), shortcut.slot % 12);
-            else if (type === 2 && shortcut.id === id) this.setShortCut(shortcut);
-        }
-    }
-
-    protected onEtcStatusUpdate(packet: PacketReader) {
-        this.etcStatus = { charges: packet.d(), weightPenalty: packet.d(), messageRefusal: packet.d(), dangerArea: packet.d(), expertisePenalty: packet.d() };
-
-        const effects: GamePackets.AbnormalStatus_T[] = [];
-        const levels = [this.etcStatus.charges, this.etcStatus.weightPenalty, this.etcStatus.messageRefusal, this.etcStatus.dangerArea, this.etcStatus.expertisePenalty];
-
-        levels.forEach((value, i) => {
-            if (value > 0) effects.push({ id: 4271 - i, level: i < 2 ? value : 1, duration: -1 });
-        });
-        this.ui.setSecondaryAbnormalStatus(effects);
-    }
-
-    protected onSignsSky(packet: PacketReader) {
-        const remaining = packet.getRemaining();
-
-        if (remaining !== 0 && remaining !== 2) throw new Error(`Invalid SignsSky payload size ${remaining}.`);
-
-        this.signsSky = remaining === 2 ? packet.h() : 0;
-    }
-
-    protected onShowBoard(packet: PacketReader) {
-        const part = GamePackets.readShowBoard(packet);
-
-        this.ui.setBoard(part);
-    }
-
-    protected readPartyMember(packet: PacketReader, hasUnknown: boolean): GamePackets.PartyMember_T {
-        const member = { objectId: packet.d(), name: packet.S(), curCp: packet.d(), maxCp: packet.d(), curHp: packet.d(), maxHp: packet.d(), curMp: packet.d(), maxMp: packet.d(), level: packet.d(), classId: packet.d() };
-
-        if (hasUnknown) packet.skip(2 * 4);
-
-        return member;
-    }
-
-    protected applyPartyMember(member: GamePackets.PartyMember_T) {
-        const object = this.objects.get(member.objectId);
-
-        if (!object) return;
-
-        object.name = member.name;
-        object.curHp = member.curHp;
-        object.maxHp = member.maxHp;
-        object.curMp = member.curMp;
-        object.maxMp = member.maxMp;
-        if (object.objectId === this.getTargetId()) this.updateTarget();
-    }
-
-    protected onPartySmallWindowAll(packet: PacketReader) {
-        const leaderId = packet.d(), lootDistribution = packet.d(), count = packet.d();
-
-        if (count < 0) throw new Error(`Invalid PartySmallWindowAll count '${count}'.`);
-
-        const members = [];
-        for (let i = 0; i < count; i++) members.push(this.readPartyMember(packet, true));
-
-        this.partyLeaderId = leaderId;
-        this.partyLootDistribution = lootDistribution;
-        this.partyMembers.clear();
-        this.partyPositions.clear();
-        for (const member of members) {
-            this.partyMembers.set(member.objectId, member);
-            this.applyPartyMember(member);
-        }
-        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
-    }
-
-    protected onPartySmallWindowAdd(packet: PacketReader) {
-        const leaderId = packet.d(), lootDistribution = packet.d(), member = this.readPartyMember(packet, true);
-
-        this.partyLeaderId = leaderId;
-        this.partyLootDistribution = lootDistribution;
-        this.partyMembers.set(member.objectId, member);
-        this.applyPartyMember(member);
-        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
-    }
-
-    protected onPartySmallWindowDeleteAll(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid PartySmallWindowDeleteAll payload.");
-
-        this.partyMembers.clear();
-        this.partyPositions.clear();
-        this.partyEffects.clear();
-        this.partyLeaderId = 0;
-        this.partyLootDistribution = 0;
-        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
-    }
-
-    protected onPartySmallWindowDelete(packet: PacketReader) {
-        const objectId = packet.d();
-
-        packet.S();
-        this.partyMembers.delete(objectId);
-        this.partyPositions.delete(objectId);
-        this.partyEffects.delete(objectId);
-        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
-    }
-
-    protected onPartySmallWindowUpdate(packet: PacketReader) {
-        const member = this.readPartyMember(packet, false);
-
-        this.partyMembers.set(member.objectId, member);
-        this.applyPartyMember(member);
-        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
-    }
-
-    protected onAskJoinPledge(packet: PacketReader) {
-        const requestorId = packet.d(), pledgeName = packet.S();
-
-        if (requestorId <= 0 || !pledgeName || packet.getRemaining()) throw new Error("Invalid AskJoinPledge payload.");
-
-        const invite: GamePackets.PledgeInvite_T = { requestorId, pledgeName };
-        this.pledgeInvite = invite;
-        this.ui.showPledgeInvite(this.objects.get(requestorId)?.name || String(requestorId), pledgeName, isAccepted => {
-            if (this.pledgeInvite !== invite) return;
-
-            this.pledgeInvite = null;
-            this.game.answerJoinPledge(isAccepted);
-        });
-    }
-
-    protected onJoinPledge(packet: PacketReader) {
-        const pledgeId = packet.d();
-
-        if (pledgeId <= 0 || packet.getRemaining()) throw new Error("Invalid JoinPledge payload.");
-
-        this.pledgeJoinId = pledgeId;
-    }
-
-    protected onAskJoinParty(packet: PacketReader) {
-        const name = packet.S(), itemDistribution = packet.d();
-
-        if (!name || itemDistribution < 0 || itemDistribution > 4 || packet.getRemaining()) throw new Error("Invalid AskJoinParty payload.");
-
-        const invite: GamePackets.PartyInvite_T = { name, itemDistribution };
-        this.partyInvite = invite;
-        this.ui.showPartyInvite(name, isAccepted => {
-            if (this.partyInvite !== invite) return;
-
-            this.partyInvite = null;
-            this.game.answerJoinParty(isAccepted);
-        }, itemDistribution);
-    }
-
-    protected onJoinParty(packet: PacketReader) {
-        const response = packet.d();
-
-        if (response !== 0 && response !== 1 || packet.getRemaining()) throw new Error("Invalid JoinParty payload.");
-
-        this.partyJoinResult = response;
-    }
-
-    protected onAskJoinFriend(packet: PacketReader) {
-        const name = packet.S(), unknown = packet.d();
-
-        if (!name || unknown !== 0 || packet.getRemaining()) throw new Error("Invalid AskJoinFriend payload.");
-
-        const invite: GamePackets.FriendInvite_T = { name };
-        this.friendInvite = invite;
-        this.ui.showFriendInvite(name, isAccepted => {
-            if (this.friendInvite !== invite) return;
-
-            this.friendInvite = null;
-            this.game.answerFriendInvite(isAccepted);
-        });
-    }
-
-    protected onPartyMemberPosition(packet: PacketReader) {
-        const count = packet.d();
-
-        if (count < 0 || count > Math.trunc(packet.getRemaining() / 16)) throw new Error(`Invalid PartyMemberPosition count '${count}'.`);
-
-        const positions = [];
-        for (let i = 0; i < count; i++) positions.push({ objectId: packet.d(), position: { ...this.readLocation(packet) } }); // readLocation returns the shared tmpLocation.
-
-        for (const entry of positions) this.partyPositions.set(entry.objectId, entry.position);
-        this.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.userId);
-    }
-
-    protected readClanMember(packet: PacketReader): GamePackets.ClanMember_T {
-        const name = packet.S(), level = packet.d(), classId = packet.d();
-
-        packet.d();
-        packet.d();
-
-        const objectId = packet.d();
-
-        return { name, level, classId, objectId, isOnline: objectId > 0 };
-    }
-
-    protected readClanMemberUpdate(packet: PacketReader): GamePackets.ClanMember_T {
-        const member = { name: packet.S(), level: packet.d(), classId: packet.d(), objectId: 0, isOnline: false };
-
-        packet.d();
-        packet.d();
-        member.objectId = packet.d();
-        member.isOnline = member.objectId > 0;
-
-        return member;
-    }
-
-    protected updateGMCharacterInfo() {
-        if (!this.gmCharacterInfo) return;
-
-        const clanId = this.gmCharacterInfo.clanId;
-        const clan = clanId > 0 ? this.pledgeInfos.get(clanId) : null;
-
-        this.ui.setGMCharacterInfo(this.gmCharacterInfo, clan ? { clanId, name: clan.name, crestId: clan.crestId } : null, clan ? clan.crest : null);
-    }
-
-    protected onPledgeInfo(packet: PacketReader) {
-        const clanId = packet.d(), name = packet.S(), allyName = packet.S();
-
-        if (packet.getRemaining()) throw new Error("Invalid PledgeInfo trailing data.");
-        const info = this.pledgeInfos.get(clanId);
-
-        if (clanId > 0 && info) { info.name = name; info.allyName = allyName; this.updateGMCharacterInfo(); }
-    }
-
-    protected updatePledgeInfo(clanId: number, crestId: number, allyId: number, allyCrestId: number, unknown: number) {
-        const info = this.pledgeInfos.get(clanId);
-
-        this.pledgeInfos.set(clanId, { name: info ? info.name : "", allyName: info ? info.allyName : "", crestId, allyId, allyCrestId, unknown, crest: info ? info.crest : null, allyCrest: info ? info.allyCrest : null });
-        if (!info || info.allyId !== allyId) this.game.requestPledgeInfo(clanId);
-        this.seedPledgeCrests(clanId, crestId, allyCrestId);
-        this.updateGMCharacterInfo();
-    }
-
-    protected onPledgeStatusChanged(packet: PacketReader) {
-        const objectId = packet.d(), clanId = packet.d(), crestId = packet.d(), allyId = packet.d(), allyCrestId = packet.d();
-        const unknown = packet.getRemaining() === 4 ? packet.d() : 0; // Retail 0x10428ad0 reads six DWORDs; Lisvus sends five.
-
-        if (objectId < 0 || clanId < 0 || crestId < 0 || allyId < 0 || allyCrestId < 0 || packet.getRemaining()) throw new Error("Invalid PledgeStatusChanged payload.");
-        const user = this.objects.get(objectId);
-
-        if (!user || clanId <= 0) return;
-
-        user.clanId = clanId;
-        user.clanCrestId = crestId;
-        user.allyId = allyId;
-        user.allyCrestId = allyCrestId;
-        this.updatePledgeInfo(clanId, crestId, allyId, allyCrestId, unknown);
-        this.ui.setPledgeStatus(objectId, clanId);
-    }
-
-    protected onPledgeShowInfoUpdate(packet: PacketReader) {
-        const clanId = packet.d(), crestId = packet.d(), level = packet.d(), hasCastle = packet.d(), hasHideout = packet.d();
-
-        packet.d();
-
-        const memberLevel = packet.d(), dissolving = packet.d();
-
-        packet.d();
-
-        const allyId = packet.d(), allyName = packet.S(), allyCrestId = packet.d(), isAtWar = packet.d();
-
-        if (clanId <= 0 || crestId < 0 || level < 0 || hasCastle < 0 || hasHideout < 0 || memberLevel < 0 || dissolving < 0 || allyId < 0 || allyCrestId < 0 || (isAtWar !== 0 && isAtWar !== 1) || packet.getRemaining())
-            throw new Error("Invalid PledgeShowInfoUpdate payload.");
-
-        const current = this.clanInfo;
-
-        this.clanInfo = { leaderId: current?.leaderId || 0, clanId, name: current?.name || "", leaderName: current?.leaderName || "", crestId, level, hasCastle, hasHideout, memberLevel, dissolving, allyId, allyName, allyCrestId, isAtWar: isAtWar !== 0 };
-        this.ui.setClan(this.clanInfo);
-    }
-
-    protected onPledgeShowMemberListAll(packet: PacketReader) {
-        const clanId = packet.d(), name = packet.S(), leaderName = packet.S();
-
-        if (clanId === 0 || !name) return;
-        const crestId = packet.d(), level = packet.d(), hasCastle = packet.d(), hasHideout = packet.d();
-
-        packet.d();
-
-        const memberLevel = packet.d(), dissolving = packet.d();
-
-        packet.d();
-
-        const allyId = packet.d(), allyName = packet.S(), allyCrestId = packet.d(), isAtWar = packet.d() !== 0, count = packet.d();
-
-        if (count < 0 || count > 1000) throw new Error(`Invalid PledgeShowMemberListAll payload (count ${count}).`);
-
-        const members = [];
-        for (let i = 0; i < count; i++) members.push(this.readClanMember(packet));
-        if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListAll trailing data.");
-
-        this.clanInfo = { leaderId: 0, clanId, name, leaderName, crestId, level, hasCastle, hasHideout, memberLevel, dissolving, allyId, allyName, allyCrestId, isAtWar };
-        this.updatePledgeInfo(clanId, crestId, allyId, allyCrestId, 0);
-        this.clanMembers.clear();
-        this.ui.setClan(this.clanInfo);
-        this.ui.clearClanMembers();
-        for (const member of members) {
-            this.clanMembers.set(member.name, member);
-            this.ui.addClanMember(member);
-        }
-    }
-
-    protected onPledgeShowMemberListUpdate(packet: PacketReader) {
-        const member = this.readClanMemberUpdate(packet);
-
-        if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListUpdate trailing data.");
-        this.setClanMember(member);
-        this.ui.updateClanMember(member);
-    }
-
-    protected onPledgeShowMemberListAdd(packet: PacketReader) {
-        const member = this.readClanMemberUpdate(packet);
-
-        if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListAdd trailing data.");
-        this.setClanMember(member);
-        this.ui.addClanMember(member);
-    }
-
-    protected setClanMember(member: GamePackets.ClanMember_T) {
-        if (!member.name) throw new Error("Invalid clan member name.");
-        this.clanMembers.set(member.name, member);
-    }
-
-    protected onPledgeShowMemberListDelete(packet: PacketReader) {
-        const name = packet.S();
-
-        if (!name || packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListDelete payload.");
-        this.clanMembers.delete(name);
-        this.ui.deleteClanMember(name);
-    }
-
-    protected onPledgeShowMemberListDeleteAll(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid PledgeShowMemberListDeleteAll payload.");
-
-        this.clanMembers.clear();
-        this.clanInfo = null;
-        this.ui.clearClanMembers();
-        this.ui.setClan(null);
-    }
-
-    protected onChooseInventoryItem(packet: PacketReader) {
-        const itemId = packet.d();
-
-        if (itemId <= 0) throw new Error(`Invalid ChooseInventoryItem item '${itemId}'.`);
-
-        this.ui.chooseInventoryItem(itemId);
-    }
-
-    protected onEnchantResult(packet: PacketReader) {
-        const result = packet.d();
-
-        if (result < 0 || result > 2 || packet.getRemaining()) throw new Error("Invalid EnchantResult payload.");
-
-        this.ui.clearInventoryChoice();
-    }
-
-    protected onFriendList(packet: PacketReader) {
-        if (packet.getRemaining() === 0) {
-            this.friends.clear();
-            return;
-        }
-
-        const count = packet.h();
-
-        if (count > Math.trunc(packet.getRemaining() / 14)) throw new Error(`Invalid FriendList count ${count}.`);
-
-        const friends = [];
-        for (let i = 0; i < count; i++) {
-            packet.h();
-            const objectId = packet.d(), name = packet.S(), isOnline = packet.d() !== 0;
-
-            packet.h();
-            friends.push({ objectId, name, isOnline });
-        }
-
-        this.friends.clear();
-        for (const friend of friends) this.friends.set(friend.objectId, friend);
-    }
-
-    protected onFriendRecvMsg(packet: PacketReader) {
-        packet.d();
-        const receiver = packet.S(), sender = packet.S(), message = packet.S();
-
-        if (!receiver || !sender) throw new Error("Invalid FriendRecvMsg names.");
-        if (packet.getRemaining()) throw new Error("Invalid FriendRecvMsg trailing data.");
-
-        this.ui.addChat(sender, message, GamePackets.Say2_T.TELL);
-    }
-
-    protected onMagicEffectIcons(packet: PacketReader) {
-        const count = packet.h() << 16 >> 16;
-
-        if (count > Math.trunc(packet.getRemaining() / 10)) throw new Error(`Invalid MagicEffectIcons count ${count}.`);
-
-        this.abnormalStatuses.length = 0;
-        for (let i = 0; i < count; i++) {
-            const effect = { id: packet.d(), level: packet.h() << 16 >> 16, duration: packet.d() };
-
-            this.abnormalStatuses.push(effect);
-        }
-
-        this.ui.setAbnormalStatus(this.abnormalStatuses.slice(0, 31));
-    }
-
-    protected onShortBuffStatusUpdate(packet: PacketReader) {
-        const id = packet.d(), level = packet.d(), duration = packet.d();
-
-        this.shortBuff = { id, level, duration };
-        this.ui.setShortBuff(this.shortBuff);
-    }
-
-    protected onSkillCoolTime(packet: PacketReader) {
-        const count = packet.d();
-
-        if (count < 0 || count > Math.trunc(packet.getRemaining() / 16)) throw new Error(`Invalid SkillCoolTime count ${count}.`);
-
-        for (let i = 0; i < count; i++) this.ui.setSkillCoolTime(packet.d(), packet.d(), packet.d(), packet.d());
-    }
-
-    public requestSkillList() { if (this.inWorld) this.game.requestSkillList(); }
-    public useSkill(id: number, ctrl: boolean = false, shift: boolean = false) {
-        const skill = this.skills.get(id);
-
-        if (this.inWorld && skill) this.game.requestMagicSkillUse(id, ctrl, shift);
-    }
     public useAction(id: number, ctrl: boolean = false, shift: boolean = false) {
-        if (!this.inWorld) return;
+        if (!this.actors.inWorld) return;
 
         switch (id) {
-            case 2: {
+            case ActionType_T.attack: {
                 if (this.nextTargetLock) break; // NWindow 0x10071c06, Engine bNextTargetLock.
 
                 const targetId = this.getTargetId();
 
-                if (this.hasServerObject(targetId)) {
+                if (this.actors.hasServerObject(targetId)) {
                     const position = this.manGame.getComponent("render").player.position;
 
-                    if (ctrl) this.game.attackRequest(targetId, position, shift);
-                    else this.game.action(targetId, position, shift);
+                    if (ctrl) this.session.game.attackRequest(targetId, position, shift);
+                    else this.session.game.action(targetId, position, shift);
                 }
                 break;
             }
-            case 3: {
-                const target = this.objects.get(this.getTargetId());
+            case ActionType_T.trade: {
+                const target = this.actors.objects.get(this.getTargetId());
 
-                if (target && target.actor) this.requestTrade(target.objectId);
+                if (target && target.actor) this.items.requestTrade(target.objectId);
                 break;
             }
-            case 4: {
-                const selected = this.objects.get(this.getTargetId());
+            case ActionType_T.targetnext: {
+                const selected = this.actors.objects.get(this.getTargetId());
                 const next = this.getNextEnemy(200, selected && selected.actor ? selected.objectId : -1);
 
                 if (next) {
                     this.nextTargetLock = true;
-                    this.game.action(next.objectId, this.manGame.getComponent("render").player.position, shift);
+                    this.session.game.action(next.objectId, this.manGame.getComponent("render").player.position, shift);
                 }
                 break;
             }
-            case 5: {
+            case ActionType_T.Pickup: {
                 const item = this.getNearestItem(200, -1);
 
-                if (item) this.game.action(item.objectId, this.manGame.getComponent("render").player.position, shift);
+                if (item) this.session.game.action(item.objectId, this.manGame.getComponent("render").player.position, shift);
                 break;
             }
-            case 6: {
-                const target = this.objects.get(this.getTargetId());
+            case ActionType_T.assist: {
+                const target = this.actors.objects.get(this.getTargetId());
 
-                if (target && target.actor && this.hasServerObject(target.selectedId))
-                    this.game.action(target.selectedId, this.manGame.getComponent("render").player.position, shift);
+                if (target && target.actor && this.actors.hasServerObject(target.selectedId))
+                    this.session.game.action(target.selectedId, this.manGame.getComponent("render").player.position, shift);
                 break;
             }
-            case 7: case 9: {
-                const target = this.objects.get(this.getTargetId());
+            case ActionType_T.partyinvite: case ActionType_T.partydismiss: {
+                const target = this.actors.objects.get(this.getTargetId());
 
                 if (target && target.kind !== "npc") {
-                    if (id === 7) this.inviteToParty(target.name, this.ui.getGameOptions().partyLooting);
-                    else this.oustPartyMember(target.name);
+                    if (id === ActionType_T.partyinvite) this.community.inviteToParty(target.name, this.ui.getGameOptions().partyLooting);
+                    else this.community.oustPartyMember(target.name);
                 } else {
-                    const messageId = id === 7 ? 185 : 187;
+                    const messageId = id === ActionType_T.partyinvite ? 185 : 187;
 
                     this.ui.addSystemMessage(this.ui.getStrings().systemMessages[messageId], 0xffb09b79);
                 }
                 break;
             }
-            case 8: this.withdrawParty(); break;
-            case 10: this.requestPrivateStoreManageSell(); break;
-            case 11: this.ui.openPartyMatch(); break;
-            case 18: {
-                const item = this.petInfo ? this.getNearestItem(200, -1, this.petInfo.objectId) : null;
+            case ActionType_T.partyleave: this.community.withdrawParty(); break;
+            case ActionType_T.vendor: this.items.requestPrivateStoreManageSell(); break;
+            case ActionType_T.partymatching: this.ui.openPartyMatch(); break;
+            case ActionType_T.petpickup: {
+                const item = this.actors.petInfo ? this.getNearestItem(200, -1, this.actors.petInfo.objectId) : null;
 
-                if (item) this.game.requestPetGetItem(item.objectId);
+                if (item) this.session.game.requestPetGetItem(item.objectId);
                 break;
             }
-            case 28: this.requestPrivateStoreManageBuy(); break;
-            case 40: {
-                const target = this.objects.get(this.getTargetId());
+            case ActionType_T.buy: this.items.requestPrivateStoreManageBuy(); break;
+            case ActionType_T.commend: {
+                const target = this.actors.objects.get(this.getTargetId());
 
-                if (target && target.kind !== "npc") this.evaluate(target.objectId);
+                if (target && target.kind !== "npc") this.community.evaluate(target.objectId);
                 else {
                     const messageId = target ? 144 : 242;
 
                     this.ui.addSystemMessage(this.ui.getStrings().systemMessages[messageId], 0xffb09b79);
-                    this.playSystemMessageSound(messageId);
+                    this.community.playSystemMessageSound(messageId);
                 }
                 break;
             }
-            case 50: {
-                const target = this.objects.get(this.getTargetId());
+            case ActionType_T.leaderchange: {
+                const target = this.actors.objects.get(this.getTargetId());
 
-                if (target && target.kind !== "npc") this.changePartyLeader(target.name);
+                if (target && target.kind !== "npc") this.community.changePartyLeader(target.name);
                 else this.ui.addSystemMessage(this.ui.getStrings().systemMessages[1400], 0xffb09b79);
                 break;
             }
-            case 55:
-                if (this.game.isRecording()) this.stopReplayRecording();
-                else this.startReplayRecording();
+            case ActionType_T.recstartstop:
+                if (this.session.game.isRecording()) this.session.stopReplayRecording();
+                else this.session.startReplayRecording();
                 break;
-            case 56: {
-                const target = this.objects.get(this.getTargetId());
+            case ActionType_T.invitechannel: {
+                const target = this.actors.objects.get(this.getTargetId());
 
-                if (target && target.kind !== "npc") this.inviteToCommandChannel(target.name);
+                if (target && target.kind !== "npc") this.community.inviteToCommandChannel(target.name);
                 else {
                     this.ui.addSystemMessage(this.ui.getStrings().systemMessages[50], 0xffb09b79);
-                    this.playSystemMessageSound(50);
+                    this.community.playSystemMessageSound(50);
                 }
                 break;
             }
             default: {
                 const type = this.ui.getStrings().actions[id].type;
 
-                if (type >= 2) this.game.requestSocialAction(type);
-                else this.game.requestActionUse(id, ctrl, shift);
+                if (type >= 2) this.session.game.requestSocialAction(type);
+                else this.session.game.requestActionUse(id, ctrl, shift);
                 break;
             }
         }
     }
-    public requestRestart() { if (this.game?.isPlayingReplay()) void this.stopReplayPlayback(); else if (this.inWorld) this.game.requestRestart(); }
-    public logout() { if (this.game?.isPlayingReplay()) void this.stopReplayPlayback(); else if (this.inWorld) this.game.logout(); }
 
-    public async playReplay(bytes: Uint8Array, lockCamera = true, useChatData = false): Promise<void> {
-        if (this.inWorld || this.game || this.ui.screen !== "login" && this.ui.screen !== "replay") throw new Error(`Replay playback requires the login screen.`);
-        const file = new L2ReplayFile(bytes), scene = file.getScene(), first = file.arrPackets[0];
-
-        file.setScene(scene);
-        // shortcut: follow-camera presets; extend after first-person/observer initialization is traced.
-        if (scene.cameraMode || scene.firstPerson || scene.observerMode || scene.zoom !== scene.desiredZoom || scene.zoom + 250 <= 0) throw new Error(`Replay camera mode is not implemented.`);
-        const presetCount = this.manGame.getComponent("asset").playerController.scriptProperties.get("FixedDefaultViewNum") as number;
-
-        if (scene.fixedCamera < 0 || scene.fixedCamera >= Math.max(1, presetCount)) throw new Error(`Invalid replay camera preset '${scene.fixedCamera}'.`);
-        if (!first || first.opcode !== GamePackets.GameServerPacket_T.UserInfo || first.time !== 0) throw new Error(`Replay requires an initial UserInfo snapshot.`);
-        if (lockCamera) {
-            for (const { key, action, amount } of file.arrCameraInstructions) {
-                if ((key === 228 || key === 229) && action === 4) {
-                    if (Math.abs(Math.trunc(amount * 3600 * Math.fround(0.01))) > 0x7fffffff) throw new Error(`Replay camera axis exceeds the implemented input range.`);
-                    continue;
-                }
-                if ((key === 2 || key === 236 || key === 237) && (action === 1 || action === 3)) continue;
-                if ((key === 33 || key === 34 || key === 36) && (action === 1 || action === 2 || action === 3)) continue;
-                throw new Error(`Replay camera key/action '${key}/${action}' is not implemented.`);
-            }
-        }
-        const info = GamePackets.readUserInfo(new PacketReader(first.payload)), render = this.manGame.getComponent("render"), input = this.manGame.getComponent("input");
-        if (file.format < 1 || !file.arrUserIds.includes(info.objectId)) throw new Error(`Replay initial pawn list is not implemented.`);
-        const game = new GameClient();
-
-        game.onPacket = (opcode, packet) => { if (this.game === game) this.onPacket(opcode, packet); };
-        game.onReplayCamera = instruction => input.applyReplayCamera(instruction);
-        game.startReplayPlayback(file, lockCamera, useChatData);
-        this.game = game;
-        this.replayLoading = true;
-
-        try {
-            this.gmTransfer = null;
-            const login = this.login;
-
-            this.login = null;
-            if (login) login.close();
-            this.ui.showLoading();
-            this.lobby.leave();
-            render.player.teleportTo(setVector(new Vector3(), info), true);
-            input.resetFollowCamera();
-            await this.enterWorld(info);
-            if (this.game !== game) return;
-
-            render.getEnvironment().setTimeOfDay(scene.hour + scene.minute / 60 + scene.second / 3600);
-            render.getEnvironment().setTimeScale(GAME_TIME_SCALE);
-            game.prepareReplayPlayback();
-            await this.worldLoad;
-            if (this.game !== game) return;
-
-            render.player.setRotationYaw(Math.trunc(scene.actorYaw));
-            input.startReplayCamera(scene);
-            game.tickReplayPlayback(0);
-            this.replayLoading = false;
-        } catch (error) {
-            if (this.game === game) await this.stopReplayPlayback();
-            throw error;
-        }
-    }
-
-    public async stopReplayPlayback(): Promise<void> {
-        const game = this.game;
-
-        if (!game || !game.isPlayingReplay()) return;
-        this.leaveWorld();
-        game.close();
-        this.game = null;
-        this.replayLoading = false;
-        this.manGame.getComponent("input").endReplayCamera();
-        await this.showLogin(this.loginUrl);
-    }
-
-    public startReplayRecording(): void {
-        if (!this.inWorld || this.game.isRecording()) return;
-        const render = this.manGame.getComponent("render"), input = this.manGame.getComponent("input"), properties = this.manGame.getComponent("asset").playerController.scriptProperties;
-        const file = new L2ReplayFile(), direction = render.camera.getWorldDirection(new Vector3());
-        const time = (render.environment.getTimeSeconds() % 86400 + 86400) % 86400;
-        const zoom = (input.controls.orbit.unclippedDistance || render.camera.position.distanceTo(input.controls.orbit.target)) - 250;
-        const fixedCamera = properties.get("CurFixedDefaultCameraNo") as number;
-
-        file.setScene({ position: render.camera.position.toArray(), yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI), pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI), zoom, desiredZoom: zoom, hour: Math.floor(time / 3600), minute: Math.floor(time / 60) % 60, second: time % 60, duration: 0, cameraMode: properties.get("bCameraWalking") ? 1 : 0, firstPerson: fixedCamera === 1 ? 1 : 0, observerMode: this.observation ? 1 : 0, actorYaw: render.player.getRotationYaw(), fixedCamera });
-        file.arrUserIds = [...this.objects.keys()];
-        this.game.startRecording(file);
-        this.ui.setReplayRecording(true);
-        this.ui.addSystemMessage(this.ui.getSystemMessage(1652), this.ui.getStrings().systemMessageColors[1652]);
-    }
-
-    public async stopReplayRecording(): Promise<void> {
-        if (!this.game || !this.game.isRecording()) return;
-        const file = this.game.stopRecording(), bytes = file.toBytes();
-        this.ui.setReplayRecording(false);
-        let name = "Replay.l2r";
-
-        try { name = await saveReplayFile(bytes); }
-        finally {
-            const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" })), link = document.createElement("a");
-
-            link.href = url;
-            link.download = name;
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
-        this.ui.addSystemMessage(this.ui.getSystemMessage(1653).replace("$s1", name), this.ui.getStrings().systemMessageColors[1653]);
-    }
-
-    public getReplayRecordingTime() { return this.game ? this.game.getRecordingTime() : null; }
-
-    public requestItemList() { if (this.inWorld) this.game.requestItemList(); }
-    public useItem(objectId: number) { if (this.inWorld) this.game.useItem(objectId, this.ui.getInputModifiers()[0]); }
-    public chooseInventoryItem(objectId: number) { if (this.inWorld && (objectId === -1 || this.inventory.has(objectId))) this.game.requestEnchantItem(objectId); }
-
-    protected onUserInfo(packet: PacketReader) {
-        const info = GamePackets.readUserInfo(packet);
-        const render = this.manGame.getComponent("render");
-        const player = this.riders.get(info.objectId) || render.player;
-        const isFirst = !this.inWorld;
-        let object = this.objects.get(info.objectId);
-
-        info.isRunning = this.isRunning;
-
-        if (this.userInfo) {
-            const played = new Set<number>();
-
-            for (let slot = 0; slot < info.paperdollObjects.length; slot++) {
-                const previous = this.userInfo.paperdollObjects[slot], current = info.paperdollObjects[slot];
-                const objectId = current || previous;
-
-                if (previous === current || played.has(objectId)) continue;
-
-                played.add(objectId);
-                const itemId = current ? info.paperdoll[slot] : this.userInfo.paperdoll[slot];
-                const sound = this.ui.getStrings().itemInfos[itemId].equipSound;
-
-                if (sound && sound.toLowerCase() !== "none") void this.manGame.getComponent("audio").playInterfaceSound(sound); // Engine 0x10424468/0x10424549: UserInfo equipment transitions, outgoing sound on removal.
-            }
-        }
-
-        this.userInfo = info;
-
-        if (!object) {
-            object = this.createObject(info.objectId, "user", info);
-            object.actor = player;
-            object.resolveActor(player);
-            object.appearanceKey = this.getAppearanceKey(this.game.isPlayingReplay() ? info : this.characters[this.selectedSlot]);
-        }
-
-        this.objects.delete(info.objectId);
-        this.objects.set(info.objectId, object);
-        object.isAttackable = false;
-
-        this.userId = info.objectId;
-        this.appearances.set(info.objectId, { ...info, paperdoll: info.paperdoll.slice() });
-        object.heading = info.heading;
-        object.pendingRotation = null;
-        setVector(object.position, info);
-        object.name = info.name;
-        object.title = info.title;
-        object.clanId = info.clanId;
-        object.clanCrestId = info.clanCrestId;
-        object.allyId = info.allyId;
-        object.allyCrestId = info.allyCrestId;
-        if (info.clanId > 0) this.updatePledgeInfo(info.clanId, info.clanCrestId, info.allyId, info.allyCrestId, info.largeCrestId);
-        object.curHp = info.curHp;
-        object.maxHp = info.maxHp;
-        object.curMp = info.curMp;
-        object.maxMp = info.maxMp;
-        object.karma = info.karma;
-        object.pvpFlag = info.pvpFlag;
-        object.recommendations = info.recommendations;
-        object.nameColor = info.nameColor;
-        object.isInCombat = info.isInCombat;
-        object.speeds = info;
-        object.cubics = info.cubics;
-        object.isRunning = this.isRunning;
-        object.privateStoreType = info.privateStoreType;
-
-        player.setUnrealScriptProperty("bNpc", false);
-        player.setUnrealScriptProperty("CanIngnoreCollision", false);
-        if (!info.mountType || this.riders.has(info.objectId)) this.applySpeeds(object.actor, info, this.isRunning);
-        object.actor.setRotationYaw(info.heading);
-        this.setIdleAnimation(object, false);
-
-        if (isFirst) {
-            this.inWorld = true;
-            player.teleportTo(setVector(object.position, info), true);
-        }
-
-        this.updateCubics(object);
-        this.updateAbnormalState(object, info.abnormalState);
-        this.isMounted = info.mountType !== 0;
-        this.updateMountable();
-        this.ui.setInventoryOrderOwner(info.name, this.inventoryOrderNamespace);
-        this.ui.setWindowOwner(JSON.stringify([this.gameServerUrl, info.objectId]));
-        this.ui.setStatus(info);
-        this.ui.setClan(this.clanInfo);
-
-        const key = this.getAppearanceKey(info);
-
-        if (key !== object.appearanceKey) {
-            object.appearanceKey = key;
-            this.userAppearanceLoad = this.loadAppearance(info, player);
-        }
-
-        this.setRide({ objectId: info.objectId, isMounted: info.mountType !== 0, mountType: info.mountType, npcId: info.mountNpcId });
-
-        if (isFirst) this.worldLoad = this.finishLoading();
-        this.teleportInfoPending = false;
-    }
-
-    protected async finishLoading() {
-        const render = this.manGame.getComponent("render");
-        const asset = this.manGame.getComponent("asset");
-
-        await this.userAppearanceLoad;
-        await this.skillListLoad;
-
-        while (this.inWorld && (!asset.isAreaLoaded(render, render.player.position) || this.npcSpawnCount > 0)) await new Promise(resolve => setTimeout(resolve, 100));
-
-        if (!this.inWorld) return;
-
-        render.setZoneMusicEnabled(true);
-        this.ui.showWorld();
-    }
-
-    protected onCharInfo(packet: PacketReader) {
-        const info = GamePackets.readCharInfo(packet);
-
-        if (info.clanId > 0) this.updatePledgeInfo(info.clanId, info.clanCrestId, info.allyId, info.allyCrestId, info.largeCrestId);
-        this.appearances.set(info.objectId, { ...info, paperdoll: info.paperdoll.slice() });
-        let object = this.objects.get(info.objectId);
-
-        if (object) {
-            Object.assign(object, { clanId: info.clanId, clanCrestId: info.clanCrestId, allyId: info.allyId, allyCrestId: info.allyCrestId });
-            this.objects.delete(info.objectId);
-            this.objects.set(info.objectId, object);
-            object.isAttackable = false;
-
-            const wasDead = object.isDead;
-            object.heading = info.heading;
-            object.pendingRotation = null;
-            this.adjustPawnLocation(object, info);
-            object.name = info.name;
-            object.title = info.title;
-            object.recommendations = info.recommendations;
-            object.speeds = info;
-            object.isRunning = info.isRunning;
-            object.isInCombat = info.isInCombat;
-            object.isDead = info.isAlikeDead;
-            object.privateStoreType = info.privateStoreType;
-            object.cubics = info.cubics;
-            this.updateCubics(object);
-            this.updateAbnormalState(object, info.abnormalState);
-
-            if (object.isDead) {
-                object.destination = null;
-                object.pendingFly = null;
-                object.pendingVehicleMove = null;
-                object.pendingAttack = null;
-                object.pendingTransientSkills.length = 0;
-                this.stopSkill(object.objectId);
-            }
-
-            if (object.actor) {
-                if (!info.mountType || this.riders.has(info.objectId)) this.applySpeeds(object.actor, info, info.isRunning);
-                object.actor.setRotationYaw(info.heading);
-                if (object.isDead) {
-                    if (!wasDead) object.actor.playDeathAnimation(() => { });
-                } else {
-                    this.setIdleAnimation(object);
-                    if (wasDead) object.actor.revive();
-                }
-            }
-            this.applyPartyMember(object);
-
-            const key = this.getAppearanceKey(info);
-
-            if (object.actor && key !== object.appearanceKey) {
-                object.appearanceKey = key;
-                void this.loadAppearance(info, this.riders.get(info.objectId) || object.actor);
-            }
-
-            this.setRide({ objectId: info.objectId, isMounted: info.mountType !== 0, mountType: info.mountType, npcId: info.mountNpcId });
-            return;
-        }
-
-        object = this.createObject(info.objectId, "player", info);
-        Object.assign(object, { clanId: info.clanId, clanCrestId: info.clanCrestId, allyId: info.allyId, allyCrestId: info.allyCrestId });
-        object.appearanceKey = this.getAppearanceKey(info);
-        this.applyPartyMember(object);
-        this.setRide({ objectId: info.objectId, isMounted: info.mountType !== 0, mountType: info.mountType, npcId: info.mountNpcId });
-
-        void this.spawnPlayer(object, info);
-    }
-
-    protected async spawnPlayer(object: NetObject_T, info: GamePackets.CreatureInfo_T & GamePackets.Appearance_T) {
-        const render = this.manGame.getComponent("render");
-        const actor = new BaseActor(render);
-
-        actor.name = info.name;
-        actor.position.copy(object.position);
-
-        try {
-            let appearance: GamePackets.Appearance_T = info;
-
-            do {
-                object.appearanceKey = this.getAppearanceKey(appearance);
-                await this.loadAppearance(appearance, actor);
-                appearance = this.appearances.get(object.objectId);
-            } while (!object.isRemoved && this.getAppearanceKey(appearance) !== object.appearanceKey);
-        } catch (e) {
-            actor.release();
-            object.resolveActor(null);
-            console.error(`[network] player '${info.name}' failed to load:`, e);
-            return;
-        }
-
-        if (object.isRemoved) {
-            actor.release();
-            return;
-        }
-
-        render.addPawn(actor);
-        this.attachActor(object, actor);
-        const ride = this.mounts.get(object.objectId);
-
-        if (ride) await this.enterRide(ride);
-    }
-
-    protected onNpcInfo(packet: PacketReader) {
-        const info = GamePackets.readNpcInfo(packet);
-
-        info.abnormalState = packet.d(); // NpcInfo 0x6f66ca: PetInfo's shared prefix stops before this field.
-        packet.skip(18);
-        info.originalCollisionRadius = packet.f();
-        info.originalCollisionHeight = packet.f();
-        packet.d();
-        this.setNpc(info);
-    }
-
-    protected onServerObjectInfo(packet: PacketReader) {
-        const info = GamePackets.readServerObjectInfo(packet);
-        const object = this.setNpc(info);
-
-        object.curHp = info.curHp;
-        object.maxHp = info.maxHp;
-        if (object.objectId === this.getTargetId()) this.updateTarget();
-    }
-
-    protected onPetInfo(packet: PacketReader) {
-        const info = GamePackets.readPetInfo(packet);
-
-        if (info.objectId === this.deletedPetId) return;
-
-        Object.assign(this.petInfo, info, { name: info.name || this.ui.getStrings().npcNames[info.npcId] });
-        this.ui.setPetRenameAvailable(info.name.length === 0);
-        this.ui.setPetInfo(this.petInfo);
-        this.updateMountable();
-        const object = this.setNpc(info, false);
-
-        object.curHp = info.curHp;
-        object.maxHp = info.maxHp;
-        object.curMp = info.curMp;
-        object.maxMp = info.maxMp;
-        if (object.objectId === this.getTargetId()) this.updateTarget();
-        if (info.spawnType === 0 || info.spawnType === 2) this.ui.showPetStatus(info.statusType);
-    }
-
-    protected updateMountable() { this.ui.setMountable(this.isMounted || this.petInfo.objectId >= 0 && this.petInfo.isMountable); }
-
-    protected readPetInventoryItem(packet: PacketReader, allowZeroCount: boolean = false): GamePackets.InventoryItem_T {
-        const item = { type1: packet.h(), objectId: packet.d(), itemId: packet.d(), count: packet.d(), type2: packet.h(), customType1: packet.h(), isEquipped: packet.h() !== 0, bodyPart: packet.d(), enchantLevel: packet.h(), customType2: packet.h() };
-
-        if (item.objectId <= 0 || item.itemId <= 0 || item.count < (allowZeroCount ? 0 : 1)) throw new Error(`Invalid pet inventory item '${item.itemId}'.`);
-
-        return item;
-    }
-
-    protected onPetItemList(packet: PacketReader) {
-        const count = packet.h();
-
-        if (count > Math.trunc(packet.getRemaining() / 28)) throw new Error(`Invalid PetItemList count '${count}'.`);
-
-        const items: GamePackets.InventoryItem_T[] = [];
-        for (let i = 0; i < count; i++) items.push(this.readPetInventoryItem(packet));
-        if (packet.getRemaining()) throw new Error("Invalid PetItemList trailing data.");
-
-        this.petInventory.clear();
-        for (const item of items) this.petInventory.set(item.objectId, item);
-        this.ui.setPetInventory(Array.from(this.petInventory.values()), true);
-    }
-
-    protected onPetInventoryUpdate(packet: PacketReader) {
-        const count = packet.h();
-
-        if (count > Math.trunc(packet.getRemaining() / 30)) throw new Error(`Invalid PetInventoryUpdate count '${count}'.`);
-
-        const changes: { change: number, item: GamePackets.InventoryItem_T }[] = [];
-        for (let i = 0; i < count; i++) {
-            const change = packet.h();
-            if (change < 1 || change > 3) throw new Error(`Unknown pet inventory change '${change}'.`);
-            changes.push({ change, item: this.readPetInventoryItem(packet, change === 3) });
-        }
-        if (packet.getRemaining()) throw new Error("Invalid PetInventoryUpdate trailing data.");
-
-        for (const change of changes) {
-            if (change.change === 3) this.petInventory.delete(change.item.objectId);
-            else if (change.change === 1 || this.petInventory.has(change.item.objectId)) this.petInventory.set(change.item.objectId, change.item);
-            if (change.change !== 1) this.updatePetShortCutItem(change.item.objectId);
-        }
-        this.ui.setPetInventory(Array.from(this.petInventory.values()));
-    }
-
-    protected updatePetShortCutItem(objectId: number) {
-        for (const shortcut of this.shortcuts.values()) {
-            if (shortcut.type !== GamePackets.ShortCutType_T.TYPE_ITEM || shortcut.id !== objectId) continue;
-            if (this.petInventory.has(shortcut.id)) this.setShortCut(shortcut);
-            else {
-                this.shortcuts.delete(shortcut.slot);
-                this.ui.removeShortCut(shortcut.slot);
-            }
-        }
-    }
-
-    protected onPetStatusShow(packet: PacketReader) {
-        const summonType = packet.d();
-
-        if (summonType < 0 || packet.getRemaining()) throw new Error("Invalid PetStatusShow payload.");
-        this.petStatusType = summonType;
-        this.ui.setPetInfo(this.petInfo);
-        this.ui.showPet(summonType);
-    }
-
-    protected onPetDelete(packet: PacketReader) { // Engine 0x103fefd0.
-        const statusType = packet.d(), objectId = packet.d();
-
-        this.ui.hidePet();
-        Object.assign(this.petInfo, { statusType, objectId: -1, x: 0, y: 0, z: 0 });
-        this.updateMountable();
-        this.removeObject(objectId);
-        this.deletedPetId = objectId;
-    }
-
-    protected onSetSummonRemainTime(packet: PacketReader) {
-        const maxTime = packet.d(), remainingTime = packet.d();
-
-        if (packet.getRemaining()) throw new Error("Invalid SetSummonRemainTime payload.");
-
-        this.petRemainTime = { maxTime, remainingTime };
-        this.ui.setSummonRemainTime(maxTime, remainingTime);
-    }
-
-    protected onPetStatusUpdate(packet: PacketReader) {
-        const statusType = packet.d(), objectId = packet.d(), x = packet.d(), y = packet.d(), z = packet.d();
-
-        packet.S();
-
-        const curFood = packet.d(), maxFood = packet.d();
-        const curHp = packet.d(), maxHp = packet.d(), curMp = packet.d(), maxMp = packet.d();
-        const level = packet.d(), exp = packet.d(), minExp = packet.d(), nextExp = packet.d();
-
-        Object.assign(this.petInfo, { statusType, objectId, x, y, z, curFood, maxFood, curHp, maxHp, curMp, maxMp, level, exp, minExp, nextExp }); // Engine 0x103fecfb..0x103feda6.
-        this.ui.setPetInfo(this.petInfo);
-
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        object.curHp = curHp;
-        object.maxHp = maxHp;
-        object.curMp = curMp;
-        object.maxMp = maxMp;
-        if (objectId === this.getTargetId()) this.updateTarget();
-    }
-
-    protected setNpc(info: GamePackets.NpcInfo_T, updateLocation: boolean = true) {
-        const object = this.objects.get(info.objectId);
-
-        if (object) {
-            const wasDead = object.isDead;
-            object.npcId = info.npcId;
-            if (updateLocation) this.adjustPawnLocation(object, info);
-            if (info.name) object.name = info.name;
-            object.title = info.title || this.ui.getStrings().npcTitles[info.npcId] || "";
-            if (!info.name && info.npcId in this.ui.getStrings().npcTitleColors) object.titleColor = this.ui.getStrings().npcTitleColors[info.npcId];
-            object.heading = info.heading;
-            object.pendingRotation = null;
-            object.isRunning = info.isRunning;
-            object.isInCombat = info.isInCombat;
-            object.isDead = info.isAlikeDead;
-            object.isSummon = info.isSummon;
-            object.isAttackable = info.isAttackable;
-            object.speeds = info;
-            this.updateAbnormalState(object, info.abnormalState);
-
-            if (object.isDead) {
-                object.destination = null;
-                object.pendingFly = null;
-                object.pendingVehicleMove = null;
-                object.pendingAttack = null;
-                object.pendingTransientSkills.length = 0;
-                this.stopSkill(object.objectId);
-            }
-
-            if (object.actor) {
-                this.applySpeeds(object.actor, info, info.isRunning);
-                object.actor.setRotationYaw(info.heading);
-                if (object.isDead) {
-                    if (!wasDead) object.actor.playDeathAnimation(() => { });
-                } else {
-                    this.setIdleAnimation(object);
-                    if (wasDead) object.actor.revive();
-                }
-            }
-            if (object.objectId === this.getTargetId()) this.updateTarget();
-
-            return object;
-        }
-
-        const created = this.createObject(info.objectId, "npc", info);
-
-        created.title = info.title || this.ui.getStrings().npcTitles[info.npcId] || "";
-        if (!info.name) created.titleColor = this.ui.getStrings().npcTitleColors[info.npcId] || 0;
-        created.isSummon = info.isSummon;
-        created.isAttackable = info.isAttackable;
-
-        void this.spawnNpc(created, info.npcId, info);
-
-        return created;
-    }
-
-    protected async spawnNpc(object: NetObject_T, npcId: number, info: GamePackets.NpcInfo_T) {
-        const render = this.manGame.getComponent("render");
-        let actor: BaseActor;
-        let npc: INpcDefinition;
-
-        while (this.npcSpawnCount >= NPC_SPAWN_CONCURRENCY) await new Promise<void>(resolve => this.npcSpawnWaiters.push(resolve));
-        if (object.isRemoved) {
-            this.npcSpawnWaiters.shift()?.();
-            return;
-        }
-        this.npcSpawnCount++;
-
-        try {
-            npc = await this.manGame.getComponent("asset").resolveNpc(npcId);
-            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, false, false, [info.collisionRadius, info.collisionHeight]);
-        } catch (e) {
-            object.resolveActor(null);
-            this.npcSpawnCount--;
-            this.npcSpawnWaiters.shift()?.();
-            debugger;
-            throw new Error(`[network] npc ${npcId} (object ${object.objectId}) failed to spawn: ${(e as Error).message}`);
-        }
-
-        this.npcSpawnCount--;
-        this.npcSpawnWaiters.shift()?.();
-
-        const speeds = object.speeds;
-
-        if (speeds.runSpd <= 0) {
-            const groundSpeed = Number(actor.getUnrealScriptProperty("GroundSpeed"));
-            const walkingPct = Number(actor.getUnrealScriptProperty("WalkingPct"));
-            const waterSpeed = Number(actor.getUnrealScriptProperty("WaterSpeed"));
-            const runSpeed = groundSpeed > 0 ? groundSpeed : 1;
-            const walkPct = walkingPct > 0 ? walkingPct : 0.5;
-
-            speeds.runSpd = runSpeed;
-            speeds.walkSpd = runSpeed * walkPct;
-            speeds.swimRunSpd = waterSpeed > 0 ? waterSpeed : runSpeed;
-            speeds.swimWalkSpd = speeds.swimRunSpd * walkPct;
-        }
-
-        if (!object.name) object.name = actor.name;
-        if (object.isRemoved) {
-            render.removePawn(actor);
-            return;
-        }
-
-        this.attachActor(object, actor);
-        if (info.spawnType === 2 && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
-    }
-
-    protected attachActor(object: NetObject_T, actor: BaseActor) {
-        object.actor = actor;
-
-        actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
-        if (object.environment !== null) actor.setUnrealScriptProperty("Environment", object.environment);
-        if (!(object.speeds as GamePackets.CharInfo_T).mountType) this.applySpeeds(actor, object.speeds, object.isRunning);
-        this.setIdleAnimation(object);
-        if (object.waitType === GamePackets.WaitType_T.WT_SITTING) actor.playMovementAnimation("idle");
-        actor.setRotationYaw(object.heading);
-
-        actor.teleportTo(object.pendingFly ? object.pendingFly.origin : object.position, true);
-        const vehicle = this.vehicles.get(this.getVehicleIdOf(object.objectId));
-
-        if (vehicle) {
-            actor.setUnrealScriptProperty("bGetOnVehicle", true);
-            this.placeVehicleRider(vehicle, object.objectId);
-        }
-        this.updateCubics(object);
-        this.updateAbnormalState(object);
-        if (object.pendingVehicleMove) {
-            const move = object.pendingVehicleMove;
-            this.moveInVehicle(object, move.vehicleId, move.position);
-        } else if (object.pendingFly) {
-            if (object.kind === "user") actor.flyTo(object.pendingFly.destination);
-            else actor.addFlyTo(object.pendingFly.origin, object.pendingFly.destination);
-            object.pendingFly = null;
-        } else if (object.destination) actor.goTo(object.destination);
-        if (object.pendingRotation) {
-            actor.startRotating(object.pendingRotation.direction, object.pendingRotation.speed);
-            object.pendingRotation = null;
-        }
-        if (object.isDead) actor.playDeathAnimation(() => { });
-        if (object.objectId === this.getTargetId()) this.updateTarget();
-        object.resolveActor(actor);
-        this.flushPendingAttacks();
-        this.flushPendingSkills();
-        this.flushSkillTargets(object.objectId);
-        this.startFishing(object);
-    }
-
-    protected async onDice(info: GamePackets.Dice_T): Promise<void> {
-        const render = this.manGame.getComponent("render"), asset = this.manGame.getComponent("asset");
-        const generation = this.teleportGeneration, owner = this.objects.get(info.objectId);
-        const origin = owner && owner.actor ? owner.actor.getWorldPosition(new Vector3()) : null;
-
-        if (origin) origin.z += owner.actor.getCollisionHeight();
-        const library = await asset.loadItem(info.itemId);
-
-        if (!this.inWorld || generation !== this.teleportGeneration) return;
-        const dice = new L2Dice(render, info.itemId, info.number, origin);
-
-        setVector(dice.position, info);
-        dice.setMeshes(library);
-        render.addPickup(dice);
-    }
-
-    protected async onSpawnItem(packet: PacketReader, dropped: boolean) {
-        const ownerId = dropped ? packet.d() : 0;
-
-        const objectId = packet.d(), itemId = packet.d();
-        const position = setVector(new Vector3(), this.readLocation(packet));
-        const stackable = packet.d() !== 0, count = packet.d(), heading = packet.d();
-
-        this.removeObject(objectId);
-
-        const render = this.manGame.getComponent("render");
-        const asset = this.manGame.getComponent("asset");
-        const owner = this.objects.get(ownerId);
-        const origin = owner && owner.actor ? owner.actor.getWorldPosition(new Vector3()) : null;
-        const pickup = new GroundPickup(render, objectId, itemId, count, stackable, dropped, origin);
-
-        pickup.position.copy(position);
-        pickup.quaternion.fromArray(getRotatorQuaternionElements(0, heading, 0));
-        this.pickups.set(objectId, pickup);
-
-        const library = await asset.loadItem(itemId);
-
-        if (this.pickups.get(objectId) !== pickup) return;
-
-        const sound = library.pickup.dropSound, animation = library.pickup.dropAnimType;
-        const [dropSound, throwSound] = dropped ? await Promise.all([
-            sound && sound.toLowerCase() !== "none" ? asset.loadSound(sound) : null,
-            animation >= 1 && animation <= 3 ? asset.loadSound("ItemSound.Item_throw") : null
-        ]) : [null, null];
-
-        if (this.pickups.get(objectId) !== pickup) return;
-
-        pickup.setMeshes(library);
-        pickup.setDropSounds(dropSound, throwSound);
-        render.addPickup(pickup);
-    }
-
-    protected onGetItem(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-        const objectId = packet.d();
-        const position = this.readLocation(packet);
-        const pickup = this.pickups.get(objectId);
-
-        if (object) {
-            object.destination = null;
-            object.pendingFly = null;
-            object.pendingVehicleMove = null;
-            setVector(object.position, position);
-        }
-
-        if (object && object.actor) {
-            const actor = object.actor;
-
-            actor.stopMoving();
-            this.adjustPawnLocation(object, position);
-
-            if (pickup) actor.setRotationYaw(Math.atan2(pickup.position.y - actor.position.y, pickup.position.x - actor.position.x) * 32768 / Math.PI);
-
-            const animation = (actor.getUnrealScriptProperty("PicItemAnimName") as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
-
-            if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnGetItem 0x7455a9..0x7455f3.
-            this.notifyMacroCommand([14], 1);
-        }
-
-        this.removeObject(objectId);
-    }
-
-    protected removeObject(objectId: number) {
-        const wasTarget = objectId === this.getTargetId();
-
-        if (objectId === this.deletedPetId) this.deletedPetId = 0;
-
-        if (this.petInfo.objectId === objectId) {
-            Object.assign(this.petInfo, { objectId: -1, x: 0, y: 0, z: 0 });
-            this.updateMountable();
-        }
-
-        for (const object of this.objects.values()) {
-            if (object.selectedId === objectId) object.selectedId = 0;
-            if (object.pendingAttack?.hits.some(hit => hit.targetObjectId === objectId)) object.pendingAttack = null;
-            if (object.pendingSkill?.targetObjectId === objectId) object.pendingSkill = null;
-            if (object.pendingSkill) object.pendingSkill.associatedObjectIds = object.pendingSkill.associatedObjectIds.filter(id => id !== objectId);
-            for (let i = object.pendingTransientSkills.length - 1; i >= 0; i--) {
-                const pending = object.pendingTransientSkills[i];
-
-                if (pending.targetObjectId === objectId) object.pendingTransientSkills.splice(i, 1);
-                else pending.associatedObjectIds = pending.associatedObjectIds.filter(id => id !== objectId);
-            }
-            if (object.skill) object.skill.associatedObjectIds = object.skill.associatedObjectIds.filter(id => id !== objectId);
-        }
-
-        if (wasTarget) this.updateTarget();
-
-        this.removeVehicle(objectId);
-        this.doors.delete(objectId);
-        for (const [realId, id] of this.staticObjects) if (id === objectId) this.staticObjects.delete(realId);
-        for (const vehicle of this.vehicles.values()) vehicle.riders.delete(objectId);
-        this.endRide(objectId);
-        this.mounts.delete(objectId);
-        this.privateStoreSellMsgs.delete(objectId);
-        this.privateStoreBuyMsgs.delete(objectId);
-
-        const pickup = this.pickups.get(objectId);
-
-        if (pickup) {
-            this.pickups.delete(objectId);
-            this.manGame.getComponent("render").removePickup(pickup);
-        }
-
-        const object = this.objects.get(objectId);
-
-        if (!object || object.kind === "user") return;
-
-        object.isRemoved = true;
-        object.resolveActor(null);
-        this.objects.delete(objectId);
-        this.appearances.delete(objectId);
-
-        if (object.actor) this.manGame.getComponent("render").removePawn(object.actor);
-    }
-
-    protected withActor(objectId: number, callback: (actor: BaseActor, object: NetObject_T) => void) {
-        const object = this.objects.get(objectId);
-
-        if (object && object.actor) callback(object.actor, object);
-    }
-
-    protected readLocation(packet: PacketReader): GamePackets.Location_T {
-        tmpLocation.x = packet.d();
-        tmpLocation.y = packet.d();
-        tmpLocation.z = packet.d();
-
-        return tmpLocation;
-    }
-
-    protected adjustPawnLocation(object: NetObject_T, position: GamePackets.Location_T) {
-        setVector(object.position, position);
-
-        const actor = object.actor;
-
-        if (!actor || object.kind === "user" || object.isDead) return;
-
-        const base = actor.getBaseActor() as Vehicle;
-
-        if (base && base.isVehicle) return;
-
-        const controller = actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
-
-        if (!controller || getProperty(controller, "bDead")) return;
-
-        const arrReservedMovePoint = getProperty(controller, "ReservedMovePoint") as unknown[];
-
-        if (arrReservedMovePoint && arrReservedMovePoint.length) return;
-
-        // AdjustPawnLocation 0x7425a0: remote living pawns, more than 200 units from the server feet position.
-        if (actor.position.distanceTo(object.position) > 200) actor.adjustLocation(object.position);
-    }
-
-    protected onMoveToLocation(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-
-        if (!object) return;
-
-        const destination = setVector(new Vector3(), this.readLocation(packet));
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-
-        setVector(object.position, this.readLocation(packet));
-
-        if (object.isDead) return;
-
-        object.destination = destination;
-        object.pendingAttack = null;
-        this.stopSkill(object.objectId);
-
-        if (object.waitType === GamePackets.WaitType_T.WT_SITTING || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH || object.chairStaticObjectId) {
-            object.waitType = GamePackets.WaitType_T.WT_STANDING;
-            object.chairStaticObjectId = 0;
-            this.setIdleAnimation(object, false);
-        }
-
-        if (!object.actor) return;
-
-        this.adjustPawnLocation(object, object.position);
-
-        if (object.kind === "user") object.actor.goTo(destination);
-        else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveTo(object.position, destination);
-    }
-
-    protected async onMoveToPawn(packet: PacketReader) {
-        const objectId = packet.d(), targetId = packet.d();
-        const distance = packet.d();
-        const current = this.readLocation(packet), position = { x: current.x, y: current.y, z: current.z }, destination = setVector(new Vector3(), this.readLocation(packet));
-        const object = this.objects.get(objectId);
-        const target = this.objects.get(targetId);
-
-        if (!object) return;
-
-        setVector(object.position, position);
-
-        if (object.isDead) return;
-
-        object.pendingAttack = null;
-        this.stopSkill(object.objectId);
-
-        if (object.waitType === GamePackets.WaitType_T.WT_SITTING || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH || object.chairStaticObjectId) {
-            object.waitType = GamePackets.WaitType_T.WT_STANDING;
-            object.chairStaticObjectId = 0;
-            this.setIdleAnimation(object, false);
-        }
-
-        object.pendingFly = null;
-
-        object.pendingVehicleMove = null;
-        if (!target || !target.actor || !object.actor) {
-            object.destination = destination;
-            if (object.actor) object.actor.goTo(destination);
-            if (!target) return;
-
-            await Promise.all([object.actorReady, target.actorReady]);
-
-            if (object.destination !== destination || object.isRemoved || target.isRemoved || object.isDead || !object.actor || !target.actor) return;
-        }
-
-        this.adjustPawnLocation(object, object.position);
-        object.destination = null;
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-        const offset = Math.fround(distance);
-
-        if (object.kind === "user") object.actor.goToActor(target.actor, offset);
-        else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveToward(object.position, target.actor, offset);
-    }
-
-    protected onStopMove(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-
-        if (!object) return;
-
-        setVector(object.position, this.readLocation(packet));
-        object.heading = packet.d() & 0xffff;
-        object.pendingRotation = null;
-        object.destination = null;
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-
-        if (!object.actor || object.isDead) return;
-
-        this.adjustPawnLocation(object, object.position);
-        object.actor.stopMoving();
-
-        object.actor.setRotationYaw(object.heading);
-    }
-
-    protected onValidateLocation(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-
-        if (!object) return;
-
-        setVector(object.position, this.readLocation(packet));
-        object.heading = packet.d() & 0xffff;
-
-        const actor = object.actor;
-
-        if (!actor) return;
-
-        const controller = actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
-
-        if (!controller || getProperty(controller, "bDead") || getProperty(controller, "WaitType") !== PStopType_T.STP_STAND) return;
-
-        if (actor === this.manGame.getComponent("render").player) {
-            actor.l2Teleport(object.position);
-            actor.setRotationYaw(object.heading);
-            return;
-        }
-
-        this.adjustPawnLocation(object, object.position);
-        actor.validateLocation(object.position);
-    }
-
-    protected onTeleport(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-
-        if (!object) return;
-
-        setVector(object.position, this.readLocation(packet));
-        object.destination = null;
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-        object.pendingRotation = null;
-        this.stopSkill(object.objectId);
-        object.pendingAttack = null;
-        object.pendingTransientSkills.length = 0;
-
-        if (object.actor) {
-            if (object.actor.getUnrealScriptProperty("Controller")) {
-                object.actor.stopMove();
-            }
-            tmpTeleportPosition.copy(object.position);
-            tmpTeleportPosition.z = Math.fround(tmpTeleportPosition.z + Math.fround(object.speeds.collisionHeight) + 10);
-            if (object.actor === this.manGame.getComponent("render").player) {
-                object.actor.l2Teleport(tmpTeleportPosition);
-            } else this.manGame.getComponent("physics").farMoveActor(object.actor, tmpTeleportPosition);
-        }
-        if (object.kind === "user") void this.finishTeleport();
-    }
-
-    protected async finishTeleport() {
-        const render = this.manGame.getComponent("render");
-        const asset = this.manGame.getComponent("asset");
-        const generation = ++this.teleportGeneration;
-
-        render.setZoneMusicEnabled(false);
-        this.ui.showLoading(true);
-
-        while (this.inWorld && generation === this.teleportGeneration && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
-
-        if (!this.inWorld || generation !== this.teleportGeneration) return;
-
-        this.teleportInfoPending = true;
-        this.game.appearing();
-
-        // Lisvus Appearing sends the destination known list before UserInfo.
-        while (this.inWorld && generation === this.teleportGeneration && (this.teleportInfoPending || this.npcSpawnCount > 0 || this.npcSpawnWaiters.length > 0)) await new Promise(resolve => setTimeout(resolve, 100));
-
-        if (!this.inWorld || generation !== this.teleportGeneration) return;
-
-        render.setZoneMusicEnabled(true);
-        this.ui.showWorld();
-    }
-
-    protected onBeginRotation(packet: PacketReader) {
-        const objectId = packet.d();
-
-        packet.d(); // OnStartRotating 0x73c9c0 ignores the initial heading.
-
-        const direction = packet.d(), speed = packet.d();
-
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        if (object.actor) object.actor.startRotating(direction, speed);
-        else object.pendingRotation = { direction, speed };
-    }
-
-    protected onStopRotation(packet: PacketReader) {
-        const objectId = packet.d(), heading = packet.d();
-        const speed = packet.getRemaining() === 0 ? 0 : packet.d();
-
-        if (packet.getRemaining() > 0) packet.c();
-
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        object.heading = heading & 65535;
-        object.pendingRotation = null;
-        if (object.actor) object.actor.finishRotating(heading, speed);
-    }
-
-    protected onAttack(packet: PacketReader) {
-        const attacker = this.objects.get(packet.d());
-        const hits = [this.readAttackHit(packet)];
-        const position = this.readLocation(packet);
-        const count = packet.h();
-
-        if (count > packet.getRemaining() / 9) throw new Error(`Invalid attack hit count '${count}'.`);
-
-        for (let i = 0; i < count; i++) hits.push(this.readAttackHit(packet));
-
-        if (!attacker || attacker.isDead || hits[0].targetObjectId === attacker.objectId) return;
-
-        attacker.destination = null;
-        attacker.pendingFly = null;
-        attacker.pendingVehicleMove = null;
-        if (attacker.actor) attacker.actor.stopMoving();
-        this.stopSkill(attacker.objectId);
-
-        if (!attacker.actor || !hits[0].actionTarget) {
-            attacker.pendingAttack = { hits, position: { x: position.x, y: position.y, z: position.z } };
-            return;
-        }
-
-        this.startServerAttack(attacker, hits, position);
-    }
-
-    protected onActionFailed() {
-        const object = this.objects.get(this.userId);
-
-        if (!object) return;
-
-        object.pendingAttack = null;
-        object.pendingSkill = null;
-        object.pendingTransientSkills.length = 0;
-    }
-
-    protected readAttackHit(packet: PacketReader): NAttackActionParam_T {
-        const targetObjectId = packet.d(), target = this.objects.get(targetObjectId);
-        const damage = packet.d(), flags = packet.c();
-
-        return { targetObjectId, actionTarget: target ? target.actor : null, damage, isMiss: !!(flags & GamePackets.AttackFlags_T.MISS), isCritical: !!(flags & GamePackets.AttackFlags_T.CRITICAL), isShieldDefense: !!(flags & GamePackets.AttackFlags_T.SHIELD), isSpirit: !!(flags & GamePackets.AttackFlags_T.SOULSHOT), soulshotGrade: flags & GamePackets.AttackFlags_T.GRADE };
-    }
-
-    protected startServerAttack(attacker: NetObject_T, hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T) {
-        if (!attacker.actor || !hits[0].actionTarget || attacker.actor === hits[0].actionTarget || attacker.isDead) return;
-
-        attacker.pendingAttack = null;
-        this.adjustPawnLocation(attacker, position);
-        attacker.destination = null;
-        attacker.pendingFly = null;
-        attacker.pendingVehicleMove = null;
-        attacker.actor.getComponent<PawnAttackComponent>("pawnAttack").attackFromServer(hits);
-        if (!attacker.isDead)
-            for (const hit of hits) {
-                const defender = this.objects.get(hit.targetObjectId);
-
-                if (defender && defender.actor && defender.actor !== attacker.actor) this.ui.notifyOlympiadAttack(attacker.objectId, defender.objectId, attacker.name, hit.isMiss, hit.isCritical);
-            }
-    }
-
-    protected flushPendingAttacks(targetObjectId?: number) {
-        for (const attacker of this.objects.values()) {
-            const pending = attacker.pendingAttack;
-
-            if (!pending || targetObjectId !== undefined && !pending.hits.some(hit => hit.targetObjectId === targetObjectId)) continue;
-
-            const hits = pending.hits.map(hit => {
-                const target = this.objects.get(hit.targetObjectId);
-
-                return { ...hit, actionTarget: target ? target.actor : null };
-            });
-
-            if (!hits[0].actionTarget) continue;
-            this.startServerAttack(attacker, hits, pending.position);
-        }
-    }
-
-    protected onMagicSkillUse(packet: PacketReader) {
-        const receivedTime = this.manGame.getCurrentTime();
-        const caster = this.objects.get(packet.d());
-        const targetObjectId = packet.d(), target = this.objects.get(targetObjectId);
-        const id = packet.d(), level = packet.d(), hitTime = Math.max(0, packet.d());
-
-        const reuseDelay = packet.d();
-        const position = this.readLocation(packet);
-
-        packet.d();
-
-        if (caster && caster.isDead) return;
-
-        if (caster && caster.objectId === this.userId) this.ui.setSkillCoolTime(id, level, Math.trunc(reuseDelay / 1000), Math.trunc(reuseDelay / 1000)); // OnReceiveMagicSkillUse 0x7505a2 / 0x750690.
-
-        const isTransient = CUBIC_SKILLS.has(id) || this.ui.getStrings().skillCastStyles[`${id}:${level}`] === 0;
-
-        if (!caster) return;
-        if (!isTransient) {
-            caster.pendingAttack = null;
-            caster.destination = null;
-            caster.pendingFly = null;
-            caster.pendingVehicleMove = null;
-            if (caster.actor) caster.actor.stopMoving();
-        }
-
-        if (caster.actor === this.manGame.getComponent("render").player && !caster.isDead && (target ? target.actor : this.doors.has(targetObjectId)) && this.ui.getStrings().skillInfos[`${id}:${level}`])
-            this.notifyMacroSkill(id, hitTime);
-
-        if (!caster.actor || !target) {
-            if (!isTransient) this.stopSkill(caster.objectId);
-            const pending = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
-
-            if (isTransient) caster.pendingTransientSkills.push(pending);
-            else caster.pendingSkill = pending;
-            return;
-        }
-
-        this.startServerSkill(caster, target, id, level, hitTime / 1000, position, isTransient, receivedTime);
-    }
-
-    protected startServerSkill(caster: NetObject_T, target: NetObject_T, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
-        if (caster.isDead) return;
-
-        const skill: NetSkill_T = { id, level, hitTime, receivedTime, associatedActors: [], associatedObjectIds: [...associatedObjectIds] }; // OnReceiveMagicSkillUse 0x7507f7..0x750831.
-
-        for (const objectId of skill.associatedObjectIds) {
-            const object = this.objects.get(objectId);
-
-            if (object?.actor) skill.associatedActors.push(object.actor);
-        }
-
-        this.adjustPawnLocation(caster, position);
-
-        if (!isTransient) {
-            caster.destination = null;
-            caster.pendingFly = null;
-            caster.pendingVehicleMove = null;
-            this.manGame.getComponent("asset").stopPawnSkill(caster.actor);
-            caster.skill = skill;
-            caster.pendingSkill = null;
-        }
-
-        void this.castSkill(caster, target, skill, isTransient);
-    }
-
-    protected async castSkill(caster: NetObject_T, target: NetObject_T, cast: NetSkill_T, isTransient: boolean) {
-        const actor = caster.actor;
-
-        const asset = this.manGame.getComponent("asset");
-        const skill = asset.getPawnSkillRecord(actor, cast.id, cast.level);
-        const attack = actor.getComponent<PawnAttackComponent>("pawnAttack");
-        const visual = skill.visual, request = asset.getPawnSkillRequest(actor);
-
-        if (!target.actor) skill.visual = null;
-
-        if (!isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved) return;
-
-        attack.castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (this.manGame.getCurrentTime() - cast.receivedTime) / 1000);
-        if (isTransient && visual?.transientRejected) this.stopSkill(caster.objectId);
-
-        if (!skill.visual) {
-            const [loaded, targetActor] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), target.actor || target.actorReady]);
-
-            if (!loaded || !targetActor || !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) || caster.isRemoved || target.isRemoved || caster.actor !== actor || !attack.isAttached()) return;
-
-            if (isTransient && loaded.visual.transientRejected && request === asset.getPawnSkillRequest(actor)) this.stopSkill(caster.objectId);
-
-            Object.assign(skill, { visual: loaded.visual, flyingTime: loaded.flyingTime, sounds: loaded.sounds, assets: loaded.assets });
-            attack.setSkillTargets(cast.id, cast.associatedActors, target.actor);
-            attack.attachSkillVisual(skill, target.actor, cast.hitTime, cast.associatedActors, (this.manGame.getCurrentTime() - cast.receivedTime) / 1000);
-        }
-        if (target.actor) this.ui.notifyOlympiadSkill(caster.objectId, cast.id);
-    }
-
-    protected onMagicSkillLaunched(packet: PacketReader) {
-        const caster = this.objects.get(packet.d());
-        const skillId = packet.d(), level = packet.d();
-
-        const count = packet.d(), objectIds: number[] = [];
-
-        if (count < 0 || count > packet.getRemaining() / 4) throw new Error(`Invalid skill target count '${count}'.`);
-
-        for (let i = 0; i < count; i++) objectIds.push(packet.d());
-
-        if (!caster) return;
-
-        if (caster.pendingSkill && caster.pendingSkill.id === skillId && caster.pendingSkill.level === level) caster.pendingSkill.associatedObjectIds.push(...objectIds);
-        for (let i = caster.pendingTransientSkills.length - 1; i >= 0; i--) {
-            const pending = caster.pendingTransientSkills[i];
-
-            if (pending.id !== skillId || pending.level !== level) continue;
-            pending.associatedObjectIds.push(...objectIds);
-            break;
-        }
-        if (!caster.skill || caster.skill.id !== skillId || caster.skill.level !== level) return;
-
-        caster.skill.associatedObjectIds.push(...objectIds);
-        if (caster.actor) this.applySkillTargets(caster);
-    }
-
-    protected flushPendingSkills(targetObjectId?: number) {
-        for (const caster of this.objects.values()) {
-            if (!caster.actor) continue;
-
-            const pending = caster.pendingSkill;
-
-            if (pending && (targetObjectId === undefined || pending.targetObjectId === targetObjectId)) {
-                const target = this.objects.get(pending.targetObjectId);
-
-                if (target) {
-                    caster.pendingSkill = null;
-                    this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
-                }
-            }
-
-            for (let i = 0; i < caster.pendingTransientSkills.length;) {
-                const pending = caster.pendingTransientSkills[i], target = this.objects.get(pending.targetObjectId);
-
-                if (!target || targetObjectId !== undefined && pending.targetObjectId !== targetObjectId) { i++; continue; }
-
-                caster.pendingTransientSkills.splice(i, 1);
-                this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, true, pending.receivedTime, pending.associatedObjectIds);
-            }
-        }
-    }
-
-    protected flushSkillTargets(objectId?: number) {
-        for (const caster of this.objects.values()) {
-            const skill = caster.skill;
-
-            if (!skill || objectId !== undefined && !skill.associatedObjectIds.includes(objectId) || !caster.actor) continue;
-
-            this.applySkillTargets(caster);
-        }
-    }
-
-    protected applySkillTargets(caster: NetObject_T) {
-        const skill = caster.skill;
-
-        skill.associatedActors.length = 0;
-        for (const targetId of skill.associatedObjectIds) {
-            const target = this.objects.get(targetId);
-
-            if (target?.actor) skill.associatedActors.push(target.actor);
-        }
-        caster.actor.getComponent<PawnAttackComponent>("pawnAttack").setSkillTargets(skill.id, skill.associatedActors);
-        this.manGame.getComponent("render").setRetainedSkillTargets(caster.actor, skill.id, skill.associatedActors);
-    }
-
-    protected stopSkill(objectId: number) {
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        object.skill = null;
-        object.pendingSkill = null;
-        if (object.actor) this.manGame.getComponent("asset").stopPawnSkill(object.actor);
-        if (objectId === this.userId) this.ui.setupGauge(GamePackets.GaugeColor_T.BLUE, 0, 0); // MagicCancel 0x7b5e6d..0x7b5e7d.
-    }
-
-    protected onDie(packet: PacketReader) {
-        const objectId = packet.d();
-        const options = [packet.d() !== 0, packet.d() !== 0, packet.d() !== 0, packet.d() !== 0];
-
-        packet.d();
-        options.push(packet.d() !== 0);
-
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        object.isDead = true;
-        object.pendingRotation = null;
-        object.pendingAttack = null;
-        object.pendingTransientSkills.length = 0;
-        object.isInCombat = false;
-        object.selectedId = 0; // OnDie 0x744e51 / 0x744e95 clears bAutoAttacking and SelectedActor.
-        object.destination = null;
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-        this.stopSkill(objectId);
-
-        if (object.actor) object.actor.playDeathAnimation(() => { });
-        if (object.kind !== "user") return;
-
-        this.updateTarget();
-        this.ui.showDeath(options);
-    }
-
-    protected onRevive(objectId: number) {
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        object.isDead = false;
-        this.setIdleAnimation(object, false);
-
-        if (object.actor) object.actor.revive();
-        if (object.kind === "user") this.ui.hideDeath();
-    }
-
-    protected onChangeMoveType(objectId: number, isRunning: boolean, environment: number) {
-        const object = this.objects.get(objectId);
-
-        if (!object || object.isRunning === isRunning) return;
-        object.isRunning = isRunning;
-        object.environment = environment;
-        if (object.kind === "user") {
-            this.isRunning = isRunning;
-            this.ui.setRunning(isRunning);
-        }
-        if (object.actor) {
-            object.actor.setUnrealScriptProperty("Environment", environment);
-            this.applySpeeds(object.actor, object.speeds, isRunning);
-        }
-    }
-
-    protected onChairSit(packet: PacketReader) {
-        const objectId = packet.d(), staticObjectId = packet.d();
-
-        if (objectId <= 0 || staticObjectId <= 0 || packet.getRemaining()) throw new Error("Invalid ChairSit payload.");
-
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        object.destination = null;
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-        object.pendingAttack = null;
-        this.stopSkill(object.objectId);
-        object.chairStaticObjectId = staticObjectId;
-        object.waitType = GamePackets.WaitType_T.WT_SITTING;
-        this.setIdleAnimation(object, false);
-
-        const actor = object.actor;
-
-        if (!actor) return;
-
-        actor.stopMoving();
-        const animation = (actor.getUnrealScriptProperty("ChairSitAnimName") as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
-
-        if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnChairSitPacket 0x10481e38..0x10481e8e.
-    }
-
-    protected onStaticObject(packet: PacketReader) {
-        const staticObjectId = packet.d(), objectId = packet.d();
-
-        if (staticObjectId <= 0 || objectId <= 0 || packet.getRemaining()) throw new Error("Invalid StaticObject payload.");
-
-        this.staticObjects.set(staticObjectId, objectId);
-    }
-
-    protected updateCubics(object: NetObject_T) {
-        const actor = object.actor;
-
-        if (!actor) return;
-
-        let component = actor.findComponent<PawnCubicComponent>("pawnCubic");
-
-        if (!object.cubics.length) {
-            if (component) actor.removeComponent(component);
-            return;
-        }
-
-        if (!component) component = actor.addComponent(new PawnCubicComponent(this.manGame.getComponent("render")));
-        component.setPosture(object.waitType === GamePackets.WaitType_T.WT_SITTING, object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH);
-        void component.setCubics(object.cubics);
-    }
-
-    protected updateAbnormalState(object: NetObject_T, abnormalState: number = object.abnormalState) {
-        if (abnormalState & ~object.abnormalState & 0xc00) {
-            object.pendingAttack = null;
-            this.stopSkill(object.objectId);
-        }
-        object.abnormalState = abnormalState;
-
-        const actor = object.actor;
-
-        if (!actor) return;
-
-        if (actor.ridePawn) this.setActorAbnormalState(actor.ridePawn, object.abnormalState & 0x2000); // FNAbnormalStat Init/Update/destructor select the flagged rider at APawn+660.
-        this.setActorAbnormalState(actor, actor.ridePawn ? object.abnormalState & ~0x2000 : object.abnormalState);
-    }
-
-    protected setActorAbnormalState(actor: BaseActor, abnormalState: number): void {
-        let component = actor.findComponent<PawnAbnormalComponent>("pawnAbnormal");
-
-        if (!abnormalState) {
-            if (component) {
-                if (component.hasPendingSizeChange()) void component.setAbnormalState(0);
-                else actor.removeComponent(component);
-            }
-            return;
-        }
-
-        if (!component) component = actor.addComponent(new PawnAbnormalComponent(this.manGame.getComponent("render")));
-        void component.setAbnormalState(abnormalState);
-    }
-
-    protected setIdleAnimation(object: NetObject_T, updatePose: boolean = true) {
-        const actor = object.actor;
-
-        if (!actor) return;
-
-        actor.getComponent<NpcLifecycleComponent>("npcLifecycle").setControllerState(object.chairStaticObjectId ? PStopType_T.STP_CHAIR_SIT : object.waitType, object.isInCombat);
-        if (object.isDead) return;
-
-        actor.findComponent<PawnCubicComponent>("pawnCubic")?.setPosture(object.waitType === GamePackets.WaitType_T.WT_SITTING, object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH);
-        const field = object.waitType === GamePackets.WaitType_T.WT_SITTING ? object.chairStaticObjectId ? "ChairWaitAnimName" : "SitWaitAnimName" : object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH ? "DeathWaitAnimName" : object.isInCombat ? "AtkWaitAnimName" : "WaitAnimName";
-        const animation = (actor.getUnrealScriptProperty(field) as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
-
-        if (animation.toLowerCase() === "none") return;
-
-        actor.setIdleAnimation(animation);
-        if (updatePose && !actor.isLocomoting() && actor.getAnimationAction()?.loop !== LoopOnce) actor.playMovementAnimation("idle");
-    }
-
-    protected onCombatState(objectId: number, isInCombat: boolean) {
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        object.isInCombat = isInCombat;
-        this.setIdleAnimation(object);
-    }
-
-    protected onChangeWaitType(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-        const waitType = packet.d() as GamePackets.WaitType_T;
-        const position = this.readLocation(packet);
-
-        if (!object) return;
-
-        this.adjustPawnLocation(object, position);
-        object.destination = null;
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-
-        if (object.waitType === waitType) return;
-
-        if (waitType === GamePackets.WaitType_T.WT_SITTING && object.kind === "user") object.pendingRotation = null;
-        object.pendingAttack = null;
-        this.stopSkill(object.objectId);
-
-        const actor = object.actor;
-
-        if (actor) {
-            actor.stopMoving();
-            if (waitType === GamePackets.WaitType_T.WT_SITTING && object.kind === "user") actor.stopRotating();
-        }
-
-        let field: string, rateField = "NonAttackSpeedRate";
-
-        switch (waitType) {
-            case GamePackets.WaitType_T.WT_SITTING: field = object.chairStaticObjectId ? "ChairSitAnimName" : "SitAnimName"; rateField = "SitAnimRate"; break;
-            case GamePackets.WaitType_T.WT_STANDING: field = "StandAnimName"; rateField = "StandAnimRate"; object.chairStaticObjectId = 0; break;
-            case GamePackets.WaitType_T.WT_START_FAKEDEATH: field = "DeathAnimName"; break;
-            case GamePackets.WaitType_T.WT_STOP_FAKEDEATH: field = "DeathStandAnimName"; object.chairStaticObjectId = 0; break;
-            default: throw new Error(`Unknown wait type '${waitType}'.`);
-        }
-
-        object.waitType = waitType === GamePackets.WaitType_T.WT_STOP_FAKEDEATH ? GamePackets.WaitType_T.WT_STANDING : waitType;
-        this.setIdleAnimation(object, false);
-
-        if (!actor) return;
-
-        const animation = (actor.getUnrealScriptProperty(field) as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
-        const rate = actor.getUnrealScriptProperty(rateField) as number;
-
-        if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, rate || 1, false, true); // OnChangeWaitType 0x74fb96..0x74fe58.
-    }
-
-    protected onSocialAction(objectId: number, actionId: number) {
-        const object = this.objects.get(objectId);
-
-        if (!object || !object.actor || actionId < 1) return;
-        if (actionId === 15 && objectId === this.userId) this.game.requestSkillList();
-
-        const actor = object.actor;
-        const isNpc = object.kind === "npc";
-
-        if (actionId === 15 || (actionId === 16 && !isNpc)) { void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a", actionId === 15 ? 20002 : 20004); return; } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
-        const prefix = isNpc ? "NpcSocial" : "PcSocial";
-        const index = isNpc ? actionId - 1 : actionId;
-        const names = actor.getUnrealScriptProperty(`${prefix}AnimName`) as string[];
-
-        if (index >= names.length || names[index].toLowerCase() === "none") return;
-
-        const animation = names[index];
-
-        actor.playAnimation(animation, isNpc ? 0.1 : 0.3, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnSocialAction 0x73dbbc / 0x73dc4a.
-        const equipment = actor.findComponent<PawnEquipmentComponent>("pawnEquipment");
-
-        if (equipment) equipment.hideForAnimation(animation, !!(actor.getUnrealScriptProperty(`${prefix}HideRightWeapon`) as number[])[index], !!(actor.getUnrealScriptProperty(`${prefix}HideLeftWeapon`) as number[])[index]);
-    }
-
-    protected async spawnSocialEffect(actor: BaseActor, path: string, skillId: number) {
-        const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
-        const library = await asset.loadSocialEffects();
-
-        if (!actor.parent) return;
-
-        const effect = asset.createScriptObject(render, library, path);
-
-        effect.position.copy(actor.position);
-        render.addTransientEffect(effect, actor);
-
-        const mesh = actor.getComponent<AnimationComponent>("animation").getMeshes()[0];
-
-        if (mesh) effect.scriptProperties.get("TrailerPrePivot")[2] = -mesh.meshOrigin.z;
-
-        // Engine.dll SpawnNTransientEffect 0x79a7e1..0x79a8ee: level1 spell sounds at Pawn.Location.
-        for (const sound of this.ui.getStrings().socialSounds[skillId] || []) {
-            const uri = await asset.loadSound(sound.sound);
-
-            void this.manGame.getComponent("audio").playOneShotSound(uri, actor.position, sound.volume / 255, 1, sound.radius, sound.radius * 100);
-        }
-    }
-
-    protected async onPlaySound(packet: PacketReader) {
-        const type = packet.d() as GamePackets.PlaySoundType_T;
-        const name = packet.S();
-
-        packet.skip(20); // OnPlaySound 0x751275..0x7512ac ignores the five positional fields.
-
-        const audio = this.manGame.getComponent("audio");
-
-        if (type === GamePackets.PlaySoundType_T.SOUND) {
-            const position = this.manGame.getComponent("render").player.position.clone();
-            const uri = await this.manGame.getComponent("asset").loadSound(name);
-
-            await audio.playOneShotSound(uri, position, 1, 1, 80, 8000); // Core.dll GAudioDefaultRadius 0x101cdf84 = 80.
-            return;
-        }
-
-        if (!/^[\w -]+$/.test(name)) throw new Error(`Invalid audio stream name '${name}'.`);
-
-        switch (type) {
-            case GamePackets.PlaySoundType_T.MUSIC: await audio.playMusic(`assets/music/${name.toLowerCase()}.ogg`, false, true); break;
-            case GamePackets.PlaySoundType_T.VOICE: await audio.playVoice(`assets/voice/${name.toLowerCase()}-e.ogg`); break;
-            default: throw new Error(`Unknown sound type '${type}'.`);
-        }
-    }
-
-    protected async onEarthquake(packet: PacketReader) {
-        if (packet.getRemaining() < 24) throw new Error("Invalid Earthquake packet.");
-
-        tmpEarthquakePosition.set(packet.d(), packet.d(), packet.d());
-        const intensity = packet.d();
-        const duration = packet.d();
-        packet.d();
-
-        const render = this.manGame.getComponent("render");
-        const positionFrequency = 30 * duration;
-
-        tmpEarthquakePositionAmplitude.set(positionFrequency, positionFrequency, 0);
-        render.addViewShakeState(duration + 2, 1, intensity * 60, positionFrequency, tmpEarthquakeRotationAmplitude, tmpEarthquakeRotationVelocity, tmpEarthquakePositionAmplitude, tmpEarthquakePosition, intensity, 0); // UGameEngine::OnEarthQuake 0x10438.
-
-        const name = duration <= 7 ? "MonSound3.antaras_earthquake" : "MonSound3.antaras_earthquake_2";
-        const uri = await this.manGame.getComponent("asset").loadSound(name);
-
-        await this.manGame.getComponent("audio").playOneShotSound(uri, render.player.position, 1, 1, 80, 8000);
-    }
-
-    protected setTarget(objectId: number, levelDifference: number = 0) {
-        const user = this.objects.get(this.userId);
-
-        if (!user) return;
-
-        this.setSelectedActor(user, objectId);
-
-        const object = this.objects.get(objectId);
-
-        if (object) object.levelDifference = levelDifference;
-
-        this.updateTarget();
-    }
-
-    protected setSelectedActor(object: NetObject_T, objectId: number) {
-        if (this.hasServerObject(objectId)) object.selectedId = objectId;
-    }
-
-    protected onTargetSelected(packet: PacketReader, isSelected: boolean) {
-        const objectId = packet.d(), selectedId = isSelected ? packet.d() : 0;
-        const position = this.readLocation(packet);
-        const object = this.objects.get(objectId);
-
-        if (!object) return;
-
-        this.adjustPawnLocation(object, position);
-        // OnTargetSelected 0x745910 / OnTargetUnselected 0x745b10: SelectedActor, independent of the current action.
-        if (isSelected) this.setSelectedActor(object, selectedId);
-        else object.selectedId = 0;
-        if (objectId === this.userId) this.updateTarget();
-    }
-
-    protected updateTarget() {
-        const object = this.objects.get(this.getTargetId());
-
-        this.ui.setTarget(object ? { npcId: object.npcId, name: object.name, curHp: object.curHp, maxHp: object.maxHp, curMp: object.curMp, maxMp: object.maxMp, showHp: object.isSummon ? object.objectId === this.petInfo.objectId : object.maxHp > 0, showMp: object.kind !== "npc" && object.maxMp > 0, levelDifference: object.levelDifference } : null); // NCTargetStatusWnd paint 0x10113600: summons show HP + level colour only to their owner.
-    }
-
-    protected onStatusUpdate(packet: PacketReader) {
-        const objectId = packet.d();
-        const count = packet.d();
-        const object = this.objects.get(objectId);
-        const status: Record<number, number> = {};
-
-        if (count < 0 || count > Math.trunc(packet.getRemaining() / 8)) throw new Error(`Invalid StatusUpdate count ${count}.`);
-
-        for (let i = 0; i < count; i++) {
-            const id = packet.d();
-
-            status[id] = packet.d();
-        }
-
-        if (!object) return;
-        if (GamePackets.StatusUpdate_T.CUR_HP in status) object.curHp = status[GamePackets.StatusUpdate_T.CUR_HP];
-        if (GamePackets.StatusUpdate_T.MAX_HP in status) object.maxHp = status[GamePackets.StatusUpdate_T.MAX_HP];
-        if (GamePackets.StatusUpdate_T.CUR_MP in status) object.curMp = status[GamePackets.StatusUpdate_T.CUR_MP];
-        if (GamePackets.StatusUpdate_T.MAX_MP in status) object.maxMp = status[GamePackets.StatusUpdate_T.MAX_MP];
-        if (GamePackets.StatusUpdate_T.KARMA in status) object.karma = status[GamePackets.StatusUpdate_T.KARMA];
-        if (GamePackets.StatusUpdate_T.PVP_FLAG in status) object.pvpFlag = status[GamePackets.StatusUpdate_T.PVP_FLAG];
-        if (objectId === this.userId) this.ui.updateStatus(status);
-        if (objectId === this.getTargetId()) this.updateTarget();
-    }
-
-    protected onNicknameChanged(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-        const title = packet.S();
-
-        if (!object) return;
-
-        object.title = title;
-        if (object.objectId === this.getTargetId()) this.updateTarget();
-    }
-
-    protected onRelationChanged(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-
-        packet.d();
-        const isAttackable = packet.d() !== 0;
-        const karma = packet.d();
-        const pvpFlag = packet.d();
-
-        if (!object) return;
-
-        object.isAttackable = isAttackable;
-        object.karma = karma;
-        object.pvpFlag = pvpFlag;
-        if (object.objectId === this.getTargetId()) this.updateTarget();
-    }
-
-    protected onCreatureSay(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-
-        const type = packet.d() as GamePackets.Say2_T;
-        const name = packet.S(), text = packet.S();
-
-        this.addChat(object, name, text, type);
-    }
-
-    protected addChat(object: NetObject_T, name: string, text: string, type: GamePackets.Say2_T) {
-        if (object && object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE && type !== GamePackets.Say2_T.PETITION_PLAYER && type !== GamePackets.Say2_T.PETITION_GM) { // NCConsole 0x1005d5e9..0x1005d811
-            object.chatMessage = text.length < 19 ? text : `${text.slice(0, 18)}...`;
-            object.chatTime = this.manGame.getCurrentTime();
-        }
-
-        this.ui.addChat(name, text, type);
-    }
-
-    protected onNpcSay(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-
-        const type = packet.d() as GamePackets.Say2_T, id = packet.d() - GamePackets.NPC_ID_OFFSET;
-        const text = packet.S();
-
-        if (!text) return;
-
-        this.addChat(object, this.npcNames.get(id) || `npc#${id}`, text, type);
-    }
-
-    protected onSystemMessage(packet: PacketReader) {
-        const message = this.readSystemMessage(packet);
-
-        this.ui.addSystemMessage(message.text, this.ui.getStrings().systemMessageColors[message.id] ?? 0xffb09b79, this.ui.getStrings().systemMessageGroups[message.id] ?? 0);
-        this.playSystemMessageSound(message.id);
-    }
-
-    protected onConfirmDlg(packet: PacketReader) {
-        const message = this.readSystemMessage(packet);
-
-        if (message.id !== 0 && this.ui.getStrings().systemMessages[message.id] === undefined) throw new Error(`Unknown ConfirmDlg message ${message.id}.`);
-
-        this.ui.showConfirm(message.id, message.text, isOk => this.game.dlgAnswer(message.id, isOk));
-    }
-
-    public playSystemMessageSound(id: number) {
-        this.ui.playSystemMessageSound(id);
-    }
-
-    protected readSystemMessage(packet: PacketReader) {
-        const strings = this.ui.getStrings();
-        const messageId = packet.d();
-        const count = packet.d();
-        const params: string[] = [];
-
-        if (count < 0 || count > Math.floor(packet.getRemaining() / 6)) throw new Error(`Invalid SystemMessage parameter count ${count}.`);
-
-        for (let i = 0; i < count; i++) {
-            switch (packet.d()) {
-                case GamePackets.SystemMessageParam_T.TYPE_TEXT: params.push(packet.S()); break;
-                case GamePackets.SystemMessageParam_T.TYPE_NUMBER: params.push(String(packet.d())); break;
-                case GamePackets.SystemMessageParam_T.TYPE_NPC_NAME: { const id = packet.d() - GamePackets.NPC_ID_OFFSET; params.push(this.npcNames.get(id) || `npc#${id}`); break; }
-                case GamePackets.SystemMessageParam_T.TYPE_ITEM_NAME: { const id = packet.d(); params.push(strings.itemNames[id] || `item#${id}`); break; }
-                case GamePackets.SystemMessageParam_T.TYPE_SKILL_NAME: { const id = packet.d(); packet.d(); params.push(strings.skillNames[id] || `skill#${id}`); break; }
-                default: throw new Error(`Unknown SystemMessage parameter type in message ${messageId}.`);
-            }
-        }
-
-        const template = strings.systemMessages[messageId];
-
-        const text = template === undefined ? `SystemMessage ${messageId} ${params.join(" ")}` : template.replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? "");
-
-        return { id: messageId, text };
-    }
-
-    protected getShortCutItem(shortcut: GamePackets.ShortCut_T) { return (shortcut.characterType === 2 ? this.petInventory : this.inventory).get(shortcut.id); }
-
-    protected setShortCut(shortcut: GamePackets.ShortCut_T) {
-        const item = this.getShortCutItem(shortcut);
-
-        if (shortcut.type === GamePackets.ShortCutType_T.TYPE_ITEM && shortcut.characterType === 2 && !item) return;
-        this.shortcuts.set(shortcut.slot, shortcut);
-        this.ui.setShortCut(shortcut, item, !!item && this.autoSoulShots.has(item.itemId), this.macros.get(shortcut.id));
-    }
-
-    protected onAutoSoulShot(packet: PacketReader) {
-        const itemId = packet.d(), isEnabled = packet.d() !== 0;
-
-        if (isEnabled) this.autoSoulShots.add(itemId);
-        else this.autoSoulShots.delete(itemId);
-
-        for (const shortcut of this.shortcuts.values()) {
-            if (shortcut.type !== GamePackets.ShortCutType_T.TYPE_ITEM) continue;
-
-            const item = this.getShortCutItem(shortcut);
-
-            if (item && item.itemId === itemId) this.setShortCut(shortcut);
-        }
-    }
-
-    protected onStorageMaxCount(packet: PacketReader) {
-        const values = [packet.d(), packet.d(), packet.d(), packet.d(), packet.d(), packet.d(), packet.d()];
-
-        if (values.some(value => value < 0) || packet.getRemaining()) throw new Error("Invalid ExStorageMaxCount packet.");
-
-        this.storageMaxCount = { inventory: values[0], warehouse: values[1], freight: values[2], privateSell: values[3], privateBuy: values[4], recipeDwarf: values[5], recipe: values[6] };
-        this.ui.setInventoryLimit(values[0]);
-        this.ui.setWarehouseLimit(values[1]);
-        this.ui.setPrivateSellLimit(values[3]);
-        this.ui.setPrivateBuyLimit(values[4]);
-        this.ui.setRecipeLimits(values[5], values[6]);
-    }
-
-    public toggleAutoSoulShot(page: number, slot: number) {
-        const shortcut = this.shortcuts.get(page * 12 + slot);
-
-        if (!this.inWorld || !shortcut || shortcut.type !== GamePackets.ShortCutType_T.TYPE_ITEM) return;
-
-        const item = this.getShortCutItem(shortcut);
-
-        if (!item) return;
-
-        const id = item.itemId;
-
-        // NCConsole 0x1006e500: retail automatic-shot item ranges.
-        if (!(id >= 1463 && id <= 1467 || id === 1835 || id >= 2509 && id <= 2514 || id >= 3947 && id <= 3952 || id >= 5789 && id <= 5790 || id >= 6645 && id <= 6647)) return;
-
-        this.game.requestAutoSoulShot(id, !this.autoSoulShots.has(id));
-    }
-
-    protected requestShortCutReg(type: GamePackets.ShortCutType_T, index: number, id: number, level: number = 1) { // NWindow 0x1007a1e0 plays pickup after registration.
-        this.game.requestShortCutReg(type, index, id, level);
-        void this.manGame.getComponent("audio").playInterfaceSound("ItemSound.pickup");
-    }
-
-    public registerSkillShortCut(id: number, page: number, slot: number) {
-        const skill = this.skills.get(id);
-
-        if (!this.inWorld || !skill) return;
-        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
-
-        this.requestShortCutReg(GamePackets.ShortCutType_T.TYPE_SKILL, page * 12 + slot, id);
-    }
-
-    public registerRecipeShortCut(id: number, page: number, slot: number) {
-        if (!this.inWorld) return;
-        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
-
-        this.requestShortCutReg(GamePackets.ShortCutType_T.TYPE_RECIPE, page * 12 + slot, id);
-    }
-
-    public registerMacroShortCut(id: number, page: number, slot: number) {
-        if (!this.inWorld || !this.macros.has(id)) return;
-        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
-
-        this.requestShortCutReg(GamePackets.ShortCutType_T.TYPE_MACRO, page * 12 + slot, id);
-    }
-
-    public registerItemShortCut(objectId: number, page: number, slot: number) {
-        if (!this.inWorld || !this.inventory.has(objectId)) return;
-        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
-
-        this.requestShortCutReg(GamePackets.ShortCutType_T.TYPE_ITEM, page * 12 + slot, objectId);
-    }
-
-    public registerPetItemShortCut(objectId: number, page: number, slot: number) {
-        if (!this.inWorld || !this.petInventory.has(objectId)) return;
-        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
-
-        this.requestShortCutReg(GamePackets.ShortCutType_T.TYPE_ITEM, page * 12 + slot, objectId, 2);
-    }
-
-    public registerActionShortCut(id: number, page: number, slot: number) {
-        if (!this.inWorld || !this.ui.getStrings().actions[id]) return;
-        if (!Number.isInteger(page) || page < 0 || page >= 10 || !Number.isInteger(slot) || slot < 0 || slot >= 12) throw new Error(`Invalid shortcut ${page}:${slot}.`);
-
-        this.requestShortCutReg(GamePackets.ShortCutType_T.TYPE_ACTION, page * 12 + slot, id, id >= 0 && id <= 14 ? 1 : id >= 15 && id <= 27 ? 2 : 0);
-    }
-
-    public moveShortCut(page: number, slot: number, targetPage: number, targetSlot: number) {
-        const index = page * 12 + slot, targetIndex = targetPage * 12 + targetSlot;
-        const source = this.shortcuts.get(index), target = this.shortcuts.get(targetIndex);
-
-        if (!this.inWorld || !source || index === targetIndex) return;
-        if (![page, targetPage].every(value => Number.isInteger(value) && value >= 0 && value < 10) || ![slot, targetSlot].every(value => Number.isInteger(value) && value >= 0 && value < 12)) throw new Error(`Invalid shortcut move ${page}:${slot} -> ${targetPage}:${targetSlot}.`);
-
-        this.requestShortCutReg(source.type, targetIndex, source.id, source.characterType ?? 1);
-        this.game.requestShortCutDel(index);
-        this.shortcuts.delete(index);
-        this.ui.removeShortCut(index);
-
-        if (target) this.requestShortCutReg(target.type, index, target.id, target.characterType ?? 1);
-    }
-
-    public useShortCut(page: number, slot: number, ctrl: boolean = false, shift: boolean = false) {
-        const shortcut = this.shortcuts.get(page * 12 + slot);
-
-        if (!shortcut) return;
-
-        switch (shortcut.type) {
-            case GamePackets.ShortCutType_T.TYPE_SKILL: this.game.requestMagicSkillUse(shortcut.id, ctrl, shift); break;
-            case GamePackets.ShortCutType_T.TYPE_ACTION: this.useAction(shortcut.id, ctrl, shift); break;
-            case GamePackets.ShortCutType_T.TYPE_ITEM:
-                if (shortcut.characterType === 2) this.usePetItem(shortcut.id);
-                else if ((shortcut.characterType ?? 1) === 1) this.useItem(shortcut.id);
-                break;
-            case GamePackets.ShortCutType_T.TYPE_MACRO: this.activateMacro(shortcut.id); break;
-            case GamePackets.ShortCutType_T.TYPE_RECIPE: this.game.requestRecipeItemMakeInfo(shortcut.id); break;
-            default: throw new Error(`Unknown shortcut type ${shortcut.type}.`);
-        }
-    }
-
-    protected async showLobby() {
-        const game = this.game, characters = this.characters, transfer = this.gmTransfer;
-        const isTransferList = transfer && transfer.phase === 5;
-
-        await this.lobby.enter(this.ui.getStrings().logonSpots);
-        if (this.game !== game || this.characters !== characters) return;
-
-        this.ui.showCharacters(characters);
-        let lastUsed = characters.findIndex(character => character.isLastUsed);
-
-        if (isTransferList) {
-            lastUsed = -1;
-            characters.slice(0, 7).forEach((character, index) => { if (character.isLastUsed && (character.deleteSeconds <= 0 || character.isDeletionMarked)) lastUsed = index; });
-            transfer.selectedSlot = lastUsed;
-        }
-        const asset = this.manGame.getComponent("asset");
-
-        await this.lobby.showSelect(characters);
-        if (this.game !== game || this.characters !== characters) return;
-
-        if (lastUsed >= 0) this.previewCharacter(lastUsed);
-        if (isTransferList && this.gmTransfer === transfer && transfer.phase === 5) transfer.phase = 6;
-    }
-
-    protected onManagePledgePower(packet: PacketReader) {
-        packet.skip(8);
-
-        if (packet.getRemaining() !== 4 && packet.getRemaining() !== 32) throw new Error(`Invalid ManagePledgePower size ${packet.getRemaining()}.`);
-
-        const privs = new Uint8Array(32);
-
-        privs.set(packet.b(packet.getRemaining()));
-
-        this.pledgePower = privs;
-        this.ui.setPledgePower(privs);
-    }
-
-    public getHeroCrest(crestId: number, isAlly: boolean): HTMLCanvasElement {
-        if (crestId <= 0) return null;
-
-        for (const info of this.pledgeInfos.values())
-            if ((isAlly ? info.allyCrestId : info.crestId) === crestId) return isAlly ? info.allyCrest : info.crest;
-        return null;
-    }
-
-    protected bindImportedCrest(crestId: number, canvas: HTMLCanvasElement, isAlly: boolean) {
-        if (!canvas) return;
-
-        for (const info of this.pledgeInfos.values()) {
-            if ((isAlly ? info.allyCrestId : info.crestId) !== crestId) continue;
-
-            if (isAlly) info.allyCrest = canvas;
-            else info.crest = canvas;
-        }
-        if (!isAlly) this.updateGMCharacterInfo();
-    }
-
-    protected seedPledgeCrests(clanId: number, crestId: number, allyCrestId: number) {
-        const info = this.pledgeInfos.get(clanId);
-
-        if (crestId === 0) info.crest = null;
-        else if (crestId > 0) {
-            const canvas = this.ui.getCachedCrest(crestId);
-
-            if (canvas) this.bindImportedCrest(crestId, canvas, false);
-            else this.game.requestPledgeCrest(crestId);
-        }
-        if (allyCrestId === 0) info.allyCrest = null;
-        else if (info.allyId > 0 && allyCrestId > 0) {
-            const canvas = this.ui.getCachedCrest(allyCrestId);
-
-            if (canvas) this.bindImportedCrest(allyCrestId, canvas, true);
-            else this.game.requestAllyCrest(allyCrestId);
-        }
-    }
-
-    protected onNpcHtmlMessage(packet: PacketReader) {
-        packet.d();
-        const html = packet.S(), type = packet.d();
-
-        if (packet.getRemaining()) throw new Error(`Invalid NpcHtmlMessage trailing data.`);
-        this.ui.showNpcHtml(html, type);
-    }
-
-    protected onPledgeCrest(packet: PacketReader) {
-        const crest = GamePackets.readCrest(packet);
-
-        this.pledgeCrests.set(crest.crestId, crest.data);
-        this.bindImportedCrest(crest.crestId, this.ui.setPledgeCrest(crest.crestId, crest.data), false);
-    }
-
-    protected onAllyCrest(packet: PacketReader) {
-        const crest = GamePackets.readCrest(packet);
-
-        this.allyCrests.set(crest.crestId, crest.data);
-        this.bindImportedCrest(crest.crestId, this.ui.setPledgeCrest(crest.crestId, crest.data), true);
-    }
-
-    protected onPledgeCrestLarge(packet: PacketReader) {
-        const crest = GamePackets.readPledgeCrestLarge(packet);
-
-        this.clanLargeCrestIds.set(crest.clanId, crest.crestId);
-
-        if (crest.data.length) this.pledgeLargeCrests.set(crest.crestId, crest.data);
-        else this.pledgeLargeCrests.delete(crest.crestId);
-    }
-
-    protected onAskJoinAlly(packet: PacketReader) {
-        const requestorId = packet.d(), requestorName = packet.S(), unknown = packet.S(), allyName = packet.S();
-
-        if (requestorId <= 0 || !requestorName || unknown || !allyName || packet.getRemaining()) throw new Error("Invalid AskJoinAlly payload.");
-
-        const invite: GamePackets.AllyInvite_T = { requestorId, requestorName, allyName };
-        this.allyInvite = invite;
-        this.ui.showAllyInvite(requestorName, allyName, isAccepted => {
-            if (this.allyInvite !== invite) return;
-
-            this.allyInvite = null;
-            this.game.answerJoinAlly(isAccepted);
-        });
-    }
-
-    public getPledgePower() { return this.pledgePower; }
-    public getClanInfo() { return this.clanInfo; }
-    public getPledgeCrest(crestId: number) { return this.pledgeCrests.get(crestId); }
-    public getPledgeLargeCrest(crestId: number) { return this.pledgeLargeCrests.get(crestId); }
-    public getClanLargeCrestId(clanId: number) { return this.clanLargeCrestIds.get(clanId); }
-    public getAllyCrest(crestId: number) { return this.allyCrests.get(crestId); }
-
-    public requestPledgeInfo(clanId: number) { if (this.inWorld) this.game.requestPledgeInfo(clanId); }
-    public requestPledgeMemberList() { if (this.inWorld) this.game.requestPledgeMemberList(); }
-    public getSelectedPlayer() { const target = this.objects.get(this.getTargetId()); return target && (target.kind === "user" || target.kind === "player") ? target : null; }
-    public invitePledge(objectId: number) { if (this.inWorld) this.game.requestJoinPledge(objectId); }
-    public withdrawPledge() { if (this.inWorld) this.game.requestWithdrawalPledge(); }
-    public oustPledgeMember(name: string) { if (this.inWorld) this.game.requestOustPledgeMember(name); }
-    public giveNickName(name: string, title: string) { if (this.inWorld) this.game.requestGiveNickName(name, title); }
-    public requestPledgePower() { if (this.inWorld) this.game.requestPledgePower(this.userId); }
-    public requestMemberPledgePower(objectId: number) { if (this.inWorld) this.game.requestMemberPledgePower(objectId); }
-    public setMemberPledgePower(objectId: number, privs: Uint8Array) { if (this.inWorld) this.game.setMemberPledgePower(objectId, privs); }
-
-    public startPledgeWar(pledgeName: string) { if (this.inWorld) this.game.requestStartPledgeWar(pledgeName); }
-    public stopPledgeWar(pledgeName: string) { if (this.inWorld) this.game.requestStopPledgeWar(pledgeName); }
-    public surrenderPledgeWar(pledgeName: string) { if (this.inWorld) this.game.requestSurrenderPledgeWar(pledgeName); }
-    public surrenderPersonally(pledgeName: string) { if (this.inWorld) this.game.requestSurrenderPersonally(pledgeName); }
-
-    public replyStartPledgeWar(isAccepted: boolean) {
-        if (!this.pledgeWarStart) throw new Error("No pending StartPledgeWar to reply to.");
-
-        this.game.requestReplyStartPledgeWar(this.pledgeWarStart.charName, isAccepted);
-        this.pledgeWarStart = null;
-    }
-
-    public replyStopPledgeWar(isAccepted: boolean) {
-        if (!this.pledgeWarStop) throw new Error("No pending StopPledgeWar to reply to.");
-
-        this.game.requestReplyStopPledgeWar(this.pledgeWarStop.charName, isAccepted);
-        this.pledgeWarStop = null;
-    }
-
-    public replySurrenderPledgeWar(isAccepted: boolean) {
-        if (!this.pledgeWarSurrender) throw new Error("No pending SurrenderPledgeWar to reply to.");
-
-        this.game.requestReplySurrenderPledgeWar(this.pledgeWarSurrender.charName, isAccepted);
-        this.pledgeWarSurrender = null;
-    }
-
-    public requestPledgeCrest(crestId: number) { if (this.inWorld && !this.pledgeCrests.has(crestId)) this.game.requestPledgeCrest(crestId); }
-    public requestPledgeLargeCrest(crestId: number) { if (this.inWorld && !this.pledgeLargeCrests.has(crestId)) this.game.requestExPledgeCrestLarge(crestId); }
-    public requestAllyCrest(crestId: number) { if (this.inWorld && !this.allyCrests.has(crestId)) this.game.requestAllyCrest(crestId); }
-
-    public setPledgeCrest(data: Uint8Array) {
-        if (data.length > 256) throw new Error(`Pledge crest is ${data.length} bytes, server limit is 256.`);
-        if (this.inWorld) this.game.requestSetPledgeCrest(data);
-    }
-
-    public setPledgeLargeCrest(data: Uint8Array) {
-        if (data.length > 2176) throw new Error(`Large pledge crest is ${data.length} bytes, server limit is 2176.`);
-        if (this.inWorld) this.game.requestExSetPledgeCrestLarge(data);
-    }
-
-    public setAllyCrest(data: Uint8Array) {
-        if (data.length > 192) throw new Error(`Ally crest is ${data.length} bytes, server limit is 192.`);
-        if (this.inWorld) this.game.requestSetAllyCrest(data);
-    }
-
-    public requestJoinAlly(objectId: number) { if (this.inWorld) this.game.requestJoinAlly(objectId); }
-    public leaveAlly() { if (this.inWorld) this.game.allyLeave(); }
-    public dismissAllyClan(clanName: string) { if (this.inWorld) this.game.allyDismiss(clanName); }
-    public dissolveAlly() { if (this.inWorld) this.game.requestDismissAlly(); }
-    public requestAllyInfo() { if (this.inWorld) this.game.requestAllyInfo(); }
-
-    protected onPrivateStoreManageListSell(packet: PacketReader) {
-        const list = GamePackets.readPrivateStoreManageListSell(packet);
-
-        if (list.playerId !== this.userId) throw new Error(`PrivateStoreManageListSell for foreign player '${list.playerId}'.`);
-
-        this.privateStoreManageSell = list;
-        this.ui.showPrivateStoreManageSell(list);
-    }
-
-    protected onPrivateStoreManageListBuy(packet: PacketReader) {
-        const list = GamePackets.readPrivateStoreManageListBuy(packet);
-
-        if (list.playerId !== this.userId) throw new Error(`PrivateStoreManageListBuy for foreign player '${list.playerId}'.`);
-
-        this.privateStoreManageBuy = list;
-        this.ui.showPrivateStoreManageBuy(list);
-    }
-
-    protected onPrivateStoreMsg(packet: PacketReader, messages: Map<number, string>) {
-        const objectId = packet.d(), message = packet.S();
-
-        if (objectId <= 0 || packet.getRemaining()) throw new Error("Invalid private store message payload.");
-
-        messages.set(objectId, message);
-    }
-
-    protected onPackageToList(packet: PacketReader) {
-        const targets = GamePackets.readPackageToList(packet);
-
-        this.packageTargets.clear();
-        for (const target of targets) this.packageTargets.set(target.objectId, target.name);
-        this.ui.showPackageTargets(targets);
-    }
-
-    protected onMultiSellList(packet: PacketReader) {
-        const list = GamePackets.readMultiSellList(packet);
-
-        if (list.page === 1 || !this.multiSell) this.multiSell = { ...list, listId: list.page === 1 ? list.listId : 0, entries: [] };
-        if (list.page === 1) this.ui.clearMultiSell(list.listId);
-
-        for (const entry of list.entries) {
-            let group = this.multiSell.entries.find(group => group.entryId === entry.entryId);
-
-            entry.products.forEach((product, index) => {
-                if (!group) {
-                    group = { entryId: entry.entryId, mode: entry.mode, products: [], ingredients: [] };
-                    this.multiSell.entries.push(group);
-                }
-                group.products.length++;
-                group.products[index] = product;
-                group.mode = entry.mode;
-            });
-            if (group) group.ingredients.push(...entry.ingredients);
-        }
-        this.multiSell.page = list.page;
-        this.multiSell.isFinished = list.isFinished;
-        if (list.isFinished) this.ui.showMultiSell(this.multiSell);
-
-    }
-
-    public requestTrade(objectId: number) { if (this.inWorld) this.game.tradeRequest(objectId); }
-    public canAddTradeItem(objectId: number) { return this.inWorld && this.tradePartnerId > 0 && this.tradeAvailableItems.some(item => item.objectId === objectId) && !this.tradeOwnItems.some(item => item.objectId === objectId); }
-    public addTradeItem(objectId: number, count: number) {
-        if (!this.canAddTradeItem(objectId)) return;
-        if (!Number.isInteger(count) || count <= 0 || count > 0x7fffffff) throw new Error(`Invalid trade item count '${count}'.`);
-
-        this.game.addTradeItem(objectId, count);
-    }
-    public confirmTrade(isConfirmed: boolean) { if (this.inWorld && this.tradePartnerId) this.game.tradeDone(isConfirmed); }
-
-    public answerTradeRequest(isAccepted: boolean) {
-        if (!this.inWorld || !this.tradeRequestId) return;
-
-        this.tradeRequestId = 0;
-        this.game.answerTradeRequest(isAccepted);
-    }
-
-    public sellItems(items: GamePackets.SellItemRequest_T[]) { if (this.inWorld) this.game.requestSellItem(this.shopSellNpcId, items); }
-    public buyItems(items: GamePackets.ItemIdCount_T[]) { if (this.inWorld) this.game.requestBuyItem(this.shopBuyListId, items); }
-    public depositWarehouse(items: GamePackets.ItemCount_T[]) { if (this.inWorld && this.warehouseDeposit) this.game.sendWareHouseDepositList(items); }
-    public withdrawWarehouse(items: GamePackets.ItemCount_T[]) { if (this.inWorld && this.warehouseWithdraw) this.game.sendWareHouseWithDrawList(items); }
-    public requestPrivateStoreManageSell() { if (this.inWorld) this.game.requestPrivateStoreManageSell(); }
-    public setPrivateStoreListSell(isPackage: boolean, items: GamePackets.PrivateStoreOffer_T[]) { if (this.inWorld) this.game.setPrivateStoreListSell(isPackage, items); }
-    public quitPrivateStoreSell() { if (this.inWorld) this.game.requestPrivateStoreQuitSell(); }
-    public setPrivateStoreMsgSell(message: string) { if (this.inWorld) this.game.setPrivateStoreMsgSell(message); }
-    public getPrivateStoreMsgSell() { return this.privateStoreSellMsgs.get(this.userId) ?? ""; }
-    public buyFromPrivateStore(ownerId: number, items: GamePackets.PrivateStoreOffer_T[]) { if (this.inWorld) this.game.requestPrivateStoreBuy(ownerId, items); }
-    public requestPrivateStoreManageBuy() { if (this.inWorld) this.game.requestPrivateStoreManageBuy(); }
-    public setPrivateStoreListBuy(items: GamePackets.PrivateStoreBuyOffer_T[]) { if (this.inWorld) this.game.setPrivateStoreListBuy(items); }
-    public quitPrivateStoreBuy() { if (this.inWorld) this.game.requestPrivateStoreQuitBuy(); }
-    public cancelPrivateStoreManageBuy() { if (this.inWorld) this.game.requestPrivateStoreManageCancelBuy(); }
-    public setPrivateStoreMsgBuy(message: string) { if (this.inWorld) this.game.setPrivateStoreMsgBuy(message); }
-    public getPrivateStoreMsgBuy() { return this.privateStoreBuyMsgs.get(this.userId) ?? ""; }
-    public sellToPrivateStore(ownerId: number, items: GamePackets.PrivateStoreSellOffer_T[]) { if (this.inWorld) this.game.requestPrivateStoreSell(ownerId, items); }
-    public requestPackageSendableItemList(objectId: number) { if (this.inWorld) this.game.requestPackageSendableItemList(objectId); }
-    public sendPackage(objectId: number, items: GamePackets.ItemCount_T[]) { if (this.inWorld) this.game.requestPackageSend(objectId, items); }
-    public clearMultiSell() { if (this.multiSell) { this.multiSell.entries = []; this.multiSell.listId = 0; } }
-    public chooseMultiSell(listId: number, entryId: number, amount: number) { if (this.inWorld) this.game.multiSellChoose(listId, entryId, amount); }
-    public requestPreviewItems(itemIds: number[]) { if (this.inWorld && this.shopPreview) this.game.requestPreviewItem(this.shopPreview.unknown, this.shopPreview.listId, itemIds); }
-    public buySeeds(items: GamePackets.ItemIdCount_T[], manorId?: number) { if (this.inWorld && this.seedShop) this.game.requestBuySeed(manorId ?? this.seedShop.manorId, items); }
-    public sellCrops(items: GamePackets.SellItemRequest_T[], listId?: number) { if (this.inWorld && this.cropProcure) this.game.requestBuyProcure(listId ?? this.cropProcure.listId, items); }
-    public dropItem(objectId: number, count: number, point: GamePackets.Location_T) { // NCGaraDialogBox kind4 reply 0x100097bd.
-        if (!this.inWorld) return;
-
-        const player = this.manGame.getComponent("render").player;
-
-        if (player.getUnrealScriptProperty("bGetOnVehicle")) {
-            this.ui.addSystemMessage(this.ui.getSystemMessage(179), 0xffdcdcdc);
-            return;
-        }
-
-        this.game.requestDropItem(objectId, count, point);
-    }
-    public destroyItem(objectId: number, count: number) { if (this.inWorld) this.game.requestDestroyItem(objectId, count); }
-    public crystallizeItem(objectId: number, count: number) { if (this.inWorld) this.game.requestCrystallizeItem(objectId, count); }
-    public unequipBodyPart(bodyPart: number) { if (this.inWorld) this.game.requestUnEquipItem(bodyPart); }
-    public giveItemToPet(objectId: number, count: number) { if (this.inWorld) this.game.requestGiveItemToPet(objectId, count); }
-    public getItemFromPet(objectId: number, count: number) { if (this.inWorld) this.game.requestGetItemFromPet(objectId, count); }
-    public usePetItem(objectId: number) { if (this.inWorld) this.game.requestPetUseItem(objectId); }
-    public petPickup(objectId: number) { if (this.inWorld && this.pickups.has(objectId)) this.game.requestPetGetItem(objectId); }
-    public changePetName(name: string) { if (this.inWorld) this.game.requestChangePetName(name); }
-
-    protected onVehicleLocation(packet: PacketReader, isStopped: boolean) {
-        const info = GamePackets.readVehicleLocation(packet);
-        let vehicle = this.vehicles.get(info.objectId);
-
-        if (!vehicle) {
-            vehicle = { actor: null, actorReady: null, objectId: info.objectId, position: new Vector3(), heading: 0, destination: null, moveSpeed: 0, rotationSpeed: 0, isStarted: false, riders: new Map() };
-            this.vehicles.set(info.objectId, vehicle);
-            vehicle.actorReady = this.enterVehicle(vehicle);
-        }
-
-        setVector(vehicle.position, info);
-        vehicle.heading = info.heading;
-        if (vehicle.actor) {
-            const actor = vehicle.actor, physics = this.manGame.getComponent("physics");
-            const rotation = (actor.getUnrealScriptProperty("Rotation") as Vector3Arr).slice() as Vector3Arr;
-
-            if (!actor.position.equals(vehicle.position)) physics.farMoveActor(actor, vehicle.position);
-            if (rotation[1] !== vehicle.heading + 16384) {
-                rotation[1] = vehicle.heading + 16384;
-                physics.rotateActor(actor, rotation);
-            }
-        }
-
-        if (isStopped) vehicle.destination = null; // L2BoatInstance.sendInfo follows VehicleInfo with VehicleDeparture while moving.
-
-    }
-
-    protected async enterVehicle(vehicle: NetVehicle_T): Promise<void> {
-        const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
-        const library = await asset.loadVehicle();
-
-        if (this.vehicles.get(vehicle.objectId) !== vehicle) return;
-
-        const actor = new Vehicle(library, vehicle.objectId, render);
-        actor.setLocation(vehicle.position, vehicle.heading);
-        render.scene.add(actor);
-        const physics = this.manGame.getComponent("physics");
-        physics.registerSimulationObjects(actor);
-        if (render.getLevel()) {
-            const level = render.getLevel().levelInfoActor;
-            actor.setUnrealScriptProperty("Level", level as any);
-            physics.setPawnLevel(actor, level as any);
-            physics.setPawnZone(actor, false, true);
-            physics.setPawnVolumes(actor);
-        }
-        actor.beginPlay();
-        if (vehicle.destination) actor.startTrip(vehicle.destination, vehicle.moveSpeed, vehicle.rotationSpeed);
-        render.queueShaderCompile(actor);
-        render.needsUpdate = true;
-        vehicle.actor = actor;
-        for (const objectId of vehicle.riders.keys()) this.placeVehicleRider(vehicle, objectId);
-    }
-
-    protected removeVehicle(objectId: number): void {
-        const vehicle = this.vehicles.get(objectId);
-
-        if (!vehicle) return;
-
-        this.vehicles.delete(objectId);
-        for (const object of this.objects.values())
-            if (object.pendingVehicleMove && object.pendingVehicleMove.vehicleId === objectId) object.pendingVehicleMove = null;
-        if (!vehicle.actor) return;
-
-        this.manGame.getComponent("physics").unregisterSimulationObjects(vehicle.actor);
-        vehicle.actor.removeFromParent();
-        vehicle.actor.release();
-        this.manGame.getComponent("render").needsUpdate = true;
-    }
-
-    protected onVehicleDeparture(packet: PacketReader) {
-        const departure = GamePackets.readVehicleDeparture(packet);
-        const vehicle = this.vehicles.get(departure.objectId);
-
-        if (!vehicle) return;
-
-        vehicle.moveSpeed = departure.moveSpeed;
-        vehicle.rotationSpeed = departure.rotationSpeed;
-        vehicle.destination = setVector(vehicle.destination || new Vector3(), departure);
-        if (vehicle.actor) vehicle.actor.startTrip(vehicle.destination, vehicle.moveSpeed, vehicle.rotationSpeed);
-    }
-
-    protected onVehicleStarted(packet: PacketReader) {
-        const objectId = packet.d(), state = packet.d();
-
-        if (state !== 0 && state !== 1) throw new Error(`Invalid VehicleStarted state '${state}'.`);
-
-        const vehicle = this.vehicles.get(objectId);
-
-        if (vehicle) vehicle.isStarted = state === 1;
-    }
-
-    protected updateVehicles(deltaTime: number) {
-        for (const vehicle of this.vehicles.values()) {
-            if (!vehicle.actor) continue;
-
-            vehicle.actor.tick(deltaTime / 1000);
-            vehicle.position.copy(vehicle.actor.position);
-            vehicle.heading = (vehicle.actor.getUnrealScriptProperty("Rotation") as number[])[1] - 16384;
-            if (!vehicle.actor.getUnrealScriptProperty("bTrip")) vehicle.destination = null;
-        }
-    }
-
-    protected setVehicleRider(vehicle: NetVehicle_T, objectId: number, local: GamePackets.Location_T) {
-        for (const other of this.vehicles.values()) if (other !== vehicle) other.riders.delete(objectId);
-
-        setVector(vehicle.riders.get(objectId) || vehicle.riders.set(objectId, new Vector3()).get(objectId), local);
-    }
-
-    protected placeVehicleRider(vehicle: NetVehicle_T, objectId: number) {
-        const object = this.objects.get(objectId);
-
-        if (!object || !object.actor || objectId === this.userId || !vehicle.actor) return;
-
-        const base = object.actor.getBaseActor();
-
-        if (base && (base as any).isVehicle) return;
-
-        const local = vehicle.riders.get(objectId), rotation = vehicle.actor.getUnrealScriptProperty("Rotation") as number[];
-        const sine = sinRotator(rotation[1]), cosine = sinRotator(rotation[1] + 16384);
-        const location = new Vector3(Math.fround(local.x * cosine - local.y * sine), Math.fround(local.x * sine + local.y * cosine), local.z).add(vehicle.actor.position);
-
-        // UGameEngine::OnGetOnVehicle 0x1047618d..0x104761e9 passes the center plus10 to FarMoveActor.
-        location.z += 10;
-        this.manGame.getComponent("physics").farMoveActor(object.actor, location);
-
-        object.position.copy(object.actor.position);
-        object.destination = null;
-        object.pendingFly = null;
-    }
-
-    protected getVehicleIdOf(objectId: number): number {
-        for (const vehicle of this.vehicles.values())
-            if (vehicle.riders.has(objectId)) return vehicle.objectId;
-
-        return 0;
-    }
-
-    public getVehicleActor(objectId: number): Vehicle | null { return this.vehicles.get(objectId)?.actor || null; }
-
-    protected onGetOnVehicle(packet: PacketReader) {
-        const rider = GamePackets.readVehicleRider(packet);
-        const vehicle = this.vehicles.get(rider.vehicleId);
-
-        this.withActor(rider.objectId, actor => actor.setUnrealScriptProperty("bGetOnVehicle", true)); // UGameEngine::OnGetOnVehicle 0x104760e2.
-        if (!vehicle) return;
-
-        this.setVehicleRider(vehicle, rider.objectId, rider);
-        this.placeVehicleRider(vehicle, rider.objectId);
-    }
-
-    protected onGetOffVehicle(packet: PacketReader) {
-        const rider = GamePackets.readVehicleRider(packet);
-        const vehicle = this.vehicles.get(rider.vehicleId);
-        const object = this.objects.get(rider.objectId);
-
-        if (vehicle) vehicle.riders.delete(rider.objectId);
-        if (!object) return;
-        object.pendingVehicleMove = null;
-
-        if (object.actor) object.actor.setUnrealScriptProperty("bGetOnVehicle", false); // UGameEngine::OnGetOffVehicle 0x10476264.
-        if (!object.actor || rider.objectId === this.userId || !vehicle || !vehicle.actor) return;
-
-        this.manGame.getComponent("physics").farMoveActor(object.actor, setVector(new Vector3(), rider));
-        object.position.copy(object.actor.position);
-        object.destination = null;
-        object.pendingFly = null;
-    }
-
-    protected onMoveToLocationInVehicle(packet: PacketReader) {
-        const move = GamePackets.readVehicleRiderMove(packet);
-        const vehicle = this.vehicles.get(move.vehicleId), object = this.objects.get(move.objectId);
-
-        if (!vehicle || !object) return;
-
-        this.moveInVehicle(object, move.vehicleId, setVector(new Vector3(), move.destination));
-    }
-
-    protected moveInVehicle(object: NetObject_T, vehicleId: number, position: Vector3): void {
-        object.destination = null;
-        object.pendingFly = null;
-        object.pendingVehicleMove = null;
-
-        if (!object.actor) {
-            if (!object.isDead) object.pendingVehicleMove = { vehicleId, position };
-            return;
-        }
-
-        object.actor.getComponent<PawnMovementComponent>("pawnMovement").moveInVehicle(vehicleId, position);
-    }
-
-    protected onStopMoveInVehicle(packet: PacketReader) {
-        const stop = GamePackets.readVehicleRiderStop(packet);
-        const vehicle = this.vehicles.get(stop.vehicleId), object = this.objects.get(stop.objectId);
-
-        if (!vehicle || !object) return;
-
-        if (!object.actor) {
-            this.moveInVehicle(object, stop.vehicleId, setVector(new Vector3(), stop));
-            return;
-        }
-
-        const controller = object.actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
-
-        if (getProperty(controller, "bDead")) return;
-        // UGameEngine::OnStopMoveInVehicle 0x104767c0: local StopMove, no heading assignment.
-        if (stop.objectId === this.userId) {
-            object.destination = null;
-            object.pendingVehicleMove = null;
-            object.actor.stopMoving();
-            return;
-        }
-
-        this.moveInVehicle(object, stop.vehicleId, setVector(new Vector3(), stop));
-    }
-
-    protected onValidateLocationInVehicle(packet: PacketReader) {
-        const stop = GamePackets.readVehicleRiderStop(packet);
-        const vehicle = this.vehicles.get(stop.vehicleId), object = this.objects.get(stop.objectId);
-
-        if (!vehicle || !vehicle.actor || !object || !object.actor) return;
-
-        const actor = object.actor, controller = actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
-
-        if (!controller || getProperty(controller, "bDead")) return;
-
-        if (actor === this.manGame.getComponent("render").player) {
-            const rotation = vehicle.actor.getUnrealScriptProperty("Rotation") as number[];
-            const sine = sinRotator(rotation[1]), cosine = sinRotator(rotation[1] + 16384);
-
-            tmpVehicleLocation.set(Math.fround(stop.x * cosine - stop.y * sine), Math.fround(stop.x * sine + stop.y * cosine), stop.z).add(vehicle.actor.position);
-            tmpVehicleLocation.z -= actor.getCollisionHeight();
-            object.position.copy(tmpVehicleLocation);
-            actor.l2Teleport(object.position, vehicle.actor);
-            object.heading = stop.heading;
-            actor.setRotationYaw(stop.heading);
-            return;
-        }
-
-        this.setVehicleRider(vehicle, stop.objectId, stop);
-    }
-
-    protected onRide(packet: PacketReader) { this.setRide(GamePackets.readRide(packet)); }
-
-    protected setRide(ride: GamePackets.Ride_T): void {
-        if (ride.objectId === this.userId) {
-            this.isMounted = ride.isMounted;
-            this.updateMountable();
-        }
-
-        const previous = this.mounts.get(ride.objectId);
-
-        if (!ride.isMounted) {
-            this.mounts.delete(ride.objectId);
-            this.endRide(ride.objectId);
-            return;
-        }
-
-        if (previous && previous.mountType === ride.mountType && previous.npcId === ride.npcId) return;
-        if (ride.npcId <= 0) throw new Error(`Mounted pawn '${ride.objectId}' has no NPC class.`);
-
-        this.endRide(ride.objectId);
-        this.mounts.set(ride.objectId, ride);
-        void this.enterRide(ride);
-    }
-
-    protected async enterRide(ride: GamePackets.Ride_T): Promise<void> {
-        const object = this.objects.get(ride.objectId);
-
-        if (!object || !object.actor) return;
-
-        const render = this.manGame.getComponent("render"), physics = this.manGame.getComponent("physics");
-        const rider = object.actor;
-
-        await this.appearanceLoads.get(rider);
-        if (this.mounts.get(ride.objectId) !== ride || object.isRemoved) return;
-
-        const mount = await this.manGame.getComponent("asset").spawnNpc(render, ride.npcId, rider.position.clone(), null, false, object.kind === "user" ? new Player(render) : new BaseActor(render), false);
-
-        if (this.mounts.get(ride.objectId) !== ride || object.isRemoved) {
-            render.removePawn(mount);
-            return;
-        }
-
-        mount.teleportTo(rider.position, true);
-
-        if (!mount.attachObjectToBone(rider, "Bone15")) {
-            render.removePawn(mount);
-            throw new Error(`Mount '${ride.npcId}' cannot attach '${rider.name}' to Bone15.`);
-        }
-
-        // RiderEnter 0x105efd4d uses mesh Origin.Z; placeMeshes already adds CollisionHeight.
-        rider.position.set(0, 0, rider.getComponent<any>("animation").getMeshes()[0].meshOrigin.z - rider.getCollisionHeight());
-        rider.rotation.set(0, 0, -Math.PI / 2);
-
-        mount.copyMovement(rider);
-        mount.setUnrealScriptProperty("bHidden", rider.getUnrealScriptProperty("bHidden"));
-        rider.stopMoving();
-        physics.removePawn(rider);
-        rider.setUnrealScriptProperty("bRide", true);
-        rider.setUnrealScriptProperty("CurRideType", ride.mountType);
-        mount.ridePawn = rider;
-        mount.rideType = ride.mountType;
-        mount.name = object.name;
-        mount.setRotationYaw(object.heading);
-        mount.setFlying(ride.mountType === GamePackets.MountType_T.WYVERN);
-        this.riders.set(ride.objectId, rider);
-        object.actor = mount;
-        for (const movement of physics.getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
-            movement.replaceTarget(rider, mount);
-            movement.getParent().findComponent<PawnAttackComponent>("pawnAttack")?.replaceTarget(rider, mount);
-        }
-        for (const projectile of physics.getPhysicsComponents<NProjectileComponent>("nProjectile")) projectile.replaceTarget(rider, mount);
-        render.replaceRetainedSkillTargets(rider, mount);
-        this.updateAbnormalState(object);
-        mount.getComponent<NpcLifecycleComponent>("npcLifecycle").setControllerState(object.waitType, object.isInCombat);
-        if (object.environment !== null) mount.setUnrealScriptProperty("Environment", object.environment);
-        this.applySpeeds(mount, object.speeds, object.isRunning);
-        if (object.kind === "user") render.setPlayer(mount as Player);
-        mount.playMovementAnimation("idle");
-        if (object.isDead) mount.playDeathAnimation(() => { });
-    }
-
-    protected endRide(objectId: number): void {
-        const rider = this.riders.get(objectId), object = this.objects.get(objectId);
-
-        if (!rider || !object) return;
-
-        const render = this.manGame.getComponent("render"), mount = object.actor;
-        const position = mount.position.clone(), heading = mount.getRotationYaw();
-
-        mount.getComponent<PawnAttackComponent>("pawnAttack").detachSkillVisuals();
-        mount.detachBoneObject(rider);
-        mount.ridePawn = null;
-        rider.setUnrealScriptProperty("bRide", false);
-        rider.setUnrealScriptProperty("CurRideType", 0);
-        render.scene.add(rider);
-        object.actor = rider;
-        this.riders.delete(objectId);
-        this.updateAbnormalState(object);
-        this.manGame.getComponent("physics").addPawn(rider);
-        if (object.kind === "user") render.setPlayer(rider as Player);
-        this.applySpeeds(rider, object.speeds, object.isRunning);
-        if (object.environment !== null) rider.setUnrealScriptProperty("Environment", object.environment);
-        rider.teleportTo(position, true);
-        rider.setRotationYaw(heading);
-        this.setIdleAnimation(object);
-        if (object.isDead) rider.playDeathAnimation(() => { });
-        else if (rider.getComponent<NpcLifecycleComponent>("npcLifecycle").isDead()) rider.revive();
-        if (!object.isDead) rider.copyMovement(mount);
-        for (const movement of this.manGame.getComponent("physics").getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
-            movement.replaceTarget(mount, rider);
-            movement.getParent().findComponent<PawnAttackComponent>("pawnAttack")?.replaceTarget(mount, rider);
-        }
-        for (const projectile of this.manGame.getComponent("physics").getPhysicsComponents<NProjectileComponent>("nProjectile")) projectile.replaceTarget(mount, rider);
-        render.replaceRetainedSkillTargets(mount, rider);
-        render.removePawn(mount);
-    }
-
-    protected onFlyToLocation(packet: PacketReader) {
-        const fly = GamePackets.readFlyToLocation(packet);
-        const object = this.objects.get(fly.objectId);
-
-        if (!object) return;
-
-        if (object.waitType === GamePackets.WaitType_T.WT_SITTING || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH || object.chairStaticObjectId) {
-            object.waitType = GamePackets.WaitType_T.WT_STANDING;
-            object.chairStaticObjectId = 0;
-            this.setIdleAnimation(object, false);
-        }
-
-        object.pendingAttack = null;
-        this.stopSkill(object.objectId);
-
-        if (object.isDead) return;
-
-        this.adjustPawnLocation(object, fly.origin);
-        object.pendingVehicleMove = null;
-        object.pendingFly = object.actor ? null : { origin: setVector(new Vector3(), fly.origin), destination: setVector(new Vector3(), fly.destination) };
-        setVector(object.position, fly.destination);
-        object.destination = null;
-
-        if (object.actor) {
-            if (object.kind === "user") object.actor.flyTo(object.position);
-            else object.actor.addFlyTo(setVector(tmpTeleportPosition, fly.origin), object.position);
-        }
-    }
-
-    protected clearKnownObjects() {
-        for (const objectId of this.objects.keys()) if (objectId !== this.userId) this.removeObject(objectId);
-        for (const objectId of this.pickups.keys()) this.removeObject(objectId);
-        this.manGame.getComponent("render").clearDice();
-
-        for (const objectId of this.vehicles.keys()) this.removeVehicle(objectId);
-    }
-
-    protected placeObserver(position: GamePackets.Location_T, isObserving: boolean) {
-        const player = this.manGame.getComponent("render").player;
-        const user = this.objects.get(this.userId);
-
-        this.clearKnownObjects(); // L2PcInstance.enterObserverMode/leaveObserverMode drop the known list without DeleteObject.
-        setVector(user.position, position);
-        user.destination = null;
-        user.pendingFly = null;
-        user.pendingVehicleMove = null;
-        player.visible = !isObserving;
-        player.teleportTo(user.position, true);
-        this.manGame.getComponent("input").resetFollowCamera();
-    }
-
-    protected onObservationMode(packet: PacketReader) {
-        const info = GamePackets.readObservationMode(packet);
-
-        this.observation = { x: info.x, y: info.y, z: info.z };
-        this.placeObserver(info, true);
-    }
-
-    protected onObservationReturn(packet: PacketReader) {
-        const position = GamePackets.readPoint(packet);
-
-        this.observation = null;
-        this.placeObserver(position, false);
-    }
-
-    protected onRadarControl(packet: PacketReader) {
-        const radar = GamePackets.readRadarControl(packet);
-
-        switch (radar.action) {
-            case 0:
-                this.questArrowDestination = { x: radar.x, y: radar.y, z: radar.z };
-                if (radar.type === 0 || radar.type === 2) this.radarMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
-                if (radar.type === 1 || radar.type === 2) this.mapMarkers.push({ x: radar.x, y: radar.y, z: radar.z });
-                break;
-            case 1: {
-                if (radar.type === 0 || radar.type === 2) {
-                    const index = this.radarMarkers.findIndex(marker => marker.x === radar.x && marker.y === radar.y && marker.z === radar.z);
-
-                    if (index >= 0) this.radarMarkers.splice(index, 1);
-                }
-                if (radar.type === 1 || radar.type === 2)
-                    for (let i = 0; i < this.mapMarkers.length; i++) {
-                        const marker = this.mapMarkers[i];
-
-                        if (marker.x === radar.x && marker.y === radar.y && marker.z === radar.z) this.mapMarkers.splice(i, 1);
-                    }
-            } break;
-            case 2: this.questArrowDestination = null; this.radarMarkers.length = this.mapMarkers.length = 0; break;
-            default: throw new Error(`Unknown RadarControl action '${radar.action}'.`);
-        }
-
-        this.ui.setMapMarkers(this.mapMarkers);
-    }
-
-    protected onSSQStatus(packet: PacketReader) {
-        const status = GamePackets.readSSQStatus(packet);
-
-        this.ssqStatus.set(status.page, status);
-        this.ui.showSSQStatus(status);
-    }
-
-    protected onGameGuardQuery(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid GameGuardQuery payload.");
-
-        this.game.gameGuardReply();
-    }
-
-    public getVehicleId() { return this.getVehicleIdOf(this.userId); }
-    public getMount(objectId: number) { return this.mounts.get(objectId) || null; }
-    public isObserving() { return this.observation !== null; }
-    public getSpecialCamera() { return this.specialCamera; }
-    public getUserId() { return this.userId; }
-    public getActor(objectId: number) { const object = this.objects.get(objectId); return object && !object.isRemoved ? object.actor : null; }
-    public getCameraMode() { return this.cameraMode; }
-    public getRadarMarkers(): readonly GamePackets.Location_T[] { return this.radarMarkers; }
-    public getTownMap() { return this.townMap; }
-    public getCalculatorId() { return this.calculatorId; }
-    public getXMasSealItemId() { return this.xmasSealItemId; }
-    public getDice() { return this.dice; }
-    public getMonRace() { return this.monRace; }
-    public getSSQStatus(page: number) { return this.ssqStatus.get(page) || null; }
-    public getClanHallDecoration(clanHallId: number) { return this.clanHallDecoration.get(clanHallId) || null; }
-    public getSiegeInfo() { return this.siegeInfo; }
-    public getSiegeAttackers() { return this.siegeAttackers; }
-    public getSiegeDefenders() { return this.siegeDefenders; }
-
-    public requestGetOnVehicle(vehicleId: number, position: GamePackets.Location_T) { if (this.inWorld && this.vehicles.has(vehicleId)) this.game.requestGetOnVehicle(vehicleId, position); }
-    public requestGetOffVehicle(vehicleId: number, position: GamePackets.Location_T) { if (this.inWorld) this.game.requestGetOffVehicle(vehicleId, position); }
-    public observerReturn() { if (this.inWorld && this.observation) this.game.observerReturn(); }
-    public requestSSQStatus(page: number) { if (this.inWorld) this.game.requestSSQStatus(page); }
-    public requestSiegeAttackerList(castleId: number) { if (this.inWorld) this.game.requestSiegeAttackerList(castleId); }
-    public requestSiegeDefenderList(castleId: number) { if (this.inWorld) this.game.requestSiegeDefenderList(castleId); }
-    public requestJoinSiege(castleId: number, isAttacker: boolean, isJoining: boolean) { if (this.inWorld) this.game.requestJoinSiege(castleId, isAttacker, isJoining); }
-    public confirmSiegeWaitingList(castleId: number, clanId: number, isApproved: boolean) { if (this.inWorld) this.game.requestConfirmSiegeWaitingList(castleId, clanId, isApproved); }
-    public startRotating(heading: number, side: number) { if (this.inWorld) this.game.startRotating(heading, side); }
-    public finishRotating(heading: number, unknown: number) { if (this.inWorld) this.game.finishRotating(heading, unknown); }
-    public requestRecordInfo() { if (this.inWorld) this.game.requestRecordInfo(); }
-    public requestShowMiniMap() { if (this.inWorld) this.game.requestShowMiniMap(); }
-
-    public requestMoveInVehicle(vehicle: Vehicle, destination: Vector3) {
-        if (!this.inWorld) return;
-
-        const player = this.manGame.getComponent("render").player;
-
-        vehicle.getLocalLocation(destination, tmpVehicleLocation);
-        tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]);
-        vehicle.getLocalLocation(tmpVehicleOrigin, tmpVehicleOrigin);
-        this.game.requestMoveToLocationInVehicle(vehicle.getUnrealScriptProperty("L2ServerObjectID") as number, tmpVehicleLocation, tmpVehicleOrigin);
-    }
-
-    public cannotMoveInVehicle(vehicle: Vehicle, position: Vector3) {
-        if (!this.inWorld) return;
-
-        vehicle.getLocalLocation(position, tmpVehicleLocation);
-        this.game.cannotMoveAnymoreInVehicle(vehicle.getUnrealScriptProperty("L2ServerObjectID") as number, tmpVehicleLocation, this.manGame.getComponent("render").player.getRotationYaw());
-    }
-
-    protected onRecipeShopMsg(packet: PacketReader) {
-        const message = GamePackets.readRecipeShopMsg(packet);
-
-        this.recipeShopMessages.set(message.objectId, message.storeName);
-    }
-
-    protected onPartySpelled(packet: PacketReader) {
-        const spelled = GamePackets.readPartySpelled(packet);
-
-        this.partyEffects.set(spelled.objectId, spelled);
-        this.ui.setPetStatusEffects(spelled);
-    }
-
-    protected onSnoop(packet: PacketReader) {
-        const snoop = GamePackets.readSnoop(packet);
-        const messages = this.snoops.get(snoop.conversationId);
-
-        if (messages) messages.push(snoop);
-        else this.snoops.set(snoop.conversationId, [snoop]);
-    }
-
-    public getRecipeBook() { return this.recipeBook; }
-    public getRecipeItemMakeInfo() { return this.recipeItemMakeInfo; }
-    public getRecipeShopManageList() { return this.recipeShopManageList; }
-    public getRecipeShopSellList() { return this.recipeShopSellList; }
-    public getRecipeShopItemInfo() { return this.recipeShopItemInfo; }
-    public getRecipeShopMessage(objectId: number) { return this.recipeShopMessages.get(objectId); }
-    public getHennaEquipList() { return this.hennaEquipList; }
-    public getHennaItemInfo() { return this.hennaItemInfo; }
-    public getPartyMatchRooms() { return this.partyMatchRooms; }
-    public isInParty() { return this.partyMembers.size > 0; }
-    public getPartyMatchPage() { return this.partyMatchPage; }
-    public getPartyMatchDetail() { return this.partyMatchDetail; }
-    public getPartyEffects(objectId: number) { return this.partyEffects.get(objectId); }
-    public getTutorialQuestionMarks() { return this.tutorialQuestionMarks; }
-    public getTutorialClientEvents() { return this.tutorialClientEvents; }
-    public getSnoops() { return this.snoops; }
-
-    public openRecipeBook(isDwarven: boolean) { if (this.inWorld) this.game.requestRecipeBookOpen(isDwarven); }
-    public destroyRecipe(recipeId: number) { if (this.inWorld) this.game.requestRecipeBookDestroy(recipeId); }
-    public requestRecipeItemMakeInfo(recipeId: number) { if (this.inWorld) this.game.requestRecipeItemMakeInfo(recipeId); }
-    public makeRecipeItem(recipeId: number) { if (this.inWorld) this.game.requestRecipeItemMakeSelf(recipeId); }
-    public requestRecipeShopManage() { if (this.inWorld) this.game.requestRecipeShopManageList(); }
-    public getOwnRecipeShopMessage() { return this.recipeShopMessages.get(this.userId) ?? ""; }
-    public setRecipeShopMessage(name: string) { if (this.inWorld) this.game.requestRecipeShopMessageSet(name); }
-    public setRecipeShopList(items: GamePackets.RecipeShopListEntry_T[]) { if (this.inWorld) this.game.requestRecipeShopListSet(items); }
-    public quitRecipeShopManage() { if (this.inWorld) this.game.requestRecipeShopManageQuit(); }
-    public cancelRecipeShopManage() { if (this.inWorld) this.game.requestRecipeShopManageCancel(); }
-    public requestRecipeShopMakeInfo(objectId: number, recipeId: number) { if (this.inWorld) this.game.requestRecipeShopMakeInfo(objectId, recipeId); }
-    public makeRecipeShopItem(objectId: number, recipeId: number, price: number) { if (this.inWorld) this.game.requestRecipeShopMakeItem(objectId, recipeId, price); }
-    public recipeShopManagePrev(objectId: number) { if (this.inWorld) this.game.requestRecipeShopManagePrev(objectId); }
-
-    public requestHennaList() { if (this.inWorld) this.game.requestHennaList(0); }
-    public requestHennaItemInfo(symbolId: number) { if (this.inWorld) this.game.requestHennaItemInfo(symbolId); }
-    public equipHenna(symbolId: number) { if (this.inWorld) this.game.requestHennaEquip(symbolId); }
-    public requestHennaUnequipList() { if (this.inWorld) this.game.requestHennaUnequipList(0); } // TODO: Capture the retail BD trailing DWORD; 103fa8b0 supplies no vararg.
-    public requestHennaUnequipInfo(symbolId: number) { if (this.inWorld) this.game.requestHennaUnequipInfo(symbolId); }
-    public unequipHenna(symbolId: number) { if (this.inWorld) this.game.requestHennaUnequip(symbolId); }
-
-    public requestPartyMatchConfig(page: number, location: number, limit: number) { if (this.inWorld) this.game.requestPartyMatchConfig(page, location, limit); }
-    public requestPartyMatchList(roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string) { if (this.inWorld) this.game.requestPartyMatchList(roomId, maxMembers, minLevel, maxLevel, lootType, title); } // Creates (roomId 0) or edits a party room.
-    public requestPartyMatchDetail(roomId: number, location = 0) { if (this.inWorld) this.game.requestPartyMatchDetail(roomId, location); }
-    public inviteToParty(name: string, lootType: number) { if (this.inWorld) this.game.requestJoinParty(name, lootType); }
-    public withdrawParty() { if (this.inWorld) this.game.requestWithDrawalParty(); }
-    public oustPartyMember(name: string) { if (this.inWorld) this.game.requestOustPartyMember(name); }
-
-    public tutorialLink(link: string) { if (this.inWorld) this.game.requestTutorialLinkHtml(link); }
-    public tutorialPassCmd(command: string) { if (this.inWorld) this.game.requestTutorialPassCmdToServer(command); }
-    public tutorialClientEvent(eventId: number) { if (this.inWorld) this.game.requestTutorialClientEvent(eventId); }
-
-    public tutorialQuestionMark(id: number) {
-        if (!this.inWorld) return;
-
-        this.game.requestTutorialQuestionMark(id);
-        this.tutorialQuestionMarks.delete(id);
-    }
-
-    public gmCommand(targetName: string, command: number) { if (this.inWorld) this.game.requestGMCommand(targetName, command); }
-    public requestGmList() { if (this.inWorld) this.game.requestGmList(); }
-
-    public snoopQuit(objectId: number) {
-        if (!this.inWorld) return;
-
-        this.game.snoopQuit(objectId);
-        this.snoops.delete(objectId);
-    }
-
-    public petition(content: string, type: number) { if (this.inWorld) this.game.requestPetition(content, type); }
-    public cancelPetition() { if (this.inWorld) this.game.requestPetitionCancel(); }
-
-    public requestFriendList() { if (this.inWorld) this.game.requestFriendList(); }
-    public deleteFriend(name: string) { if (this.inWorld) this.game.requestFriendDel(name); }
-    public sendFriendMessage(receiver: string, message: string) { if (this.inWorld) this.game.requestSendFriendMsg(message, receiver); }
-
-    public requestQuestList() { if (this.inWorld) this.game.requestQuestList(); }
-    public abortQuest(questId: number) { if (this.inWorld) this.game.requestQuestAbort(questId); }
-
-    public makeMacro(macro: GamePackets.Macro_T) {
-        if (!this.inWorld) return;
-        if (macro.commands.length > 12) throw new Error(`Invalid macro command count ${macro.commands.length}.`);
-
-        this.game.requestMakeMacro(macro);
-    }
-
-    public deleteMacro(id: number) { if (this.inWorld && this.macros.has(id)) this.game.requestDeleteMacro(id); }
-
-    public activateMacro(id: number) { // NWindow 0x10074e00 / 0x100a994c.
-        const macro = this.macros.get(id);
-
-        if (!this.inWorld || !macro) return;
-
-        let execution = this.macroExecutions.get(id);
-
-        if (!execution) {
-            const rows: MacroRow_T[] = new Array(macro.commands.length);
-
-            for (const command of macro.commands) {
-                const index = command.index > 0 ? command.index - 1 : command.index;
-
-                if (index < 0 || index >= rows.length) throw new Error(`Invalid macro row index ${command.index}.`);
-                rows[index] = { command, duration: 0, start: 0, elapsed: 0 };
-            }
-
-            for (let i = 0; i < rows.length; i++)
-                if (!rows[i]) throw new Error(`Macro ${id} has an uninitialized row ${i}.`);
-
-            execution = { macro, rows, active: false, current: 0 };
-            this.macroExecutions.set(id, execution);
-        }
-
-        execution.active = true;
-    }
-
-    public resetMacros() { // NWindow 0x100a76c0.
-        for (const execution of this.macroExecutions.values()) {
-            if (!execution.active) continue;
-
-            execution.active = false;
-            execution.current = 0;
-            for (const row of execution.rows) row.duration = row.start = row.elapsed = 0;
-        }
-    }
-
-    protected getMacroCommandType(text: string): number {
-        if (text[0] !== "/" && text[0] !== "／") return 0x20000000;
-
-        const tokens = getCommandTokens(text);
-        const entry = Object.entries(this.ui.getStrings().commands).find(([, name]) => `/${name.toLowerCase()}` === tokens[0].toLowerCase());
-
-        return entry ? Number(entry[0]) : -1;
-    }
-
-    protected executeMacroRow(execution: MacroExecution_T) { // NWindow 0x100a7f80.
-        const row = execution.rows[execution.current], command = row.command;
-        const [ctrl, shift] = this.ui.getInputModifiers();
-        const player = this.manGame.getComponent("render").player;
-        let animation = -1;
-
-        switch (command.type) {
-            case 1: this.game.requestMagicSkillUse(command.data1, ctrl, shift); return;
-            case 2: {
-                const actions: Record<number, number> = { 12: 2, 13: 3, 14: 4, 24: 6, 25: 5, 26: 7, 29: 8, 30: 9, 31: 10, 33: 11, 34: 12, 35: 13 };
-
-                animation = command.data1 === 0 ? this.objects.get(this.userId).waitType === GamePackets.WaitType_T.WT_SITTING ? 0 : 1 : actions[command.data1] ?? -1;
-                break;
-            }
-            case 3: {
-                this.ui.sendMacroText(command.command);
-
-                const type = this.getMacroCommandType(command.command);
-                const actions: Record<number, number> = { 4: 0, 5: 1, 21: 2, 22: 3, 23: 4, 46: 5, 47: 6, 48: 7, 49: 8, 50: 9, 51: 10, 54: 11, 55: 12, 56: 13 };
-                const next = execution.rows[execution.current + 1];
-
-                if (type === 0x20000000 && next && next.command.type === 3 && this.getMacroCommandType(next.command.command) === 0x20000000)
-                    row.duration = Math.fround(command.command.length * Math.fround(0.2));
-
-                if (type === 28 || type === 29) {
-                    const tokens = getCommandTokens(command.command), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
-
-                    if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12 && this.shortcuts.get((page - 1) * 12 + slot - 1)?.type === GamePackets.ShortCutType_T.TYPE_MACRO) this.cancelRecursiveMacro();
-                }
-
-                animation = type === 57 ? this.objects.get(this.userId).waitType === GamePackets.WaitType_T.WT_SITTING ? 0 : 1 : actions[type] ?? -1;
-                break;
-            }
-            case 4: {
-                if (command.data1 < 0 || command.data1 > 9 || command.data2 < 0 || command.data2 > 11) return;
-
-                this.useShortCut(command.data1, command.data2, ctrl, shift);
-                if (this.shortcuts.get(command.data1 * 12 + command.data2)?.type === GamePackets.ShortCutType_T.TYPE_MACRO) this.cancelRecursiveMacro();
-                return;
-            }
-            case 5: debugger; throw new Error(`Macro item row has no initialized retail object ID.`);
-            case 6: row.duration = Math.fround(command.data1); return;
-            default: throw new Error(`Unknown macro row type ${command.type}.`);
-        }
-
-        const duration = player.getSocialAnimDuration(animation);
-
-        if (duration > 0) row.duration = Math.fround(duration);
-    }
-
-    protected cancelRecursiveMacro() {
-        for (const execution of this.macroExecutions.values()) execution.active = false;
-        this.ui.showNotice(1339); // NWindow 0x10075990, dialog kind 31.
-        this.playSystemMessageSound(1339);
-    }
-
-    protected getActiveMacroRow(): MacroRow_T {
-        for (const id of this.macros.keys()) {
-            const execution = this.macroExecutions.get(id);
-
-            if (execution && execution.active) return execution.rows[execution.current];
-        }
-
-        return null;
-    }
-
-    protected notifyMacroCommand(types: number[], duration: number) {
-        const row = this.getActiveMacroRow();
-
-        if (row && row.command.type === 3 && types.includes(this.getMacroCommandType(row.command.command))) row.duration = duration;
-    }
-
-    protected notifyMacroSkill(id: number, hitTime: number) { // NWindow 0x100a8850.
-        const row = this.getActiveMacroRow();
-
-        if (!row) return;
-
-        const command = row.command;
-        let skillId: number;
-
-        if (command.type === 1) skillId = command.data1;
-        else if (command.type === 4) {
-            if (command.data1 < 0 || command.data1 > 9 || command.data2 < 0 || command.data2 > 11) return;
-            skillId = this.shortcuts.get(command.data1 * 12 + command.data2)?.id;
-        } else if (command.type === 3) {
-            const type = this.getMacroCommandType(command.command), tokens = getCommandTokens(command.command);
-
-            if (type === 25 || type === 26) skillId = this.ui.getStrings().skillCommands[tokens.slice(1).join(" ").toLowerCase()];
-            else if (type === 28 || type === 29) {
-                const page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
-
-                if (!(page >= 1 && page <= 10 && slot >= 1 && slot <= 12)) return;
-                skillId = this.shortcuts.get((page - 1) * 12 + slot - 1)?.id;
-            } else if (id !== 0) return;
-        } else return;
-
-        if (id && skillId !== id) return;
-        row.duration = Math.fround(Math.trunc(hitTime / 1000) + 1);
-    }
-
-    protected updateMacros(deltaTime: number) { // NWindow 0x100aaf60.
-        const delta = Math.fround(deltaTime / 1000);
-
-        for (const id of this.macros.keys()) {
-            const execution = this.macroExecutions.get(id);
-
-            if (!execution || !execution.active) continue;
-            if (execution.current >= execution.rows.length) { execution.active = false; execution.current = 0; continue; }
-
-            const row = execution.rows[execution.current], command = row.command;
-
-            if (execution.current === 0 && row.start === 0) {
-                row.start = row.elapsed = delta;
-                this.executeMacroRow(execution);
-                continue;
-            }
-
-            row.elapsed = Math.fround(row.elapsed + delta);
-            let canAdvance = command.type !== 1;
-
-            if (command.type === 4) {
-                const shortcut = this.shortcuts.get(command.data1 * 12 + command.data2);
-
-                if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_MACRO) { execution.active = false; execution.current = 0; this.cancelRecursiveMacro(); continue; }
-                if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_SKILL) canAdvance = false;
-            }
-            if (command.type === 3) {
-                const type = this.getMacroCommandType(command.command);
-
-                if ([24, 25, 26, 14, 12, 13, 15].includes(type)) canAdvance = false;
-                if (type === 12 || type === 13 || type === 15) {
-                    const selected = this.objects.get(this.getTargetId());
-                    let target: NetObject_T = null;
-
-                    if (type === 12) {
-                        const name = getCommandTokens(command.command).slice(1).join(" ").toLowerCase();
-
-                        for (const object of this.objects.values()) {
-                            if (object.name.toLowerCase() !== name) continue;
-                            target = object;
-                            if (!object.isSummon) break;
-                        }
-                    } else if (selected && selected.actor) target = type === 13 ? this.getNextEnemy(200, selected.objectId) : this.objects.get(selected.selectedId);
-
-                    if (selected && selected.actor && target && target.actor && selected.objectId === target.objectId)
-                        this.notifyMacroCommand([12, 13, 15], Math.fround(0.001));
-                }
-                if (type === 28 || type === 29) {
-                    const tokens = getCommandTokens(command.command), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
-                    const shortcut = page >= 1 && page <= 10 && slot >= 1 && slot <= 12 ? this.shortcuts.get((page - 1) * 12 + slot - 1) : null;
-
-                    if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_MACRO) { execution.active = false; execution.current = 0; this.cancelRecursiveMacro(); continue; }
-                    if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_SKILL) canAdvance = false;
-                }
-            }
-
-            if (!(row.duration > 0 && row.elapsed - row.start > row.duration) && !(canAdvance && row.duration === 0)) continue;
-
-            row.duration = row.start = row.elapsed = 0;
-            execution.current++;
-            if (execution.current >= execution.rows.length) continue;
-
-            const next = execution.rows[execution.current];
-
-            next.start = next.elapsed = delta;
-            this.executeMacroRow(execution);
-        }
-    }
-
-    public block(type: GamePackets.BlockType_T, name: string = null) { if (this.inWorld) this.game.requestBlock(type, name); }
-    public userCommand(id: number) { if (this.inWorld) this.game.requestUserCommand(id); }
-    public evaluate(objectId: number) { if (this.inWorld) this.game.requestEvaluate(objectId); }
-    public showBoard() { if (this.inWorld) this.game.requestShowBoard(1); }
-    public writeBoard(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { if (this.inWorld) this.game.requestBBSwrite(url, arg1, arg2, arg3, arg4, arg5); }
-
-    public requestAquireSkillInfo(id: number, level: number, mode = Number(this.aquireSkillFishing)) { if (this.inWorld) this.game.requestAquireSkillInfo(id, level, mode); }
-    public aquireSkill(id: number, level: number, mode = Number(this.aquireSkillFishing)) { if (this.inWorld) this.game.requestAquireSkill(id, level, mode); }
-
-    public deleteShortCut(page: number, slot: number) {
-        const index = page * 12 + slot;
-
-        if (!this.inWorld || !this.shortcuts.has(index)) return;
-
-        const source = this.shortcuts.get(index);
-        const item = source.type === GamePackets.ShortCutType_T.TYPE_ITEM ? this.getShortCutItem(source) : null;
-
-        if (item && this.autoSoulShots.has(item.itemId)) {
-            const isKept = [...this.shortcuts.values()].some(shortcut => shortcut.slot !== index && shortcut.type === GamePackets.ShortCutType_T.TYPE_ITEM && this.getShortCutItem(shortcut)?.itemId === item.itemId);
-
-            if (!isKept) this.game.requestAutoSoulShot(item.itemId, false);
-        }
-
-        this.game.requestShortCutDel(index);
-        this.shortcuts.delete(index);
-        this.ui.removeShortCut(index);
-    }
-
-    protected onEventMatchMessage(packet: PacketReader) {
-        const type = packet.c() as GamePackets.EventMatchMessage_T;
-        const message = type === GamePackets.EventMatchMessage_T.STRING ? packet.S() : "";
-
-        if (type > GamePackets.EventMatchMessage_T.STATIC_5 || packet.getRemaining()) throw new Error(`Invalid ExEventMatchMessage type ${type}.`);
-
-        this.eventMatchMessageType = type;
-
-        if (type === GamePackets.EventMatchMessage_T.STRING) this.ui.showMessage(message);
-    }
-
-    protected onPartyRoomMember(packet: PacketReader) {
-        const room = GamePackets.readPartyRoomMembers(packet);
-
-        this.partyRoomMode = room.mode;
-        this.partyRoomMembers.clear();
-        for (const member of room.members.slice(0, 20)) this.partyRoomMembers.set(member.objectId, member);
-        this.ui.setPartyRoomMembers(this.partyRoomMode, Array.from(this.partyRoomMembers.values()), true);
-    }
-
-    protected onManagePartyRoomMember(packet: PacketReader) {
-        const mode = packet.d() as GamePackets.PartyRoomMemberChange_T, member = GamePackets.readPartyRoomMember(packet);
-
-        if (packet.getRemaining()) throw new Error("Invalid ExManagePartyRoomMember trailing data.");
-
-        switch (mode) {
-            case GamePackets.PartyRoomMemberChange_T.ADD:
-                if (this.partyRoomMembers.size < 20) this.partyRoomMembers.set(member.objectId, member);
-                break;
-            case GamePackets.PartyRoomMemberChange_T.MODIFY:
-                if (this.partyRoomMembers.has(member.objectId)) this.partyRoomMembers.set(member.objectId, member);
-                break;
-            case GamePackets.PartyRoomMemberChange_T.REMOVE: this.partyRoomMembers.delete(member.objectId); break;
-            default: throw new Error(`Invalid ExManagePartyRoomMember mode ${mode}.`);
-        }
-        if (member.objectId === this.userId) this.partyRoomMode = mode === GamePackets.PartyRoomMemberChange_T.REMOVE || mode === GamePackets.PartyRoomMemberChange_T.MODIFY && !this.partyRoomMembers.has(member.objectId) ? 0 : member.role;
-        this.ui.setPartyRoomMembers(this.partyRoomMode, Array.from(this.partyRoomMembers.values()), false);
-    }
-
-    protected onClosePartyRoom(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid ExClosePartyRoom payload.");
-
-        this.partyRoomMode = -1;
-        this.partyRoomMembers.clear();
-        this.ui.closePartyRoom();
-    }
-
-    protected onFishingStart(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-        const fishType = packet.d(), x = packet.d(), y = packet.d(), z = packet.d();
-
-        if (packet.getRemaining()) throw new Error("Invalid ExFishingStart payload.");
-
-        if (!object || object.fishing || object.actor && object.actor.getUnrealScriptProperty("bFish")) return;
-
-        object.fishing = { fishType, x, y, z, isFighting: false, time: 0, maxTime: 0, fishHp: 0, maxFishHp: 0, mode: 0, lureType: 0, isGoodUse: false, animation: 0, penalty: 0 };
-        this.startFishing(object);
-    }
-
-    protected startFishing(object: NetObject_T) {
-        const state = object.fishing;
-        if (!state || !object.actor) return;
-
-        const render = this.manGame.getComponent("render");
-        let component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
-
-        if (!component) component = object.actor.addComponent(new PawnFishingComponent(render, () => this.startFishingCombat(object)));
-        void component.start(new Vector3(state.x, state.y, state.z), state.fishType, object.actor === render.player, this.ui.getScreenCanvas().width);
-        if (object.actor === render.player) this.ui.startFishing();
-    }
-
-    protected onFishingEnd(packet: PacketReader) {
-        const object = this.objects.get(packet.d()), isWin = packet.c();
-
-        if (isWin > 1 || packet.getRemaining()) throw new Error("Invalid ExFishingEnd payload.");
-        if (!object) return;
-
-        object.fishing = null;
-        if (!object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
-
-        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
-
-        if (component) component.end(isWin !== 0);
-        if (object.actor === this.manGame.getComponent("render").player) this.ui.endFishing(isWin !== 0);
-    }
-
-    protected onFishingStartCombat(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-        const time = packet.d(), maxFishHp = packet.d(), mode = packet.c(), lureType = packet.c();
-
-        if (packet.getRemaining()) throw new Error("Invalid ExFishingStartCombat payload.");
-        if (!object || !object.fishing) return;
-
-        Object.assign(object.fishing, { isFighting: true, time, maxTime: time, fishHp: maxFishHp, maxFishHp, mode, lureType });
-        this.startFishingCombat(object);
-    }
-
-    protected startFishingCombat(object: NetObject_T) {
-        const state = object.fishing;
-        if (!state || !state.isFighting || !object.actor || !object.actor.getUnrealScriptProperty("bFish")) return;
-
-        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
-        if (!component || !component.getFloat() || object.actor.getUnrealScriptProperty("CurFishingType") === FishingType_T.FST_BATTLE) return;
-
-        component.startCombat(state.mode);
-        component.updateCombat(state.mode, state.animation);
-        if (object.actor === this.manGame.getComponent("render").player) {
-            this.ui.startFishingCombat(state.maxFishHp, state.maxTime, state.mode, state.lureType);
-            this.ui.updateFishing(state.fishHp, state.time, state.isGoodUse, state.mode, state.animation, state.penalty);
-        }
-    }
-
-    protected onFishingHpRegen(packet: PacketReader) {
-        const object = this.objects.get(packet.d());
-        const time = packet.d(), fishHp = packet.d(), mode = packet.c(), isGoodUse = packet.c() !== 0, animation = packet.c(), penalty = packet.d();
-
-        if (packet.getRemaining()) throw new Error("Invalid ExFishingHpRegen payload.");
-        if (!object || !object.fishing) return; // Broadcast: a fisher seen mid-fight never sent us ExFishingStart.
-
-        Object.assign(object.fishing, { isFighting: true, time, fishHp, mode, isGoodUse, animation, penalty });
-        if (!object.actor || !object.actor.getUnrealScriptProperty("bFish") || object.actor.getUnrealScriptProperty("CurFishingType") !== FishingType_T.FST_BATTLE) return;
-        const component = object.actor.findComponent<PawnFishingComponent>("pawnFishing");
-
-        if (component) component.updateCombat(mode, animation);
-        if (component && component.getFloat() && object.actor === this.manGame.getComponent("render").player) this.ui.updateFishing(fishHp, time, isGoodUse, mode, animation, penalty);
-    }
-
-    protected onShowQuestMark(packet: PacketReader) {
-        const questId = packet.d();
-
-        if (questId <= 0 || packet.getRemaining()) throw new Error("Invalid ExShowQuestMark payload.");
-
-        this.questMarkId = questId;
-    }
-
-    protected onOpenMPCC(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid ExOpenMPCC payload.");
-
-        this.isInCommandChannel = true;
-        this.ui.openCommandChannel();
-    }
-
-    protected onCloseMPCC(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid ExCloseMPCC payload.");
-
-        this.isInCommandChannel = false;
-        this.commandChannel = null;
-        this.ui.closeCommandChannel();
-    }
-
-    protected onAskJoinMPCC(packet: PacketReader) {
-        const name = packet.S();
-
-        if (!name || packet.getRemaining()) throw new Error("Invalid ExAskJoinMPCC payload.");
-
-        this.commandChannelInviter = name;
-        this.ui.showCommandChannelInvite(name, isAccepted => {
-            if (this.commandChannelInviter !== name) return;
-
-            this.answerCommandChannelInvite(isAccepted);
-        });
-    }
-
-    protected onOlympiadMode(packet: PacketReader) {
-        const mode = packet.c();
-
-        if (mode > 3 || packet.getRemaining()) throw new Error(`Invalid ExOlympiadMode ${mode}.`);
-
-        this.olympiadMode = mode;
-        this.ui.setOlympiadMode(mode);
-    }
-
-    protected onOlympiadMatchEnd(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid ExOlympiadMatchEnd payload.");
-
-        this.olympiadUsers.clear();
-        this.olympiadEffects.clear();
-        this.ui.resetOlympiadMatch();
-    }
-
-    protected onMailArrived(packet: PacketReader) {
-        if (packet.getRemaining()) throw new Error("Invalid ExMailArrived payload.");
-
-        this.hasNewMail = true;
-    }
-
-    public oustFromPartyRoom(objectId: number) { if (this.inWorld && this.partyRoomMembers.has(objectId)) this.game.requestOustFromPartyRoom(objectId); }
-    public dismissPartyRoom(roomId: number) { if (this.inWorld) this.game.requestDismissPartyRoom(roomId); }
-    public withdrawPartyRoom(roomId: number) { if (this.inWorld) this.game.requestWithdrawPartyRoom(roomId); }
-    public changePartyLeader(name: string) { if (this.inWorld) this.game.requestChangePartyLeader(name); }
-    public requestEnchantSkillInfo(id: number, level: number) { if (this.inWorld) this.game.requestExEnchantSkillInfo(id, level); }
-    public enchantSkill(id: number, level: number) { if (this.inWorld) this.game.requestExEnchantSkill(id, level); }
-    public requestManorList() { if (this.inWorld) this.game.requestManorList(); }
-    public procureCrops(items: GamePackets.ProcureCropRequest_T[]) { if (this.inWorld) this.game.requestProcureCropList(items); }
-    public setManorSeeds(manorId: number, items: GamePackets.SeedSettingRequest_T[]) { if (this.inWorld) this.game.requestSetSeed(manorId, items); }
-    public setManorCrops(manorId: number, items: GamePackets.CropSettingRequest_T[]) { if (this.inWorld) this.game.requestSetCrop(manorId, items); }
-    public writeHeroWords(words: string) { if (this.inWorld) this.game.requestWriteHeroWords(words); }
-    public inviteToCommandChannel(name: string) { if (this.inWorld) this.game.requestExAskJoinMPCC(name); }
-    public oustFromCommandChannel(name: string) { if (this.inWorld) this.game.requestExOustFromMPCC(name); }
-    public endOlympiadObserver() { if (this.inWorld) this.game.requestOlympiadObserverEnd(); }
-    public requestOlympiadMatchList() { if (this.inWorld) this.game.requestOlympiadMatchList(); }
-
-    public answerCommandChannelInvite(isAccepted: boolean) {
-        if (!this.inWorld || !this.commandChannelInviter) return;
-
-        this.commandChannelInviter = null;
-        this.game.requestExAcceptJoinMPCC(isAccepted);
-    }
-
-    protected waitNextTick(): Promise<void> {
+    public requestRestart() { return this.session.requestRestart(); }
+    public logout() { return this.session.logout(); }
+    public playReplay(bytes: Uint8Array, lockCamera = true, useChatData = false): Promise<void> { return this.session.playReplay(bytes, lockCamera, useChatData); }
+    public stopReplayPlayback(): Promise<void> { return this.session.stopReplayPlayback(); }
+    public startReplayRecording(): void { return this.session.startReplayRecording(); }
+    public stopReplayRecording(): Promise<void> { return this.session.stopReplayRecording(); }
+    public getReplayRecordingTime() { return this.session.getReplayRecordingTime(); }
+
+    public requestItemList() { return this.items.requestItemList(); }
+    public useItem(objectId: number) { return this.items.useItem(objectId); }
+    public chooseInventoryItem(objectId: number) { return this.items.chooseInventoryItem(objectId); }
+    public toggleAutoSoulShot(page: number, slot: number) { return this.items.toggleAutoSoulShot(page, slot); }
+    public registerSkillShortCut(id: number, page: number, slot: number) { return this.items.registerSkillShortCut(id, page, slot); }
+    public registerRecipeShortCut(id: number, page: number, slot: number) { return this.items.registerRecipeShortCut(id, page, slot); }
+    public registerMacroShortCut(id: number, page: number, slot: number) { return this.items.registerMacroShortCut(id, page, slot); }
+    public registerItemShortCut(objectId: number, page: number, slot: number) { return this.items.registerItemShortCut(objectId, page, slot); }
+    public registerPetItemShortCut(objectId: number, page: number, slot: number) { return this.items.registerPetItemShortCut(objectId, page, slot); }
+    public registerActionShortCut(id: number, page: number, slot: number) { return this.items.registerActionShortCut(id, page, slot); }
+    public moveShortCut(page: number, slot: number, targetPage: number, targetSlot: number) { return this.items.moveShortCut(page, slot, targetPage, targetSlot); }
+    public useShortCut(page: number, slot: number, ctrl: boolean = false, shift: boolean = false) { return this.items.useShortCut(page, slot, ctrl, shift); }
+    public requestTrade(objectId: number) { return this.items.requestTrade(objectId); }
+    public canAddTradeItem(objectId: number) { return this.items.canAddTradeItem(objectId); }
+    public addTradeItem(objectId: number, count: number) { return this.items.addTradeItem(objectId, count); }
+    public confirmTrade(isConfirmed: boolean) { return this.items.confirmTrade(isConfirmed); }
+    public answerTradeRequest(isAccepted: boolean) { return this.items.answerTradeRequest(isAccepted); }
+    public sellItems(items: GamePackets.SellItemRequest_T[]) { return this.items.sellItems(items); }
+    public buyItems(items: GamePackets.ItemIdCount_T[]) { return this.items.buyItems(items); }
+    public depositWarehouse(items: GamePackets.ItemCount_T[]) { return this.items.depositWarehouse(items); }
+    public withdrawWarehouse(items: GamePackets.ItemCount_T[]) { return this.items.withdrawWarehouse(items); }
+    public requestPrivateStoreManageSell() { return this.items.requestPrivateStoreManageSell(); }
+    public setPrivateStoreListSell(isPackage: boolean, items: GamePackets.PrivateStoreOffer_T[]) { return this.items.setPrivateStoreListSell(isPackage, items); }
+    public quitPrivateStoreSell() { return this.items.quitPrivateStoreSell(); }
+    public setPrivateStoreMsgSell(message: string) { return this.items.setPrivateStoreMsgSell(message); }
+    public getPrivateStoreMsgSell() { return this.items.getPrivateStoreMsgSell(); }
+    public buyFromPrivateStore(ownerId: number, items: GamePackets.PrivateStoreOffer_T[]) { return this.items.buyFromPrivateStore(ownerId, items); }
+    public requestPrivateStoreManageBuy() { return this.items.requestPrivateStoreManageBuy(); }
+    public setPrivateStoreListBuy(items: GamePackets.PrivateStoreBuyOffer_T[]) { return this.items.setPrivateStoreListBuy(items); }
+    public quitPrivateStoreBuy() { return this.items.quitPrivateStoreBuy(); }
+    public cancelPrivateStoreManageBuy() { return this.items.cancelPrivateStoreManageBuy(); }
+    public setPrivateStoreMsgBuy(message: string) { return this.items.setPrivateStoreMsgBuy(message); }
+    public getPrivateStoreMsgBuy() { return this.items.getPrivateStoreMsgBuy(); }
+    public sellToPrivateStore(ownerId: number, items: GamePackets.PrivateStoreSellOffer_T[]) { return this.items.sellToPrivateStore(ownerId, items); }
+    public requestPackageSendableItemList(objectId: number) { return this.items.requestPackageSendableItemList(objectId); }
+    public sendPackage(objectId: number, items: GamePackets.ItemCount_T[]) { return this.items.sendPackage(objectId, items); }
+    public clearMultiSell() { return this.items.clearMultiSell(); }
+    public chooseMultiSell(listId: number, entryId: number, amount: number) { return this.items.chooseMultiSell(listId, entryId, amount); }
+    public requestPreviewItems(itemIds: number[]) { return this.items.requestPreviewItems(itemIds); }
+    public buySeeds(items: GamePackets.ItemIdCount_T[], manorId?: number) { return this.items.buySeeds(items, manorId); }
+    public sellCrops(items: GamePackets.SellItemRequest_T[], listId?: number) { return this.items.sellCrops(items, listId); }
+    public dropItem(objectId: number, count: number, point: GamePackets.Location_T) { return this.items.dropItem(objectId, count, point); }
+    public destroyItem(objectId: number, count: number) { return this.items.destroyItem(objectId, count); }
+    public crystallizeItem(objectId: number, count: number) { return this.items.crystallizeItem(objectId, count); }
+    public unequipBodyPart(bodyPart: number) { return this.items.unequipBodyPart(bodyPart); }
+    public giveItemToPet(objectId: number, count: number) { return this.items.giveItemToPet(objectId, count); }
+    public getItemFromPet(objectId: number, count: number) { return this.items.getItemFromPet(objectId, count); }
+    public usePetItem(objectId: number) { return this.items.usePetItem(objectId); }
+    public petPickup(objectId: number) { return this.items.petPickup(objectId); }
+    public changePetName(name: string) { return this.items.changePetName(name); }
+    public getRecipeBook() { return this.items.getRecipeBook(); }
+    public getRecipeItemMakeInfo() { return this.items.getRecipeItemMakeInfo(); }
+    public getRecipeShopManageList() { return this.items.getRecipeShopManageList(); }
+    public getRecipeShopSellList() { return this.items.getRecipeShopSellList(); }
+    public getRecipeShopItemInfo() { return this.items.getRecipeShopItemInfo(); }
+    public getRecipeShopMessage(objectId: number) { return this.items.getRecipeShopMessage(objectId); }
+    public getHennaEquipList() { return this.items.getHennaEquipList(); }
+    public getHennaItemInfo() { return this.items.getHennaItemInfo(); }
+    public openRecipeBook(isDwarven: boolean) { return this.items.openRecipeBook(isDwarven); }
+    public destroyRecipe(recipeId: number) { return this.items.destroyRecipe(recipeId); }
+    public requestRecipeItemMakeInfo(recipeId: number) { return this.items.requestRecipeItemMakeInfo(recipeId); }
+    public makeRecipeItem(recipeId: number) { return this.items.makeRecipeItem(recipeId); }
+    public requestRecipeShopManage() { return this.items.requestRecipeShopManage(); }
+    public getOwnRecipeShopMessage() { return this.items.getOwnRecipeShopMessage(); }
+    public setRecipeShopMessage(name: string) { return this.items.setRecipeShopMessage(name); }
+    public setRecipeShopList(items: GamePackets.RecipeShopListEntry_T[]) { return this.items.setRecipeShopList(items); }
+    public quitRecipeShopManage() { return this.items.quitRecipeShopManage(); }
+    public cancelRecipeShopManage() { return this.items.cancelRecipeShopManage(); }
+    public requestRecipeShopMakeInfo(objectId: number, recipeId: number) { return this.items.requestRecipeShopMakeInfo(objectId, recipeId); }
+    public makeRecipeShopItem(objectId: number, recipeId: number, price: number) { return this.items.makeRecipeShopItem(objectId, recipeId, price); }
+    public recipeShopManagePrev(objectId: number) { return this.items.recipeShopManagePrev(objectId); }
+    public requestHennaList() { return this.items.requestHennaList(); }
+    public requestHennaItemInfo(symbolId: number) { return this.items.requestHennaItemInfo(symbolId); }
+    public equipHenna(symbolId: number) { return this.items.equipHenna(symbolId); }
+    public requestHennaUnequipList() { return this.items.requestHennaUnequipList(); }
+    public requestHennaUnequipInfo(symbolId: number) { return this.items.requestHennaUnequipInfo(symbolId); }
+    public unequipHenna(symbolId: number) { return this.items.unequipHenna(symbolId); }
+    public requestQuestList() { return this.items.requestQuestList(); }
+    public abortQuest(questId: number) { return this.items.abortQuest(questId); }
+    public makeMacro(macro: GamePackets.Macro_T) { return this.items.makeMacro(macro); }
+    public deleteMacro(id: number) { return this.items.deleteMacro(id); }
+    public requestAquireSkillInfo(id: number, level: number, mode = Number(this.items.aquireSkillFishing)) { return this.items.requestAquireSkillInfo(id, level, mode); }
+    public aquireSkill(id: number, level: number, mode = Number(this.items.aquireSkillFishing)) { return this.items.aquireSkill(id, level, mode); }
+    public deleteShortCut(page: number, slot: number) { return this.items.deleteShortCut(page, slot); }
+    public requestEnchantSkillInfo(id: number, level: number) { return this.items.requestEnchantSkillInfo(id, level); }
+    public enchantSkill(id: number, level: number) { return this.items.enchantSkill(id, level); }
+    public requestManorList() { return this.items.requestManorList(); }
+    public procureCrops(items: GamePackets.ProcureCropRequest_T[]) { return this.items.procureCrops(items); }
+    public setManorSeeds(manorId: number, items: GamePackets.SeedSettingRequest_T[]) { return this.items.setManorSeeds(manorId, items); }
+    public setManorCrops(manorId: number, items: GamePackets.CropSettingRequest_T[]) { return this.items.setManorCrops(manorId, items); }
+
+    public playSystemMessageSound(id: number) { return this.community.playSystemMessageSound(id); }
+    public getHeroCrest(crestId: number, isAlly: boolean): HTMLCanvasElement { return this.community.getHeroCrest(crestId, isAlly); }
+    public getPledgePower() { return this.community.getPledgePower(); }
+    public getClanInfo() { return this.community.getClanInfo(); }
+    public getPledgeCrest(crestId: number) { return this.community.getPledgeCrest(crestId); }
+    public getPledgeLargeCrest(crestId: number) { return this.community.getPledgeLargeCrest(crestId); }
+    public getClanLargeCrestId(clanId: number) { return this.community.getClanLargeCrestId(clanId); }
+    public getAllyCrest(crestId: number) { return this.community.getAllyCrest(crestId); }
+    public requestPledgeInfo(clanId: number) { return this.community.requestPledgeInfo(clanId); }
+    public requestPledgeMemberList() { return this.community.requestPledgeMemberList(); }
+    public getSelectedPlayer() { return this.community.getSelectedPlayer(); }
+    public invitePledge(objectId: number) { return this.community.invitePledge(objectId); }
+    public withdrawPledge() { return this.community.withdrawPledge(); }
+    public oustPledgeMember(name: string) { return this.community.oustPledgeMember(name); }
+    public giveNickName(name: string, title: string) { return this.community.giveNickName(name, title); }
+    public requestPledgePower() { return this.community.requestPledgePower(); }
+    public requestMemberPledgePower(objectId: number) { return this.community.requestMemberPledgePower(objectId); }
+    public setMemberPledgePower(objectId: number, privs: Uint8Array) { return this.community.setMemberPledgePower(objectId, privs); }
+    public startPledgeWar(pledgeName: string) { return this.community.startPledgeWar(pledgeName); }
+    public stopPledgeWar(pledgeName: string) { return this.community.stopPledgeWar(pledgeName); }
+    public surrenderPledgeWar(pledgeName: string) { return this.community.surrenderPledgeWar(pledgeName); }
+    public surrenderPersonally(pledgeName: string) { return this.community.surrenderPersonally(pledgeName); }
+    public replyStartPledgeWar(isAccepted: boolean) { return this.community.replyStartPledgeWar(isAccepted); }
+    public replyStopPledgeWar(isAccepted: boolean) { return this.community.replyStopPledgeWar(isAccepted); }
+    public replySurrenderPledgeWar(isAccepted: boolean) { return this.community.replySurrenderPledgeWar(isAccepted); }
+    public requestPledgeCrest(crestId: number) { return this.community.requestPledgeCrest(crestId); }
+    public requestPledgeLargeCrest(crestId: number) { return this.community.requestPledgeLargeCrest(crestId); }
+    public requestAllyCrest(crestId: number) { return this.community.requestAllyCrest(crestId); }
+    public setPledgeCrest(data: Uint8Array) { return this.community.setPledgeCrest(data); }
+    public setPledgeLargeCrest(data: Uint8Array) { return this.community.setPledgeLargeCrest(data); }
+    public setAllyCrest(data: Uint8Array) { return this.community.setAllyCrest(data); }
+    public requestJoinAlly(objectId: number) { return this.community.requestJoinAlly(objectId); }
+    public leaveAlly() { return this.community.leaveAlly(); }
+    public dismissAllyClan(clanName: string) { return this.community.dismissAllyClan(clanName); }
+    public dissolveAlly() { return this.community.dissolveAlly(); }
+    public requestAllyInfo() { return this.community.requestAllyInfo(); }
+    public getRadarMarkers(): readonly GamePackets.Location_T[] { return this.community.getRadarMarkers(); }
+    public getTownMap() { return this.community.getTownMap(); }
+    public getCalculatorId() { return this.community.getCalculatorId(); }
+    public getXMasSealItemId() { return this.community.getXMasSealItemId(); }
+    public getMonRace() { return this.community.getMonRace(); }
+    public getSSQStatus(page: number) { return this.community.getSSQStatus(page); }
+    public getClanHallDecoration(clanHallId: number) { return this.community.getClanHallDecoration(clanHallId); }
+    public getSiegeInfo() { return this.community.getSiegeInfo(); }
+    public getSiegeAttackers() { return this.community.getSiegeAttackers(); }
+    public getSiegeDefenders() { return this.community.getSiegeDefenders(); }
+    public requestSSQStatus(page: GamePackets.SSQPage_T) { return this.community.requestSSQStatus(page); }
+    public requestSiegeAttackerList(castleId: number) { return this.community.requestSiegeAttackerList(castleId); }
+    public requestSiegeDefenderList(castleId: number) { return this.community.requestSiegeDefenderList(castleId); }
+    public requestJoinSiege(castleId: number, isAttacker: boolean, isJoining: boolean) { return this.community.requestJoinSiege(castleId, isAttacker, isJoining); }
+    public confirmSiegeWaitingList(castleId: number, clanId: number, isApproved: boolean) { return this.community.confirmSiegeWaitingList(castleId, clanId, isApproved); }
+    public getPartyMatchRooms() { return this.community.getPartyMatchRooms(); }
+    public isInParty() { return this.community.isInParty(); }
+    public getPartyMatchPage() { return this.community.getPartyMatchPage(); }
+    public getPartyMatchDetail() { return this.community.getPartyMatchDetail(); }
+    public getPartyEffects(objectId: number) { return this.community.getPartyEffects(objectId); }
+    public getTutorialQuestionMarks() { return this.community.getTutorialQuestionMarks(); }
+    public getTutorialClientEvents() { return this.community.getTutorialClientEvents(); }
+    public getSnoops() { return this.community.getSnoops(); }
+    public requestPartyMatchConfig(page: number, location: number, limit: number) { return this.community.requestPartyMatchConfig(page, location, limit); }
+    public requestPartyMatchList(roomId: number, maxMembers: number, minLevel: number, maxLevel: number, lootType: number, title: string) { return this.community.requestPartyMatchList(roomId, maxMembers, minLevel, maxLevel, lootType, title); }
+    public requestPartyMatchDetail(roomId: number, location = 0) { return this.community.requestPartyMatchDetail(roomId, location); }
+    public inviteToParty(name: string, lootType: number) { return this.community.inviteToParty(name, lootType); }
+    public withdrawParty() { return this.community.withdrawParty(); }
+    public oustPartyMember(name: string) { return this.community.oustPartyMember(name); }
+    public tutorialLink(link: string) { return this.community.tutorialLink(link); }
+    public tutorialPassCmd(command: string) { return this.community.tutorialPassCmd(command); }
+    public tutorialClientEvent(eventId: number) { return this.community.tutorialClientEvent(eventId); }
+    public tutorialQuestionMark(id: number) { return this.community.tutorialQuestionMark(id); }
+    public gmCommand(targetName: string, command: number) { return this.community.gmCommand(targetName, command); }
+    public requestGmList() { return this.community.requestGmList(); }
+    public snoopQuit(objectId: number) { return this.community.snoopQuit(objectId); }
+    public petition(content: string, type: number) { return this.community.petition(content, type); }
+    public cancelPetition() { return this.community.cancelPetition(); }
+    public requestFriendList() { return this.community.requestFriendList(); }
+    public deleteFriend(name: string) { return this.community.deleteFriend(name); }
+    public sendFriendMessage(receiver: string, message: string) { return this.community.sendFriendMessage(receiver, message); }
+    public block(type: GamePackets.BlockType_T, name: string = null) { return this.community.block(type, name); }
+    public userCommand(id: number) { return this.community.userCommand(id); }
+    public evaluate(objectId: number) { return this.community.evaluate(objectId); }
+    public showBoard() { return this.community.showBoard(); }
+    public writeBoard(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { return this.community.writeBoard(url, arg1, arg2, arg3, arg4, arg5); }
+    public oustFromPartyRoom(objectId: number) { return this.community.oustFromPartyRoom(objectId); }
+    public dismissPartyRoom(roomId: number) { return this.community.dismissPartyRoom(roomId); }
+    public withdrawPartyRoom(roomId: number) { return this.community.withdrawPartyRoom(roomId); }
+    public changePartyLeader(name: string) { return this.community.changePartyLeader(name); }
+    public writeHeroWords(words: string) { return this.community.writeHeroWords(words); }
+    public inviteToCommandChannel(name: string) { return this.community.inviteToCommandChannel(name); }
+    public oustFromCommandChannel(name: string) { return this.community.oustFromCommandChannel(name); }
+    public endOlympiadObserver() { return this.community.endOlympiadObserver(); }
+    public requestOlympiadMatchList() { return this.community.requestOlympiadMatchList(); }
+    public answerCommandChannelInvite(isAccepted: boolean) { return this.community.answerCommandChannelInvite(isAccepted); }
+
+    public getVehicleActor(objectId: number): Vehicle | null { return this.movement.getVehicleActor(objectId); }
+    public getVehicleId() { return this.movement.getVehicleId(); }
+    public getMount(objectId: number) { return this.movement.getMount(objectId); }
+    public isObserving() { return this.movement.isObserving(); }
+    public getSpecialCamera() { return this.movement.getSpecialCamera(); }
+    public getCameraMode() { return this.movement.getCameraMode(); }
+    public requestGetOnVehicle(vehicleId: number, position: GamePackets.Location_T) { return this.movement.requestGetOnVehicle(vehicleId, position); }
+    public requestGetOffVehicle(vehicleId: number, position: GamePackets.Location_T) { return this.movement.requestGetOffVehicle(vehicleId, position); }
+    public observerReturn() { return this.movement.observerReturn(); }
+    public startRotating(heading: number, side: number) { return this.movement.startRotating(heading, side); }
+    public finishRotating(heading: number, unknown: number) { return this.movement.finishRotating(heading, unknown); }
+    public requestRecordInfo() { return this.movement.requestRecordInfo(); }
+    public requestShowMiniMap() { return this.movement.requestShowMiniMap(); }
+    public requestMoveInVehicle(vehicle: Vehicle, destination: Vector3) { return this.movement.requestMoveInVehicle(vehicle, destination); }
+    public cannotMoveInVehicle(vehicle: Vehicle, position: Vector3) { return this.movement.cannotMoveInVehicle(vehicle, position); }
+
+    public getUserId() { return this.actors.getUserId(); }
+    public getActor(objectId: number) { return this.actors.getActor(objectId); }
+    public getDice() { return this.actors.getDice(); }
+
+    public activateMacro(id: number) { this.macroExecutor.activate(id); }
+    public resetMacros() { this.macroExecutor.reset(); }
+
+    public waitNextTick(): Promise<void> {
         if (!this.nextTick) this.nextTick = new Promise(resolve => this.resolveNextTick = resolve);
 
         return this.nextTick;
     }
 
     public onEngineTick(currentTime: number, deltaTime: number): void {
-        this.tickGMServerTransfer();
-        if (this.getReplayRecordingTime() > 1800) this.stopReplayRecording(); // FL2ReplayManager::Tick 0x75f8a6.
-        if (this.game?.isPlayingReplay() && !this.replayLoading && !this.game.tickReplayPlayback(deltaTime / 1000)) {
-            void this.stopReplayPlayback();
+        this.session.tickGMServerTransfer();
+        if (this.session.getReplayRecordingTime() > 1800) this.session.stopReplayRecording(); // FL2ReplayManager::Tick 0x75f8a6.
+        if (this.session.game?.isPlayingReplay() && !this.session.replayLoading && !this.session.game.tickReplayPlayback(deltaTime / 1000)) {
+            void this.session.stopReplayPlayback();
             return;
         }
 
@@ -5822,78 +1176,49 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             resolve();
         }
 
-        if (this.lobby) this.lobby.tick(deltaTime);
-        if (this.lobby && this.ui.isLobbyVisible()) this.ui.setPawnLabels(this.lobby.getPawnLabels(this.characters, this.ui.getScreenCanvas().width, this.ui.getScreenCanvas().height));
-        if (!this.inWorld) return;
+        if (this.session.lobby) this.session.lobby.tick(deltaTime);
+        if (this.session.lobby && this.ui.isLobbyVisible()) this.ui.setPawnLabels(this.session.lobby.getPawnLabels(this.session.characters, this.ui.getScreenCanvas().width, this.ui.getScreenCanvas().height));
+        if (!this.actors.inWorld) return;
 
         this.updateGNOManager(deltaTime);
-        this.updateMacros(deltaTime);
-        this.updateVehicles(deltaTime);
+        this.macroExecutor.tick(deltaTime);
+        this.movement.updateVehicles(deltaTime);
 
         const player = this.manGame.getComponent("render").player;
         const isMoving = player.isLocomoting();
 
-        if ((isMoving || this.wasMoving) && currentTime - this.lastValidateAt >= VALIDATE_POSITION_INTERVAL) {
-            this.lastValidateAt = currentTime;
-            this.wasMoving = isMoving;
+        if ((isMoving || this.movement.wasMoving) && currentTime - this.movement.lastValidateAt >= VALIDATE_POSITION_INTERVAL) {
+            this.movement.lastValidateAt = currentTime;
+            this.movement.wasMoving = isMoving;
             const base = player.getBaseActor() as Vehicle;
 
             if (base && base.isVehicle) {
                 tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]);
                 base.getLocalLocation(tmpVehicleOrigin, tmpVehicleOrigin);
-                this.game.validatePosition(tmpVehicleOrigin, player.getRotationYaw(), base.getUnrealScriptProperty("L2ServerObjectID") as number);
-            } else this.game.validatePosition(player.position, player.getRotationYaw());
+                this.session.game.validatePosition(tmpVehicleOrigin, player.getRotationYaw(), base.getUnrealScriptProperty("L2ServerObjectID") as number);
+            } else this.session.game.validatePosition(player.position, player.getRotationYaw());
         }
 
-        if (!isMoving || !player.isInteractive()) this.stuckCheckAt = 0;
-        else if (this.stuckCheckAt === 0) {
-            this.stuckCheckAt = currentTime;
-            this.stuckPosition.copy(player.position);
-        } else if (currentTime - this.stuckCheckAt >= STUCK_INTERVAL) { // Server walks straight through whatever blocked us; CannotMoveAnymore makes it adopt our stop point.
-            if (player.position.distanceTo(this.stuckPosition) < STUCK_DISTANCE) {
+        if (!isMoving || !player.isInteractive()) this.movement.stuckCheckAt = 0;
+        else if (this.movement.stuckCheckAt === 0) {
+            this.movement.stuckCheckAt = currentTime;
+            this.movement.stuckPosition.copy(player.position);
+        } else if (currentTime - this.movement.stuckCheckAt >= STUCK_INTERVAL) { // Server walks straight through whatever blocked us; CannotMoveAnymore makes it adopt our stop point.
+            if (player.position.distanceTo(this.movement.stuckPosition) < STUCK_DISTANCE) {
                 player.stopMoving();
                 const base = player.getBaseActor() as Vehicle;
 
-                if (base && base.isVehicle) this.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
-                else this.game.cannotMoveAnymore(player.position, player.getRotationYaw());
-                this.stuckCheckAt = 0;
+                if (base && base.isVehicle) this.movement.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
+                else this.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
+                this.movement.stuckCheckAt = 0;
             } else {
-                this.stuckCheckAt = currentTime;
-                this.stuckPosition.copy(player.position);
+                this.movement.stuckCheckAt = currentTime;
+                this.movement.stuckPosition.copy(player.position);
             }
         }
     }
 
-    public getNameplates(): Nameplate_T[] {
-        const player = this.manGame.getComponent("render").player;
-        const mouseTarget = this.manGame.getComponent("input").getMouseTarget();
-        const plates: Nameplate_T[] = [];
-        const now = this.manGame.getCurrentTime();
-        const clanId = this.objects.get(this.userId)?.clanId || 0;
-
-        for (const object of this.objects.values()) {
-            const actor = object.actor;
-
-            if (!actor || !actor.parent || !object.name) continue;
-
-            let parent = actor;
-
-            while (parent && parent.visible) parent = parent.parent as BaseActor;
-            if (parent) continue;
-
-            const isTarget = object.objectId === this.getTargetId(), isMouseTarget = actor === mouseTarget;
-            const distance = Math.trunc(actor.position.distanceTo(player.position));
-
-            if (!isTarget && !isMouseTarget && distance >= NAMEPLATE_DISTANCE) continue; // FDynamicActor::Render branch C: retail l2.ini [CharacterDisplay] Name=true, Dist=1000.
-
-            const storeMessages = object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ? this.privateStoreBuyMsgs : object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.recipeShopMessages : this.privateStoreSellMsgs;
-
-            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", isSummon: object.isSummon, isAttackable: object.isAttackable, isSelf: object.objectId === this.userId, isPartyMember: this.partyMembers.has(object.objectId), isPledgeMember: clanId !== 0 && object.clanId === clanId, isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0, abnormalState: object.abnormalState, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
-        }
-
-        return plates;
-    }
-
+    public getNameplates(): Nameplate_T[] { return this.actors.getNameplates(); }
 }
 
 export default NetworkManager;

@@ -2,6 +2,8 @@ import UObject from "./un-object";
 import type { Constructable_T, UClass } from "@l2js/core";
 import type FVector from "./un-vector";
 
+export enum EAttachMethod_T { EAM_None = 0, EAM_RH = 1, EAM_LH = 2, EAM_BoneSpecified = 3, EAM_AliasSpecified = 4, EAM_Trail = 5, EAM_RF = 6, EAM_LF = 7, EAM_MAX = 8 }
+
 export abstract class USkillAction extends UObject {
     declare public effectClass: UClass;
     declare public onMultiTarget: boolean;
@@ -35,7 +37,7 @@ export abstract class USkillVisualEffect extends UObject {
 }
 
 export abstract class USkillActionLocateEffect extends USkillAction {
-    declare public attachOn: number;
+    declare public attachOn: EAttachMethod_T;
     declare public attachBoneName: string;
     declare public isAbsolute: boolean;
     declare public spawnDelay: number;

@@ -2,7 +2,7 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import type { InventoryEntry_T } from "./nc-inventory-wnd";
 import { FontType_T } from "./nwindow-canvas";
-import type { MultiSellList_T, MultiSellEntry_T, MultiSellProduct_T, MultiSellIngredient_T } from "../network/game-packets";
+import { ItemType2_T, type MultiSellList_T, type MultiSellEntry_T, type MultiSellProduct_T, type MultiSellIngredient_T } from "../network/game-packets";
 import type { InventoryWndView_T } from "./skin";
 
 const TEX_BACK = "L2UI_CH3.MultiSellWnd.multicell_back";
@@ -167,7 +167,7 @@ export class NCVIPShopWnd {
     protected getItem(item: MultiSellItem_T, count = item.count): InventoryEntry_T {
         const strings = this.layer.getManager().strings;
 
-        return { objectId: 0, itemId: item.itemId, name: strings.itemNames[item.itemId], icon: strings.itemIcons[item.itemId], count, enchant: item.enchantLevel, itemClass: item.type2, bodyPart: "bodyPart" in item ? item.bodyPart : strings.itemInfos[item.itemId].bodyPart, slot: -1, isQuest: item.type2 === 3, isMoney: item.type2 === 4, info: strings.itemInfos[item.itemId] };
+        return { objectId: 0, itemId: item.itemId, name: strings.itemNames[item.itemId], icon: strings.itemIcons[item.itemId], count, enchant: item.enchantLevel, itemClass: item.type2, bodyPart: "bodyPart" in item ? item.bodyPart : strings.itemInfos[item.itemId].bodyPart, slot: -1, isQuest: item.type2 === ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === ItemType2_T.TYPE2_MONEY, info: strings.itemInfos[item.itemId] };
     }
     protected paintDetails(entry: MultiSellEntry_T) {
         this.products.content.replaceChildren();

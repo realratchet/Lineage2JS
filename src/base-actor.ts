@@ -1,3 +1,4 @@
+import { ENetMode_T } from "@l2js/engine/un-level-info";
 import { AnimationAction, AnimationClip, Mesh, Object3D, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
 import { EDrawType_T, EPhysics_T } from "./assets/unreal/un-aactor";
@@ -238,7 +239,7 @@ export class BaseActor extends GameObject implements ICollidable {
         if (physics !== EPhysics_T.PHYS_None && physics !== EPhysics_T.PHYS_Rotating) return false;
 
         // AActor::Tick 0x86580f..0x865886.
-        return currentTime / 1000 - (this.getUnrealScriptProperty("LastRenderTime") as number) > 5 && (this.getUnrealScriptProperty("Level") as GameObject).getUnrealScriptProperty("NetMode") === 0;
+        return currentTime / 1000 - (this.getUnrealScriptProperty("LastRenderTime") as number) > 5 && (this.getUnrealScriptProperty("Level") as GameObject).getUnrealScriptProperty("NetMode") === ENetMode_T.NM_Standalone;
     }
 
     public updatePresentation(currentTime: number, deltaTime: number) {

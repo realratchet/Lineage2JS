@@ -71,14 +71,14 @@ import NCDialogBox, { DialogType_T } from "./nc-dialog-box";
 import type NetworkManager from "../network/network-manager";
 import type AssetManager from "../assets/asset-manager";
 import type { GameServerInfo_T } from "../network/login-client";
-import encodeCrest from "../network/crest-encoder";
+import { encodeCrestImage, PLEDGE_CREST_WIDTH, PLEDGE_CREST_HEIGHT, PLEDGE_LARGE_CREST_WIDTH, PLEDGE_LARGE_CREST_HEIGHT } from "../network/crest-encoder";
 import NCTooltip from "./nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { IEngineComponent } from "../game/components";
 import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type CommandInfoWndView_T, type CommunityWndView_T, type DeliverWndView_T, type DialogBoxView_T, type FishViewportWndView_T, type GMClanWndView_T, type GMDetailStatusWndView_T, type GMInventoryWndView_T, type GMMagicSkillWndView_T, type GMQuestWndView_T, type GMStoreWndView_T, type GMWndView_T, type HennaInfoWndView_T, type HennaListWndView_T, type HeroTowerWndView_T, type InventoryWndView_T, type ItemEnchantWndView_T, type LoadingWndView_T, type LobbyWndView_T, type LoginServerWndView_T, type LoginWndView_T, type ReplayWndView_T, type MacroWndView_T, type MainWndView_T, type ManorShopWndView_T, type MapWndView_T, type TownMapWndView_T, type MatchWndView_T, type MenuWndView_T, type MessageWndView_T, type NPCHtmlViewerView_T, type OlympiadControlWndView_T, type OlympiadPlayerWndView_T, type OlympiadTargetWndView_T, type OptionWndView_T, type PartyRoomMakingWndView_T, type PartyRoomWndView_T, type PawnCreateWndView_T, type PetStatusWndView_T, type PetWndView_T, type PlayerStatusWndView_T, type PledgePowerWndView_T, type PrivateBuyWndView_T, type PrivateShopWndView_T, type RecipeBookWndView_T, type RecipeBuyListWndView_T, type RecipeBuyManufactureWndView_T, type RecipeManufactureWndView_T, type RecipeShopWndView_T, type RecipeTreeWndView_T, type RecordMarkView_T, type RestartMenuWndView_T, type SSQMainBoardView_T, type SelectDeliverWndView_T, type ShopWndView_T, type ShortCutWndView_T, type SkillWndView_T, type StoreWndView_T, type SummonedWndView_T, type SystemMenuWndView_T, type TargetStatusWndView_T, type TradeWndView_T, type TrainWndView_T, type VIPShopWndView_T, type ZoneTitleWndView_T } from "./skin";
 import type GameManager from "../game/game-manager";
 
-export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
+export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, clanCrestId: number, allyCrestId: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
 
 const TEX_TARGET_BRACKET = "L2ui.NWindow.target";
 const TEX_MOUSE_TARGET_BRACKET = "L2ui.NWindow.normal"; // UCanvas::Init 0x7f0769, TargetRenderType 1
@@ -1408,7 +1408,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public hasNameplate(actor: BaseActor): boolean { return this.nameplates.get(actor)?.visible === true; }
 
-    public updateNameplates() { // FDynamicActor::Render anchor (cylinder top) and DrawTargetName 0x1051d780 layout, LargeFont, no crests or icons.
+    public updateNameplates() { // FDynamicActor::Render anchor (cylinder top) and DrawTargetName 0x1051d780 layout, LargeFont.
         if (this.pickupLabel) {
             this.pickupLabel.visible = false;
             if (this.screen !== "world") {
@@ -1507,7 +1507,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 }
                 const bracket = plate.isTarget ? TEX_TARGET_BRACKET : plate.isMouseTarget ? TEX_MOUSE_TARGET_BRACKET : null;
 
-                nameplate.update(canvas, plate.name, plate.title, getNameColor(plate), getTitleColor(plate), bracket && canvas.hasTexture(bracket) ? bracket : null);
+                nameplate.update(canvas, plate.name, plate.title, getNameColor(plate), getTitleColor(plate), bracket && canvas.hasTexture(bracket) ? bracket : null, this.getCachedCrest(plate.clanCrestId), this.getCachedCrest(plate.allyCrestId));
                 tmpNameplateAnchor.x = sx / width * 2 - 1;
                 tmpNameplateAnchor.y = 1 - sy / height * 2;
                 nameplate.position.copy(tmpNameplateAnchor.unproject(camera));
@@ -2457,7 +2457,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 break;
             case "setCrest":
             case "setInsignia":
-                dialog.show(this.nwindow.getSystemMessage(action === "setCrest" ? 211 : 1478), action === "setCrest" ? DialogType_T.OK : DialogType_T.OK_CANCEL, isOk => {
+                dialog.show(this.getCrestMessage(action === "setCrest"), action === "setCrest" ? DialogType_T.OK : DialogType_T.OK_CANCEL, isOk => {
                     if (isOk) this.pickCrest(action === "setCrest");
                 }, true, 0, action === "setCrest" ? 211 : 1478);
                 break;
@@ -2471,7 +2471,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const input = document.createElement("input");
 
         input.type = "file";
-        input.accept = ".bmp";
+        input.accept = "image/*";
         input.onchange = async () => {
             if (!input.files.length) return;
 
@@ -2487,7 +2487,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             let data: Uint8Array;
 
             try {
-                data = encodeCrest(bytes, isSmall ? 16 : 64, isSmall ? 12 : 64);
+                data = await encodeCrestImage(new Blob([bytes.buffer as ArrayBuffer], { type: input.files[0].type }), isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH, isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT);
             } catch {
                 this.clanError(isSmall ? 211 : 1478);
                 return;
@@ -2500,7 +2500,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         input.click();
     }
 
-    protected clanError(id: number) { this.addSystemMessage(this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); this.manNetwork.playSystemMessageSound(id); }
+    protected getCrestMessage(isSmall: boolean) { return `Select a supported image measuring ${isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH}x${isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT} pixels.`; }
+    protected clanError(id: number) { this.addSystemMessage(id === 211 || id === 1478 ? this.getCrestMessage(id === 211) : this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); this.manNetwork.playSystemMessageSound(id); }
 
     protected isValidName(name: string) {
         const lower = name.replace(/[A-Z]/g, char => String.fromCharCode(char.charCodeAt(0) + 32));

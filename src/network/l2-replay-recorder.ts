@@ -1,3 +1,4 @@
+import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 import L2ReplayFile from "./l2-replay-file";
 import PacketReader from "./packet-reader";
 
@@ -46,9 +47,9 @@ export class L2ReplayRecorder {
             case "wheel": {
                 if (yaw === 0) return;
                 if (yaw !== -1 && yaw !== 1) throw new Error(`Invalid replay wheel direction '${yaw}'.`);
-                const key = yaw < 0 ? 236 : 237;
+                const key = yaw < 0 ? EInputKey_T.IK_MouseWheelUp : EInputKey_T.IK_MouseWheelDown;
 
-                this.file.arrCameraInstructions.push({ time: elapsed, key, action: 1, amount: 0 }, { time: elapsed, key, action: 3, amount: 0 });
+                this.file.arrCameraInstructions.push({ time: elapsed, key, action: EInputAction_T.IST_Press, amount: 0 }, { time: elapsed, key, action: EInputAction_T.IST_Release, amount: 0 });
                 return;
             }
             case "press":
@@ -57,7 +58,7 @@ export class L2ReplayRecorder {
 
                 if (this.isCameraRotating === pressed) return;
                 this.isCameraRotating = pressed;
-                this.file.arrCameraInstructions.push({ time: elapsed, key: 2, action: pressed ? 1 : 3, amount: 0 });
+                this.file.arrCameraInstructions.push({ time: elapsed, key: EInputKey_T.IK_RightMouse, action: pressed ? EInputAction_T.IST_Press : EInputAction_T.IST_Release, amount: 0 });
                 return;
             }
             case "axis":
@@ -78,12 +79,12 @@ export class L2ReplayRecorder {
             this.arrRecordedCameraAngles[i] = next;
             if (delta === 0) continue;
 
-            this.file.arrCameraInstructions.push({ time: elapsed, key: 228 + i, action: 4, amount });
+            this.file.arrCameraInstructions.push({ time: elapsed, key: EInputKey_T.IK_MouseX + i, action: EInputAction_T.IST_Axis, amount });
         }
     }
 
     public addCameraKey(key: number, action: number, time: number): void {
-        if (key !== 33 && key !== 34 && key !== 36 || action !== 1 && action !== 2 && action !== 3 || !Number.isFinite(time)) throw new Error(`Invalid replay camera key '${key}/${action}'.`);
+        if (key !== EInputKey_T.IK_PageUp && key !== EInputKey_T.IK_PageDown && key !== EInputKey_T.IK_Home || action !== EInputAction_T.IST_Press && action !== EInputAction_T.IST_Hold && action !== EInputAction_T.IST_Release || !Number.isFinite(time)) throw new Error(`Invalid replay camera key '${key}/${action}'.`);
         if (this.startTime === null) return;
         if (time < this.startTime) throw new Error(`Replay clock precedes recording start.`);
 

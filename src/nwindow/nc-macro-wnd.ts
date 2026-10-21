@@ -1,8 +1,8 @@
-import getCommandTokens from "../network/command-parser";
+import getCommandTokens, { CommandType_T } from "../network/command-parser";
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import { FontType_T } from "./nwindow-canvas";
-import type { Macro_T, MacroCommand_T } from "../network/game-packets";
+import { MacroCommandType_T, type Macro_T, type MacroCommand_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
 
 const arrBack = ["macro2_back", "macro1_back", "macro3_back"].map(name => `L2UI_CH3.MacroWnd.${name}`);
@@ -202,10 +202,10 @@ export class NCMacroWnd {
         const strings = this.layer.getManager().strings;
 
         switch (command.type) {
-            case 1: return `/${strings.commands[24]} ${strings.skillNames[command.data1]}`;
-            case 2: return `/${strings.actions[command.data1].command}`;
-            case 4: return `/${strings.commands[27]} ${command.data1 + 1} ${command.data2 + 1}`;
-            case 6: return `/${strings.commands[76]} ${command.data1}`;
+            case MacroCommandType_T.SKILL: return `/${strings.commands[CommandType_T.useskill]} ${strings.skillNames[command.data1]}`;
+            case MacroCommandType_T.ACTION: return `/${strings.actions[command.data1].command}`;
+            case MacroCommandType_T.SHORTCUT: return `/${strings.commands[CommandType_T.useshortcut]} ${command.data1 + 1} ${command.data2 + 1}`;
+            case MacroCommandType_T.DELAY: return `/${strings.commands[CommandType_T.delay]} ${command.data1}`;
             default: return "";
         }
     }
@@ -226,26 +226,26 @@ export class NCMacroWnd {
                 if (this.commands.slice(i + 1).some(edit => edit.getValue())) { if (this.onError) this.onError(810); return; }
                 break;
             }
-            const command = { index: i + 1, type: 3, data1: 0, data2: 0, command: text };
+            const command = { index: i + 1, type: MacroCommandType_T.CHAT, data1: 0, data2: 0, command: text };
             const strings = this.layer.getManager().strings, tokens = getCommandTokens(text);
             const entry = text[0] === "/" && Object.entries(strings.commands).find(([, name]) => `/${name.toLowerCase()}` === tokens[0].toLowerCase());
             const type = entry ? Number(entry[0]) : -1;
 
-            if (type >= 24 && type <= 26) {
+            if (type >= CommandType_T.useskill && type <= CommandType_T.useskillstand) {
                 const skillId = strings.skillCommands[tokens.slice(1).join(" ").toLowerCase()];
 
-                command.type = 1;
+                command.type = MacroCommandType_T.SKILL;
                 command.data1 = skillId || 0;
                 command.data2 = skillId ? 1 : 0;
                 command.command = "";
-            } else if (type >= 27 && type <= 29 || type === 76) {
-                const data1 = parseInt(tokens[1], 10), data2 = type === 76 ? 0 : parseInt(tokens[2], 10);
+            } else if (type >= CommandType_T.useshortcut && type <= CommandType_T.useshortcutstand || type === CommandType_T.delay) {
+                const data1 = parseInt(tokens[1], 10), data2 = type === CommandType_T.delay ? 0 : parseInt(tokens[2], 10);
 
-                if (!Number.isFinite(data1) || data1 < 1 || data1 > 0x7fffffff || type !== 76 && (!Number.isFinite(data2) || data1 > 10 || data2 < 1 || data2 > 12)) { if (this.onError) this.onError(810); return; }
-                if (type === 27 || type === 76) {
-                    command.type = type === 76 ? 6 : 4;
-                    command.data1 = type === 76 ? data1 : data1 - 1;
-                    command.data2 = type === 27 ? data2 - 1 : 0;
+                if (!Number.isFinite(data1) || data1 < 1 || data1 > 0x7fffffff || type !== CommandType_T.delay && (!Number.isFinite(data2) || data1 > 10 || data2 < 1 || data2 > 12)) { if (this.onError) this.onError(810); return; }
+                if (type === CommandType_T.useshortcut || type === CommandType_T.delay) {
+                    command.type = type === CommandType_T.delay ? MacroCommandType_T.DELAY : MacroCommandType_T.SHORTCUT;
+                    command.data1 = type === CommandType_T.delay ? data1 : data1 - 1;
+                    command.data2 = type === CommandType_T.useshortcut ? data2 - 1 : 0;
                     command.command = "";
                 }
             }

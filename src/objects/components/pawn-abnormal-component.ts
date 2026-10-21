@@ -1,3 +1,4 @@
+import { AbnormalEffect_T } from "../../network/game-packets";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { Material, Mesh } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, GameObject, ObjectComponent } from "../../game/components";
@@ -10,9 +11,9 @@ import type PawnRenderableComponent from "../../rendering/components/pawn-render
 type AbnormalSize_T = { phase: number, radius: number, height: number, weaponScale: number };
 type AbnormalStat_T = { state: number, effect: GameObject, time: number, scale: number, size: AbnormalSize_T | null };
 
-const ABNORMAL_EFFECTS: Record<number, string> = { 0x1: "LineageEffect.a_u001_a", 0x2: "LineageEffect.a_u000_a", 0x4: "LineageEffect.a_u001_a", 0x8: "LineageEffect.a_u001_a", 0x10: "LineageEffect.a_u001_a", 0x20: "LineageEffect.a_u008_a", 0x40: "LineageEffect.a_u002_a", 0x80: "LineageEffect.a_u004_a", 0x100: "LineageEffect.a_u005_a", 0x200: "LineageEffect.a_u006_a", 0x4000: "LineageEffect.a_u007_a" }; // FNAbnormalStat::Init 0x763b40 / Update 0x764970
-const PULSE_STATES = 0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20 | 0x4000;
-const E_BONE_STATES = 0x2 | 0x40 | 0x80 | 0x100 | 0x4000;
+const ABNORMAL_EFFECTS: Record<number, string> = { [AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_POISON]: "LineageEffect.a_u000_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6]: "LineageEffect.a_u008_a", [AbnormalEffect_T.ABNORMAL_EFFECT_STUN]: "LineageEffect.a_u002_a", [AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP]: "LineageEffect.a_u004_a", [AbnormalEffect_T.ABNORMAL_EFFECT_MUTED]: "LineageEffect.a_u005_a", [AbnormalEffect_T.ABNORMAL_EFFECT_ROOT]: "LineageEffect.a_u006_a", [AbnormalEffect_T.ABNORMAL_EFFECT_FLAME]: "LineageEffect.a_u007_a" }; // FNAbnormalStat::Init 0x763b40 / Update 0x764970
+const PULSE_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING | AbnormalEffect_T.ABNORMAL_EFFECT_POISON | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6 | AbnormalEffect_T.ABNORMAL_EFFECT_FLAME;
+const E_BONE_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_POISON | AbnormalEffect_T.ABNORMAL_EFFECT_STUN | AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP | AbnormalEffect_T.ABNORMAL_EFFECT_MUTED | AbnormalEffect_T.ABNORMAL_EFFECT_FLAME;
 
 function setSizeScale(effect: GameObject, scale: number): void {
     effect.traverse((emitter: any) => {
@@ -46,16 +47,16 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     public async setAbnormalState(abnormalState: number): Promise<void> {
         const asset = this.renderManager.getParent().getComponent("asset");
 
-        if (abnormalState & ~this.abnormalState & 0xc00) asset.stopPawnSkill(this.getParent());
-        if ((abnormalState ^ this.abnormalState) & 0x800) this.setOverlayColor(abnormalState & 0x800 ? 72 : 255, abnormalState & 0x800 ? 105 : 255, abnormalState & 0x800 ? 140 : 255);
+        if (abnormalState & ~this.abnormalState & (AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2)) asset.stopPawnSkill(this.getParent());
+        if ((abnormalState ^ this.abnormalState) & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 72 : 255, abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 105 : 255, abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 140 : 255);
 
         this.abnormalState = abnormalState;
 
-        if (!(abnormalState & 0x8000)) this.restoreNpcSkins();
+        if (!(abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_TEXTURE_CHANGE)) this.restoreNpcSkins();
         else if (!this.npcSkins.length && this.getParent().getUnrealScriptProperty("bNpc")) {
             const npc = await asset.resolveNpc(this.getParent().getUnrealScriptProperty("NpcClassID") as number);
 
-            if (!this.isAttached() || !(this.abnormalState & 0x8000)) return;
+            if (!this.isAttached() || !(this.abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_TEXTURE_CHANGE)) return;
 
             if (npc.alternateTextures.length && !this.npcSkins.length) {
                 const count = npc.textures.length - npc.alternateTextures.length;
@@ -71,7 +72,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             }
         }
 
-        if (abnormalState & 0x2000 && this.bigHeadMaxSize === null) {
+        if (abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD && this.bigHeadMaxSize === null) {
             const scales = await asset.loadBigHeadScales();
             if (!this.isAttached()) return;
             const mesh = this.getComponent<AnimationComponent>("animation").getMeshes()[0];
@@ -104,7 +105,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             }
 
             if (stat.effect && stat.effect.parent) this.renderManager.removeTransientEffect(stat.effect);
-            if (stat.state === 0x2000) this.setHeadScale(1);
+            if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD) this.setHeadScale(1);
             if (stat.size) { this.releaseSize(stat); releasedSize = true; }
             this.stats.splice(i, 1);
         }
@@ -117,22 +118,22 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             const stat: AbnormalStat_T = { state, effect: null, time: 0, scale: 1, size: null };
 
             switch (state) {
-                case 0x40: case 0x80: case 0x100: case 0x200: this.spawnEffect(stat); break;
-                case 0x400: case 0x800: case 0x2000: case 0x8000: break;
-                case 0x10000: this.initSize(stat); break;
+                case AbnormalEffect_T.ABNORMAL_EFFECT_STUN: case AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP: case AbnormalEffect_T.ABNORMAL_EFFECT_MUTED: case AbnormalEffect_T.ABNORMAL_EFFECT_ROOT: this.spawnEffect(stat); break;
+                case AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1: case AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2: case AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD: case AbnormalEffect_T.ABNORMAL_EFFECT_TEXTURE_CHANGE: break;
+                case AbnormalEffect_T.ABNORMAL_EFFECT_GROW: this.initSize(stat); break;
             }
 
             this.stats.push(stat);
         }
 
         for (const stat of this.stats) {
-            if (stat.state === 0x10000) {
+            if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_GROW) {
                 if (stat.size) this.updateSize(stat, Math.fround(deltaTime));
                 else stat.time = Math.fround(stat.time + Math.fround(deltaTime));
                 continue;
             }
 
-            if (stat.state === 0x2000) {
+            if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD) {
                 if (this.bigHeadMaxSize === null) continue;
                 const delta = Math.fround(deltaTime);
 
@@ -242,20 +243,20 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
         stat.effect = effect;
         effect.position.copy(parent.position);
-        if (stat.state === 0x200) effect.position.z -= height;
+        if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_ROOT) effect.position.z -= height;
         this.renderManager.addTransientEffect(effect, parent);
 
         switch (stat.state) {
-            case 0x1: case 0x4: case 0x8: case 0x10: case 0x20: {
+            case AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6: {
                 const scale = Math.sqrt(height * radius) / Math.sqrt(207);
 
                 parent.attachObjectToBone(effect, 0);
                 if (scale > 1) setSizeScale(effect, scale);
                 break;
             }
-            case 0x2: case 0x40: case 0x80: case 0x100: {
+            case AbnormalEffect_T.ABNORMAL_EFFECT_POISON: case AbnormalEffect_T.ABNORMAL_EFFECT_STUN: case AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP: case AbnormalEffect_T.ABNORMAL_EFFECT_MUTED: {
                 if (parent.attachObjectToBone(effect, mesh.tagNames[index], true)) {
-                    const bigHead = this.stats.find(stat => stat.state === 0x2000);
+                    const bigHead = this.stats.find(stat => stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD);
 
                     effect.position.fromArray(mesh.tagOrigins[index]);
                     if (bigHead) effect.position.multiplyScalar(bigHead.scale);
@@ -263,7 +264,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
                 else parent.attachObjectToBone(effect, 0, true);
                 break;
             }
-            case 0x200: case 0x4000: setSizeScale(effect, radius / 9); break;
+            case AbnormalEffect_T.ABNORMAL_EFFECT_ROOT: case AbnormalEffect_T.ABNORMAL_EFFECT_FLAME: setSizeScale(effect, radius / 9); break;
             default: throw new Error(`Abnormal state 0x${stat.state.toString(16)} has no effect.`);
         }
     }
@@ -287,8 +288,8 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
     public onDetach(): void {
         this.restoreNpcSkins();
-        if (this.abnormalState & 0x800) this.setOverlayColor(255, 255, 255);
-        if (this.abnormalState & 0x2000) this.setHeadScale(1);
+        if (this.abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(255, 255, 255);
+        if (this.abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD) this.setHeadScale(1);
         for (const stat of this.stats) {
             if (stat.size) this.releaseSize(stat);
             if (stat.effect && stat.effect.parent) this.renderManager.removeTransientEffect(stat.effect);

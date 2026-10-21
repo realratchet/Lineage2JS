@@ -1,3 +1,13 @@
+export const PLEDGE_CREST_WIDTH = 16;
+export const PLEDGE_CREST_HEIGHT = 12;
+export const PLEDGE_CREST_MAX_BYTES = 256;
+export const PLEDGE_LARGE_CREST_WIDTH = 64;
+export const PLEDGE_LARGE_CREST_HEIGHT = 64;
+export const PLEDGE_LARGE_CREST_MAX_BYTES = 2176;
+export const ALLY_CREST_MAX_BYTES = 192;
+
+type CrestImage_T = { width: number, height: number, pixels: Uint32Array };
+
 const tmpColors = new Uint8Array(48), tmpPalette = new Uint8Array(12);
 
 function encodeColor565(colors: Uint8Array, offset: number) { return (Math.round(colors[offset] * 31 / 255) << 11) | (Math.round(colors[offset + 1] * 63 / 255) << 5) | Math.round(colors[offset + 2] * 31 / 255); }
@@ -102,7 +112,36 @@ export function encodeCrest(file: Uint8Array, width: number, height: number): Ui
     if (view.getUint16(0, true) !== 0x4d42 || view.getInt32(18, true) !== width || view.getInt32(22, true) !== height || view.getUint16(28, true) > 8) return null; // NWindow 0x10080c5d / 0x10080f2d / 0x10080a39
     if (width < 64 && view.getUint32(2, true) > 0xC00) return null; // NWindow 0x10080c65
 
-    const image = importBmp8(width < 64 ? prepareCrestBmp(file) : file);
+    return encodeCrestPixels(importBmp8(width < 64 ? prepareCrestBmp(file) : file));
+}
+
+export async function encodeCrestImage(file: Blob, width: number, height: number): Promise<Uint8Array> {
+    const image = new Image(), url = URL.createObjectURL(file);
+
+    try {
+        image.src = url;
+        await image.decode();
+        if (image.naturalWidth !== width || image.naturalHeight !== height) return null;
+        const canvas = document.createElement("canvas");
+
+        canvas.width = width;
+        canvas.height = width < PLEDGE_LARGE_CREST_WIDTH ? 16 : height;
+        const context = canvas.getContext("2d");
+
+        context.fillStyle = "white";
+        context.fillRect(0, 0, width, canvas.height - height);
+        context.drawImage(image, 0, canvas.height - height); // DrawTargetName 0x1051e448 samples crest rows4..15.
+        const colors = context.getImageData(0, 0, canvas.width, canvas.height).data, pixels = new Uint32Array(canvas.width * canvas.height);
+
+        for (let i = 0; i < pixels.length; i++) pixels[i] = colors[i * 4] << 16 | colors[i * 4 + 1] << 8 | colors[i * 4 + 2] | colors[i * 4 + 3] << 24;
+
+        return encodeCrestPixels({ width: canvas.width, height: canvas.height, pixels });
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
+function encodeCrestPixels(image: CrestImage_T): Uint8Array {
     const data = new Uint8Array(128 + image.width * image.height / 2), out = new DataView(data.buffer);
 
     out.setUint32(0, 0x20534444, true); // Engine MakeBMPToDXT1 0x1052010b

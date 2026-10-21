@@ -120,7 +120,7 @@ function layoutHtmlTableHeight(table: HtmlTable_T) { // NWindow 0x1003d098..0x10
     table.table.style.gridTemplateRows = table.rows.map(row => row.length > 0 ? "auto" : `${2 * (table.padding + table.border)}px`).join(" ");
     const inset = 2 * (table.padding + table.border);
     const heights = getComputedStyle(table.table).gridTemplateRows.split(" ").map(value => parseFloat(value) - inset);
-    const naturalHeight = table.table.getBoundingClientRect().height;
+    const naturalHeight = table.table.offsetHeight;
     const total = heights.reduce((sum, height) => sum + height, 0);
 
     if (table.height > naturalHeight && total > 0) {
@@ -132,8 +132,8 @@ function layoutHtmlTableHeight(table: HtmlTable_T) { // NWindow 0x1003d098..0x10
     table.table.style.height = `${Math.max(naturalHeight, table.height)}px`;
     for (const row of table.rows) for (const cell of row) {
         const inner = cell.block.element, align = cell.element.style.verticalAlign;
-        const height = cell.element.getBoundingClientRect().height - inset;
-        const contentHeight = inner.getBoundingClientRect().height + (parseFloat(inner.style.marginBottom) || 0);
+        const height = cell.element.offsetHeight - inset;
+        const contentHeight = inner.offsetHeight + (parseFloat(inner.style.marginBottom) || 0);
         const offset = align === "middle" ? Math.trunc(height / 2) - Math.trunc(contentHeight / 2) : align === "bottom" ? height - contentHeight : 0;
 
         inner.style.transform = `translateY(${offset}px)`;

@@ -2,6 +2,8 @@ import FZoneInfo, { type IInfo, type IBaseZoneDecodeInfo } from "./un-zone-info"
 import type { ULevel } from "./un-level";
 import type { DecodeLibrary } from "./decode-library";
 
+export enum ENetMode_T { NM_Standalone = 0, NM_DedicatedServer = 1, NM_ListenServer = 2, NM_Client = 3 };
+
 export abstract class ULevelInfo extends FZoneInfo implements IInfo {
     declare protected level: ULevel;
 

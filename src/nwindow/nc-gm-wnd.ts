@@ -1,10 +1,12 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import type { default as NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
 
+enum GMControl_T { TeleportTo = 0xf0f00d, InstantMove = 0xf0f03d, Recall = 0xf0f00e, CharacterInfo = 0xf0f007, PledgeInfo = 0xf0f006, QuestInfo = 0xf0f008, InventoryInfo = 0xf0f00a, Debug = 0xf0f05d, WarehouseInfo = 0xf0f00c, SkillInfo = 0xf0f00b, PetitionChat = 0xf0f03f, SendHome = 0xf0f03e, NpcLookup = 0xf0f01c, ItemLookup = 0xf0f02c, SkillLookup = 0xf0f03c, ForcePetition = 0xf0f016, ServerTransfer = 0xf0f123 }
+
 const TEX_BACK = "l2ui_ch3.siegewnd.siege_back31";
 const TEX_BUTTON = "sek.cbui91";
 const TEX_DOWN = "sek.cbui93";
-const arrButtons = [[0xf0f00d, 10, 75, 899], [0xf0f03d, 74, 75, 900], [0xf0f00e, 138, 75, 688], [0xf0f007, 10, 96, 433], [0xf0f006, 74, 96, 138], [0xf0f008, 138, 96, 119], [0xf0f00a, 10, 117, 118], [0xf0f05d, 74, 117, 901], [0xf0f00c, 138, 117, 131], [0xf0f00b, 10, 138, 439], [0xf0f03f, 74, 138, 902], [0xf0f03e, 138, 138, 903], [0xf0f01c, 10, 159, 690], [0xf0f02c, 74, 159, 691], [0xf0f03c, 138, 159, 692], [0xf0f016, 10, 180, 1274], [0xf0f123, 74, 180, 1275]];
+const arrButtons = [[GMControl_T.TeleportTo, 10, 75, 899], [GMControl_T.InstantMove, 74, 75, 900], [GMControl_T.Recall, 138, 75, 688], [GMControl_T.CharacterInfo, 10, 96, 433], [GMControl_T.PledgeInfo, 74, 96, 138], [GMControl_T.QuestInfo, 138, 96, 119], [GMControl_T.InventoryInfo, 10, 117, 118], [GMControl_T.Debug, 74, 117, 901], [GMControl_T.WarehouseInfo, 138, 117, 131], [GMControl_T.SkillInfo, 10, 138, 439], [GMControl_T.PetitionChat, 74, 138, 902], [GMControl_T.SendHome, 138, 138, 903], [GMControl_T.NpcLookup, 10, 159, 690], [GMControl_T.ItemLookup, 74, 159, 691], [GMControl_T.SkillLookup, 138, 159, 692], [GMControl_T.ForcePetition, 10, 180, 1274], [GMControl_T.ServerTransfer, 74, 180, 1275]];
 
 export class NCGMWnd {
     public static getTextures() { return [...NCFrameCtrl.getTextures(), TEX_BACK, TEX_BUTTON, TEX_DOWN, "NWindow.ChatBack"]; }
@@ -54,7 +56,7 @@ export class NCGMWnd {
     }
     public press(id: number) {
         const target = this.target.getValue();
-        const views = [0xf0f007, 0xf0f00b, 0xf0f008, 0xf0f00a, 0xf0f006, 0xf0f00c];
+        const views = [GMControl_T.CharacterInfo, GMControl_T.SkillInfo, GMControl_T.QuestInfo, GMControl_T.InventoryInfo, GMControl_T.PledgeInfo, GMControl_T.WarehouseInfo];
         const index = views.indexOf(id);
 
         if (index >= 0) {
@@ -63,8 +65,8 @@ export class NCGMWnd {
             if (this.onView) this.onView(target, index + 1);
             return;
         }
-        if (id === 0xf0f03d) { this.command("instant_move"); return; }
-        if (id === 0xf0f123) {
+        if (id === GMControl_T.InstantMove) { this.command("instant_move"); return; }
+        if (id === GMControl_T.ServerTransfer) {
             const number = target.match(/^\s*([+-]?\d+)/);
 
             if (this.onServerTransfer) this.onServerTransfer(number ? Number(number[1]) | 0 : 0);
@@ -73,16 +75,16 @@ export class NCGMWnd {
         if (!target) return;
 
         switch (id) {
-            case 0xf0f00d: this.command(`teleportto ${target}`); break;
-            case 0xf0f05d: this.command(`debug ${target}`); break;
-            case 0xf0f03f: this.command(`add_peti_chat ${target}`); break;
-            case 0xf0f016: this.command(`force_peti ${target} ${this.playerName}`); break;
-            case 0xf0f00e: case 0xf0f03e:
-                if (this.onConfirm) this.onConfirm(id === 0xf0f00e ? 1220 : 1221, target, isOk => {
-                    if (isOk) this.command(`${id === 0xf0f00e ? "recall" : "sendhome"} ${target}`);
+            case GMControl_T.TeleportTo: this.command(`teleportto ${target}`); break;
+            case GMControl_T.Debug: this.command(`debug ${target}`); break;
+            case GMControl_T.PetitionChat: this.command(`add_peti_chat ${target}`); break;
+            case GMControl_T.ForcePetition: this.command(`force_peti ${target} ${this.playerName}`); break;
+            case GMControl_T.Recall: case GMControl_T.SendHome:
+                if (this.onConfirm) this.onConfirm(id === GMControl_T.Recall ? 1220 : 1221, target, isOk => {
+                    if (isOk) this.command(`${id === GMControl_T.Recall ? "recall" : "sendhome"} ${target}`);
                 });
                 break;
-            case 0xf0f01c: case 0xf0f02c: case 0xf0f03c: this.lookup(id, target); break;
+            case GMControl_T.NpcLookup: case GMControl_T.ItemLookup: case GMControl_T.SkillLookup: this.lookup(id, target); break;
             default: throw new Error(`Unknown GM control ${id}.`);
         }
     }
@@ -92,8 +94,8 @@ export class NCGMWnd {
         const name = target.toLowerCase();
         let rows: [number, string][];
 
-        if (id === 0xf0f01c) rows = Object.keys(strings.npcNames).map(key => [Number(key) + 1000000, strings.npcNames[key]]);
-        else if (id === 0xf0f02c) {
+        if (id === GMControl_T.NpcLookup) rows = Object.keys(strings.npcNames).map(key => [Number(key) + 1000000, strings.npcNames[key]]);
+        else if (id === GMControl_T.ItemLookup) {
             const keys = Object.keys(strings.itemInfos);
 
             rows = [];
