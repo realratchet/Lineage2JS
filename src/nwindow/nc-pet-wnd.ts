@@ -46,8 +46,8 @@ export class NCPetWnd {
     protected readonly panes: HTMLDivElement[] = [];
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly actionGrid: HTMLDivElement;
-    protected readonly values: HTMLCanvasElement;
-    protected readonly stats: HTMLCanvasElement;
+    protected readonly values: HTMLDivElement;
+    protected readonly stats: HTMLDivElement;
     protected readonly bars: HTMLDivElement[];
     protected readonly frames: HTMLDivElement[] = [];
     protected info: PetStatus_T = null;
@@ -83,7 +83,7 @@ export class NCPetWnd {
         layer.tile(this.element, 0, 20, 256, 95, 0, 0, 256, 95, TEX_BACK + "1");
         layer.tile(this.element, 0, 115, 256, 23, 0, 0, 256, 23, TEX_BACK + "2");
         this.bars = [[35, 51], [35, 65], [35, 79], [35, 93], [156, 51]].map(([x, y], index) => layer.tile(this.element, x, y, 0, 12, 0, 0, 8, 12, index === 4 ? arrWeight[0] : arrBars[index]));
-        this.values = this.createCanvas(this.element, 256, 115);
+        this.values = this.createValues(this.element, 256, 115);
         this.rename = layer.button(this.element, 167, 28, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(497), () => { if (this.onRename) this.onRename(); });
         this.rename.setAttribute("aria-label", manager.getSysString(497));
 
@@ -94,7 +94,7 @@ export class NCPetWnd {
             this.panes.push(pane);
             this.tabs.push(layer.tab(this.element, 12 + index * 74, 115, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(491 + index), null, () => this.selectTab(index)));
         }
-        this.stats = this.createCanvas(this.panes[0], 256, 91);
+        this.stats = this.createValues(this.panes[0], 256, 91);
         this.actionGrid = layer.createWindow(18, 9, 219, 69, this.panes[1]);
         this.actionGrid.style.overflow = "hidden";
         this.inventoryGrid = layer.scrollPane(this.panes[2], 18, 9, 235, 69, 35);
@@ -161,26 +161,11 @@ export class NCPetWnd {
         }, true);
     }
 
-    protected createCanvas(parent: HTMLElement, width: number, height: number): HTMLCanvasElement {
-        const canvas = document.createElement("canvas");
+    protected createValues(parent: HTMLElement, width: number, height: number): HTMLDivElement {
+        const values = this.layer.createWindow(0, 0, width, height, parent);
 
-        canvas.className = "ndom-text ndom-absolute";
-        canvas.style.pointerEvents = "none";
-        this.layer.place(canvas, 0, 0, width, height);
-        parent.appendChild(canvas);
-        return canvas;
-    }
-
-    protected getContext(canvas: HTMLCanvasElement, width: number, height: number): CanvasRenderingContext2D {
-        const scale = this.layer.getManager().canvas.scale;
-
-        canvas.width = Math.round(width * scale);
-        canvas.height = Math.round(height * scale);
-        const context = canvas.getContext("2d");
-
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
-        return context;
+        values.style.pointerEvents = "none";
+        return values;
     }
 
     public isVisible() { return !this.element.hidden; }
@@ -237,17 +222,20 @@ export class NCPetWnd {
         this.paint();
     }
 
-    protected drawText(context: CanvasRenderingContext2D, x: number, y: number, text: string, color: number, align: CanvasTextAlign = "left", digits = false) {
-        const width = this.layer.measureText(text), canvas = this.layer.getManager().canvas;
+    protected drawText(parent: HTMLElement, x: number, y: number, text: string, color: number, align: CanvasTextAlign = "left", digits = false) {
+        const width = this.layer.measureText(text);
 
         if (align === "right") x -= width;
         else if (align === "center") x -= Math.trunc(width / 2);
-        if (digits) canvas.renderDigits(context, x, y, color, text);
-        else canvas.renderText(context, x, y, color, text);
+        if (digits) this.layer.digits(parent, text, color, undefined, x, y);
+        else this.layer.text(parent, text, color, FontType_T.SMALL, Math.trunc(x), Math.trunc(y));
     }
 
     protected paint() {
-        const context = this.getContext(this.values, 256, 115), stats = this.getContext(this.stats, 256, 91), info = this.info;
+        const panel = this.values, stats = this.stats, info = this.info;
+
+        panel.replaceChildren();
+        stats.replaceChildren();
 
         this.bars.forEach(bar => bar.hidden = true);
         if (!info) return;
@@ -270,17 +258,17 @@ export class NCPetWnd {
             this.layer.place(bar, index === 4 ? 156 : 35, [51, 65, 79, 93, 51][index], w, h);
             this.layer.setTile(bar, w, h, 0, 0, sourceWidth, h, index === 4 ? arrWeight[weightIndex] : arrBars[index]);
         });
-        this.drawText(context, 15, 35, this.layer.getManager().getSysString(88), 0xffa3a3a3);
-        this.drawText(context, 33, 35, `${info.level} ${info.name || "(null)"}`, 0xffb09b79);
+        this.drawText(panel, 15, 35, this.layer.getManager().getSysString(88), 0xffa3a3a3);
+        this.drawText(panel, 33, 35, `${info.level} ${info.name || "(null)"}`, 0xffb09b79);
         for (const [y, current, maximum] of [[53, info.curHp, info.maxHp], [67, info.curMp, info.maxMp]]) {
-            this.drawText(context, 67, y, String(current), 0xffdcdcdc, "right", true);
-            this.drawText(context, 77, y, "/", 0xffdcdcdc, "center", true);
-            this.drawText(context, 83, y, String(maximum), 0xffdcdcdc, "left", true);
+            this.drawText(panel, 67, y, String(current), 0xffdcdcdc, "right", true);
+            this.drawText(panel, 77, y, "/", 0xffdcdcdc, "center", true);
+            this.drawText(panel, 83, y, String(maximum), 0xffdcdcdc, "left", true);
         }
-        this.drawText(context, 138, 81, formatPercent(expDelta * 100 / expSpan), 0xffb4b4b4, "center", true);
-        this.drawText(context, 138, 95, formatPercent(info.curFood * 100 / info.maxFood), 0xffb4b4b4, "center", true);
-        this.drawText(context, 198, 53, `${weight.toFixed(2)}%`, 0xffdcdcdc, "center", true);
-        this.drawText(context, 198, 66, String(info.field42), 0xffb09b79, "center");
+        this.drawText(panel, 138, 81, formatPercent(expDelta * 100 / expSpan), 0xffb4b4b4, "center", true);
+        this.drawText(panel, 138, 95, formatPercent(info.curFood * 100 / info.maxFood), 0xffb4b4b4, "center", true);
+        this.drawText(panel, 198, 53, `${weight.toFixed(2)}%`, 0xffdcdcdc, "center", true);
+        this.drawText(panel, 198, 66, String(info.field42), 0xffb09b79, "center");
         const values = [info.pAtk, info.pDef, info.accuracy, info.critical, info.attackSpeed, info.soulshotsUsed, info.mAtk, info.mDef, info.evasion, info.speed, info.castSpeed, info.spiritshotsUsed];
 
         values.forEach((value, index) => {

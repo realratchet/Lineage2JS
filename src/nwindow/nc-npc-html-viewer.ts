@@ -26,7 +26,7 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
     protected readonly layer: NDomLayer;
     protected readonly frame: HTMLDivElement;
     protected readonly viewer: NCHtmlViewer;
-    protected titleText: HTMLCanvasElement = null;
+    protected titleText: HTMLDivElement = null;
     protected readonly titleId: number;
 
     public constructor(layer: NDomLayer, height = HEIGHT, titleId = TITLE_SYSSTRING, background = TEX_BACK) {

@@ -10,7 +10,7 @@ type MapPartyMarker_T = { element: HTMLDivElement, x: number, y: number, memberI
 
 type MapTargetMarker_T = { element: HTMLDivElement, x: number, y: number, worldX: number, worldY: number };
 
-type MapGrid_T = { line: HTMLDivElement, label: HTMLCanvasElement, text: string };
+type MapGrid_T = { line: HTMLDivElement, label: HTMLDivElement, text: string };
 
 type MapInfo_T = { scaleX: number, scaleY: number, originX: number, originY: number, width: number, height: number, x: number, y: number, texture: string };
 
@@ -64,9 +64,9 @@ export class NCMapWnd {
     protected readonly arrGridRows: MapGrid_T[] = [];
     protected readonly townMap: HTMLDivElement;
     protected readonly returnButton: HTMLDivElement;
-    protected readonly zoneCaption: HTMLCanvasElement;
+    protected readonly zoneCaption: HTMLDivElement;
     protected zoneName: string = null;
-    protected readonly clock: HTMLCanvasElement;
+    protected readonly clock: HTMLDivElement;
     protected readonly clockIcon: HTMLDivElement;
     protected clockText = "";
     protected clockDay = false;
@@ -395,6 +395,7 @@ export class NCMapWnd {
         }
     }
 
+    public getQuestLocation() { return this.questLocation; }
     public setQuestLocation(location: QuestLocation_T) {
         this.questLocation = location;
         this.questMarker.hidden = !location;

@@ -19,8 +19,8 @@ export class NCRecipeBookWnd {
     public onHideTooltip: () => void = null;
     public onHide: () => void = null;
     protected readonly list: NDomScrollPane_T;
-    protected readonly caption: HTMLCanvasElement;
-    protected readonly counter: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
+    protected readonly counter: HTMLDivElement;
     protected readonly trash: HTMLDivElement;
     protected readonly trashNormal: HTMLElement;
     protected readonly trashDrag: HTMLElement;

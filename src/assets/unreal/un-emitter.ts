@@ -175,7 +175,7 @@ export abstract class UEmitter extends UAActor {
         if (!this.spawnSound) return null;
 
         const sound = this.spawnSound.loadSelf();
-        const soundName = sound.objectName ?? sound.uuid;
+        const soundName = sound.name;
 
         if (!builder.pullSound(sound)) throw new Error(`Emitter '${this.objectName}' spawn sound '${soundName}' has no audio data.`);
 

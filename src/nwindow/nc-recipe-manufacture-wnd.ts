@@ -34,7 +34,7 @@ export class NCRecipeManufactureWnd {
     protected readonly result: HTMLDivElement;
     protected readonly mp: HTMLDivElement;
     protected readonly list: NDomScrollPane_T;
-    protected readonly inventoryCount: HTMLCanvasElement;
+    protected readonly inventoryCount: HTMLDivElement;
     protected recipe: RecipeInfo_T = null;
     protected materials: RecipeMaterial_T[] = [];
     protected selected = -1;

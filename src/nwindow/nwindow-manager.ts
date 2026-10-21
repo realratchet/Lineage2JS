@@ -1,12 +1,9 @@
 import "../../style/nwindow.scss";
 import NWindowCanvas from "./nwindow-canvas";
-import type { default as NWnd, NMouseEvent_T } from "./nwnd";
 import type AssetManager from "../assets/asset-manager";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import fetchAsset from "../assets/asset-source";
 import type SkinTextures from "./skin-textures";
-
-type TextInputHandler_T = { onTextInput(text: string): void, onTextSubmit(text: string, isShift: boolean): void, onTextBlur(): void };
 
 const SNAP_DISTANCE = 10;
 
@@ -17,34 +14,19 @@ function snapToEdge(position: number, size: number, screen: number) { // NWindow
     return position;
 }
 
-type DockWindow_T = NWnd | HTMLElement;
+type DockWindow_T = HTMLElement;
 
-function getWindowRect(wnd: DockWindow_T): [number, number, number, number] {
-    return wnd instanceof HTMLElement ? [wnd.offsetLeft, wnd.offsetTop, wnd.offsetWidth, wnd.offsetHeight] : [wnd.x, wnd.y, wnd.width, wnd.height];
-}
+function getWindowRect(wnd: DockWindow_T): [number, number, number, number] { return [wnd.offsetLeft, wnd.offsetTop, wnd.offsetWidth, wnd.offsetHeight]; }
 
 export class NWindowManager {
     public readonly canvas: NWindowCanvas;
-    protected readonly windows: NWnd[] = [];
-    protected readonly windowPositions = new Map<NWnd, [number, number]>();
     protected windowOwner: string = null;
     protected readonly dockedWindows = new Map<DockWindow_T, Set<DockWindow_T>[]>();
-    protected readonly textInput = document.createElement("input");
-    protected textHandler: TextInputHandler_T = null;
-    protected textOwner: NWnd = null;
-    protected hovered: NWnd = null;
-    protected pressed: NWnd = null;
-    protected dragged: NWnd = null;
-    protected dragOffsetX = 0;
-    protected dragStartX = 0;
-    protected dragStartY = 0;
-    protected dragOffsetY = 0;
     protected isDirty = true;
     protected isReady = false;
     public readonly ready: Promise<void>;
 
     public overlayPaint: (canvas: NWindowCanvas) => void = null;
-    public readonly arrTooltipPaint: (() => void)[] = [];
     public strings: GameStrings_T = { trueFonts: {}, zoneNames: [], zoneNameMasks: {}, systemMessages: {}, systemMessageColors: {}, systemMessageGroups: {}, systemMessageSounds: {}, systemMessageVoices: {}, sysStrings: {}, recipes: [], hennas: {}, serverNames: {}, skillIcons: {}, skillCastStyles: {}, skillRecords: {}, skillInfos: {}, actions: {}, logonSpots: [], classNames: {}, skillNames: {}, itemNames: {}, itemIcons: {}, itemInfos: {}, symbols: {} };
 
     public constructor(protected readonly asset: AssetManager, skin: SkinTextures) {
@@ -52,49 +34,7 @@ export class NWindowManager {
 
         document.body.appendChild(this.canvas.element);
 
-        this.textInput.className = "nwindow-text-input";
-        this.textInput.autocomplete = "off";
-        this.textInput.addEventListener("input", () => { if (this.textHandler) this.textHandler.onTextInput(this.textInput.value); });
-        this.textInput.addEventListener("keydown", event => {
-            event.stopPropagation();
-
-            if (event.key === "Enter" && this.textHandler) this.textHandler.onTextSubmit(this.textInput.value, event.shiftKey);
-            if (event.key === "Escape") this.textInput.blur();
-        });
-        this.textInput.addEventListener("keyup", event => { event.stopPropagation(); this.invalidate(); });
-        this.textInput.addEventListener("blur", () => {
-            const handler = this.textHandler;
-
-            this.textHandler = null;
-            this.textOwner = null;
-
-            if (handler) handler.onTextBlur();
-
-            this.invalidate();
-        });
-        document.body.appendChild(this.textInput);
-
         window.addEventListener("resize", () => this.resize());
-        window.addEventListener("pointerdown", event => { const target = event.target instanceof Element ? event.target : null; if (!target?.closest(".ndom-layer") && this.findClientWindow(event)) event.stopPropagation(); }, true);
-        window.addEventListener("mousedown", event => this.onMouse(event, "down"), true);
-        window.addEventListener("mouseup", event => this.onMouse(event, "up"), true);
-        window.addEventListener("mousemove", event => this.onMouse(event, "move"), true);
-        window.addEventListener("blur", () => this.cancelMouse());
-        window.addEventListener("click", event => { const target = event.target instanceof Element ? event.target : null; if (!target?.closest(".ndom-layer") && this.findClientWindow(event)) event.stopPropagation(); }, true);
-        window.addEventListener("contextmenu", event => { if (this.findClientWindow(event)) event.preventDefault(); }, true);
-        window.addEventListener("wheel", event => {
-            if (event.target instanceof Element && event.target.closest(".ndom-layer")) return;
-
-            const target = this.findClientWindow(event);
-
-            if (!target) return;
-
-            event.stopPropagation();
-
-            for (let wnd = target; wnd; wnd = wnd.parent)
-                if (wnd.onWheel(Math.sign(event.deltaY))) break;
-        }, { capture: true, passive: true });
-
         this.resize();
         this.ready = this.loadFonts();
     }
@@ -134,83 +74,8 @@ export class NWindowManager {
     protected resize() {
         this.dockedWindows.clear();
         this.canvas.resize(window.innerWidth, window.innerHeight);
-
-        for (const wnd of this.windows) this.placeWindow(wnd);
-
         this.invalidate();
     }
-
-    protected placeWindow(wnd: NWnd) {
-        wnd.placeOnScreen(this.canvas.width, this.canvas.height);
-
-        if (!this.windowPositions.has(wnd)) this.windowPositions.set(wnd, [wnd.x, wnd.y]);
-
-        const position = wnd.windowName ? this.loadWindowPosition(wnd.windowName, wnd.width, wnd.height) : null;
-
-        if (position) {
-            wnd.x = position[0];
-            wnd.y = position[1];
-        }
-    }
-
-    public async addWindow<T extends NWnd>(wnd: T, windowName: string = null): Promise<T> {
-        const textures = new Set<string>();
-        const collect = (node: NWnd) => {
-            for (const texture of node.getTextures()) textures.add(texture);
-            for (const child of node.children) collect(child);
-        };
-
-        collect(wnd);
-        wnd.windowName = windowName;
-        wnd.attach(this);
-        this.windows.push(wnd);
-        this.placeWindow(wnd);
-
-        await this.canvas.loadTextures([...textures]);
-
-        this.invalidate();
-
-        return wnd;
-    }
-
-    public removeWindow(wnd: NWnd) {
-        const index = this.windows.indexOf(wnd);
-
-        if (index >= 0) {
-            function isRemoved(node: NWnd) {
-                while (node && node !== wnd) node = node.parent;
-
-                return node === wnd;
-            }
-
-            const pressed = this.pressed;
-
-            if (isRemoved(pressed) || isRemoved(this.dragged)) this.cancelMouse();
-            if (isRemoved(this.hovered)) {
-                if (this.hovered !== pressed) this.hovered.onMouseLeave();
-                this.hovered = null;
-            }
-
-            this.clearWindowDocking(wnd);
-            this.windows.splice(index, 1);
-            this.windowPositions.delete(wnd);
-            wnd.detach();
-        }
-
-        this.invalidate();
-    }
-
-    public bringToFront(wnd: NWnd) {
-        const index = this.windows.indexOf(wnd);
-
-        if (index < 0) return;
-
-        this.windows.splice(index, 1);
-        this.windows.push(wnd);
-        this.invalidate();
-    }
-
-    public getWindows() { return this.windows; }
 
     public invalidate() { this.isDirty = true; }
 
@@ -278,7 +143,7 @@ export class NWindowManager {
 
     public snapWindow(x: number, y: number, width: number, height: number, owner: DockWindow_T): [number, number] { // NWindow 0x10037150: acquire from the current rectangle, release from the mouse position.
         for (const wnd of this.dockedWindows.keys())
-            if (wnd !== owner && (wnd instanceof HTMLElement ? !wnd.isConnected : !this.windows.includes(wnd))) this.clearWindowDocking(wnd);
+            if (wnd !== owner && !wnd.isConnected) this.clearWindowDocking(wnd);
 
         const [oldX, oldY] = getWindowRect(owner), edges = this.getDockedWindows(owner);
         let nextX = x, nextY = y;
@@ -307,10 +172,8 @@ export class NWindowManager {
             this.dockWindow(owner, edge, null);
         }
 
-        const peers: DockWindow_T[] = [...this.windows, ...document.querySelectorAll<HTMLElement>(".ndom-layer > .ndom-window")];
-
-        for (const peer of peers) {
-            if (peer === owner || (peer instanceof HTMLElement ? !peer.getClientRects().length : !peer.isVisible)) continue;
+        for (const peer of document.querySelectorAll<HTMLElement>(".ndom-layer > .ndom-window")) {
+            if (peer === owner || !peer.getClientRects().length) continue;
 
             const [otherX, otherY, otherWidth, otherHeight] = getWindowRect(peer);
             const overlapX = Math.max(oldX, otherX) <= Math.min(oldX + width, otherX + otherWidth), overlapY = Math.max(oldY, otherY) <= Math.min(oldY + height, otherY + otherHeight);
@@ -365,22 +228,14 @@ export class NWindowManager {
     public saveWindowPosition(name: string, x: number, y: number) { if (this.windowOwner !== null) localStorage.setItem(`wnd:${this.windowOwner}:${name}`, JSON.stringify([x, y])); } // NWindow 0x100732c0 writes posX/posY to WindowsInfo.ini.
 
     public resetWindowPositions() {
-        this.cancelMouse();
         this.dockedWindows.clear();
 
-        if (this.windowOwner !== null) {
-            const prefix = `wnd:${this.windowOwner}:`;
+        if (this.windowOwner === null) return;
 
-            for (const key of Object.keys(localStorage))
-                if (key.startsWith(prefix)) localStorage.removeItem(key);
-        }
+        const prefix = `wnd:${this.windowOwner}:`;
 
-        for (const wnd of this.windows) {
-            [wnd.x, wnd.y] = this.windowPositions.get(wnd);
-            this.placeWindow(wnd);
-        }
-
-        this.invalidate();
+        for (const key of Object.keys(localStorage))
+            if (key.startsWith(prefix)) localStorage.removeItem(key);
     }
 
     public getWindowOwner() { return this.windowOwner; }
@@ -388,162 +243,8 @@ export class NWindowManager {
     public setWindowOwner(owner: string) {
         if (owner === this.windowOwner) return;
 
-        this.cancelMouse();
         this.dockedWindows.clear();
         this.windowOwner = owner;
-
-        for (const wnd of this.windows) {
-            if (!wnd.windowName) continue;
-
-            [wnd.x, wnd.y] = this.windowPositions.get(wnd);
-            this.placeWindow(wnd);
-        }
-
-        this.invalidate();
-    }
-
-    public beginDrag(wnd: NWnd, x: number, y: number) {
-        this.dragged = wnd;
-        this.dragStartX = wnd.x;
-        this.dragStartY = wnd.y;
-        this.dragOffsetX = x - wnd.x;
-        this.dragOffsetY = y - wnd.y;
-    }
-
-    public focusText(owner: NWnd & TextInputHandler_T, value: string, isPassword: boolean, maxLength: number) {
-        const isOwnerChanged = this.textOwner !== owner;
-
-        if (isOwnerChanged && this.textHandler) this.blurText();
-
-        this.textHandler = null;
-        this.textOwner = owner;
-        this.textInput.type = isPassword ? "password" : "text";
-        this.textInput.maxLength = maxLength > 0 ? maxLength : 524288;
-        this.textInput.value = value;
-        this.textHandler = owner;
-        this.textInput.focus();
-
-        if (isOwnerChanged) this.textInput.setSelectionRange(value.length, value.length);
-
-        this.invalidate();
-    }
-
-    public blurText(wnd: NWnd = null) {
-        if (wnd) {
-            let owner = this.textOwner;
-
-            while (owner && owner !== wnd) owner = owner.parent;
-            if (!owner) return;
-        }
-        this.textInput.blur();
-    }
-    public isTextFocused(owner: NWnd) { return this.textOwner === owner; }
-    public getCaretPosition() { return (this.textInput.selectionDirection === "backward" ? this.textInput.selectionEnd : this.textInput.selectionStart) || 0; }
-    public getSelectionStart() { return this.textInput.selectionStart || 0; }
-    public getSelectionEnd() { return this.textInput.selectionEnd || 0; }
-    public setTextSelection(start: number, end: number, direction: "forward" | "backward" = "forward") {
-        this.textInput.setSelectionRange(start, end, direction);
-        this.invalidate();
-    }
-
-    public findWindow(x: number, y: number): NWnd {
-        for (let i = this.windows.length - 1; i >= 0; i--) {
-            const wnd = this.windows[i];
-            const hit = wnd.hitTest(x - wnd.x, y - wnd.y);
-
-            if (hit) return hit;
-        }
-
-        return null;
-    }
-
-    public findClientWindow(event: MouseEvent): NWnd { return this.findWindow(this.canvas.toUI(event.clientX), this.canvas.toUI(event.clientY)); }
-    public isMouseOver(x: number, y: number) { return !!(this.pressed || this.dragged || this.findWindow(this.canvas.toUI(x), this.canvas.toUI(y))); }
-
-    protected toLocal(wnd: NWnd, event: MouseEvent): NMouseEvent_T {
-        return { x: this.canvas.toUI(event.clientX) - wnd.getScreenX(), y: this.canvas.toUI(event.clientY) - wnd.getScreenY(), button: event.button, shift: event.shiftKey, ctrl: event.ctrlKey, clickCount: event.detail, target: event.target };
-    }
-
-    protected onMouse(event: MouseEvent, type: "down" | "up" | "move") {
-        if (type === "move" && !(event.buttons & 1) && (this.dragged || this.pressed)) this.cancelMouse();
-        if (!this.dragged && !this.pressed && event.target instanceof Element && event.target.closest(".ndom-layer")) {
-            if (this.hovered) {
-                this.hovered.onMouseLeave();
-                this.hovered = null;
-                this.invalidate();
-            }
-
-            return;
-        }
-
-        if (this.dragged) {
-            if (type === "move") {
-                const [x, y] = this.snapWindow(this.canvas.toUI(event.clientX) - this.dragOffsetX, this.canvas.toUI(event.clientY) - this.dragOffsetY, this.dragged.width, this.dragged.height, this.dragged);
-
-                this.dragged.x = Math.max(0, Math.min(this.canvas.width - this.dragged.width, x));
-                this.dragged.y = Math.max(0, Math.min(this.canvas.height - this.dragged.height, y));
-                this.invalidate();
-            } else if (type === "up") this.cancelMouse();
-
-            event.stopPropagation();
-            return;
-        }
-
-        const target = this.findClientWindow(event);
-
-        if (type === "move" && target !== this.hovered) {
-            if (this.hovered) this.hovered.onMouseLeave();
-            if (target) target.onMouseEnter();
-
-            this.hovered = target;
-            this.invalidate();
-        }
-
-        if (type === "down" && this.textHandler && target !== this.textOwner) this.blurText();
-
-        if (this.pressed && type !== "down") {
-            const pressed = this.pressed;
-
-            event.stopPropagation();
-
-            if (type === "move") pressed.onMouseMove(this.toLocal(pressed, event));
-            else {
-                pressed.onMouseUp(this.toLocal(pressed, event));
-
-                if (target === pressed && pressed.isEnabled) pressed.onClick(this.toLocal(pressed, event));
-
-                this.pressed = null;
-                this.invalidate();
-            }
-
-            return;
-        }
-
-        if (!target) return;
-
-        event.stopPropagation();
-
-        if (type === "down") {
-            event.preventDefault();
-
-            let root = target;
-
-            while (root.parent) root = root.parent;
-
-            this.bringToFront(root);
-            this.pressed = target;
-            target.onMouseDown(this.toLocal(target, event));
-        } else if (type === "up") target.onMouseUp(this.toLocal(target, event));
-        else target.onMouseMove(this.toLocal(target, event));
-    }
-
-    protected cancelMouse() {
-        if (this.pressed) this.pressed.onMouseCancel();
-        if (this.dragged && this.dragged.windowName && (this.dragged.x !== this.dragStartX || this.dragged.y !== this.dragStartY)) this.saveWindowPosition(this.dragged.windowName, this.dragged.x, this.dragged.y);
-
-        this.dragged = null;
-        this.pressed = null;
-        this.invalidate();
     }
 
     public getZoneName(x: number, y: number, z: number): string { return this.getZoneNameInfo(x, y, z)?.name || ""; }
@@ -594,9 +295,6 @@ export class NWindowManager {
 
     public getClassName(classId: number): string { return this.getSysString(classId >= 0 && classId < 88 ? 247 + classId : 1071 + classId); } // 0x1006b250: class names are sysstrings 247+id below class 88, 1071+id above.
 
-    public isHovered(wnd: NWnd) { return this.hovered === wnd; }
-    public isPressed(wnd: NWnd) { return this.pressed === wnd; }
-
     public getCursor(index: number) { return this.asset.getCursor(index); }
 
     public setCursor(cursor: string) {
@@ -611,16 +309,9 @@ export class NWindowManager {
 
         if (!this.isDirty && !hasOverlay && !this.canvas.isAnimating) return;
 
-        const canvas = this.canvas;
+        this.canvas.beginFrame();
 
-        this.arrTooltipPaint.length = 0;
-        canvas.beginFrame();
-
-        if (hasOverlay) this.overlayPaint(canvas);
-
-        for (const wnd of this.windows) wnd.paint(canvas);
-        for (const paint of this.arrTooltipPaint) paint();
-        this.arrTooltipPaint.length = 0;
+        if (hasOverlay) this.overlayPaint(this.canvas);
 
         this.isDirty = false;
     }

@@ -7,7 +7,7 @@ import type { StoreWndView_T, GMStoreWndView_T } from "./skin";
 export class NCStoreWnd extends NCShopWnd {
     public onDrop: (side: number, target: Element) => boolean = null;
     public onTransfer: () => void = null;
-    protected readonly counter: HTMLCanvasElement;
+    protected readonly counter: HTMLDivElement;
     protected readonly arrDestinations: [StoreWndView_T | GMStoreWndView_T, number][];
     protected type = WarehouseType_T.Private;
     protected maxCount = 0;

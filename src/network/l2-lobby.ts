@@ -1,5 +1,7 @@
 import { Object3D, Vector3 } from "three";
 import BaseActor from "../base-actor";
+import { EActorViewType_T } from "../assets/unreal/un-aactor";
+import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import MatineePlayer from "../rendering/camera/matinee-player";
 import type GameManager from "../game/game-manager";
 import type { SectorObject, ZoneObject } from "../objects/zone-object";
@@ -159,6 +161,7 @@ export class L2Lobby {
 
             if (generation !== this.generation) return actor.release();
 
+            actor.setWalking(true);
             render.addPawn(actor);
             actor.setRotationYaw(yaw);
         }));
@@ -246,6 +249,21 @@ export class L2Lobby {
         actor.position.set(x, y, hit ? hit.location.z - height + 2.15 : z);
         render.addPawn(actor);
         actor.setRotationYaw(yaw);
+        actor.getComponent<PawnRenderableComponent>("pawnRenderable").setActorViewType(EActorViewType_T.EAVT_InSight);
+        this.updatePreviewVisibility();
+    }
+
+    protected updatePreviewVisibility() {
+        const selection = this.createSelection;
+        const selected = selection && selection.sex >= 0 && (selection.step === "sex" || selection.step === "appearance") ? this.getPreviewIndex(selection.race as Race_T, selection.isMystic, selection.sex) : -1;
+
+        for (const [index, actor] of this.previewPawns) {
+            if (!actor.parent) continue;
+
+            const type = actor.getUnrealScriptProperty("L2ActorViewtype");
+            if (selected >= 0 && index !== selected) actor.getComponent<PawnRenderableComponent>("pawnRenderable").setActorViewType(EActorViewType_T.EAVT_Hiding);
+            else if (type === EActorViewType_T.EAVT_Hiding) actor.getComponent<PawnRenderableComponent>("pawnRenderable").setActorViewType(EActorViewType_T.EAVT_Showing);
+        }
     }
 
     public async previewCreate(selection: PawnCreateSelection_T) { // NWindow 0x100cdee0: stage-specific scene tags and reverse flag.
@@ -256,6 +274,7 @@ export class L2Lobby {
             if (actor.parent) actor.resetRotationYaw(this.spots[PREVIEW_ROW_OFFSET + index][3]);
 
         this.createSelection = selection;
+        this.updatePreviewVisibility();
 
         if (selection.step === "race") {
             this.isBackdropExpanded = false;

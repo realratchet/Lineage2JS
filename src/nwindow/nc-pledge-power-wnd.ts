@@ -17,7 +17,7 @@ export class NCPledgePowerWnd {
     protected readonly name: HTMLDivElement;
     protected readonly controls: HTMLDivElement[] = [];
     protected readonly faces: HTMLDivElement[] = [];
-    protected readonly labels: HTMLCanvasElement[] = [];
+    protected readonly labels: HTMLDivElement[] = [];
     protected readonly checked = arrControls.map(() => false);
     protected readonly power = new Uint8Array(32);
     protected objectId = 0;

@@ -860,7 +860,7 @@ export class DecodeEngine {
         }
 
         const sound = pkg.fetchObject<USound>(entry.index + 1).loadSelf();
-        const soundName = sound.objectName ?? sound.uuid;
+        const soundName = sound.name;
 
         const decoded = builder.pullSound(sound);
 
@@ -2967,7 +2967,7 @@ export class DecodeEngine {
 
     protected async decodeNpcDefinitions(settings: LoadSettings_T): Promise<INpcDefinition[]> {
         if (!this.cacheNpcDefinitions) {
-            const library = await this.getStoredAssets("npc_runtime", "definitions-v2", settings, async () => Object.assign(new DecodeLibrary(), { npcDefinitions: await this.loadNpcDefinitions() })) as DecodeLibrary & { npcDefinitions: INpcDefinition[] };
+            const library = await this.getStoredAssets("npc_runtime", "definitions-v3", settings, async () => Object.assign(new DecodeLibrary(), { npcDefinitions: await this.loadNpcDefinitions() })) as DecodeLibrary & { npcDefinitions: INpcDefinition[] };
             this.cacheNpcDefinitions = library.npcDefinitions;
         }
 
@@ -3043,6 +3043,7 @@ export class DecodeEngine {
             alternateTextures: (row.tex2 as string[]).filter(path => path && path.toLowerCase() !== "none"),
             skillAttacks: skillAttacksByNpcId.get(row.tag as number) || [],
             enterEvent: enterEventsById.get(row.tag as number) || null,
+            questMark: row.UNK1 > 0 ? { minLevel: row.levelLimLo as number, maxLevel: row.levelLimHi as number, classIds: row.UNK2 as number[] } : null,
             // Engine.dll NpcDataLoad 0x73205d/0x7320ad and 0x732103..0x732159.
             sounds: {
                 defense: { sounds: (row.sound2 as string[]).slice(0, 5), volume: row.soundVolume as number, radius: row.soundRadius as number },

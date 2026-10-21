@@ -209,8 +209,8 @@ export class GroundPickup extends Object3D {
             this.tracePosition.copy(this.position);
             this.traceNormal.copy(hit.normal);
             this.previousPickup = null;
-            this.effectPosition.copy(hit.location);
-            this.effectPosition.z = height - this.collisionHeight * (this.dropType === 1 || this.dropType === 2 ? 1.5 : 1);
+            this.effectPosition.copy(this.dropAnimType === 5 ? this.position : hit.location);
+            if (this.dropAnimType !== 5) this.effectPosition.z = height - this.collisionHeight * (this.dropType === 1 || this.dropType === 2 ? 1.5 : 1);
             this.lastUpdateTime = currentTime;
             if (this.dropped && this.dropAnimType >= 1 && this.dropAnimType <= 3) {
                 // UGameEngine::OnDropItem 0x74d354..0x74d84a: chase a descending target, or fall 30 units without an owner.

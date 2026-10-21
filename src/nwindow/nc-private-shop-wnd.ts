@@ -8,7 +8,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
     protected readonly quitButton: NDomButton_T;
     protected readonly messageButton: NDomButton_T;
     protected readonly packageCheckbox: NDomCheckBox_T;
-    protected readonly counter: HTMLCanvasElement;
+    protected readonly counter: HTMLDivElement;
     protected maxCount = 0;
     protected isOwn = false;
     protected ownerId = 0;
@@ -124,7 +124,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
         this.layer.renderText(this.counter, text, 0xffb09b79);
         this.layer.place(this.counter, 251 - this.layer.measureText(text), 198);
     }
-    protected drawAmount(canvas: HTMLCanvasElement, value: string, y: number) { super.drawAmount(canvas, BigInt.asIntN(32, BigInt(value)).toString(), y); }
+    protected drawAmount(element: HTMLDivElement, value: string, y: number) { super.drawAmount(element, BigInt.asIntN(32, BigInt(value)).toString(), y); }
 }
 
 export default NCPrivateShopWnd;

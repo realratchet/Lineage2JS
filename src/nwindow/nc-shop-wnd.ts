@@ -32,10 +32,10 @@ export class NCShopWnd {
     protected heldSide = -1;
     protected hoveredSide = -1;
     protected hoveredIndex = -1;
-    protected readonly labels: HTMLCanvasElement[] = [];
-    protected readonly total: HTMLCanvasElement;
-    protected readonly money: HTMLCanvasElement;
-    protected readonly caption: HTMLCanvasElement;
+    protected readonly labels: HTMLDivElement[] = [];
+    protected readonly total: HTMLDivElement;
+    protected readonly money: HTMLDivElement;
+    protected readonly caption: HTMLDivElement;
     protected readonly okButton: NDomButton_T;
     protected readonly cancelButton: NDomButton_T;
     protected capacity = 160;
@@ -305,11 +305,11 @@ export class NCShopWnd {
         for (const item of this.items[1]) total = BigInt.asIntN(64, total + BigInt(item.price) * BigInt(item.count));
         this.drawAmount(this.total, total.toString(), 331);
     }
-    protected drawAmount(canvas: HTMLCanvasElement, value: string, y: number) {
+    protected drawAmount(element: HTMLDivElement, value: string, y: number) {
         const text = value.replace(/(.)(?=(.{3})+$)/g, "$1,");
 
-        this.layer.renderText(canvas, text, 0xffdcdcdc);
-        this.layer.place(canvas, 247 - this.layer.measureText(text), y);
+        this.layer.renderText(element, text, 0xffdcdcdc);
+        this.layer.place(element, 247 - this.layer.measureText(text), y);
     }
 }
 

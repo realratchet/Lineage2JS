@@ -22,7 +22,7 @@ export class NCQuestWnd {
     public onAbort: (id: number) => void = null;
     public onLocationChange: (location: QuestLocation_T) => void = null;
     protected readonly list: NDomScrollPane_T;
-    protected readonly count: HTMLCanvasElement;
+    protected readonly count: HTMLDivElement;
     protected readonly checkbox: HTMLDivElement;
     protected strings: GameStrings_T;
     protected states: QuestState_T[] = [];

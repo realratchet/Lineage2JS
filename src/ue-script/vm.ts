@@ -1092,6 +1092,17 @@ export class UnScriptVM {
         if (context.handlesUnrealNative && context.handlesUnrealNative(index, name))
             return context.callUnrealNative!({ index, name, args, self, context });
 
+        if (name.toLowerCase() === "onlyaffectpawns") {
+            const value = !!args[0];
+
+            if (!getProperty(context, "bCollideActors") || value === !!getProperty(context, "bOnlyAffectPawns")) return;
+
+            this.invokeNative(self, context, 262, "SetCollision", [false, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
+            setProperty(context, "bOnlyAffectPawns", value);
+            this.invokeNative(self, context, 262, "SetCollision", [true, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
+            return;
+        }
+
         if (index === 113) {
             const frame = cacheStateFrames.get(context), previous = frame && frame.node !== frame.cls ? frame.node.name : "None", requested = args[0] == null ? previous : args[0] as string, label = args[1] == null || (args[1] as string).toLowerCase() === "none" ? "Begin" : args[1] as string;
             const result = requested.toLowerCase() === previous.toLowerCase() ? 1 : this.gotoState(context, requested);

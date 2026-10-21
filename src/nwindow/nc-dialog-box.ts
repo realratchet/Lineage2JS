@@ -25,7 +25,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
     public owner: HTMLElement = null;
 
     protected readonly layer: NDomLayer;
-    protected readonly textCanvas: HTMLCanvasElement;
+    protected readonly textBox: HTMLDivElement;
     protected readonly okButton: NDomButton_T;
     protected readonly cancelButton: NDomButton_T;
     protected readonly background: HTMLDivElement;
@@ -56,10 +56,8 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         this.background = layer.tile(this.element, 0, 0, 256, 108, 0, 0, 256, 108, TEX_BACK);
         layer.tile(this.element, 11, 15, 24, 24, 0, 0, 24, 24, TEX_ICON);
 
-        this.textCanvas = document.createElement("canvas");
-        this.textCanvas.className = "ndom-text ndom-absolute";
-        layer.place(this.textCanvas, TEXT_X, TEXT_Y);
-        this.element.appendChild(this.textCanvas);
+        this.textBox = layer.createWindow(TEXT_X, TEXT_Y, 256 - TEXT_X, 108 - TEXT_Y, this.element);
+        this.textBox.style.overflow = "hidden";
 
         this.timer = layer.tile(this.element, 17, 61, 222, 6, 0, 0, 222, 6, TEX_TIME_BACK);
         this.timerFill = layer.tile(this.timer, 1, 1, 220, 4, 0, 0, 222, 6, TEX_TIME);
@@ -250,23 +248,13 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
 
     protected renderText(text: string) {
         const nwindow = this.layer.getManager().canvas;
-        const scale = nwindow.scale;
         const lines = nwindow.wrapText(text.replace(/\\n/g, "\n"), WRAP_WIDTH);
         const lineHeight = nwindow.getLineHeight(FontType_T.SMALL);
-        const width = 256 - TEXT_X, height = 108 - TEXT_Y;
 
-        this.textCanvas.width = Math.round(width * scale);
-        this.textCanvas.height = Math.round(height * scale);
-        this.textCanvas.style.width = `${width}px`;
-        this.textCanvas.style.height = `${height}px`;
-
-        const context = this.textCanvas.getContext("2d");
-
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
+        this.textBox.replaceChildren();
 
         for (let i = 0; i < lines.length; i++)
-            nwindow.renderText(context, 0, i * lineHeight, TEXT_COLOR, lines[i], FontType_T.SMALL);
+            this.layer.text(this.textBox, lines[i], TEXT_COLOR, FontType_T.SMALL, 0, i * lineHeight);
     }
 }
 

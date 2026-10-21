@@ -3,6 +3,14 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import type NDomLayer from "./ndom";
 import type { UserInfo_T, GMViewCharacterInfo_T } from "../network/game-packets";
 
+const cacheCrestUrls = new WeakMap<CanvasImageSource, string>();
+
+function getCrestUrl(crest: CanvasImageSource) {
+    if (!cacheCrestUrls.has(crest)) cacheCrestUrls.set(crest, (crest as HTMLCanvasElement).toDataURL());
+
+    return cacheCrestUrls.get(crest);
+}
+
 export type GMClanInfo_T = { clanId: number, name: string, crestId: number };
 
 class NCGMDetailStatusPage extends NCDetailStatusWnd {
@@ -19,31 +27,35 @@ class NCGMDetailStatusPage extends NCDetailStatusWnd {
         this.crest = crest;
         this.paint();
     }
-    protected drawText(context: CanvasRenderingContext2D, x: number, y: number, text: string, color: number = 0xffb09b79, align: CanvasTextAlign = "left") {
+    protected drawText(x: number, y: number, text: string, color: number = 0xffb09b79, align: CanvasTextAlign = "left") {
         if (y === 25) return;
         if (x === 235 && y === 177) return;
         if (x === 235 && y === 192) y++;
 
-        super.drawText(context, x, y, text, color, align);
+        super.drawText(x, y, text, color, align);
     }
     protected paint() {
         super.paint();
         if (!this.status) return;
 
-        const layer = this.layer, context = this.values.getContext("2d"), info = this.status as UserInfo_T & GMViewCharacterInfo_T;
+        const layer = this.layer, info = this.status as UserInfo_T & GMViewCharacterInfo_T;
         const clan = this.gmClan && this.gmClan.clanId === info.clanId ? this.gmClan : null;
         const x = layer.measureText(layer.getManager().getSysString(430)) + 20;
 
         if (clan) {
-            if (this.crest) context.drawImage(this.crest, 0, 4, 16, 12, x, 25, 16, 12);
-            if (clan.name) super.drawText(context, x + (clan.crestId > 0 ? 20 : 0), 25, clan.name);
-        } else super.drawText(context, x, 25, layer.getManager().getSysString(431), 0xffdcdcdc);
+            if (this.crest) {
+                const crest = layer.createWindow(x, 25, 16, 12, this.values);
+
+                crest.style.background = `url(${getCrestUrl(this.crest)}) 0 -4px no-repeat`;
+            }
+            if (clan.name) super.drawText(x + (clan.crestId > 0 ? 20 : 0), 25, clan.name);
+        } else super.drawText(x, 25, layer.getManager().getSysString(431), 0xffdcdcdc);
 
         const speeds = [info.swimRunSpd, info.swimWalkSpd, info.flyRunSpd, info.flyWalkSpd, info.runSpd, info.walkSpd].map(speed => Math.trunc(speed * info.moveMultiplier));
         const text = `${speeds[0]},${speeds[1]}/${speeds[2]},${speeds[3]}/${speeds[4]},${speeds[5]}`;
 
-        super.drawText(context, 235, 208, text, 0xffb09b79, "right");
-        super.drawText(context, 235 - layer.measureText(text), 220, "Water/Air/Ground", 0xffa3a3a3);
+        super.drawText(235, 208, text, 0xffb09b79, "right");
+        super.drawText(235 - layer.measureText(text), 220, "Water/Air/Ground", 0xffa3a3a3);
     }
 }
 

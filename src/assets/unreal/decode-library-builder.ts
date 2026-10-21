@@ -128,7 +128,7 @@ export class DecodeLibraryBuilder {
 
         sound = sound.loadSelf();
 
-        const soundKey = sound.objectName ?? sound.uuid;
+        const soundKey = sound.name;
         let soundEntry = this.library.soundBlobCache.get(soundKey);
 
         if (soundEntry) return soundEntry;

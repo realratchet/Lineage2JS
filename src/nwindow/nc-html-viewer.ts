@@ -42,7 +42,7 @@ const ALIGN_CSS = ["left", "center", "left", "right"]; // Alignment stack values
 const VALIGN_CSS = ["top", "middle", "top", "bottom"];
 
 type HtmlSegment_T = { text: string, color: number };
-type HtmlWord_T = { element: HTMLSpanElement, segments: HtmlSegment_T[], space: Text, last: HTMLCanvasElement, advance: number };
+type HtmlWord_T = { element: HTMLSpanElement, segments: HtmlSegment_T[], space: Text, last: HTMLDivElement, advance: number };
 type HtmlToken_T = { tag: string, isOpen: boolean, attrs: Record<string, string>, segments: HtmlSegment_T[] };
 type HtmlBlock_T = { element: HTMLElement, paragraph: HTMLDivElement, paragraphAlign: number, width: number, minimumWidth: number, tables: HtmlTable_T[] };
 type HtmlCell_T = { element: HTMLTableCellElement, block: HtmlBlock_T, fixedWidth: number };
@@ -854,16 +854,16 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
         const paragraph = block.paragraph, layer = this.layer;
         block.width = Math.max(block.width, layer.measureText(segments.map(segment => segment.text).join("")));
         block.minimumWidth = Math.max(block.minimumWidth, layer.measureText("A"));
-        const arrWords: HtmlWord_T[] = [], arrCanvases: HTMLCanvasElement[] = [];
+        const arrWords: HtmlWord_T[] = [], arrTexts: HTMLDivElement[] = [];
         let word: HTMLSpanElement = null;
 
         function draw(parent: HTMLElement, text: string, color: number) {
-            const canvas = layer.text(parent, text, color, FontType_T.SMALL, null, null, !!link && link.isUnderlined);
+            const element = layer.text(parent, text, color, FontType_T.SMALL, null, null, !!link && link.isUnderlined);
 
-            arrCanvases.push(canvas);
-            canvas.style.marginBottom = `${LINE_SPACING}px`;
+            arrTexts.push(element);
+            element.style.marginBottom = `${LINE_SPACING}px`;
 
-            return canvas;
+            return element;
         }
 
         for (const segment of segments) {
@@ -909,7 +909,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             for (const entry of arrWords) {
                 if (entry.segments.reduce((total, segment) => total + layer.measureText(segment.text), 0) <= width) {
                     entry.segments.forEach(segment => draw(entry.element, segment.text, segment.color));
-                    entry.last = arrCanvases[arrCanvases.length - 1];
+                    entry.last = arrTexts[arrTexts.length - 1];
                     continue;
                 }
 
@@ -939,7 +939,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     }
                     if (start < segment.text.length) draw(chunk, segment.text.slice(start), segment.color);
                 }
-                entry.last = arrCanvases[arrCanvases.length - 1];
+                entry.last = arrTexts[arrTexts.length - 1];
             }
 
             const alignment = paragraph.style.textAlign;
@@ -948,8 +948,8 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             const lines = new Map<number, { end: number, spaces: HtmlWord_T[] }>(), spaceWidth = layer.measureText(" ");
             let lastLine = -Infinity;
 
-            for (const canvas of arrCanvases) {
-                const rect = canvas.getBoundingClientRect();
+            for (const text of arrTexts) {
+                const rect = text.getBoundingClientRect();
                 let line = lines.get(rect.top);
 
                 if (!line) lines.set(rect.top, line = { end: rect.right, spaces: [] });
@@ -984,8 +984,8 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                 if (!entry.space) continue;
 
                 entry.space.replaceWith(document.createElement("wbr"));
-                const canvas = draw(entry.element, " ", entry.segments[entry.segments.length - 1].color);
-                canvas.style.minWidth = canvas.style.maxWidth = `${entry.advance}px`;
+                const text = draw(entry.element, " ", entry.segments[entry.segments.length - 1].color);
+                text.style.minWidth = text.style.maxWidth = `${entry.advance}px`;
             }
             paragraph.style.textAlign = alignment;
             return true;

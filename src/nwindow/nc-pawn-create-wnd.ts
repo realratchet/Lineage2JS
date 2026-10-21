@@ -45,7 +45,7 @@ export class NCSelectCtrl { // NCSelectCtrl OnCreate 0x100ce7b0, OnPaint 0x100cc
     public readonly element: HTMLDivElement;
     public onChange: (index: number) => void = null;
     protected readonly layer: NDomLayer;
-    protected readonly caption: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
     protected readonly prevButton: NDomButton_T;
     protected readonly nextButton: NDomButton_T;
     protected options: number[] = [];
@@ -197,7 +197,7 @@ export class NCPawnSetupWnd { // NCPawnSetupWnd OnCreate 0x100cf680, OnPaint 0x1
 export class NCPawnInfoWnd { // NCPawnInfoWnd OnCreate 0x100ccc10, OnPaint 0x100ccc70: (24,249) 256x205 class description box.
     public readonly element: HTMLDivElement;
     protected readonly layer: NDomLayer;
-    protected readonly textCanvas: HTMLCanvasElement;
+    protected readonly description: HTMLDivElement;
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
         this.layer = layer;
@@ -209,26 +209,18 @@ export class NCPawnInfoWnd { // NCPawnInfoWnd OnCreate 0x100ccc10, OnPaint 0x100
         for (let i = 1; i < 13; i += 2)
             layer.tile(this.element, 5, i * 15 + 5, 256 - 10, 15, 0, 0, 8, 15, TEX_TEXTBACKLINE);
 
-        this.textCanvas = layer.text(this.element, "", TEXT_COLOR, FontType_T.SMALL, 7, 7);
+        this.description = layer.createWindow(7, 7, 249, 198, this.element);
+        this.description.style.overflow = "hidden";
         this.setDescription(0);
     }
 
     public setDescription(index: number) {
-        const nwindow = this.layer.getManager().canvas, scale = nwindow.scale;
         const text = index < 0 ? "" : this.layer.getManager().strings.classNames[index];
 
         if (text === undefined) throw new Error(`Missing character description ${index}.`);
 
-        this.textCanvas.width = Math.round(249 * scale);
-        this.textCanvas.height = Math.round(198 * scale);
-        this.textCanvas.style.width = "249px";
-        this.textCanvas.style.height = "198px";
-
-        const context = this.textCanvas.getContext("2d");
-
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
-        nwindow.renderWrappedText(context, 0, 0, TEXT_COLOR, text, 242, 6);
+        this.description.replaceChildren();
+        this.layer.wrappedText(this.description, 0, 0, TEXT_COLOR, text, 242, 6);
     }
 }
 

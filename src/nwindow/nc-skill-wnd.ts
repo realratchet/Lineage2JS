@@ -23,7 +23,7 @@ export class NCSkillWnd {
     protected isPassive = false;
     protected pressedSelection: HTMLDivElement = null;
     protected pressedFrame: HTMLDivElement = null;
-    protected readonly coolTimeIcons = new Map<string, HTMLCanvasElement>();
+    protected readonly coolTimeIcons = new Map<string, HTMLDivElement>();
 
     public constructor(layer: NDomLayer, protected readonly coolTimes: Map<string, NCCoolTimeIcon>, parent: HTMLElement) {
         this.layer = layer;
@@ -93,19 +93,14 @@ export class NCSkillWnd {
     public renderCoolTimes() {
         if (!this.isVisible()) return;
 
-        const canvas = this.layer.getManager().canvas;
-
         for (const [key, element] of this.coolTimeIcons) {
             const coolTime = this.coolTimes.get(key);
-            const texture = coolTime && coolTime.texture && canvas.hasTexture(coolTime.texture) ? coolTime.texture : "";
+            const texture = coolTime && coolTime.texture && this.layer.hasTexture(coolTime.texture) ? coolTime.texture : "";
 
             if (element.dataset.texture === texture) continue;
 
-            const context = element.getContext("2d");
-
-            context.clearRect(0, 0, 32, 32);
-            context.imageSmoothingEnabled = false;
-            if (texture) context.drawImage(canvas.getTintedImage(texture, coolTime.color), 0, 0, 32, 32);
+            element.hidden = !texture;
+            if (texture) this.layer.setTile(element, 32, 32, 0, 0, 32, 32, texture, coolTime.color);
             element.dataset.texture = texture;
         }
     }
@@ -151,12 +146,11 @@ export class NCSkillWnd {
 
             if (frame) frame.hidden = true;
 
-            const coolTimeIcon = document.createElement("canvas");
+            const coolTimeIcon = layer.createWindow(1, 1, 32, 32, button);
 
             coolTimeIcon.className = "ndom-tile";
-            coolTimeIcon.width = coolTimeIcon.height = 32;
-            layer.place(coolTimeIcon, 1, 1, 32, 32);
-            button.appendChild(coolTimeIcon);
+            coolTimeIcon.hidden = true;
+            coolTimeIcon.dataset.texture = "";
             this.coolTimeIcons.set(`${skill.id}:${skill.level}`, coolTimeIcon);
 
             const use = (event: MouseEvent | KeyboardEvent) => { if (this.onUse) this.onUse(skill.id, event.ctrlKey, event.shiftKey); };

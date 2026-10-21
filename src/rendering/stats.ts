@@ -112,55 +112,43 @@ export var Stats = function () {
 Stats.Panel = function (name, fg, bg) {
 
     var min = Infinity, max = 0, round = Math.round;
-    var PR = round(window.devicePixelRatio || 1);
 
-    var WIDTH = 80 * PR, HEIGHT = 48 * PR,
-        TEXT_X = 3 * PR, TEXT_Y = 2 * PR,
-        GRAPH_X = 3 * PR, GRAPH_Y = 15 * PR,
-        GRAPH_WIDTH = 74 * PR, GRAPH_HEIGHT = 30 * PR;
+    var GRAPH_WIDTH = 74, GRAPH_HEIGHT = 30;
 
-    var canvas = document.createElement('canvas');
-    canvas.width = WIDTH;
-    canvas.height = HEIGHT;
-    canvas.style.cssText = 'width:80px;height:48px';
+    var dom = document.createElement('div');
+    dom.style.cssText = 'position:relative;width:80px;height:48px;background:' + bg;
 
-    var context = canvas.getContext('2d');
-    context.font = 'bold ' + (9 * PR) + 'px Helvetica,Arial,sans-serif';
-    context.textBaseline = 'top';
+    var text = document.createElement('div');
+    text.style.cssText = 'position:absolute;left:3px;top:2px;font:bold 9px Helvetica,Arial,sans-serif;line-height:9px;white-space:nowrap;color:' + fg;
+    text.textContent = name;
 
-    context.fillStyle = bg;
-    context.fillRect(0, 0, WIDTH, HEIGHT);
+    var graph = document.createElement('div');
+    graph.style.cssText = 'position:absolute;left:3px;top:15px;display:flex;width:' + GRAPH_WIDTH + 'px;height:' + GRAPH_HEIGHT + 'px;background:' + fg;
 
-    context.fillStyle = fg;
-    context.fillText(name, TEXT_X, TEXT_Y);
-    context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT);
+    for (var i = 0; i < GRAPH_WIDTH; i++) {
 
-    context.fillStyle = bg;
-    context.globalAlpha = 0.9;
-    context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT);
+        var column = document.createElement('div');
+        column.style.cssText = 'flex:0 0 1px;height:' + GRAPH_HEIGHT + 'px;background:' + bg + ';opacity:0.9';
+        graph.appendChild(column);
+
+    }
+
+    dom.append(text, graph);
 
     return {
 
-        dom: canvas,
+        dom: dom,
 
         update: function (value, maxValue) {
 
             min = Math.min(min, value);
             max = Math.max(max, value);
 
-            context.fillStyle = bg;
-            context.globalAlpha = 1;
-            context.fillRect(0, 0, WIDTH, GRAPH_Y);
-            context.fillStyle = fg;
-            context.fillText(round(value) + ' ' + name + ' (' + round(min) + '-' + round(max) + ')', TEXT_X, TEXT_Y);
+            text.textContent = round(value) + ' ' + name + ' (' + round(min) + '-' + round(max) + ')';
 
-            context.drawImage(canvas, GRAPH_X + PR, GRAPH_Y, GRAPH_WIDTH - PR, GRAPH_HEIGHT, GRAPH_X, GRAPH_Y, GRAPH_WIDTH - PR, GRAPH_HEIGHT);
-
-            context.fillRect(GRAPH_X + GRAPH_WIDTH - PR, GRAPH_Y, PR, GRAPH_HEIGHT);
-
-            context.fillStyle = bg;
-            context.globalAlpha = 0.9;
-            context.fillRect(GRAPH_X + GRAPH_WIDTH - PR, GRAPH_Y, PR, round((1 - (value / maxValue)) * GRAPH_HEIGHT));
+            var column = graph.firstChild;
+            column.style.height = round((1 - (value / maxValue)) * GRAPH_HEIGHT) + 'px';
+            graph.appendChild(column);
 
         }
 

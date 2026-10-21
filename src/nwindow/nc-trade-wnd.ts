@@ -24,7 +24,7 @@ export class NCTradeWnd {
     public onHideTooltip: () => void = null;
     protected readonly layer: NDomLayer;
     protected readonly lists: NDomScrollPane_T[] = [];
-    protected readonly names: HTMLCanvasElement[] = [];
+    protected readonly names: HTMLDivElement[] = [];
     protected readonly items: TradeItem_T[][] = [[], [], []];
     protected readonly rowCounts = [0, 0, 0];
     protected readonly selectedItems: TradeItem_T[] = [null, null, null];

@@ -62,26 +62,44 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
     public tickActorView(deltaTime: number): void {
         const pawn = this.getParent(), type = pawn.getUnrealScriptProperty("L2ActorViewtype");
-        if (type !== EActorViewType_T.EAVT_InSighting && type !== EActorViewType_T.EAVT_OutSighting) return;
+        if (type !== EActorViewType_T.EAVT_InSighting && type !== EActorViewType_T.EAVT_OutSighting && type !== EActorViewType_T.EAVT_Hiding && type !== EActorViewType_T.EAVT_Showing) return;
+
+        if (type === EActorViewType_T.EAVT_Hiding && pawn.getUnrealScriptProperty("bHidden")) return;
 
         const duration = pawn.getUnrealScriptProperty("L2ActorViewDuration") as number;
         const elapsed = (pawn.getUnrealScriptProperty("L2ActorViewElapsedTime") as number) + deltaTime;
 
         if (elapsed >= duration) {
             this.clearAlphaTexModifier();
-            pawn.setUnrealScriptProperty("L2ActorViewtype", type === EActorViewType_T.EAVT_InSighting ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight);
+            if (type === EActorViewType_T.EAVT_Hiding) pawn.setUnrealScriptProperty("bHidden", true);
+            else pawn.setUnrealScriptProperty("L2ActorViewtype", type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight);
             pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", 0);
             return;
         }
 
         pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", Math.fround(elapsed));
-        this.texModifierAlpha = Math.trunc(Math.max(0, Math.min(255, Math.fround(type === EActorViewType_T.EAVT_InSighting ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)))) / 255;
+        this.texModifierAlpha = Math.trunc(Math.max(0, Math.min(255, Math.fround(type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)))) / 255;
     }
 
     public updateActorView(distance: number, range: number): boolean {
-        const pawn = this.getParent();
         const type = distance <= range - 256 ? EActorViewType_T.EAVT_InSight : distance < range ? EActorViewType_T.EAVT_InSighting : distance < range + 256 ? EActorViewType_T.EAVT_OutSighting : EActorViewType_T.EAVT_OutSight;
-        const previous = pawn.getUnrealScriptProperty("L2ActorViewtype") as EActorViewType_T;
+        return this.setActorViewType(type);
+    }
+
+    public setActorViewType(type: EActorViewType_T): boolean {
+        const pawn = this.getParent(), previous = pawn.getUnrealScriptProperty("L2ActorViewtype") as EActorViewType_T;
+
+        if (type === EActorViewType_T.EAVT_Hiding || type === EActorViewType_T.EAVT_Showing) {
+            if (type === previous) return this.prepareActorView(previous);
+
+            const elapsed = previous === EActorViewType_T.EAVT_Hiding || previous === EActorViewType_T.EAVT_Showing ? Math.fround((pawn.getUnrealScriptProperty("L2ActorViewDuration") as number) - (pawn.getUnrealScriptProperty("L2ActorViewElapsedTime") as number)) : 0;
+
+            pawn.setUnrealScriptProperty("L2ActorViewtype", type);
+            pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", elapsed);
+            if (type === EActorViewType_T.EAVT_Showing) pawn.setUnrealScriptProperty("bHidden", false);
+            return this.prepareActorView(type);
+        }
+
         let elapsed = 0;
 
         // AActor::SetActorViewType 0x104f4780 preserves repeated requests and mirrors reversals.
@@ -118,7 +136,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         return this.prepareActorView(type);
     }
 
-    protected prepareActorView(type: EActorViewType_T): boolean {
+    public prepareActorView(type = this.getParent().getUnrealScriptProperty("L2ActorViewtype") as EActorViewType_T): boolean {
         if (this.texModifierAlpha >= 0) {
             for (const batch of this.batches) {
                 const material = batch.material as MeshStaticMaterial;

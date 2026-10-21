@@ -269,7 +269,7 @@ export class NetworkSession {
     public logout() { if (this.game?.isPlayingReplay()) void this.stopReplayPlayback(); else if (this.network.actors.inWorld) this.game.logout(); }
 
     public async playReplay(bytes: Uint8Array, lockCamera = true, useChatData = false): Promise<void> {
-        if (this.network.actors.inWorld || this.game || this.network.ui.screen !== "login" && this.network.ui.screen !== "replay") throw new Error(`Replay playback requires the login screen.`);
+        if (this.network.actors.inWorld || this.game || this.network.ui.getScreen() !== "login" && this.network.ui.getScreen() !== "replay") throw new Error(`Replay playback requires the login screen.`);
         const file = new L2ReplayFile(bytes), scene = file.getScene(), first = file.arrPackets[0];
 
         file.setScene(scene);

@@ -10,14 +10,6 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     z-index: 10;
 }
 
-.nwindow-text-input {
-    position: fixed;
-    left: -10000px;
-    top: 0;
-    width: 200px;
-    opacity: 0;
-}
-
 .ndom-layer {
     position: fixed;
     left: 0;
@@ -41,10 +33,17 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     image-rendering: auto;
 }
 
+.ndom-tile { opacity: var(--alpha, 1); }
+
 .ndom-text {
     display: inline-block;
     vertical-align: top;
     image-rendering: auto;
+
+    &:not(.ndom-absolute) { position: relative; }
+
+    > i, > b { position: absolute; }
+    > i { background-image: var(--glyphs); }
 }
 
 .ndom-button, .ndom-inventory-item { cursor: inherit; }
@@ -53,7 +52,7 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 
 .ndom-item-drag *, .nwindow-cursor * { cursor: inherit !important; }
 
-.ndom-inactive .ndom-tile { opacity: 0.502; } // NWindow 0x10012dbd: the +0x70 flag swaps texture alpha 0xff for 0x80; text keeps its alpha.
+.ndom-inactive .ndom-tile { opacity: calc(var(--alpha, 1) * 0.502); } // NWindow 0x10012dbd: the +0x70 flag swaps texture alpha 0xff for 0x80; text keeps its alpha.
 
 .ndom-inventory-item {
     position: absolute;
@@ -85,6 +84,9 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     position: absolute;
     left: 0;
     top: 0;
+    overflow: hidden;
     pointer-events: none;
     image-rendering: auto;
+
+    > div:not(.ndom-text) > b { position: absolute; background: rgba(255, 255, 255, 0.502); }
 }

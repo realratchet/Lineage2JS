@@ -27,7 +27,7 @@ export class NCMacroWnd {
     public onDrop: (id: number, x: number, y: number) => void = null;
     protected readonly layer: NDomLayer;
     protected readonly list: HTMLDivElement;
-    protected readonly count: HTMLCanvasElement;
+    protected readonly count: HTMLDivElement;
     protected readonly name: NDomEdit_T;
     protected readonly acronym: NDomEdit_T;
     protected readonly commands: NDomEdit_T[] = [];
@@ -94,20 +94,13 @@ export class NCMacroWnd {
         this.description.spellcheck = false;
         this.description.setAttribute("aria-label", manager.getSysString(57));
         this.description.style.cssText = "position:absolute;box-sizing:border-box;resize:none;background:transparent;color:transparent;caret-color:#dcdcdc;border:0;outline:none;font:12px Arial;padding:2px;";
-        const descriptionText = document.createElement("canvas"), canvas = manager.canvas;
+        const descriptionText = layer.createWindow(9, 48, 238, 77, this.info);
 
-        descriptionText.width = Math.round(238 * canvas.scale);
-        descriptionText.height = Math.round(77 * canvas.scale);
-        descriptionText.className = "ndom-text ndom-absolute";
+        descriptionText.style.overflow = "hidden";
         descriptionText.style.pointerEvents = "none";
-        layer.place(descriptionText, 9, 48, 238, 77);
-        this.info.appendChild(descriptionText);
         const drawDescription = () => {
-            const context = descriptionText.getContext("2d");
-
-            context.setTransform(canvas.scale, 0, 0, canvas.scale, 0, 0);
-            context.clearRect(0, 0, 238, 77);
-            canvas.renderWrappedText(context, 2, 2, 0xffdcdcdc, this.description.value, 234);
+            descriptionText.replaceChildren();
+            layer.wrappedText(descriptionText, 2, 2, 0xffdcdcdc, this.description.value, 234);
         };
         this.description.addEventListener("input", drawDescription);
         this.description.addEventListener("change", drawDescription);

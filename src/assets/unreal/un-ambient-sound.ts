@@ -55,7 +55,7 @@ export abstract class UAmbientSoundObject extends UAActor {
         console.assert(isFinite(this.soundType));
         console.assert(isFinite(this.randomAmbient));
 
-        const soundKey = snd.objectName ?? snd.uuid;
+        const soundKey = snd.name;
 
         if (!builder.pullSound(snd)) return null;
 

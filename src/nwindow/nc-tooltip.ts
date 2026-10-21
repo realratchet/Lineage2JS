@@ -1,4 +1,3 @@
-import type NWnd from "./nwnd";
 import type NWindowCanvas from "./nwindow-canvas";
 import type NDomLayer from "./ndom";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
@@ -146,34 +145,20 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         return tooltip;
     }
 
-    public bind(layer: NDomLayer, parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T) {
+    public bind(layer: NDomLayer, parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T, topOffset = 32) { // 0x10032560 uses 32 at the top edge; NCButton's 0x10032860 uses 0.
         let tooltip: HTMLDivElement = null;
         const hide = () => { if (tooltip) { tooltip.remove(); tooltip = null; } };
         const show = () => {
             hide();
             const rect = button.getBoundingClientRect();
 
-            tooltip = this.createDOM(layer, parent, layer.toUI(rect.left), layer.toUI(rect.top), info);
+            tooltip = this.createDOM(layer, parent, layer.toUI(rect.left), layer.toUI(rect.top), info, topOffset);
         };
 
         button.addEventListener("mouseenter", show);
         button.addEventListener("mouseleave", hide);
         button.addEventListener("focus", show);
         button.addEventListener("blur", hide);
-    }
-
-    public paint(canvas: NWindowCanvas, wnd: NWnd, anchorX: number, anchorY: number, text: string | TooltipInfo_T, topOffset = 32) { // 0x10032560 uses32 at the top edge; NCButton's0x10032860 uses0.
-        if (!text) return;
-
-        const layout = this.layout(canvas, text);
-        const screenX = wnd.getScreenX(), screenY = wnd.getScreenY();
-        const x = Math.max(-screenX, Math.min(anchorX, canvas.width - screenX - layout.width));
-        const y = screenY + anchorY - layout.height < 0 ? anchorY + topOffset : anchorY - layout.height;
-
-        wnd.manager.arrTooltipPaint.push(() => {
-            canvas.setOrigin(screenX, screenY);
-            this.draw(layout, (tx, ty, w, h, texture) => canvas.drawTile(x + tx, y + ty, w, h, 0, 0, 8, 8, texture), (tx, ty, color, value) => canvas.drawText(x + tx, y + ty, color, value));
-        });
     }
 }
 

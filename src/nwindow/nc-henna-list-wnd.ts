@@ -14,9 +14,9 @@ export class NCHennaListWnd {
     public readonly list: HTMLDivElement;
     public onOpen: (symbolId: number, isRemove: boolean) => void = null;
     protected readonly content: HTMLDivElement;
-    protected readonly caption: HTMLCanvasElement;
-    protected readonly heading: HTMLCanvasElement;
-    protected readonly adena: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
+    protected readonly heading: HTMLDivElement;
+    protected readonly adena: HTMLDivElement;
     protected readonly thumb: HTMLDivElement;
     protected readonly thumbCenter: HTMLDivElement;
     protected readonly thumbBottom: HTMLDivElement;

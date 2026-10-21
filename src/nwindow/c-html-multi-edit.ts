@@ -22,7 +22,7 @@ export class CHtmlMultiEdit {
     protected readonly layer: NDomLayer;
     protected readonly width: number;
     protected readonly height: number;
-    protected readonly text: HTMLCanvasElement;
+    protected readonly text: HTMLDivElement;
     protected readonly arrSlices: HTMLDivElement[];
     protected readonly thumb: HTMLDivElement;
     protected readonly thumbCenter: HTMLDivElement;
@@ -63,14 +63,9 @@ export class CHtmlMultiEdit {
             return layer.tile(this.element, column === 2 ? width - 4 : column * 4, row === 2 ? height - 4 : row * 4, w, h, 0, 0, corner ? 4 : image.width, corner ? 4 : image.height, path);
         });
 
-        this.text = document.createElement("canvas");
-        const canvas = layer.getManager().canvas;
-
-        this.text.style.position = "absolute";
+        this.text = layer.createWindow(0, 0, width, height, this.element);
+        this.text.style.overflow = "hidden";
         this.text.style.pointerEvents = "none";
-        this.text.width = Math.round(width * canvas.scale);
-        this.text.height = Math.round(height * canvas.scale);
-        layer.place(this.text, 0, 0, width, height);
         this.input = document.createElement("textarea");
         this.input.spellcheck = false;
         this.input.wrap = "off";
@@ -222,12 +217,11 @@ export class CHtmlMultiEdit {
     }
 
     protected paint() {
-        const canvas = this.layer.getManager().canvas, context = this.text.getContext("2d");
+        const canvas = this.layer.getManager().canvas;
 
-        context.setTransform(canvas.scale, 0, 0, canvas.scale, 0, 0);
-        context.clearRect(0, 0, this.width, this.height);
+        this.text.replaceChildren();
         for (let i = 0; i < this.visibleRows && i + this.firstRow < this.arrRows.length; i++)
-            canvas.renderText(context, 2, 2 + i * this.rowHeight, 0xffdcdcdc, this.arrRows[i + this.firstRow].text);
+            this.layer.text(this.text, this.arrRows[i + this.firstRow].text, 0xffdcdcdc, undefined, 2, 2 + i * this.rowHeight);
 
         if (document.activeElement !== this.input || !this.isCaretVisible) return;
 
@@ -235,7 +229,7 @@ export class CHtmlMultiEdit {
         const position = rawIndex(this.value, this.input.selectionDirection === "backward" ? this.input.selectionStart : this.input.selectionEnd);
 
         if (entry && row >= this.firstRow && row < this.firstRow + this.visibleRows)
-            canvas.renderText(context, 2 + canvas.measureText(this.value.slice(entry.start, Math.min(position, entry.end))) - 3, 2 + (row - this.firstRow) * this.rowHeight, 0xffdcdcdc, "|");
+            this.layer.text(this.text, "|", 0xffdcdcdc, undefined, Math.trunc(2 + canvas.measureText(this.value.slice(entry.start, Math.min(position, entry.end))) - 3), 2 + (row - this.firstRow) * this.rowHeight);
     }
 
     protected updateThumb() {

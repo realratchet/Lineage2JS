@@ -1,11 +1,11 @@
-import { FontType_T } from "./nwindow-canvas";
+import { DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type { NDomLayer, NDomButton_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
 
 export type LobbyCharacter_T = { name: string, level: number, className: string, curHp: number, maxHp: number, curMp: number, maxMp: number, sp: number, exp: number, karma: number, deleteSeconds: number };
 export type LobbyPawnLabel_T = { x: number, y: number, name: string, karma: number, deleteSeconds: number };
 
-type PawnLabelElements_T = { name: HTMLCanvasElement, time: HTMLCanvasElement, text: string, color: number, timeText: string };
+type PawnLabelElements_T = { name: HTMLDivElement, time: HTMLDivElement, text: string, color: number, timeText: string };
 
 const TEXT_COLOR = 0xffdcdcdc;
 const LABEL_COLOR = 0xffa3a3a3;
@@ -13,8 +13,6 @@ const VALUE_COLOR = 0xffb09b79;
 const MAX_CHARACTERS = 7;
 const BOTTOM_STRIP = 52;
 const COMBO_ROW = 17;
-const DIGIT_CELL = 8;
-const DIGIT_CELLS = "0123456789HMP/%.C:";
 
 const TEX_SELECT_BACK = "L2UI_CH3.LobbyWnd.select1_back";
 const TEX_START_BACK = "L2UI_CH3.LobbyWnd.lobby_startbtnback";
@@ -36,57 +34,6 @@ const TEX_DOWNBUTTON_DOWN = "L2UI_CH3.Button.downbutton_down";
 const TEX_DIGITS = "L2UI.NWindow.Number";
 
 export const EXPERIENCE_TABLE = [0, 0, 68, 363, 1168, 2884, 6038, 11287, 19423, 31378, 48229, 71202, 101677, 141193, 191454, 254330, 331867, 426288, 540000, 675596, 835862, 1023784, 1242546, 1495543, 1786379, 2118876, 2497077, 2925250, 3407897, 3949754, 4555796, 5231246, 5981576, 6812513, 7730044, 8740422, 9850166, 11066072, 12395215, 13844951, 15422929, 17137087, 18995665, 21007203, 23180550, 25524868, 28049635, 30764654, 33680052, 36806289, 40154162, 45525133, 51262490, 57383988, 63907911, 70853089, 80700831, 91162654, 102265881, 114038596, 126509653, 146308200, 167244337, 189364894, 212717908, 237352644, 271975263, 308443198, 346827154, 387199547, 429634523, 474207979, 532694979, 606322775, 696381369, 804225364, 931275828, 1151275834, 1511275834, 2099275834, 2099325834, 2099375834, 2099425834, 2099475834, 2099525834, 2099575834, 2099625834, 2099675834, 2099725834]; // NWindow.dll 0x101b79fc: experience at the start of each level.
-
-const cacheDigitAtlas = new Map<number, HTMLCanvasElement>();
-
-function getDigitAtlas(layer: NDomLayer, color: number): HTMLCanvasElement {
-    let atlas = cacheDigitAtlas.get(color & 0xffffff);
-
-    if (atlas) return atlas;
-
-    const texture = layer.getManager().canvas.getTexture(TEX_DIGITS);
-
-    atlas = document.createElement("canvas");
-    atlas.width = texture.width;
-    atlas.height = texture.height;
-
-    const context = atlas.getContext("2d");
-
-    context.drawImage(texture, 0, 0);
-
-    const pixels = context.getImageData(0, 0, atlas.width, atlas.height);
-    const data = pixels.data;
-    const r = (color >>> 16) & 0xff, g = (color >>> 8) & 0xff, b = color & 0xff;
-
-    for (let i = 0; i < data.length; i += 4) {
-        data[i] = data[i] * r / 255;
-        data[i + 1] = data[i + 1] * g / 255;
-        data[i + 2] = data[i + 2] * b / 255;
-    }
-
-    context.putImageData(pixels, 0, 0);
-    cacheDigitAtlas.set(color & 0xffffff, atlas);
-
-    return atlas;
-}
-
-function drawDigits(layer: NDomLayer, context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string) { // 0x10013350 font 1 -> UCanvas::DrawSpecialDigit: cell k is (k*8, 0, 8, 8), characters outside the strip skip without advancing.
-    const atlas = getDigitAtlas(layer, color);
-    let penX = Math.trunc(x);
-
-    context.globalAlpha = ((color >>> 24) & 0xff) / 255;
-
-    for (let i = 0; i < text.length; i++) {
-        const cell = DIGIT_CELLS.indexOf(text[i]);
-
-        if (cell < 0) continue;
-
-        context.drawImage(atlas, cell * DIGIT_CELL, 0, DIGIT_CELL, DIGIT_CELL, penX, Math.trunc(y), DIGIT_CELL, DIGIT_CELL);
-        penX += DIGIT_CELL;
-    }
-
-    context.globalAlpha = 1;
-}
 
 function karmaColor(karma: number): number { // NCLobbyWnd paint 0x1009c8cd: white, fading to red as karma grows.
     let a = 0;
@@ -113,7 +60,7 @@ export class NCComboBox { // NCComboBox OnCreate 0x100064d0, OnPaint 0x10005e40;
     public readonly element: HTMLDivElement;
     public onChange: (index: number) => void = null;
     protected readonly layer: NDomLayer;
-    protected readonly caption: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
     protected readonly button: NDomButton_T;
     protected readonly list: HTMLDivElement;
     protected readonly width: number;
@@ -207,10 +154,10 @@ export class NCPawnSelectWnd { // NCPawnSelectWnd OnCreate 0x1009ccc0, OnPaint 0
     protected readonly hpBar: HTMLDivElement;
     protected readonly mpBar: HTMLDivElement;
     protected readonly expBar: HTMLDivElement;
-    protected readonly digits: HTMLCanvasElement;
-    protected readonly levelText: HTMLCanvasElement;
-    protected readonly spText: HTMLCanvasElement;
-    protected readonly karmaText: HTMLCanvasElement;
+    protected readonly digits: HTMLDivElement;
+    protected readonly levelText: HTMLDivElement;
+    protected readonly spText: HTMLDivElement;
+    protected readonly karmaText: HTMLDivElement;
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
         const manager = layer.getManager();
@@ -229,10 +176,8 @@ export class NCPawnSelectWnd { // NCPawnSelectWnd OnCreate 0x1009ccc0, OnPaint 0
         this.hpBar = layer.tile(this.values, 35, 55, 85, 12, 0, 0, 8, 12, TEX_HPBAR);
         this.mpBar = layer.tile(this.values, 35, 69, 85, 12, 0, 0, 8, 12, TEX_MPBAR);
         this.expBar = layer.tile(this.values, 35, 83, 206, 12, 0, 0, 8, 12, TEX_EXPBAR);
-        this.digits = document.createElement("canvas");
-        this.digits.className = "ndom-text ndom-absolute";
-        layer.place(this.digits, 0, 0);
-        this.values.appendChild(this.digits);
+        this.digits = layer.createWindow(0, 0, 256, 108, this.values);
+        this.digits.style.pointerEvents = "none";
         this.levelText = layer.text(this.values, "", VALUE_COLOR, FontType_T.SMALL, 32, 39);
         this.spText = layer.text(this.values, "", VALUE_COLOR, FontType_T.SMALL, 0, 56);
         this.karmaText = layer.text(this.values, "", VALUE_COLOR, FontType_T.SMALL, 0, 70);
@@ -264,25 +209,18 @@ export class NCPawnSelectWnd { // NCPawnSelectWnd OnCreate 0x1009ccc0, OnPaint 0
         this.setBar(this.mpBar, 69, character.maxMp ? Math.trunc(character.curMp * 85 / character.maxMp) : 0, 85, TEX_MPBAR);
         this.setBar(this.expBar, 83, levelEnd ? Math.trunc((character.exp - levelStart) * 206 / (levelEnd - levelStart)) : 0, 206, TEX_EXPBAR);
 
-        const scale = this.layer.getManager().canvas.scale;
-        const context = this.digits.getContext("2d");
+        const layer = this.layer, digits = this.digits;
         const percent = `${((character.exp - levelStart) * 100 / (levelEnd - levelStart)).toFixed(2)}%`;
         const hp = String(character.curHp), mp = String(character.curMp);
 
-        this.digits.width = Math.round(256 * scale);
-        this.digits.height = Math.round(108 * scale);
-        this.digits.style.width = "256px";
-        this.digits.style.height = "108px";
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
-
-        drawDigits(this.layer, context, 138 - Math.trunc(this.layer.measureText(percent) / 2), 85, TEXT_COLOR, percent); // digit strings are positioned with the regular-font extent 0x10012960, not the 8px cell width
-        drawDigits(this.layer, context, 77 - Math.trunc(this.layer.measureText("/") / 2), 57, TEXT_COLOR, "/");
-        drawDigits(this.layer, context, 67 - this.layer.measureText(hp), 57, TEXT_COLOR, hp);
-        drawDigits(this.layer, context, 83, 57, TEXT_COLOR, String(character.maxHp));
-        drawDigits(this.layer, context, 77 - Math.trunc(this.layer.measureText("/") / 2), 71, TEXT_COLOR, "/");
-        drawDigits(this.layer, context, 67 - this.layer.measureText(mp), 71, TEXT_COLOR, mp);
-        drawDigits(this.layer, context, 83, 71, TEXT_COLOR, String(character.maxMp));
+        digits.replaceChildren();
+        layer.digits(digits, percent, TEXT_COLOR, DigitFont_T.NORMAL, 138 - Math.trunc(this.layer.measureText(percent) / 2), 85); // digit strings are positioned with the regular-font extent 0x10012960, not the 8px cell width
+        layer.digits(digits, "/", TEXT_COLOR, DigitFont_T.NORMAL, 77 - Math.trunc(this.layer.measureText("/") / 2), 57); // 0x10013350 font 1 -> UCanvas::DrawSpecialDigit: cell k is (k*8, 0, 8, 8), characters outside the strip skip without advancing.
+        layer.digits(digits, hp, TEXT_COLOR, DigitFont_T.NORMAL, 67 - this.layer.measureText(hp), 57);
+        layer.digits(digits, String(character.maxHp), TEXT_COLOR, DigitFont_T.NORMAL, 83, 57);
+        layer.digits(digits, "/", TEXT_COLOR, DigitFont_T.NORMAL, 77 - Math.trunc(this.layer.measureText("/") / 2), 71);
+        layer.digits(digits, mp, TEXT_COLOR, DigitFont_T.NORMAL, 67 - this.layer.measureText(mp), 71);
+        layer.digits(digits, String(character.maxMp), TEXT_COLOR, DigitFont_T.NORMAL, 83, 71);
 
         const karma = character.karma >= 999999 ? `${character.karma}+` : String(character.karma);
 

@@ -24,8 +24,8 @@ export class NCRecipeShopWnd {
     public onTooltip: (row: RecipeShopRow_T, button: HTMLElement, context: number, isDetailed: boolean) => void = null;
     public onHideTooltip: () => void = null;
     protected readonly lists: NDomScrollPane_T[] = [];
-    protected readonly caption: HTMLCanvasElement;
-    protected readonly counter: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
+    protected readonly counter: HTMLDivElement;
     protected readonly pressed = [-1, -1];
     protected readonly selected: RecipeShopRow_T[] = [null, null];
     protected items: RecipeShopRow_T[][] = [[], []];

@@ -6,8 +6,10 @@ const TEX_BACK = "NWindow.ChatBack";
 export class NCMinimizedWnd {
     public static getTextures() { return [TEX_ICON, TEX_BACK]; }
     public readonly element: HTMLDivElement;
-    protected readonly icon: HTMLCanvasElement;
-    protected readonly caption: HTMLCanvasElement;
+    protected readonly blink: HTMLDivElement;
+    protected readonly caption: HTMLDivElement;
+    protected readonly captionBack: HTMLDivElement;
+    protected readonly captionText: HTMLDivElement;
     protected hasActivity = false;
     protected blinkPhase = false;
     protected timer = 0;
@@ -17,11 +19,12 @@ export class NCMinimizedWnd {
         this.element = layer.createWindow(0, 0, 32, 32);
         this.element.hidden = true;
         this.element.style.overflow = "visible";
-        this.icon = document.createElement("canvas");
-        this.icon.width = this.icon.height = 32;
-        this.icon.style.pointerEvents = "none";
-        this.element.appendChild(this.icon);
-        this.caption = layer.text(this.element, layer.getManager().getSysString(389), 0xffdcdcdc, undefined, 0, 0);
+        layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, TEX_ICON).style.pointerEvents = "none";
+        this.blink = layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, TEX_ICON, 0xff388080);
+        this.blink.style.pointerEvents = "none";
+        this.caption = layer.createWindow(0, 0, 0, 0, this.element);
+        this.captionBack = layer.tile(this.caption, 0, 0, 0, 0, 0, 0, 1, 1, TEX_BACK);
+        this.captionText = layer.text(this.caption, layer.getManager().getSysString(389), 0xffdcdcdc, undefined, 0, 0);
         this.caption.hidden = true;
         this.caption.style.pointerEvents = "none";
         layer.createWindow(0, 0, 33, 33, this.element);
@@ -117,15 +120,7 @@ export class NCMinimizedWnd {
         this.paint();
     }
 
-    protected paint() {
-        const canvas = this.layer.getManager().canvas;
-        const context = this.icon.getContext("2d");
-
-        context.clearRect(0, 0, 32, 32);
-        context.drawImage(canvas.getTexture(TEX_ICON), 0, 0, 32, 32, 0, 0, 32, 32);
-
-        if (this.hasActivity && this.blinkPhase) context.drawImage(canvas.getTintedImage(TEX_ICON, 0xff388080), 0, 0, 32, 32, 0, 0, 32, 32);
-    }
+    protected paint() { this.blink.hidden = !(this.hasActivity && this.blinkPhase); }
 
     protected paintCaption() {
         if (!this.isHovered || !this.isVisible()) return;
@@ -133,13 +128,11 @@ export class NCMinimizedWnd {
         const canvas = this.layer.getManager().canvas;
         const text = this.layer.getManager().getSysString(389);
         const width = canvas.measureText(text), height = canvas.getLineHeight();
-        const left = parseInt(this.element.style.left);
-        const context = this.caption.getContext("2d");
+        const left = parseInt(this.element.style.left), back = canvas.getTexture(TEX_BACK);
 
-        this.layer.place(this.caption, Math.min(left, canvas.width - width) - left, -height);
-        context.clearRect(0, 0, this.caption.width, this.caption.height);
-        context.drawImage(canvas.getTexture(TEX_BACK), 0, 0, width, height);
-        canvas.renderText(context, 0, 0, 0xffdcdcdc, text);
+        this.layer.place(this.caption, Math.min(left, canvas.width - width) - left, -height, width, height);
+        this.layer.placeTile(this.captionBack, 0, 0, width, height, 0, 0, back.width, back.height, TEX_BACK);
+        this.layer.renderText(this.captionText, text, 0xffdcdcdc);
         this.caption.hidden = false;
     }
 }

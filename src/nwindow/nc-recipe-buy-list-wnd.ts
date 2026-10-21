@@ -25,7 +25,7 @@ export class NCRecipeBuyListWnd {
     protected readonly thumbCenter: HTMLDivElement;
     protected readonly thumbBottom: HTMLDivElement;
     protected readonly mp: HTMLDivElement;
-    protected readonly adena: HTMLCanvasElement;
+    protected readonly adena: HTMLDivElement;
     protected items: RecipeBuyRow_T[] = [];
     protected ownerId = 0;
     protected scroll = 0;

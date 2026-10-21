@@ -12,7 +12,7 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
 
     protected readonly layer: NDomLayer;
     protected readonly back: HTMLDivElement;
-    protected readonly textCanvas: HTMLCanvasElement;
+    protected readonly textBox: HTMLDivElement;
     protected readonly textLink: HTMLAnchorElement;
     protected text = "";
     protected screenWidth = 0;
@@ -25,13 +25,11 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
 
         this.back = layer.tile(this.element, 0, 0, 0, BAR_HEIGHT, 0, 0, 1, BAR_HEIGHT, TEX_BACK);
 
-        this.textCanvas = document.createElement("canvas");
-        this.textCanvas.className = "ndom-text ndom-absolute";
-        layer.place(this.textCanvas, 0, 0);
         this.textLink = document.createElement("a");
         this.textLink.target = "_blank";
         this.textLink.rel = "noopener noreferrer";
-        this.textLink.appendChild(this.textCanvas);
+        this.textBox = layer.createWindow(0, 0, 0, BAR_HEIGHT, this.textLink);
+        this.textBox.style.overflow = "hidden";
         this.element.appendChild(this.textLink);
     }
 
@@ -58,20 +56,12 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
 
     protected renderText() {
         const nwindow = this.layer.getManager().canvas;
-        const scale = nwindow.scale;
         const width = Math.max(1, this.screenWidth);
         const lineHeight = nwindow.getLineHeight(FontType_T.SMALL);
         const textWidth = this.layer.measureText(this.text);
 
-        this.textCanvas.width = Math.round(width * scale);
-        this.textCanvas.height = Math.round(BAR_HEIGHT * scale);
-        this.textCanvas.style.width = `${width}px`;
-        this.textCanvas.style.height = `${BAR_HEIGHT}px`;
-
-        const context = this.textCanvas.getContext("2d");
-
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
+        this.layer.place(this.textBox, 0, 0, width, BAR_HEIGHT);
+        this.textBox.replaceChildren();
 
         if (!this.text) return;
 
@@ -79,14 +69,14 @@ export class NCMessageWnd { // NCMessageWnd (vtable 0x101bd350): OnCreate 0x100b
             const x = Math.trunc(this.screenWidth * 0.5 - Math.trunc(textWidth / 2));
             const y = Math.trunc(BAR_HEIGHT * 0.5 - Math.trunc(lineHeight / 2));
 
-            nwindow.renderText(context, x, y, TEXT_COLOR, this.text, FontType_T.SMALL);
+            this.layer.text(this.textBox, this.text, TEXT_COLOR, FontType_T.SMALL, x, y);
             return;
         }
 
         const lines = nwindow.wrapText(this.text, this.screenWidth - 100);
 
         for (let i = 0; i < lines.length; i++)
-            nwindow.renderText(context, 50, 8 + i * lineHeight, TEXT_COLOR, lines[i], FontType_T.SMALL);
+            this.layer.text(this.textBox, lines[i], TEXT_COLOR, FontType_T.SMALL, 50, 8 + i * lineHeight);
     }
 }
 

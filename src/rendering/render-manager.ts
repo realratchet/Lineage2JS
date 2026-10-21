@@ -53,6 +53,7 @@ import type HairSimulationComponent from "../objects/components/hair-simulation-
 import type { INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import Radar from "./radar";
+import OverHeadAlarm from "./over-head-alarm";
 import QuestArrow from "./quest-arrow";
 import ViewportWindow from "./viewport-window";
 import type PawnFishingComponent from "../objects/components/pawn-fishing-component";
@@ -287,6 +288,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
     public readonly radar = new Radar();
+    public readonly overHeadAlarm = new OverHeadAlarm();
     public readonly questArrow = new QuestArrow(this);
     protected viewportWindow: ViewportWindow = null;
     protected viewportSceneCanvas: HTMLCanvasElement = null;
@@ -1422,7 +1424,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const pawn = component.getParent();
             const state = this.resolvePawnLocation(pawn);
             const dx = Math.fround(state.position.x) - originX, dy = Math.fround(state.position.y) - originY;
-            const inRange = !inWorld || component.updateActorView(Math.sqrt(dx * dx + dy * dy), range);
+            const inRange = inWorld ? component.updateActorView(Math.sqrt(dx * dx + dy * dy), range) : component.prepareActorView();
 
             if (!state.sector || !state.sector.staticMeshGroup || state.leafIndex === null) {
                 pawn.visible = false;
@@ -1516,7 +1518,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             const gui = this.manGame.getComponent("gui");
             for (const component of this.pawnRenderables)
-                if (component.getParent() !== this.player && (gui.screen !== "world" || gui.hasNameplate(component.getParent()))) arrShadowCasters.push(component.getParent());
+                if (component.getParent() !== this.player && (gui.getScreen() !== "world" || gui.hasNameplate(component.getParent()))) arrShadowCasters.push(component.getParent());
         }
 
         this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
@@ -1776,6 +1778,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             (GLOBAL_UNIFORMS.staticMeshHardwareSunDirection.value as Vector3).copy(sunLight.lightDirection);
         }
 
+        this.overHeadAlarm.clear();
         this.manGame.getComponent("gui").updateNameplates();
         this.updatePawnLighting(true, currentTime);
 
@@ -2521,6 +2524,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.getWaterEffects().underWaterEffect.renderCellophane(this.renderer);
         this.renderer.getSize(tmpSize);
+        this.overHeadAlarm.draw(this.renderer);
         this.questArrow.draw();
         this.radar.render(this.renderer, this.camera, this.player.position, tmpSize.x, tmpSize.y);
 

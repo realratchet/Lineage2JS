@@ -90,7 +90,7 @@ function pullSound(builder: DecodeLibraryBuilder, value: USound | null): string 
     if (!value) return null;
 
     const sound = value.loadSelf();
-    const soundName = sound.objectName ?? sound.uuid;
+    const soundName = sound.name;
 
     return builder.pullSound(sound) ? soundName : null;
 }

@@ -28,7 +28,7 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
     public readonly clanWnd: ClanWndView_T;
     public readonly detailStatusWnd: DetailStatusWndView_T;
     public onSelect: (tab: MainTab_T) => void = null;
-    protected readonly caption: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly pages: Record<MainTab_T, HTMLDivElement>;
     protected selectedTab: MainTab_T = "status";

@@ -1,5 +1,5 @@
 import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
-import { FontType_T } from "./nwindow-canvas";
+import { DIGIT_CELLS, DIGIT_FONTS, DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
 import { SKIN_SLOTS } from "./skin-textures";
 
@@ -11,7 +11,6 @@ const ATLAS_WIDTH = 2048;
 const MIN_THUMB = 15;
 
 type AtlasEntry_T = { url: string, x: number, y: number, width: number, height: number, atlasWidth: number, atlasHeight: number };
-type TextLabel_T = { text: string, color: number, font: FontType_T, isUnderlined: boolean };
 
 function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with RGBA bitfields: raw canvas bytes, no PNG compression pass.
     const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
@@ -36,6 +35,10 @@ function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with 
     return new Blob([header.buffer, pixels], { type: "image/bmp" });
 }
 
+function selectionHtml(x: number, width: number) { return `<b style="left:${x}px;top:2px;width:${width}px;height:12px"></b>`; } // NWindow.WhiteTexture at alpha 0x80.
+
+function glyphHtml(x: number, y: number, w: number, h: number, u: number, v: number) { return `<i style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;background-position:${-u}px ${-v}px"></i>`; }
+
 export type NDomCheckBox_T = HTMLDivElement & { setChecked(checked: boolean): void, getChecked(): boolean };
 export type NDomButton_T = HTMLDivElement & { setLabel(label: string): void, setEnabled(isEnabled: boolean): void, setTextures(normal: string, down: string, over?: string): void };
 export type NDomScrollPane_T = HTMLDivElement & { content: HTMLDivElement, setContentHeight(height: number, preserveScroll?: boolean): void, setScroll(position: number, isClamped?: boolean): void, getScroll(): number };
@@ -43,11 +46,11 @@ export type NDomEdit_T = HTMLDivElement & { input: HTMLInputElement, getValue():
 
 export class NDomLayer {
     protected readonly tooltips = new NCTooltip();
-    protected readonly cacheText = new WeakMap<HTMLCanvasElement, TextLabel_T>();
     public readonly root = document.createElement("div");
     protected readonly manager: NWindowManager;
     protected readonly atlas = new Map<string, AtlasEntry_T>();
     protected readonly cacheWrapUrls = new Map<string, string>();
+    protected readonly cacheTintUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
     protected readonly windowPositions = new Map<HTMLElement, [number, number]>();
     protected stopDrag: () => void = null;
@@ -87,11 +90,6 @@ export class NDomLayer {
         this.root.style.width = `${canvas.width}px`;
         this.root.style.height = `${canvas.height}px`;
         this.root.style.transform = `scale(${canvas.cssScale})`;
-        for (const element of this.root.querySelectorAll("canvas")) {
-            const text = this.cacheText.get(element);
-
-            if (text) this.renderText(element, text.text, text.color, text.font, text.isUnderlined);
-        }
     }
 
     public getManager() { return this.manager; }
@@ -254,15 +252,15 @@ export class NDomLayer {
         if (height !== null) element.style.height = `${height}px`;
     }
 
-    public setTile(element: HTMLElement, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string) {
+    public setTile(element: HTMLElement, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff) {
         const entry = this.atlas.get(path.toLowerCase());
 
         if (!entry) throw new Error(`UI texture '${path}' was not loaded for the DOM layer.`);
 
         const scaleX = w / uw, scaleY = h / vh;
 
-        if (u < 0 || v < 0 || u + uw > entry.width || v + vh > entry.height) { // Wrapping tiles need the texture on its own for background-repeat.
-            element.style.backgroundImage = `url(${this.getWrapUrl(path)})`;
+        if (color !== 0xffffff || u < 0 || v < 0 || u + uw > entry.width || v + vh > entry.height) { // Wrapping and tinted tiles need the texture on its own.
+            element.style.backgroundImage = `url(${color === 0xffffff ? this.getWrapUrl(path) : this.getTintUrl(path, color)})`;
             element.style.backgroundSize = `${entry.width * scaleX}px ${entry.height * scaleY}px`;
             element.style.backgroundPosition = `${-u * scaleX}px ${-v * scaleY}px`;
             return;
@@ -273,51 +271,117 @@ export class NDomLayer {
         element.style.backgroundPosition = `${-(entry.x + u) * scaleX}px ${-(entry.y + v) * scaleY}px`;
     }
 
-    public tile(parent: HTMLElement, x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string): HTMLDivElement {
+    public tile(parent: HTMLElement, x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff): HTMLDivElement {
         const element = document.createElement("div");
 
         element.className = "ndom-tile";
         this.place(element, x, y, w, h);
-        this.setTile(element, w, h, u, v, uw, vh, path);
+        this.setTile(element, w, h, u, v, uw, vh, path, color);
         parent.appendChild(element);
 
         return element;
     }
 
-    public renderText(canvas: HTMLCanvasElement, text: string, color: number, font: FontType_T = FontType_T.SMALL, isUnderlined: boolean = false) {
-        const nwindow = this.manager.canvas;
-        const scale = nwindow.scale;
-        const width = Math.max(1, nwindow.measureText(text, font)), height = nwindow.getLineHeight(font);
+    public placeTile(element: HTMLElement, x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff) {
+        element.hidden = w <= 0 || h <= 0;
 
-        canvas.width = Math.round(width * scale);
-        canvas.height = Math.round(height * scale);
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
+        if (element.hidden) return;
 
-        const context = canvas.getContext("2d");
-
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
-        nwindow.renderText(context, 0, 0, color, text, font);
-        if (isUnderlined) { // LINK underline occupies the last font row, L2.4_20 capture.
-            context.setTransform(scale, 0, 0, scale, 0, 0);
-            context.globalAlpha = 1;
-            context.fillStyle = `#${(color & 0xffffff).toString(16).padStart(6, "0")}`;
-            context.fillRect(0, height - 1, width, 1);
-        }
-        this.cacheText.set(canvas, { text, color, font, isUnderlined });
+        this.place(element, x, y, w, h);
+        this.setTile(element, w, h, u, v, uw, vh, path, color);
     }
 
-    public text(parent: HTMLElement, text: string, color: number = TEXT_COLOR, font: FontType_T = FontType_T.SMALL, x: number = null, y: number = null, isUnderlined: boolean = false): HTMLCanvasElement {
-        const canvas = document.createElement("canvas");
+    public getTintUrl(path: string, color: number, alphaRef: number = -1): string {
+        const key = `${path.toLowerCase()}:${color & 0xffffff}:${alphaRef}`;
 
-        canvas.className = x === null ? "ndom-text" : "ndom-text ndom-absolute";
-        this.renderText(canvas, text, color, font, isUnderlined);
+        if (!this.cacheTintUrls.has(key)) this.cacheTintUrls.set(key, URL.createObjectURL(encodeBitmap(this.manager.canvas.getTintedImage(path, color, alphaRef))));
 
-        if (x !== null) this.place(canvas, x, y);
-        if (parent) parent.appendChild(canvas);
+        return this.cacheTintUrls.get(key);
+    }
 
-        return canvas;
+    public setAlpha(element: HTMLElement, alpha: number) { element.style.setProperty("--alpha", alpha >= 0xff ? "" : String(alpha / 255)); }
+
+    protected setGlyphs(element: HTMLElement, html: string, width: number, height: number, texture: string, color: number, alphaRef: number = -1) {
+        const alpha = (color >>> 24) & 0xff;
+
+        element.style.width = `${width}px`;
+        element.style.height = `${height}px`;
+        element.style.opacity = alpha === 0xff ? "" : String(alpha / 255);
+        element.style.setProperty("--glyphs", `url(${this.getTintUrl(texture, color, alphaRef)})`);
+        element.innerHTML = html;
+    }
+
+    public renderText(element: HTMLElement, text: string, color: number, font: FontType_T = FontType_T.SMALL, isUnderlined: boolean = false) { // Engine.dll DrawNormalText 0x10527880: one 1:1 quad per glyph, pen advances by the glyph width.
+        const nwindow = this.manager.canvas, { texture, glyphs, lineHeight } = nwindow.getFont(font);
+        const width = Math.max(1, nwindow.measureText(text, font));
+        let html = "", penX = 0, penY = 0;
+
+        for (let i = 0; i < text.length; i++) {
+            const code = text.charCodeAt(i);
+
+            if (code === 0x0a) {
+                penX = 0;
+                penY += lineHeight;
+                continue;
+            }
+
+            if (code < 0x20) continue;
+
+            const glyph = glyphs.get(code);
+
+            if (!glyph) continue;
+
+            html += glyphHtml(penX, penY, glyph.w, glyph.h, glyph.u, glyph.v);
+            penX += glyph.w;
+        }
+
+        if (isUnderlined) html += `<b style="left:0;top:${lineHeight - 1}px;width:${width}px;height:1px;background:#${(color & 0xffffff).toString(16).padStart(6, "0")}"></b>`; // LINK underline occupies the last font row, L2.4_20 capture.
+
+        this.setGlyphs(element, html, width, lineHeight, texture, color);
+    }
+
+    public text(parent: HTMLElement, text: string, color: number = TEXT_COLOR, font: FontType_T = FontType_T.SMALL, x: number = null, y: number = null, isUnderlined: boolean = false): HTMLDivElement {
+        const element = document.createElement("div");
+
+        element.className = x === null ? "ndom-text" : "ndom-text ndom-absolute";
+        this.renderText(element, text, color, font, isUnderlined);
+
+        if (x !== null) this.place(element, x, y);
+        if (parent) parent.appendChild(element);
+
+        return element;
+    }
+
+    public renderDigits(element: HTMLElement, text: string, color: number, type: DigitFont_T = DigitFont_T.NORMAL, alphaRef: number = -1) { // UCanvas::DrawSpecialDigit (Engine 0x105284e0): fixed cells, characters outside the strip are skipped.
+        const [texture, cellW, cellH] = DIGIT_FONTS[type];
+        let html = "", count = 0;
+
+        for (let i = 0; i < text.length; i++) {
+            const cell = DIGIT_CELLS.indexOf(text[i]);
+
+            if (cell < 0) continue;
+
+            html += glyphHtml(count * cellW, 0, cellW, cellH, cell * cellW, 0);
+            count++;
+        }
+
+        this.setGlyphs(element, html, Math.max(1, count * cellW), cellH, texture, color, alphaRef);
+    }
+
+    public digits(parent: HTMLElement, text: string, color: number = TEXT_COLOR, type: DigitFont_T = DigitFont_T.NORMAL, x: number = null, y: number = null, alphaRef: number = -1): HTMLDivElement {
+        const element = document.createElement("div");
+
+        element.className = x === null ? "ndom-text" : "ndom-text ndom-absolute";
+        this.renderDigits(element, text, color, type, alphaRef);
+
+        if (x !== null) this.place(element, Math.trunc(x), Math.trunc(y));
+        if (parent) parent.appendChild(element);
+
+        return element;
+    }
+
+    public wrappedText(parent: HTMLElement, x: number, y: number, color: number, text: string, width: number, lineSpacing = 0, font: FontType_T = FontType_T.SMALL) {
+        this.manager.canvas.layoutWrappedText(x, y, text, width, lineSpacing, font, (penX, penY, part) => this.text(parent, part, color, font, Math.trunc(penX), Math.trunc(penY)));
     }
 
     public measureText(text: string, font: FontType_T = FontType_T.SMALL) { return this.manager.canvas.measureText(text, font); }
@@ -325,7 +389,7 @@ export class NDomLayer {
     public button(parent: HTMLElement, x: number, y: number, w: number, h: number, normal: string, down: string, over: string = null, label: string = null, onPress: () => void = null, onHold: (isDown: boolean) => void = null): NDomButton_T { // NCButton states (0x100010ec); NCExButton 0x100017d0 / 0x10001810 notifies both edges without click audio.
         const element = document.createElement("div") as NDomButton_T;
         const face = document.createElement("div");
-        const caption = document.createElement("canvas");
+        const caption = document.createElement("div");
         let textures = { normal, down, over: over || (this.hasTexture(`${normal}_over`) ? `${normal}_over` : normal) };
         let isEnabled = true, isHover = false, isDown = false, text = label;
 
@@ -403,7 +467,7 @@ export class NDomLayer {
         return element;
     }
 
-    public tooltip(parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T) { this.tooltips.bind(this, parent, button, info); }
+    public tooltip(parent: HTMLElement, button: HTMLElement, info: string | TooltipInfo_T, topOffset = 32) { this.tooltips.bind(this, parent, button, info, topOffset); }
 
     public tab(parent: HTMLElement, x: number, y: number, w: number, h: number, normal: string, selected: string, label: string, tooltip: string, onSelect: () => void): NDomButton_T { // NCTabButton 0x10001b90, 0x10001a50: selected stays state 1; unselected hover uses state 2.
         let isEnabled = true, isSelected = normal === selected;
@@ -557,7 +621,10 @@ export class NDomLayer {
         const middle = this.tile(element, 8, 0, w - 16, h, 0, 0, 8, 17, SKIN_SLOTS.edit2);
         const right = this.tile(element, w - 8, 0, 8, h, 0, 0, 8, 17, SKIN_SLOTS.edit3);
         const input = document.createElement("input");
-        const overlay = document.createElement("canvas");
+        const overlay = document.createElement("div");
+        const text = this.text(overlay, "", TEXT_COLOR, FontType_T.SMALL, 2, 2);
+        const caret = this.text(overlay, "|", TEXT_COLOR, FontType_T.SMALL, 0, 2);
+        const selection = document.createElement("div");
         const nwindow = this.manager.canvas;
         let timer: number = null;
         let selectOnClick = true;
@@ -598,53 +665,40 @@ export class NDomLayer {
         }
 
         const draw = () => {
-            const scale = nwindow.scale;
             const shown = isPassword ? "*".repeat(input.value.length) : input.value;
             let start = 0;
 
             while (start < shown.length && nwindow.measureText(shown.slice(start)) > w - 6) start++;
 
-            const visible = shown.slice(start);
+            const visible = shown.slice(start), isFocused = document.activeElement === input;
 
-            overlay.width = Math.round(w * scale);
-            overlay.height = Math.round(h * scale);
+            this.renderText(text, visible, TEXT_COLOR);
+            caret.hidden = !isFocused || !isCaretVisible;
 
-            const context = overlay.getContext("2d");
-
-            context.setTransform(scale, 0, 0, scale, 0, 0);
-            context.imageSmoothingEnabled = false;
-            nwindow.renderText(context, 2, 2, TEXT_COLOR, visible);
-
-            if (document.activeElement === input && isCaretVisible) {
-                const caret = Math.max(0, getCaret() - start);
-
-                nwindow.renderText(context, 2 + nwindow.measureText(visible.slice(0, caret)) - (isPassword ? 0 : 1), 2, TEXT_COLOR, "|");
-            }
+            if (!caret.hidden) this.place(caret, 2 + nwindow.measureText(visible.slice(0, Math.max(0, getCaret() - start))) - (isPassword ? 0 : 1), 2);
 
             const selectionStart = input.selectionStart || 0, selectionEnd = input.selectionEnd || 0;
+            let html = "";
 
-            if (document.activeElement === input && selectionEnd > selectionStart) {
-                const texture = nwindow.getTexture("NWindow.WhiteTexture");
+            if (isFocused && selectionEnd > selectionStart) {
                 const anchor = getCaret();
                 let x = nwindow.measureText(shown.slice(start, anchor));
-
-                context.globalAlpha = 0x80 / 255;
 
                 if (anchor === selectionEnd) {
                     const width = nwindow.measureText(input.value.slice(selectionStart, selectionEnd));
 
-                    context.drawImage(texture, 0, 0, 1, 1, 2 + x - width, 2, width, 12);
+                    html = selectionHtml(2 + x - width, width);
                 } else {
                     for (let i = Math.max(start, selectionStart); i < selectionEnd; i++) {
                         const width = nwindow.measureText(input.value[i]);
 
-                        context.drawImage(texture, 0, 0, 1, 1, 1 + x, 2, width, 12);
+                        html += selectionHtml(1 + x, width);
                         x += width;
                     }
                 }
-
-                context.globalAlpha = 1;
             }
+
+            selection.innerHTML = html;
         };
 
         element.className = "ndom-edit";
@@ -739,6 +793,7 @@ export class NDomLayer {
         overlay.className = "ndom-edit-overlay";
         overlay.style.width = `${w}px`;
         overlay.style.height = `${h}px`;
+        overlay.append(selection);
         element.append(input, overlay);
 
         for (const type of ["input", "keyup", "click", "select"]) input.addEventListener(type, draw);

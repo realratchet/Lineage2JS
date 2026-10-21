@@ -15,7 +15,7 @@ export class NCFishViewportWnd {
     public static getTextures() { return [TEX_BACK, TEX_CLOCK, TEX_BAR, TEX_BAR_BACK, TEX_EFFECT, ...TEX_HINT, ...TEX_FRAME]; }
     public readonly element: HTMLDivElement;
     protected readonly viewport: HTMLCanvasElement;
-    protected readonly hud: HTMLCanvasElement;
+    protected readonly hud: HTMLDivElement;
     protected maxHp = 0;
     protected hp = 0;
     protected maxTime = 0;
@@ -49,11 +49,9 @@ export class NCFishViewportWnd {
         this.viewport.style.pointerEvents = "none";
         layer.place(this.viewport, 2, 20, 252, 254);
         this.element.appendChild(this.viewport);
-        this.hud = document.createElement("canvas");
-        this.hud.className = "ndom-absolute";
+        this.hud = layer.createWindow(0, 0, 256, 276, this.element);
+        this.hud.style.overflow = "hidden";
         this.hud.style.pointerEvents = "none";
-        layer.place(this.hud, 0, 0, 256, 276);
-        this.element.appendChild(this.hud);
 
         const frame = layer.createWindow(0, 0, 256, 20, this.element);
         layer.tile(frame, 0, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME[0]);
@@ -153,42 +151,33 @@ export class NCFishViewportWnd {
         if (this.isVisible()) this.paint();
     }
 
-    protected paintTile(context: CanvasRenderingContext2D, path: string, x: number, y: number, width: number, height: number, sourceWidth: number, sourceHeight: number, alpha = 255) {
-        const texture = this.layer.getManager().canvas.getTexture(path);
+    protected paintTile(path: string, x: number, y: number, width: number, height: number, sourceWidth: number, sourceHeight: number, alpha = 255) {
+        if (!this.layer.hasTexture(path) || width <= 0 || height <= 0) return;
 
-        if (!texture || width <= 0 || height <= 0) return;
-
-        context.globalAlpha = (alpha & 255) / 255;
-        context.drawImage(texture, 0, 0, sourceWidth, sourceHeight, x, y, width, height);
-        context.globalAlpha = 1;
+        this.layer.setAlpha(this.layer.tile(this.hud, x, y, width, height, 0, 0, sourceWidth, sourceHeight, path), alpha & 255);
     }
 
     protected paint() {
-        const canvas = this.layer.getManager().canvas, scale = canvas.scale;
-        const width = Math.round(256 * scale), height = Math.round(276 * scale);
+        const layer = this.layer, canvas = layer.getManager().canvas, hud = this.hud;
 
-        if (this.hud.width !== width || this.hud.height !== height) { this.hud.width = width; this.hud.height = height; }
-        const context = this.hud.getContext("2d");
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.clearRect(0, 0, 256, 276);
-        context.imageSmoothingEnabled = false;
+        hud.replaceChildren();
         const alpha = this.messageFade >= 1 ? 255 : Math.trunc(this.messageFade * 255);
-        canvas.renderText(context, 13, 256, (alpha << 24) | (this.redMessage ? 0xff0000 : 0xdcdcdc), this.message);
-        if (this.delta) canvas.renderText(context, 242 - canvas.measureText(String(this.delta)), 256, (alpha << 24) | (this.delta > 0 ? 0xff0000 : 0xdcdcdc), String(this.delta));
+        layer.text(hud, this.message, ((alpha << 24) | (this.redMessage ? 0xff0000 : 0xdcdcdc)) >>> 0, FontType_T.SMALL, 13, 256);
+        if (this.delta) layer.text(hud, String(this.delta), ((alpha << 24) | (this.delta > 0 ? 0xff0000 : 0xdcdcdc)) >>> 0, FontType_T.SMALL, 242 - canvas.measureText(String(this.delta)), 256);
         if (this.hasCombatUI) {
-            this.paintTile(context, TEX_CLOCK, 110, 215, 12, 16, 12, 16);
-            canvas.renderDigits(context, 125, 216, 0xffdcdcdc, String(this.time), DigitFont_T.LARGE);
+            this.paintTile(TEX_CLOCK, 110, 215, 12, 16, 12, 16);
+            layer.digits(hud, String(this.time), 0xffdcdcdc, DigitFont_T.LARGE, 125, 216);
             if (this.maxHp !== 0) {
                 const filled = Math.trunc(Math.imul(this.hp, 115) / this.maxHp);
-                this.paintTile(context, TEX_BAR, 13, 236, filled, 11, 8, 11);
-                this.paintTile(context, TEX_BAR_BACK, 13 + filled, 236, 230 - filled, 11, 8, 11);
+                this.paintTile(TEX_BAR, 13, 236, filled, 11, 8, 11);
+                this.paintTile(TEX_BAR_BACK, 13 + filled, 236, 230 - filled, 11, 8, 11);
             }
-            if (this.effectActive) this.paintTile(context, TEX_EFFECT, -22, 221, 297, 41, 297, 41, this.effectAlpha);
+            if (this.effectActive) this.paintTile(TEX_EFFECT, -22, 221, 297, 41, 297, 41, this.effectAlpha);
         }
         const phase = this.hintPhase;
         if (this.hintsEnabled && (phase >= 0 && phase < Math.fround(.1) || phase >= Math.fround(.2) && phase < Math.fround(.3) || phase >= Math.fround(.4))) {
-            this.paintTile(context, TEX_HINT[this.mode === 0 ? 0 : 1], 13, 33, 32, 32, 32, 32);
-            canvas.renderWrappedText(context, 53, 33, 0xffe7dcb6, this.layer.getManager().getSystemMessage(this.mode === 0 ? 1665 : 1664), 193);
+            this.paintTile(TEX_HINT[this.mode === 0 ? 0 : 1], 13, 33, 32, 32, 32, 32);
+            layer.wrappedText(hud, 53, 33, 0xffe7dcb6, layer.getManager().getSystemMessage(this.mode === 0 ? 1665 : 1664), 193);
         }
     }
 }

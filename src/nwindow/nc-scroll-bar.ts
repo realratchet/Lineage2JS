@@ -1,6 +1,5 @@
-import NWnd, { type NMouseEvent_T } from "./nwnd";
-import NCButton, { NCBUTTON_NO_OVER } from "./nc-button";
-import type NWindowCanvas from "./nwindow-canvas";
+import type NDomLayer from "./ndom";
+import type { NDomButton_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_TOP = SKIN_SLOTS.scrollThumbTop;
@@ -9,114 +8,88 @@ const TEX_BOTTOM = SKIN_SLOTS.scrollThumbBottom;
 const MIN_THUMB = 15;
 const REPEAT_PERIOD = 100; // NCPushButton auto-repeat period (0x10003940).
 
-class NCSliderBar extends NWnd { // NCSliderBar (vtable 0x101a6368): thumb only, no track texture.
-    public thumbPos = 0;
-    public thumbLen = 0;
-    protected dragOffsetY = 0;
-    protected isDragging = false;
-    public readonly owner: NCScrollBar;
-
-    public constructor(owner: NCScrollBar, x: number, y: number, width: number, height: number) {
-        super(x, y, width, height);
-
-        this.owner = owner;
-    }
-
-    public getTextures(): string[] { return [TEX_TOP, TEX_CENTER, TEX_BOTTOM]; }
-
-    public onPaint(canvas: NWindowCanvas) { // OnPaint 0x1002c360.
-        if (this.thumbLen <= 0) return;
-
-        canvas.drawTile(0, this.thumbPos, 15, 8, 0, 0, 15, 8, TEX_TOP);
-        canvas.drawTile(0, this.thumbPos + this.thumbLen - 8, 15, 8, 0, 0, 15, 8, TEX_BOTTOM);
-        canvas.drawTile(0, this.thumbPos + 8, 15, this.thumbLen - 16, 0, 0, 15, 8, TEX_CENTER);
-    }
-
-    public onMouseDown(event: NMouseEvent_T) {
-        if (event.button !== 0) return;
-
-        if (this.owner.content > this.owner.view && event.y >= this.thumbPos && event.y <= this.thumbPos + this.thumbLen) {
-            this.isDragging = true;
-            this.dragOffsetY = event.y - this.thumbPos;
-        }
-    }
-
-    public onMouseMove(event: NMouseEvent_T) {
-        if (!this.isDragging || !this.manager.isPressed(this)) {
-            this.isDragging = false;
-            return;
-        }
-
-        const travel = this.height - this.thumbLen;
-
-        if (travel <= 0) return;
-
-        const position = Math.max(0, Math.min(travel, Math.trunc(event.y - this.dragOffsetY)));
-
-        if (position === this.thumbPos) return;
-
-        this.owner.setPosition(Math.trunc(position * (this.owner.content - this.owner.view) / travel)); // NCSliderBar::OnMouseMove, NWindow RVA 0x2c230: pixel offset, then signed integer division.
-        this.thumbPos = position;
-        this.invalidate();
-    }
-
-    public onMouseUp() { this.isDragging = false; }
-}
-
-class NCPushButton extends NCButton {
-    protected timer: number = null;
-
-    public onMouseDown(event: NMouseEvent_T) {
-        super.onMouseDown(event);
-
-        if (event.button !== 0 || !this.isEnabled) return;
-
-        if (this.onPress) this.onPress();
-
-        this.timer = window.setInterval(() => {
-            if (!this.manager.isPressed(this)) return this.stop();
-            if (this.manager.isHovered(this) && this.onPress) this.onPress(); // NCPushButton::OnMouseMove/OnTimer, RVAs 0x1940/0x19a0.
-        }, REPEAT_PERIOD);
-    }
-
-    protected stop() {
-        window.clearInterval(this.timer);
-        this.timer = null;
-    }
-
-    public onMouseUp() { this.stop(); }
-    public onClick() { }
-    public detach() { this.stop(); super.detach(); }
-}
-
-export class NCScrollBar extends NWnd { // NCScrollWnd scrollbar column (0x1002bdc3..0x1002bfdb): up arrow, slider, down arrow, 15 px wide.
-    protected readonly slider: NCSliderBar;
-    protected readonly upButton: NCPushButton;
-    protected readonly downButton: NCPushButton;
+export class NCScrollBar { // NCScrollWnd scrollbar column (0x1002bdc3..0x1002bfdb): up arrow, slider, down arrow, 15 px wide.
+    public readonly element: HTMLDivElement;
+    protected readonly slider: HTMLDivElement;
+    protected readonly thumb: HTMLDivElement;
+    protected readonly thumbCenter: HTMLDivElement;
+    protected readonly thumbBottom: HTMLDivElement;
+    protected readonly downButton: NDomButton_T;
+    protected height: number;
+    protected thumbPos = 0;
+    protected thumbLen = 0;
     public content = 0;
     public view = 0;
     public position = 0;
     public onScroll: (position: number) => void = null;
 
-    public constructor(x: number, y: number, height: number) {
-        super(x, y, 15, height);
+    public constructor(protected readonly layer: NDomLayer, parent: HTMLElement, x: number, y: number, height: number) {
+        this.height = height;
+        this.element = layer.createWindow(x, y, 15, height, parent);
+        this.createPushButton(0, SKIN_SLOTS.scrollUp, SKIN_SLOTS.scrollUpDown, -1);
+        this.downButton = this.createPushButton(height - 15, SKIN_SLOTS.scrollDown, SKIN_SLOTS.scrollDownDown, 1);
+        this.slider = layer.createWindow(0, 15, 15, height - 30, this.element); // NCSliderBar (vtable 0x101a6368): thumb only, no track texture.
+        this.thumb = layer.createWindow(0, 0, 15, 0, this.slider);
+        layer.tile(this.thumb, 0, 0, 15, 8, 0, 0, 15, 8, TEX_TOP);
+        this.thumbCenter = layer.tile(this.thumb, 0, 8, 15, 0, 0, 0, 15, 8, TEX_CENTER);
+        this.thumbBottom = layer.tile(this.thumb, 0, 0, 15, 8, 0, 0, 15, 8, TEX_BOTTOM);
+        this.slider.addEventListener("mousedown", event => {
+            if (event.button !== 0) return;
 
-        this.upButton = this.addChild(new NCPushButton(0, 0, 15, 15, SKIN_SLOTS.scrollUp, SKIN_SLOTS.scrollUpDown, null, NCBUTTON_NO_OVER));
-        this.downButton = this.addChild(new NCPushButton(0, height - 15, 15, 15, SKIN_SLOTS.scrollDown, SKIN_SLOTS.scrollDownDown, null, NCBUTTON_NO_OVER));
-        this.slider = this.addChild(new NCSliderBar(this, 0, 15, 15, height - 30));
-        this.upButton.onPress = () => this.scrollBy(-1);
-        this.downButton.onPress = () => this.scrollBy(1);
+            event.preventDefault();
+
+            const y = layer.toUI(event.clientY - this.slider.getBoundingClientRect().top);
+
+            if (this.content <= this.view || y < this.thumbPos || y > this.thumbPos + this.thumbLen) return;
+
+            const dragOffsetY = y - this.thumbPos;
+
+            layer.beginDrag(move => { // NCSliderBar::OnMouseMove, NWindow RVA 0x2c230: pixel offset, then signed integer division.
+                const travel = this.height - 30 - this.thumbLen;
+
+                if (travel <= 0) return;
+
+                const position = Math.max(0, Math.min(travel, Math.trunc(layer.toUI(move.clientY - this.slider.getBoundingClientRect().top) - dragOffsetY)));
+
+                if (position === this.thumbPos) return;
+
+                this.setPosition(Math.trunc(position * (this.content - this.view) / travel));
+                this.thumbPos = position;
+                this.layoutThumb();
+            });
+        });
+    }
+
+    protected createPushButton(y: number, normal: string, down: string, direction: number) { // NCPushButton::OnMouseMove/OnTimer, RVAs 0x1940/0x19a0.
+        const manager = this.layer.getManager();
+        let timer: number = null, isHovered = false;
+        const button = this.layer.button(this.element, 0, y, 15, 15, normal, down, normal, null, null, isDown => {
+            window.clearInterval(timer);
+            timer = null;
+
+            if (!isDown) return;
+
+            manager.playButtonSound(true);
+            this.scrollBy(direction);
+            timer = window.setInterval(() => { if (isHovered) this.scrollBy(direction); }, REPEAT_PERIOD);
+        });
+
+        button.addEventListener("mouseenter", () => isHovered = true);
+        button.addEventListener("mouseleave", () => isHovered = false);
+
+        return button;
     }
 
     public setHeight(height: number) {
         this.height = height;
-        this.downButton.y = height - 15;
-        this.slider.height = height - 30;
+        this.element.style.height = `${height}px`;
+        this.layer.place(this.downButton, 0, height - 15);
+        this.slider.style.height = `${height - 30}px`;
         this.updateThumb();
     }
 
     public setRange(content: number, view: number) { // SetRange 0x1002c0a0: thumb = int(view * sliderH / content), min 15; hidden when everything fits.
-        if (this.content === content && this.view === view && this.slider.thumbLen > 0) return;
+        if (this.content === content && this.view === view && this.thumbLen > 0) return;
 
         this.content = content;
         this.view = view;
@@ -125,20 +98,18 @@ export class NCScrollBar extends NWnd { // NCScrollWnd scrollbar column (0x1002b
     }
 
     protected updateThumb() {
-        const slider = this.slider;
+        const sliderHeight = this.height - 30;
 
-        if (this.content <= this.view) {
-            slider.thumbLen = slider.height;
-            slider.isVisible = false;
-        } else {
-            slider.isVisible = true;
-            slider.thumbLen = Math.max(MIN_THUMB, Math.trunc(this.view * slider.height / this.content));
-        }
+        this.thumbLen = this.content <= this.view ? sliderHeight : Math.max(MIN_THUMB, Math.trunc(this.view * sliderHeight / this.content));
+        this.thumbPos = this.content > this.view ? Math.trunc((sliderHeight - this.thumbLen) * this.position / (this.content - this.view)) : 0;
+        this.thumb.hidden = this.content <= this.view;
+        this.layoutThumb();
+    }
 
-        const travel = slider.height - slider.thumbLen;
-
-        slider.thumbPos = this.content > this.view ? Math.trunc(travel * this.position / (this.content - this.view)) : 0;
-        this.invalidate();
+    protected layoutThumb() { // OnPaint 0x1002c360.
+        this.layer.place(this.thumb, 0, this.thumbPos, 15, this.thumbLen);
+        this.layer.placeTile(this.thumbCenter, 0, 8, 15, this.thumbLen - 16, 0, 0, 15, 8, TEX_CENTER);
+        this.layer.place(this.thumbBottom, 0, this.thumbLen - 8);
     }
 
     public setPosition(position: number) {

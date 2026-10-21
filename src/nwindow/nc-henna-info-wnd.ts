@@ -15,7 +15,7 @@ export class NCHennaInfoWnd {
     public onBack: (isRemove: boolean) => void = null;
     public onConfirm: (symbolId: number, isRemove: boolean) => void = null;
     protected readonly content: HTMLDivElement;
-    protected readonly caption: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
     protected isRemove = false;
     protected symbolId = 0;
     protected dyeName = "";

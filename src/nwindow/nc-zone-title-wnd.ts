@@ -6,8 +6,10 @@ const TEX_DECO = "L2UI_ch3.PlayerStatusWnd.fontdeco";
 export class NCZoneTitleWnd {
     public static getTextures() { return [TEX_DECO]; }
     public readonly element: HTMLDivElement;
-    protected readonly canvas = document.createElement("canvas");
-    protected readonly context = this.canvas.getContext("2d");
+    protected readonly context = document.createElement("canvas").getContext("2d");
+    protected readonly deco: HTMLDivElement;
+    protected readonly shadow: HTMLDivElement;
+    protected readonly text: HTMLDivElement;
     protected readonly lines = ["", "", ""];
     protected readonly widths = [0, 0, 0];
     protected readonly cacheWidths = new Map<string, number>();
@@ -28,7 +30,9 @@ export class NCZoneTitleWnd {
         this.element.classList.add("ndom-opaque");
         this.element.style.pointerEvents = "none";
         this.element.hidden = true;
-        this.element.appendChild(this.canvas);
+        this.deco = layer.tile(this.element, 0, 0, 256, 256, 0, 0, 256, 256, TEX_DECO);
+        this.shadow = layer.createWindow(0, 0, 0, 0, this.element);
+        this.text = layer.createWindow(0, 0, 0, 0, this.element);
         const info = layer.getManager().strings.trueFonts.zonetitle;
 
         if (!info) throw new Error(`Zone title TrueFont is not configured.`);
@@ -99,9 +103,15 @@ export class NCZoneTitleWnd {
             }
         }
         this.width = Math.max(...this.widths);
-        this.canvas.width = Math.max(256, this.width + 103);
-        this.canvas.height = Math.max(256, 80 + this.lineHeight * 3 + 13);
-        this.setFont();
+        this.layer.place(this.element, this.element.offsetLeft, this.element.offsetTop, Math.max(256, this.width + 103), Math.max(256, 80 + this.lineHeight * 3 + 13));
+        this.shadow.replaceChildren();
+        this.text.replaceChildren();
+        for (let i = 0; i < 3; i++) {
+            const x = 100 + Math.trunc(this.width / 2) - Math.trunc(this.widths[i] / 2);
+
+            this.drawText(this.shadow, this.lines[i], x + 3, 80 + i * this.lineHeight + (i === 0 ? 3 : i * 3), "#000000");
+            this.drawText(this.text, this.lines[i], x, 80 + i * this.lineHeight + i * 5, "#f0f0dc");
+        }
         this.paint();
     }
 
@@ -130,29 +140,21 @@ export class NCZoneTitleWnd {
         if (alpha !== this.alpha || shadowAlpha !== this.shadowAlpha) this.paint();
     }
 
-    protected drawText(text: string, x: number, y: number) {
+    protected drawText(parent: HTMLElement, text: string, x: number, y: number, color: string) {
         for (let i = 0; i < text.length; i++) {
-            this.context.fillText(text[i], x, y + this.ascent);
+            const char = document.createElement("span");
+
+            char.textContent = text[i];
+            char.style.cssText = `position:absolute;left:${x}px;top:${y}px;font:${this.font};font-kerning:none;line-height:${this.lineHeight}px;color:${color};white-space:pre`;
+            parent.appendChild(char);
             x += this.cacheWidths.get(text[i]);
         }
     }
 
     protected paint() {
-        const ctx = this.context;
-
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.globalAlpha = this.alpha / 255;
-        ctx.drawImage(this.layer.getManager().canvas.getTexture(TEX_DECO), 0, 0, 256, 256);
-        for (let i = 0; i < 3; i++) {
-            const x = 100 + Math.trunc(this.width / 2) - Math.trunc(this.widths[i] / 2);
-
-            ctx.globalAlpha = this.shadowAlpha / 255;
-            ctx.fillStyle = "#000000";
-            this.drawText(this.lines[i], x + 3, 80 + i * this.lineHeight + (i === 0 ? 3 : i * 3));
-            ctx.globalAlpha = this.alpha / 255;
-            ctx.fillStyle = "#f0f0dc";
-            this.drawText(this.lines[i], x, 80 + i * this.lineHeight + i * 5);
-        }
+        this.layer.setAlpha(this.deco, this.alpha);
+        this.shadow.style.opacity = String(this.shadowAlpha / 255);
+        this.text.style.opacity = String(this.alpha / 255);
     }
 }
 

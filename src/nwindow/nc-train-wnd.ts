@@ -29,12 +29,12 @@ export class NCTrainWnd {
     public onAquireInfo: (id: number, level: number, mode: number) => void = null;
     public onAquire: (id: number, level: number, mode: number) => void = null;
     protected readonly infoBack: HTMLDivElement;
-    protected readonly learningHeading: HTMLCanvasElement;
+    protected readonly learningHeading: HTMLDivElement;
     protected readonly details: HTMLDivElement;
-    protected readonly listSp: HTMLCanvasElement;
-    protected readonly infoSp: HTMLCanvasElement;
-    protected readonly infoSpLabel: HTMLCanvasElement;
-    protected readonly infoExp: HTMLCanvasElement;
+    protected readonly listSp: HTMLDivElement;
+    protected readonly infoSp: HTMLDivElement;
+    protected readonly infoSpLabel: HTMLDivElement;
+    protected readonly infoExp: HTMLDivElement;
     protected rows: (EnchantSkill_T | AquireSkillEntry_T)[] = [];
     protected info: EnchantSkillInfo_T | AquireSkillInfo_T = null;
     protected status: TrainStatus_T = null;
@@ -113,8 +113,8 @@ export class NCTrainWnd {
         const layer = this.layer, sp = status ? String(status.sp) : "", exp = status && status.level >= 1 && status.level <= 78 ? String(status.exp - EXPERIENCE_TABLE[status.level]) : "";
 
         [[this.listSp, sp, 326], [this.infoSp, sp, 326], [this.infoExp, exp, 306]].forEach(([element, value, y]) => {
-            layer.renderText(element as HTMLCanvasElement, value as string, 0xffdcdcdc);
-            layer.place(element as HTMLCanvasElement, 224 - layer.measureText(value as string), y as number);
+            layer.renderText(element as HTMLDivElement, value as string, 0xffdcdcdc);
+            layer.place(element as HTMLDivElement, 224 - layer.measureText(value as string), y as number);
         });
     }
     public showList() {

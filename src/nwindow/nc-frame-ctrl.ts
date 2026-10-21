@@ -1,9 +1,8 @@
-import NWnd, { type NMouseEvent_T } from "./nwnd";
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
 
-export class NCFrameCtrl extends NWnd {
+export class NCFrameCtrl {
     public static getTextures(): string[] { return [SKIN_SLOTS.frameLeft, SKIN_SLOTS.frameMid, SKIN_SLOTS.frameRight, SKIN_SLOTS.frameClose, SKIN_SLOTS.frameCloseDown, SKIN_SLOTS.frameMinimize, SKIN_SLOTS.frameMinimizeDown]; }
 
     public static createDOM(layer: NDomLayer, element: HTMLDivElement, width: number, title: string, hasMinimize: boolean = false, onClose: () => void = null, onBeforeClose: () => void = null, onMinimize: () => void = null) {
@@ -51,14 +50,21 @@ export class NCFrameCtrl extends NWnd {
         return caption;
     }
 
-    public onMouseDown(event: NMouseEvent_T) {
-        if (event.button !== 0) return;
+    public static createGrip(layer: NDomLayer, element: HTMLDivElement, x: number, y: number, width: number, height: number) {
+        const grip = layer.createWindow(x, y, width, height, element);
 
-        let root: NWnd = this;
+        grip.addEventListener("mousedown", event => {
+            if (event.button !== 0) return;
 
-        while (root.parent) root = root.parent;
+            event.preventDefault();
+            layer.dragWindow(element, event, (x, y) => {
+                const canvas = layer.getManager().canvas;
 
-        this.manager.beginDrag(root, event.x + this.getScreenX(), event.y + this.getScreenY());
+                layer.place(element, Math.max(0, Math.min(canvas.width - element.offsetWidth, x)), Math.max(0, Math.min(canvas.height - element.offsetHeight, y)));
+            });
+        });
+
+        return grip;
     }
 }
 

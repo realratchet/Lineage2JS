@@ -1,5 +1,5 @@
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
-import { FontType_T } from "./nwindow-canvas";
+import { DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
 import { ItemType2_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -72,10 +72,10 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected readonly equipment: HTMLDivElement;
     protected readonly arrBags: NDomScrollPane_T[] = [];
     protected getBag() { return this.arrBags[Number(this.isQuest)]; }
-    protected readonly adena: HTMLCanvasElement;
-    protected readonly count: HTMLCanvasElement;
+    protected readonly adena: HTMLDivElement;
+    protected readonly count: HTMLDivElement;
     protected readonly weightBar: HTMLDivElement;
-    protected readonly weightText: HTMLCanvasElement;
+    protected readonly weightText: HTMLDivElement;
     protected limit = 0;
     protected readonly tabs: NDomButton_T[] = [];
     protected items: InventoryEntry_T[] = [];
@@ -217,9 +217,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         const weight = layer.createWindow(117, 372, 85, 12, this.element); // NCInvenWeightWnd at (117, 372, 85, 12), OnPaint 0x10095630.
 
         this.weightBar = layer.tile(weight, 0, 0, 0, 12, 0, 0, 1, 12, arrWeightBars[0]);
-        this.weightText = document.createElement("canvas");
-        this.weightText.className = "ndom-text ndom-absolute";
-        weight.appendChild(this.weightText);
+        this.weightText = layer.digits(weight, "", 0xffdcdcdc, DigitFont_T.NORMAL, 0, 2);
 
         this.crystal = layer.tile(this.element, 14, 351, 34, 34, 0, 0, 34, 34, TEX_CRYSTAL);
         this.crystal.title = layer.getManager().getSysString(891);
@@ -292,7 +290,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         const width = maximum > 0 ? Math.trunc(current * 85 / maximum) : 0;
         const percent = width > 0 ? current / maximum * 100 : 0;
         const index = percent > 100 ? 4 : percent > 80 ? 3 : percent > 66.6 ? 2 : percent > 50 ? 1 : 0;
-        const canvas = this.layer.getManager().canvas, scale = canvas.scale, text = `${percent.toFixed(2)}%`;
+        const canvas = this.layer.getManager().canvas, text = `${percent.toFixed(2)}%`;
 
         this.weightBar.hidden = width <= 0;
         if (width > 0) {
@@ -302,17 +300,8 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
         const textWidth = canvas.measureText(text); // 0x100957d5 measures with the text font, 0x10095811 draws digits.
 
-        this.weightText.width = Math.round(85 * scale);
-        this.weightText.height = Math.round(12 * scale);
-        this.weightText.style.width = "85px";
-        this.weightText.style.height = "12px";
-        this.layer.place(this.weightText, 0, 0);
-
-        const context = this.weightText.getContext("2d");
-
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
-        canvas.renderDigits(context, Math.trunc(85 * 0.5 - textWidth / 2), 2, 0xffdcdcdc, text);
+        this.layer.renderDigits(this.weightText, text, 0xffdcdcdc);
+        this.layer.place(this.weightText, Math.trunc(85 * 0.5 - textWidth / 2), 2);
     }
 
     public setLimit(limit: number) {

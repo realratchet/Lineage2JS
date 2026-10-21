@@ -17,7 +17,7 @@ const arrLabels = [[430, 15, 25], [88, 15, 46], [93, 22, 110], [94, 16, 132], [9
 export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (textures).
     public static getTextures() { return [TEX_BACK, TEX_HP, TEX_MP, TEX_CP, TEX_EXP, TEX_HERO, TEX_NOBLE, ...arrWeight, "L2UI.NWindow.Number"]; }
     public readonly element: HTMLDivElement;
-    protected readonly values = document.createElement("canvas");
+    protected readonly values: HTMLDivElement;
     protected readonly bars: HTMLDivElement[];
     protected readonly rank: HTMLDivElement;
     protected status: UserInfo_T = null;
@@ -33,21 +33,20 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
         this.rank = layer.tile(this.element, 192, 40, 13, 15, 0, 0, 13, 15, TEX_HERO);
         this.rank.hidden = true;
         this.bars.forEach(bar => bar.hidden = true);
-        this.values.className = "ndom-tile";
-        layer.place(this.values, 0, 0, 256, 335);
-        this.element.appendChild(this.values);
+        this.values = layer.createWindow(0, 0, 256, 335, this.element);
+        this.values.style.pointerEvents = "none";
     }
 
     public setStatus(status: UserInfo_T) { this.status = status; this.paint(); }
     public setClan(clan: ClanInfo_T) { this.clan = clan; this.paint(); }
     public setHenna(henna: HennaStatus_T) { this.henna = henna; this.paint(); }
 
-    protected drawText(context: CanvasRenderingContext2D, x: number, y: number, text: string, color: number = VALUE_COLOR, align: CanvasTextAlign = "left") {
+    protected drawText(x: number, y: number, text: string, color: number = VALUE_COLOR, align: CanvasTextAlign = "left") {
         const width = this.layer.measureText(text);
 
         if (align === "right") x -= width;
         if (align === "center") x -= Math.trunc(width / 2);
-        this.layer.getManager().canvas.renderText(context, x, y, color, text);
+        this.layer.text(this.values, text, color, FontType_T.SMALL, Math.trunc(x), Math.trunc(y));
     }
 
     protected paint() {
@@ -55,7 +54,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
         if (!info) return;
 
-        const layer = this.layer, canvas = layer.getManager().canvas;
+        const layer = this.layer;
         const levelStart = EXPERIENCE_TABLE[info.level], levelEnd = EXPERIENCE_TABLE[info.level + 1];
 
         if (levelEnd === undefined) throw new Error(`Level ${info.level} is outside the experience table.`);
@@ -83,24 +82,19 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
         this.rank.hidden = !info.isHero && !info.isNoble;
         if (!this.rank.hidden) layer.setTile(this.rank, 13, 15, 0, 0, 13, 15, info.isHero ? TEX_HERO : TEX_NOBLE);
 
-        const scale = canvas.scale, context = this.values.getContext("2d");
-
-        this.values.width = Math.round(256 * scale);
-        this.values.height = Math.round(335 * scale);
-        context.setTransform(scale, 0, 0, scale, 0, 0);
-        context.imageSmoothingEnabled = false;
+        this.values.replaceChildren();
 
         for (const [x, y, current, maximum] of [[77, 61, info.curHp, info.maxHp], [77, 75, info.curMp, info.maxMp], [198, 61, info.curCp, info.maxCp]]) {
-            canvas.renderDigits(context, x - Math.trunc(layer.measureText("/") / 2), y, 0xffdcdcdc, "/");
-            canvas.renderDigits(context, x - 10 - layer.measureText(String(current)), y, 0xffdcdcdc, String(current));
-            canvas.renderDigits(context, x + 6, y, 0xffdcdcdc, String(maximum));
+            layer.digits(this.values, "/", 0xffdcdcdc, undefined, x - Math.trunc(layer.measureText("/") / 2), y);
+            layer.digits(this.values, String(current), 0xffdcdcdc, undefined, x - 10 - layer.measureText(String(current)), y);
+            layer.digits(this.values, String(maximum), 0xffdcdcdc, undefined, x + 6, y);
         }
         for (const [x, y, value] of [[77, 89, exp], [198, 75, weight]]) {
             const text = `${(y === 75 ? weightPercent : value * 100).toFixed(2)}%`;
 
-            canvas.renderDigits(context, x - Math.trunc(layer.measureText(text) / 2), y, y === 89 ? 0xffb4b4b4 : 0xffdcdcdc, text);
+            layer.digits(this.values, text, y === 89 ? 0xffb4b4b4 : 0xffdcdcdc, undefined, x - Math.trunc(layer.measureText(text) / 2), y);
         }
-        this.drawText(context, 198, 88, String(info.sp), VALUE_COLOR, "center");
+        this.drawText(198, 88, String(info.sp), VALUE_COLOR, "center");
 
         let title = info.title, name = info.name;
 
@@ -110,23 +104,23 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
         }
         const karmaColor = info.karma > 0 ? Math.min(255, Math.max(info.karma, Math.trunc(info.karma / 16) + 100)) : 0;
 
-        if (title) this.drawText(context, 15, 9, title, 0xffa2f9ec);
-        this.drawText(context, title ? layer.measureText(title) + 21 : 15, 9, name, (0xffff0000 | (255 - karmaColor) << 8 | (255 - karmaColor)) >>> 0);
-        this.drawText(context, layer.measureText(layer.getManager().getSysString(430)) + 20, 25, this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(431), 0xffdcdcdc);
-        this.drawText(context, 35, 46, `${info.level} ${layer.getManager().getClassName(info.classId)}`);
+        if (title) this.drawText(15, 9, title, 0xffa2f9ec);
+        this.drawText(title ? layer.measureText(title) + 21 : 15, 9, name, (0xffff0000 | (255 - karmaColor) << 8 | (255 - karmaColor)) >>> 0);
+        this.drawText(layer.measureText(layer.getManager().getSysString(430)) + 20, 25, this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(431), 0xffdcdcdc);
+        this.drawText(35, 46, `${info.level} ${layer.getManager().getClassName(info.classId)}`);
 
-        [info.pAtk, info.pDef, info.accuracy, info.critical, info.atkSpd].forEach((value, index) => this.drawText(context, 114, 132 + index * 15, String(value), VALUE_COLOR, "right"));
-        [info.mAtk, info.mDef, info.evasion, Math.trunc((info.isRunning ? info.runSpd : info.walkSpd) * info.moveMultiplier), info.castSpd].forEach((value, index) => this.drawText(context, 235, 132 + index * 15, String(value), VALUE_COLOR, "right"));
+        [info.pAtk, info.pDef, info.accuracy, info.critical, info.atkSpd].forEach((value, index) => this.drawText(114, 132 + index * 15, String(value), VALUE_COLOR, "right"));
+        [info.mAtk, info.mDef, info.evasion, Math.trunc((info.isRunning ? info.runSpd : info.walkSpd) * info.moveMultiplier), info.castSpd].forEach((value, index) => this.drawText(235, 132 + index * 15, String(value), VALUE_COLOR, "right"));
         [info.str, info.dex, info.con, info.int, info.wit, info.men].forEach((value, index) => {
             const modifier = this.henna ? this.henna.stats[[1, 4, 2, 0, 5, 3][index]] : 0;
             const text = modifier > 0 ? `${value} (+${modifier})` : modifier < 0 ? `${value}(${modifier})` : String(value);
 
-            this.drawText(context, [65, 148, 229][index % 3], index < 3 ? 236 : 252, text, VALUE_COLOR, "center");
+            this.drawText([65, 148, 229][index % 3], index < 3 ? 236 : 252, text, VALUE_COLOR, "center");
         });
-        this.drawText(context, 114, 294, `${info.karma}${info.karma >= 999999 ? "+" : ""}`, VALUE_COLOR, "right");
-        this.drawText(context, 235, 294, `${info.pvpKills}/${info.pkKills}`, VALUE_COLOR, "right");
-        this.drawText(context, 114, 310, String(info.recommendations), VALUE_COLOR, "right");
-        this.drawText(context, 235, 310, String(info.recommendationsLeft), VALUE_COLOR, "right");
+        this.drawText(114, 294, `${info.karma}${info.karma >= 999999 ? "+" : ""}`, VALUE_COLOR, "right");
+        this.drawText(235, 294, `${info.pvpKills}/${info.pkKills}`, VALUE_COLOR, "right");
+        this.drawText(114, 310, String(info.recommendations), VALUE_COLOR, "right");
+        this.drawText(235, 310, String(info.recommendationsLeft), VALUE_COLOR, "right");
     }
 }
 

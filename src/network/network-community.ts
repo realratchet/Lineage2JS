@@ -79,6 +79,7 @@ export class NetworkCommunity {
 
         render.radar.setMeshes(await this.network.getParent().getComponent("asset").loadSkeletalMeshes("LineageDecos", Radar.getMeshNames()));
         render.radar.getState = () => this.getRadarState();
+        if (!render.overHeadAlarm.isLoaded()) render.overHeadAlarm.setMesh((await this.network.getParent().getComponent("asset").loadSkeletalMeshes("LineageDecos", ["e_mark_m00"], ["LineageDecosTex.e_t00"]))[0]);
         const asset = this.network.getParent().getComponent("asset"), library = await asset.loadQuestEffects();
 
         render.questArrow.createEffect = path => asset.createScriptObject(render, library, path);

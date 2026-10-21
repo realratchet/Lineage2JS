@@ -16,7 +16,7 @@ export class NCItemEnchantWnd {
     public onConfirm: (objectId: number) => void = null;
     public onTooltip: (item: InventoryEntry_T, button: HTMLElement, isDetailed: boolean) => void = null;
     public onHideTooltip: () => void = null;
-    protected readonly caption: HTMLCanvasElement;
+    protected readonly caption: HTMLDivElement;
     protected readonly list: NDomScrollPane_T;
     protected readonly frames: HTMLDivElement[] = [];
     protected items: InventoryEntry_T[] = [];

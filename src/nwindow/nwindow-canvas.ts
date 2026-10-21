@@ -12,8 +12,8 @@ export enum FontType_T { SMALL, LARGE } // Engine.dll FontType: 0 SmallFont-r (a
 
 export enum DigitFont_T { SMALL, NORMAL, LARGE } // NWindow 0x10013570 canvas digit strips for UCanvas::DrawSpecialDigit (Engine 0x105284e0): texture, cell width, cell height.
 
-const DIGIT_FONTS: [string, number, number][] = [["SEK.cbui13", 5, 5], ["L2UI.NWindow.Number", 8, 8], ["L2UI_CH3.Etc.XLargeNumber", 11, 14]];
-const DIGIT_CELLS = "0123456789HMP/%.C:";
+export const DIGIT_FONTS: [string, number, number][] = [["SEK.cbui13", 5, 5], ["L2UI.NWindow.Number", 8, 8], ["L2UI_CH3.Etc.XLargeNumber", 11, 14]];
+export const DIGIT_CELLS = "0123456789HMP/%.C:";
 
 function parseGlyphs(buffer: ArrayBuffer): Map<number, Glyph_T> { // NL2Font::Load 0x10088a50 legacy layout; GetGlyph 0x10088400 takes the first range holding a non-empty rect.
     const view = new DataView(buffer);
@@ -35,10 +35,6 @@ function parseGlyphs(buffer: ArrayBuffer): Map<number, Glyph_T> { // NL2Font::Lo
     return glyphs;
 }
 
-function cssColor(color: number): string {
-    return `rgba(${(color >>> 16) & 0xff}, ${(color >>> 8) & 0xff}, ${color & 0xff}, ${((color >>> 24) & 0xff) / 255})`;
-}
-
 export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x10012d90 (texture tile) and 0x10012aa0 (text).
     public readonly element = document.createElement("canvas");
     protected readonly context = this.element.getContext("2d");
@@ -49,14 +45,11 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     protected readonly fonts = new Map<FontType_T, BitmapFont_T>();
     protected readonly tinted = new Map<string, HTMLCanvasElement>();
     protected readonly cacheRasterFonts = new Map<string, RasterFont_T>();
-    protected originX = 0;
-    protected originY = 0;
     public scale = 1;
     public uiScale = 1;
     public cssScale = 1;
     public width = 0;
     public height = 0;
-    public needsRedraw = true;
     public isAnimating = false;
 
     public constructor(asset: AssetManager, skin: SkinTextures) {
@@ -77,7 +70,6 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         this.element.height = Math.round(this.height * this.scale);
         this.element.style.width = `${this.width * this.cssScale}px`;
         this.element.style.height = `${this.height * this.cssScale}px`;
-        this.needsRedraw = true;
     }
 
     public getScreenSize(uiScale: number) { return [Math.floor(window.innerWidth / uiScale), Math.floor(window.innerHeight / uiScale)]; }
@@ -147,8 +139,6 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         } finally {
             for (const path of missing) this.pending.delete(path.replace(/^\?/, "").toLowerCase());
         }
-
-        this.needsRedraw = true;
     }
 
     public hasTexture(path: string): boolean { return !!this.textures.get(path.toLowerCase()); }
@@ -174,25 +164,19 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         context.setTransform(this.scale, 0, 0, this.scale, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
         context.imageSmoothingEnabled = true;
-        this.originX = this.originY = 0;
         this.isAnimating = false;
     }
 
-    public setOrigin(x: number, y: number) {
-        this.originX = x;
-        this.originY = y;
+    public drawTile(x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, alpha: number = 0xff, color: number = 0xffffff) {
+        this.renderTile(this.context, x, y, w, h, u, v, uw, vh, path, alpha, color);
     }
 
-    public drawTile(x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, alpha: number = 0xff, color: number = 0xffffff) {
+    public renderTile(context: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, alpha: number = 0xff, color: number = 0xffffff) {
         const texture = color === 0xffffff ? this.getTexture(path) : this.getTintedImage(path, color);
 
         if (!texture || w <= 0 || h <= 0) return;
 
-        const context = this.context;
-
         context.globalAlpha = alpha / 255;
-        x += this.originX;
-        y += this.originY;
 
         if (u >= 0 && v >= 0 && u + uw <= texture.width && v + vh <= texture.height) {
             context.drawImage(texture, u, v, uw, vh, x, y, w, h);
@@ -218,11 +202,6 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         context.globalAlpha = 1;
     }
 
-    public fillRect(x: number, y: number, w: number, h: number, color: number) {
-        this.context.fillStyle = cssColor(color);
-        this.context.fillRect(x + this.originX, y + this.originY, w, h);
-    }
-
     public async loadFonts() {
         const { bitmapFonts } = await this.asset.getGameStrings();
         const sources: [FontType_T, BitmapFontSource_T][] = [[FontType_T.SMALL, bitmapFonts.small], [FontType_T.LARGE, bitmapFonts.large]];
@@ -237,6 +216,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     }
 
     public getLineHeight(type: FontType_T = FontType_T.SMALL): number { return this.fonts.get(type).lineHeight; }
+    public getFont(type: FontType_T = FontType_T.SMALL) { return this.fonts.get(type); }
 
     public hasGlyphs(text: string, type: FontType_T = FontType_T.SMALL): boolean {
         const font = this.fonts.get(type);
@@ -300,31 +280,6 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         return count * DIGIT_FONTS[type][1];
     }
 
-    public drawDigits(x: number, y: number, color: number, text: string, type: DigitFont_T = DigitFont_T.NORMAL) {
-        this.renderDigits(this.context, x + this.originX, y + this.originY, color, text, type);
-    }
-
-    public renderDigits(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: DigitFont_T = DigitFont_T.NORMAL, alphaRef: number = -1) {
-        const [texture, cellW, cellH] = DIGIT_FONTS[type];
-        const atlas = this.getTintedImage(texture, color, alphaRef);
-        let penX = Math.trunc(x);
-        const penY = Math.trunc(y);
-
-        context.imageSmoothingEnabled = true;
-        context.globalAlpha = ((color >>> 24) & 0xff) / 255;
-
-        for (let i = 0; i < text.length; i++) {
-            const cell = DIGIT_CELLS.indexOf(text[i]);
-
-            if (cell < 0) continue;
-
-            context.drawImage(atlas, cell * cellW, 0, cellW, cellH, penX, penY, cellW, cellH);
-            penX += cellW;
-        }
-
-        context.globalAlpha = 1;
-    }
-
     public getTintedImage(path: string, color: number, alphaRef: number = -1): HTMLCanvasElement {
         const key = `${path.toLowerCase()}:${color & 0xffffff}` + (alphaRef < 0 ? "" : `:${alphaRef}`);
         let atlas = this.tinted.get(key);
@@ -358,7 +313,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         return atlas;
     }
 
-    public renderWrappedText(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, width: number, lineSpacing = 0, type: FontType_T = FontType_T.SMALL) { // FL2TextAlignParser::GetLineBuffer 0x10521cf0, English bitmap-font path.
+    public layoutWrappedText(x: number, y: number, text: string, width: number, lineSpacing: number, type: FontType_T, emit: (x: number, y: number, part: string) => void) { // FL2TextAlignParser::GetLineBuffer 0x10521cf0, English bitmap-font path.
         const tokens = text.match(/[^ \n]+| |\n/g) || [];
         const spaceWidth = this.measureText(" ", type), minSpaceWidth = Math.trunc(spaceWidth / 2) + 2;
         const lineHeight = this.getLineHeight(type) + lineSpacing;
@@ -377,7 +332,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
                     penX += spaces[spaceIndex] + direction * (delta + (spaceIndex < remainder ? 1 : 0));
                     spaceIndex++;
                 } else {
-                    canvas.renderText(context, penX, y + lineIndex * lineHeight, color, part, type);
+                    emit(penX, y + lineIndex * lineHeight, part);
                     penX += canvas.measureText(part, type);
                 }
             }
@@ -538,19 +493,6 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
             context.imageSmoothingEnabled = true;
         }
     }
-
-    public drawText(x: number, y: number, color: number, text: string, type: FontType_T = FontType_T.SMALL) {
-        this.renderText(this.context, x + this.originX, y + this.originY, color, text, type);
-    }
-
-    public clip(x: number, y: number, w: number, h: number) {
-        this.context.save();
-        this.context.beginPath();
-        this.context.rect(x + this.originX, y + this.originY, w, h);
-        this.context.clip();
-    }
-
-    public unclip() { this.context.restore(); }
 }
 
 export default NWindowCanvas;

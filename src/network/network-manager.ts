@@ -54,7 +54,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getParent(): GameManager { return this.manGame; }
     public getGameClient() { return this.session.game; }
     public isInWorld() { return this.actors.inWorld; }
-    public isWorldLoading() { return this.actors.inWorld && this.ui.screen === "loading"; }
+    public isWorldLoading() { return this.actors.inWorld && this.ui.getScreen() === "loading"; }
     public isPlayingReplay() { return !!this.session.game?.isPlayingReplay(); }
 
     public getReplayDeltaTime(deltaTime: number): number | null {

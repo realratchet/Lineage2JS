@@ -753,7 +753,7 @@ export abstract class UParticleSound extends UObject {
         const snd = this.sound.loadSelf();
         if (!snd) return null;
 
-        const soundKey = snd.objectName ?? snd.uuid;
+        const soundKey = snd.name;
 
         if (!builder.pullSound(snd)) return null;
 

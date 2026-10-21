@@ -26,6 +26,7 @@ export type INpcDefinition = {
     alternateTextures: string[];
     skillAttacks: NpcSkillAttack_T[];
     enterEvent: INpcEnterEvent | null;
+    questMark: { minLevel: number; maxLevel: number; classIds: number[] } | null;
     sounds: IPawnSoundsDecodeInfo;
 };
 

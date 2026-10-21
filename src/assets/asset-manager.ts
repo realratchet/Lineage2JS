@@ -462,8 +462,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return library;
     }
 
-    public async loadSkeletalMeshes(packageName: string, meshNames: string[]): Promise<LitSkinnedMesh[]> {
-        const libraries = await Promise.all(meshNames.map(name => this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, name)));
+    public async loadSkeletalMeshes(packageName: string, meshNames: string[], texturePaths: string[] = []): Promise<LitSkinnedMesh[]> {
+        const libraries = await Promise.all(meshNames.map(name => this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, name, null, texturePaths)));
 
         return libraries.map(library => {
             library.anisotropy = this.glCapabilities.getMaxAnisotropy();

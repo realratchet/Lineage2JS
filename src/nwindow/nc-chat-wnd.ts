@@ -1,10 +1,7 @@
 import { Say2_T } from "../network/game-packets";
-import NWnd, { type NMouseEvent_T } from "./nwnd";
-import NCButton from "./nc-button";
-import NCEditBox from "./nc-edit-box";
-import NCTabControl from "./nc-tab-control";
-import NCChatListBox, { NCChatSystemMsgWnd } from "./nc-chat-list-box";
-import type NWindowCanvas from "./nwindow-canvas";
+import NCChatListBox from "./nc-chat-list-box";
+import type NDomLayer from "./ndom";
+import type { NDomButton_T, NDomEdit_T } from "./ndom";
 
 const TEX_BACK1 = "L2UI_CH3.ChatWnd.Chatting_Back1";
 const TEX_BACK2 = "L2UI_CH3.ChatWnd.Chatting_Back2";
@@ -22,6 +19,9 @@ const MIN_HEIGHT = 187;
 const MAX_HEIGHT = 502;
 const RESIZE_STEP = 15;
 const DEFAULT_COLOR = 0xffdcdcdc;
+const LABEL_COLOR = 0xffe6dcbe;
+const WIDTH = 348;
+const WINDOW_NAME = "ChatWnd";
 
 type ChatListFilter_T = { types: number[], hasSystem: boolean };
 
@@ -39,115 +39,115 @@ const CHAT_COLORS: { [type: number]: [number, number] } = { [Say2_T.SHOUT]: [0xf
 
 const CHAT_PREFIXES = new Map<string, number>([["~", Say2_T.ALL], ["～", Say2_T.ALL], ["!", Say2_T.SHOUT], ["！", Say2_T.SHOUT], ["\"", Say2_T.TELL], ["”", Say2_T.TELL], ["#", Say2_T.PARTY], ["＃", Say2_T.PARTY], ["@", Say2_T.CLAN], ["＠", Say2_T.CLAN], ["&", Say2_T.PETITION_PLAYER], ["＆", Say2_T.PETITION_PLAYER], ["*", Say2_T.PETITION_GM], ["＊", Say2_T.PETITION_GM], ["+", Say2_T.TRADE], ["＋", Say2_T.TRADE], ["$", Say2_T.ALLIANCE], ["＄", Say2_T.ALLIANCE], ["%", Say2_T.HERO_VOICE], ["％", Say2_T.HERO_VOICE]]); // Prefix table 0x1023dbb8 (ASCII, fullwidth per type).
 
-class NCResizeFrame extends NWnd { // NCResizeFrame 0xf007 (0x1005aab6): drag feeds OnResizeWnd; dragging up grows the window.
-    protected readonly owner: NCChatWnd;
-    protected stopSizing: () => void = null;
+export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 SetWindow(0, H - 187, 348, 187), bottom anchored.
+    public static getTextures(): string[] { return [TEX_BACK1, TEX_BACK2, TEX_BACK3, TEX_BACK4, TEX_SIZECONTROL, TEX_IME_EN, TEX_TAB1, TEX_TAB2, TEX_OPTION1, TEX_OPTION2, `?${TEX_OPTION1}_over`, TEX_MSN1, TEX_MSN2, `?${TEX_MSN1}_over`, ...NCChatListBox.getTextures()]; }
 
-    public constructor(owner: NCChatWnd, x: number, y: number, width: number, height: number) {
-        super(x, y, width, height);
-
-        this.owner = owner;
-    }
-
-    public onMouseMove(event: NMouseEvent_T) {
-        this.manager.setCursor(this.stopSizing || event.x >= 0 && event.x <= this.width && event.y >= 0 && event.y <= this.height ? this.manager.getCursor(5) : "");
-    }
-
-    public onMouseLeave() { if (!this.stopSizing) this.manager.setCursor(""); }
-    public onMouseCancel() {
-        if (this.stopSizing) this.stopSizing();
-        this.manager.setCursor("");
-    }
-
-    public onMouseDown(event: NMouseEvent_T) {
-        if (event.button !== 0) return;
-
-        this.onMouseCancel();
-        this.onMouseMove(event);
-
-        let lastY = this.getScreenY() + event.y;
-
-        const onMove = (move: MouseEvent) => {
-            if (!(move.buttons & 1)) { onUp(); return; }
-
-            const y = this.manager.canvas.toUI(move.clientY);
-
-            this.owner.onResizeWnd(lastY - y);
-            lastY = y;
-        };
-        const onUp = () => {
-            window.removeEventListener("mousemove", onMove, true);
-            window.removeEventListener("mouseup", onUp, true);
-            window.removeEventListener("blur", onCancel);
-            this.stopSizing = null;
-            if (!this.manager.isHovered(this)) this.manager.setCursor("");
-        };
-        const onCancel = () => this.onMouseCancel();
-
-        this.stopSizing = onUp;
-        window.addEventListener("mousemove", onMove, true);
-        window.addEventListener("mouseup", onUp, true);
-        window.addEventListener("blur", onCancel);
-    }
-}
-
-export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 SetWindow(0, H - 187, 348, 187), bottom anchored.
+    public readonly element: HTMLDivElement;
     protected readonly lists: NCChatListBox[] = [];
-    protected readonly systemPane: NCChatSystemMsgWnd;
+    protected readonly systemPane: NCChatListBox;
     protected oldChatting = true;
     protected systemMsgWndDamage = true;
     protected systemMsgWndExpendableItem = true;
-    protected readonly tabControl: NCTabControl;
-    protected readonly optionButton: NCButton;
-    protected readonly messengerButton: NCButton;
-    protected readonly editBox: NCEditBox;
-    protected readonly resizeFrame: NCResizeFrame;
+    protected readonly rows: HTMLDivElement;
+    protected readonly back4: HTMLDivElement;
+    protected readonly back1: HTMLDivElement;
+    protected readonly imeMode: HTMLDivElement;
+    protected readonly tabs: NDomButton_T[] = [];
+    protected readonly optionButton: NDomButton_T;
+    protected readonly messengerButton: NDomButton_T;
+    protected readonly editBox: NDomEdit_T;
+    protected selected = 0;
+    protected height = MIN_HEIGHT;
     protected resizeDelta = 0;
 
     public onSend: (text: string, type: number, target: string) => void = null;
     public onBuildCommand: (command: string) => void = null;
     public onCommand: (command: string, isShift: boolean) => void = null;
 
-    public constructor() {
-        super(0, 0, 348, MIN_HEIGHT);
+    public constructor(protected readonly layer: NDomLayer) {
+        const W = WIDTH, H = MIN_HEIGHT, manager = layer.getManager();
 
-        const W = this.width, H = this.height;
+        this.element = layer.createWindow(0, 0, W, H);
+        this.element.hidden = true;
+        this.element.classList.add("ndom-opaque");
+        layer.tile(this.element, 0, 0, 348, 18, 0, 0, 348, 18, TEX_BACK2); // OnPaint 0x100544a0: 1:1 stacked tiles, Back3 rows = int((H - 82) / 15).
+        layer.tile(this.element, 0, -3, 24, 10, 0, 0, 24, 10, TEX_SIZECONTROL);
+        this.rows = layer.createWindow(0, 18, W, 0, this.element);
+        this.back4 = layer.tile(this.element, 0, 0, 348, 18, 0, 0, 348, 18, TEX_BACK4);
+        this.back1 = layer.tile(this.element, 0, 0, 348, 46, 0, 0, 348, 46, TEX_BACK1);
+        this.imeMode = layer.tile(this.element, 24, 0, 15, 15, 0, 0, 15, 15, TEX_IME_EN); // IME mode 0x10064b10 has no browser equivalent; drawn as mode 1 (IMEen).
 
         for (let i = 0; i < TABS.length; i++) {
-            const list = this.addChild(new NCChatListBox(0, 0, W - 10, H - 46));
+            const list = new NCChatListBox(layer, this.element, 0, 0, W - 10, H - 46);
 
-            list.isVisible = i === 0;
+            list.setVisible(i === 0);
             this.lists.push(list);
         }
 
-        this.systemPane = this.addChild(new NCChatSystemMsgWnd(0, -130, W, 125)); // 0x1005b165 hidden at create; ShowWindow 0x10053c2a keeps it hidden unless GL2SystemMsgWnd.
-        this.systemPane.isVisible = false;
+        this.systemPane = new NCChatListBox(layer, this.element, 0, -130, W, 125, true); // 0x1005b165 hidden at create; ShowWindow 0x10053c2a keeps it hidden unless GL2SystemMsgWnd.
+        this.systemPane.setVisible(false);
 
-        this.tabControl = this.addChild(new NCTabControl(23, H - 46, 320, 23));
-        this.tabControl.onSelect = index => this.selectTab(index);
+        TABS.forEach(([labelId], index) => { // NCTabButton (uclass 0x102b5350): paint 0x10002410 -> 0x10001000, state 0 selected [+0x200], 1 unselected [+0x204]; AddTab 0x1002ded0 lays them left to right.
+            const texture = index === 0 ? TEX_TAB2 : TEX_TAB1, label = manager.getSysString(labelId);
+            const tab = layer.button(this.element, 23 + index * 64, 0, 64, 23, texture, texture, texture, null, () => this.select(index));
 
-        for (const [labelId] of TABS) this.tabControl.addTab(labelId, 64, 23, TEX_TAB2, TEX_TAB1);
+            layer.text(tab, label, LABEL_COLOR, undefined, Math.trunc(64 * 0.5 + 2 - Math.trunc(layer.measureText(label) / 2)), Math.trunc(23 * 0.5 + 1 - Math.trunc(manager.canvas.getLineHeight() / 2)));
+            this.tabs.push(tab);
+        });
 
-        this.optionButton = this.addChild(new NCButton(5, H - 20, 15, 15, TEX_OPTION1, TEX_OPTION2));
-        this.messengerButton = this.addChild(new NCButton(5, H - 39, 15, 15, TEX_MSN1, TEX_MSN2));
-        this.editBox = this.addChild(new NCEditBox(39, H - 22, 303, 16));
-        this.editBox.onSubmit = (text, isShift) => this.submit(text, isShift);
-        this.resizeFrame = this.addChild(new NCResizeFrame(this, 0, 0, 24, 10));
+        this.optionButton = layer.button(this.element, 5, 0, 15, 15, TEX_OPTION1, TEX_OPTION2);
+        this.messengerButton = layer.button(this.element, 5, 0, 15, 15, TEX_MSN1, TEX_MSN2);
+        this.editBox = layer.edit(this.element, 39, 0, 303, 16);
+        this.editBox.input.addEventListener("keydown", event => {
+            if (event.key === "Enter") this.submit(this.editBox.getValue(), event.shiftKey);
+            if (event.key === "Escape") this.editBox.input.blur();
+        });
+        this.createResizeFrame();
+        this.element.addEventListener("wheel", event => {
+            if (!this.systemPane.element.contains(event.target as Node) && !this.lists.some(list => list.element.contains(event.target as Node))) this.lists[this.selected].onWheel(Math.sign(event.deltaY));
+        });
+        this.layout();
     }
 
-    public getTextures(): string[] { return [TEX_BACK1, TEX_BACK2, TEX_BACK3, TEX_BACK4, TEX_SIZECONTROL, TEX_IME_EN]; }
+    protected createResizeFrame() { // NCResizeFrame 0xf007 (0x1005aab6): drag feeds OnResizeWnd; dragging up grows the window.
+        const manager = this.layer.getManager(), frame = this.layer.createWindow(0, 0, 24, 10, this.element);
+        let isSizing = false;
+
+        frame.addEventListener("mouseenter", () => manager.setCursor(manager.getCursor(5)));
+        frame.addEventListener("mouseleave", () => { if (!isSizing) manager.setCursor(""); });
+        frame.addEventListener("mousedown", event => {
+            if (event.button !== 0) return;
+
+            event.preventDefault();
+            isSizing = true;
+
+            let lastY = this.layer.toUI(event.clientY);
+
+            this.layer.beginDrag(move => {
+                const y = this.layer.toUI(move.clientY);
+
+                this.onResizeWnd(lastY - y);
+                lastY = y;
+            }, () => {
+                isSizing = false;
+                if (!frame.matches(":hover")) manager.setCursor("");
+            });
+        });
+    }
+
+    public isVisible() { return !this.element.hidden; }
+    public setVisible(isVisible: boolean) { this.element.hidden = !isVisible; }
 
     public placeOnScreen(_screenWidth: number, screenHeight: number) {
-        const owner = this.manager.getWindowOwner();
-        const saved = owner === null ? null : localStorage.getItem(`wnd:${owner}:${this.windowName}:height`);
+        const owner = this.layer.getManager().getWindowOwner();
+        const saved = owner === null ? null : localStorage.getItem(`wnd:${owner}:${WINDOW_NAME}:height`);
         const height = saved === null ? MIN_HEIGHT : JSON.parse(saved);
 
         if (!Number.isInteger(height) || height < MIN_HEIGHT || height > MAX_HEIGHT || (height - MIN_HEIGHT) % RESIZE_STEP !== 0) throw new Error(`Invalid chat height.`);
 
         this.resizeDelta = 0;
         this.onResizeWnd(height - this.height, false);
-        this.x = 0;
-        this.y = screenHeight - this.height;
+        this.layer.place(this.element, 0, screenHeight - this.height);
     }
 
     public resetLayout() {
@@ -161,21 +161,15 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
 
     public setSystemMsgWnd(isVisible: boolean) { this.systemPane.setVisible(isVisible); }
 
-    public hitTest(x: number, y: number): NWnd { // The system pane hangs above the chat's own rect.
-        const hit = this.systemPane.hitTest(x - this.systemPane.x, y - this.systemPane.y);
-
-        return hit || super.hitTest(x, y);
-    }
-
     public focusInput() { this.editBox.focus(); }
-    public isInputFocused() { return this.editBox.isFocused(); }
+    public isInputFocused() { return document.activeElement === this.editBox.input; }
 
     public addCreatureSay(name: string, text: string, type: number) { // NConsoleWnd 0x1007d200 -> NCConsole 0x1005d580 "%s: %s" (0x101ad5e8).
         const [color, routed] = CHAT_COLORS[type] || [DEFAULT_COLOR, Say2_T.ALL];
 
         if (routed === Say2_T.PETITION_PLAYER || routed === Say2_T.PETITION_GM || routed === Say2_T.PARTYROOM_ALL || routed === Say2_T.PARTYROOM_COMMANDER || routed === Say2_T.CHANNEL_ALL) return; // 0x1005d5e9..0x1005d622: 6/7 go to the petition window, 14 to the party room, 15/16 to [+0x264].
 
-        const sender = routed === Say2_T.ANNOUNCEMENT ? this.manager.getSysString(328) : name;
+        const sender = routed === Say2_T.ANNOUNCEMENT ? this.layer.getManager().getSysString(328) : name;
 
         this.addChat(routed === Say2_T.CRITICAL_ANNOUNCE ? text : `${sender}: ${text}`, color, routed);
     }
@@ -201,11 +195,20 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
         }
     }
 
-    protected selectTab(index: number) {
-        if (this.oldChatting) {
-            const text = this.editBox.text;
+    protected select(index: number) { // 0x10001a50: the first tab starts selected; selecting the current one does nothing.
+        if (index === this.selected) return;
 
-            this.editBox.setText(TABS[index][2] + (["+", "＋", "#", "＃", "@", "＠", "$", "＄"].includes(text.charAt(0)) ? text.slice(1) : text));
+        this.selected = index;
+        this.tabs.forEach((tab, i) => {
+            const texture = i === index ? TEX_TAB2 : TEX_TAB1;
+
+            tab.setTextures(texture, texture, texture);
+        });
+
+        if (this.oldChatting) {
+            const text = this.editBox.getValue();
+
+            this.editBox.setValue(TABS[index][2] + (["+", "＋", "#", "＃", "@", "＠", "$", "＄"].includes(text.charAt(0)) ? text.slice(1) : text));
         }
 
         for (let i = 0; i < this.lists.length; i++)
@@ -213,10 +216,10 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
     }
 
     protected submit(line: string, isShift: boolean = false) { // Enter handler 0x10059a3a..0x10059f66; U+FF02 is a tell prefix (0x10059aff) outside the strip list.
-        this.editBox.setText("");
+        this.editBox.setValue("");
 
         this.sendText(line, isShift);
-        if (line && this.oldChatting) this.editBox.setText(TABS[this.tabControl.selected][2]);
+        if (line && this.oldChatting) this.editBox.setValue(TABS[this.selected][2]);
     }
 
     public dispatchCommand(line: string, isShift: boolean = false) {
@@ -240,7 +243,7 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
 
         const first = line.charAt(0);
         const hasPrefix = CHAT_PREFIXES.has(first);
-        const type = first === "＂" ? Say2_T.TELL : hasPrefix ? CHAT_PREFIXES.get(first) : this.oldChatting ? Say2_T.ALL : TABS[this.tabControl.selected][1];
+        const type = first === "＂" ? Say2_T.TELL : hasPrefix ? CHAT_PREFIXES.get(first) : this.oldChatting ? Say2_T.ALL : TABS[this.selected][1];
 
         if (type === Say2_T.TELL) return this.sendTell(line);
 
@@ -275,41 +278,35 @@ export class NCChatWnd extends NWnd { // NCChatWnd (vtable 0x101acbc8): NCConsol
 
         if (height < MIN_HEIGHT || height > MAX_HEIGHT) return;
 
-        this.y -= step;
         this.height = height;
-        this.editBox.y = height - 22;
-        this.tabControl.y = height - 46;
-        this.optionButton.y = height - 20;
-        this.messengerButton.y = height - 39;
+        this.layer.place(this.element, parseFloat(this.element.style.left), parseFloat(this.element.style.top) - step, WIDTH, height);
+        this.layout();
 
-        for (const list of this.lists) list.resize(this.width - 10, height - 46);
-
-        this.invalidate();
-
-        const owner = this.manager.getWindowOwner();
+        const owner = this.layer.getManager().getWindowOwner();
 
         if (save && owner !== null) {
-            localStorage.setItem(`wnd:${owner}:${this.windowName}:height`, JSON.stringify(this.height));
-            this.manager.saveWindowPosition(this.windowName, this.x, this.y);
+            localStorage.setItem(`wnd:${owner}:${WINDOW_NAME}:height`, JSON.stringify(this.height));
+            this.layer.saveWindowPosition(this.element);
         }
     }
 
-    public onWheel(delta: number): boolean { return this.lists[this.tabControl.selected].onWheel(delta); }
+    protected layout() {
+        const layer = this.layer, H = this.height;
 
-    public onPaint(canvas: NWindowCanvas) { // OnPaint 0x100544a0: 1:1 stacked tiles, Back3 rows = int((H - 82) / 15).
-        const H = this.height;
-
-        canvas.clip(0, -3, this.width, H + 3);
-        canvas.drawTile(0, 0, 348, 18, 0, 0, 348, 18, TEX_BACK2);
-        canvas.drawTile(0, -3, 24, 10, 0, 0, 24, 10, TEX_SIZECONTROL);
+        this.rows.replaceChildren();
 
         for (let i = 0, rows = Math.trunc((H - 82) / 15); i < rows; i++)
-            canvas.drawTile(0, 18 + 15 * i, 348, 15, 0, 0, 348, 15, TEX_BACK3);
+            layer.tile(this.rows, 0, 15 * i, 348, 15, 0, 0, 348, 15, TEX_BACK3);
 
-        canvas.drawTile(0, H - 64, 348, 18, 0, 0, 348, 18, TEX_BACK4);
-        canvas.drawTile(0, H - 46, 348, 46, 0, 0, 348, 46, TEX_BACK1);
-        canvas.drawTile(24, H - 20, 15, 15, 0, 0, 15, 15, TEX_IME_EN); // IME mode 0x10064b10 has no browser equivalent; drawn as mode 1 (IMEen).
-        canvas.unclip();
+        layer.place(this.back4, 0, H - 64);
+        layer.place(this.back1, 0, H - 46);
+        layer.place(this.imeMode, 24, H - 20);
+        layer.place(this.editBox, 39, H - 22);
+        layer.place(this.optionButton, 5, H - 20);
+        layer.place(this.messengerButton, 5, H - 39);
+        this.tabs.forEach((tab, index) => layer.place(tab, 23 + index * 64, H - 46));
+
+        for (const list of this.lists) list.resize(WIDTH - 10, H - 46);
     }
 }
 
