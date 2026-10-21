@@ -271,11 +271,12 @@ export class NetworkSession {
     public async playReplay(bytes: Uint8Array, lockCamera = true, useChatData = false): Promise<void> {
         if (this.network.actors.inWorld || this.game || this.network.ui.getScreen() !== "login" && this.network.ui.getScreen() !== "replay") throw new Error(`Replay playback requires the login screen.`);
         const file = new L2ReplayFile(bytes), scene = file.getScene(), first = file.arrPackets[0];
+        const properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
 
         file.setScene(scene);
         // shortcut: follow-camera presets; extend after observer/free-camera initialization is traced.
-        if (scene.cameraMode || scene.observerMode || scene.zoom !== scene.desiredZoom || scene.zoom + 250 <= 0) throw new Error(`Replay camera mode is not implemented.`);
-        const presetCount = this.network.getParent().getComponent("asset").playerController.scriptProperties.get("FixedDefaultViewNum") as number;
+        if (scene.cameraMode || scene.observerMode || scene.zoom !== scene.desiredZoom && properties.get("bUseVolumeCamera") || Math.min(scene.zoom, scene.desiredZoom) + 250 <= 0) throw new Error(`Replay camera mode is not implemented.`);
+        const presetCount = properties.get("FixedDefaultViewNum") as number;
 
         if (scene.fixedCamera < 0 || scene.fixedCamera >= Math.max(1, presetCount)) throw new Error(`Invalid replay camera preset '${scene.fixedCamera}'.`);
         if (!first || first.opcode !== GamePackets.GameServerPacket_T.UserInfo || first.time !== 0) throw new Error(`Replay requires an initial UserInfo snapshot.`);
@@ -291,7 +292,6 @@ export class NetworkSession {
             }
         }
         const info = GamePackets.readUserInfo(new PacketReader(first.payload)), render = this.network.getParent().getComponent("render"), input = this.network.getParent().getComponent("input");
-        if (file.format < 1 || !file.arrUserIds.includes(info.objectId)) throw new Error(`Replay initial pawn list is not implemented.`);
         const game = new GameClient();
 
         game.onPacket = (opcode, packet) => { if (this.game === game) this.network.onPacket(opcode, packet); };

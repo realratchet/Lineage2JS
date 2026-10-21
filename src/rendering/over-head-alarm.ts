@@ -1,4 +1,4 @@
-import { Object3D, OrthographicCamera, Scene, Vector3, type WebGLRenderer } from "three";
+import { Object3D, OrthographicCamera, Scene, Vector3, type ShaderMaterial, type WebGLRenderer } from "three";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import { ColorByte } from "../utils/color-byte";
 
@@ -30,6 +30,10 @@ export class OverHeadAlarm {
     public setMesh(mesh: LitSkinnedMesh) {
         tmpOffset.copy(mesh.meshOrigin).multiply(mesh.scale).negate().applyQuaternion(mesh.quaternion);
         mesh.position.add(tmpOffset);
+        mesh.geometry.computeBoundingSphere();
+        mesh.boundingSphere = mesh.geometry.boundingSphere.clone();
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+            delete (material as ShaderMaterial).defines.USE_FOG;
         mesh.isUnlit = true;
         mesh.updateActorLighting(null, [], tmpColorByte);
         this.actor.add(mesh);

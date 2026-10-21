@@ -224,6 +224,8 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("ManuallyCameraPitch", 0);
         properties.set("CurFixedDefaultCameraNo", scene.fixedCamera);
         properties.set("bCameraMovingToDefault", false);
+        properties.set("CurZoomingDist", scene.zoom);
+        properties.set("DesiredZoomingDist", scene.desiredZoom);
         if (scene.firstPerson) render.player.setUnrealScriptProperty("bHidden", true);
         render.player.getCameraTargetPosition(this.controls.orbit.target);
         dirForward.set(Math.cos(yaw) * Math.cos(pitch), Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch));
@@ -329,6 +331,14 @@ export class InputManager implements IEngineComponent<GameManager> {
         if (this.manGame.getComponent("network").getGameClient()?.isPlayingReplay()) {
             const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
             const yaw = properties.get("ManuallyCameraYaw") as number, pitch = properties.get("ManuallyCameraPitch") as number;
+
+            // PlayerCalcView 0x1053cde0 copies desired zoom before the non-volume view.
+            if (!properties.get("bUseVolumeCamera") && properties.get("CurZoomingDist") !== properties.get("DesiredZoomingDist")) {
+                const zoom = properties.get("DesiredZoomingDist") as number;
+
+                properties.set("CurZoomingDist", zoom);
+                this.controls.orbit.unclippedDistance = zoom + 250;
+            }
 
             if (yaw !== 0 || pitch !== 0) {
                 const orbit = this.controls.orbit;

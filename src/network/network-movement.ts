@@ -207,6 +207,8 @@ export class NetworkMovement {
         object.pendingAttack = null;
         object.pendingTransientSkills.length = 0;
 
+        if (object.kind === "user") this.network.actors.clearKnownObjects();
+
         if (object.actor) {
             if (object.actor.getUnrealScriptProperty("Controller")) {
                 object.actor.stopMove();

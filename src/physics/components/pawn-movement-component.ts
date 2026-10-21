@@ -99,7 +99,6 @@ export const PAWN_COLLISION_SIZE_CHANGED_EVENT = "pawnCollisionSizeChanged";
 
 export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     public readonly componentName = "pawnMovement";
-    protected tickRate = 30;
     protected readonly renderManager: RenderManager;
     protected collider: RAPIER.Collider = null;
     protected rigidbody: RAPIER.RigidBody = null;
@@ -168,9 +167,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     protected getPosition(): Vector3 { return this.getParent().position; }
     protected getRotation(): Euler { return this.getParent().rotation; }
     protected getTransformComponent(): TransformComponent { return this.getComponent("transform"); }
-
-    public getPhysicsTickRate(): number { return this.tickRate; }
-    public setPhysicsTickRate(tickRate: number): void { this.tickRate = tickRate; }
 
     public onPhysicsTick(currentTime: number, deltaTime: number, _actors: BaseActor[]): boolean {
         if (this.vehicleId) this.tickMoveInVehicle();

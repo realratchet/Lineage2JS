@@ -12,7 +12,7 @@ import { EPhysics_T } from "../assets/unreal/un-aactor";
 import type BaseActor from "../base-actor";
 import type CollidingMesh from "../objects/colliding-mesh";
 import type { ScriptComponent } from "../game/script-component";
-import { beginTouch, endTouch } from "../objects/components/transform-component";
+import { beginTouch, endTouch, releaseTouching } from "../objects/components/transform-component";
 
 const tmpVolumeBounds = new Box3();
 const tmpBodyPosition = new Vector3();
@@ -551,6 +551,7 @@ export class CollisionWorld {
 
     public unregisterPhysicsVolumes(volumes: PhysicsVolume[]): void {
         const level = this.physicsVolumeTrees.get(volumes);
+        for (const entry of this.volumeActors.get(volumes) || []) releaseTouching(entry.actor);
         for (const [pawn, owner] of this.pawnLevels)
             if (owner === level) this.setPawnLevel(pawn, null);
         this.physicsVolumes.delete(volumes);

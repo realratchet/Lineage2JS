@@ -100,7 +100,7 @@ export class GroundPickup extends Object3D {
             if (type === 2) rate.roll = index % 2 ? 540016 : -540016;
             else rate.pitch = index % 2 ? 540016 : -540016;
         }
-        target.toQuaternion(mesh.quaternion).multiply(base);
+        setMeshRotation(mesh, target, base);
         this.arrRotations.push({ current, target, rate, base });
 
         this.updateBounds();
@@ -199,7 +199,7 @@ export class GroundPickup extends Object3D {
                 const { current, target, base } = this.arrRotations[j];
                 current.pitch = target.pitch += pitch;
                 current.yaw = target.yaw = (this.origin ? ownerYaw : target.yaw) + yaw;
-                current.toQuaternion(this.meshes[j].quaternion).multiply(base);
+                setMeshRotation(this.meshes[j], current, base);
             }
             this.updateBounds();
             this.position.copy(hit.location);
@@ -251,7 +251,7 @@ export class GroundPickup extends Object3D {
             rotation.target.set(rotation.current.pitch, rotation.current.yaw, rotation.current.roll);
             rotation.rate.set(this.arrRotations[0].rate.pitch, this.arrRotations[0].rate.yaw, this.arrRotations[0].rate.roll);
         }
-        rotation.current.toQuaternion(mesh.quaternion).multiply(rotation.base);
+        setMeshRotation(mesh, rotation.current, rotation.base);
         previous.collisionRadius = this.collisionRadius;
         previous.collisionHeight = this.collisionHeight;
         previous.tracePosition.copy(location);
@@ -288,7 +288,7 @@ export class GroundPickup extends Object3D {
                     if (this.mover.isEnded() && (rate[axis] === 0 || Math.abs(amount) >= Math.abs(remaining) || (current[axis] & 65535) === (target[axis] & 65535))) current[axis] = target[axis];
                     else { current[axis] += amount; settled = false; }
                 }
-                current.toQuaternion(this.meshes[i].quaternion).multiply(base);
+                setMeshRotation(this.meshes[i], current, base);
             }
 
             if (settled) {
@@ -344,3 +344,9 @@ export class GroundPickup extends Object3D {
 }
 
 export default GroundPickup;
+
+function setMeshRotation(mesh: LitSkinnedMesh, rotation: Rotator, base: Quaternion): void {
+    rotation.toQuaternion(mesh.quaternion).multiply(base);
+    // USubSkeletalMeshInstance::MeshToWorld 0x946bf5..0x946c9b subtracts the transformed mesh origin.
+    mesh.position.copy(mesh.meshOrigin).multiply(mesh.scale).negate().applyQuaternion(mesh.quaternion);
+}

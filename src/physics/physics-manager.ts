@@ -49,9 +49,7 @@ function callZoneEvent(pawn: BaseActor | Actor | CollidingMesh, host: ScriptHost
 }
 
 export class PhysicsManager implements IEngineComponent<GameManager> {
-    protected static readonly PLAYER_PHYSICS_HZ = 60;
     protected static readonly PHYSICS_HZ = 30;
-    protected static readonly PLAYER_PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PLAYER_PHYSICS_HZ;
     protected static readonly PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PHYSICS_HZ;
     protected static readonly MAX_PHYSICS_TICKS = 8;
     protected static readonly PAWN_DECODE_CONCURRENCY = 3;
@@ -66,7 +64,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     protected readonly physicsComponentsByName = new Map<string, Set<IPhysicsComponent<any>>>();
     protected readonly triggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
-    protected nextPlayerPhysicsTick: number;
     protected nextPhysicsTick: number;
 
     protected static getCollisionBackend(): CollisionBackend_T {
@@ -88,30 +85,19 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         this.physicsWorld.timestep = 1 / PhysicsManager.PHYSICS_HZ;
         this.physicsWorld.step();
 
-        this.nextPlayerPhysicsTick = currentTime + PhysicsManager.PLAYER_PHYSICS_INTERVAL_MS;
         this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
         const manRender = this.manGame.getComponent("render");
 
-        let playerPhysicsTicks = 0;
-        let updatedPhysicsComponent = false;
-
-        while (this.nextPlayerPhysicsTick <= currentTime && playerPhysicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
-            updatedPhysicsComponent = this.updatePhysicsComponents(this.nextPlayerPhysicsTick, PhysicsManager.PLAYER_PHYSICS_INTERVAL_MS, PhysicsManager.PLAYER_PHYSICS_HZ) || updatedPhysicsComponent;
-            this.nextPlayerPhysicsTick += PhysicsManager.PLAYER_PHYSICS_INTERVAL_MS;
-        }
-
-        if (this.nextPlayerPhysicsTick <= currentTime)
-            this.nextPlayerPhysicsTick = currentTime + PhysicsManager.PLAYER_PHYSICS_INTERVAL_MS;
+        const updatedPhysicsComponent = this.updatePhysicsComponents(currentTime, deltaTime);
 
         // nothing reads the rapier world under the analytical backend
         const stepsRapier = this.collisionWorld.usesRapier();
         let physicsTicks = 0;
 
         while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
-            updatedPhysicsComponent = this.updatePhysicsComponents(this.nextPhysicsTick, PhysicsManager.PHYSICS_INTERVAL_MS, PhysicsManager.PHYSICS_HZ) || updatedPhysicsComponent;
             this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), manRender);
             if (stepsRapier) this.physicsWorld.step();
             this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
@@ -122,7 +108,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (this.nextPhysicsTick <= currentTime)
             this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
 
-        if (playerPhysicsTicks > 0 && updatedPhysicsComponent || physicsTicks > 0 && (this.simEmitters.getSize() > 0 || updatedPhysicsComponent))
+        if (updatedPhysicsComponent || physicsTicks > 0 && this.simEmitters.getSize() > 0)
             manRender.needsUpdate = true;
     }
 
@@ -138,9 +124,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     public isEmitterEffectFinished(effect: Object3D): boolean { return EmitterSimulation.isEffectFinished(effect); }
 
     public addPawn(pawn: BaseActor, expires: number = Infinity, nextTurn: number = Infinity, simulate: boolean = false): void {
-        const movement = pawn.getComponent<PawnMovementComponent>("pawnMovement");
-
-        movement.setPhysicsTickRate(PhysicsManager.PHYSICS_HZ);
         if (simulate) {
             const simulation = pawn.findComponent<NpcSimulationComponent>("npcSimulation") || pawn.addComponent(new NpcSimulationComponent());
             simulation.configure(expires, nextTurn);
@@ -714,8 +697,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         component.onPhysicsRemoved(this);
     }
 
-    protected updatePhysicsComponents(currentTime: number, deltaTime: number, tickRate: number): boolean {
-        const triggerChanged = tickRate === PhysicsManager.PHYSICS_HZ && !this.lastMoverTriggerPosition.equals(this.triggerPosition);
+    protected updatePhysicsComponents(currentTime: number, deltaTime: number): boolean {
+        const triggerChanged = !this.lastMoverTriggerPosition.equals(this.triggerPosition);
         let didUpdate = false;
 
         arrMoverPawns.length = 0;
@@ -724,7 +707,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (triggerChanged) this.lastMoverTriggerPosition.copy(this.triggerPosition);
 
         for (const component of this.physicsComponents) {
-            if ((component.getPhysicsTickRate ? component.getPhysicsTickRate() : PhysicsManager.PHYSICS_HZ) !== tickRate) continue;
             if (triggerChanged) component.onTriggerPosition?.(currentTime, this.triggerPosition);
             if (component.onPhysicsTick?.(currentTime, deltaTime, arrMoverPawns)) didUpdate = true;
         }

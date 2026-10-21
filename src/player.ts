@@ -11,7 +11,6 @@ export class Player extends BaseActor {
     public constructor(renderManager: RenderManager) {
         super(renderManager);
 
-        this.movementComponent.setPhysicsTickRate(60);
         this.addComponent(new WaterEffectsComponent());
         this.addComponent(new LandmarkComponent(renderManager, classPath => renderManager.getParent().getComponent("asset").createLandmarkEffect(classPath)));
     }

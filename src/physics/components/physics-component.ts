@@ -12,7 +12,6 @@ export type IPhysicsComponent<TParent extends IObject = IObject> = IComponent<TP
     isPhysicsAdded(manager: PhysicsManager): boolean;
     onPhysicsAdded(manager: PhysicsManager): void;
     onPhysicsRemoved(manager: PhysicsManager): void;
-    getPhysicsTickRate?(): number;
     onPhysicsTick?(currentTime: number, deltaTime: number, actors: BaseActor[]): boolean;
     onTriggerPosition?(currentTime: number, position: Vector3): void;
 };

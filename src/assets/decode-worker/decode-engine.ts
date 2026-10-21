@@ -361,34 +361,38 @@ function resolveCharacterPartPaths(row: Record<string, any>, headParts: Characte
 }
 
 function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: number, buffer: ArrayBuffer } {
+    let width = info.width, height = info.height, buffer: ArrayBuffer;
+
     if (info.textureType === "rgba") {
         const data = info as IDataTextureDecodeInfo;
 
         if (data.format && data.format !== "rgba") throw new Error(`UI texture '${info.name}' has unsupported data format '${data.format}'.`);
 
-        const buffer = info.buffer.slice(0);
+        buffer = info.buffer.slice(0);
+    } else {
+        if (info.textureType !== "dds") throw new Error(`UI texture '${info.name}' has unsupported type '${info.textureType}'.`);
 
-        if (!info.isAlphaTexture && !info.isMasked) {
-            const pixels = new Uint8Array(buffer);
+        const header = new Int32Array(info.buffer, 0, 31);
+        const fourCC = header[21], input = new Uint8Array(info.buffer, 128);
 
-            for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255;
+        height = header[3];
+        width = header[4];
+
+        switch (fourCC) {
+            case DDSConstants.FOURCC_DXT1: buffer = dxt1ToRgba(width, height, input).buffer as ArrayBuffer; break;
+            case DDSConstants.FOURCC_DXT3: buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer; break;
+            case DDSConstants.FOURCC_DXT5: buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer; break;
+            default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
         }
-
-        return { width: data.width, height: data.height, buffer };
     }
 
-    if (info.textureType !== "dds") throw new Error(`UI texture '${info.name}' has unsupported type '${info.textureType}'.`);
+    if (!info.isAlphaTexture && !info.isMasked) {
+        const pixels = new Uint8Array(buffer);
 
-    const header = new Int32Array(info.buffer, 0, 31);
-    const height = header[3], width = header[4], fourCC = header[21];
-    const input = new Uint8Array(info.buffer, 128);
-
-    switch (fourCC) {
-        case DDSConstants.FOURCC_DXT1: return { width, height, buffer: dxt1ToRgba(width, height, input).buffer as ArrayBuffer };
-        case DDSConstants.FOURCC_DXT3: return { width, height, buffer: dxt3ToRgba(width, height, input).buffer as ArrayBuffer };
-        case DDSConstants.FOURCC_DXT5: return { width, height, buffer: dxt5ToRgba(width, height, input).buffer as ArrayBuffer };
-        default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
+        for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255;
     }
+
+    return { width, height, buffer };
 }
 
 function getLanguageValue(localization: UConfigLocalization, key: string): string {
