@@ -305,7 +305,9 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
             }
             this.basedMoveLocation.fromArray(actor.getUnrealScriptProperty("Location") as Vector3Arr);
             this.basedMoveExtent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), actor.getCollisionHeight());
-            if (physics.isBlockedBy(actor, parent, vm) && pointPrimitive(parent.getCollisionPrimitive(), this.basedMoveLocation, this.basedMoveExtent) && script.call("EncroachingOn", [actor])) return false;
+            // Acknowledged passengers must not reject their own ship's turn at a railing.
+            const passenger = (parent as any).isVehicle && actor.getUnrealScriptProperty("bGetOnVehicle");
+            if (!passenger && physics.isBlockedBy(actor, parent, vm) && pointPrimitive(parent.getCollisionPrimitive(), this.basedMoveLocation, this.basedMoveExtent) && script.call("EncroachingOn", [actor])) return false;
             if (actor.getBaseActor() === parent) actor.getComponent<TransformComponent>("transform").updateBaseTransform(parent.getWorldPosition(tmpBasePosition), parent.getWorldQuaternion(tmpBaseQuaternion));
         }
         return true;

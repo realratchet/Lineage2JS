@@ -17,6 +17,8 @@ import type { NpcSkillSound_T, IPawnEquipmentDecodeInfo } from "@l2js/engine/con
 import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
 import UnScriptVM, { type ScriptHost_T } from "../../ue-script/vm";
+import type RibbonEmitter from "../emitters/ribbon-emitter";
+import { EPhysics_T } from "@l2js/engine/un-aactor";
 
 const cacheSkillVMs = new WeakMap<DecodeLibrary, UnScriptVM>();
 const cacheEffectLibraries = new WeakMap<object, DecodeLibrary>();
@@ -190,7 +192,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
         });
     }
 
-    public getWeaponLength(actor: SkillActor_T, left: boolean, scale: number = 1): number | null {
+    protected getWeaponMesh(actor: SkillActor_T, left: boolean) {
         const library = (this.script(actor).getVM() as any).library;
         const equipment = library.pawnEquipment as IPawnEquipmentDecodeInfo;
         const hand = left ? "Left" : "Right";
@@ -200,7 +202,32 @@ export class SkillEffectHost implements SkillEffectHost_T {
         if (!path) return null;
         const mesh = library.scriptMeshes[path.toLowerCase()];
 
+        if (!mesh) throw new Error(`Pawn '${actor.name}' has no decoded weapon mesh '${path}'.`);
+        return mesh;
+    }
+
+    public getWeaponLength(actor: SkillActor_T, left: boolean, scale: number = 1): number | null {
+        const mesh = this.getWeaponMesh(actor, left);
+
+        if (!mesh) return null;
+
         return mesh.sk_unkArr11.length ? Math.fround(mesh.weaponLength * scale) : mesh.weaponLength;
+    }
+
+    public attachTrailer(actor: SkillActor_T, assets: DecodeLibrary, shotTime: number, numPoints: number, lifeSpanOffset: number, rightHand: boolean): void {
+        const mesh = this.getWeaponMesh(actor, !rightHand);
+
+        if (!mesh || !mesh.sk_unkArr11.length || mesh.sk_unkArr11[0] <= 0) return;
+        const length = mesh.sk_unkArr11[0] * mesh.meshScale[0];
+        const effect = this.createEffect(actor, "LineageEffect.RibbonSet", assets);
+        const emitter = this.object(effect).children[0] as RibbonEmitter;
+        const bone = actor.getUnrealScriptProperty(rightHand ? "RightHandBone" : "LeftHandBone") as string;
+
+        effect.scriptProperties.set("Physics", EPhysics_T.PHYS_None);
+        effect.scriptProperties.set("LifeSpan", Math.fround(shotTime + Math.fround(lifeSpanOffset)));
+        emitter.attachTrailer(bone, length, shotTime, numPoints);
+        this.addEffect(effect, actor);
+        this.attachToBone(actor, effect, bone);
     }
 
     public setSoulShotVelocity(actor: SkillActor_T, velocity: number): void {

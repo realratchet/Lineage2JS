@@ -227,7 +227,7 @@ export class ShadowProjector {
     }
 
     protected drawReceiver(renderer: THREE.WebGLRenderer, scene: Scene, camera: Camera, mesh: Mesh, source: ShaderMaterial, group: THREE.BufferGeometry["groups"][number]): void {
-        if (this.renderingShadow || !GLOBAL_UNIFORMS.shadowActive.value || !source.isShaderMaterial) return;
+        if (this.renderingShadow || !GLOBAL_UNIFORMS.shadowActive.value || !source.isShaderMaterial || !source.colorWrite) return;
         const terrain = (source as any).isTerrainMaterial;
         if (!(source as any).isStaticMeshMaterial && !terrain || "USE_ACTOR_LIGHTS" in source.defines || "NO_SHADOW_RECEIVE" in source.defines) return;
         if (terrain && group) {

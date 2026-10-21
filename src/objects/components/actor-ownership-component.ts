@@ -1,7 +1,7 @@
 import { Object3D } from "three";
 import { ObjectComponent, type IObject } from "../../game/components";
 import { ScriptComponent } from "../../game/script-component";
-import type { ScriptHost_T, ScriptValue_T } from "../../ue-script/vm";
+import { updateLevelActor, type ScriptHost_T, type ScriptValue_T } from "../../ue-script/vm";
 
 type OwnedActor_T = Object3D & IObject;
 
@@ -9,14 +9,17 @@ export function setScriptObjectProperty(object: Object3D, field: string, value: 
     const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
 
     if (!properties) return;
+    const name = field.slice(field.lastIndexOf(".") + 1).toLowerCase();
 
     for (const key of properties.keys())
-        if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === field.toLowerCase()) {
+        if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === name) {
             properties.set(key, value);
+            if (name === "level") updateLevelActor(object as any);
             return;
         }
 
     properties.set(field, value);
+    if (name === "level") updateLevelActor(object as any);
 }
 
 export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {

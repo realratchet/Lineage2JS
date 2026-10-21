@@ -1,5 +1,5 @@
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../game/components";
-import type { default as UnScriptVM, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { unregisterLevelActor, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
 import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
 import type { ICollidable } from "./objects";
 import type BaseActor from "../base-actor";
@@ -12,15 +12,17 @@ export class Actor extends GameObject {
     public readonly actorUuid: string;
     public readonly scriptClassId: string;
     public readonly scriptProperties: Map<string, ScriptValue_T>;
+    public readonly isLevelActor: boolean;
     protected readonly basedActors = new Set<ICollidable>();
     protected scriptComponent: ScriptComponent = null;
 
-    public constructor(info: ActorInfo_T) {
+    public constructor(info: ActorInfo_T, isLevelActor: boolean = true) {
         super();
 
         this.name = info.name;
         this.actorUuid = info.uuid;
         this.scriptClassId = info.scriptClassId;
+        this.isLevelActor = isLevelActor;
         this.scriptProperties = new Map(Object.entries(structuredClone(info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties)));
         // UGameEngine::LoadMap (0x831cbf..0x831cd3) clears serialized Touching.
         setScriptObjectProperty(this, "Touching", []);
@@ -77,6 +79,7 @@ export class Actor extends GameObject {
         this.basedActors.clear();
         if (this.scriptComponent) releaseTouching(this);
         this.detachComponents();
+        unregisterLevelActor(this);
         setScriptObjectProperty(this, "bDeleteMe", true);
     }
 }

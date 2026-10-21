@@ -9,6 +9,9 @@ import type PhysicsManager from "../physics/physics-manager";
 import type { ICollidable } from "../objects/objects";
 import type BaseActor from "../base-actor";
 import type GroundPickup from "../objects/ground-pickup";
+import type CollidingMesh from "../objects/colliding-mesh";
+import type StaticMeshActor from "../objects/static-mesh-actor";
+import { EActorViewType_T } from "../assets/unreal/un-aactor";
 import type { CollisionQuery_T } from "../physics/collision-world";
 import SpecialView from "../rendering/camera/special-view";
 import type { ReplayScene_T, ReplayCameraInstruction_T } from "../network/l2-replay-file";
@@ -26,7 +29,7 @@ const tmpCameraTraceStart = new Vector3();
 const tmpCameraTraceDelta = new Vector3();
 const hitCheckCameraExtent = new Vector3(0.1, 0.1, 0.1);
 const arrMouseIntersections: THREE.Intersection[] = [];
-type ReplayCameraState_T = { height: number, adjusted: boolean, rotating: boolean, yaw: number, pitch: number };
+type ReplayCameraState_T = { height: number, adjusted: boolean, rotating: boolean, yaw: number, pitch: number, rightMouseDownTime: number, preset: [string, any][], hidden: boolean, enableRotate: boolean };
 
 function getBatchIntersectionActor(intersection: THREE.Intersection): { actorIndex: number, actorName: string, actorUuid: string } | null {
     const object = intersection.object as any;
@@ -88,6 +91,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected replayCameraState: ReplayCameraState_T = null;
     protected readonly specialView = new SpecialView(this);
     protected shiftTimeDown = 0;
+    protected rightMouseDownTime = -Infinity;
     protected activeSector = 0;
     protected readonly keyDownHandler: (event: KeyboardEvent) => void;
     protected readonly keyUpHandler: (event: KeyboardEvent) => void;
@@ -142,7 +146,11 @@ export class InputManager implements IEngineComponent<GameManager> {
                 this.isCameraHeightAdjusted = direction > 0;
             }
 
-            return (direction > 0 ? Math.max(minimum, next) : Math.min(maximum, next)) + 250;
+            const value = direction > 0 ? Math.max(minimum, next) : Math.min(maximum, next);
+
+            properties.set("CurZoomingDist", value);
+            properties.set("DesiredZoomingDist", value);
+            return value + 250;
         };
         this.controls.orbit.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("change", () => renderManager.needsUpdate = true);
@@ -202,10 +210,17 @@ export class InputManager implements IEngineComponent<GameManager> {
         const yaw = scene.yaw * Math.PI / 32768, pitch = Math.min(scene.pitch * Math.PI / 32768, Math.PI / 2 - 0.000001);
 
         if (this.replayCameraState) throw new Error(`Replay camera is already active.`);
-        this.replayCameraState = { height: properties.get("CameraViewHeightAdjust") as number, adjusted: this.isCameraHeightAdjusted, rotating: properties.get("bCameraManuallyRotating") as boolean, yaw: properties.get("ManuallyCameraYaw") as number, pitch: properties.get("ManuallyCameraPitch") as number };
+        const preset: [string, any][] = ["CurFixedDefaultCameraNo", "bDisableZoom", "DefaultCameraYaw", "DefaultCameraPitch", "DefaultCameraDist", "bCameraMovingToDefault", "bUseDefaultCameraYaw", "bUseDefaultCameraPitch", "bUseDefaultCameraDist", "SavedViewTargetYaw", "SavedViewTargetPitch", "CurZoomingDist", "DesiredZoomingDist", "OldCameraRotation"].map(name => {
+            const value = properties.get(name);
+
+            return [name, Array.isArray(value) ? value.slice() : value];
+        });
+        this.replayCameraState = { height: properties.get("CameraViewHeightAdjust") as number, adjusted: this.isCameraHeightAdjusted, rotating: properties.get("bCameraManuallyRotating") as boolean, yaw: properties.get("ManuallyCameraYaw") as number, pitch: properties.get("ManuallyCameraPitch") as number, rightMouseDownTime: this.rightMouseDownTime, preset, hidden: render.player.getUnrealScriptProperty("bHidden") as boolean, enableRotate: this.controls.orbit.enableRotate };
+        this.rightMouseDownTime = -Infinity;
         properties.set("bCameraManuallyRotating", false);
         properties.set("ManuallyCameraYaw", 0);
         properties.set("ManuallyCameraPitch", 0);
+        properties.set("CurFixedDefaultCameraNo", scene.fixedCamera);
         render.player.getCameraTargetPosition(this.controls.orbit.target);
         dirForward.set(Math.cos(yaw) * Math.cos(pitch), Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch));
         render.camera.position.copy(this.controls.orbit.target).addScaledVector(dirForward, -(scene.zoom + 250));
@@ -226,7 +241,14 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("bCameraManuallyRotating", state.rotating);
         properties.set("ManuallyCameraYaw", state.yaw);
         properties.set("ManuallyCameraPitch", state.pitch);
+        for (const [name, value] of state.preset) properties.set(name, value);
+        const player = this.renderManager.player;
+
+        player.setUnrealScriptProperty("bHidden", state.hidden);
+        if (player.ridePawn) player.ridePawn.setUnrealScriptProperty("bHidden", state.hidden);
+        this.controls.orbit.enableRotate = state.enableRotate;
         this.isCameraHeightAdjusted = state.adjusted;
+        this.rightMouseDownTime = state.rightMouseDownTime;
         this.replayCameraState = null;
     }
 
@@ -234,7 +256,17 @@ export class InputManager implements IEngineComponent<GameManager> {
         const { key, action, amount } = instruction, properties = this.manGame.getComponent("asset").playerController.scriptProperties;
 
         switch (key) {
+            case 33:
+            case 34:
+            case 36:
+                if (action === 1) this.setFixedDefaultCamera(key === 33 ? -1 : key === 34 ? 1 : 0);
+                break;
             case 2:
+                if (action === 1) this.rightMouseDownTime = performance.now();
+                else if (action === 3) {
+                    if (Math.fround(performance.now() - this.rightMouseDownTime) <= 200) this.setFixedDefaultCamera(0);
+                    this.rightMouseDownTime = -Infinity;
+                }
                 if (action === 3 || !properties.get("bDisableCameraManuallyRotating")) properties.set("bCameraManuallyRotating", action === 1);
                 break;
             case 228:
@@ -321,12 +353,66 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         renderManager.player.getCameraTargetPosition(tmpMouseIntersection);
         cameraVelocity.copy(tmpMouseIntersection).sub(this.controls.orbit.target);
-        this.updateAutoTrackingPawn(tmpMouseIntersection, manualYaw);
-        renderManager.camera.position.add(cameraVelocity);
+        if (!this.updateDefaultCamera(deltaTime / 1000, tmpMouseIntersection)) {
+            this.updateAutoTrackingPawn(tmpMouseIntersection, manualYaw);
+            renderManager.camera.position.add(cameraVelocity);
+        }
         this.controls.orbit.target.copy(tmpMouseIntersection);
         this.controls.orbit.update();
         this.hitCheckCamera();
         renderManager.updateCameraMatrices();
+    }
+
+    protected setFixedDefaultCamera(direction: number): void { // UInput::Exec 0x10579555..0x105796c2.
+        const network = this.manGame.getComponent("network"), controller = this.manGame.getComponent("asset").playerController;
+
+        if (!network.isInWorld() || !this.followPlayer || !this.isOrbitControls || this.isCameraLocked) return;
+        const properties = controller.scriptProperties, count = properties.get("FixedDefaultViewNum") as number;
+
+        if (count === 0 || properties.get("bCameraWalking") || properties.get("bCameraSpecialMove") || properties.get("bCameraMovingToSpecial")) return;
+        const orbit = this.controls.orbit, player = this.renderManager.player, rotation = player.getUnrealScriptProperty("Rotation") as number[];
+        const current = (properties.get("CurFixedDefaultCameraNo") as number) + direction;
+        const index = current < 0 ? count - 1 : current >= count ? 0 : current;
+        const yaw = ((Math.round((orbit.getAzimuthalAngle() + Math.PI / 2) * 32768 / Math.PI) + 32767) & 65535) - 32767;
+        const pitch = Math.round((orbit.getPolarAngle() - Math.PI / 2) * 32768 / Math.PI);
+        const distance = Math.fround((orbit.unclippedDistance || this.renderManager.camera.position.distanceTo(orbit.target)) - 250);
+
+        properties.set("OldCameraRotation", [pitch, yaw, 0]);
+        properties.set("CurZoomingDist", distance);
+        properties.set("DesiredZoomingDist", distance);
+        properties.set("CurFixedDefaultCameraNo", index);
+        for (const field of ["Yaw", "Pitch", "Dist"]) {
+            properties.set(`DefaultCamera${field}`, (properties.get(`FixedDefaultCamera${field}`) as number[])[index]);
+            properties.set(`bUseDefaultCamera${field}`, true);
+        }
+        properties.set("CameraViewHeightAdjust", (properties.get("FixedDefaultCameraViewHeight") as number[])[index]);
+        properties.set("bDisableZoom", !!((properties.get("FixedDefaultCameraDisableZoom") as number[])[index] & 1));
+        const hidden = !!((properties.get("FixedDefaultCameraHidePlayer") as number[])[index] & 1);
+
+        player.setUnrealScriptProperty("bHidden", hidden);
+        if (player.ridePawn) player.ridePawn.setUnrealScriptProperty("bHidden", hidden);
+        properties.set("SavedViewTargetYaw", rotation[1]);
+        properties.set("SavedViewTargetPitch", rotation[0]);
+        properties.set("bCameraManuallyRotating", false);
+        properties.set("bCameraMovingToDefault", true);
+        orbit.enableRotate = false;
+    }
+
+    protected updateDefaultCamera(deltaTime: number, target: Vector3): boolean {
+        const controller = this.manGame.getComponent("asset").playerController, properties = controller.scriptProperties;
+
+        if (!properties.get("bCameraMovingToDefault")) return false;
+        deltaTime = Math.fround(deltaTime);
+        if (properties.get("bUseDefaultCameraYaw")) properties.set("bUseDefaultCameraYaw", controller.call("CalcCameraMovingToDefaultYaw", [deltaTime, properties.get("SavedViewTargetYaw")]));
+        if (properties.get("bUseDefaultCameraPitch")) properties.set("bUseDefaultCameraPitch", controller.call("CalcCameraMovingToDefaultPitch", [deltaTime, properties.get("SavedViewTargetPitch")]));
+        if (properties.get("bUseDefaultCameraDist")) properties.set("bUseDefaultCameraDist", controller.call("CalcCameraMovingToDefaultDistance", [deltaTime]));
+        properties.set("bCameraMovingToDefault", !!(properties.get("bUseDefaultCameraYaw") || properties.get("bUseDefaultCameraPitch") || properties.get("bUseDefaultCameraDist")));
+        const rotation = properties.get("OldCameraRotation") as number[], yaw = rotation[1] * Math.PI / 32768, pitch = rotation[0] * Math.PI / 32768, distance = (properties.get("CurZoomingDist") as number) + 250;
+
+        this.renderManager.camera.position.set(-Math.cos(pitch) * Math.cos(yaw), -Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)).multiplyScalar(distance).add(target);
+        this.controls.orbit.unclippedDistance = 0;
+        this.controls.orbit.enableRotate = !properties.get("bCameraMovingToDefault") && !properties.get("bDisableCameraManuallyRotating");
+        return true;
     }
 
     protected updateAutoTrackingPawn(target: Vector3, manualYaw: number): void {
@@ -402,6 +488,15 @@ export class InputManager implements IEngineComponent<GameManager> {
         if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
         if (this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+        if (event.code === "PageUp" || event.code === "PageDown" || event.code === "Home") {
+            if (this.manGame.getComponent("network").isInWorld() && this.followPlayer) {
+                event.preventDefault();
+                if (this.isOrbitControls && !this.isCameraLocked) this.manGame.getComponent("network").game.recordCameraKey(event.code === "PageUp" ? 33 : event.code === "PageDown" ? 34 : 36, event.repeat ? 2 : 1);
+                if (!event.repeat) this.setFixedDefaultCamera(event.code === "PageUp" ? -1 : event.code === "PageDown" ? 1 : 0);
+            }
+            return;
+        }
 
         if (event.code === "Backquote") {
             event.preventDefault();
@@ -510,6 +605,13 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleKeyUp(event: KeyboardEvent): void {
+        if (event.code === "PageUp" || event.code === "PageDown" || event.code === "Home") {
+            const target = event.target as HTMLElement, network = this.manGame.getComponent("network");
+
+            if (!event.defaultPrevented && !event.altKey && !event.ctrlKey && !event.metaKey && target.tagName !== "INPUT" && target.tagName !== "TEXTAREA" && !target.isContentEditable && network.isInWorld() && this.followPlayer && this.isOrbitControls && !this.isCameraLocked)
+                network.game.recordCameraKey(event.code === "PageUp" ? 33 : event.code === "PageDown" ? 34 : 36, 3);
+            return;
+        }
         switch (event.key.toLowerCase()) {
             case "c":
                 const target = event.target as HTMLElement;
@@ -527,6 +629,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleMouseDown(event: MouseEvent): void {
+        if (event.button === 2) { this.rightMouseDownTime = event.timeStamp; return; }
         if (event.button !== 0 || !this.isOrbitControls) return;
 
         this.isPrimaryMouseDown = true;
@@ -547,6 +650,11 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleMouseUp(event: MouseEvent): void {
+        if (event.button === 2) {
+            if (Math.fround(event.timeStamp - this.rightMouseDownTime) <= 200) this.setFixedDefaultCamera(0);
+            this.rightMouseDownTime = -Infinity;
+            return;
+        }
         if (event.button !== 0) return;
 
         const dx = event.clientX - this.mouseDownPosition.x;
@@ -682,6 +790,11 @@ export class InputManager implements IEngineComponent<GameManager> {
         }
 
         if (actor === this.mouseTarget && pickup === this.mousePickup && cursor === this.mouseCursor) return;
+
+        if (actor !== this.mouseTarget) {
+            if ((this.mouseTarget as CollidingMesh)?.isStaticMeshActor) (this.mouseTarget as CollidingMesh | StaticMeshActor).setUnrealScriptProperty("L2ActorViewtype", EActorViewType_T.EAVT_InSight);
+            if ((actor as CollidingMesh)?.isStaticMeshActor) (actor as CollidingMesh | StaticMeshActor).setUnrealScriptProperty("L2ActorViewtype", EActorViewType_T.EAVT_HighLight);
+        }
 
         this.mouseTarget = actor;
         this.mousePickup = pickup;

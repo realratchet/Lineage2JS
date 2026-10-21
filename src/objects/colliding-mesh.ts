@@ -1,7 +1,9 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
 import LitActorMesh, { MeshLight_T } from "./lit-actor";
-import { Box3, Quaternion, Vector3 } from "three";
+import { Box3, BufferGeometry, Mesh, Quaternion, ShaderMaterial, Vector3 } from "three";
+import MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
+import { EActorViewType_T } from "../assets/unreal/un-aactor";
 import buildTriangleIndex from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
 import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, StaticMeshBatchInfo_T } from "@l2js/engine/contracts/mesh";
@@ -58,6 +60,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     protected scriptVM: UnScriptVM = null;
     protected scriptObjectFactory: ScriptObjectFactory_T = null;
     protected scriptComponent: ScriptComponent = null;
+    protected highlightMesh: Mesh<BufferGeometry, ShaderMaterial[]> = null;
 
     public constructor(props: CollidingMeshProps_T) {
         super(props);
@@ -221,6 +224,9 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         const profile = actor.getCollisionProfile();
 
         switch (field.toLowerCase()) {
+            case "l2actorviewtype":
+                this.setHighlight(actor, value === EActorViewType_T.EAVT_HighLight);
+                return;
             case "location":
                 if (actor !== this) return;
 
@@ -240,6 +246,45 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         }
 
         if (actor !== this) this.hasChangedCollisionActors = true;
+    }
+
+    public setHighlight(actor: CollidingMesh | StaticMeshActor, visible: boolean): void {
+        if (this.highlightMesh) {
+            this.remove(this.highlightMesh);
+            // Vertex attributes belong to the source mesh; only the overlay index is owned here.
+            this.highlightMesh.geometry.attributes = {};
+            this.highlightMesh.geometry.dispose();
+            for (const material of this.highlightMesh.material) material.dispose();
+            this.highlightMesh = null;
+        }
+        if (!visible) return;
+
+        const groups = actor === this ? this.geometry.groups.length ? this.geometry.groups : [{ start: 0, count: this.geometry.index ? this.geometry.index.count : this.geometry.attributes.position.count, materialIndex: 0 }] : this.batchElements.find(element => element.uuid === actor.actorUuid)?.groups;
+        if (!groups) throw new Error(`Actor '${actor.name}' has no render groups in '${this.name}'.`);
+
+        const source = Array.isArray(this.material) ? this.material : [this.material];
+        const geometry = new BufferGeometry();
+        geometry.attributes = { ...this.geometry.attributes };
+        if (this.geometry.index) geometry.setIndex(this.geometry.index.clone());
+        const materials: ShaderMaterial[] = [], indexes = new Map<number, number>();
+        for (const group of groups) {
+            let index = indexes.get(group.materialIndex);
+            if (index !== undefined) {
+                geometry.addGroup(group.start, group.count, index);
+                continue;
+            }
+            const material = source[group.materialIndex];
+            if (!(material as MeshStaticMaterial).isStaticMeshMaterial) throw new Error(`Actor '${actor.name}' has an unsupported highlight material.`);
+            index = materials.length;
+            indexes.set(group.materialIndex, index);
+            materials.push((material as MeshStaticMaterial).createHighlightMaterial());
+            geometry.addGroup(group.start, group.count, index);
+        }
+        this.highlightMesh = new Mesh(geometry, materials);
+        this.highlightMesh.name = `${actor.name}_HighLight`;
+        this.highlightMesh.renderOrder = this.renderOrder;
+        this.add(this.highlightMesh);
+        this.highlightMesh.updateMatrixWorld(true);
     }
 
     public makeCollider(indices: Uint32Array, vertices: Float32Array) {
@@ -315,12 +360,11 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     }
 
     public releaseCollider() {
+        this.setHighlight(this, false);
         if (this.scriptComponent) releaseTouching(this);
         for (const record of this.collisionActors) {
-            if (record.object) record.object.release();
-            record.object = null;
+            if (record.object) releaseTouching(record.object);
         }
-        this.hasChangedCollisionActors = false;
         this.collider = null;
         this.rigidbody = null;
     }

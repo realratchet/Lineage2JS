@@ -490,6 +490,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     public castFromServer(target: BaseActor, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly BaseActor[], targetExcepted: boolean, elapsed: number = 0): void {
         if (!Number.isFinite(hitTime)) throw new Error(`Invalid server cast time '${hitTime}'.`);
 
+        skill = { ...skill, previewTarget: undefined };
         this.attack(target, this.addSkill(skill), [], associatedActors, targetExcepted, true);
         if (skill.castStyle === 0) return;
         this.serverHitTime = Math.max(0, hitTime - elapsed);
@@ -497,6 +498,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public attachSkillVisual(skill: NpcSkillAttack_T, target: BaseActor, hitTime: number, associatedActors: readonly BaseActor[], elapsed: number): void {
+        skill = { ...skill, previewTarget: undefined };
         const remaining = Math.max(0, hitTime - elapsed);
         const cast: SkillCast_T = { skill, caster: this.getParent(), target, associatedActors, locList: [], targetExcepted: associatedActors.length > 0, stageShot: 1, stagePreShot: 0, finalShot: true, shotTime: remaining, firstShotTime: remaining };
 
@@ -707,7 +709,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
                 const mesh = arrow.getComponent<ActorMeshComponent>("actorMesh").getMesh();
 
                 tmpAttackDirection.set(1, 0, 0).applyQuaternion(arrow.quaternion);
-                tmpEffectPosition.copy(mesh.meshOrigin).multiplyScalar(properties.get("CollisionHeight") * properties.get("DrawScale") * properties.get("DrawScale3D")[0] * 1.3).multiply(tmpAttackDirection);
+                // APawn::AttackedNotify 0x105ee9d3 uses ULodMesh.Scale (+0x84), not Origin (+0x90).
+                tmpEffectPosition.copy(mesh.meshScale).multiplyScalar(properties.get("CollisionHeight") * properties.get("DrawScale") * properties.get("DrawScale3D")[0] * 1.3).multiply(tmpAttackDirection);
                 arrow.position.sub(tmpEffectPosition);
                 arrow.updateWorldMatrix(true, false);
                 tmpArrowWorld.copy(arrow.matrixWorld);

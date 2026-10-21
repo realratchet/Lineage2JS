@@ -18,7 +18,7 @@ export type ClippingRangeConfig_T = {
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
 export type GameConfig_T = { antiAliasing: number; textureDetail: number; useTrilinear: boolean; renderDeco: boolean; pawnShadow: boolean; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
 export type AudioConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
-export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; minZoomingDist: number; maxZoomingDist: number; };
+export type UserConfig_T = { audio: AudioConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; minZoomingDist: number; maxZoomingDist: number; fixedDefaultCamera: Record<string, number | number[]>; };
 
 export class UConfigSystem extends BaseConfigFile {
     // Option.ini only overrides keys it defines.
@@ -52,6 +52,7 @@ export class UConfigSystem extends BaseConfigFile {
     public autoTrackingPawnSpeed = 0;
     public minZoomingDist: number = null;
     public maxZoomingDist: number = null;
+    public readonly fixedDefaultCamera: Record<string, number | number[]> = {};
 
     public async load(): Promise<this> {
         const fileContents = this.decodeConfig();
@@ -134,6 +135,25 @@ export class UConfigSystem extends BaseConfigFile {
 
         this.loadSection(fileContents, "Engine.LineagePlayerController", (key, value) => {
             const name = key.toLowerCase();
+
+            if (name === "fixeddefaultviewnum") {
+                const count = Number(value);
+
+                if (!Number.isInteger(count) || count < 0 || count > 10) throw new Error(`Invalid fixed camera count '${value}'.`);
+                this.fixedDefaultCamera.FixedDefaultViewNum = count;
+                return;
+            }
+            const preset = /^(FixedDefaultCamera(?:Yaw|Pitch|Dist|ViewHeight|HidePlayer|DisableZoom))\[(\d+)\]$/i.exec(key);
+
+            if (preset) {
+                const field = ["FixedDefaultCameraYaw", "FixedDefaultCameraPitch", "FixedDefaultCameraDist", "FixedDefaultCameraViewHeight", "FixedDefaultCameraHidePlayer", "FixedDefaultCameraDisableZoom"].find(field => field.toLowerCase() === preset[1].toLowerCase());
+                const index = Number(preset[2]), number = field === "FixedDefaultCameraDist" || field === "FixedDefaultCameraViewHeight" ? Math.fround(Number(value)) : Math.trunc(Number(value));
+
+                if (index >= 10 || !Number.isFinite(number)) throw new Error(`Invalid fixed camera '${key}=${value}'.`);
+                if (!this.fixedDefaultCamera[field]) this.fixedDefaultCamera[field] = [];
+                (this.fixedDefaultCamera[field] as number[])[index] = number;
+                return;
+            }
 
             if (name === "minzoomingdist" || name === "maxzoomingdist") {
                 const field = name === "minzoomingdist" ? "minZoomingDist" : "maxZoomingDist";
@@ -221,7 +241,7 @@ export async function getUserConfig(): Promise<UserConfig_T> {
     for (const key of ["autoTrackingPawn", "arrowMode", "showZoneTitle", "myName", "npcName", "groupName", "pledgeMemberName", "partyMemberName", "otherPCName", "oldChatting", "systemMsgWndDamage", "systemMsgWndExpendableItem"] as const)
         defaults.game[key] = options.game[key];
 
-    return { audio: options.audio, clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game, cameraViewHeightAdjust: user.cameraViewHeightAdjust, useAutoTrackingPawn: user.useAutoTrackingPawn, autoTrackingPawnSpeed: user.autoTrackingPawnSpeed, minZoomingDist: user.minZoomingDist, maxZoomingDist: user.maxZoomingDist };
+    return { audio: options.audio, clippingRange: defaults.clippingRange, display: defaults.display, game: defaults.game, cameraViewHeightAdjust: user.cameraViewHeightAdjust, useAutoTrackingPawn: user.useAutoTrackingPawn, autoTrackingPawnSpeed: user.autoTrackingPawnSpeed, minZoomingDist: user.minZoomingDist, maxZoomingDist: user.maxZoomingDist, fixedDefaultCamera: user.fixedDefaultCamera };
 }
 
 export default UConfigSystem;

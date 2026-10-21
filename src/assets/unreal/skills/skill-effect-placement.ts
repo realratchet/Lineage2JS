@@ -144,6 +144,11 @@ export class SkillEffectPlacement {
     }
 
     public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: SkillActor_T, target: SkillActor_T, shotTime: number, addEffect: (effect: SkillActor_T) => void, source: SkillActor_T = caster, locList: readonly Vector3Arr[] = [], hitActor: boolean = !!target, impactActor: SkillActor_T = hitActor ? target : null): boolean {
+        if (info.weaponTrail) {
+            // Engine.dll 0x79bceb/0x79c1ea: GL2KeepMinFrameRate and bNpc gate APawn::AttachTrailer.
+            if (!this.host.isLowDetail() && !caster.getUnrealScriptProperty("bNpc")) this.host.attachTrailer(caster, skill.assets, shotTime, 0, 0.8, true);
+            return true;
+        }
         // Engine.dll 0x7aa351..0x7aa35b: reject NULL, then distinguish TargetPawn == caster.
         if (info.targetIsCaster !== undefined && (!target || info.targetIsCaster !== (target === caster))) return true;
         // Engine.dll 0x7a9288..0x7a928e: Siege Hammer exits before both shake and particle without a target.

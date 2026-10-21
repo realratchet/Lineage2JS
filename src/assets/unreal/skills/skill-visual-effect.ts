@@ -116,6 +116,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         this.pendingEffects.length = 0;
         this.pendingSounds.length = 0;
         this.clearSkillTargets();
+        this.projectileCasts.clear();
     }
 
     public clear(): void {
@@ -255,7 +256,6 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
     public clearSkillTargets(): void {
         this.associatedActions.length = 0;
-        this.projectileCasts.clear();
     }
 
     protected execute(frame: SkillPhase_T): boolean {

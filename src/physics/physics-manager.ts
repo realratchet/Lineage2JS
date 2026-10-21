@@ -598,7 +598,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
                 }
             });
             const arrVolumes = this.getLevelVolumes(sector);
-            const pending = [...actors].filter(actor => !actor.getComponent<ScriptComponent>("script").getHasBegunPlay());
+            const pending = [...actors].filter(actor => actor.isLevelActor && !actor.getComponent<ScriptComponent>("script").getHasBegunPlay());
             for (const actor of pending) {
                 actor.setUnrealScriptProperty("Level", sector.levelInfoActor);
                 actor.setUnrealScriptProperty("PhysicsVolume", volume as any);
@@ -631,9 +631,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             if ((object as any).isSectorObject) {
                 const sector = object as SectorObject;
                 this.collisionWorld.unregisterPhysicsVolumes(sector.physicsVolumeActors);
-                sector.releasePhysicsVolumeActors();
-                sector.releaseMusicVolumeActors();
-                sector.releaseZoneInfoActors();
             }
             if ((object as any).isTerrainBatch)
                 for (const terrain of (object as any).sectors) this.unregisterObjectComponents(terrain);

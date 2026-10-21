@@ -1,5 +1,5 @@
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, IObject, ObjectComponent } from "./components";
-import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { getProperty, setProperty, registerLevelActor, ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 
 export const SCRIPT_CALL_EVENT = "scriptCall";
 export const SCRIPT_NATIVE_EVENT = "scriptNative";
@@ -45,7 +45,6 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     protected readonly classId: string;
     protected readonly properties = new Map<string, ScriptValue_T>();
     protected hasBegunPlay = false;
-    protected isTicking = false;
     protected isDestroyed = false;
 
     public constructor(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T, classId: string) {
@@ -57,6 +56,7 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     }
 
     public setRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T): void {
+        vm.bindHost(this.getParent());
         this.vm = vm;
         this.objectFactory = objectFactory;
     }
@@ -65,7 +65,8 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
         const parent = this.getParent();
 
         this.vm.initializeHost(parent);
-        this.isTicking = this.vm.hasScriptFunction(this.classId, "Tick") && this.vm.findFunction(this.classId, "Tick").program.entries.length > 2;
+        if (this.vm.getLevelInfo()) setProperty(parent, "Level", this.vm.getLevelInfo());
+        registerLevelActor(parent);
     }
 
     public onDetach(): void { this.destroy(); }
@@ -76,12 +77,35 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
         if (this.hasBegunPlay || this.isDestroyed) return;
 
         this.hasBegunPlay = true;
+        registerLevelActor(this.getParent());
         if (initialize) initialize();
         this.call("PostBeginPlay");
+        if (!this.isDestroyed && !getProperty(this.getParent(), "bDeleteMe")) this.call("SetInitialState");
     }
 
     public tick(deltaTime: number): void {
-        if (this.hasBegunPlay && this.isTicking && !this.isDestroyed) this.call("Tick", [deltaTime]);
+        if (!this.hasBegunPlay || this.isDestroyed) return;
+
+        const parent = this.getParent();
+
+        if (this.vm.hasTickFunction(parent)) this.call("Tick", [deltaTime]);
+        this.vm.processState(parent, deltaTime);
+
+        const rate = Math.fround(getProperty(parent, "TimerRate") as number);
+
+        if (!(rate > 0)) return;
+
+        const counter = Math.fround(Math.fround(getProperty(parent, "TimerCounter") as number) + Math.fround(deltaTime));
+
+        setProperty(parent, "TimerCounter", counter);
+        if (!(counter >= rate)) return;
+
+        // AActor::UpdateTimers 0x10594900..0x1059499f dispatches once after normalizing all elapsed intervals.
+        const ticks = Math.trunc(counter / rate) | 0;
+
+        setProperty(parent, "TimerCounter", Math.fround(counter - rate * ticks));
+        if (ticks && !getProperty(parent, "bTimerLoop")) setProperty(parent, "TimerRate", 0);
+        if (!this.isDestroyed) this.call("Timer");
     }
 
     public onUpdate(_currentTime: number, deltaTime: number): void { this.tick(deltaTime); }
@@ -90,7 +114,6 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
         if (this.isDestroyed) return;
 
         this.isDestroyed = true;
-        this.isTicking = false;
 
         if (notify && this.hasBegunPlay && this.hasFunction("Destroyed")) this.call("Destroyed");
     }
@@ -114,7 +137,7 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
         this.vm.initializeHost(object);
         return object;
     }
-    public hasFunction(name: string): boolean { return this.vm.hasScriptFunction(this.classId, name); }
+    public hasFunction(name: string): boolean { return this.vm.hasScriptFunction(this.getParent(), name); }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
         if (type !== SCRIPT_CALL_EVENT) return COMPONENT_EVENT_NOT_HANDLED;

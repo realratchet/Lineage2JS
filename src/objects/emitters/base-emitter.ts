@@ -61,7 +61,7 @@ class Particle_T {
     public boneIndex: number = 0;
 }
 
-enum EParticleFlags_T {
+export enum EParticleFlags_T {
     PTF_None = 0,
     PTF_Active = 1,
     PTF_NoTick = 2,
@@ -290,7 +290,13 @@ export abstract class BaseEmitter extends Object3D {
 
     public getCurrentTime() { return this.currentTime; }
     public isFinished() { return this.isDisabled || this.allParticlesDead; }
-    public kill() { this.killPending = true; }
+    public kill() {
+        this.isRespawningDeadParticles = false;
+        this.initialParticlesPerSecond = 0;
+        this.generalSettings.particlesPerSecond = 0;
+        this.isAutoReset = this.isAutoDestroyed = false;
+        this.killPending = true;
+    }
     public handlesUnrealNative(_index: number, name: string): boolean { return name.toLowerCase() === "trigger"; }
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
         if (call.context === this && call.name.toLowerCase() === "trigger") { this.trigger(); return undefined; }

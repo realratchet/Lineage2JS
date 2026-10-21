@@ -245,8 +245,16 @@ export class DecodeLibraryBuilder {
         const levelInfo = level.levelInfo.loadSelf();
         const batching = this.settings.batching ?? { terrain: true, staticMeshes: true };
 
-        for (const actor of level.getActors())
+        for (const actor of level.getActors()) {
             this.library.levelActorUuids.push(actor ? actor.uuid : null);
+            if (!actor) { this.library.levelActors.push(null); continue; }
+
+            actor.loadSelf();
+            const info: Pick<IBaseObjectDecodeInfo, "uuid" | "name" | "scriptClassId" | "scriptProperties" | "ownerUuid"> = { uuid: actor.uuid, name: actor.objectName };
+
+            this.setScriptClass(actor, info);
+            this.library.levelActors.push(info);
+        }
 
         // sectorName is the caller's own key, not level.url.map (stale on some packages, e.g. 23_17)
         const sectorMatch = /^(\d+)_(\d+)$/.exec(sectorName);

@@ -82,9 +82,9 @@ const nativeEffectRecipes = new Map<string, NativeEffectBinding_T>([
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79c21d / 0x7a3de7 / 0x7a5a9d / 0x791ade.
     ["s_sonic_slash", { effects: ["LineageEffect.s_u010_b", "LineageEffect.s_u010_a", "LineageEffect.s_u015_b"], effectGroup: "sonicSlash", soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79c010 / 0x7a3de7 / 0x7ae49b / 0x791ade.
-    ["s_power_smash", { effects: ["LineageEffect.s_u010_b", "LineageEffect.s_u010_a", "LineageEffect.p_u004_a"], finalShotOnly: true, soundPhases: ["casting", "shot"], pending: "secondary weapon RibbonSet attachment" }],
+    ["s_power_smash", { effects: ["LineageEffect.s_u010_b", "LineageEffect.s_u010_a", "LineageEffect.p_u004_a", "LineageEffect.RibbonSet"], finalShotOnly: true, soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79e2c5 / 0x7a3de7 / 0x7ae49b / 0x791ade.
-    ["s_power_strike", { effects: ["LineageEffect.s_u002_a", "LineageEffect.p_u004_a"], finalShotOnly: true, soundPhases: ["casting", "shot"] }],
+    ["s_power_strike", { effects: ["LineageEffect.s_u002_a", "LineageEffect.p_u004_a", "LineageEffect.RibbonSet"], finalShotOnly: true, soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79c74b / 0x7a3de7 / 0x7ae49b / 0x791ade.
     ["s_npc_die_you_fool", { effects: ["LineageEffect.p_u004_a"], finalShotOnly: true, soundPhases: ["shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79e483 / 0x7a3de7 / 0x7a8ef6 / 0x791ade.
@@ -154,7 +154,7 @@ const nativeEffectRecipes = new Map<string, NativeEffectBinding_T>([
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79d3dd / 0x7a3de7 / 0x7a6f9b / 0x78ebbc.
     ["s_chill_flame", { effects: ["LineageEffect.m_u028_a", "LineageEffect.m_u028_b", "LineageEffect.m_u028_c"], soundPhases: ["casting", "shot", "explosion"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79bc21 / 0x7a3de7 / 0x7a57a1 / 0x791ade.
-    ["s_mortal_blow", { effects: ["LineageEffect.s_u001_a", "LineageEffect.s_u001_b"], soundPhases: ["casting", "shot"], pending: "secondary weapon RibbonSet attachment" }],
+    ["s_mortal_blow", { effects: ["LineageEffect.s_u001_a", "LineageEffect.s_u001_b", "LineageEffect.RibbonSet"], soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x7a1220 / 0x7a3de7 / 0x7a57a1 / 0x791ade.
     ["s_deadly_blow", { effects: ["LineageEffect.s_u010_a", "LineageEffect.s_u001_b"], soundPhases: ["casting", "shot"] }],
     // Engine.dll Init/PreShot/Shot/Explosion: 0x79bd1b / 0x7a3de7 / 0x7a4dfe / 0x791ade.

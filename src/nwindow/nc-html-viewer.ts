@@ -42,11 +42,132 @@ const ALIGN_CSS = ["left", "center", "left", "right"]; // Alignment stack values
 const VALIGN_CSS = ["top", "middle", "top", "bottom"];
 
 type HtmlSegment_T = { text: string, color: number };
+type HtmlWord_T = { element: HTMLSpanElement, segments: HtmlSegment_T[], space: Text, last: HTMLCanvasElement, advance: number };
 type HtmlToken_T = { tag: string, isOpen: boolean, attrs: Record<string, string>, segments: HtmlSegment_T[] };
-type HtmlBlock_T = { element: HTMLElement, paragraph: HTMLDivElement, paragraphAlign: number };
-type HtmlTable_T = { table: HTMLTableElement, row: HTMLTableRowElement, cell: HTMLTableCellElement, border: number, padding: number };
+type HtmlBlock_T = { element: HTMLElement, paragraph: HTMLDivElement, paragraphAlign: number, width: number, minimumWidth: number, tables: HtmlTable_T[] };
+type HtmlCell_T = { element: HTMLTableCellElement, block: HtmlBlock_T, fixedWidth: number };
+type HtmlTable_T = { table: HTMLTableElement, frame: SVGSVGElement, row: HTMLTableRowElement, cell: HTMLTableCellElement, border: number, padding: number, spacing: number, width: number, height: number, isPercentage: boolean, rows: HtmlCell_T[][], columns: number[], naturalWidth: number, minimumWidth: number };
 type HtmlLink_T = { target: string, isUnderlined: boolean };
 type HtmlVariable_T = { name: string, isMultiline: boolean, edit: { getValue(): string, setValue(value: string): void } };
+
+function measureHtmlTable(table: HtmlTable_T) { // NWindow 0x1003e2e2..0x1003e477.
+    const minimums: number[] = [];
+
+    for (const row of table.rows) for (let i = 0; i < row.length; i++) {
+        const cell = row[i], block = cell.block;
+
+        for (const nested of block.tables) {
+            measureHtmlTable(nested);
+            block.width = Math.max(block.width, nested.naturalWidth);
+            block.minimumWidth = Math.max(block.minimumWidth, nested.minimumWidth);
+        }
+        const width = cell.fixedWidth > 0 ? cell.fixedWidth : block.width;
+
+        if (i === table.columns.length) {
+            table.columns.push(width - 2 * table.padding);
+            minimums.push(block.minimumWidth - 2 * table.padding);
+        } else {
+            table.columns[i] = Math.max(table.columns[i], width);
+            minimums[i] = Math.max(minimums[i], block.minimumWidth);
+        }
+    }
+    table.naturalWidth = table.columns.reduce((total, width) => total + width + 2 * (table.padding + table.border) + table.spacing, table.spacing + 2 * table.border);
+    table.minimumWidth = minimums.reduce((total, width) => total + width, table.spacing + 2 * table.border);
+}
+
+function layoutHtmlTable(table: HtmlTable_T, availableWidth: number) { // NWindow 0x1003ce00 / 0x1003be40.
+    let width = table.isPercentage ? Math.trunc(table.width * availableWidth / 100) : table.width;
+
+    if (table.naturalWidth >= availableWidth && width === 0) width = availableWidth;
+
+    const columns = table.columns.map(value => availableWidth > table.naturalWidth && width === 0 ? value : Math.trunc(table.naturalWidth > 0 ? value * width / table.naturalWidth : value * width));
+    const sizes = columns.map(() => 0), inset = 2 * (table.padding + table.border);
+    let outerWidth = 0;
+
+    table.rows.forEach(row => {
+        let rowWidth = table.spacing + 2 * table.border;
+
+        row.forEach((cell, i) => {
+            const allocated = Math.max(cell.block.minimumWidth, columns[i]);
+            let cellWidth = allocated;
+
+            for (const nested of cell.block.tables)
+                cellWidth = Math.max(cellWidth, layoutHtmlTable(nested, allocated));
+
+            sizes[i] = Math.max(sizes[i], cellWidth);
+            rowWidth += cellWidth + inset + table.spacing;
+        });
+        outerWidth = Math.max(outerWidth, rowWidth);
+    });
+    table.table.style.width = `${outerWidth}px`;
+    const edge = `${table.border + table.spacing}px`;
+
+    table.table.style.gridTemplateColumns = sizes.length > 0 ? [edge, ...sizes.map((value, i) => `${value + inset + (i + 1 < sizes.length ? table.spacing : 0)}px`), edge].join(" ") : "none";
+    table.table.style.gridTemplateRows = table.rows.map(row => row.length > 0 ? "auto" : `${inset}px`).join(" ");
+    table.table.style.paddingTop = `${table.border + table.spacing}px`;
+    table.table.style.paddingBottom = `${table.border + (table.rows.length > 0 ? table.spacing : 0)}px`;
+    table.rows.forEach((row, y) => row.forEach((cell, x) => {
+        cell.element.style.gridRow = `${y + 1}`;
+        cell.element.style.gridColumn = `${x + 2}`;
+        cell.element.style.width = `${sizes[x]}px`;
+    }));
+
+    return outerWidth;
+}
+
+function layoutHtmlTableHeight(table: HtmlTable_T) { // NWindow 0x1003d098..0x1003d1ef.
+    table.table.style.height = "auto";
+    table.table.style.gridTemplateRows = table.rows.map(row => row.length > 0 ? "auto" : `${2 * (table.padding + table.border)}px`).join(" ");
+    const inset = 2 * (table.padding + table.border);
+    const heights = getComputedStyle(table.table).gridTemplateRows.split(" ").map(value => parseFloat(value) - inset);
+    const naturalHeight = table.table.getBoundingClientRect().height;
+    const total = heights.reduce((sum, height) => sum + height, 0);
+
+    if (table.height > naturalHeight && total > 0) {
+        const available = table.height - 2 * table.border - table.rows.length * inset - (table.rows.length + 1) * table.spacing;
+
+        table.table.style.gridTemplateRows = heights.map(height => `${Math.trunc(height * available / total) + inset}px`).join(" ");
+        table.table.style.alignContent = "start";
+    }
+    table.table.style.height = `${Math.max(naturalHeight, table.height)}px`;
+    for (const row of table.rows) for (const cell of row) {
+        const inner = cell.block.element, align = cell.element.style.verticalAlign;
+        const height = cell.element.getBoundingClientRect().height - inset;
+        const contentHeight = inner.getBoundingClientRect().height + (parseFloat(inner.style.marginBottom) || 0);
+        const offset = align === "middle" ? Math.trunc(height / 2) - Math.trunc(contentHeight / 2) : align === "bottom" ? height - contentHeight : 0;
+
+        inner.style.transform = `translateY(${offset}px)`;
+    }
+}
+
+function drawHtmlTableFrame(table: HtmlTable_T) { // NWindow 0x1003bf10..0x1003bfee.
+    if (!table.frame) return;
+
+    const width = table.table.clientWidth, height = table.table.clientHeight, rects: SVGRectElement[] = [];
+
+    function line(x1: number, y1: number, x2: number, y2: number) {
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+
+        rect.setAttribute("x", `${Math.min(x1, x2)}`);
+        rect.setAttribute("y", `${Math.min(y1, y2)}`);
+        rect.setAttribute("width", `${Math.abs(x2 - x1) + 1}`);
+        rect.setAttribute("height", `${Math.abs(y2 - y1) + 1}`);
+        rect.setAttribute("fill", cssColor(TEXT_COLOR));
+        rects.push(rect);
+    }
+    table.frame.setAttribute("width", `${Math.max(1, width)}`);
+    table.frame.setAttribute("height", `${Math.max(1, height)}`);
+
+    for (let i = 0; i < table.border; i++) {
+        const right = width - i - 1, bottom = height - i - 1;
+
+        line(i, i, right, i);
+        line(i, bottom, right, bottom);
+        line(i, i, i, bottom);
+        line(right, i, right, bottom);
+    }
+    table.frame.replaceChildren(...rects);
+}
 
 function compareNoCase(a: string, b: string) {
     const x = a.toLowerCase(), y = b.toLowerCase();
@@ -331,6 +452,8 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     protected background: HTMLDivElement = null;
     protected variables: HtmlVariable_T[] = [];
     protected arrMultiEdits: CHtmlMultiEdit[] = [];
+    protected arrTextLayouts: (() => boolean)[] = [];
+    protected arrTables: HtmlTable_T[] = [];
     protected contentHeight = 0;
     protected scroll = 0;
     protected thumbPos = 0;
@@ -358,8 +481,13 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
         this.element.addEventListener("wheel", event => this.scrollBy(Math.sign(event.deltaY) * this.getLineStep()));
 
         new ResizeObserver(() => { // Content laid out while hidden measures 0 tall; re-measure once it is shown.
-            this.contentHeight = this.content.offsetHeight;
-            this.setScroll(this.scroll);
+            setTimeout(() => {
+                this.arrTextLayouts = this.arrTextLayouts.filter(layout => !layout());
+                for (let i = this.arrTables.length - 1; i >= 0; i--) layoutHtmlTableHeight(this.arrTables[i]);
+                this.arrTables.forEach(drawHtmlTableFrame);
+                this.contentHeight = this.content.offsetHeight;
+                this.setScroll(this.scroll);
+            }, 0);
         }).observe(this.content);
     }
 
@@ -467,9 +595,11 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     }
 
     protected build(tokens: HtmlToken_T[]) {
-        const blocks: HtmlBlock_T[] = [{ element: this.content, paragraph: null, paragraphAlign: 0 }];
+        const blocks: HtmlBlock_T[] = [{ element: this.content, paragraph: null, paragraphAlign: 0, width: 0, minimumWidth: 0, tables: [] }];
         const aligns: number[] = [];
-        const tables: HtmlTable_T[] = [];
+        const tables: HtmlTable_T[] = [], root = blocks[0];
+        this.arrTextLayouts = [];
+        this.arrTables = [];
         let link: HtmlLink_T = null, isTitle = false, backgroundPath: string = null;
 
         const getAlign = () => aligns.length > 0 ? aligns[aligns.length - 1] : 0;
@@ -494,6 +624,8 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             holder.style.width = `${width}px`;
             holder.style.height = `${height}px`;
             row.appendChild(holder);
+            getBlock().width = Math.max(getBlock().width, width);
+            getBlock().minimumWidth = Math.max(getBlock().minimumWidth, width);
 
             return holder;
         };
@@ -503,6 +635,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             const inner = getBlock().element;
 
             if (inner.childElementCount > 0) inner.style.marginBottom = `${-LINE_SPACING}px`; // A cell's last line has no trailing pitch: title rows are 19px tall in the L2.4_20 capture.
+            else if (inner.style.minHeight) inner.style.minHeight = `${Math.max(0, parseFloat(inner.style.minHeight) - LINE_SPACING)}px`;
 
             blocks.pop();
             aligns.pop();
@@ -518,7 +651,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             }
 
             switch (token.tag) {
-                case "TEXTCODE": this.addTextRun(getBlock(), getAlign(), token.segments, link); break;
+                case "TEXTCODE": this.arrTextLayouts.push(this.addTextRun(getBlock(), getAlign(), token.segments, link)); break;
                 case "TITLE": isTitle = token.isOpen; break;
                 case "HTML": if (token.isOpen && attrs.IMGSRC) backgroundPath = attrs.IMGSRC; break;
                 case "CENTER":
@@ -593,17 +726,33 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     const table = document.createElement("table");
                     const spacing = "CELLSPACING" in attrs ? atoi(attrs.CELLSPACING) : 2;
 
-                    table.style.display = "inline-table";
+                    table.style.display = "inline-grid";
+                    table.style.boxSizing = "border-box";
+                    table.style.position = "relative";
+                    table.style.padding = "0";
+                    table.style.rowGap = `${spacing}px`;
                     table.style.borderCollapse = "separate";
                     table.style.borderSpacing = `${spacing}px`;
                     table.style.verticalAlign = "top";
 
-                    if ("WIDTH" in attrs) table.style.width = attrs.WIDTH.endsWith("%") ? `${atoi(attrs.WIDTH)}%` : `${atoi(attrs.WIDTH)}px`;
-                    if ("HEIGHT" in attrs) table.style.height = `${atoi(attrs.HEIGHT)}px`;
+                    const frame = atoi(attrs.BORDER) > 0 ? document.createElementNS("http://www.w3.org/2000/svg", "svg") : null;
+
+                    if (frame) {
+                        frame.style.position = "absolute";
+                        frame.style.left = frame.style.top = "0";
+                        frame.style.overflow = "visible";
+                        frame.style.pointerEvents = "none";
+                        table.appendChild(frame);
+                    }
+
                     if ("BGCOLOR" in attrs) table.style.backgroundColor = cssColor(parseColor(attrs.BGCOLOR));
 
                     addRow().appendChild(table);
-                    tables.push({ table, row: null, cell: null, border: atoi(attrs.BORDER), padding: "CELLPADDING" in attrs ? atoi(attrs.CELLPADDING) : 1 });
+                    const entry: HtmlTable_T = { table, frame, row: null, cell: null, border: atoi(attrs.BORDER), padding: "CELLPADDING" in attrs ? atoi(attrs.CELLPADDING) : 1, spacing, width: atoi(attrs.WIDTH), height: atoi(attrs.HEIGHT), isPercentage: !!attrs.WIDTH && attrs.WIDTH.endsWith("%"), rows: [], columns: [], naturalWidth: 0, minimumWidth: 0 };
+
+                    getBlock().tables.push(entry);
+                    this.arrTables.push(entry);
+                    tables.push(entry);
                     break;
                 }
                 case "TR": {
@@ -613,6 +762,11 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
 
                     closeCell(table);
                     table.row = token.isOpen ? table.table.insertRow() : null;
+                    if (table.row) {
+                        table.row.style.display = "contents";
+                        (table.row.parentElement as HTMLElement).style.display = "contents";
+                        table.rows.push([]);
+                    }
                     break;
                 }
                 case "TD": { // TD 0x1003dde0: ALIGN pushed on the alignment stack, VALIGN TOP=2 BOTTOM=3 CENTER=1 (absent=1), WIDTH may end in '%'.
@@ -623,28 +777,57 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     closeCell(table);
 
                     if (!token.isOpen) break;
-                    if (!table.row) table.row = table.table.insertRow();
+                    if (!table.row) {
+                        table.row = table.table.insertRow();
+                        table.row.style.display = "contents";
+                        (table.row.parentElement as HTMLElement).style.display = "contents";
+                        table.rows.push([]);
+                    }
 
                     const cell = table.row.insertCell(), inner = document.createElement("div");
                     const align = "ALIGN" in attrs ? ["CENTER", "RIGHT", "LEFT"].findIndex(keyword => compareNoCase(attrs.ALIGN, keyword) === 0) : -1;
                     const valign = "VALIGN" in attrs ? ["CENTER", "TOP", "BOTTOM"].findIndex(keyword => compareNoCase(attrs.VALIGN, keyword) === 0) + 1 : 1;
 
+                    cell.style.display = "flex";
+                    cell.style.flexDirection = "column";
+                    cell.style.justifyContent = "flex-start";
                     cell.style.padding = `${table.padding}px`;
                     cell.style.verticalAlign = VALIGN_CSS[valign];
 
                     if (table.border > 0) cell.style.border = `${table.border}px solid ${cssColor(TEXT_COLOR)}`;
-                    if ("WIDTH" in attrs) cell.style.width = attrs.WIDTH.endsWith("%") ? `${atoi(attrs.WIDTH)}%` : `${atoi(attrs.WIDTH)}px`;
-                    if ("HEIGHT" in attrs) cell.style.height = `${atoi(attrs.HEIGHT)}px`;
+                    if ("HEIGHT" in attrs) inner.style.minHeight = `${Math.max(0, atoi(attrs.HEIGHT))}px`;
                     if ("BGCOLOR" in attrs) cell.style.backgroundColor = cssColor(parseColor(attrs.BGCOLOR));
 
                     cell.appendChild(inner);
                     table.cell = cell;
-                    blocks.push({ element: inner, paragraph: null, paragraphAlign: 0 });
+                    const block: HtmlBlock_T = { element: inner, paragraph: null, paragraphAlign: 0, width: attrs.WIDTH && !attrs.WIDTH.endsWith("%") ? Math.max(0, atoi(attrs.WIDTH)) : 0, minimumWidth: 0, tables: [] };
+
+                    table.rows[table.rows.length - 1].push({ element: cell, block, fixedWidth: atoi(attrs.FIXWIDTH) });
+                    blocks.push(block);
                     aligns.push([1, 3, 2, 0][align < 0 ? 3 : align]);
                     break;
                 }
             }
         }
+
+        for (const table of root.tables) measureHtmlTable(table);
+
+        this.arrTextLayouts.unshift(() => {
+            if (this.content.clientWidth <= 0) return false;
+
+            for (const table of root.tables) layoutHtmlTable(table, this.content.clientWidth);
+
+            return true;
+        });
+        this.arrTextLayouts = this.arrTextLayouts.filter(layout => !layout());
+        for (let i = this.arrTables.length - 1; i >= 0; i--) layoutHtmlTableHeight(this.arrTables[i]);
+        this.arrTables.forEach(drawHtmlTableFrame);
+        if (this.arrTextLayouts.length > 0)
+            setTimeout(() => {
+                this.arrTextLayouts = this.arrTextLayouts.filter(layout => !layout());
+                for (let i = this.arrTables.length - 1; i >= 0; i--) layoutHtmlTableHeight(this.arrTables[i]);
+                this.arrTables.forEach(drawHtmlTableFrame);
+            }, 0);
 
         if (backgroundPath && this.layer.hasTexture(backgroundPath)) {
             const width = this.content.offsetHeight > this.height ? this.width - SCROLLBAR_RESERVE : this.width;
@@ -662,22 +845,37 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             paragraph.style.fontSize = "0";
             paragraph.style.lineHeight = "0";
             paragraph.style.wordSpacing = `${this.layer.measureText(" ")}px`;
+            paragraph.style.minWidth = `${this.layer.measureText("A")}px`;
             block.element.appendChild(paragraph);
             block.paragraph = paragraph;
             block.paragraphAlign = align;
         }
 
-        const paragraph = block.paragraph;
+        const paragraph = block.paragraph, layer = this.layer;
+        block.width = Math.max(block.width, layer.measureText(segments.map(segment => segment.text).join("")));
+        block.minimumWidth = Math.max(block.minimumWidth, layer.measureText("A"));
+        const arrWords: HtmlWord_T[] = [], arrCanvases: HTMLCanvasElement[] = [];
         let word: HTMLSpanElement = null;
+
+        function draw(parent: HTMLElement, text: string, color: number) {
+            const canvas = layer.text(parent, text, color, FontType_T.SMALL, null, null, !!link && link.isUnderlined);
+
+            arrCanvases.push(canvas);
+            canvas.style.marginBottom = `${LINE_SPACING}px`;
+
+            return canvas;
+        }
 
         for (const segment of segments) {
             const color = link ? LINK_COLOR : segment.color === null ? TEXT_COLOR : segment.color;
-            const parts = link && link.isUnderlined ? [segment.text] : segment.text.split(" ");
+            const parts = segment.text.split(" ");
 
             for (let i = 0; i < parts.length; i++) {
                 if (i > 0) {
+                    const space = document.createTextNode(" ");
+                    if (arrWords.length > 0) arrWords[arrWords.length - 1].space = space;
                     word = null;
-                    paragraph.appendChild(document.createTextNode(" "));
+                    paragraph.appendChild(space);
                 }
 
                 if (parts[i].length === 0) continue;
@@ -686,6 +884,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     word = document.createElement("span");
                     word.style.whiteSpace = "nowrap";
                     paragraph.appendChild(word);
+                    arrWords.push({ element: word, segments: [], space: null, last: null, advance: 0 });
 
                     if (link && link.target !== null) {
                         const target = link.target;
@@ -698,19 +897,99 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     }
                 }
 
-                const text = this.layer.text(word, parts[i], color, FontType_T.SMALL);
-
-                text.style.marginBottom = `${LINE_SPACING}px`;
-
-                if (link && link.isUnderlined) { // LINK anchors carry a 1px underline on the last cell row across the run, L2.4_20 capture.
-                    const context = text.getContext("2d"), lineHeight = this.layer.getManager().canvas.getLineHeight(FontType_T.SMALL);
-
-                    context.globalAlpha = 1;
-                    context.fillStyle = `#${(color & 0xffffff).toString(16).padStart(6, "0")}`;
-                    context.fillRect(0, lineHeight - 1, this.layer.measureText(parts[i]), 1);
-                }
+                arrWords[arrWords.length - 1].segments.push({ text: parts[i], color });
             }
         }
+
+        return () => {
+            const width = paragraph.clientWidth;
+
+            if (width <= 0) return false;
+
+            for (const entry of arrWords) {
+                if (entry.segments.reduce((total, segment) => total + layer.measureText(segment.text), 0) <= width) {
+                    entry.segments.forEach(segment => draw(entry.element, segment.text, segment.color));
+                    entry.last = arrCanvases[arrCanvases.length - 1];
+                    continue;
+                }
+
+                entry.element.style.whiteSpace = "normal";
+                let chunk: HTMLSpanElement = null, advance = 0;
+
+                for (const segment of entry.segments) {
+                    let start = 0;
+
+                    for (let i = 0; i < segment.text.length; i++) {
+                        const glyphWidth = layer.measureText(segment.text[i]);
+
+                        // FL2TextAlignParser::DivideTokenWithWidth uses a strict width comparison.
+                        if (chunk && advance + glyphWidth >= width) {
+                            if (i > start) draw(chunk, segment.text.slice(start, i), segment.color);
+                            start = i;
+                            entry.element.appendChild(document.createElement("wbr"));
+                            chunk = null;
+                            advance = 0;
+                        }
+                        if (!chunk) {
+                            chunk = document.createElement("span");
+                            chunk.style.whiteSpace = "nowrap";
+                            entry.element.appendChild(chunk);
+                        }
+                        advance += glyphWidth;
+                    }
+                    if (start < segment.text.length) draw(chunk, segment.text.slice(start), segment.color);
+                }
+                entry.last = arrCanvases[arrCanvases.length - 1];
+            }
+
+            const alignment = paragraph.style.textAlign;
+            paragraph.style.textAlign = "left";
+            const bounds = paragraph.getBoundingClientRect(), scale = bounds.width / width;
+            const lines = new Map<number, { end: number, spaces: HtmlWord_T[] }>(), spaceWidth = layer.measureText(" ");
+            let lastLine = -Infinity;
+
+            for (const canvas of arrCanvases) {
+                const rect = canvas.getBoundingClientRect();
+                let line = lines.get(rect.top);
+
+                if (!line) lines.set(rect.top, line = { end: rect.right, spaces: [] });
+                line.end = Math.max(line.end, rect.right);
+                lastLine = Math.max(lastLine, rect.top);
+            }
+            for (const entry of arrWords) {
+                if (!entry.space) continue;
+
+                const rect = entry.last.getBoundingClientRect(), line = lines.get(rect.top);
+                entry.advance = spaceWidth;
+
+                if (rect.top !== lastLine && Math.abs(rect.right - line.end) < 0.01) {
+                    if ((bounds.right - line.end) / scale <= spaceWidth) {
+                        entry.advance = 0;
+                        continue;
+                    }
+                    line.end += spaceWidth * scale;
+                }
+                line.spaces.push(entry);
+            }
+            for (const [top, line] of lines) {
+                if (top === lastLine || line.spaces.length === 0) continue;
+
+                const extra = Math.max(0, Math.round((bounds.right - line.end) / scale));
+                const advance = Math.floor(extra / line.spaces.length), remainder = extra % line.spaces.length;
+
+                for (let i = 0; i < line.spaces.length; i++)
+                    line.spaces[i].advance += advance + (i < remainder ? 1 : 0);
+            }
+            for (const entry of arrWords) {
+                if (!entry.space) continue;
+
+                entry.space.replaceWith(document.createElement("wbr"));
+                const canvas = draw(entry.element, " ", entry.segments[entry.segments.length - 1].color);
+                canvas.style.minWidth = canvas.style.maxWidth = `${entry.advance}px`;
+            }
+            paragraph.style.textAlign = alignment;
+            return true;
+        };
     }
 
     protected getVariable(name: string): string { // 0x1003c1b0: first control whose VAR matches (wcscmp).

@@ -4,7 +4,7 @@ import { EDrawType_T, EPhysics_T } from "./assets/unreal/un-aactor";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T } from "./physics/collision-world";
-import UnScriptVM, { ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
+import UnScriptVM, { unregisterLevelActor, updateLevelActor, ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
 import { GameObject, COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
 import { ColliderComponent } from "./physics/components/physics-component";
 import PawnMovementComponent, { PawnMovementState_T } from "./physics/components/pawn-movement-component";
@@ -163,6 +163,7 @@ export class BaseActor extends GameObject implements ICollidable {
         const property = findScriptPropertyKey(this.scriptProperties, field.toLowerCase()) ?? field;
 
         this.scriptProperties.set(property, value);
+        if (field.toLowerCase() === "level") updateLevelActor(this);
         switch (field.toLowerCase()) {
             case "bcollideactors":
                 this.movementComponent.setCollideActors(!!value);
@@ -295,6 +296,7 @@ export class BaseActor extends GameObject implements ICollidable {
         this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.release();
         this.isDeleted = true;
         this.detachComponents();
+        unregisterLevelActor(this);
     }
 
     public isPendingKill(): boolean { return this.isDeleted; }

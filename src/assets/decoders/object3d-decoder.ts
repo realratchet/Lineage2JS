@@ -11,6 +11,7 @@ import SpriteEmitter from "../../objects/emitters/sprite-emitter";
 import MeshEmitter from "../../objects/emitters/mesh-emitter";
 import VertMeshEmitter from "../../objects/emitters/vert-mesh-emitter";
 import BeamEmitter from "../../objects/emitters/beam-emitter";
+import RibbonEmitter from "../../objects/emitters/ribbon-emitter";
 import type { BaseEmitter } from "../../objects/emitters/base-emitter";
 import DynamicLight, { ColorHSV } from "../../objects/dynamic-light";
 import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance, makeSwayAttribute, stepStaticMeshBatchJob, StaticMeshBatchJob_T } from "./object-batching";
@@ -143,6 +144,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
 type EmitterSpawnSound_T = IEmitterSpawnSoundDecodeInfo & { dataUri: string };
 
 class EmitterActor extends GameObject {
+    public actorUuid: string;
     public scriptClassId: string;
     public scriptProperties: Map<string, ScriptValue_T>;
     public spawnSound: EmitterSpawnSound_T = null;
@@ -165,6 +167,7 @@ class EmitterActor extends GameObject {
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        if (call.context === this && call.name.toLowerCase() === "kill") { this.kill(); return undefined; }
         const result = this.dispatchComponentEvent<ScriptValue_T>(SCRIPT_NATIVE_EVENT, call);
 
         if (result !== COMPONENT_EVENT_NOT_HANDLED) return result;
@@ -172,6 +175,15 @@ class EmitterActor extends GameObject {
         if (call.self !== this && call.self.callUnrealNative) return call.self.callUnrealNative(call);
 
         throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${call.context.scriptClassId}'.`);
+    }
+
+    public kill(): void {
+        // Engine.dll AEmitter::Kill 0x105d2990..0x105d2a23.
+        for (const emitter of this.scriptProperties.get("Emitters") as BaseEmitter[])
+            if (emitter) emitter.kill();
+
+        this.scriptProperties.set("AutoReset", false);
+        this.scriptProperties.set("AutoDestroy", true);
     }
 
     public getSpeedRate(): number {
@@ -293,6 +305,8 @@ class EmitterActor extends GameObject {
 
 function decodeEmitterObject(library: DecodeLibrary, info: IEmitterActorDecodeInfo) {
     const object = decodeSimpleObject(library, EmitterActor, info);
+
+    object.actorUuid = info.uuid;
 
     object.scriptProperties.set("Emitters", object.children.slice());
     object.scriptProperties.set("FirstSpawnParticle", false);
@@ -1209,6 +1223,13 @@ function decodeBeamEmitter(library: DecodeLibrary, info: any) {
     return emitter;
 }
 
+function decodeRibbonEmitter(library: DecodeLibrary, info: any) {
+    const material = decodeMaterial(library, { materialType: "particle", material: info.texture, opacity: info.opacity, blendingMode: info.blendingMode } as IParticleMaterialDecodeInfo) as any as ParticleMaterialInitSettings_T;
+    const emitter = new RibbonEmitter(Object.assign(decodeEmitterConfig(info), { material, ribbon: info.ribbon }));
+    applySimpleProperties(library, emitter, info);
+    return emitter;
+}
+
 function decodeFogInfo(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     const object = new FogInfoObject();
 
@@ -1249,6 +1270,7 @@ export function decodeObject3D(library: DecodeLibrary, info: IBaseObjectOrInstan
         case "MeshEmitter": return decodeMeshEmitter(library, info as IMeshEmitterDecodeInfo);
         case "VertMeshEmitter": return decodeVertMeshEmitter(library, info);
         case "BeamEmitter": return decodeBeamEmitter(library, info);
+        case "RibbonEmitter": return decodeRibbonEmitter(library, info);
         case "L2FogInfo": return decodeFogInfo(library, info as IBaseZoneDecodeInfo);
         case "Zone":
         case "Sky":

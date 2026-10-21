@@ -53,6 +53,7 @@ export type SkillEffectHost_T = {
     adjustParticleLife(actor: SkillActor_T, time: number): void;
     setParticleScale(actor: SkillActor_T, scale: number, all?: boolean): void;
     getWeaponLength(actor: SkillActor_T, left: boolean, scale?: number): number | null;
+    attachTrailer(actor: SkillActor_T, assets: import("../decode-library").DecodeLibrary, shotTime: number, numPoints: number, lifeSpanOffset: number, rightHand: boolean): void;
     setSoulShotVelocity(actor: SkillActor_T, velocity: number): void;
     setParticleDelay(actor: SkillActor_T, time: number): void;
     createDamageEffect(actor: SkillActor_T): SkillActor_T | null;

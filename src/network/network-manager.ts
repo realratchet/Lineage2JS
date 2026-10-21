@@ -1,5 +1,6 @@
 import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 import type NProjectileComponent from "../physics/components/projectile-component";
+import type AnimationComponent from "../objects/components/animation-component";
 import { LoopOnce, Raycaster, Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
 import Player from "../player";
@@ -100,7 +101,6 @@ const MYSTIC_BODY_CLASS_IDS = new Set([10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 2
 const VALIDATE_POSITION_INTERVAL = 1000;
 const STUCK_INTERVAL = 600;
 const STUCK_DISTANCE = 2;
-const SNAP_DISTANCE = 300;
 const NAMEPLATE_DISTANCE = 1000;
 const CHAT_BALLOON_TIME = 6000; // NCConsole 0x1005f070: 1 s timer, the balloon is cleared on the sixth tick.
 const STOP_SNAP_DISTANCE = 32;
@@ -120,7 +120,6 @@ const tmpEarthquakePositionAmplitude = new Vector3();
 
 function setVector(target: Vector3, location: GamePackets.Location_T): Vector3 { return target.set(location.x, location.y, location.z); }
 
-function distanceXY(a: Vector3, b: Vector3): number { return Math.hypot(a.x - b.x, a.y - b.y); }
 
 function getDistance(a: Vector3, b: Vector3): number {
     const x = Math.fround(Math.fround(a.x) - Math.fround(b.x)), y = Math.fround(Math.fround(a.y) - Math.fround(b.y)), z = Math.fround(Math.fround(a.z) - Math.fround(b.z));
@@ -1203,7 +1202,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.ObservationMode: this.onObservationMode(packet); break;
             case GamePackets.GameServerPacket_T.ObservationReturn: this.onObservationReturn(packet); break;
             case GamePackets.GameServerPacket_T.RadarControl: this.onRadarControl(packet); break;
-            case GamePackets.GameServerPacket_T.ShowTownMap: this.townMap = GamePackets.readTownMap(packet); break;
+            case GamePackets.GameServerPacket_T.ShowTownMap: this.townMap = GamePackets.readTownMap(packet); this.ui.showTownMap(this.townMap); break;
             case GamePackets.GameServerPacket_T.ShowCalculator: this.calculatorId = packet.d(); break;
             case GamePackets.GameServerPacket_T.ShowXMasSeal: this.xmasSealItemId = packet.d(); break;
             case GamePackets.GameServerPacket_T.Dice:
@@ -1452,6 +1451,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected async enterWorld(entry: GamePackets.Appearance_T) {
         const render = this.manGame.getComponent("render");
         const asset = this.manGame.getComponent("asset");
+        const physics = this.manGame.getComponent("physics");
         const generation = this.teleportGeneration;
         const [x, y] = render.getSectorId(render.player.position);
 
@@ -1472,6 +1472,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (generation !== this.teleportGeneration) return;
 
         render.player.setUnrealScriptProperty("Level", level.levelInfoActor as any);
+        physics.setPawnZone(render.player, false, true);
+        physics.setPawnVolumes(render.player);
         this.userAppearanceLoad = null;
         if (this.game.isPlayingReplay()) this.skillListLoad = this.resolveSkillList = null;
         else this.skillListLoad = new Promise(resolve => this.resolveSkillList = resolve);
@@ -2557,8 +2559,11 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const file = new L2ReplayFile(bytes), scene = file.getScene(), first = file.arrPackets[0];
 
         file.setScene(scene);
-        // shortcut: ordinary mouse follow-camera recordings; extend after alternate controls are traced.
-        if (scene.cameraMode || scene.firstPerson || scene.observerMode || scene.fixedCamera || scene.zoom !== scene.desiredZoom || scene.zoom + 250 <= 0) throw new Error(`Replay camera mode is not implemented.`);
+        // shortcut: follow-camera presets; extend after first-person/observer initialization is traced.
+        if (scene.cameraMode || scene.firstPerson || scene.observerMode || scene.zoom !== scene.desiredZoom || scene.zoom + 250 <= 0) throw new Error(`Replay camera mode is not implemented.`);
+        const presetCount = this.manGame.getComponent("asset").playerController.scriptProperties.get("FixedDefaultViewNum") as number;
+
+        if (scene.fixedCamera < 0 || scene.fixedCamera >= Math.max(1, presetCount)) throw new Error(`Invalid replay camera preset '${scene.fixedCamera}'.`);
         if (!first || first.opcode !== GamePackets.GameServerPacket_T.UserInfo || first.time !== 0) throw new Error(`Replay requires an initial UserInfo snapshot.`);
         if (lockCamera) {
             for (const { key, action, amount } of file.arrCameraInstructions) {
@@ -2567,6 +2572,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     continue;
                 }
                 if ((key === 2 || key === 236 || key === 237) && (action === 1 || action === 3)) continue;
+                if ((key === 33 || key === 34 || key === 36) && (action === 1 || action === 2 || action === 3)) continue;
                 throw new Error(`Replay camera key/action '${key}/${action}' is not implemented.`);
             }
         }
@@ -3370,7 +3376,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.adjustPawnLocation(object, object.position);
 
-        object.actor.goTo(destination);
+        if (object.kind === "user") object.actor.goTo(destination);
+        else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveTo(object.position, destination);
     }
 
     protected async onMoveToPawn(packet: PacketReader) {
@@ -3412,7 +3419,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         object.destination = null;
         object.pendingFly = null;
         object.pendingVehicleMove = null;
-        object.actor.goToActor(target.actor, Math.max(5, distance - Math.abs(destination.z - position.z)) - 5); // L2Character.moveToLocation: offset shrinks by |dz|, stops at offset - 5.
+        const offset = Math.fround(distance);
+
+        if (object.kind === "user") object.actor.goToActor(target.actor, offset);
+        else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveToward(object.position, target.actor, offset);
     }
 
     protected onStopMove(packet: PacketReader) {
@@ -3454,11 +3464,6 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (actor === this.manGame.getComponent("render").player) {
             actor.l2Teleport(object.position);
             actor.setRotationYaw(object.heading);
-            return;
-        }
-
-        if (actor.isLocomoting()) {
-            if (!actor.visible || distanceXY(actor.position, object.position) > SNAP_DISTANCE) actor.teleportTo(object.position, true);
             return;
         }
 
@@ -4052,6 +4057,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         effect.position.copy(actor.position);
         render.addTransientEffect(effect, actor);
+
+        const mesh = actor.getComponent<AnimationComponent>("animation").getMeshes()[0];
+
+        if (mesh) effect.scriptProperties.get("TrailerPrePivot")[2] = -mesh.meshOrigin.z;
 
         // Engine.dll SpawnNTransientEffect 0x79a7e1..0x79a8ee: level1 spell sounds at Pawn.Location.
         for (const sound of this.ui.getStrings().socialSounds[skillId] || []) {
@@ -5014,6 +5023,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         rider.rotation.set(0, 0, -Math.PI / 2);
 
         mount.copyMovement(rider);
+        mount.setUnrealScriptProperty("bHidden", rider.getUnrealScriptProperty("bHidden"));
         rider.stopMoving();
         physics.removePawn(rider);
         rider.setUnrealScriptProperty("bRide", true);

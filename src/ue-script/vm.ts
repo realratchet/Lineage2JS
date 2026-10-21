@@ -1,7 +1,8 @@
 import UNativeRegistry from "./native-registry";
-import { CastToken_T, ExprToken_T } from "@l2js/core";
+import { CastToken_T, ExprToken_T, EStateFlags_T } from "@l2js/core";
+import { ENetRole_T } from "../assets/unreal/un-aactor";
 import type { DecodeLibrary } from "@l2js/engine";
-import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo } from "@l2js/engine/contracts/script";
+import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo, IScriptStateDecodeInfo } from "@l2js/engine/contracts/script";
 
 export type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
 export type ScriptProperties_T = Map<string, ScriptValue_T> | Record<string, ScriptValue_T>;
@@ -16,6 +17,7 @@ export type ScriptNativeCall_T = {
 
 export type ScriptHost_T = {
     scriptClassId: string,
+    isLevelActor?: boolean,
     scriptProperties?: ScriptProperties_T,
     getUnrealScriptProperty?(id: string): ScriptValue_T,
     setUnrealScriptProperty?(id: string, value: ScriptValue_T): void,
@@ -32,7 +34,7 @@ export type ScriptSlot_T = {
 export type ScriptArgument_T = ScriptValue_T | ScriptSlot_T;
 
 export type ScriptFrame_T = {
-    fn: IScriptFunctionDecodeInfo,
+    fn: IScriptFunctionDecodeInfo | IScriptStateDecodeInfo,
     self: ScriptHost_T,
     context: ScriptHost_T,
     locals: Map<string, ScriptArgument_T>,
@@ -47,6 +49,57 @@ const CPF_ReturnParm = 0x00000400;
 const FUNC_Native = 0x00000400;
 const assignmentNatives = new Set([133, 134, 135, 136, 137, 138, 139, 140, 159, 160, 161, 162, 163, 164, 165, 166, 182, 183, 184, 185, 221, 222, 223, 224, 290, 291, 297, 318, 319]);
 const postAssignmentNatives = new Set([139, 140, 165, 166]);
+
+enum EPollSlowFuncs {
+    EPOLL_Sleep = 384
+}
+
+type StateFrame_T = { node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
+
+export type ScriptLevelActors_T = { getFirstDynamicActor(): number, getLevelActorCount(): number, getLevelActor(index: number): ScriptHost_T | null, addLevelActor(actor: ScriptHost_T): void, removeLevelActor(actor: ScriptHost_T): void };
+
+const cacheLevelActors = new WeakMap<ScriptHost_T, ScriptLevelActors_T>();
+const cacheActorLevels = new WeakMap<ScriptHost_T, ScriptLevelActors_T | null>();
+
+export function setLevelActors(level: ScriptHost_T, actors: ScriptLevelActors_T): void { cacheLevelActors.set(level, actors); }
+export function deleteLevelActors(level: ScriptHost_T): void { cacheLevelActors.delete(level); }
+export function getLevelActors(actor: ScriptHost_T): ScriptLevelActors_T {
+    const level = getProperty(actor, "Level") as ScriptHost_T, actors = level && typeof level === "object" ? cacheLevelActors.get(level) : null;
+
+    if (!actors) throw new Error(`UnrealScript actor '${actor.scriptClassId}' has no registered level actor list`);
+    return actors;
+}
+
+export function registerLevelActor(actor: ScriptHost_T): void {
+    if (actor.isLevelActor === false || cacheActorLevels.get(actor) || !getProperty(actor, "Level")) return;
+    const actors = getLevelActors(actor);
+
+    actors.addLevelActor(actor);
+    cacheActorLevels.set(actor, actors);
+}
+
+export function updateLevelActor(actor: ScriptHost_T): void {
+    if (actor.isLevelActor === false) return;
+    if (!cacheActorLevels.has(actor)) { registerLevelActor(actor); return; }
+    const previous = cacheActorLevels.get(actor), next = getProperty(actor, "Level") ? getLevelActors(actor) : null;
+
+    if (next === previous) return;
+    if (previous) previous.removeLevelActor(actor);
+    if (next) next.addLevelActor(actor);
+    cacheActorLevels.set(actor, next);
+}
+
+export function unregisterLevelActor(actor: ScriptHost_T): void {
+    const actors = cacheActorLevels.get(actor);
+
+    if (actors) actors.removeLevelActor(actor);
+    cacheActorLevels.delete(actor);
+}
+
+const cacheStateFrames = new WeakMap<ScriptHost_T, StateFrame_T>();
+// Core.dll FName indices 300..363; execEnable 0x101412f0, execDisable 0x10141420.
+const arrProbeNames = ["Spawned", "Destroyed", "GainedChild", "LostChild", "Probe4", "Probe5", "Trigger", "UnTrigger", "Timer", "HitWall", "Falling", "Landed", "PhysicsVolumeChange", "Touch", "UnTouch", "Bump", "BeginState", "EndState", "BaseChange", "Attach", "Detach", "ActorEntered", "ActorLeaving", "ZoneChange", "AnimEnd", "EndedRotation", "InterpolateEnd", "EncroachingOn", "EncroachedBy", "NotifyTurningInPlace", "HeadVolumeChange", "PostTouch", "PawnEnteredVolume", "MayFall", "CheckDirectionChange", "PawnLeavingVolume", "Tick", "PlayerTick", "ModifyVelocity", "CheckMovementTransition", "SeePlayer", "EnemyNotVisible", "HearNoise", "UpdateEyeHeight", "SeeMonster", "SeeFriend", "SpecialHandling", "BotDesireability", "NotifyBump", "NotifyPhysicsVolumeChange", "AIHearSound", "NotifyHeadVolumeChange", "NotifyLanded", "NotifyHitWall", "PostNetReceive", "PreBeginPlay", "BeginPlay", "PostBeginPlay", "Probe58", "PhysicsChangedFor", "ActorEnteredVolume", "ActorLeavingVolume", "PrepareForMove", "All"];
+const cacheProbeMasks = new Map(arrProbeNames.map((name, index) => [name.toLowerCase(), 1n << BigInt(index)]));
 
 function getFieldName(id: string): string {
     const index = id.lastIndexOf(".");
@@ -247,10 +300,11 @@ class ScriptExecutor {
     protected pc: number = 0;
     protected steps: number = 0;
 
-    public constructor(vm: UnScriptVM, frame: ScriptFrame_T) {
+    public constructor(vm: UnScriptVM, frame: ScriptFrame_T, entryIndex: number = 0) {
         this.vm = vm;
         this.frame = frame;
         this.entries = frame.fn.program.entries;
+        this.pc = entryIndex;
     }
 
     protected next(): IScriptBytecodeEntryDecodeInfo {
@@ -400,11 +454,12 @@ class ScriptExecutor {
         let fn: IScriptFunctionDecodeInfo;
         const context = this.frame.context;
         const script = opcode === ExprToken_T.VirtualFunction && context !== this.frame.self && typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
-        const vm = script ? script.getVM() as UnScriptVM : this.vm;
+        const runtime = opcode === ExprToken_T.FinalFunction ? null : cacheStateFrames.get(opcode === ExprToken_T.GlobalFunction ? this.frame.self : context)?.vm;
+        const vm = runtime || (script ? script.getVM() as UnScriptVM : this.vm);
         const name = this.next().value as string;
 
         if (opcode === ExprToken_T.FinalFunction) fn = this.vm.getFunction(name);
-        else fn = vm.findFunction(opcode === ExprToken_T.GlobalFunction ? this.frame.self.scriptClassId : context.scriptClassId, name);
+        else fn = vm.findFunction(opcode === ExprToken_T.GlobalFunction ? this.frame.self.scriptClassId : context, name);
 
         let args: ScriptArgument_T[];
 
@@ -424,6 +479,8 @@ class ScriptExecutor {
     protected evalNative(entry: IScriptBytecodeEntryDecodeInfo): ScriptValue_T {
         const index = entry.value as number;
 
+        if (index === 304 || index === 307 || index === 313) return this.evalActorIterator(index);
+
         if (assignmentNatives.has(index)) {
             const slot = this.evalLValue();
             const previous = slot.get();
@@ -437,6 +494,76 @@ class ScriptExecutor {
         const args = this.readArguments();
 
         return this.vm.invokeNative(this.frame.self, this.frame.context, index, entry.tokenName || `Native${index}`, args);
+    }
+
+    protected evalActorIterator(nativeIndex: number): ScriptValue_T {
+        const context = this.frame.context;
+
+        this.frame.context = this.frame.self;
+
+        try {
+            const baseClass = this.evalToken() as string || "engine.Actor", slot = this.evalLValue();
+            const matchTag = nativeIndex !== 307 && this.entries[this.pc].value !== ExprToken_T.EndFunctionParms ? this.evalToken() as string : null, end = this.next();
+
+            if (end.type !== "token" || end.value !== ExprToken_T.EndFunctionParms) throw new Error(`UnrealScript '${this.frame.fn.id}' expected actor iterator parameters to end`);
+            if (this.entries[this.pc].value === ExprToken_T.DebugInfo) this.evalToken();
+
+            const target = this.readOffset(), start = this.pc, pop = this.entries[target.entryIndex];
+
+            if (!pop || pop.type !== "token" || pop.value !== ExprToken_T.IteratorPop) throw new Error(`UnrealScript '${this.frame.fn.id}' has no IteratorPop at '${target.virtualOffset}'`);
+            if (!this.vm.getLibrary().scriptClasses[baseClass]) throw new Error(`UnrealScript iterator class '${baseClass}' is not in the decode library`);
+
+            let index = nativeIndex === 313 ? getLevelActors(context).getFirstDynamicActor() : 0;
+
+            while (true) {
+                slot.set(null);
+
+                while (true) {
+                    let actor: ScriptHost_T;
+
+                    if (nativeIndex !== 307) {
+                        const level = getLevelActors(context);
+
+                        if (index >= level.getLevelActorCount()) break;
+                        actor = level.getLevelActor(index++);
+                    } else {
+                        const touching = getProperty(context, "Touching") as ScriptHost_T[];
+
+                        if (!Array.isArray(touching)) throw new Error(`UnrealScript TouchingActors requires a Touching array for '${context.scriptClassId}'`);
+                        if (index >= touching.length) break;
+                        actor = touching[index++];
+                    }
+
+                    if (!actor) continue;
+
+                    const script = typeof (actor as any).findComponent === "function" ? (actor as any).findComponent("script") : null;
+                    const vm = cacheStateFrames.get(actor)?.vm || (script ? script.getVM() as UnScriptVM : this.vm);
+                    let classId = actor.scriptClassId;
+
+                    while (classId && classId !== baseClass) {
+                        const cls = vm.getLibrary().scriptClasses[classId];
+
+                        if (!cls) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
+                        classId = cls.superClassId;
+                    }
+
+                    if (classId && (!matchTag || matchTag.toLowerCase() === "none" || (getProperty(actor, "Tag") as string || "None").toLowerCase() === matchTag.toLowerCase())) { slot.set(actor); break; }
+                }
+
+                if (slot.get() === null) { this.pc = target.entryIndex + 1; return undefined; }
+
+                while (true) {
+                    const entry = this.entries[this.pc];
+
+                    if (!entry) throw new Error(`UnrealScript '${this.frame.fn.id}' read past its iterator body`);
+                    if (entry.type === "token" && entry.value === ExprToken_T.IteratorPop) { this.pc++; return undefined; }
+                    if (entry.type === "token" && entry.value === ExprToken_T.IteratorNext) { this.pc = start; break; }
+                    this.evalToken();
+                }
+            }
+        } finally {
+            this.frame.context = context;
+        }
     }
 
     protected readArguments(fn: IScriptFunctionDecodeInfo = null): ScriptArgument_T[] {
@@ -553,8 +680,14 @@ class ScriptExecutor {
             case ExprToken_T.Stop:
                 this.frame.stopped = true;
                 return undefined;
+            case ExprToken_T.Iterator:
             case ExprToken_T.Nothing: return undefined;
-            case ExprToken_T.GotoLabel: return this.vm.gotoLabel(this.frame.context, this.evalToken() as string);
+            case ExprToken_T.GotoLabel: {
+                const label = this.evalToken() as string;
+
+                if (!this.vm.gotoLabel(this.frame.context, label)) throw new Error(`UnrealScript '${this.frame.fn.id}' has no label '${label}'`);
+                return undefined;
+            }
             case ExprToken_T.EatString:
                 this.evalToken();
                 return undefined;
@@ -632,10 +765,26 @@ class ScriptExecutor {
 
         return this.frame.returnValue;
     }
+
+    public step(): void { this.steps = 0; this.evalToken(); }
+    public hasFinished(): boolean { return this.frame.didReturn || this.frame.stopped || this.pc >= this.entries.length; }
+
+    public rebind(vm: UnScriptVM): ScriptExecutor {
+        if (this.hasFinished()) return null;
+
+        const library = vm.getLibrary(), node = library.scriptStates[this.frame.fn.id] || library.scriptClasses[this.frame.fn.id];
+
+        if (!node) throw new Error(`UnrealScript state '${this.frame.fn.id}' is not in the replacement decode library`);
+        const offset = this.entries[this.pc].virtualOffset, index = node.program.entries.findIndex(entry => entry.virtualOffset === offset);
+
+        if (index < 0) throw new Error(`UnrealScript state '${node.id}' has no replacement cursor at '${offset}'`);
+        return new ScriptExecutor(vm, { ...this.frame, fn: node }, index);
+    }
 }
 
 export class UnScriptVM {
     protected readonly library: DecodeLibrary;
+    protected levelInfo: ScriptHost_T = null;
     protected readonly functionsById = new Map<string, IScriptFunctionDecodeInfo>();
     protected readonly functionsByClass = new Map<string, Map<string, IScriptFunctionDecodeInfo>>();
 
@@ -643,6 +792,10 @@ export class UnScriptVM {
         this.library = library;
         this.loadFunctions();
     }
+
+    public getLibrary(): DecodeLibrary { return this.library; }
+    public getLevelInfo(): ScriptHost_T { return this.levelInfo; }
+    public setLevelInfo(level: ScriptHost_T): void { this.levelInfo = level; }
 
     public loadFunctions(): void {
         for (const fn of Object.values(this.library.scriptFunctions)) {
@@ -669,6 +822,9 @@ export class UnScriptVM {
         let cls = this.library.scriptClasses[host.scriptClassId];
 
         if (!cls) throw new Error(`UnrealScript class '${host.scriptClassId}' is not in the decode library`);
+
+        cacheStateFrames.set(host, { node: cls, cls, vm: this, probeMask: 0xffffffffffffffffn, execution: null, latentAction: 0, isEndingState: false, stateChanged: false, hasTick: false });
+        this.updateStateTick(host);
 
         while (cls) {
             classes.push(cls);
@@ -736,8 +892,26 @@ export class UnScriptVM {
         cacheLayouts.set(layout, recorded);
     }
 
-    protected findFunctionOptional(classId: string, name: string): IScriptFunctionDecodeInfo | null {
+    protected findFunctionOptional(classId: string | ScriptHost_T, name: string): IScriptFunctionDecodeInfo | null {
         const lowerName = name.toLowerCase();
+        if (typeof classId !== "string") {
+            const frame = cacheStateFrames.get(classId);
+
+            if (!frame) return this.findFunctionOptional(classId.scriptClassId, name);
+            if (frame.node !== frame.cls) {
+                let node = frame.node;
+
+                while (node) {
+                    const fn = frame.vm.functionsByClass.get(node.id)?.get(lowerName);
+
+                    if (fn) return fn;
+                    node = this.getStateParent(frame, node);
+                }
+            }
+
+            return frame.vm.findFunctionOptional(frame.cls.id, name);
+        }
+
         let cls = this.library.scriptClasses[classId];
 
         while (cls) {
@@ -752,16 +926,16 @@ export class UnScriptVM {
         return null;
     }
 
-    public findFunction(classId: string, name: string): IScriptFunctionDecodeInfo {
+    public findFunction(classId: string | ScriptHost_T, name: string): IScriptFunctionDecodeInfo {
         const fn = this.findFunctionOptional(classId, name);
 
         if (!fn)
-            throw new Error(`UnrealScript function '${classId}.${name}' is not in the decode library`);
+            throw new Error(`UnrealScript function '${typeof classId === "string" ? classId : classId.scriptClassId}.${name}' is not in the decode library`);
 
         return fn;
     }
 
-    public hasScriptFunction(classId: string, name: string): boolean {
+    public hasScriptFunction(classId: string | ScriptHost_T, name: string): boolean {
         const fn = this.findFunctionOptional(classId, name);
 
         return !!fn && fn.nativeIndex === 0 && !(fn.flags & FUNC_Native);
@@ -773,18 +947,217 @@ export class UnScriptVM {
         return typeof resolver === "function" ? resolver.call(context, id) : id;
     }
 
-    public gotoLabel(context: ScriptHost_T, name: string): ScriptValue_T {
-        const gotoLabel = (context as any).gotoUnrealLabel;
+    protected getStateParent(frame: StateFrame_T, node: IScriptStateDecodeInfo): IScriptStateDecodeInfo {
+        if (!node.superStateId) return null;
 
-        if (typeof gotoLabel !== "function")
-            throw new Error(`UnrealScript host '${context.scriptClassId}' cannot goto label '${name}'`);
+        const parent = frame.vm.library.scriptStates[node.superStateId] || frame.vm.library.scriptClasses[node.superStateId];
 
-        return gotoLabel.call(context, name);
+        if (!parent) throw new Error(`UnrealScript state '${node.superStateId}' is not in the decode library`);
+        return parent;
+    }
+
+    protected updateStateTick(context: ScriptHost_T): void {
+        const frame = cacheStateFrames.get(context), fn = frame.vm.findFunctionOptional(context, "Tick");
+
+        frame.hasTick = !!fn && fn.nativeIndex === 0 && !(fn.flags & FUNC_Native) && fn.program.entries.length > 2;
+    }
+
+    public hasTickFunction(context: ScriptHost_T): boolean { return cacheStateFrames.get(context)?.hasTick ?? false; }
+
+    public bindHost(context: ScriptHost_T): void {
+        const frame = cacheStateFrames.get(context), cls = this.library.scriptClasses[context.scriptClassId];
+
+        if (!frame || !cls) throw new Error(`UnrealScript runtime replacement requires an initialized class '${context.scriptClassId}'`);
+        const node = frame.node === frame.cls ? cls : this.library.scriptStates[frame.node.id] || this.library.scriptClasses[frame.node.id];
+
+        if (!node) throw new Error(`UnrealScript state '${frame.node.id}' is not in the replacement decode library`);
+        const execution = frame.execution ? frame.execution.rebind(this) : null;
+
+        frame.vm = this;
+        frame.cls = cls;
+        frame.node = node;
+        frame.execution = execution;
+        this.updateStateTick(context);
+    }
+
+    public gotoState(context: ScriptHost_T, name: string): number {
+        const frame = cacheStateFrames.get(context);
+
+        if (!frame) return 0;
+
+        const previous = frame.node !== frame.cls ? frame.node.name.toLowerCase() : "none", requested = name.toLowerCase();
+        let node: IScriptStateDecodeInfo = null, cls = frame.cls;
+
+        frame.latentAction = 0;
+        while (cls && !node && requested !== "none") {
+            for (const id of cls.stateIds) {
+                const state = frame.vm.library.scriptStates[id];
+
+                if (!state) throw new Error(`UnrealScript state '${id}' is not in the decode library`);
+                if (requested === "auto" ? state.flags & EStateFlags_T.STATE_Auto : state.name.toLowerCase() === requested) { node = state; break; }
+            }
+            cls = cls.superClassId ? frame.vm.library.scriptClasses[cls.superClassId] : null;
+        }
+
+        const target = node ? node.name.toLowerCase() : "none";
+
+        if (previous !== "none" && previous !== target && !frame.isEndingState && this.isProbing(context, "EndState")) {
+            frame.stateChanged = false;
+            frame.isEndingState = true;
+            frame.vm.call(context, "EndState");
+            frame.isEndingState = false;
+            if (frame.stateChanged) return 2;
+        }
+
+        frame.node = node || frame.cls;
+        frame.execution = null;
+        frame.probeMask = (frame.node.probeMask | frame.cls.probeMask) & frame.node.ignoreMask;
+        this.updateStateTick(context);
+        if (target === "none") return 0;
+
+        if (previous !== target && this.isProbing(context, "BeginState")) {
+            frame.stateChanged = false;
+            frame.vm.call(context, "BeginState");
+            if (frame.stateChanged) return 2;
+        }
+
+        frame.stateChanged = true;
+        return 1;
+    }
+
+    public gotoLabel(context: ScriptHost_T, name: string): boolean {
+        const frame = cacheStateFrames.get(context);
+
+        if (!frame) return false;
+
+        frame.latentAction = 0;
+        frame.execution = null;
+        if (name.toLowerCase() === "none") return false;
+
+        let node = frame.node;
+
+        while (node) {
+            if (node.labelTableVirtualOffset !== 65535) {
+                const entries = node.program.entries;
+                let index = entries.findIndex(entry => entry.virtualOffset === node.labelTableVirtualOffset && entry.type === "label");
+
+                if (index < 0) throw new Error(`UnrealScript state '${node.id}' has no label table at '${node.labelTableVirtualOffset}'`);
+                for (; index < entries.length; index++) {
+                    const label = entries[index].value as any;
+
+                    if (entries[index].type !== "label") throw new Error(`Invalid label table in UnrealScript state '${node.id}'`);
+                    if (label.name.toLowerCase() === "none") break;
+                    if (label.name.toLowerCase() !== name.toLowerCase()) continue;
+                    if (label.entryIndex < 0 || entries[label.entryIndex]?.virtualOffset !== label.virtualOffset) throw new Error(`Invalid label '${label.name}' in UnrealScript state '${node.id}'`);
+
+                    frame.execution = new ScriptExecutor(frame.vm, { fn: node, self: context, context, locals: new Map(), returnValue: undefined, didReturn: false, stopped: false }, label.entryIndex);
+                    return true;
+                }
+            }
+            node = this.getStateParent(frame, node);
+        }
+
+        return false;
+    }
+
+    public processState(context: ScriptHost_T, deltaTime: number): void {
+        const frame = cacheStateFrames.get(context), role = getProperty(context, "Role") as number;
+
+        if (!frame || role == null || role < ENetRole_T.ROLE_Authority && !(frame.node.flags & EStateFlags_T.STATE_Simulated) || getProperty(context, "bDeleteMe")) return;
+
+        if (frame.latentAction) {
+            if (frame.latentAction !== EPollSlowFuncs.EPOLL_Sleep) { debugger; throw new Error(`Unimplemented latent action '${frame.latentAction}' for '${context.scriptClassId}'`); }
+            const delta = Math.fround(deltaTime), remaining = Math.fround(getProperty(context, "LatentFloat") as number) - delta;
+
+            setProperty(context, "LatentFloat", Math.fround(remaining));
+            if (remaining < delta * 0.5) frame.latentAction = 0;
+        }
+
+        let node = frame.node, changes = 0, steps = 0;
+
+        while (frame.execution && !frame.latentAction && !getProperty(context, "bDeleteMe")) {
+            if (++steps > 1000000) throw new Error(`UnrealScript state '${frame.node.id}' exceeded its runaway limit`);
+            const execution = frame.execution;
+
+            execution.step();
+            if (frame.execution === execution && execution.hasFinished()) frame.execution = null;
+            if (frame.node.id !== node.id) {
+                node = frame.node;
+                if (++changes > 4) break;
+            }
+        }
     }
 
     public invokeNative(self: ScriptHost_T, context: ScriptHost_T, index: number, name: string, args: ScriptArgument_T[]): ScriptValue_T {
         if (context.handlesUnrealNative && context.handlesUnrealNative(index, name))
             return context.callUnrealNative!({ index, name, args, self, context });
+
+        if (index === 113) {
+            const frame = cacheStateFrames.get(context), previous = frame && frame.node !== frame.cls ? frame.node.name : "None", requested = args[0] == null ? previous : args[0] as string, label = args[1] == null || (args[1] as string).toLowerCase() === "none" ? "Begin" : args[1] as string;
+            const result = requested.toLowerCase() === previous.toLowerCase() ? 1 : this.gotoState(context, requested);
+
+            if (result === 1) {
+                if (!this.gotoLabel(context, label) && args[1] != null && (args[1] as string).toLowerCase() !== "none") throw new Error(`UnrealScript state '${requested}' has no label '${label}'`);
+            } else if (result === 0 && requested.toLowerCase() !== "none" && requested.toLowerCase() !== "auto") throw new Error(`UnrealScript state '${requested}' does not exist for '${context.scriptClassId}'`);
+            return undefined;
+        }
+
+        if (index === 256) {
+            const frame = cacheStateFrames.get(context);
+
+            if (!frame) throw new Error(`UnrealScript Sleep requires an initialized state frame for '${context.scriptClassId}'`);
+            frame.latentAction = EPollSlowFuncs.EPOLL_Sleep;
+            setProperty(context, "LatentFloat", Math.fround(args[0] as number));
+            return undefined;
+        }
+
+        if (index === 117 || index === 118) {
+            const probe = args[0] as string, mask = typeof probe === "string" ? cacheProbeMasks.get(probe.toLowerCase()) : undefined;
+            const frame = cacheStateFrames.get(context);
+
+            if (mask === undefined || !frame) throw new Error(`UnrealScript '${name}' requires a probe function and an initialized state frame for '${context.scriptClassId}'.`);
+
+            if (index === 117) frame.probeMask |= (frame.node.probeMask | frame.cls.probeMask) & frame.node.ignoreMask & mask;
+            else frame.probeMask &= ~mask;
+            return undefined;
+        }
+
+        if (index === 281) {
+            const frame = cacheStateFrames.get(context), name = (args[0] as string).toLowerCase();
+            let node = frame ? frame.node : null;
+
+            while (node) {
+                if (node.name.toLowerCase() === name) return true;
+
+                node = this.getStateParent(frame, node);
+            }
+
+            return false;
+        }
+
+        if (index === 284) {
+            const frame = cacheStateFrames.get(context);
+
+            return frame && frame.node ? frame.node.name : "None";
+        }
+
+        if (name.toLowerCase() === "dynamicloadobject" && typeof args[1] === "string" && args[1].toLowerCase() === "engine.sound") {
+            const path = args[0] as string;
+
+            if (!(path in this.library.sounds)) throw new Error(`Script sound '${path}' has not been decoded.`);
+            return this.library.sounds[path] === null ? null : path;
+        }
+
+        if (index === 280) {
+            const rate = Math.fround(args[0] as number);
+
+            if (!Number.isFinite(rate)) throw new Error(`Invalid timer rate for '${context.scriptClassId}'.`);
+
+            setProperty(context, "TimerRate", rate);
+            setProperty(context, "TimerCounter", 0);
+            setProperty(context, "bTimerLoop", !!args[1]);
+            return undefined;
+        }
 
         if (index === 303) {
             const className = (args[0] as string).toLowerCase();
@@ -833,8 +1206,19 @@ export class UnScriptVM {
         return new ScriptExecutor(this, frame).run();
     }
 
+    public isProbing(context: ScriptHost_T, name: string): boolean {
+        const mask = cacheProbeMasks.get(name.toLowerCase()), frame = cacheStateFrames.get(context);
+
+        return mask === undefined || !frame || (frame.probeMask & mask) !== 0n;
+    }
+
     public call(context: ScriptHost_T, name: string, args: ScriptValue_T[] = []): ScriptValue_T {
-        return this.invoke(context, this.findFunction(context.scriptClassId, name), args);
+        const vm = cacheStateFrames.get(context)?.vm || this;
+        const fn = vm.findFunction(context, name);
+
+        if (!vm.isProbing(context, name)) return undefined;
+
+        return vm.invoke(context, fn, args);
     }
 }
 

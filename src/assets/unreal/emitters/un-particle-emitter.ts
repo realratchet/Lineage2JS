@@ -57,7 +57,7 @@ export type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
 export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 
 export type EmitterConfig_T = {
-    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter" | "VertMeshEmitter",
+    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter" | "VertMeshEmitter" | "RibbonEmitter",
     name?: string,
     scriptClassId?: string,
     blendingMode: ParticleBlendModes_T,

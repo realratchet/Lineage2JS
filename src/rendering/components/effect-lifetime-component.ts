@@ -27,6 +27,9 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
     public onPhysicsTick(currentTime: number, deltaTime: number, _actors: BaseActor[]): boolean {
         const effect = this.getParent();
 
+        effect.updateComponents(currentTime, deltaTime * 0.001);
+        if (!effect.parent) return true;
+
         const properties = (effect as any).scriptProperties;
         const lifeSpan = properties?.get("LifeSpan");
         let root: THREE.Object3D = effect;
@@ -43,9 +46,6 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
                 return true;
             }
         }
-
-        effect.updateComponents(currentTime, deltaTime * 0.001);
-        if (!effect.parent) return true;
 
         if (properties?.get("Physics") === EPhysics_T.PHYS_Trailer) {
             const owner = (effect as any).scriptOwner as THREE.Object3D;

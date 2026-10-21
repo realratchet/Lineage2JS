@@ -9,6 +9,7 @@ import buildCollisionModel from "../physics/collision-model";
 import type { ScriptValue_T, default as UnScriptVM } from "../ue-script/vm";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 import Volume from "./volume";
+import { releaseTouching } from "./components/transform-component";
 
 const tmpPosition = new Vector3();
 const tmpQuaternion = new Quaternion();
@@ -88,8 +89,7 @@ export class BSPCollider extends GameObject implements ICollidable {
     }
 
     public releaseCollider() {
-        if (this.scriptActor) this.scriptActor.release();
-        this.scriptActor = null;
+        if (this.scriptActor) releaseTouching(this.scriptActor);
         this.colliders.length = 0;
         this.rigidbody = null;
     }

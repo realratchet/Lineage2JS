@@ -205,6 +205,11 @@ function copyScriptClass(target: DecodeLibrary, source: DecodeLibrary, classId: 
 
         target.scriptStates[id] = state;
 
+        if (state.superStateId) {
+            if (state.superStateId in source.scriptClasses) copyClass(state.superStateId);
+            else copyState(state.superStateId);
+        }
+
         for (const functionId of state.functionIds) copyFunction(functionId);
     }
 
@@ -846,7 +851,7 @@ export class DecodeEngine {
 
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Sound"));
         const lowerName = objectName.toLowerCase();
-        const entry = pkg.exportGroups.Sound.find(entry => (entry.export.objectName as string).toLowerCase() === lowerName);
+        const entry = pkg.exportGroups.Sound.find(entry => objectName.includes(".") ? pkg.getObjectPath(entry.export).toLowerCase() === key : (entry.export.objectName as string).toLowerCase() === lowerName);
 
         if (!entry) {
             if (!required) return null;
@@ -976,12 +981,13 @@ export class DecodeEngine {
             info.scriptProperties.Skins = row.wpn_tex.slice();
         }
 
-        if (info.drawType === "mesh") await this.pullScriptMeshAssets(library, builder, cls.name, info.scriptProperties);
+        await this.pullScriptAssets(library, builder, cls.name, info.scriptProperties);
     }
 
-    protected async pullScriptMeshAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>, animations = false): Promise<void> {
+    protected async pullScriptAssets(library: DecodeLibrary, builder: DecodeLibraryBuilder, classId: string, properties: Record<string, any>, animations = false): Promise<void> {
         const meshes = new Set<string>();
         const materials = new Set<string>();
+        const sounds = new Set<string>();
 
         if (properties.Mesh && properties.Mesh.toLowerCase() !== "none") meshes.add(properties.Mesh);
         for (const skin of properties.Skins || [])
@@ -1002,6 +1008,7 @@ export class DecodeEngine {
 
                     if (type === "engine.skeletalmesh") meshes.add(path);
                     else if (type === "engine.texture" || type === "engine.material") materials.add(path);
+                    else if (type === "engine.sound") sounds.add(path);
                 }
             }
 
@@ -1009,6 +1016,12 @@ export class DecodeEngine {
             if (!library.scriptMeshes[path.toLowerCase()]) library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), animations);
         for (const path of materials)
             if (!library.scriptMaterials[path.toLowerCase()]) library.scriptMaterials[path.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
+        if (builder.getSettings().loadAudio !== false)
+            for (const path of sounds)
+                if (!(path in library.sounds)) {
+                    library.sounds[path] = await this.pullSoundPath(builder, path, false);
+                    if (library.sounds[path] === null) console.warn(`[decode] Script sound '${path}' does not exist.`);
+                }
     }
 
     protected async pullSectorScriptAssets(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
@@ -1527,6 +1540,7 @@ export class DecodeEngine {
 
         library.name = "PassengerShip";
         builder.pullScriptClasses([cls]);
+        await this.pullScriptAssets(library, builder, cls.name, {});
 
         for (const name of ["StaticMesh", "StaticVehicleMast"]) {
             let path: string;
@@ -2366,7 +2380,7 @@ export class DecodeEngine {
                 if (!pkgMesh.exportGroups.SkeletalMesh.some(entry => (entry.export.objectName as string).toLowerCase() === meshName.toLowerCase())) continue;
                 if (!pkgTexture.exports.some(entry => textureName.includes(".") ? pkgTexture.getObjectPath(entry).toLowerCase() === texture.toLowerCase() : (entry.objectName as string).toLowerCase() === textureName.toLowerCase())) continue;
 
-                await this.pullScriptMeshAssets(library, builder, null, { Mesh: mesh, Skins: [texture] });
+                await this.pullScriptAssets(library, builder, null, { Mesh: mesh, Skins: [texture] });
             }
         }
 
@@ -2772,7 +2786,7 @@ export class DecodeEngine {
             for (const [mesh, texture] of getCharacterArmorPaths(row, head)) info.items.push({ mesh, skins: [texture], bone: "HeadBone" });
         }
 
-        for (const item of info.items) await this.pullScriptMeshAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins }, item.extraMesh);
+        for (const item of info.items) await this.pullScriptAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins }, item.extraMesh);
 
         if (equipment.hair) {
             let locations = this.cacheCharacterHairTables.get("hairaccessorylocgrp");
@@ -2826,7 +2840,7 @@ export class DecodeEngine {
 
             if (!skin) throw new Error(`EnchantEffect has no CubeTexName.`);
 
-            await this.pullScriptMeshAssets(library, builder, null, { Mesh: mesh, Skins: [skin] });
+            await this.pullScriptAssets(library, builder, null, { Mesh: mesh, Skins: [skin] });
             item.enchantMesh = { mesh, skin, scale: weapon.enchantedMeshScale[index], offset: weapon.enchantedMeshOffset[index], colors: [1, 2].map(n => ["r", "g", "b"].map(c => Number(values[`${c}${n}`] ?? 100) / 255)) };
         }
 
@@ -2879,7 +2893,7 @@ export class DecodeEngine {
             }
         }
 
-        for (const item of info.items) await this.pullScriptMeshAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins });
+        for (const item of info.items) await this.pullScriptAssets(library, builder, null, { Mesh: item.mesh, Skins: item.skins });
         if (info.items.length) library.pawnEquipment = info;
         if (!bow) return;
 
@@ -2900,8 +2914,8 @@ export class DecodeEngine {
 
         template.scriptProperties.Mesh = arrow.mesh_tex_pair[0][0];
         template.scriptProperties.Skins = arrow.mesh_tex_pair[1].slice();
-        await this.pullScriptMeshAssets(library, builder, template.scriptClassId, template.scriptProperties);
-        await this.pullScriptMeshAssets(library, builder, null, { Mesh: weapon.wpn_mesh[0], Skins: weapon.wpn_tex });
+        await this.pullScriptAssets(library, builder, template.scriptClassId, template.scriptProperties);
+        await this.pullScriptAssets(library, builder, null, { Mesh: weapon.wpn_mesh[0], Skins: weapon.wpn_tex });
         library.npcBow = { weaponMesh: weapon.wpn_mesh[0], weaponSkins: weapon.wpn_tex.slice(), curvature: weapon.curvature, attackRange: equipment.attackRange, ammo };
     }
 

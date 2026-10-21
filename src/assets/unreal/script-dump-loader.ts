@@ -32,6 +32,7 @@ export type IScriptStateDecodeInfo = {
     id: string,
     owner: string,
     name: string,
+    superStateId: string | null,
     flags: number,
     probeMask: bigint,
     ignoreMask: bigint,
@@ -70,6 +71,7 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
     if (value === null || value === undefined) return null;
     if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") return value;
     if (Array.isArray(value)) return [...value].map(dumpPropertyValue);
+    if (typeof value.getTypedArray === "function") return Array.from(value.getTypedArray(), dumpPropertyValue);
     if (typeof value.getElements === "function") return value.getElements().map(dumpPropertyValue);
     if (typeof value.toArray === "function") return value.toArray().map(dumpPropertyValue);
     if (value.constructor?.plainStructFields) {
@@ -242,12 +244,13 @@ function dumpFunction(fn: UFunction): IScriptFunctionDecodeInfo {
 function dumpState(state: UState): IScriptStateDecodeInfo {
     state = state.loadSelf();
 
-    const id = getObjectId(state);
+    const id = getObjectId(state), superState = state.superField;
 
     return {
         id,
         owner: getOwnerId(id),
         name: state.objectName,
+        superStateId: superState && !superState.exp?.isFake ? getObjectId(superState) : null,
         flags: state.getStateFlags(),
         probeMask: state.getProbeMask(),
         ignoreMask: state.getIgnoreMask(),
@@ -279,6 +282,13 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
         for (const fn of state.childFunctions) pullFunction(fn);
 
         library.scriptStates[id] = dumpState(state);
+
+        const superState = state.superField;
+
+        if (superState && !superState.exp?.isFake) {
+            if ((superState as any).isClass) pullClass(superState as UClass);
+            else pullState(superState);
+        }
     }
 
     function pullClass(cls: UClass) {
@@ -343,6 +353,7 @@ export function pullScriptClassFunctions(library: DecodeLibrary, classes: Iterab
             id,
             owner: getOwnerId(id),
             name: cls.objectName,
+            superStateId: superClass && !superClass.exp?.isFake ? getObjectId(superClass) : null,
             flags: cls.getStateFlags(),
             probeMask: cls.getProbeMask(),
             ignoreMask: cls.getIgnoreMask(),

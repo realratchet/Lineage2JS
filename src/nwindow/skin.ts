@@ -31,6 +31,7 @@ import NCMacroWnd from "./nc-macro-wnd";
 import NCMainWnd from "./nc-main-wnd";
 import NCManorShopWnd from "./nc-manor-shop-wnd";
 import NCMapWnd from "./nc-map-wnd";
+import NTownMapWnd from "./n-town-map-wnd";
 import NCMatchWnd from "./nc-match-wnd";
 import NCMenuWnd from "./nc-menu-wnd";
 import NCMessageWnd from "./nc-message-wnd";
@@ -101,6 +102,7 @@ export type LoginWndView_T = Pick<NCLoginWnd, "auth" | "element" | "loginFunctio
 export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "element" | "hide" | "highlightCommand" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setMacros" | "setVisible">;
 export type MainWndView_T = Pick<NCMainWnd, "element" | "getSelectedTab" | "isVisible" | "placeOnScreen" | "selectTab" | "setVisible"> & { readonly detailStatusWnd: DetailStatusWndView_T, readonly skillWnd: SkillWndView_T, readonly actionWnd: ActionWndView_T, readonly questWnd: QuestWndView_T, readonly clanWnd: ClanWndView_T };
 export type ManorShopWndView_T = Pick<NCManorShopWnd, "element" | "getGrid" | "getItems" | "getPressedItem" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMove" | "onQuantity" | "onSelect" | "onSubmit" | "onTooltip" | "placeOnScreen" | "setVisible" | "showManor" | "transfer">;
+export type TownMapWndView_T = Pick<NTownMapWnd, "element" | "isVisible" | "placeOnScreen" | "setVisible" | "show">;
 export type MapWndView_T = Pick<NCMapWnd, "element" | "isVisible" | "openPosition" | "placeOnScreen" | "setFacing" | "setPartyMembers" | "setPosition" | "setQuestLocation" | "setTargetLocations" | "setTime" | "setVisible">;
 export type MatchWndView_T = Pick<NCMatchWnd, "element" | "isVisible" | "onConfig" | "onCreate" | "onJoin" | "placeOnScreen" | "resetFilters" | "setVisible" | "show" | "tick">;
 export type MenuWndView_T = Pick<NCMenuWnd, "element" | "onSelect" | "placeOnScreen" | "setVisible">;
@@ -175,6 +177,7 @@ export class Skin {
     public createMacroWnd(...args: ConstructorParameters<typeof NCMacroWnd>): MacroWndView_T { return new NCMacroWnd(...args); }
     public createMainWnd(...args: ConstructorParameters<typeof NCMainWnd>): MainWndView_T { return new NCMainWnd(...args); }
     public createManorShopWnd(...args: ConstructorParameters<typeof NCManorShopWnd>): ManorShopWndView_T { return new NCManorShopWnd(...args); }
+    public createTownMapWnd(...args: ConstructorParameters<typeof NTownMapWnd>): TownMapWndView_T { return new NTownMapWnd(...args); }
     public createMapWnd(...args: ConstructorParameters<typeof NCMapWnd>): MapWndView_T { return new NCMapWnd(...args); }
     public createMatchWnd(...args: ConstructorParameters<typeof NCMatchWnd>): MatchWndView_T { return new NCMatchWnd(...args); }
     public createMenuWnd(...args: ConstructorParameters<typeof NCMenuWnd>): MenuWndView_T { return new NCMenuWnd(...args); }

@@ -82,6 +82,14 @@ export class L2ReplayRecorder {
         }
     }
 
+    public addCameraKey(key: number, action: number, time: number): void {
+        if (key !== 33 && key !== 34 && key !== 36 || action !== 1 && action !== 2 && action !== 3 || !Number.isFinite(time)) throw new Error(`Invalid replay camera key '${key}/${action}'.`);
+        if (this.startTime === null) return;
+        if (time < this.startTime) throw new Error(`Replay clock precedes recording start.`);
+
+        this.file.arrCameraInstructions.push({ time: time - this.startTime, key, action, amount: 0 });
+    }
+
     public finish(time: number): L2ReplayFile {
         if (!Number.isFinite(time)) throw new Error(`Invalid replay clock '${time}'.`);
         this.file.setDuration(this.startTime === null ? 0 : time - this.startTime);

@@ -182,6 +182,10 @@ export class GameClient {
         if (this.replayRecorder) this.replayRecorder.addCameraInput(action, yaw, pitch, performance.now() / 1000);
     }
 
+    public recordCameraKey(key: number, action: number): void {
+        if (this.replayRecorder) this.replayRecorder.addCameraKey(key, action, performance.now() / 1000);
+    }
+
     public isRecording() { return this.replayRecorder !== null; }
     public getRecordingTime() { return this.replayRecorder ? this.replayRecorder.getElapsed(performance.now() / 1000) : null; }
 

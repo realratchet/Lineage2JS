@@ -42,7 +42,9 @@ import UTerrainLayer from "./un-terrain-layer";
 import UDecoLayer from "./un-deco-layer";
 import UWetTexture, { UADrop } from "./un-wet-texture";
 import UBeamEmitter from "./emitters/un-beam-emitter";
+import URibbonEmitter from "./emitters/un-ribbon-emitter";
 import FRange, { FRangeVector } from "./un-range";
+import FProjectorRenderInfoPtr from "./un-projector-render-info-ptr";
 import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
@@ -324,6 +326,8 @@ export class UNativePackage extends ANativePackage {
             case "TerrainIntensityMap": Constructor = FTIntMap; break;
             case "Coords": Constructor = FCoords; break;
             case "Quat": Constructor = FQuaternion; break;
+            case "ProjectorRenderInfoPtr":
+            case "StaticMeshProjectorRenderInfoPtr": Constructor = FProjectorRenderInfoPtr; break;
 
             case "NTimeColor": Constructor = NEnv.FNTimeColor; break;
             case "NTimeHSV": Constructor = NEnv.FNTimeHSV; break;
@@ -440,6 +444,7 @@ export class UNativePackage extends ANativePackage {
             case "VertMeshEmitter": Constructor = UVertMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
             case "BeamEmitter": Constructor = UBeamEmitter; break;
+            case "RibbonEmitter": Constructor = URibbonEmitter; break;
 
 
 

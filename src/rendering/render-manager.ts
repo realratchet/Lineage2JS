@@ -43,8 +43,8 @@ import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
 import type AnimationComponent from "../objects/components/animation-component";
 import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
-import { getProperty, type ScriptHost_T } from "../ue-script/vm";
-import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
+import { getProperty, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
+import ActorOwnershipComponent, { setScriptObjectProperty } from "../objects/components/actor-ownership-component";
 import type PawnAttackComponent from "../objects/components/pawn-attack-component";
 import type SkillVisualEffect from "@l2js/engine/skills/skill-visual-effect";
 import NPawnLightComponent from "./components/pawn-light-component";
@@ -320,6 +320,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
     protected level: SectorObject = null;
+    protected levelTimeSeconds = 0;
     protected readonly arrLoadedSectors: SectorObject[] = [];
     protected readonly arrSceneSectors: SectorObject[] = [];
 
@@ -1136,7 +1137,25 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getLevel(): SectorObject { return this.level; }
-    public setLevel(level: SectorObject): void { this.level = level; }
+    public setLevel(level: SectorObject): void {
+        this.level = level;
+        this.levelTimeSeconds = 0;
+        this.updateLevelTime(0);
+    }
+
+    protected updateLevelTime(deltaTime: number): void { // ULevel::Tick 0x1059b8ff..0x1059b9d2 publishes before clamping actor delta.
+        if (!this.level) return;
+        const info = this.level.levelInfoActor;
+
+        if (!(info.getUnrealScriptProperty("Pauser") && (info.getUnrealScriptProperty("PauseDelay") as number) <= this.levelTimeSeconds))
+            this.levelTimeSeconds += Math.fround(Math.fround(deltaTime / 1000) * (info.getUnrealScriptProperty("TimeDilation") as number));
+
+        const timeSeconds = Math.fround(this.levelTimeSeconds);
+
+        info.setUnrealScriptProperty("TimeSeconds", timeSeconds);
+        for (const column of this.sectors.values()) for (const sector of column.values())
+            if (sector !== this.level) sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", timeSeconds);
+    }
 
     public addPawn(pawn: BaseActor): void {
         this.scene.add(pawn);
@@ -1162,6 +1181,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (owner) (owner.findComponent<ActorOwnershipComponent>("actorOwnership") || owner.addComponent(new ActorOwnershipComponent())).gainScriptChild(effect);
         const script = object.findComponent<ScriptComponent>("script");
 
+        if (script && !getProperty(object as any, "Level")) {
+            const level = owner ? getProperty(owner as any, "Level") : this.level ? this.level.levelInfoActor : null;
+
+            if (level) setScriptObjectProperty(object, "Level", level);
+        }
         if (object.findComponent("pawnMovement")) (object as BaseActor).beginPlay();
         else if (script) script.beginPlay();
         this.queueShaderCompile(effect);
@@ -1200,6 +1224,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if ((effect as any).isActor) (effect as BaseActor).release();
         else (effect as Object3D & IObject).detachComponents();
+        unregisterLevelActor(effect as any);
 
         for (const resource of this.transientResources.get(effect)) releaseResource(resource);
         this.transientResources.delete(effect);
@@ -1366,22 +1391,24 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) {
                 const animation = pawn.findComponent<AnimationComponent>("animation");
+                const attack = pawn.findComponent<PawnAttackComponent>("pawnAttack");
                 const lifecycle = pawn.findComponent<NpcLifecycleComponent>("npcLifecycle");
                 const script = pawn.findComponent<ScriptComponent>("script");
 
-                if (script) script.onUpdate(currentTime, deltaTime / 1000);
+                if (script) script.onUpdate(currentTime, actorDelta);
 
-                if (animation) animation.onUpdate(currentTime, deltaTime / 1000);
-                if (lifecycle) lifecycle.onUpdate(currentTime, deltaTime / 1000);
+                if (animation) animation.onUpdate(currentTime, actorDelta);
+                if (attack) attack.onUpdate(currentTime, actorDelta);
+                if (lifecycle) lifecycle.onUpdate(currentTime, actorDelta);
                 continue;
             }
 
-            pawn.updatePresentation(currentTime, deltaTime / 1000);
+            pawn.updatePresentation(currentTime, actorDelta);
         }
     }
 
     protected updatePawnVisibility(frustum = this.frustum): void {
-        const inWorld = this.manGame.getComponent("network").isInWorld();
+        const network = this.manGame.getComponent("network"), inWorld = network.isInWorld(), isObserving = network.isObserving();
         const range = Math.fround(this.getPawnRange()) * CLIPPING_RANGE_SCALE;
         const controller = this.manGame.getComponent("asset").playerController;
         const viewTarget = getProperty(controller, "ViewTarget");
@@ -1402,7 +1429,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 continue;
             }
 
-            pawn.visible = inRange && state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            pawn.visible = !pawn.getUnrealScriptProperty("bHidden") && (pawn !== this.player || !isObserving) && inRange && state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
             if (pawn.visible) component.createSkin();
         }
 
@@ -2107,6 +2134,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
+        this.updateLevelTime(deltaTime);
         for (const [visual, { effects }] of this.retainedSkillVisuals) {
             visual.update(currentTime);
             if (visual.hasActiveEffects() || effects.some(effect => effect.parent && (effect as Object3D & IObject).findComponent("nProjectile"))) continue;
@@ -2638,6 +2666,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public addSector(sector: SectorObject) {
         sector.setRenderDeco(this.renderDeco);
+        if (this.level) sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", Math.fround(this.levelTimeSeconds));
 
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
@@ -2893,11 +2922,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public disposeSector(sector: SectorObject) {
+        sector.releasePhysicsVolumeActors();
         sector.releaseMusicVolumeActors();
         sector.releaseZoneInfoActors();
         sector.traverse(object => {
             const actor = object as CollidingMesh;
 
+            if ((actor as any).scriptActor) (actor as any).scriptActor.release();
+            if (actor.collisionActors) for (const record of actor.collisionActors) if (record.object) record.object.release();
             if (actor.isStaticMeshActor && actor.findComponent("script"))
                 actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
         });
@@ -2915,6 +2947,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         releaseSectorResources(sector);
+        sector.releaseLevelActors();
     }
 
     public toggleBSPHelperCamera() {

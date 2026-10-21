@@ -143,6 +143,7 @@ export class DecodeLibrary {
     // (un-emitter.ts), so gating on leaf membership on top of the zone mask double-gates them
     public readonly allEmitterActors: IBaseObjectOrInstanceDecodeInfo[] = [];
     public readonly levelActorUuids: (string | null)[] = [];
+    public readonly levelActors: (Pick<IBaseObjectDecodeInfo, "uuid" | "name" | "scriptClassId" | "scriptProperties" | "ownerUuid"> | null)[] = [];
     public readonly staticMeshCollisionActors: Pick<IStaticMeshActorDecodeInfo, "uuid" | "name" | "position" | "collisionBounds" | "collision">[] = [];
     public readonly volumeCollisionActors: Pick<IStaticMeshActorDecodeInfo, "uuid" | "name" | "position" | "collisionBounds" | "collision">[] = [];
     // pawns (players, mobs/NPCs) move freely across sector boundaries, unlike StaticMeshActor

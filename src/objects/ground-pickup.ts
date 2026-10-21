@@ -156,7 +156,7 @@ export class GroundPickup extends Object3D {
 
             this.position.x = previous.tracePosition.x;
         }
-        if (!this.renderManager.getSector(this.position)) return;
+        if (!this.renderManager.isSectorCollisionReady(this.position)) return;
 
         const physics = this.renderManager.getParent().getComponent("physics");
 

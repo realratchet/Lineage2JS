@@ -214,6 +214,7 @@ function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
 export class AssetManager implements IEngineComponent<GameManager> {
     protected isTicking: boolean = false;
     protected isStreaming: boolean = true;
+    protected streamingGeneration = 0;
     protected loadSettings: LoadSettings_T;
     protected glCapabilities: WebGLCapabilities;
     protected hasS3TC: boolean;
@@ -341,6 +342,13 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         this.userConfig = clientConfig.userConfig;
         this.playerController = playerController;
+        for (const [key, value] of Object.entries(this.userConfig.fixedDefaultCamera)) {
+            if (Array.isArray(value)) {
+                const target = playerController.scriptProperties.get(key) as number[];
+
+                value.forEach((entry, index) => target[index] = entry);
+            } else playerController.scriptProperties.set(key, value);
+        }
         playerController.scriptProperties.set("CameraViewHeightAdjust", this.userConfig.cameraViewHeightAdjust);
         playerController.scriptProperties.set("bUseAutoTrackingPawn", this.userConfig.useAutoTrackingPawn);
         playerController.scriptProperties.set("AutoTrackingPawnSpeed", this.userConfig.autoTrackingPawnSpeed);
@@ -530,7 +538,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (!info) throw new Error(`Effect template '${classPath}' is missing.`);
 
-        return decodeObject3D(this.effectLibrary, info);
+        return this.createScriptObject(this.getParent().getComponent("render"), this.effectLibrary, classPath);
     }
 
     protected async applyCharacter(renderManager: RenderManager, characterLibrary: DecodeLibrary, actor?: BaseActor, charIndex: number = DEFAULT_CHAR_INDEX, request: number = null) {
@@ -555,7 +563,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const animations = (bodyparts[0] as any).meshAnimations as Record<string, THREE.AnimationClip>;
         const player = actor || renderManager.player;
 
-        if (player === renderManager.player) this.stopPlayerSkill(renderManager);
+        if (player === renderManager.player) this.pawnSkillRequests.set(player, (this.pawnSkillRequests.get(player) || 0) + 1);
         const previousAttack = player.findComponent<PawnAttackComponent>("pawnAttack");
 
         if (previousAttack) player.removeComponent(previousAttack);
@@ -904,10 +912,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         const effect = decodeObject3D(library, info) as any;
 
-        if ((info as any).drawType === "mesh") {
-            effect.addComponent(new ScriptComponent(vm, classId => this.createScriptObject(renderManager, library, classId, vm), info.scriptClassId));
-            effect.addComponent(new ActorMeshComponent(library, renderManager));
-        }
+        effect.addComponent(new ScriptComponent(vm, classId => this.createScriptObject(renderManager, library, classId, vm), info.scriptClassId));
+        if ((info as any).drawType === "mesh") effect.addComponent(new ActorMeshComponent(library, renderManager));
 
         effect.children.forEach((emitter: any) => {
             emitter.isActorAttachedEmitter = true;
@@ -1018,6 +1024,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public getStreaming() { return this.isStreaming; }
 
     public setStreaming(renderManager: RenderManager, isStreaming: boolean) {
+        if (this.isStreaming !== isStreaming) this.streamingGeneration++;
         this.isStreaming = isStreaming;
 
         if (isStreaming) return;
@@ -1057,6 +1064,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             object.setScriptRuntime(sector.scriptVM, classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
         });
+        sector.rearrangeLevelActors();
     }
 
     protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes): boolean {
@@ -1078,9 +1086,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (this.inFlightSectors.size >= maxInFlight) return false;
 
         this.inFlightSectors.add(sectorIdx);
+        const generation = this.streamingGeneration;
 
         this.decodeWorker.decodeSector(sectorIdx, this.loadSettings)
             .then(decodeLibrary => {
+                if (generation !== this.streamingGeneration) {
+                    this.decodeWorker.freeSector(sectorIdx);
+                    return;
+                }
+
                 decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
                 (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 

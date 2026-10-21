@@ -17,6 +17,8 @@ export class PlayerController implements ScriptHost_T {
         this.scriptVM.call(this, "PostBeginPlay");
     }
 
+    public call(name: string, args: ScriptValue_T[] = []): ScriptValue_T { return this.scriptVM.call(this, name, args); }
+
     public getUnderWaterLoopSound(): string {
         const value = this.scriptProperties.get("UnderWaterLoopSound");
 

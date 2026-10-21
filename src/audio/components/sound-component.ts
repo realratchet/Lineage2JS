@@ -1,6 +1,6 @@
 import { Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
-import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
+import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import type AudioManager from "../audio-manager";
 import type BaseActor from "../../base-actor";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
@@ -167,9 +167,12 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         if (typeof soundRef !== "string") throw new Error(`UnrealScript ${call.name} has invalid sound '${soundRef}'.`);
         if (!this.library) throw new Error(`UnrealScript ${call.name} has no decode library.`);
 
-        let soundName = this.library.sounds[soundRef] || soundRef;
+        const script = (call.self as any).findComponent?.("script") as ScriptComponent;
+        const source = script ? script.getVM().getLibrary() : this.library;
+        const library = source.sounds[soundRef] ? source : this.library;
+        let soundName = library.sounds[soundRef] || soundRef;
 
-        if (!this.library.soundBlobCache.has(soundName)) soundName = soundName.slice(soundName.lastIndexOf(".") + 1);
+        if (!library.soundBlobCache.has(soundName)) soundName = soundName.slice(soundName.lastIndexOf(".") + 1);
 
         const actor = this.getParent();
         const volume = call.args.length > 2 ? Number(call.args[2]) : Number(actor.getUnrealScriptProperty("TransientSoundVolume"));
@@ -179,7 +182,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
 
         if (!Number.isFinite(volume) || !Number.isFinite(radius) || !Number.isFinite(pitch)) throw new Error(`UnrealScript ${call.name} has invalid sound parameters.`);
 
-        this.play(soundName, volume, pitch, radius, radius * 100, attenuate, `UnrealScript ${call.name}`);
+        this.play(soundName, volume, pitch, radius, radius * 100, attenuate, `UnrealScript ${call.name}`, null, library);
     }
 
     protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null, library: DecodeLibrary = this.library, onStarted?: (duration: number) => void): void {

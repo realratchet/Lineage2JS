@@ -117,6 +117,7 @@ export type NativeSkillEffect_T = {
     sourceTarget?: boolean;
     owner?: "target" | "none" | "source" | "impactActor";
     attach?: "trail";
+    weaponTrail?: boolean;
     bone?: number | string;
     boneOptional?: boolean;
     boneFallback?: number;
@@ -170,6 +171,7 @@ export type NativeSkillEffect_T = {
 };
 
 const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
+    "lineageeffect.ribbonset": [{ phase: "casting", effectClass: "LineageEffect.RibbonSet", host: "caster", weaponTrail: true }],
     "lineageeffect.e_u001_a": [{ phase: "shot", effectClass: "LineageEffect.e_u001_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
     "lineageeffect.e_u002_a": [{ phase: "shot", effectClass: "LineageEffect.e_u002_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
     "lineageeffect.e_u003_a": [{ phase: "shot", effectClass: "LineageEffect.e_u003_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],

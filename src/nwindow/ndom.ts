@@ -11,7 +11,7 @@ const ATLAS_WIDTH = 2048;
 const MIN_THUMB = 15;
 
 type AtlasEntry_T = { url: string, x: number, y: number, width: number, height: number, atlasWidth: number, atlasHeight: number };
-type TextLabel_T = { text: string, color: number, font: FontType_T };
+type TextLabel_T = { text: string, color: number, font: FontType_T, isUnderlined: boolean };
 
 function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with RGBA bitfields: raw canvas bytes, no PNG compression pass.
     const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
@@ -90,7 +90,7 @@ export class NDomLayer {
         for (const element of this.root.querySelectorAll("canvas")) {
             const text = this.cacheText.get(element);
 
-            if (text) this.renderText(element, text.text, text.color, text.font);
+            if (text) this.renderText(element, text.text, text.color, text.font, text.isUnderlined);
         }
     }
 
@@ -284,7 +284,7 @@ export class NDomLayer {
         return element;
     }
 
-    public renderText(canvas: HTMLCanvasElement, text: string, color: number, font: FontType_T = FontType_T.SMALL) {
+    public renderText(canvas: HTMLCanvasElement, text: string, color: number, font: FontType_T = FontType_T.SMALL, isUnderlined: boolean = false) {
         const nwindow = this.manager.canvas;
         const scale = nwindow.scale;
         const width = Math.max(1, nwindow.measureText(text, font)), height = nwindow.getLineHeight(font);
@@ -299,14 +299,20 @@ export class NDomLayer {
         context.setTransform(scale, 0, 0, scale, 0, 0);
         context.imageSmoothingEnabled = false;
         nwindow.renderText(context, 0, 0, color, text, font);
-        this.cacheText.set(canvas, { text, color, font });
+        if (isUnderlined) { // LINK underline occupies the last font row, L2.4_20 capture.
+            context.setTransform(scale, 0, 0, scale, 0, 0);
+            context.globalAlpha = 1;
+            context.fillStyle = `#${(color & 0xffffff).toString(16).padStart(6, "0")}`;
+            context.fillRect(0, height - 1, width, 1);
+        }
+        this.cacheText.set(canvas, { text, color, font, isUnderlined });
     }
 
-    public text(parent: HTMLElement, text: string, color: number = TEXT_COLOR, font: FontType_T = FontType_T.SMALL, x: number = null, y: number = null): HTMLCanvasElement {
+    public text(parent: HTMLElement, text: string, color: number = TEXT_COLOR, font: FontType_T = FontType_T.SMALL, x: number = null, y: number = null, isUnderlined: boolean = false): HTMLCanvasElement {
         const canvas = document.createElement("canvas");
 
         canvas.className = x === null ? "ndom-text" : "ndom-text ndom-absolute";
-        this.renderText(canvas, text, color, font);
+        this.renderText(canvas, text, color, font, isUnderlined);
 
         if (x !== null) this.place(canvas, x, y);
         if (parent) parent.appendChild(canvas);

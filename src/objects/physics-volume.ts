@@ -14,8 +14,8 @@ export class PhysicsVolume extends Actor {
     public readonly objectPath: string;
     public readonly bsp: PhysicsVolumeDecodeInfo_T["bsp"];
 
-    public constructor(info: PhysicsVolumeDecodeInfo_T) {
-        super(info);
+    public constructor(info: PhysicsVolumeDecodeInfo_T, isLevelActor: boolean = true) {
+        super(info, isLevelActor);
 
         (this as any).isVolume = true;
         this.objectPath = info.objectPath;

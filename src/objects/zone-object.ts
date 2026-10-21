@@ -12,7 +12,7 @@ import { setScriptObjectProperty } from "./components/actor-ownership-component"
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
-import type UnScriptVM from "../ue-script/vm";
+import UnScriptVM, { getProperty, setLevelActors, deleteLevelActors, registerLevelActor, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
 import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
@@ -233,6 +233,13 @@ export class SectorObject extends GameObject {
 
     public levelInfo: IBaseZoneDecodeInfo;
     public levelActorUuids: (string | null)[] = [];
+    protected readonly arrLevelActors: (ScriptHost_T | null)[] = [];
+    protected readonly arrLevelActorRecords: DecodeLibrary["levelActors"] = [];
+    protected firstDynamicActor = 0;
+    protected hasRearrangedLevelActors = false;
+    protected readonly cacheLevelActorIndices = new Map<string, number>();
+    protected readonly cacheLevelActorObjects = new Map<string, ScriptHost_T>();
+    protected levelActorHostsReady = false;
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];
     public bspLeaves: BSPLeafData[];
@@ -294,6 +301,114 @@ export class SectorObject extends GameObject {
     protected lastLoggedZone: number | null = null;
     protected lastLoggedLeaf: number | null = null;
 
+    public getLevelActorCount(): number { return this.arrLevelActors.length; }
+    public getFirstDynamicActor(): number { return this.firstDynamicActor; }
+
+    public rearrangeLevelActors(): void {
+        if (this.hasRearrangedLevelActors) return;
+
+        const entries = Array.from(this.arrLevelActors, (actor, index) => {
+            const info = this.arrLevelActorRecords[index];
+            let host = actor;
+
+            if (host === undefined && info) {
+                host = { scriptClassId: info.scriptClassId, scriptProperties: { ...info.scriptProperties } };
+                this.scriptVM.initializeHost(host);
+            }
+            return { actor, info, exists: !!host, isStatic: host && !!getProperty(host, "bStatic"), isAlwaysRelevant: host && !!getProperty(host, "bAlwaysRelevant") };
+        });
+        const ordered = entries.slice(0, 2);
+
+        // UGameEngine::LoadMap 0x105622af..0x1056249f; EndLoadSWLevel 0x105a4542..0x105a46a3.
+        for (let group = 0; group < 3; group++) {
+            if (group === 2) this.firstDynamicActor = ordered.length;
+            for (let index = 2; index < entries.length; index++) {
+                const entry = entries[index];
+
+                if (entry.exists && (entry.isStatic ? entry.isAlwaysRelevant ? 1 : 0 : 2) === group) ordered.push(entry);
+            }
+        }
+
+        this.arrLevelActors.length = this.arrLevelActorRecords.length = 0;
+        this.cacheLevelActorIndices.clear();
+        for (const entry of ordered) {
+            if (entry.info) this.cacheLevelActorIndices.set(entry.info.uuid, this.arrLevelActors.length);
+            this.arrLevelActors.push(entry.actor);
+            this.arrLevelActorRecords.push(entry.info);
+        }
+        this.hasRearrangedLevelActors = true;
+    }
+
+    public addLevelActor(actor: ScriptHost_T): void {
+        const index = this.cacheLevelActorIndices.get((actor as any).actorUuid);
+
+        if (index !== undefined) {
+            const previous = this.arrLevelActors[index];
+
+            if (previous === null || previous && previous !== actor) throw new Error(`Level actor '${(actor as any).actorUuid}' already has a different identity`);
+            this.arrLevelActors[index] = actor;
+        } else if (!this.arrLevelActors.includes(actor)) {
+            this.arrLevelActors.push(actor);
+            this.arrLevelActorRecords.push(null);
+        }
+    }
+
+    public removeLevelActor(actor: ScriptHost_T): void {
+        const index = this.arrLevelActors.indexOf(actor);
+
+        if (index < 0) throw new Error(`Actor '${actor.scriptClassId}' is absent from '${this.name}'`);
+        this.arrLevelActors[index] = null;
+    }
+
+    public getLevelActor(index: number): ScriptHost_T | null {
+        if (!Number.isInteger(index) || index < 0 || index >= this.arrLevelActors.length) throw new Error(`Invalid actor slot '${index}' in '${this.name}'`);
+        if (this.arrLevelActors[index] !== undefined) return this.arrLevelActors[index];
+        if (!this.staticMeshGroup) throw new Error(`Level actors in '${this.name}' are not ready`);
+
+        if (!this.levelActorHostsReady) {
+            this.traverse((object: any) => {
+                if (object.scriptActor) this.cacheLevelActorObjects.set(object.scriptActor.actorUuid, object.scriptActor);
+                else if (object.actorUuid && object.scriptClassId) this.cacheLevelActorObjects.set(object.actorUuid, object);
+            });
+            this.levelActorHostsReady = true;
+        }
+
+        const info = this.arrLevelActorRecords[index];
+        let actor = this.cacheLevelActorObjects.get(info.uuid);
+        const mesh = this.staticMeshMap.get(info.uuid) as any;
+
+        if (!actor && mesh && mesh.collisionActors) {
+            const record = mesh.collisionActors.find((record: any) => record.actor.uuid === info.uuid);
+
+            if (record) actor = mesh.getCollisionActor(record.firstTriangle);
+        }
+        if (!actor) {
+            const object = new Actor(info as any);
+
+            object.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            actor = object;
+        } else {
+            if (!(actor as any).findComponent || !(actor as any).findComponent("script")) this.scriptVM.initializeHost(actor);
+            setScriptObjectProperty(actor as any, "Level", this.scriptVM.getLevelInfo());
+            registerLevelActor(actor);
+        }
+        if (actor.scriptClassId !== info.scriptClassId) throw new Error(`Actor '${info.uuid}' has class '${actor.scriptClassId}', expected '${info.scriptClassId}'`);
+        this.arrLevelActors[index] = actor;
+        return actor;
+    }
+
+    public releaseLevelActors(): void {
+        for (const actor of this.arrLevelActors) if (actor) unregisterLevelActor(actor);
+        deleteLevelActors(this.scriptVM.getLevelInfo());
+        this.scriptVM.setLevelInfo(null);
+        this.arrLevelActors.length = 0;
+        this.arrLevelActorRecords.length = 0;
+        this.firstDynamicActor = 0;
+        this.hasRearrangedLevelActors = false;
+        this.cacheLevelActorObjects.clear();
+        this.cacheLevelActorIndices.clear();
+    }
+
     public setPhysicsVolumeScriptRuntime(objectFactory: ScriptObjectFactory_T): void {
         this.physicsVolumeObjectFactory = objectFactory;
         this.createZoneInfoActors();
@@ -320,10 +435,20 @@ export class SectorObject extends GameObject {
         }
 
         this.levelInfoActor = create(this.levelInfo);
+        const records = this.scriptVM.getLibrary().levelActors;
+
+        this.arrLevelActors.length = records.length;
+        this.arrLevelActorRecords.push(...records);
+        for (let index = 0; index < records.length; index++) {
+            if (records[index]) this.cacheLevelActorIndices.set(records[index].uuid, index);
+            else this.arrLevelActors[index] = null;
+        }
+        this.scriptVM.setLevelInfo(this.levelInfoActor);
+        setLevelActors(this.levelInfoActor, this);
         for (const zone of this.bspZones) this.zoneInfoActors.push(create(zone.zoneInfo));
         for (const actor of actors.values()) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
         if (this.levelInfo.physicsVolume) {
-            const volume = new PhysicsVolume(this.levelInfo.physicsVolume);
+            const volume = new PhysicsVolume(this.levelInfo.physicsVolume, this.cacheLevelActorIndices.has(this.levelInfo.physicsVolume.uuid));
             setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
             setScriptObjectProperty(volume, "bNoDelete", true);
             setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);

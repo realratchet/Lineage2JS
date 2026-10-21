@@ -1,8 +1,9 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
+import HIGHLIGHT_SHADER from "./shader/highlight.fs";
 import { appendGlobalUniforms, getLocalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide, Texture } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide, DoubleSide, Texture } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
 import type DynamicLight from "../../objects/dynamic-light";
@@ -471,6 +472,18 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.needsUpdate = true;
 
         return this;
+    }
+
+    public createHighlightMaterial(): ShaderMaterial {
+        // Engine.dll 0x1063b330: lit solid(200,200,200,64), FB_AlphaBlend, ZTest, no ZWrite, two-sided.
+        const defines = { ...this.defines };
+        delete defines.USE_ADDITIVE_FOG;
+        delete defines.USE_MODULATED_FOG;
+
+        const material = new ShaderMaterial({ vertexShader: this.vertexShader, fragmentShader: HIGHLIGHT_SHADER, defines, uniforms: this.uniforms, transparent: true, depthTest: true, depthWrite: false, side: DoubleSide });
+        material.defaultAttributeValues = this.defaultAttributeValues;
+        material.forceSinglePass = true;
+        return material;
     }
 
     public setExtendedBoneInfluences() {

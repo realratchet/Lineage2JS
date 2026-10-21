@@ -34,7 +34,7 @@ export class L2Dice extends GroundPickup {
     }
 
     public placeOnGround(currentTime = this.renderManager.getParent().getCurrentTime()): void {
-        if (this.grounded || !this.meshes.length || !this.renderManager.getSector(this.position)) return;
+        if (this.grounded || !this.meshes.length || !this.renderManager.isSectorCollisionReady(this.position)) return;
 
         const physics = this.renderManager.getParent().getComponent("physics");
 
