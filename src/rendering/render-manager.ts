@@ -1753,6 +1753,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (let parent = emitter.parent; parent; parent = parent.parent)
                 if (parent.isSectorObject) { sector = parent; break; }
 
+            if (!emitter.isActorAttachedEmitter && sector && !sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) {
+                emitter.setRenderVisible(false);
+                continue;
+            }
+
             emitter.parent.getWorldPosition(tmpEmitterOrigin);
             const dx = tmpEmitterOrigin.x - camera.position.x, dy = tmpEmitterOrigin.y - camera.position.y;
             const visible = (emitter.isActorAttachedEmitter || !!sector && sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) && Math.sqrt(dx * dx + dy * dy) < emitterCullDist;

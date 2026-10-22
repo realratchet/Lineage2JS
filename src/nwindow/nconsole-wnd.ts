@@ -1296,7 +1296,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public showWorld() {
-        void this.layer.loadTextures(NCCoolTimeIcon.getTextures());
+        void this.loadCoolTimeTextures();
         void this.manNetwork.getParent().getComponent("asset").loadSound("ItemSound.cooltime_end");
         this.show("world");
         this.messageWnd.hide();
@@ -1309,6 +1309,16 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.abnormalStatusWnd.setVisible(true);
         this.shortCutWnd.setVisible(true);
         this.chatWnd.setVisible(true);
+    }
+
+    protected async loadCoolTimeTextures() {
+        await this.layer.loadTextures(NCCoolTimeIcon.getTextures());
+        await Promise.all(NCCoolTimeIcon.getFinishTextures().map(async path => {
+            const image = new Image();
+
+            image.src = this.layer.getTintUrl(path, 0x008080);
+            await image.decode();
+        }));
     }
 
     public showNpcHtml(html: string, type: number) {

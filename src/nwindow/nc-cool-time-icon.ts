@@ -19,6 +19,7 @@ export class NCCoolTimeIcon {
     }
 
     public static getTextures() { return [...arrRotation, ...arrEnd]; }
+    public static getFinishTextures() { return arrEnd; }
 
     public update(now: number) {
         const remaining = this.endsAt - now;
