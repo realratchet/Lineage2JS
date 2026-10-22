@@ -70,6 +70,7 @@ const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
 const tmpPawnViewOrigin = new Vector3();
 const tmpPawnSunAmbient = new ColorByte();
+const arrSectorIndex: [number, number] = [0, 0];
 const arrPawnLights: DynamicLight[] = [];
 const arrLightingObjects: THREE.Object3D[] = [];
 const arrPawnEffects: Object3D[] = [];
@@ -449,6 +450,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.camera.position.set(0, 15, 5);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxGeometry()));
+        this.scene.matrixAutoUpdate = false;
+        this.objectGroup.matrixAutoUpdate = false;
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
@@ -1017,17 +1020,21 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.camera.updateMatrixWorld();
     }
 
-    public getSectorId(position: THREE.Vector3): [number, number] {
+    public getSectorId(position: THREE.Vector3, target: [number, number] = [0, 0]): [number, number] {
         const sectorSize = 256 * 128;
         // UGameEngine::GetSWMapXY 0x824ba0 truncates FVector components before map conversion.
         const sectorX = Math.trunc(Math.trunc(Math.fround(position.x)) / sectorSize + 20);
         const sectorY = Math.trunc(Math.trunc(Math.fround(position.y)) / sectorSize + 18);
 
-        return [sectorX, sectorY];
+        target[0] = sectorX;
+        target[1] = sectorY;
+        return target;
     }
 
     public getSector(position: THREE.Vector3): SectorObject | null {
-        return this.getSectorByCoords(...this.getSectorId(position));
+        const [sectorX, sectorY] = this.getSectorId(position, arrSectorIndex);
+
+        return this.getSectorByCoords(sectorX, sectorY);
     }
 
     public isSectorWarm(sector: SectorObject): boolean { return !this.pendingSectorWarmups.some(job => job.sector === sector); }
@@ -1039,15 +1046,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getSectorByCoords(sectorX: number, sectorY: number): SectorObject | null {
-        if (!this.sectors.has(sectorX))
-            return null;
-
-        const xsect = this.sectors.get(sectorX);
-
-        if (!xsect.has(sectorY))
-            return null;
-
-        return xsect.get(sectorY);
+        return this.sectors.get(sectorX)?.get(sectorY) ?? null;
     }
 
     protected static readonly EMITTER_DEBUG_MAX = 80;

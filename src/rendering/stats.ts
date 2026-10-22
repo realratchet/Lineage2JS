@@ -148,6 +148,8 @@ Stats.Panel = function (name, fg, bg) {
             values.push(value);
             if (values.length > GRAPH_WIDTH / PR) values.shift();
 
+            if (canvas.style.display === 'none') return;
+
             var min = Math.min.apply(null, values), max = Math.max.apply(null, values), range = max - min;
 
             context.fillStyle = bg;

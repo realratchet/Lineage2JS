@@ -10,8 +10,10 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+#ifdef USE_PROJECTOR_RECEIVER
 uniform mat4 shadowMatrix;
 varying vec4 vShadowCoord;
+#endif
 
 // gl_VertexID (vertex index)
 
@@ -123,8 +125,8 @@ void main() {
     #include <begin_vertex>
     #include <morphtarget_vertex>
     #include <skinning_vertex>
-    vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
     #ifdef USE_PROJECTOR_RECEIVER
+        vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
         vProjectorNormal = normalize(normalMatrix * normal);
     #endif
     #include <project_vertex>

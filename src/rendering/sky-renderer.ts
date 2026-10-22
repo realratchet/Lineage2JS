@@ -31,7 +31,8 @@ class CelestialMaterial extends MeshBasicMaterial {
             blendDst: OneFactor,      // Trace: D3DBLEND_ONE (2) -> Additive Alpha
             depthWrite: false,
             depthTest: false,
-            side: DoubleSide
+            side: DoubleSide,
+            forceSinglePass: true
         });
     }
 }
@@ -288,10 +289,13 @@ export default class SkyRenderer {
 
             if (isLayer2) {
                 mesh.visible = this.config.haze1 && this.config.haze2;
-                material.fog = false;
             } else {
                 mesh.visible = this.config.haze1;
+            }
+
+            if (material.fog !== false) {
                 material.fog = false;
+                material.needsUpdate = true;
             }
 
             if (!mesh.visible) return;
@@ -302,7 +306,6 @@ export default class SkyRenderer {
             const modulator = tmpModifierColorByte.set(targetColor.r, targetColor.g, targetColor.b, 255);
 
             applyModifierColor(material, modulator);
-            material.needsUpdate = true;
         });
 
         this.skyLayers.clouds.forEach(({ mesh, index }) => {

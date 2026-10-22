@@ -371,7 +371,7 @@
     varying vec3 vLitColor;
 #endif
 
-#if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+#if defined(USE_PROJECTOR_RECEIVER) && !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
     uniform mat4 shadowMatrix;
     varying vec4 vShadowCoord;
 #endif
@@ -727,7 +727,7 @@ void main() {
 
         vLitColor = clamp( actorLighting, 0.0, 1.0 );
     #endif
-    #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+    #if defined(USE_PROJECTOR_RECEIVER) && !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
         vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
     #ifdef USE_PROJECTOR_RECEIVER
         vProjectorNormal = normalize(normalMatrix * normal);

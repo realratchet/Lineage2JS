@@ -1,6 +1,6 @@
 import { AnimationMixer, AnimationAction, KeyframeTrack, Object3D, NormalAnimationBlendMode, AdditiveAnimationBlendMode, InterpolateLinear, LinearInterpolant, Quaternion, QuaternionLinearInterpolant } from "three";
 
-type RootState_T = { object: Object3D, frame: number, count: number, checkedFrame: number, deferredFrame: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazyDurations: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
+type RootState_T = { object: Object3D, frame: number, count: number, checkedFrame: number, deferredFrame: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindingVersion: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazyDurations: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
 type BindingState_T = { root: RootState_T, property: any, target: Object3D, frame: number, value: ArrayLike<number>, x: number, y: number, z: number, w: number, wasFast: boolean, isLazyBone: boolean, lazyVersion: number };
 type TrackResult_T = { frame: number, time: number, value: ArrayLike<number> };
 type ChannelState_T = { binding: BindingState_T, interpolant: any, constant: Float32Array, linearConstant: boolean, result: TrackResult_T, kind: number, index: number };
@@ -109,6 +109,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     protected readonly constantTracks = new WeakMap<KeyframeTrack, Float32Array>();
     protected readonly trackResults = new WeakMap<KeyframeTrack, TrackResult_T>();
     protected readonly arrBindingStates: BindingState_T[] = [];
+    protected readonly arrBindingRootEnds: number[] = [];
     protected readonly arrDeferredRoots: RootState_T[] = [];
     protected bindingVersion: number = 0;
     protected cachedBindingVersion: number = -1;
@@ -164,7 +165,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         const root = action.getRoot() as Object3D;
         let rootState = this.rootStates.get(root);
-        if (!rootState) this.rootStates.set(root, rootState = { object: root, frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, fastActions: [], fastTimes: [], slowActions: [], bindingCount: 0, bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazyDurations: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
+        if (!rootState) this.rootStates.set(root, rootState = { object: root, frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, fastActions: [], fastTimes: [], slowActions: [], bindingCount: 0, bindingVersion: -1, bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazyDurations: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
         const channels: ChannelState_T[] = [], tracks = action.getClip().tracks;
 
         for (let i = 0; i < tracks.length; i++) {
@@ -207,7 +208,12 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         const mixer = this as any;
         if (this.cachedBindingVersion !== this.bindingVersion) {
             this.arrBindingStates.length = mixer._nActiveBindings;
-            for (let i = 0; i < mixer._nActiveBindings; i++) this.arrBindingStates[i] = this.bindingStates.get(mixer._bindings[i]);
+            this.arrBindingRootEnds.length = mixer._nActiveBindings;
+            for (let i = mixer._nActiveBindings - 1, end = mixer._nActiveBindings; i >= 0; i--) {
+                this.arrBindingStates[i] = this.bindingStates.get(mixer._bindings[i]);
+                this.arrBindingRootEnds[i] = end;
+                if (i > 0 && mixer._bindings[i - 1].binding.rootNode !== mixer._bindings[i].binding.rootNode) end = i;
+            }
             this.cachedBindingVersion = this.bindingVersion;
         }
         return this.arrBindingStates;
@@ -283,6 +289,10 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         for (let i = 0; i < mixer._nActiveBindings; i++) {
             const binding = mixer._bindings[i], state = states[i], root = state ? state.root : this.rootStates.get(binding.binding.rootNode);
             if (root && root.deferredFrame === frame) {
+                if (root.bindingVersion === this.bindingVersion) {
+                    i = this.arrBindingRootEnds[i] - 1;
+                    continue;
+                }
                 const index = root.bindingCount++;
                 root.bindings[index] = binding;
                 root.bindingStates[index] = state;
@@ -290,6 +300,8 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         }
 
         for (const root of this.arrDeferredRoots) {
+            if (root.bindingVersion === this.bindingVersion) continue;
+            root.bindingVersion = this.bindingVersion;
             root.bindings.length = root.bindingCount;
             root.bindingStates.length = root.bindingCount;
         }

@@ -136,9 +136,9 @@ export class BaseActor extends GameObject implements ICollidable {
     }
 
     public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
-        const field = id.slice(id.lastIndexOf(".") + 1);
+        const name = getScriptPropertyName(id);
 
-        switch (field.toLowerCase()) {
+        switch (name) {
             case "location":
                 tmpScriptLocation.fromArray(value as Vector3Arr);
                 tmpScriptLocation.z -= this.movementComponent.getCollisionHeight();
@@ -161,11 +161,11 @@ export class BaseActor extends GameObject implements ICollidable {
 
         if (!this.scriptProperties) throw new Error(`${this.type} has no UnrealScript property storage.`);
 
-        const property = findScriptPropertyKey(this.scriptProperties, field.toLowerCase()) ?? field;
+        const property = findScriptPropertyKey(this.scriptProperties, name) ?? id.slice(id.lastIndexOf(".") + 1);
 
         this.scriptProperties.set(property, value);
-        if (field.toLowerCase() === "level") updateLevelActor(this);
-        switch (field.toLowerCase()) {
+        if (name === "level") updateLevelActor(this);
+        switch (name) {
             case "bcollideactors":
                 this.movementComponent.setCollideActors(!!value);
                 this.renderManager.getPhysicsManager().updatePawnCollision(this);
@@ -177,7 +177,7 @@ export class BaseActor extends GameObject implements ICollidable {
             case "bblocknonzeroextenttraces": this.movementComponent.getCollisionProfile().blockNonZeroExtent = !!value; break;
             case "bworldgeometry": this.movementComponent.getCollisionProfile().worldGeometry = !!value; break;
         }
-        if (field.toLowerCase() === "drawscale" || field.toLowerCase() === "drawscale3d") this.dispatchComponentEvent(MESH_SCALE_CHANGED_EVENT);
+        if (name === "drawscale" || name === "drawscale3d") this.dispatchComponentEvent(MESH_SCALE_CHANGED_EVENT);
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {

@@ -254,6 +254,14 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         }
 
         for (const mesh of [...meshes, ...this.equipmentMeshes, ...this.batches]) {
+            for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+                const mat = material as MeshStaticMaterial;
+                if (!mat?.isStaticMeshMaterial || "USE_TEX_MODIFIER" in mat.defines) continue;
+
+                mat.defines.USE_TEX_MODIFIER = "";
+                mat.needsUpdate = true;
+            }
+
             // FDynamicActor::Render 0x8eef4e sets Pawn.bRendered before mesh submission.
             mesh.onBeforeRender = (_renderer, scene, _camera, _geometry, material) => {
                 if ((mesh as PawnMesh).isPawnMesh) (mesh as PawnMesh).updateBatch(_camera);

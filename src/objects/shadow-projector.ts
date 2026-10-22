@@ -273,7 +273,11 @@ export class ShadowProjector {
         if (cached) cached.material.dispose();
         // Trace7334112 presents X8R8G8B8; preserve canvas coverage while blending shadow RGB.
         const material = new ShaderMaterial({ vertexShader: source.vertexShader, fragmentShader: source.fragmentShader, defines: { ...source.defines, USE_PROJECTOR_RECEIVER: "" }, uniforms: { ...source.uniforms, shadowMatrix: new Uniform(new Matrix4()), shadowMap: new Uniform(null), shadowNormalMatrix: new Uniform(new Matrix3()), shadowDepthRange: new Uniform(new Vector2()), shadowAttenuation: new Uniform(this.attenuation) }, side: FrontSide, transparent: true, depthWrite: false, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendSrcAlpha: ZeroFactor, blendDst: OneMinusSrcAlphaFactor, blendDstAlpha: OneFactor });
-        if ((source as any).isTerrainMaterial) delete material.defines.TERRAIN_OVERLAY;
+        if ((source as any).isTerrainMaterial) {
+            delete material.defines.TERRAIN_OVERLAY;
+            delete material.defines.USE_UV_TEXTURE;
+        }
+        delete material.defines.USE_LIT_ATTRIBUTES;
         material.vertexColors = source.vertexColors;
         const dispose = () => material.dispose();
         source.addEventListener("dispose", dispose);

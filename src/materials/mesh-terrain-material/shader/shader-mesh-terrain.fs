@@ -21,10 +21,12 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
+#ifdef USE_PROJECTOR_RECEIVER
 uniform sampler2D shadowMap;
 uniform float shadowDarkness;
 uniform float shadowActive;
 varying vec4 vShadowCoord;
+#endif
 
 #ifdef USE_UV_TEXTURE
     #pragma params_include_layers

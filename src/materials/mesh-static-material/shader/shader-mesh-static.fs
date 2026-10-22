@@ -1,6 +1,11 @@
 uniform vec3 diffuse;
+#ifdef USE_TEX_MODIFIER
 uniform vec3 texModifierColor;
 uniform float texModifierAlpha;
+#else
+const vec3 texModifierColor = vec3(1.0);
+const float texModifierAlpha = -1.0;
+#endif
 uniform float opacity;
 #ifdef USE_PAWN_MATERIALS
     flat varying int vPawnPart;
@@ -527,7 +532,7 @@ uniform float opacity;
     varying vec3 vLitColor;
 #endif
 
-#if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+#if defined(USE_PROJECTOR_RECEIVER) && !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
     uniform sampler2D shadowMap;
     uniform float shadowDarkness;
     uniform float shadowActive;

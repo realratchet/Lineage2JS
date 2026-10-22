@@ -574,6 +574,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
     public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isDaytime: boolean, isSubmerged: boolean): void {
         const candidates = this.ambientCandidates;
+        let maxPriority = -Infinity;
 
         candidates.length = 0;
         for (const entry of this.activeAmbientSounds.values()) entry.isAudible = false;
@@ -607,11 +608,18 @@ export class AudioManager implements IEngineComponent<GameManager> {
             if (!info.looping && !this.rollAmbientTrigger(info.uuid, component.dataUri, info.randomChance, currentTime)) continue;
 
             candidates.push({ component, priority });
+            maxPriority = Math.max(maxPriority, priority);
         }
 
         // A playing ambient is never dropped for merely ranking below the newcomers
         for (const [id, entry] of this.activeAmbientSounds)
             if (!entry.isAudible) this.stopAmbientSound(id);
+
+        if (this.activeAmbientSounds.size >= MAX_AUDIOCHANNELS) {
+            let minPriority = Infinity;
+            for (const entry of this.activeAmbientSounds.values()) minPriority = Math.min(minPriority, entry.priority);
+            if (maxPriority <= minPriority) return;
+        }
 
         candidates.sort((a, b) => b.priority - a.priority);
 
