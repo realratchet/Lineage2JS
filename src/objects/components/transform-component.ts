@@ -306,6 +306,7 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
                 this.basedMoveQuery.ignoreCollision = passenger;
                 try { physics.moveActor(this.basedMoveQuery, actor, childRotation); }
                 finally {
+                    this.basedMoveQuery.hit = null;
                     this.basedMoveQuery.sourceActor = null;
                     this.basedMoveQuery.sourceProfile = null;
                     this.basedMoveQuery.sourceCollider = null;
@@ -341,6 +342,7 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
             this.basedMoveQuery.ignoreCollision = !!(parent as any).isVehicle && !!actor.getUnrealScriptProperty("bGetOnVehicle");
             try { physics.moveActor(this.basedMoveQuery, actor, actor.getUnrealScriptProperty("Rotation") as Vector3Arr, true); }
             finally {
+                this.basedMoveQuery.hit = null;
                 this.basedMoveQuery.sourceActor = null;
                 this.basedMoveQuery.sourceProfile = null;
                 this.basedMoveQuery.sourceCollider = null;

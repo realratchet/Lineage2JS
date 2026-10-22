@@ -190,7 +190,9 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
 
         tmpOldPosition.copy(effect.position);
         const distanceSquared = tmpOldPosition.distanceToSquared(this.targetLocation);
-        const hit = this.physicsManager.moveActor(this.query);
+        this.physicsManager.moveActor(this.query);
+        const hit = this.query.hit;
+        this.query.hit = null;
 
         if (hit || tmpOldPosition.distanceToSquared(effect.position) >= distanceSquared) {
             // Engine.dll physNProjectile 0x8d344d..0x8d3524 uses the post-movement position.

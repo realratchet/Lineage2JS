@@ -1169,8 +1169,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         let hit: CheckResult_T;
         moveActorDepth++;
-        try { hit = this.physicsManager.moveActor(query, this.getParent()); }
-        finally { moveActorDepth--; query.ignoreCollision = false; }
+        try { this.physicsManager.moveActor(query, this.getParent()); hit = query.hit; }
+        finally { moveActorDepth--; query.ignoreCollision = false; query.hit = null; }
 
         position.copy(this.getPosition());
 

@@ -203,12 +203,16 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (!sector) throw new Error(`Pawn '${pawn.name}' has an unregistered LevelInfo.`);
         this.collisionWorld.setPawnLevel(pawn, sector.physicsVolumeActors);
     }
-    public moveActor(query: CollisionQuery_T, pawn: BaseActor = null, rotation: Vector3Arr = null, test: boolean = false): CheckResult_T | null {
-        if (!pawn) return this.collisionWorld.moveActor(query);
+    public moveActor(query: CollisionQuery_T, pawn: BaseActor = null, rotation: Vector3Arr = null, test: boolean = false): boolean {
+        query.hit = null;
+        if (!pawn) {
+            query.hit = this.collisionWorld.moveActor(query);
+            return !query.hit || query.hit.time > 0;
+        }
 
         const hasMovement = query.delta.lengthSq() !== 0;
         const oldRotation = rotation ? pawn.getUnrealScriptProperty("Rotation") as Vector3Arr : null;
-        if (!hasMovement && (!rotation || rotation.every((value, index) => value === oldRotation[index]))) return null;
+        if (!hasMovement && (!rotation || rotation.every((value, index) => value === oldRotation[index]))) return true;
 
         // shortcut: ordinary cylinder pawn movement, extend before mesh or encroacher translation.
         const transform = pawn.getComponent<TransformComponent>("transform"), hasBasedActors = !test && transform.getBasedActors().size > 0;
@@ -228,7 +232,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             this.setActorRotation(pawn, previousRotation);
             transform.rollbackBasedActors(delta);
             location.fromArray(pawn.getUnrealScriptProperty("Location") as Vector3Arr);
-            return hit;
+            query.hit = hit;
+            return false;
         }
         if (!test) {
             if (hasMovement || hasBasedActors) transform.updateRelativeLocation();
@@ -240,7 +245,8 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         }
         if (test) this.setPawnZone(pawn, true);
         location.fromArray(pawn.getUnrealScriptProperty("Location") as number[]);
-        return hit;
+        query.hit = hit;
+        return !hit || hit.time > 0;
     }
     public singleLineCheck(query: CollisionQuery_T): CheckResult_T | null { return this.collisionWorld.singleLineCheck(query); }
     public isBlockedBy(source: ScriptHost_T, target: ScriptHost_T, vm: UnScriptVM): boolean { return this.collisionWorld.isBlockedBy(source, target, vm); }

@@ -56,6 +56,7 @@ export type CollisionActor_T = BaseActor | CollidingMesh | StaticMeshActor | Vol
 type CollisionSource_T = CollisionActor_T | PhysicsVolume | MusicVolume;
 
 export type CollisionQuery_T = {
+    hit?: CheckResult_T | null;
     location: Vector3;
     delta: Vector3;
     extent: Vector3;
