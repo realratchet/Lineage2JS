@@ -28,6 +28,7 @@ type AmbientChannel_T = {
     panner?: PannerNode,
     gain?: GainNode,
     priority: number,
+    isAudible: boolean,
     info: AmbientInfo_T
 };
 
@@ -531,7 +532,6 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly cacheAmbientCells = new Map<number, AmbientSoundComponent[]>();
     protected isAmbientGridDirty = true;
     protected readonly ambientCandidates: AmbientCandidate_T[] = [];
-    protected readonly audibleAmbientSounds = new Map<string, number>();
     protected readonly ambientBufferCache = new Map<string, AudioBuffer>();
     protected readonly ambientSlotAnchors = new Map<string, number>();
     protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
@@ -574,10 +574,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
     public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isDaytime: boolean, isSubmerged: boolean): void {
         const candidates = this.ambientCandidates;
-        const audibleSounds = this.audibleAmbientSounds;
 
         candidates.length = 0;
-        audibleSounds.clear();
+        for (const entry of this.activeAmbientSounds.values()) entry.isAudible = false;
 
         if (this.isAmbientGridDirty) this.rebuildAmbientGrid();
 
@@ -599,21 +598,20 @@ export class AudioManager implements IEngineComponent<GameManager> {
             // SoundPriority: Volume * Clamp(1 - distSq / Square(GAudioMaxRadiusMultiplier*Radius), 0.01, 1)
             const priority = info.volume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
 
-            audibleSounds.set(info.uuid, priority);
-
-            if (this.activeAmbientSounds.has(info.uuid)) continue;
+            const active = this.activeAmbientSounds.get(info.uuid);
+            if (active) {
+                active.priority = priority;
+                active.isAudible = true;
+                continue;
+            }
             if (!info.looping && !this.rollAmbientTrigger(info.uuid, component.dataUri, info.randomChance, currentTime)) continue;
 
             candidates.push({ component, priority });
         }
 
         // A playing ambient is never dropped for merely ranking below the newcomers
-        for (const [id, entry] of this.activeAmbientSounds) {
-            const priority = audibleSounds.get(id);
-
-            if (priority === undefined) this.stopAmbientSound(id);
-            else entry.priority = priority;
-        }
+        for (const [id, entry] of this.activeAmbientSounds)
+            if (!entry.isAudible) this.stopAmbientSound(id);
 
         candidates.sort((a, b) => b.priority - a.priority);
 
@@ -672,6 +670,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         const entry: AmbientChannel_T = {
             priority,
+            isAudible: false,
             info: { dataUri, soundName, position, volume, pitch, refDistance, maxDistance, looping }
         };
 

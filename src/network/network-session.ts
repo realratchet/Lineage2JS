@@ -275,7 +275,7 @@ export class NetworkSession {
 
         file.setScene(scene);
         // shortcut: follow-camera presets; extend after observer/free-camera initialization is traced.
-        if (scene.cameraMode || scene.observerMode || scene.zoom !== scene.desiredZoom && properties.get("bUseVolumeCamera") || Math.min(scene.zoom, scene.desiredZoom) + 250 <= 0) throw new Error(`Replay camera mode is not implemented.`);
+        if (scene.cameraMode || scene.observerMode) throw new Error(`Replay camera mode is not implemented.`);
         const presetCount = properties.get("FixedDefaultViewNum") as number;
 
         if (scene.fixedCamera < 0 || scene.fixedCamera >= Math.max(1, presetCount)) throw new Error(`Invalid replay camera preset '${scene.fixedCamera}'.`);
@@ -343,13 +343,13 @@ export class NetworkSession {
 
     public startReplayRecording(): void {
         if (!this.network.actors.inWorld || this.game.isRecording()) return;
-        const render = this.network.getParent().getComponent("render"), input = this.network.getParent().getComponent("input"), properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
+        const render = this.network.getParent().getComponent("render"), properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
         const file = new L2ReplayFile(), direction = render.camera.getWorldDirection(new Vector3());
         const time = (render.environment.getTimeSeconds() % 86400 + 86400) % 86400;
-        const zoom = (input.controls.orbit.unclippedDistance || render.camera.position.distanceTo(input.controls.orbit.target)) - 250;
+        const zoom = properties.get("CurZoomingDist") as number;
         const fixedCamera = properties.get("CurFixedDefaultCameraNo") as number;
 
-        file.setScene({ position: render.camera.position.toArray(), yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI), pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI), zoom, desiredZoom: zoom, hour: Math.floor(time / 3600), minute: Math.floor(time / 60) % 60, second: time % 60, duration: 0, cameraMode: properties.get("bCameraWalking") ? 1 : 0, firstPerson: fixedCamera === 1 ? 1 : 0, observerMode: this.network.movement.observation ? 1 : 0, actorYaw: render.player.getRotationYaw(), fixedCamera });
+        file.setScene({ position: render.camera.position.toArray(), yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI), pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI), zoom, desiredZoom: properties.get("DesiredZoomingDist") as number, hour: Math.floor(time / 3600), minute: Math.floor(time / 60) % 60, second: time % 60, duration: 0, cameraMode: properties.get("bCameraWalking") ? 1 : 0, firstPerson: fixedCamera === 1 ? 1 : 0, observerMode: this.network.movement.observation ? 1 : 0, actorYaw: render.player.getRotationYaw(), fixedCamera });
         file.arrUserIds = [...this.network.actors.objects.keys()];
         this.game.startRecording(file);
         this.network.ui.setReplayRecording(true);

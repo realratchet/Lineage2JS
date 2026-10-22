@@ -362,6 +362,7 @@ function resolveCharacterPartPaths(row: Record<string, any>, headParts: Characte
 
 function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: number, buffer: ArrayBuffer } {
     let width = info.width, height = info.height, buffer: ArrayBuffer;
+    let hasAlpha = info.isAlphaTexture || info.isMasked;
 
     if (info.textureType === "rgba") {
         const data = info as IDataTextureDecodeInfo;
@@ -380,13 +381,13 @@ function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: n
 
         switch (fourCC) {
             case DDSConstants.FOURCC_DXT1: buffer = dxt1ToRgba(width, height, input).buffer as ArrayBuffer; break;
-            case DDSConstants.FOURCC_DXT3: buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer; break;
-            case DDSConstants.FOURCC_DXT5: buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer; break;
+            case DDSConstants.FOURCC_DXT3: buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = true; break;
+            case DDSConstants.FOURCC_DXT5: buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = true; break;
             default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
         }
     }
 
-    if (!info.isAlphaTexture && !info.isMasked) {
+    if (!hasAlpha) {
         const pixels = new Uint8Array(buffer);
 
         for (let i = 3; i < pixels.length; i += 4) pixels[i] = 255;

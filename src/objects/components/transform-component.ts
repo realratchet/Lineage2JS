@@ -54,6 +54,13 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
         const context = call.context as any;
         const name = call.index === 267 ? "setlocation" : call.index === 299 ? "setrotation" : call.name.toLowerCase();
 
+        if (call.index === 262 || name === "setcollision") {
+            if (context !== this.getParent()) throw new Error(`SetCollision for '${context.scriptClassId}' is not implemented by '${this.getParent().name}'.`);
+
+            this.renderManager.getPhysicsManager().setCollision(context, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
+            return;
+        }
+
         if (call.index === 298 || name === "setbase") {
             const base = call.args[0] as any;
 
@@ -255,6 +262,7 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
         for (const entry of this.basedActors) {
             const actor = entry as BaseActor, movement = actor.findComponent<PawnMovementComponent>("pawnMovement");
             if (actor.scriptBase && !movement) continue;
+            const passenger = (parent as any).isVehicle && !!actor.getUnrealScriptProperty("bGetOnVehicle");
             const controller = actor === this.renderManager.player ? this.renderManager.getParent().getComponent("asset").playerController : actor.getUnrealScriptProperty("Controller") as ScriptHost_T;
 
             if (controller) {
@@ -295,18 +303,19 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
                 this.basedMoveQuery.sourceProfile = actor.getCollisionProfile();
                 this.basedMoveQuery.sourceCollider = actor.getCollider();
                 this.basedMoveQuery.sourceBody = actor.getRigidbody();
+                this.basedMoveQuery.ignoreCollision = passenger;
                 try { physics.moveActor(this.basedMoveQuery, actor, childRotation); }
                 finally {
                     this.basedMoveQuery.sourceActor = null;
                     this.basedMoveQuery.sourceProfile = null;
                     this.basedMoveQuery.sourceCollider = null;
                     this.basedMoveQuery.sourceBody = null;
+                    this.basedMoveQuery.ignoreCollision = false;
                 }
             }
             this.basedMoveLocation.fromArray(actor.getUnrealScriptProperty("Location") as Vector3Arr);
             this.basedMoveExtent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), actor.getCollisionHeight());
             // Acknowledged passengers must not reject their own ship's turn at a railing.
-            const passenger = (parent as any).isVehicle && actor.getUnrealScriptProperty("bGetOnVehicle");
             if (!passenger && physics.isBlockedBy(actor, parent, vm) && pointPrimitive(parent.getCollisionPrimitive(), this.basedMoveLocation, this.basedMoveExtent) && script.call("EncroachingOn", [actor])) return false;
             if (actor.getBaseActor() === parent) actor.getComponent<TransformComponent>("transform").updateBaseTransform(parent.getWorldPosition(tmpBasePosition), parent.getWorldQuaternion(tmpBaseQuaternion));
         }
@@ -329,12 +338,14 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
             this.basedMoveQuery.sourceProfile = actor.getCollisionProfile();
             this.basedMoveQuery.sourceCollider = actor.getCollider();
             this.basedMoveQuery.sourceBody = actor.getRigidbody();
+            this.basedMoveQuery.ignoreCollision = !!(parent as any).isVehicle && !!actor.getUnrealScriptProperty("bGetOnVehicle");
             try { physics.moveActor(this.basedMoveQuery, actor, actor.getUnrealScriptProperty("Rotation") as Vector3Arr, true); }
             finally {
                 this.basedMoveQuery.sourceActor = null;
                 this.basedMoveQuery.sourceProfile = null;
                 this.basedMoveQuery.sourceCollider = null;
                 this.basedMoveQuery.sourceBody = null;
+                this.basedMoveQuery.ignoreCollision = false;
             }
             if (actor.getBaseActor() === parent) actor.getComponent<TransformComponent>("transform").updateBaseTransform(parent.getWorldPosition(tmpBasePosition), parent.getWorldQuaternion(tmpBaseQuaternion));
         }

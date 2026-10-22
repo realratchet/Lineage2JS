@@ -6,6 +6,8 @@ import type MovableObject from "../../objects/movable-object";
 import type RotatingObject from "../../objects/rotating-object";
 import type PhysicsManager from "../physics-manager";
 import type UIManager from "../../game/ui-manager";
+import type { CollisionActor_T } from "../collision-world";
+import type StaticMeshActor from "../../objects/static-mesh-actor";
 
 export type IPhysicsComponent<TParent extends IObject = IObject> = IComponent<TParent> & {
     readonly isPhysicsComponent: boolean;
@@ -48,6 +50,14 @@ export abstract class PhysicsComponent<TParent extends IObject = IObject> extend
 export class ColliderComponent extends PhysicsComponent<ICollidable & IObject> {
     public readonly componentName = "collider";
     protected isRegistered = false;
+
+    public setCollision(actor: CollisionActor_T, collideActors?: boolean, blockActors?: boolean, blockPlayers?: boolean): void {
+        if (!this.physicsManager) throw new Error(`Collision actor '${this.getParent().name}' has no physics manager.`);
+        if (actor !== this.getParent() && (actor as StaticMeshActor).collisionOwner !== this.getParent())
+            throw new Error(`Collision actor '${actor.name}' does not belong to '${this.getParent().name}'.`);
+
+        this.physicsManager.setCollision(actor, collideActors, blockActors, blockPlayers);
+    }
 
     public onPhysicsAdded(manager: PhysicsManager): void {
         super.onPhysicsAdded(manager);

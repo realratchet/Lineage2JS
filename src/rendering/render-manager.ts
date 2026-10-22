@@ -1,3 +1,5 @@
+import NameplateDepth from "./nameplate-depth";
+import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
@@ -296,11 +298,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly arrViewportBatchEmitters: any[] = [];
-    protected readonly arrVisibleNameplates: Object3D[] = [];
-    protected readonly arrNameplateWorldRoots: Object3D[] = [];
-    protected readonly arrNameplateDepthMaterials: THREE.Material[] = [];
-    protected readonly arrNameplateDepthColorWrites: boolean[] = [];
-    protected readonly nameplateDepthMaterials = new Set<THREE.Material>();
+    protected readonly nameplateDepth: NameplateDepth;
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
@@ -399,12 +397,33 @@ export class RenderManager implements IEngineComponent<GameManager> {
             alpha: true,
         });
 
+        this.nameplateDepth = new NameplateDepth(this.renderer);
+        const renderBufferDirect = this.renderer.renderBufferDirect;
+        this.renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
+            if (group && group.count === 0) return;
+
+            this.nameplateDepth.beforeRender(material, object);
+            renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
+        };
+
+        const dispose = this.renderer.dispose;
+        this.renderer.dispose = () => {
+            this.nameplateDepth.dispose();
+            dispose.call(this.renderer);
+        };
+
         this.renderer.outputColorSpace = LinearSRGBColorSpace;
         this.renderer.setOpaqueSort((a, b) => {
             const programA = this.renderer.properties.get(a.material).currentProgram?.id ?? -1;
             const programB = this.renderer.properties.get(b.material).currentProgram?.id ?? -1;
 
             return a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || programA - programB || a.material.id - b.material.id || a.materialVariant - b.materialVariant || a.z - b.z || a.id - b.id;
+        });
+        this.renderer.setTransparentSort((a, b) => {
+            const nameA = !!(a.object as any).isNameplate, nameB = !!(b.object as any).isNameplate;
+            if (nameA !== nameB) return nameA ? 1 : -1;
+
+            return a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || b.z - a.z || a.id - b.id;
         });
         this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
@@ -1139,8 +1158,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getLevel(): SectorObject { return this.level; }
-    public setLevel(level: SectorObject): void {
+    public setLevel(level: SectorObject, netMode: ENetMode_T = ENetMode_T.NM_Standalone): void {
         this.level = level;
+        if (level) {
+            level.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
+            for (const sector of this.arrSceneSectors) sector.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
+        }
         this.levelTimeSeconds = 0;
         this.updateLevelTime(0);
     }
@@ -2389,7 +2412,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // i think bloom pass is only enabled when shader rendering used which is off by default
         // this.renderer.setRenderTarget(this.mainRenderTarget);
 
-        this.renderer.setRenderTarget(this.displayGammaEnabled || this.displayGammaPass.getTarget().samples > 0 ? this.displayGammaPass.getTarget() : null);
+        const worldRenderTarget = this.displayGammaPass.getTarget();
+        const renderToTarget = this.displayGammaEnabled || worldRenderTarget.samples > 0 || this.scene.children.some(object => (object as any).isNameplate && object.visible && (object as Sprite).material.visible);
+        this.renderer.setRenderTarget(renderToTarget ? worldRenderTarget : null);
 
         // Render Sky (Background)
         this.renderer.clear();
@@ -2533,7 +2558,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         // this.renderer.setRenderTarget(null);
 
-        if (this.displayGammaEnabled || this.displayGammaPass.getTarget().samples > 0) this.displayGammaPass.render(this.renderer, undefined, this.displayGammaEnabled);
+        if (renderToTarget) this.displayGammaPass.render(this.renderer, undefined, this.displayGammaEnabled);
 
         if (viewShakeActive) this.restoreViewShake();
     }
@@ -2541,65 +2566,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected drawWorld() {
         const frame = LocalSpaceSkeleton.renderFrame;
         LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
+        this.nameplateDepth.begin(this.scene);
         try {
-            const arrNames = this.arrVisibleNameplates, arrRoots = this.arrNameplateWorldRoots;
-            const arrMaterials = this.arrNameplateDepthMaterials, arrColorWrites = this.arrNameplateDepthColorWrites;
-            const materials = this.nameplateDepthMaterials;
-
-            arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
-            materials.clear();
-            this.scene.children.forEach(object => {
-                if (object.visible && (object as any).isNameplate && (object as Sprite).material.visible) arrNames.push(object);
-            });
-            if (!arrNames.length) {
-                this.renderer.render(this.scene, this.camera);
-                return;
-            }
-
-            try {
-                arrNames.forEach(object => object.visible = false);
-                this.renderer.render(this.scene, this.camera);
-                const saveMaterial = (material: THREE.Material) => {
-                    if (!material || !material.visible || materials.has(material)) return;
-
-                    materials.add(material);
-                    arrMaterials.push(material);
-                    arrColorWrites.push(material.colorWrite);
-                    if (material.transparent || !material.depthWrite) material.visible = false;
-                    else material.colorWrite = false;
-                };
-                this.scene.traverseVisible(object => {
-                    const value = (object as any).material;
-                    if (!value) return;
-
-                    if (Array.isArray(value)) value.forEach(saveMaterial);
-                    else saveMaterial(value);
-                });
-                this.renderer.clearDepth();
-                this.renderer.render(this.scene, this.camera);
-                arrMaterials.forEach((material, index) => {
-                    material.colorWrite = arrColorWrites[index];
-                    material.visible = true;
-                });
-                this.scene.children.forEach(object => {
-                    if (!object.visible) return;
-
-                    arrRoots.push(object);
-                    object.visible = false;
-                });
-                arrNames.forEach(object => object.visible = true);
-                this.renderer.render(this.scene, this.camera);
-            } finally {
-                arrMaterials.forEach((material, index) => {
-                    material.colorWrite = arrColorWrites[index];
-                    material.visible = true;
-                });
-                arrRoots.forEach(object => object.visible = true);
-                arrNames.forEach(object => object.visible = true);
-                arrNames.length = arrRoots.length = arrMaterials.length = arrColorWrites.length = 0;
-                materials.clear();
-            }
+            this.renderer.render(this.scene, this.camera);
         } finally {
+            this.nameplateDepth.end();
             LocalSpaceSkeleton.renderFrame = frame;
         }
     }
@@ -2670,7 +2641,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public addSector(sector: SectorObject) {
         sector.setRenderDeco(this.renderDeco);
-        if (this.level) sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", Math.fround(this.levelTimeSeconds));
+        if (this.level) {
+            sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", Math.fround(this.levelTimeSeconds));
+            sector.levelInfoActor.setUnrealScriptProperty("NetMode", this.level.levelInfoActor.getUnrealScriptProperty("NetMode"));
+        }
 
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))

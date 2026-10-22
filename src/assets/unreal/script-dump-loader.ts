@@ -1,11 +1,11 @@
-import type { ScriptBytecodeEntry_T, UClass, UFunction, UObject, UState, UStruct, UStructProperty, PropertyTypes_T } from "@l2js/core";
+import { ExprToken_T, ObjectFlags_T, type ScriptBytecodeEntry_T, type UClass, type UFunction, type UObject, type UState, type UStruct, type UProperty, type UStructProperty, type UArrayProperty, type PropertyTypes_T } from "@l2js/core";
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector3Arr } from "./library-types";
 
 export type ScriptBytecodeValue_T = number | string | null | Vector3Arr | IScriptBytecodeOffsetDecodeInfo | IScriptBytecodeLabelDecodeInfo;
 export type IScriptBytecodeOffsetDecodeInfo = { virtualOffset: number, entryIndex: number };
 export type IScriptBytecodeLabelDecodeInfo = IScriptBytecodeOffsetDecodeInfo & { name: string };
-export type IScriptBytecodeEntryDecodeInfo = { virtualOffset: number, type: string, value: ScriptBytecodeValue_T, tokenName?: string };
+export type IScriptBytecodeEntryDecodeInfo = { virtualOffset: number, type: string, value: ScriptBytecodeValue_T, tokenName?: string, arrayElementDefault?: ScriptPropertyValue_T };
 export type IScriptProgramDecodeInfo = { virtualSize: number, entries: IScriptBytecodeEntryDecodeInfo[] };
 
 export type IScriptFieldDecodeInfo = {
@@ -45,6 +45,7 @@ export type IScriptStateDecodeInfo = {
 export type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
     superClassId: string | null,
     classFlags: number,
+    isNative: boolean,
     stateIds: string[],
     defaults: Record<string, ScriptPropertyValue_T>
 };
@@ -90,8 +91,13 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
 export function dumpObjectScriptProperties(object: UObject): Record<string, ScriptPropertyValue_T> {
     const properties: Record<string, ScriptPropertyValue_T> = {};
 
-    for (const name of object.propertyDict.keys())
-        properties[name] = dumpPropertyValue(object.propertyDict.get(name));
+    for (const name of object.propertyDict.keys()) {
+        const value = object.propertyDict.get(name);
+
+        properties[name] = Array.isArray(value) && (value.includes(null) || value.includes(undefined))
+            ? dumpFieldValue((object as any).findValidProperty(name).loadSelf(), value)
+            : dumpPropertyValue(value);
+    }
 
     return properties;
 }
@@ -114,14 +120,24 @@ function makeStructDefault(field: UStructProperty): ScriptPropertyValue_T {
     for (const child of struct.childPropFields.values()) {
         child.loadSelf();
 
-        const childValue = child.getDefaultValue();
-
-        value[child.propertyName] = childValue === null && child.getTypeName() === "Struct"
-            ? makeStructDefault(child as UStructProperty)
-            : dumpPropertyValue(childValue);
+        value[child.propertyName] = dumpFieldValue(child, child.getDefaultValue());
     }
 
     return value;
+}
+
+function dumpFieldValue(field: UProperty, value: any): ScriptPropertyValue_T {
+    if (field.arrayDimensions > 1) {
+        const defaults = field.getDefaultValue() as any[];
+
+        return Array.from(value, (element, index) => element === null || element === undefined
+            ? field.getTypeName() === "Struct" ? makeStructDefault(field as UStructProperty) : field.getTypeName() === "Array" ? [] : dumpPropertyValue(defaults[index])
+            : dumpPropertyValue(element));
+    }
+
+    if (value === null && field.getTypeName() === "Array") return [];
+
+    return value === null && field.getTypeName() === "Struct" ? makeStructDefault(field as UStructProperty) : dumpPropertyValue(value);
 }
 
 function dumpClassDefaults(cls: UClass): Record<string, ScriptPropertyValue_T> {
@@ -133,11 +149,7 @@ function dumpClassDefaults(cls: UClass): Record<string, ScriptPropertyValue_T> {
         const name = field.propertyName;
         if (name in defaults) continue;
 
-        const value = field.getDefaultValue();
-
-        defaults[name] = value === null && field.getTypeName() === "Struct"
-            ? makeStructDefault(field as UStructProperty)
-            : dumpPropertyValue(value);
+        defaults[name] = dumpFieldValue(field, field.getDefaultValue());
     }
 
     return defaults;
@@ -195,12 +207,26 @@ function dumpProgram(script: UStruct): IScriptProgramDecodeInfo {
 
     return {
         virtualSize,
-        entries: entries.map(entry => ({
-            virtualOffset: entry.offset,
-            type: entry.type,
-            value: dumpBytecodeValue(script, entry, entriesByOffset, virtualSize),
-            tokenName: entry.tokenName
-        }))
+        entries: entries.map(entry => {
+            const value: IScriptBytecodeEntryDecodeInfo = {
+                virtualOffset: entry.offset,
+                type: entry.type,
+                value: dumpBytecodeValue(script, entry, entriesByOffset, virtualSize),
+                tokenName: entry.tokenName
+            };
+
+            if (entry.type === "propertyRef") {
+                const field = (script as any).pkg.fetchObject(entry.value).loadSelf() as UProperty;
+
+                if (field.getTypeName() === "Array") {
+                    const inner = (field as UArrayProperty).value.loadSelf();
+
+                    value.arrayElementDefault = dumpFieldValue(inner, inner.getDefaultValue());
+                }
+            }
+
+            return value;
+        })
     };
 }
 
@@ -261,6 +287,21 @@ function dumpState(state: UState): IScriptStateDecodeInfo {
     };
 }
 
+function getConstructedClasses(script: UStruct): UClass[] {
+    const entries = script.getScriptBytecode(), classes: UClass[] = [];
+
+    if (!entries.some(entry => entry.type === "token" && entry.value === ExprToken_T.New)) return classes;
+
+    for (const entry of entries) {
+        if (entry.type !== "objectRef" || !entry.value) continue;
+        const object = (script as any).pkg.fetchObject(entry.value);
+
+        if (object?.isClass) classes.push(object);
+    }
+
+    return classes;
+}
+
 export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): void {
     const seenClasses = new Set<string>();
 
@@ -270,6 +311,7 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
         if (id in library.scriptFunctions) return;
 
         library.scriptFunctions[id] = dumpFunction(fn);
+        for (const cls of getConstructedClasses(fn)) pullClass(cls);
     }
 
     function pullState(state: UState) {
@@ -282,6 +324,7 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
         for (const fn of state.childFunctions) pullFunction(fn);
 
         library.scriptStates[id] = dumpState(state);
+        for (const cls of getConstructedClasses(state)) pullClass(cls);
 
         const superState = state.superField;
 
@@ -314,9 +357,11 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
             ...stateInfo,
             superClassId: superClass ? getObjectId(superClass) : null,
             classFlags: cls.getClassFlags(),
+            isNative: !!(cls.exp.flags & ObjectFlags_T.RF_Native),
             stateIds: cls.childStates.map(state => getObjectId(state)),
             defaults: dumpClassDefaults(cls)
         };
+        for (const constructed of getConstructedClasses(cls)) pullClass(constructed);
     }
 
     for (const cls of classes)
@@ -363,9 +408,11 @@ export function pullScriptClassFunctions(library: DecodeLibrary, classes: Iterab
             program: { virtualSize: 0, entries: [] },
             superClassId: superClass ? getObjectId(superClass) : null,
             classFlags: cls.getClassFlags(),
+            isNative: !!(cls.exp.flags & ObjectFlags_T.RF_Native),
             stateIds: [],
             defaults: dumpClassDefaults(cls)
         };
+        pullScriptClasses(library, functions.flatMap(getConstructedClasses));
     }
 
     for (const cls of classes)

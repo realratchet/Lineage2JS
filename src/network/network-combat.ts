@@ -393,7 +393,7 @@ export class NetworkCombat {
         if (animation.toLowerCase() === "none") return;
 
         actor.setIdleAnimation(animation);
-        if (updatePose && !actor.isLocomoting() && actor.getAnimationAction()?.loop !== LoopOnce) actor.playMovementAnimation("idle");
+        if (updatePose && !actor.isLocomoting() && !actor.getComponent<PawnAttackComponent>("pawnAttack").isAttacking() && actor.getAnimationAction()?.loop !== LoopOnce) actor.playMovementAnimation("idle");
     }
 
     public onCombatState(objectId: number, isInCombat: boolean) {

@@ -33,13 +33,12 @@ const arrLightCandidates: number[] = [];
 const tmpLightCenter = new Vector3();
 const tmpLightExtent = new Vector3();
 const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
-const TRANSPARENT_SORT_DISTANCE_SQ = 128 * 128;
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
-type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number; transparent: number };
+type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number };
 
 function considerLight(light: DynamicLight, position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, isSpecialLit: boolean) {
     if (light.isSpecialLit !== isSpecialLit) return;
@@ -123,7 +122,7 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
             run.count += group.count;
         } else {
             if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
-            run = { start: offset, count: group.count, materialIndex: group.materialIndex, distance: group.distance, transparent: group.transparent };
+            run = { elementIndex: group.elementIndex, start: offset, count: group.count, materialIndex: group.materialIndex, distance: group.distance, transparent: group.transparent };
         }
 
         offset += group.count;
@@ -1529,8 +1528,24 @@ export class SectorObject extends GameObject {
                         }
                     }
 
-                    const transparentSortPosition = (object as any).transparentSortPosition as Vector3;
-                    const sortChanged = !!sortedTransparentMats?.size && (!transparentSortPosition || transparentSortPosition.distanceToSquared(cameraPosition) >= TRANSPARENT_SORT_DISTANCE_SQ);
+                    let sortChanged = false;
+                    const previousGroups = (object as any).visibleBatchGroups as BatchGroup_T[];
+
+                    if (!visibilityChanged && sortedTransparentMats?.size && previousGroups) {
+                        let previousDistance = Infinity, previousMaterial = -1;
+
+                        for (const group of previousGroups) {
+                            if (!group.transparent) continue;
+                            const distance = elemDistances[group.elementIndex];
+
+                            if (distance > previousDistance || distance === previousDistance && group.materialIndex < previousMaterial) {
+                                sortChanged = true;
+                                break;
+                            }
+                            previousDistance = distance;
+                            previousMaterial = group.materialIndex;
+                        }
+                    }
 
                     if (visibilityChanged) (object as any).needsRelightPass = true; // catch up a newly-visible element's dynamic lighting
 
@@ -1550,8 +1565,9 @@ export class SectorObject extends GameObject {
 
                             for (const g of batchElements[ei].groups) {
                                 let entry = groupPool[groupCount];
-                                if (!entry) entry = groupPool[groupCount] = { start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
+                                if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
 
+                                entry.elementIndex = ei;
                                 entry.start = g.start;
                                 entry.count = g.count;
                                 entry.materialIndex = g.materialIndex;
@@ -1570,10 +1586,6 @@ export class SectorObject extends GameObject {
                         }
 
                         object.visible = groupCount > 0;
-                        if (sortedTransparentMats?.size) {
-                            if (transparentSortPosition) transparentSortPosition.copy(cameraPosition);
-                            else (object as any).transparentSortPosition = cameraPosition.clone();
-                        }
                     }
 
                     if (object.visible) visibleCount++;

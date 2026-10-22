@@ -7,6 +7,7 @@ import Rotator from "../utils/rotator";
 import { Vector3 } from "three";
 import { pointPrimitive } from "../physics/collision-primitive";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
+import { ColliderComponent } from "../physics/components/physics-component";
 
 const tmpRotator = new Rotator();
 const tmpLocation = new Vector3();
@@ -37,6 +38,20 @@ export class Volume extends Actor implements ICollidable {
     public getCollisionProfile(): ActorCollisionProfile_T { return this.collisionProfile; }
     public getCollisionPrimitive(): CollisionPrimitive_T { return this.collisionOwner.getCollisionPrimitive(); }
     public getCollisionRadius(): number { return this.collisionProfile.collisionRadius; }
+    public getCollisionHeight(): number { return this.collisionProfile.collisionHeight; }
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
+        super.setUnrealScriptProperty(id, value);
+
+        switch (id.slice(id.lastIndexOf(".") + 1).toLowerCase()) {
+            case "bcollideactors": this.collisionProfile.collideActors = !!value; break;
+            case "bcollideworld": this.collisionProfile.collideWorld = !!value; break;
+            case "bblockactors": this.collisionProfile.blockActors = !!value; break;
+            case "bblockplayers": this.collisionProfile.blockPlayers = !!value; break;
+            case "bblockzeroextenttraces": this.collisionProfile.blockZeroExtent = !!value; break;
+            case "bblocknonzeroextenttraces": this.collisionProfile.blockNonZeroExtent = !!value; break;
+            case "bworldgeometry": this.collisionProfile.worldGeometry = !!value; break;
+        }
+    }
     public encompasses(location: Vector3): boolean {
         if (!this.getUnrealScriptProperty("Brush")) return false;
 
@@ -44,6 +59,12 @@ export class Volume extends Actor implements ICollidable {
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        if (call.index === 262 || call.name.toLowerCase() === "setcollision") {
+            if (call.context !== this) throw new Error(`SetCollision context does not match '${this.name}'.`);
+
+            this.collisionOwner.getComponent<ColliderComponent>("collider").setCollision(this, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
+            return;
+        }
         if (call.name.toLowerCase() === "encompasses") return this.encompasses(tmpLocation.fromArray(call.args[0] as Vector3Arr));
 
         return super.callUnrealNative(call);

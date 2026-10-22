@@ -1,5 +1,5 @@
 import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
-import { Box3, Raycaster, Vector2, Vector3 } from "three";
+import { Box3, Camera, Raycaster, Vector2, Vector3 } from "three";
 import { IEngineComponent } from "./components";
 import { getProperty, setProperty } from "../ue-script/vm";
 import { ZUpOrbitControls } from "../rendering/camera/controllers/zup-orbit-controls";
@@ -15,6 +15,9 @@ import type StaticMeshActor from "../objects/static-mesh-actor";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
 import type { CollisionQuery_T } from "../physics/collision-world";
 import SpecialView from "../rendering/camera/special-view";
+import VolumeCamera from "../rendering/camera/volume-camera";
+import BehindViewCamera from "../rendering/camera/behind-view-camera";
+import { sinRotator } from "../assets/unreal/utils/rotator";
 import type { ReplayScene_T, ReplayCameraInstruction_T } from "../network/l2-replay-file";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
@@ -28,10 +31,21 @@ const cameraVelocity = new Vector3();
 const tmpCameraView = new Vector3();
 const tmpCameraTraceStart = new Vector3();
 const tmpCameraTraceDelta = new Vector3();
+const tmpVolumeOffset = new Vector3();
+const tmpVolumeRotation: Vector3Arr = [0, 0, 0];
 const hitCheckCameraExtent = new Vector3(0.1, 0.1, 0.1);
+const tmpCameraUp = new Vector3();
 const arrMouseIntersections: THREE.Intersection[] = [];
 type ReplayCameraState_T = { height: number, adjusted: boolean, rotating: boolean, yaw: number, pitch: number, rightMouseDownTime: number, preset: [string, any][], hidden: boolean, enableRotate: boolean };
 
+function lookAtCameraRotation(camera: Camera, pitch: number, yaw: number): void {
+    const sinPitch = sinRotator(pitch);
+
+    tmpCameraUp.copy(camera.up);
+    camera.up.set(-sinPitch * sinRotator(yaw + 16384), -sinPitch * sinRotator(yaw), sinRotator(pitch + 16384));
+    camera.lookAt(tmpCameraView.copy(camera.position).add(dirForward));
+    camera.up.copy(tmpCameraUp);
+}
 function getBatchIntersectionActor(intersection: THREE.Intersection): { actorIndex: number, actorName: string, actorUuid: string } | null {
     const object = intersection.object as any;
 
@@ -91,6 +105,8 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected isCameraHeightAdjusted = false;
     protected replayCameraState: ReplayCameraState_T = null;
     protected readonly specialView = new SpecialView(this);
+    protected volumeCamera: VolumeCamera;
+    protected behindViewCamera: BehindViewCamera;
     protected shiftTimeDown = 0;
     protected rightMouseDownTime = -Infinity;
     protected activeSector = 0;
@@ -116,6 +132,8 @@ export class InputManager implements IEngineComponent<GameManager> {
         const viewport = renderManager.viewport;
 
         this.physicsManager = this.manGame.getComponent("physics");
+        this.volumeCamera = new VolumeCamera(this.physicsManager);
+        this.behindViewCamera = new BehindViewCamera(this.physicsManager);
         this.controls.orbit = new ZUpOrbitControls(renderManager.camera, renderManager.renderer.domElement);
         this.controls.fps = new ZUpPointerLockControls(renderManager.camera, renderManager.renderer.domElement);
         this.controls.orbit.target.copy(renderManager.cameraTarget);
@@ -136,7 +154,8 @@ export class InputManager implements IEngineComponent<GameManager> {
 
             if (this.isCameraLocked || properties.get("bDisableZoom") || properties.get("bCameraSpecialMove") || properties.get("bCameraMovingToSpecial")) return distance;
 
-            const minimum = properties.get("MinZoomingDist") as number, maximum = properties.get("MaxZoomingDist") as number, zoom = Math.fround(distance - 250);
+            const replay = this.replayCameraState !== null;
+            const minimum = properties.get("MinZoomingDist") as number, maximum = properties.get("MaxZoomingDist") as number, zoom = Math.fround(replay ? properties.get("CurZoomingDist") as number : distance - 250);
             // UInput::Exec ZoomInPress/ZoomOutPress 0x84adfc..0x84b066.
             const step = minimum + this.renderManager.player.getCollisionHeight() * 2 > zoom ? 2.5 : 20;
             const next = Math.fround(zoom + (direction > 0 ? -step : step));
@@ -152,7 +171,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
             properties.set("CurZoomingDist", value);
             properties.set("DesiredZoomingDist", value);
-            return value + 250;
+            return replay ? Math.max(0.000001, Math.abs(value + 250)) : value + 250;
         };
         this.controls.orbit.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("change", () => renderManager.needsUpdate = true);
@@ -197,6 +216,11 @@ export class InputManager implements IEngineComponent<GameManager> {
         renderManager.camera.position.set(-Math.cos(yaw) * FOLLOW_CAMERA_DISTANCE, -Math.sin(yaw) * FOLLOW_CAMERA_DISTANCE, FOLLOW_CAMERA_HEIGHT).add(this.controls.orbit.target);
         this.controls.orbit.unclippedDistance = 0;
         this.controls.orbit.update();
+        const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+        const zoom = Math.fround(renderManager.camera.position.distanceTo(this.controls.orbit.target) - 250);
+
+        properties.set("CurZoomingDist", zoom);
+        properties.set("DesiredZoomingDist", zoom);
         this.setFollowPlayer(true);
         renderManager.updateCameraMatrices();
     }
@@ -209,10 +233,9 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     public startReplayCamera(scene: ReplayScene_T): void {
         const render = this.renderManager, asset = this.manGame.getComponent("asset"), properties = asset.playerController.scriptProperties;
-        const yaw = scene.yaw * Math.PI / 32768, pitch = Math.min(scene.pitch * Math.PI / 32768, Math.PI / 2 - 0.000001);
 
         if (this.replayCameraState) throw new Error(`Replay camera is already active.`);
-        const preset: [string, any][] = ["CurFixedDefaultCameraNo", "bDisableZoom", "DefaultCameraYaw", "DefaultCameraPitch", "DefaultCameraDist", "bCameraMovingToDefault", "bUseDefaultCameraYaw", "bUseDefaultCameraPitch", "bUseDefaultCameraDist", "SavedViewTargetYaw", "SavedViewTargetPitch", "CurZoomingDist", "DesiredZoomingDist", "OldCameraRotation"].map(name => {
+        const preset: [string, any][] = ["CurFixedDefaultCameraNo", "bDisableZoom", "DefaultCameraYaw", "DefaultCameraPitch", "DefaultCameraDist", "bCameraMovingToDefault", "bUseDefaultCameraYaw", "bUseDefaultCameraPitch", "bUseDefaultCameraDist", "SavedViewTargetYaw", "SavedViewTargetPitch", "CurZoomingDist", "DesiredZoomingDist", "OldCameraRotation", "OldCameraLocation", "CurVolumeCameraRadius"].map(name => {
             const value = properties.get(name);
 
             return [name, Array.isArray(value) ? value.slice() : value];
@@ -228,11 +251,20 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("DesiredZoomingDist", scene.desiredZoom);
         if (scene.firstPerson) render.player.setUnrealScriptProperty("bHidden", true);
         render.player.getCameraTargetPosition(this.controls.orbit.target);
-        dirForward.set(Math.cos(yaw) * Math.cos(pitch), Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch));
-        render.camera.position.copy(this.controls.orbit.target).addScaledVector(dirForward, -(scene.zoom + 250));
-        render.camera.lookAt(this.controls.orbit.target);
         this.controls.orbit.unclippedDistance = 0;
+        const location = render.player.getUnrealScriptProperty("Location") as number[], pitch = Math.trunc(scene.pitch), yaw = Math.trunc(scene.yaw), cosPitch = sinRotator(pitch + 16384), distance = Math.fround(scene.zoom + 250);
+
+        dirForward.set(Math.fround(cosPitch * sinRotator(yaw + 16384)), Math.fround(cosPitch * sinRotator(yaw)), sinRotator(pitch));
+
+        properties.set("OldCameraLocation", [Math.fround(location[0] - dirForward.x * distance), Math.fround(location[1] - dirForward.y * distance), Math.fround(location[2] - Math.fround(dirForward.z * distance))]);
+        properties.set("OldCameraRotation", [pitch, yaw, 0]);
+        const orbitPitch = Math.min(pitch * Math.PI / 32768, Math.PI / 2 - 0.000001);
+
+        tmpVolumeOffset.set(Math.cos(orbitPitch) * Math.cos(yaw * Math.PI / 32768), Math.cos(orbitPitch) * Math.sin(yaw * Math.PI / 32768), Math.sin(orbitPitch));
+        this.controls.orbit.unclippedOffset = tmpVolumeOffset.multiplyScalar(-Math.max(0.000001, Math.abs(distance)));
         this.controls.orbit.update();
+        render.camera.position.copy(this.controls.orbit.target).addScaledVector(dirForward, -distance);
+        lookAtCameraRotation(render.camera, pitch, yaw);
         this.setFollowPlayer(true);
         render.updateCameraMatrices();
     }
@@ -253,6 +285,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         player.setUnrealScriptProperty("bHidden", state.hidden);
         if (player.ridePawn) player.ridePawn.setUnrealScriptProperty("bHidden", state.hidden);
         this.controls.orbit.enableRotate = state.enableRotate;
+        this.controls.orbit.unclippedOffset = null;
         this.isCameraHeightAdjusted = state.adjusted;
         this.rightMouseDownTime = state.rightMouseDownTime;
         this.replayCameraState = null;
@@ -337,7 +370,7 @@ export class InputManager implements IEngineComponent<GameManager> {
                 const zoom = properties.get("DesiredZoomingDist") as number;
 
                 properties.set("CurZoomingDist", zoom);
-                this.controls.orbit.unclippedDistance = zoom + 250;
+                this.controls.orbit.unclippedDistance = Math.max(0.000001, Math.abs(zoom + 250));
             }
 
             if (yaw !== 0 || pitch !== 0) {
@@ -366,15 +399,34 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         const renderManager = this.renderManager;
 
+        if (this.controls.orbit.unclippedOffset) renderManager.camera.position.copy(this.controls.orbit.target).add(this.controls.orbit.unclippedOffset);
         renderManager.player.getCameraTargetPosition(tmpMouseIntersection);
         cameraVelocity.copy(tmpMouseIntersection).sub(this.controls.orbit.target);
         if (!this.updateDefaultCamera(deltaTime / 1000, tmpMouseIntersection)) {
             this.updateAutoTrackingPawn(tmpMouseIntersection, manualYaw);
             renderManager.camera.position.add(cameraVelocity);
         }
+        if (this.controls.orbit.unclippedOffset) this.controls.orbit.unclippedOffset.subVectors(renderManager.camera.position, tmpMouseIntersection);
         this.controls.orbit.target.copy(tmpMouseIntersection);
         this.controls.orbit.update();
-        this.hitCheckCamera();
+        if (this.replayCameraState) {
+            const properties = controller.scriptProperties, oldRotation = properties.get("OldCameraRotation") as number[], oldLocation = properties.get("OldCameraLocation") as number[];
+
+            renderManager.camera.getWorldDirection(dirForward);
+            tmpVolumeRotation[0] = Math.round(Math.atan2(dirForward.z, Math.hypot(dirForward.x, dirForward.y)) * 32768 / Math.PI);
+            tmpVolumeRotation[1] = Math.round(Math.atan2(dirForward.y, dirForward.x) * 32768 / Math.PI);
+            tmpVolumeRotation[2] = 0;
+            if (properties.get("bUseVolumeCamera")) this.volumeCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
+            else this.behindViewCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
+            const cosPitch = sinRotator(tmpVolumeRotation[0] + 16384), distance = Math.max(0.000001, Math.abs((properties.get("CurZoomingDist") as number) + 250));
+
+            dirForward.set(cosPitch * sinRotator(tmpVolumeRotation[1] + 16384), cosPitch * sinRotator(tmpVolumeRotation[1]), sinRotator(tmpVolumeRotation[0]));
+            const orbitPitch = Math.min(tmpVolumeRotation[0] * Math.PI / 32768, Math.PI / 2 - 0.000001);
+
+            tmpVolumeOffset.set(Math.cos(orbitPitch) * Math.cos(tmpVolumeRotation[1] * Math.PI / 32768), Math.cos(orbitPitch) * Math.sin(tmpVolumeRotation[1] * Math.PI / 32768), Math.sin(orbitPitch)).multiplyScalar(-distance);
+            lookAtCameraRotation(renderManager.camera, tmpVolumeRotation[0], tmpVolumeRotation[1]);
+            for (let i = 0; i < 3; i++) { oldRotation[i] = tmpVolumeRotation[i]; oldLocation[i] = Math.fround(renderManager.camera.position.getComponent(i)); }
+        } else this.hitCheckCamera();
         renderManager.updateCameraMatrices();
     }
 

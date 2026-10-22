@@ -10,7 +10,7 @@ const LABEL_DISABLED = 0xffa0a0a0;
 const ATLAS_WIDTH = 2048;
 const MIN_THUMB = 15;
 
-type AtlasEntry_T = { url: string, x: number, y: number, width: number, height: number, atlasWidth: number, atlasHeight: number };
+type AtlasEntry_T = { url: string, x: number, y: number, width: number, height: number, atlasWidth: number, atlasHeight: number, frames: [number, number][], frameTime: number };
 
 function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with RGBA bitfields: raw canvas bytes, no PNG compression pass.
     const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
@@ -49,6 +49,7 @@ export class NDomLayer {
     public readonly root = document.createElement("div");
     protected readonly manager: NWindowManager;
     protected readonly atlas = new Map<string, AtlasEntry_T>();
+    protected readonly tileAnimations = new WeakMap<HTMLElement, Animation>();
     protected readonly cacheWrapUrls = new Map<string, string>();
     protected readonly cacheTintUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
@@ -183,12 +184,13 @@ export class NDomLayer {
 
         if (keys.length === 0) return;
 
-        const images = keys.map(key => this.manager.canvas.getTexture(key));
+        const animations = keys.map(key => this.manager.canvas.getTextureAnimation(key));
+        const images = animations.flatMap(image => image.frames);
         const atlasWidth = Math.max(ATLAS_WIDTH, ...images.map(image => image.width));
         const places: [number, number][] = [];
         let x = 0, y = 0, shelf = 0;
 
-        for (const i of keys.map((_, i) => i).sort((a, b) => images[b].height - images[a].height)) {
+        for (const i of images.map((_, i) => i).sort((a, b) => images[b].height - images[a].height)) {
             if (x + images[i].width > atlasWidth) {
                 x = 0;
                 y += shelf + 1;
@@ -211,8 +213,12 @@ export class NDomLayer {
 
         const url = URL.createObjectURL(encodeBitmap(canvas));
 
+        let first = 0;
         keys.forEach((key, i) => {
-            if (!this.atlas.has(key)) this.atlas.set(key, { url, x: places[i][0], y: places[i][1], width: images[i].width, height: images[i].height, atlasWidth, atlasHeight: canvas.height });
+            const image = animations[i], frames = places.slice(first, first + image.frames.length);
+
+            if (!this.atlas.has(key)) this.atlas.set(key, { url, x: frames[0][0], y: frames[0][1], width: image.frames[0].width, height: image.frames[0].height, atlasWidth, atlasHeight: canvas.height, frames, frameTime: image.frameTime });
+            first += image.frames.length;
         });
     }
 
@@ -259,6 +265,10 @@ export class NDomLayer {
 
         const scaleX = w / uw, scaleY = h / vh;
 
+        const previous = this.tileAnimations.get(element);
+
+        if (previous) { previous.cancel(); this.tileAnimations.delete(element); }
+
         if (color !== 0xffffff || u < 0 || v < 0 || u + uw > entry.width || v + vh > entry.height) { // Wrapping and tinted tiles need the texture on its own.
             element.style.backgroundImage = `url(${color === 0xffffff ? this.getWrapUrl(path) : this.getTintUrl(path, color)})`;
             element.style.backgroundSize = `${entry.width * scaleX}px ${entry.height * scaleY}px`;
@@ -269,6 +279,13 @@ export class NDomLayer {
         element.style.backgroundImage = `url(${entry.url})`;
         element.style.backgroundSize = `${entry.atlasWidth * scaleX}px ${entry.atlasHeight * scaleY}px`;
         element.style.backgroundPosition = `${-(entry.x + u) * scaleX}px ${-(entry.y + v) * scaleY}px`;
+        if (entry.frames.length > 1) {
+            const frames = [...entry.frames, entry.frames[0]].map(([x, y]) => ({ backgroundPosition: `${-(x + u) * scaleX}px ${-(y + v) * scaleY}px`, easing: "steps(1, end)" }));
+            const animation = element.animate(frames, { duration: entry.frameTime * entry.frames.length, iterations: Infinity });
+
+            animation.startTime = 0;
+            this.tileAnimations.set(element, animation);
+        }
     }
 
     public tile(parent: HTMLElement, x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff): HTMLDivElement {

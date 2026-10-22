@@ -1,5 +1,6 @@
 import UNativeRegistry from "./native-registry";
-import { CastToken_T, ExprToken_T, EStateFlags_T } from "@l2js/core";
+import { CastToken_T, ExprToken_T, EStateFlags_T, ObjectFlags_T } from "@l2js/core";
+import { EClassFlags_T } from "@l2js/core/unreal/un-class";
 import { ENetRole_T } from "../assets/unreal/un-aactor";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo, IScriptStateDecodeInfo } from "@l2js/engine/contracts/script";
@@ -27,6 +28,7 @@ export type ScriptHost_T = {
 };
 
 export type ScriptSlot_T = {
+    arrayElementDefault?: ScriptValue_T,
     get(): ScriptValue_T,
     set(value: ScriptValue_T): void
 };
@@ -47,6 +49,7 @@ const CPF_Parm = 0x00000080;
 const CPF_OutParm = 0x00000100;
 const CPF_ReturnParm = 0x00000400;
 const FUNC_Native = 0x00000400;
+const NAME_SIZE = 64;
 const assignmentNatives = new Set([133, 134, 135, 136, 137, 138, 139, 140, 159, 160, 161, 162, 163, 164, 165, 166, 182, 183, 184, 185, 221, 222, 223, 224, 290, 291, 297, 318, 319]);
 const postAssignmentNatives = new Set([139, 140, 165, 166]);
 
@@ -55,11 +58,18 @@ enum EPollSlowFuncs {
 }
 
 type StateFrame_T = { node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
+type ObjectName_T = { names: Map<string, WeakRef<ScriptHost_T>>, name: string, object: WeakRef<ScriptHost_T> };
 
 export type ScriptLevelActors_T = { getFirstDynamicActor(): number, getLevelActorCount(): number, getLevelActor(index: number): ScriptHost_T | null, addLevelActor(actor: ScriptHost_T): void, removeLevelActor(actor: ScriptHost_T): void };
 
 const cacheLevelActors = new WeakMap<ScriptHost_T, ScriptLevelActors_T>();
 const cacheActorLevels = new WeakMap<ScriptHost_T, ScriptLevelActors_T | null>();
+const cacheObjectNames = new WeakMap<IScriptClassDecodeInfo, number>();
+const cacheOuterObjects = new WeakMap<ScriptHost_T, Map<string, WeakRef<ScriptHost_T>>>();
+const objectNames = new FinalizationRegistry<ObjectName_T>(entry => {
+    if (entry.names.get(entry.name) === entry.object) entry.names.delete(entry.name);
+});
+const transientPackage: ScriptHost_T = { scriptClassId: "core.Package", isLevelActor: false, scriptProperties: { Name: "Transient", Outer: null, Class: "core.Package", ObjectFlags: 0 } };
 
 export function setLevelActors(level: ScriptHost_T, actors: ScriptLevelActors_T): void { cacheLevelActors.set(level, actors); }
 export function deleteLevelActors(level: ScriptHost_T): void { cacheLevelActors.delete(level); }
@@ -329,10 +339,11 @@ class ScriptExecutor {
 
         switch (opcode) {
             case ExprToken_T.LocalVariable: {
-                const id = this.next().value as string;
+                const field = this.next(), id = field.value as string;
                 const name = getFieldName(id);
 
                 return {
+                    arrayElementDefault: field.arrayElementDefault,
                     get: () => {
                         const value = this.frame.locals.has(name) ? this.frame.locals.get(name) : null;
 
@@ -348,10 +359,11 @@ class ScriptExecutor {
             }
             case ExprToken_T.InstanceVariable:
             case ExprToken_T.DefaultVariable: {
-                const id = this.next().value as string;
+                const field = this.next(), id = field.value as string;
                 const context = this.frame.context;
 
                 return {
+                    arrayElementDefault: field.arrayElementDefault,
                     get: () => getProperty(context, id),
                     set: value => { setProperty(context, id, value); }
                 };
@@ -384,6 +396,7 @@ class ScriptExecutor {
                 const parent = this.evalLValue();
 
                 return {
+                    arrayElementDefault: parent.arrayElementDefault,
                     get: () => {
                         const value = parent.get();
 
@@ -403,11 +416,32 @@ class ScriptExecutor {
                     }
                 };
             }
-            case ExprToken_T.StructMember: {
-                const id = this.next().value as string;
+            case ExprToken_T.DynArrayLength: {
                 const parent = this.evalLValue();
 
                 return {
+                    get: () => (parent.get() as ScriptValue_T[]).length,
+                    set: value => {
+                        const array = parent.get(), length = value as number;
+
+                        if (!Array.isArray(array)) throw new Error(`UnrealScript '${this.frame.fn.id}' array length target is not an array`);
+                        if (!Number.isInteger(length) || length < 0 || length > 0x7fffffff) throw new Error(`UnrealScript '${this.frame.fn.id}' invalid array length '${length}'`);
+                        if (length === array.length) return;
+                        if (length > array.length && parent.arrayElementDefault === undefined) throw new Error(`UnrealScript '${this.frame.fn.id}' array element default is missing`);
+
+                        const copy = array.slice(0, length);
+
+                        while (copy.length < length) copy.push(cloneScriptValue(parent.arrayElementDefault) as any);
+                        parent.set(copy);
+                    }
+                };
+            }
+            case ExprToken_T.StructMember: {
+                const field = this.next(), id = field.value as string;
+                const parent = this.evalLValue();
+
+                return {
+                    arrayElementDefault: field.arrayElementDefault,
                     get: () => {
                         const value = parent.get() ?? createDefaultArrayStruct(id);
 
@@ -702,6 +736,11 @@ class ScriptExecutor {
             }
             case ExprToken_T.ClassContext:
             case ExprToken_T.Context: return this.evalContext();
+            case ExprToken_T.New: {
+                const outer = this.evalToken(), name = this.evalToken(), flags = this.evalToken(), cls = this.evalToken();
+
+                return this.vm.constructObject(cls as string, outer === undefined ? this.frame.context : outer as ScriptHost_T, name === undefined ? "" : name as string, flags === undefined ? 0 : flags as number);
+            }
             case ExprToken_T.MetaCast:
             case ExprToken_T.DynamicCast:
                 this.next();
@@ -742,6 +781,36 @@ class ScriptExecutor {
             case ExprToken_T.BoolVariable: return this.evalToken();
             case ExprToken_T.UnicodeStringConst: return this.next().value as string;
             case ExprToken_T.DynArrayLength: return (this.evalToken() as unknown as ScriptValue_T[]).length;
+            case ExprToken_T.DynArrayInsert: {
+                const slot = this.evalLValue(), index = this.evalToken() as number, count = this.evalToken() as number;
+                const array = slot.get();
+
+                if (!Array.isArray(array)) throw new Error(`UnrealScript '${this.frame.fn.id}' array insertion is not an array`);
+                if (count < 0) throw new Error(`UnrealScript '${this.frame.fn.id}' cannot insert a negative array count '${count}'`);
+                if (count === 0) return undefined;
+                if (slot.arrayElementDefault === undefined) throw new Error(`UnrealScript '${this.frame.fn.id}' array element default is missing`);
+
+                const start = Math.max(0, Math.min(index, array.length)), copy = array.slice(0, start);
+
+                for (let i = 0; i < count; i++) copy.push(cloneScriptValue(slot.arrayElementDefault) as any);
+                for (let i = start; i < array.length; i++) copy.push(array[i]);
+                slot.set(copy);
+                return undefined;
+            }
+            case ExprToken_T.DynArrayRemove: {
+                const slot = this.evalLValue(), index = this.evalToken() as number, count = this.evalToken() as number;
+                const array = slot.get();
+
+                if (!Array.isArray(array)) throw new Error(`UnrealScript '${this.frame.fn.id}' array removal is not an array`);
+                if (count < 0) throw new Error(`UnrealScript '${this.frame.fn.id}' cannot remove a negative array count '${count}'`);
+                if (count === 0) return undefined;
+
+                const start = Math.max(0, Math.min(index, array.length)), copy = array.slice();
+
+                copy.splice(start, Math.min(count, array.length - start));
+                slot.set(copy);
+                return undefined;
+            }
             case ExprToken_T.PrimitiveCast: return this.evalPrimitiveCast();
             case ExprToken_T.DebugInfo:
                 this.next();
@@ -796,6 +865,46 @@ export class UnScriptVM {
     public getLibrary(): DecodeLibrary { return this.library; }
     public getLevelInfo(): ScriptHost_T { return this.levelInfo; }
     public setLevelInfo(level: ScriptHost_T): void { this.levelInfo = level; }
+
+    public constructObject(classId: string, outer: ScriptHost_T, name: string, flags: number): ScriptHost_T {
+        // Core.dll execNew 0x101454d0; StaticAllocateObject 0x101687f0; MakeUniqueObjectName 0x1015ef10.
+        if (typeof classId !== "string" || !this.library.scriptClasses[classId]) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
+        if (outer !== null && (!outer || typeof outer !== "object" || !outer.scriptClassId)) throw new Error(`Invalid UnrealScript object outer.`);
+        if (typeof name !== "string" || !Number.isInteger(flags) || flags < -0x80000000 || flags > 0x7fffffff || flags & ~ObjectFlags_T.RF_ScriptMask) throw new Error(`Invalid UnrealScript object name or flags.`);
+        // shortcut: unnamed script objects; native replacement and derived native constructors remain unsupported.
+        if (name) throw new Error(`UnrealScript construction of named objects is not implemented.`);
+
+        const cls = this.library.scriptClasses[classId];
+
+        if (cls.classFlags & EClassFlags_T.CLASS_Abstract) throw new Error(`Cannot construct abstract UnrealScript class '${classId}'.`);
+        for (let parent = cls; parent; parent = this.library.scriptClasses[parent.superClassId])
+            if (parent.isNative && parent.superClassId) throw new Error(`UnrealScript native constructor '${parent.id}' is not implemented.`);
+
+        const object: ScriptHost_T = { scriptClassId: classId, isLevelActor: false, scriptProperties: new Map() };
+
+        this.initializeHost(object);
+        // StaticAllocateObject 0x10168c4c leaves UObject.StateFrame null.
+        cacheStateFrames.delete(object);
+        outer = outer || transientPackage;
+        let names = cacheOuterObjects.get(outer), index = cacheObjectNames.get(cls) ?? 0;
+
+        if (!names) cacheOuterObjects.set(outer, names = new Map());
+        do {
+            const suffix = String(index++);
+
+            name = cls.name.replace(/[0-9]+$/, "").slice(0, NAME_SIZE - suffix.length - 2) + suffix;
+        } while (names.get(name.toLowerCase())?.deref());
+        cacheObjectNames.set(cls, index);
+        const reference = new WeakRef(object), lowerName = name.toLowerCase();
+
+        names.set(lowerName, reference);
+        objectNames.register(object, { names, name: lowerName, object: reference });
+        setProperty(object, "Outer", outer);
+        setProperty(object, "Name", name);
+        setProperty(object, "Class", classId);
+        setProperty(object, "ObjectFlags", flags | (cls.classFlags & EClassFlags_T.CLASS_Transient ? ObjectFlags_T.RF_Transient : 0));
+        return object;
+    }
 
     public loadFunctions(): void {
         for (const fn of Object.values(this.library.scriptFunctions)) {
@@ -1225,7 +1334,11 @@ export class UnScriptVM {
         let argIndex = 0;
 
         for (const field of fn.fields) {
-            if (!(field.flags & CPF_Parm) || field.flags & CPF_ReturnParm) continue;
+            if (!(field.flags & CPF_Parm)) {
+                if ((field.type as string) === "Array") locals.set(field.name, []);
+                continue;
+            }
+            if (field.flags & CPF_ReturnParm) continue;
 
             locals.set(field.name, argIndex < args.length ? args[argIndex++] : null);
         }

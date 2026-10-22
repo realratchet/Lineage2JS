@@ -15,6 +15,7 @@ export class ZUpOrbitControls extends EventDispatcher {
     public onCameraInput: (action: "press" | "release" | "axis" | "wheel", yaw: number, pitch: number) => void = null;
     public onCameraZoom: (direction: number, distance: number) => number = null;
     public unclippedDistance: number = 0;
+    public unclippedOffset: Vector3 = null;
     protected nativeLike: boolean;
 
     [key: string]: any;
@@ -172,9 +173,11 @@ export class ZUpOrbitControls extends EventDispatcher {
                 const position = scope.object.position;
 
                 offset.copy(position).sub(scope.target);
+                if (scope.unclippedOffset) offset.copy(scope.unclippedOffset);
 
                 if (scope.unclippedDistance > 0) {
-                    offset.set(0, 0, scope.unclippedDistance).applyQuaternion(scope.object.quaternion);
+                    if (scope.unclippedOffset) offset.setLength(scope.unclippedDistance);
+                    else offset.set(0, 0, scope.unclippedDistance).applyQuaternion(scope.object.quaternion);
                     scope.unclippedDistance = 0;
                 }
 
@@ -254,6 +257,7 @@ export class ZUpOrbitControls extends EventDispatcher {
 
                 // rotate offset back to "camera-up-vector-is-up" space
                 offset.applyQuaternion(quatInverse);
+                if (scope.unclippedOffset) scope.unclippedOffset.copy(offset);
 
                 position.copy(scope.target).add(offset);
 

@@ -182,13 +182,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const name = call.name.toLowerCase();
         const context = call.context as any;
 
-        if (call.index === 262 || name === "setcollision") {
-            if (context !== this.getParent()) throw new Error(`SetCollision for '${context.scriptClassId}' is not implemented by '${this.getParent().name}'.`);
-
-            this.renderManager.getPhysicsManager().setCollision(context, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
-            return;
-        }
-
         if (call.index !== 3970 && name !== "setphysics") return COMPONENT_EVENT_NOT_HANDLED;
 
         if (typeof context.setUnrealScriptProperty === "function") context.setUnrealScriptProperty("Physics", call.args[0]);
@@ -501,8 +494,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const wasIgnored = this.ignoredActors.has(base);
 
         this.ignoredActors.add(base);
-        const hit = this.moveActor(position, tmpMovement);
-        if (!wasIgnored) this.ignoredActors.delete(base);
+        let hit: CheckResult_T;
+        try { hit = this.moveActor(position, tmpMovement, !!(base as Vehicle).isVehicle && !!this.getParent().getUnrealScriptProperty("bGetOnVehicle")); }
+        finally { if (!wasIgnored) this.ignoredActors.delete(base); }
 
         if (hit) {
             this.setBase(null);
@@ -1155,7 +1149,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return findVolumeTransition(tmpWaterPosition, tmpWaterEnd, volume.bsp, startsInWater);
     }
 
-    public moveActor(position: Vector3, movement: Vector3): CheckResult_T | null {
+    public moveActor(position: Vector3, movement: Vector3, ignoreCollision: boolean = false): CheckResult_T | null {
         const bodyPosition = tmpBodyPosition.copy(position).addScaledVector(tmpUp, this.collisionHeight);
         const query = this.collisionQuery;
 
@@ -1171,11 +1165,12 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         query.ignoreBases = false;
         query.ignorePawns = !query.sourceIsPlayer;
         query.zeroExtent = false;
+        query.ignoreCollision = ignoreCollision;
 
         let hit: CheckResult_T;
         moveActorDepth++;
         try { hit = this.physicsManager.moveActor(query, this.getParent()); }
-        finally { moveActorDepth--; }
+        finally { moveActorDepth--; query.ignoreCollision = false; }
 
         position.copy(this.getPosition());
 
@@ -1702,8 +1697,6 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public getCurSpeed(environment = -1): number {
         const parent = this.getParent(), controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
-        if (controller && getProperty(controller, "bCameraWalking") && this.getComponent<ScriptComponent>("script").getVM().invokeNative(parent, controller, 303, "IsA", ["LineagePlayerController"]))
-            return parent.getUnrealScriptProperty("AirSpeed") as number;
         if (parent.getUnrealScriptProperty("bNotRotationMoving")) return (parent.getUnrealScriptProperty("GroundMinSpeed") as number) * Math.fround(2 / 3);
         if (environment === -1) environment = parent.getUnrealScriptProperty("Environment") as number;
 

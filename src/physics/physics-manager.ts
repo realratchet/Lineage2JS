@@ -2,7 +2,7 @@ import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
-import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T } from "./collision-world";
+import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T } from "./collision-world";
 import Player from "../player";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
@@ -196,7 +196,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
     public updateDynamicEntries(currentTime: number): void { this.collisionWorld.updateDynamicEntries(currentTime); }
     public updatePawnCollision(pawn: BaseActor | CollidingMesh): void { this.collisionWorld.updatePawnCollision(pawn); }
-    public setCollision(pawn: BaseActor, collideActors?: boolean, blockActors?: boolean, blockPlayers?: boolean): void { this.collisionWorld.setCollision(pawn, collideActors, blockActors, blockPlayers); }
+    public setCollision(pawn: CollisionActor_T, collideActors?: boolean, blockActors?: boolean, blockPlayers?: boolean): void { this.collisionWorld.setCollision(pawn, collideActors, blockActors, blockPlayers); }
     public setPawnLevel(pawn: BaseActor | CollidingMesh, level: ScriptHost_T | null): void {
         if (!level) return this.collisionWorld.setPawnLevel(pawn, null);
         const sector = this.manGame.getComponent("render").getLoadedSectors().find(sector => sector.levelInfoActor === level);
@@ -563,7 +563,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
                 sector.createZoneInfoActors();
                 sector.createPhysicsVolumeActors();
                 sector.createMusicVolumeActors();
-                this.collisionWorld.registerPhysicsVolumes(sector.physicsVolumeActors, (sector as any).decodeLibrary, sector.musicVolumeActors);
+                this.collisionWorld.registerPhysicsVolumes(sector.physicsVolumeActors, (sector as any).decodeLibrary, sector.musicVolumeActors, sector.getDefaultPhysicsVolume());
                 sectors.push(sector);
             }
             if ((object as any).isTerrainBatch)

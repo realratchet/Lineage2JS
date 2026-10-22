@@ -142,6 +142,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     }
 
     public hasTexture(path: string): boolean { return !!this.textures.get(path.toLowerCase()); }
+    public getTextureAnimation(path: string): UIImage_T { return this.textures.get(path.toLowerCase()); }
 
     public getTexture(path: string): ImageBitmap {
         const key = path.toLowerCase();

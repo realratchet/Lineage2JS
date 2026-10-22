@@ -13,6 +13,7 @@ import PacketReader from "./packet-reader";
 import type { ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
 import { setVector } from "./network-location";
+import { ENetMode_T } from "../assets/unreal/un-level-info";
 
 type NetObjectKind_T = "user" | "player" | "npc";
 
@@ -259,7 +260,7 @@ export class NetworkActors {
         }
 
         this.worldLevel = level;
-        render.setLevel(level);
+        render.setLevel(level, ENetMode_T.NM_Client);
         asset.setStreaming(render, true);
 
         await this.loadAppearance(entry, render.player);

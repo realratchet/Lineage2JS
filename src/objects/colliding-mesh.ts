@@ -203,7 +203,16 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         return Actor.prototype.getUnrealScriptProperty.call(this, id);
     }
 
-    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T { return Actor.prototype.callUnrealNative.call(this, call); }
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        if ((call.index === 262 || call.name.toLowerCase() === "setcollision") && !this.findComponent<TransformComponent>("transform")) {
+            if (call.context !== this) throw new Error(`SetCollision context does not match '${this.name}'.`);
+
+            this.getComponent<ColliderComponent>("collider").setCollision(this, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
+            return;
+        }
+
+        return Actor.prototype.callUnrealNative.call(this, call);
+    }
     public getBaseActor(): ICollidable | null { return Actor.prototype.getBaseActor.call(this); }
     public setBase(actor: ICollidable | null): void {
         if (this.getComponent<TransformComponent>("transform").setBase(actor)) setScriptObjectProperty(this, "Base", actor as any);

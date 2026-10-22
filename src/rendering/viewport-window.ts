@@ -1,7 +1,7 @@
 import { Color, Fog, Frustum, LinearFilter, PerspectiveCamera, Scene, Vector3, Vector4, WebGLRenderer, WebGLRenderTarget } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 
-type ViewObjectState_T = { object: any, visible: boolean, renderOrder: number, groups: any[], index: any, indexData: any, values: Record<string, any>, buffers: Record<string, any>, vectors: Record<string, Vector3> };
+type ViewObjectState_T = { object: any, visible: boolean, renderOrder: number, groups: any[], index: any, indexData: any, values: Record<string, any>, buffers: Record<string, any>, vectors: Record<string, Vector3>, batchGroupPool?: any[], visibleBatchGroups?: any[] };
 type ViewMaterialState_T = { material: THREE.Material, visible: boolean };
 
 const arrSectorProperties = ["lastZoneMask", "visibleLeaves", "visibleEmitterUuids", "visibilityCacheInitialized", "visibilityCacheFrustumCulling", "visibilityCacheTopLevelOnly", "visibilityCacheDistanceSq", "visibilityCacheEmitterDistanceSq", "visibilityCacheEnvVersion", "visibilityCacheTimeStep", "lastLoggedZone", "lastLoggedLeaf", "lastLoggedStaticMeshLeaf"];
@@ -108,11 +108,20 @@ export class ViewportWindow {
                 for (const name of arrSectorProperties) state.values[name] = node[name];
                 saveBuffer(state, "visibilityCachePlanes", node.visibilityCachePlanes);
                 saveVector(state, "visibilityCachePosition", node.visibilityCachePosition);
+                node.visibilityCacheInitialized = false;
             }
             if (node.isBatch || node.isTerrainBatch) {
                 for (const name of arrBatchProperties) state.values[name] = node[name];
                 for (const name of arrBatchBuffers) saveBuffer(state, name, node[name]);
-                saveVector(state, "transparentSortPosition", node.transparentSortPosition);
+                if (node.isBatch) {
+                    state.values.batchGroupPool = node.batchGroupPool;
+                    state.values.visibleBatchGroups = node.visibleBatchGroups;
+                    if (!state.batchGroupPool) state.batchGroupPool = [];
+                    if (!state.visibleBatchGroups) state.visibleBatchGroups = [];
+                    node.batchGroupPool = state.batchGroupPool;
+                    node.visibleBatchGroups = state.visibleBatchGroups;
+                    if (node.elemVisibility) node.elemVisibility.fill(2);
+                }
             }
             this.arrObjects.push(state);
 

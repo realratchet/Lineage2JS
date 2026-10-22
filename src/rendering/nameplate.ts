@@ -1,8 +1,11 @@
-import { CanvasTexture, DoubleSide, NearestFilter, NoColorSpace, Sprite, SpriteMaterial } from "three";
+import { AlwaysDepth, CanvasTexture, DepthTexture, DoubleSide, LessEqualDepth, NearestFilter, NoColorSpace, Sprite, SpriteMaterial, Uniform, Vector2 } from "three";
 import { FontType_T, type default as NWindowCanvas } from "../nwindow/nwindow-canvas";
 
 export class Nameplate extends Sprite {
     protected readonly canvas = document.createElement("canvas");
+    protected readonly opaqueDepth = new Uniform(null);
+    protected readonly opaqueDepthSize = new Uniform(new Vector2());
+    protected readonly opaqueDepthEnabled = new Uniform(false);
     protected nameText: string = null;
     protected titleText: string = null;
     protected nameColor = 0;
@@ -20,6 +23,30 @@ export class Nameplate extends Sprite {
         this.renderOrder = 10000;
         this.material.map = this.createTexture();
         this.frustumCulled = false;
+        this.material.onBeforeCompile = shader => {
+            shader.uniforms.opaqueDepth = this.opaqueDepth;
+            shader.uniforms.opaqueDepthSize = this.opaqueDepthSize;
+            shader.uniforms.opaqueDepthEnabled = this.opaqueDepthEnabled;
+            shader.fragmentShader = `uniform sampler2D opaqueDepth;
+uniform vec2 opaqueDepthSize;
+uniform bool opaqueDepthEnabled;
+${shader.fragmentShader}`.replace("#include <logdepthbuf_fragment>", `#include <logdepthbuf_fragment>
+if (opaqueDepthEnabled) {
+    #ifdef USE_LOGARITHMIC_DEPTH_BUFFER
+        float nameplateDepth = gl_FragDepth;
+    #else
+        float nameplateDepth = gl_FragCoord.z;
+    #endif
+    if (nameplateDepth > texture2D(opaqueDepth, gl_FragCoord.xy / opaqueDepthSize).r) discard;
+}`);
+        };
+    }
+
+    public setOpaqueDepth(texture: DepthTexture, width: number, height: number) {
+        this.opaqueDepth.value = texture;
+        this.opaqueDepthSize.value.set(width, height);
+        this.opaqueDepthEnabled.value = !!texture;
+        this.material.depthFunc = texture ? AlwaysDepth : LessEqualDepth;
     }
 
     protected createTexture() {

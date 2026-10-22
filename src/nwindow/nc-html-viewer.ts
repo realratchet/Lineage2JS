@@ -986,6 +986,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                 entry.space.replaceWith(document.createElement("wbr"));
                 const text = draw(entry.element, " ", entry.segments[entry.segments.length - 1].color);
                 text.style.minWidth = text.style.maxWidth = `${entry.advance}px`;
+                text.style.overflow = "hidden";
             }
             paragraph.style.textAlign = alignment;
             return true;

@@ -117,9 +117,13 @@ export class MovableObject extends CollidingMesh {
             tmpExtent.set(actorPrimitive.radius, actorPrimitive.radius, actorPrimitive.halfHeight);
             if (!pointPrimitive(primitive, actorPrimitive.center, tmpExtent)) continue;
 
-            tmpActorLocalPosition.copy(actorPrimitive.center).sub(oldPosition).applyQuaternion(tmpOldInverseQuaternion);
-            tmpActorTargetPosition.copy(tmpActorLocalPosition).applyQuaternion(this.quaternion).add(this.position);
-            tmpEncroachMovement.copy(this.position).sub(oldPosition).addScaledVector(tmpActorTargetPosition.sub(actorPrimitive.center), 1.5);
+            tmpEncroachMovement.copy(this.position).sub(oldPosition);
+            // ULevel::CheckEncroachment 0x1058ce64..0x1058d076 applies the extra displacement only for rotation.
+            if (!this.quaternion.equals(oldQuaternion)) {
+                tmpActorLocalPosition.copy(actorPrimitive.center).sub(oldPosition).applyQuaternion(tmpOldInverseQuaternion);
+                tmpActorTargetPosition.copy(tmpActorLocalPosition).applyQuaternion(this.quaternion).add(this.position);
+                tmpEncroachMovement.addScaledVector(tmpActorTargetPosition.sub(actorPrimitive.center), 1.5);
+            }
 
             actor.moveSmooth(tmpEncroachMovement, this);
 
