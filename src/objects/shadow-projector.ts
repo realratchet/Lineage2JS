@@ -1,4 +1,4 @@
-import { Box3, Camera, Color, CubeTexture, CustomBlending, DataTexture, FramebufferTexture, FrontSide, LinearFilter, LinearMipmapLinearFilter, Material, Matrix3, Matrix4, Mesh, MeshBasicMaterial, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PerspectiveCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, SrcAlphaFactor, Texture, Uniform, Vector2, Vector3, WebGLRenderTarget, ZeroFactor } from "three";
+import { Box3, Camera, Color, CubeTexture, CustomBlending, DataTexture, FramebufferTexture, FrontSide, LinearFilter, LinearMipmapLinearFilter, Material, Matrix3, Matrix4, Mesh, MeshBasicMaterial, NoBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PerspectiveCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, SrcAlphaFactor, Texture, Uniform, Vector2, Vector3, WebGLRenderTarget, ZeroFactor } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import { sinRotator } from "../assets/unreal/utils/rotator";
 import type BaseActor from "../base-actor";
@@ -7,6 +7,7 @@ import type PawnRenderableComponent from "../rendering/components/pawn-renderabl
 import type PawnMesh from "./pawn-mesh";
 import type LocalSpaceSkeleton from "./local-space-skeleton";
 import type MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
+import type { BatchRenderGroup_T } from "./lit-actor";
 
 const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
 const SHADOW_RANGE = Math.fround(PROJECTOR_CLIPPING_RANGE) * 2048;
@@ -22,13 +23,19 @@ void main() {
     gl_Position = vec4( position.xy, 0.0, 1.0 );
 }`;
 
+// SRCALPHA,ONE accumulates squared alpha into RGBA8 after each offset.
 const BLUR_FRAGMENT = `
 uniform sampler2D tSource;
-uniform vec2 direction;
-uniform float weight;
 varying vec2 vUv;
 void main() {
-    gl_FragColor = vec4( 0.0, 0.0, 0.0, texture2D( tSource, vUv + direction ).a * weight );
+    float alpha = 0.0;
+    for (int i = 0; i < 9; i++) {
+        int x = i % 3 - 1, y = i / 3 - 1;
+        float weight = (x == 0 && y == 0 ? 132.0 : 88.0) / 255.0;
+        float sampleAlpha = texture2D(tSource, vUv - vec2(float(x), float(y)) * 1.5 / ${SHADOW_SIZE}.0).a * weight;
+        alpha = min(1.0, alpha + floor(sampleAlpha * sampleAlpha * 255.0 + 0.5) / 255.0);
+    }
+    gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
 }`;
 
 
@@ -62,7 +69,7 @@ export class ShadowProjector {
     protected readonly blurScene = new Scene();
     protected readonly blurCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
     protected readonly blurGeometry = new PlaneGeometry(2, 2);
-    protected readonly blurMaterial = new ShaderMaterial({ vertexShader: BLUR_VERTEX, fragmentShader: BLUR_FRAGMENT, depthTest: false, depthWrite: false, transparent: true, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendDst: OneFactor, uniforms: { tSource: { value: null }, direction: { value: new Vector2() }, weight: { value: 0 } } });
+    protected readonly blurMaterial = new ShaderMaterial({ vertexShader: BLUR_VERTEX, fragmentShader: BLUR_FRAGMENT, depthTest: false, depthWrite: false, blending: NoBlending, uniforms: { tSource: { value: null } } });
     protected readonly camera = new PerspectiveCamera();
     protected readonly silhouette = new MeshBasicMaterial({ color: 0x000000 });
     protected readonly attenuation = createAttenuationCube();
@@ -87,19 +94,7 @@ export class ShadowProjector {
         this.camera.matrixAutoUpdate = this.camera.matrixWorldAutoUpdate = false;
         GLOBAL_UNIFORMS.shadowMap.value = this.target.texture;
         GLOBAL_UNIFORMS.shadowDarkness.value = 1;
-        const mesh = new Mesh(this.blurGeometry, this.blurMaterial);
-        // renderBufferDirect needs the active render state from renderer.render.
-        mesh.onAfterRender = renderer => {
-            const uniforms = this.blurMaterial.uniforms;
-            for (let i = 1; i < 9; i++) {
-                const x = i % 3 - 1, y = Math.floor(i / 3) - 1;
-                (uniforms.direction.value as Vector2).set(-x * 1.5 / SHADOW_SIZE, -y * 1.5 / SHADOW_SIZE);
-                uniforms.weight.value = (x === 0 && y === 0 ? 132 : 88) / 255;
-                this.blurMaterial.uniformsNeedUpdate = true;
-                renderer.renderBufferDirect(this.blurCamera, this.blurScene, this.blurGeometry, this.blurMaterial, mesh, null);
-            }
-        };
-        this.blurScene.add(mesh);
+        this.blurScene.add(new Mesh(this.blurGeometry, this.blurMaterial));
     }
 
     public attachReceivers(root: Object3D): void {
@@ -257,6 +252,8 @@ export class ShadowProjector {
         const position = geometry.getAttribute("position"), index = geometry.index;
         const buffer = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data : position as THREE.BufferAttribute;
         const positionVersion = buffer.version, indexVersion = index ? index.version : -1;
+        const prepared = group as BatchRenderGroup_T;
+        if (prepared.position === position && prepared.index === index && prepared.positionVersion === positionVersion && prepared.indexVersion === indexVersion && prepared.boundsStart === group.start && prepared.boundsCount === group.count) return prepared.bounds;
         const cached = this.cacheReceiverBounds.get(group);
         if (cached && cached.geometry === geometry && cached.position === position && cached.index === index && cached.positionVersion === positionVersion && cached.indexVersion === indexVersion && cached.start === group.start && cached.count === group.count) return cached.bounds;
 
@@ -323,8 +320,6 @@ export class ShadowProjector {
         renderer.autoClear = false;
         try {
             // UShadowBitmapMaterial::Get 0x93e86e..0x93eb37; trace7334037..7334077 uses byte alpha88/132 and SRCALPHA,ONE.
-            (uniforms.direction.value as Vector2).set(1.5 / SHADOW_SIZE, 1.5 / SHADOW_SIZE);
-            uniforms.weight.value = 88 / 255;
             this.blurMaterial.uniformsNeedUpdate = true;
             renderer.render(this.blurScene, this.blurCamera);
         } finally { renderer.autoClear = autoClear; }

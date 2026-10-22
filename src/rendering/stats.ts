@@ -72,11 +72,11 @@ export var Stats = function () {
 
             var time = (performance || Date).now();
 
-            msPanel.update(time - beginTime, 200);
+            msPanel.update(time - beginTime);
 
             if (time >= prevTime + 1000) {
 
-                fpsPanel.update((frames * 1000) / (time - prevTime), 100);
+                fpsPanel.update((frames * 1000) / (time - prevTime));
 
                 prevTime = time;
                 frames = 0;
@@ -84,7 +84,7 @@ export var Stats = function () {
                 if (memPanel) {
 
                     var memory = performance.memory;
-                    memPanel.update(memory.usedJSHeapSize / 1048576, memory.jsHeapSizeLimit / 1048576);
+                    memPanel.update(memory.usedJSHeapSize / 1048576);
 
                 }
 
@@ -111,44 +111,63 @@ export var Stats = function () {
 
 Stats.Panel = function (name, fg, bg) {
 
-    var min = Infinity, max = 0, round = Math.round;
+    var round = Math.round, values = [];
+    var PR = round(window.devicePixelRatio || 1);
 
-    var GRAPH_WIDTH = 74, GRAPH_HEIGHT = 30;
+    var WIDTH = 80 * PR, HEIGHT = 48 * PR,
+        TEXT_X = 3 * PR, TEXT_Y = 2 * PR,
+        GRAPH_X = 3 * PR, GRAPH_Y = 15 * PR,
+        GRAPH_WIDTH = 74 * PR, GRAPH_HEIGHT = 30 * PR;
 
-    var dom = document.createElement('div');
-    dom.style.cssText = 'position:relative;width:80px;height:48px;background:' + bg;
+    var canvas = document.createElement('canvas');
+    canvas.width = WIDTH;
+    canvas.height = HEIGHT;
+    canvas.style.cssText = 'width:80px;height:48px';
 
-    var text = document.createElement('div');
-    text.style.cssText = 'position:absolute;left:3px;top:2px;font:bold 9px Helvetica,Arial,sans-serif;line-height:9px;white-space:nowrap;color:' + fg;
-    text.textContent = name;
+    var context = canvas.getContext('2d');
+    context.font = 'bold ' + (9 * PR) + 'px Helvetica,Arial,sans-serif';
+    context.textBaseline = 'top';
 
-    var graph = document.createElement('div');
-    graph.style.cssText = 'position:absolute;left:3px;top:15px;display:flex;width:' + GRAPH_WIDTH + 'px;height:' + GRAPH_HEIGHT + 'px;background:' + fg;
+    context.fillStyle = bg;
+    context.fillRect(0, 0, WIDTH, HEIGHT);
 
-    for (var i = 0; i < GRAPH_WIDTH; i++) {
+    context.fillStyle = fg;
+    context.fillText(name, TEXT_X, TEXT_Y);
+    context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT);
 
-        var column = document.createElement('div');
-        column.style.cssText = 'flex:0 0 1px;height:' + GRAPH_HEIGHT + 'px;background:' + bg + ';opacity:0.9';
-        graph.appendChild(column);
-
-    }
-
-    dom.append(text, graph);
+    context.fillStyle = bg;
+    context.globalAlpha = 0.9;
+    context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT);
 
     return {
 
-        dom: dom,
+        dom: canvas,
 
-        update: function (value, maxValue) {
+        update: function (value) {
 
-            min = Math.min(min, value);
-            max = Math.max(max, value);
+            values.push(value);
+            if (values.length > GRAPH_WIDTH / PR) values.shift();
 
-            text.textContent = round(value) + ' ' + name + ' (' + round(min) + '-' + round(max) + ')';
+            var min = Math.min.apply(null, values), max = Math.max.apply(null, values), range = max - min;
 
-            var column = graph.firstChild;
-            column.style.height = round((1 - (value / maxValue)) * GRAPH_HEIGHT) + 'px';
-            graph.appendChild(column);
+            context.fillStyle = bg;
+            context.globalAlpha = 1;
+            context.fillRect(0, 0, WIDTH, GRAPH_Y);
+            context.fillStyle = fg;
+            context.fillText(round(value) + ' ' + name + ' (' + round(min) + '-' + round(max) + ')', TEXT_X, TEXT_Y);
+            context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT);
+
+            context.fillStyle = bg;
+            context.globalAlpha = 0.9;
+            context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH - values.length * PR, GRAPH_HEIGHT);
+
+            for (var i = 0; i < values.length; i++) {
+
+                var x = GRAPH_X + GRAPH_WIDTH - (values.length - i) * PR;
+
+                context.fillRect(x, GRAPH_Y, PR, range ? round((1 - (values[i] - min) / range) * GRAPH_HEIGHT) : 0);
+
+            }
 
         }
 

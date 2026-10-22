@@ -5,6 +5,7 @@ import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import { pointPrimitive } from "../physics/collision-primitive";
 import { MoverComponent } from "../physics/components/physics-component";
+import type { SectorObject } from "./zone-object";
 import type { IMoverDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
@@ -146,6 +147,10 @@ export class MovableObject extends CollidingMesh {
         Object3D.prototype.updateMatrixWorld.call(this, true);
         this.matrixAutoUpdate = false;
         this.updateMatrixWorld = frozenUpdateMatrixWorld;
+
+        let parent = this.parent;
+        while (parent && !(parent as SectorObject).isSectorObject) parent = parent.parent;
+        if (parent) (parent as SectorObject).invalidateDoorPortals();
     }
 
     public unfreezeMover(): void {

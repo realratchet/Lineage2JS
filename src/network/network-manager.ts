@@ -192,11 +192,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return properties instanceof Map ? this.actors.staticObjects.get(getProperty(actor as any, "L2ServerObjectRealID") as number) ?? 0 : 0;
     }
 
-    public requestAction(actor: Object3D | null, isShift: boolean = false) {
+    public requestAction(actor: Object3D | null, isShift: boolean = false, isCtrl: boolean = false) {
         const objectId = this.getActorObjectId(actor);
         if (!objectId) return false;
 
-        this.session.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
+        if (isCtrl) this.session.game.attackRequest(objectId, this.manGame.getComponent("render").player.position, isShift);
+        else this.session.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
 
         return true;
     }

@@ -177,14 +177,21 @@ export class NDomLayer {
         for (const [element, position] of this.windowPositions) this.place(element, position[0], position[1]);
     }
 
-    public async loadTextures(paths: string[]) {
-        await this.manager.canvas.loadTextures(paths);
+    public async loadTextures(paths: string[], tinted: [string, number][] = []) { // tinted copies share the atlas image of the same call
+        const canvas = this.manager.canvas;
 
-        const keys = [...new Set(paths.map(request => request.replace(/^\?/, "").toLowerCase()))].filter(key => !this.atlas.has(key) && this.manager.canvas.hasTexture(key));
+        await canvas.loadTextures([...paths, ...tinted.map(([path]) => path)]);
 
-        if (keys.length === 0) return;
+        const requests = [...new Map<string, [string, number]>([...paths.map(path => [path, 0xffffff] as [string, number]), ...tinted].map(([path, tint]) => {
+            const key = path.replace(/^\?/, "").toLowerCase(), atlasKey = tint === 0xffffff ? key : `${key}:${tint & 0xffffff}`;
 
-        const animations = keys.map(key => this.manager.canvas.getTextureAnimation(key));
+            return [atlasKey, [key, tint]];
+        })).entries()].filter(([atlasKey, [key]]) => !this.atlas.has(atlasKey) && canvas.hasTexture(key));
+
+        if (requests.length === 0) return;
+
+        const keys = requests.map(([atlasKey]) => atlasKey);
+        const animations: { frames: (ImageBitmap | HTMLCanvasElement)[], frameTime: number }[] = requests.map(([, [key, tint]]) => tint === 0xffffff ? canvas.getTextureAnimation(key) : { frames: [canvas.getTintedImage(key, tint)], frameTime: 0 });
         const images = animations.flatMap(image => image.frames);
         const atlasWidth = Math.max(ATLAS_WIDTH, ...images.map(image => image.width));
         const places: [number, number][] = [];
@@ -202,22 +209,22 @@ export class NDomLayer {
             shelf = Math.max(shelf, images[i].height);
         }
 
-        const canvas = document.createElement("canvas");
+        const atlas = document.createElement("canvas");
 
-        canvas.width = atlasWidth;
-        canvas.height = y + shelf;
+        atlas.width = atlasWidth;
+        atlas.height = y + shelf;
 
-        const context = canvas.getContext("2d");
+        const context = atlas.getContext("2d", { willReadFrequently: true });
 
         images.forEach((image, i) => context.drawImage(image, places[i][0], places[i][1]));
 
-        const url = URL.createObjectURL(encodeBitmap(canvas));
+        const url = URL.createObjectURL(encodeBitmap(atlas));
 
         let first = 0;
         keys.forEach((key, i) => {
             const image = animations[i], frames = places.slice(first, first + image.frames.length);
 
-            if (!this.atlas.has(key)) this.atlas.set(key, { url, x: frames[0][0], y: frames[0][1], width: image.frames[0].width, height: image.frames[0].height, atlasWidth, atlasHeight: canvas.height, frames, frameTime: image.frameTime });
+            if (!this.atlas.has(key)) this.atlas.set(key, { url, x: frames[0][0], y: frames[0][1], width: image.frames[0].width, height: image.frames[0].height, atlasWidth, atlasHeight: atlas.height, frames, frameTime: image.frameTime });
             first += image.frames.length;
         });
     }
@@ -259,7 +266,11 @@ export class NDomLayer {
     }
 
     public setTile(element: HTMLElement, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff) {
-        const entry = this.atlas.get(path.toLowerCase());
+        const tinted = color === 0xffffff ? null : this.atlas.get(`${path.toLowerCase()}:${color & 0xffffff}`);
+
+        if (tinted) color = 0xffffff;
+
+        const entry = tinted || this.atlas.get(path.toLowerCase());
 
         if (!entry) throw new Error(`UI texture '${path}' was not loaded for the DOM layer.`);
 

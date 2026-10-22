@@ -111,7 +111,7 @@ export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferG
         gl.disable(gl.RASTERIZER_DISCARD);
         checkError(gl, "transform feedback");
         const values = new Uint32Array(count);
-        // shortcut: read back while ambient and changing lights still update the CPU color buffer.
+        // shortcut: retain bake readback until ambient and hardware terms leave the CPU cache.
         gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, values);
         if (gl.isContextLost()) return false;
         checkError(gl, "readback");

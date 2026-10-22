@@ -2792,7 +2792,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (job.releaseEmitters)
             this.getPhysicsManager().setEmitterWarmupGate(job.sector, true);
 
-        (job.sector as any).visibilityCacheInitialized = false;
+        job.sector.invalidateDoorPortals();
     }
 
     protected queueSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean) {

@@ -29,7 +29,14 @@ void main() {
     vec3 color = initialColor;
 
     for (uint i = start; i < end; i++) {
-        uint index = texelFetch(indices, address(i), 0).x * 3u;
+        #ifdef DYNAMIC_LIGHTING
+            uint index = texelFetch(indices, address(i), 0).x * 4u;
+            float multiplier = texelFetch(lights, address(index + 3u), 0).x;
+            if (multiplier <= 0.0) continue;
+        #else
+            uint index = texelFetch(indices, address(i), 0).x * 3u;
+            float multiplier = 1.0;
+        #endif
         vec4 a = texelFetch(lights, address(index), 0);
         vec4 b = texelFetch(lights, address(index + 1u), 0);
         vec4 c = texelFetch(lights, address(index + 2u), 0);
@@ -42,7 +49,7 @@ void main() {
         light.effect = int(c.w);
         light.isHardwareLight = false;
         light.attenuation = vec2(0.0);
-        float intensity = glow * 0.5 * actorLightIntensity(light, p, n);
+        float intensity = multiplier * glow * 0.5 * actorLightIntensity(light, p, n);
 
         if (intensity > 0.0) color = clamp(color + floor(light.color * intensity), 0.0, 255.0);
     }

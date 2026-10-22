@@ -6,8 +6,11 @@ import type { TerrainDecoration } from "./terrain-decoration";
 import { encompassesVolume } from "../physics/volume-bsp";
 import { GameObject } from "../game/components";
 import PhysicsVolume from "./physics-volume";
+import type MovableObject from "./movable-object";
+import { isPortalBlocked } from "../rendering/door-portals";
 import MusicVolume from "./music-volume";
 import Actor from "./actor";
+import type { BatchRenderGroup_T } from "./lit-actor";
 import { setScriptObjectProperty } from "./components/actor-ownership-component";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
@@ -39,6 +42,29 @@ const MAX_RECURSION_DEPTH = 4;
 
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
 type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number };
+type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, version: number, source: Uint8Array | Uint16Array | Uint32Array, ranges: Map<number, { count: number, bounds: Box3 }> };
+const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
+
+function getBatchBounds(geometry: BufferGeometry, source: BatchBounds_T["source"], group: BatchGroup_T): Box3 {
+    const position = geometry.getAttribute("position");
+    const version = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
+    let cache = cacheBatchBounds.get(geometry);
+
+    if (!cache || cache.position !== position || cache.version !== version || cache.source !== source) {
+        cache = { position, version, source, ranges: new Map() };
+        cacheBatchBounds.set(geometry, cache);
+    }
+
+    const cached = cache.ranges.get(group.start);
+    if (cached && cached.count === group.count) return cached.bounds;
+
+    const bounds = new Box3();
+    for (let i = group.start, end = Math.min(group.start + group.count, source.length); i < end; i++)
+        bounds.expandByPoint(tmpVec3.fromBufferAttribute(position, source[i]));
+
+    cache.ranges.set(group.start, { count: group.count, bounds });
+    return bounds;
+}
 
 function considerLight(light: DynamicLight, position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, isSpecialLit: boolean) {
     if (light.isSpecialLit !== isSpecialLit) return;
@@ -112,23 +138,48 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
     }
 
     const target = index.array as Uint8Array | Uint16Array | Uint32Array;
+    const position = geometry.getAttribute("position");
+    const positionVersion = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
+    const groups: BatchRenderGroup_T[] = object.batchRenderGroups || (object.batchRenderGroups = []);
     let offset = 0;
-    let run: BatchGroup_T = null;
+    let copyStart = 0, copyCount = 0;
+    let run: BatchRenderGroup_T = null;
+    let groupCount = 0;
 
     for (const group of visibleGroups) {
-        target.set(source.subarray(group.start, group.start + group.count), offset);
+        if (copyCount && copyStart + copyCount !== group.start) {
+            target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+            copyCount = 0;
+        }
+
+        if (!copyCount) copyStart = group.start;
+        copyCount += group.count;
 
         if (run && run.materialIndex === group.materialIndex) {
             run.count += group.count;
         } else {
-            if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
-            run = { elementIndex: group.elementIndex, start: offset, count: group.count, materialIndex: group.materialIndex, distance: group.distance, transparent: group.transparent };
+            run = groups[groupCount];
+            if (!run) run = groups[groupCount] = { start: 0, count: 0, materialIndex: 0, bounds: new Box3(), boundsStart: 0, boundsCount: 0, position, index, positionVersion, indexVersion: 0 };
+            run.start = offset;
+            run.count = group.count;
+            run.materialIndex = group.materialIndex;
+            run.position = position;
+            run.index = index;
+            run.positionVersion = positionVersion;
+            run.indexVersion = index.version + 1;
+            run.bounds.makeEmpty();
+            geometry.groups.push(run);
+            groupCount++;
         }
+
+        run.bounds.union(getBatchBounds(geometry, source, group));
+        run.boundsStart = run.start;
+        run.boundsCount = run.count;
 
         offset += group.count;
     }
 
-    if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
+    if (copyCount) target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
 
     index.clearUpdateRanges();
     index.addUpdateRange(0, offset);
@@ -287,6 +338,8 @@ export class SectorObject extends GameObject {
     protected staticVisibilityStamp = 0;
     protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
     protected visibilityCacheInitialized = false;
+    protected doorPortalsDirty = true;
+    protected readonly blockedDoorPortals = new Set<number>();
     protected readonly visibilityCachePosition = new Vector3();
     protected readonly visibilityCachePlanes = new Float64Array(24);
     protected visibilityCacheFrustumCulling = true;
@@ -636,6 +689,7 @@ export class SectorObject extends GameObject {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
         this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
+        this.invalidateDoorPortals();
 
         let outdoorMask = 1n << 0n;
 
@@ -646,6 +700,25 @@ export class SectorObject extends GameObject {
         if (outdoorMask === (1n << 0n)) outdoorMask |= 1n << 1n;
 
         this.outdoorZoneMask = outdoorMask;
+    }
+
+    public invalidateDoorPortals(): void {
+        this.doorPortalsDirty = true;
+        this.visibilityCacheInitialized = false;
+    }
+
+    protected updateDoorPortals(): void {
+        if (!this.doorPortalsDirty) return;
+
+        const doors: MovableObject[] = [];
+        this.traverse(object => {
+            if ((object as MovableObject).isMovableObject && (object as MovableObject).isServerControlled()) doors.push(object as MovableObject);
+        });
+        this.blockedDoorPortals.clear();
+        for (let i = 0; i < this.bspNodes.length; i++)
+            if (isPortalBlocked(this.bspNodes[i], doors)) this.blockedDoorPortals.add(i);
+
+        this.doorPortalsDirty = false;
     }
 
     protected cacheSectionZoneAmbient = new Map<number, ColorByte | null>();
@@ -875,6 +948,7 @@ export class SectorObject extends GameObject {
         leafOnlyMode: boolean = false,
         topLevelOnly: boolean = false
     ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
+        this.updateDoorPortals();
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
 
@@ -961,25 +1035,11 @@ export class SectorObject extends GameObject {
                 if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
                     const renderBound = library.bspRenderBounds[node.iRenderBound];
                     if (renderBound && renderBound.isValid) {
-                        let boxVisible = false;
-                        for (let zoneIndex = 0; zoneIndex < 64; zoneIndex++) {
-                            const zoneBit = 1n << BigInt(zoneIndex);
-                            if (currentZoneMask & zoneBit) {
-                                if (nodeZoneMask && (nodeZoneMask & zoneBit)) {
-                                    const box = new Box3(
-                                        new Vector3(...renderBound.min),
-                                        new Vector3(...renderBound.max)
-                                    );
-                                    if (!frustumCullingEnabled || cameraFrustum.intersectsBox(box)) {
-                                        boxVisible = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (!boxVisible) {
-                            continue;
+                        if (!nodeZoneMask || !(nodeZoneMask & currentZoneMask)) continue;
+                        if (frustumCullingEnabled) {
+                            tmpActorBox.min.fromArray(renderBound.min);
+                            tmpActorBox.max.fromArray(renderBound.max);
+                            if (!cameraFrustum.intersectsBox(tmpActorBox)) continue;
                         }
                     }
                 }
@@ -1043,8 +1103,11 @@ export class SectorObject extends GameObject {
                         const portalSphere = currentNode.exclusiveSphereBound;
                         const portalDistance = cameraPosition.distanceTo(portalSphere.center);
                         const isPortalInRange = portalDistance <= (PORTAL_MAX_DISTANCE + portalSphere.radius);
+                        // shortcut: retain indoor-to-outdoor visibility until indoor BSP boundary visibility is verified.
+                        const isDoorOccluded = !!(currentZoneBit & this.outdoorZoneMask) && !(this.outdoorZoneMask & (1n << BigInt(oppositeZone))) && this.blockedDoorPortals.has(current) && Math.abs(planeDot) > portalSphere.radius;
 
                         const portalVisible = isCurrentZoneActive &&
+                            !isDoorOccluded &&
                             isPortalInRange &&
                             (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
@@ -1757,10 +1820,7 @@ export class SectorObject extends GameObject {
 
             if (visibleGroups.length > 0) {
                 batch.visible = true;
-                batchGeo.clearGroups();
-                visibleGroups.forEach(g => {
-                    batchGeo.addGroup(g.start, g.count, g.materialIndex);
-                });
+                batchGeo.groups = visibleGroups;
             } else {
                 batch.visible = false;
             }
@@ -1925,6 +1985,7 @@ class BSPLeafData {
 }
 
 class BSPNodeData {
+    public portalVertices?: number[];
     public back: number;
     public front: number;
     public iPlane: number; // Index to next coplanar node (UE2 line 1472-1473)
@@ -1946,6 +2007,7 @@ class BSPNodeData {
         node.iPlane = info.iPlane !== undefined ? info.iPlane : -1;
 
         node.plane.fromArray(info.plane);
+        node.portalVertices = info.portalVertices;
 
         node.leaves[0] = info.leaves[0];
         node.leaves[1] = info.leaves[1];

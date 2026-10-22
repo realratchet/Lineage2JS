@@ -780,7 +780,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         if (network.isInWorld()) {
             if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, event.shiftKey)) return;
-            if (physicsIntersection && network.requestAction(physicsIntersection.actor, event.shiftKey)) return;
+            if (physicsIntersection && network.requestAction(physicsIntersection.actor, event.shiftKey, event.ctrlKey)) return;
             if (physicsIntersection) {
                 tmpMouseIntersection.copy(physicsIntersection.location);
                 network.requestMoveTo(tmpMouseIntersection, physicsIntersection.actor);

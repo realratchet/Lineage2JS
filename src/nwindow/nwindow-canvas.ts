@@ -293,7 +293,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         atlas.width = texture.width;
         atlas.height = texture.height;
 
-        const context = atlas.getContext("2d");
+        const context = atlas.getContext("2d", { willReadFrequently: true });
 
         context.drawImage(texture, 0, 0);
 
@@ -420,7 +420,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         atlas.width = cellW * 32;
         atlas.height = cellH * Math.ceil(arrGlyphs.length / 32);
 
-        const context = atlas.getContext("2d");
+        const context = atlas.getContext("2d", { willReadFrequently: true });
 
         context.imageSmoothingQuality = "high";
         arrGlyphs.forEach(([code, glyph], index) => {

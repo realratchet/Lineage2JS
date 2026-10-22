@@ -10,6 +10,7 @@ export type IBSPNodeDecodeInfo_T = {
     leaves: [number, number],
     zones: [number, number],
     surfFlags: number,
+    portalVertices?: number[],
     iPlane: number,
     isCsg: boolean,
     iRenderBound: number,

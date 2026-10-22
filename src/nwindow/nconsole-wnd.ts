@@ -225,7 +225,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 this.inputCtrl = event.ctrlKey;
                 this.inputShift = event.shiftKey;
                 if (type === "mousedown" && (event as MouseEvent).button === 0) network.resetMacros();
-                if (type === "keydown" && !event.altKey && this.chatWnd.isInputFocused()) {
+                if (type === "keydown" && !event.altKey && this.screen === "world" && this.chatWnd.isInputFocused()) {
                     const key = (event as KeyboardEvent).key;
 
                     if (!/^F\d+$/.test(key) && !["PageUp", "PageDown", "Insert", "PrintScreen"].includes(key)) network.resetMacros(); // NWindow 0x10076242..0x1007626c, before edit dispatch 0x1007f80d.
@@ -1296,7 +1296,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public showWorld() {
-        void this.loadCoolTimeTextures();
+        void this.layer.loadTextures(NCCoolTimeIcon.getTextures(), NCCoolTimeIcon.getFinishTextures().map(path => [path, NCCoolTimeIcon.FINISH_COLOR]));
         void this.manNetwork.getParent().getComponent("asset").loadSound("ItemSound.cooltime_end");
         this.show("world");
         this.messageWnd.hide();
@@ -1309,16 +1309,6 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.abnormalStatusWnd.setVisible(true);
         this.shortCutWnd.setVisible(true);
         this.chatWnd.setVisible(true);
-    }
-
-    protected async loadCoolTimeTextures() {
-        await this.layer.loadTextures(NCCoolTimeIcon.getTextures());
-        await Promise.all(NCCoolTimeIcon.getFinishTextures().map(async path => {
-            const image = new Image();
-
-            image.src = this.layer.getTintUrl(path, 0x008080);
-            await image.decode();
-        }));
     }
 
     public showNpcHtml(html: string, type: number) {

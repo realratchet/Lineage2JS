@@ -1,8 +1,9 @@
 
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
-import { Box3, BufferAttribute, Color, Matrix4, Vector2, Vector3, WebGLRenderer } from "three";
+import { Box3, BufferAttribute, Color, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
 import { computeStaticLighting } from "../rendering/static-lighting";
+import VertexLighting, { getAffectedVertices } from "../rendering/vertex-lighting";
 import type { L2Environment } from "../rendering/l2-env";
 import { ColorByte } from "../utils/color-byte";
 import MeshStaticMaterial, { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
@@ -21,29 +22,8 @@ const arrBakedHardwareLights = Array.from({ length: NUM_ACTOR_LIGHTS }, () => ({
 const arrPermeatingLights: string[] = [];
 const tmpHardwareBox = new Box3();
 
-const affectedVertexCache = new WeakMap<Uint8Array, Uint32Array>();
-
-function getAffectedVertices(flags: Uint8Array, vertexCount: number, rangeStart: number = 0, rangeEnd: number = vertexCount, flagsOffset: number = 0): Uint32Array {
-    let indices = affectedVertexCache.get(flags);
-
-    if (!indices) {
-        let count = 0;
-
-        for (let vi = rangeStart; vi < rangeEnd; vi++)
-            if (flags[(vi >> 3) - flagsOffset] & (1 << (vi & 7))) count++;
-
-        indices = new Uint32Array(count);
-
-        for (let vi = rangeStart, k = 0; vi < rangeEnd; vi++)
-            if (flags[(vi >> 3) - flagsOffset] & (1 << (vi & 7))) indices[k++] = vi;
-
-        affectedVertexCache.set(flags, indices);
-    }
-
-    return indices;
-}
-
 type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
+export type BatchRenderGroup_T = { start: number, count: number, materialIndex: number, bounds: Box3, boundsStart: number, boundsCount: number, position: BufferAttribute | InterleavedBufferAttribute, index: BufferAttribute, positionVersion: number, indexVersion: number };
 
 export class LitActorMesh extends GameMesh {
     public readonly isUpdatable: boolean = true;
@@ -57,6 +37,8 @@ export class LitActorMesh extends GameMesh {
     protected readonly forcedRegion: number;
     protected staticLightingCache?: Uint8ClampedArray;
     protected lightingRenderer?: WebGLRenderer;
+    protected vertexLighting?: VertexLighting;
+    protected lightingAttribute?: BufferAttribute;
     protected ambient?: { glow: number, vector: number[], isUnlit: boolean, hardwareLighting?: boolean };
     protected readonly arrHardwareMaterials: MeshStaticMaterial[] = [];
 
@@ -73,6 +55,7 @@ export class LitActorMesh extends GameMesh {
     public elemDistances?: Float64Array;
     public transparentLookup?: Uint8Array;
     public batchGroupPool?: { elementIndex: number, start: number, count: number, materialIndex: number, distance: number, transparent: number }[];
+    public batchRenderGroups?: BatchRenderGroup_T[];
     public visibleBatchGroups?: { elementIndex: number, start: number, count: number, materialIndex: number, distance: number, transparent: number }[];
     public actorBoundsMin?: number[];
     public actorBoundsMax?: number[];
@@ -393,7 +376,7 @@ export class LitActorMesh extends GameMesh {
             return;
         }
 
-        const attrColors = this.geometry.getAttribute("lighting");
+        const attrColors = this.lightingAttribute || (this.lightingAttribute = this.geometry.getAttribute("lighting") as BufferAttribute);
         const colorArray = attrColors.array as Uint8ClampedArray;
 
         let staticCacheDirty = !this.staticLightingCache || this.staticLightingCache.length !== colorArray.length;
@@ -516,6 +499,24 @@ export class LitActorMesh extends GameMesh {
             } else if (staticEnv.length === 1) this.computeLighting(sector, staticEnv, this.staticLightingCache, 1.0, undefined, undefined, envColor);
 
             this.computeHardwareLighting(sector, this.staticLightingCache);
+        }
+
+        if (this.isBatch && this.lightingRenderer && this.lightInfo && (dynamicScene.length || dynamicEnv.length)) {
+            if (this.lightingRenderer.getContext().isContextLost()) return;
+
+            if (!this.vertexLighting) {
+                const glow = this.perActorAmbient ? this.getPerVertexGlow(this.perActorAmbient, this.geometry.getAttribute("position").count) : new Float32Array(this.geometry.getAttribute("position").count).fill(this.scaledGlow);
+                this.vertexLighting = new VertexLighting(this.lightingRenderer, this.geometry, glow, dynamicScene.concat(dynamicEnv), dynamicScene.length, this.staticLightingCache);
+                this.geometry.setAttribute("lightingSource", attrColors);
+            }
+
+            const indices = dynamicEnv.length >= 2 ? env.selectEnvironmentLightIndices(dynamicEnv.length) : [0, -1, 0];
+            env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor);
+            this.vertexLighting.update(this.lightInfo.matrix, this.staticLightingCache, staticCacheDirty, tmpEnvColor, indices[0], indices[1], indices[2]);
+            this.geometry.setAttribute("lighting", this.vertexLighting.output);
+            this.needsRelightPass = false;
+            if (this.elemRelight) this.elemRelight.fill(0);
+            return;
         }
 
         if (relight) {

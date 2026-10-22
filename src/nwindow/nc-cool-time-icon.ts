@@ -2,6 +2,8 @@ const arrRotation = Array.from({ length: 360 }, (_, index) => `L2_SkillTime.Rota
 const arrEnd = Array.from({ length: 9 }, (_, index) => `L2_SkillTime.CooltimeEnd.CooltimeEnd00${index + 1}`);
 
 export class NCCoolTimeIcon {
+    public static readonly FINISH_COLOR = 0x008080;
+
     public texture: string = null;
     public color = 0xffffff;
     public isFinishing = false;
@@ -26,7 +28,7 @@ export class NCCoolTimeIcon {
 
         // NCCoolTimeIcon, NWindow RVA 0x1f190 / 0x1f610: 360 rotation frames, then a 0.5s completion flash.
         this.isFinishing = remaining <= 0;
-        this.color = this.isFinishing ? 0x008080 : 0xffffff;
+        this.color = this.isFinishing ? NCCoolTimeIcon.FINISH_COLOR : 0xffffff;
         this.texture = remaining > 0 ? arrRotation[Math.min(359, this.firstFrame + Math.max(0, Math.trunc(360 * (now - this.startedAt) / this.duration)))] : arrEnd[Math.trunc(-remaining * 9 / 500)] || null;
     }
 }

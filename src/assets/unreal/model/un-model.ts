@@ -398,6 +398,7 @@ export abstract class UModel extends UPrimitive {
             result.bspRenderBounds[i] = this.bounds.getElem(i, _box).getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
 
         const sectionMap = new Map<PriorityGroups_T, Map<string, ObjectsForSection_T>>();
+        const portalPosition = FVector.make();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
@@ -407,6 +408,15 @@ export abstract class UModel extends UPrimitive {
             nodeInfo.zoneMask = result.nodeZoneMasks[nodeIndex] = node.zoneMask;
 
             result.bspNodes.push(nodeInfo);
+
+            if (surf.flags & PolyFlags_T.PF_Portal) {
+                nodeInfo.portalVertices = [];
+                for (let vertexIndex = 0; vertexIndex < node.numVertices; vertexIndex++) {
+                    const vert = this.vertices.getElem(node.iVertPool + vertexIndex);
+                    const position = this.points.getElem(vert.pVertex, portalPosition);
+                    nodeInfo.portalVertices.push(position.x, position.y, position.z);
+                }
+            }
 
             if (node.iCollisionBound >= 0) {
                 const hulls = this.leafHulls.getTypedArray() as Int32Array;
