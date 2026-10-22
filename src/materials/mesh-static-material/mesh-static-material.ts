@@ -592,12 +592,24 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     }
 
     public updateHardwareLighting(ambient: ColorByte, lights: readonly DynamicLight[], center: Vector3, radius: number) {
-        this.updateActorLighting(ambient, 1, lights);
+        const uniforms = this.uniforms;
+        const entries = uniforms.actorLights.value;
+        const count = Math.min(lights.length, entries.length);
 
-        const entries = this.uniforms.actorLights.value;
-        for (let i = 0; i < this.uniforms.numActorLights.value; i++) {
-            lights[i].getHardwareLight(center, radius, entries[i]);
-            entries[i].isHardwareLight = true;
+        ambient.toFloats(uniforms.actorAmbient.value);
+        uniforms.actorScaledGlow.value = 1;
+        uniforms.numActorLights.value = count;
+
+        for (let i = 0; i < count; i++) {
+            const light = lights[i];
+            const entry = entries[i];
+
+            entry.position.copy(light.lightPosition);
+            entry.direction.copy(light.lightDirection);
+            entry.radius = light.lightRadius;
+            entry.effect = light.lightEffect;
+            light.getHardwareLight(center, radius, entry);
+            entry.isHardwareLight = true;
         }
 
         this.packActorLights();
