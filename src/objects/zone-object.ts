@@ -40,7 +40,7 @@ const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
-type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
+type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string; actorIndex: number };
 type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number };
 type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, version: number, source: Uint8Array | Uint16Array | Uint32Array, ranges: Map<number, { count: number, bounds: Box3 }> };
 const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
@@ -332,6 +332,7 @@ export class SectorObject extends GameObject {
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
+    protected readonly arrBSPStack: number[] = [];
     protected staticActorCandidateStamps = new Uint32Array(256);
     protected staticActorVisibleStamps = new Uint32Array(256);
     protected staticActorDistances = new Float64Array(256);
@@ -868,38 +869,12 @@ export class SectorObject extends GameObject {
         return selected;
     }
 
-    public getActiveZoneMask(cameraPosition: THREE.Vector3): bigint {
+    public getActiveZoneMask(cameraPosition: THREE.Vector3, leafIndex?: number | null): bigint {
         if (this.bspNodes.length === 0 || !this.bspLeaves) {
             return (1n << 64n) - 1n;
         }
 
-        const findZonePosition = tmpVec4.set(cameraPosition.x, cameraPosition.y, cameraPosition.z, -1);
-        let nodeIndex = 0;
-        let leafIndex: number | null = null;
-        let node: BSPNodeData;
-
-        while (true) {
-            node = this.bspNodes[nodeIndex];
-            const plane = node.plane;
-            const side = findZonePosition.dot(plane);
-
-            if (node.front >= 0 && side >= 0) {
-                nodeIndex = node.front;
-            } else if (node.back >= 0 && side <= 0) {
-                nodeIndex = node.back;
-            } else {
-                const candidateLeaf = side >= 0 ? node.leaves[1] : node.leaves[0];
-                if (candidateLeaf >= 0 && candidateLeaf < this.bspLeaves.length) {
-                    leafIndex = candidateLeaf;
-                } else {
-                    const fallbackLeaf = side >= 0 ? node.leaves[0] : node.leaves[1];
-                    if (fallbackLeaf >= 0 && fallbackLeaf < this.bspLeaves.length) {
-                        leafIndex = fallbackLeaf;
-                    }
-                }
-                break;
-            }
-        }
+        if (leafIndex === undefined) leafIndex = this.findPositionLeaf(cameraPosition);
 
         const cameraZone = leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length
             ? this.bspLeaves[leafIndex].zone
@@ -1009,20 +984,16 @@ export class SectorObject extends GameObject {
 
         const zoneDepthMap = new Map<number, number>();
         const zonesAddedThroughPortals = new Set<number>();
-        for (let i = 0; i < 64; i++) {
-            if (currentZoneMask & (1n << BigInt(i))) {
-                zoneDepthMap.set(i, recursionDepth);
-            }
-        }
+        const nodeStack = this.arrBSPStack;
+        let stackCount = 1;
+        nodeStack[0] = 0;
 
-        const nodeStack: { nodeIndex: number; pass: "front" | "plane" }[] = [];
-        nodeStack.push({ nodeIndex: 0, pass: "front" });
-
-        while (nodeStack.length > 0) {
-            const { nodeIndex, pass } = nodeStack.pop()!;
+        while (stackCount > 0) {
+            const entry = nodeStack[--stackCount];
+            const nodeIndex = entry >= 0 ? entry : -entry - 1;
             const node = this.bspNodes[nodeIndex];
 
-            if (pass === "front") {
+            if (entry >= 0) {
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
                 if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
                     if (!(nodeZoneMask & currentZoneMask)) {
@@ -1054,7 +1025,7 @@ export class SectorObject extends GameObject {
                 const nearLeafIndex = isFront ? node.leaves[1] : node.leaves[0];
 
                 if (farChild >= 0) {
-                    nodeStack.push({ nodeIndex: farChild, pass: "front" });
+                    nodeStack[stackCount++] = farChild;
                 } else {
                     if (farLeafIndex >= 0 && farLeafIndex < (this.bspLeaves?.length || 0)) {
                         const leaf = this.bspLeaves[farLeafIndex];
@@ -1064,10 +1035,10 @@ export class SectorObject extends GameObject {
                     }
                 }
 
-                nodeStack.push({ nodeIndex: nodeIndex, pass: "plane" });
+                nodeStack[stackCount++] = -nodeIndex - 1;
 
                 if (nearChild >= 0) {
-                    nodeStack.push({ nodeIndex: nearChild, pass: "front" });
+                    nodeStack[stackCount++] = nearChild;
                 } else {
                     if (nearLeafIndex >= 0 && nearLeafIndex < (this.bspLeaves?.length || 0)) {
                         const leaf = this.bspLeaves[nearLeafIndex];
@@ -1154,21 +1125,14 @@ export class SectorObject extends GameObject {
             }
         }
 
-        const filteredVisibleLeaves = new Set<number>();
         for (const leafIndex of visibleLeaves) {
-            if (leafIndex >= 0 && leafIndex < (this.bspLeaves?.length || 0)) {
-                const leaf = this.bspLeaves[leafIndex];
-                if (leaf && leaf.zone >= 0) {
-                    const leafZoneBit = 1n << BigInt(leaf.zone);
-                    const isZoneInMask = !!(leafZoneBit & currentZoneMask);
-
-                    if (isZoneInMask) filteredVisibleLeaves.add(leafIndex);
-                }
-            }
+            const leaf = this.bspLeaves[leafIndex];
+            if (!leaf || leaf.zone < 0 || !(currentZoneMask & (1n << BigInt(leaf.zone))))
+                visibleLeaves.delete(leafIndex);
         }
 
         this.lastZoneMask = currentZoneMask;
-        return { visibleNodes, visibleLeaves: filteredVisibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
+        return { visibleNodes, visibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
     }
 
 
@@ -1183,10 +1147,10 @@ export class SectorObject extends GameObject {
 
         const leafOnlyMode = !isCameraInSector;
 
-        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition, cameraLeaf);
 
         let currentZone: number | null = null;
-        const leafIndex = this.findPositionLeaf(cameraPosition);
+        const leafIndex = cameraLeaf;
         if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
             currentZone = this.bspLeaves[leafIndex].zone;
         }
@@ -1340,10 +1304,10 @@ export class SectorObject extends GameObject {
         this.helpers.visible = isCameraInSector;
 
         const leafOnlyMode = !isCameraInSector;
-        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition, cameraLeaf);
 
         let currentZone: number | null = null;
-        const leafIndex = this.findPositionLeaf(cameraPosition);
+        const leafIndex = cameraLeaf;
         if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
             currentZone = this.bspLeaves[leafIndex].zone;
         }
@@ -1522,11 +1486,11 @@ export class SectorObject extends GameObject {
                         processedBatches.add(object.uuid);
                     }
 
-                    this.staticMeshVisibilityEntries.push({ object, uuid });
+                    this.staticMeshVisibilityEntries.push({ object, uuid, actorIndex: (object as any).isBatch ? -1 : this.getStaticActorIndex(uuid) });
                 });
             }
 
-            for (const { object, uuid } of this.staticMeshVisibilityEntries) {
+            for (const { object, uuid, actorIndex } of this.staticMeshVisibilityEntries) {
                 if ((object as any).isBatch) {
                     const batchElements = (object as any).batchElements;
                     const geometry = (object as any).geometry;
@@ -1654,7 +1618,7 @@ export class SectorObject extends GameObject {
                     if (object.visible) visibleCount++;
 
                 } else {
-                    let isVisible = this.staticActorVisibleStamps[this.getStaticActorIndex(uuid)] === stamp;
+                    let isVisible = this.staticActorVisibleStamps[actorIndex] === stamp;
 
                     if (!isVisible && (object as any).actorBoundsMin && !isCameraInSector) {
                         tmpActorBox.min.fromArray((object as any).actorBoundsMin);
@@ -1845,7 +1809,7 @@ export class SectorObject extends GameObject {
         this.helpers.visible = isCameraInSector;
 
         const leafOnlyMode = !isCameraInSector;
-        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition, cameraLeaf);
 
         const { finalZoneMask, visibleLeaves } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled, 0, leafOnlyMode);
 
