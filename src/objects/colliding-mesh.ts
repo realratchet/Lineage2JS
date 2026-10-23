@@ -1,7 +1,7 @@
 import { World, Collider, RigidBody, ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, CollisionTriangleIndex_T, ICollidable } from "./objects";
 import LitActorMesh, { MeshLight_T } from "./lit-actor";
-import { Box3, BufferGeometry, Mesh, Quaternion, ShaderMaterial, Vector3 } from "three";
+import { Box3, BufferGeometry, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3 } from "three";
 import MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
 import buildTriangleIndex from "../physics/triangle-index";
@@ -384,7 +384,8 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
     public getCollisionRadius(): number { return this.collisionProfile.collisionRadius; }
     public getCollisionHeight(): number { return this.collisionProfile.collisionHeight; }
     public syncCollisionTransform(): void {
-        this.updateMatrixWorld(true);
+        this.updateMatrix();
+        Object3D.prototype.updateMatrixWorld.call(this, true);
         this.getCollisionPrimitive();
         if (!this.rigidbody) return;
 

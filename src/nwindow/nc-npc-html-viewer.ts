@@ -60,12 +60,12 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
         this.viewer.onHide = () => this.hide();
     }
 
-    protected setTitle(title: string) { // Title text 0x10011d84: x=20, y=int(H/2 - textH/2 + 2).
+    protected setTitle(title: string) { // NCFrameCtrl 0x10011d6a: integer-halve text height before centering.
         if (this.titleText) this.titleText.remove();
 
         const lineHeight = this.layer.getManager().canvas.getLineHeight(FontType_T.SMALL);
 
-        this.titleText = title ? this.layer.text(this.frame, title, TITLE_COLOR, FontType_T.SMALL, 20, Math.trunc(TITLE_HEIGHT / 2 - lineHeight / 2 + 2)) : null;
+        this.titleText = title ? this.layer.text(this.frame, title, TITLE_COLOR, FontType_T.SMALL, 20, Math.trunc(TITLE_HEIGHT / 2 - Math.trunc(lineHeight / 2) + 2)) : null;
     }
 
     protected beginDrag(event: MouseEvent) {

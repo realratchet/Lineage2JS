@@ -1,9 +1,11 @@
+import type NDomLayer from "./ndom";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import { NDOM_EDIT_TEXTURES } from "./ndom";
 import SkinTextures from "./skin-textures";
 import NCAbnormalStatusWnd from "./nc-abnormal-status-wnd";
 import NCActionWnd from "./nc-action-wnd";
 import NCChatWnd from "./nc-chat-wnd";
+import NCChatFilterWnd from "./nc-chat-filter-wnd";
 import NCClanWnd from "./nc-clan-wnd";
 import NCCommandInfoWnd from "./nc-command-info-wnd";
 import NCCommunityWnd from "./nc-community-wnd";
@@ -46,6 +48,10 @@ import NCPartyRoomWnd from "./nc-party-room-wnd";
 import NCPawnCreateWnd from "./nc-pawn-create-wnd";
 import NCPetStatusWnd from "./nc-pet-status-wnd";
 import NCPetWnd from "./nc-pet-wnd";
+import NCPetitionBeginWnd from "./nc-petition-begin-wnd";
+import NCPetitionWnd from "./nc-petition-wnd";
+import NCPetitionFeedBackWnd from "./nc-petition-feedback-wnd";
+import NCGMSnoopWnd from "./nc-gm-snoop-wnd";
 import NCPlayerStatusWnd from "./nc-player-status-wnd";
 import NCPledgePowerWnd from "./nc-pledge-power-wnd";
 import NCPrivateBuyWnd from "./nc-private-buy-wnd";
@@ -75,7 +81,8 @@ import RecordMark from "./record-mark";
 
 export type AbnormalStatusWndView_T = Pick<NCAbnormalStatusWnd, "element" | "getEffects" | "isVisible" | "placeOnScreen" | "setEffects" | "setSecondaryEffects" | "setShortEffect" | "setVisible" | "tick">;
 export type ActionWndView_T = Pick<NCActionWnd, "clearSelection" | "element" | "onUse" | "setActions" | "setClass" | "setMountable">;
-export type ChatWndView_T = Pick<NCChatWnd, "addCreatureSay" | "addSystemMessage" | "dispatchCommand" | "element" | "focusInput" | "isInputFocused" | "isVisible" | "onBuildCommand" | "onCommand" | "onSend" | "placeOnScreen" | "resetLayout" | "sendText" | "setOldChatting" | "setSystemMessageFilters" | "setSystemMsgWnd" | "setVisible">;
+export type ChatFilterWndView_T = Pick<NCChatFilterWnd, "element" | "isVisible" | "onApply" | "placeOnScreen" | "setVisible" | "show">;
+export type ChatWndView_T = Pick<NCChatWnd, "getFilter" | "setFilter" | "onOptions" | "addCreatureSay" | "addSystemMessage" | "dispatchCommand" | "element" | "focusInput" | "isInputFocused" | "isVisible" | "onBuildCommand" | "onCommand" | "onSend" | "placeOnScreen" | "resetLayout" | "sendText" | "setOldChatting" | "setSystemMessageFilters" | "setSystemMsgWnd" | "setVisible">;
 export type ClanWndView_T = Pick<NCClanWnd, "addMember" | "clearMembers" | "deleteMember" | "element" | "onAction" | "setClan" | "setStatus" | "setStrings" | "setVisible" | "updateMember">;
 export type CommandInfoWndView_T = Pick<NCCommandInfoWnd, "addChat" | "closeChannel" | "element" | "isVisible" | "onLeave" | "onOust" | "onSay" | "onUpdate" | "open" | "placeOnScreen" | "setInfo" | "setVisible" | "tick">;
 export type CommunityWndView_T = Pick<NCCommunityWnd, "element" | "hide" | "isVisible" | "onAction" | "onRequest" | "openClan" | "placeOnScreen" | "setBoard" | "setVisible" | "toggle" | "viewer">;
@@ -93,7 +100,7 @@ export type GMWndView_T = Pick<NCGMWnd, "element" | "isVisible" | "onCommand" | 
 export type HennaInfoWndView_T = Pick<NCHennaInfoWnd, "element" | "isVisible" | "onBack" | "onConfirm" | "placeOnScreen" | "setVisible" | "show">;
 export type HennaListWndView_T = Pick<NCHennaListWnd, "clear" | "element" | "isVisible" | "onOpen" | "placeOnScreen" | "setVisible" | "show">;
 export type HeroTowerWndView_T = Pick<NCHeroTowerWnd, "element" | "isVisible" | "onDiary" | "onWriteWords" | "placeOnScreen" | "setCrestGetter" | "setVisible" | "show">;
-export type InventoryWndView_T = Pick<NCInventoryWnd, "clearChoice" | "element" | "getEnchantItems" | "getItemLines" | "getItemOwner" | "getItemTitle" | "hideTooltip" | "isItemDropTarget" | "isVisible" | "onChoose" | "onCrystallize" | "onDestroy" | "onDropItem" | "onEquip" | "onHideBag" | "onUnequip" | "onUse" | "placeOnScreen" | "saveOrder" | "setDwarvenCraft" | "setItems" | "setLimit" | "setOrderOwner" | "setVisible" | "setWeight" | "showTooltip" | "updateOrder">;
+export type InventoryWndView_T = Pick<NCInventoryWnd, "clearChoice" | "element" | "getEnchantItems" | "getItemLines" | "getItemOwner" | "getItemTitle" | "hideTooltip" | "isItemDropTarget" | "isVisible" | "onChoose" | "onCrystallize" | "onDestroy" | "onDropItem" | "onEquip" | "onHideBag" | "onUnequip" | "onUse" | "placeOnScreen" | "saveOrder" | "setClass" | "setDwarvenCraft" | "setHenna" | "setItems" | "setLimit" | "setOrderOwner" | "setVisible" | "setWeight" | "showTooltip" | "updateOrder">;
 export type ItemEnchantWndView_T = Pick<NCItemEnchantWnd, "element" | "isVisible" | "onConfirm" | "onHideTooltip" | "onTooltip" | "placeOnScreen" | "setVisible" | "show">;
 export type LoadingWndView_T = Pick<NCLoadingWnd, "element" | "placeOnScreen" | "setBlack" | "setVisible">;
 export type LobbyWndView_T = Pick<NCLobbyWnd, "element" | "gameStart" | "onCreate" | "onDelete" | "onRelogin" | "onRestore" | "onSelect" | "onStart" | "onSystemMessage" | "pick" | "placeOnScreen" | "setCharacters" | "setPawnLabels" | "setSelected" | "setVisible">;
@@ -145,18 +152,34 @@ export type VIPShopWndView_T = Pick<NCVIPShopWnd, "clear" | "element" | "isVisib
 export type ZoneTitleWndView_T = Pick<NCZoneTitleWnd, "clear" | "element" | "placeOnScreen" | "reset" | "tick" | "updateZone">;
 export type RecordMarkView_T = Pick<RecordMark, "element" | "placeOnScreen" | "setVisible" | "update">;
 
+export type GMSnoopWndView_T = Pick<NCGMSnoopWnd, "addChat" | "element" | "getConversationId" | "isVisible" | "onQuit" | "placeOnScreen" | "reset" | "setConversation" | "setVisible">;
+
+export type PetitionBeginWndView_T = Pick<NCPetitionBeginWnd, "element" | "getHtml" | "isVisible" | "onCancel" | "onSubmit" | "onValidation" | "placeOnScreen" | "reset" | "setVisible" | "tick">;
+
+export type PetitionFeedBackWndView_T = Pick<NCPetitionFeedBackWnd, "element" | "isVisible" | "onClose" | "onSubmit" | "onValidation" | "placeOnScreen" | "setVisible" | "tick">;
+
+export type GMPetitionWndView_T = Pick<NCPetitionWnd, "addString" | "element" | "isVisible" | "onBegin" | "onEnd" | "onSay" | "placeOnScreen" | "reset" | "setVisible">;
+
+export type PetitionWndView_T = Pick<NCPetitionWnd, "addChat" | "addString" | "element" | "isVisible" | "onCancel" | "onEvaluate" | "onSay" | "placeOnScreen" | "reset" | "setEvaluationEnabled" | "setVisible">;
+
 export class Skin {
     public constructor(public readonly textures: SkinTextures = new SkinTextures()) { }
 
     public getTextures(strings: GameStrings_T): string[] {
         return [
             ...NCLoginWnd.getTextures(), ...NCReplayWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...["graded", "gradec", "gradeb", "gradea", "grades"].map(key => strings.symbols[key]), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCSSQMainBoard.getTextures(), ...NCItemEnchantWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCFishViewportWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NTownMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCOptionWnd.getTextures(), ...NCZoneTitleWnd.getTextures(), ...RecordMark.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES,
-            ...NCPlayerStatusWnd.getTextures(), ...NCPetStatusWnd.getTextures(), ...NCAbnormalStatusWnd.getTextures(), ...NCTargetStatusWnd.getTextures(), ...NCShortCutWnd.getTextures(), ...NCChatWnd.getTextures(), ...NCRestartMenuWnd.getTextures(), ...NCOlympiadPlayerWnd.getTextures(), ...NCOlympiadTargetWnd.getTextures()
+            ...NCPlayerStatusWnd.getTextures(), ...NCPetStatusWnd.getTextures(), ...NCAbnormalStatusWnd.getTextures(), ...NCTargetStatusWnd.getTextures(), ...NCShortCutWnd.getTextures(), ...NCChatWnd.getTextures(), ...NCChatFilterWnd.getTextures(), ...NCPetitionBeginWnd.getTextures(), ...NCPetitionWnd.getTextures(), ...NCPetitionFeedBackWnd.getTextures(), ...NCGMSnoopWnd.getTextures(), ...NCRestartMenuWnd.getTextures(), ...NCOlympiadPlayerWnd.getTextures(), ...NCOlympiadTargetWnd.getTextures()
         ];
     }
 
     public createAbnormalStatusWnd(...args: ConstructorParameters<typeof NCAbnormalStatusWnd>): AbnormalStatusWndView_T { return new NCAbnormalStatusWnd(...args); }
     public createActionWnd(...args: ConstructorParameters<typeof NCActionWnd>): ActionWndView_T { return new NCActionWnd(...args); }
+    public createGMSnoopWnd(...args: ConstructorParameters<typeof NCGMSnoopWnd>): GMSnoopWndView_T { return new NCGMSnoopWnd(...args); }
+    public createPetitionFeedBackWnd(...args: ConstructorParameters<typeof NCPetitionFeedBackWnd>): PetitionFeedBackWndView_T { return new NCPetitionFeedBackWnd(...args); }
+    public createGMPetitionWnd(layer: NDomLayer): GMPetitionWndView_T { return new NCPetitionWnd(layer, true); }
+    public createPetitionWnd(...args: ConstructorParameters<typeof NCPetitionWnd>): PetitionWndView_T { return new NCPetitionWnd(...args); }
+    public createPetitionBeginWnd(...args: ConstructorParameters<typeof NCPetitionBeginWnd>): PetitionBeginWndView_T { return new NCPetitionBeginWnd(...args); }
+    public createChatFilterWnd(...args: ConstructorParameters<typeof NCChatFilterWnd>): ChatFilterWndView_T { return new NCChatFilterWnd(...args); }
     public createChatWnd(...args: ConstructorParameters<typeof NCChatWnd>): ChatWndView_T { return new NCChatWnd(...args); }
     public createClanWnd(...args: ConstructorParameters<typeof NCClanWnd>): ClanWndView_T { return new NCClanWnd(...args); }
     public createCommandInfoWnd(...args: ConstructorParameters<typeof NCCommandInfoWnd>): CommandInfoWndView_T { return new NCCommandInfoWnd(...args); }

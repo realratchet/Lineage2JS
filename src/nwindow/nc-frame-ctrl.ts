@@ -13,7 +13,7 @@ export class NCFrameCtrl {
         layer.tile(frame, 0, 0, 16, 20, 0, 0, 16, 20, SKIN_SLOTS.frameLeft);
         layer.tile(frame, 16, 0, width - 32, 20, 0, 0, 32, 20, SKIN_SLOTS.frameMid);
         layer.tile(frame, width - 16, 0, 16, 20, 0, 0, 16, 20, SKIN_SLOTS.frameRight);
-        const caption = layer.text(frame, title, 0xffc8d2dc, FontType_T.SMALL, 20, 5);
+        const caption = layer.text(frame, title, 0xffc8d2dc, FontType_T.SMALL, 20, 6);
 
         const closeWindow = () => { if (onClose) onClose(); else element.hidden = true; };
         const closeFrame = () => { if (onBeforeClose) onBeforeClose(); layer.getManager().playWindowCloseSound(); closeWindow(); };

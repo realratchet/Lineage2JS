@@ -60,7 +60,8 @@ export class HairSimulationComponent extends ObjectComponent<BaseActor> {
         const attackEffectFrame = clip ? Number((clip as any).attackEffectFrame) || 0 : 0;
         const attackEndEffectFrame = clip ? Number((clip as any).attackEndEffectFrame) || 0 : 0;
         const isMoving = this.movementComponent.getVelocity().lengthSq() > 0;
-        const isRunning = this.movementComponent.isRunning();
+        const runAnimationName = (parent.getUnrealScriptProperty("RunAnimName") as string[])[weaponType];
+        const isRunning = !!lowerName && lowerName === runAnimationName.toLowerCase();
         const isDying = this.movementComponent.isDying();
         const isBowRunning = weaponType === WeaponType.WT_BOW && isRunning;
         const isSpecialAttack = lowerName.startsWith("spatk01_") || lowerName.startsWith("spatk02_");

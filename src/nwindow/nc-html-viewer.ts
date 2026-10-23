@@ -544,7 +544,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     protected updateThumb() { // 0x1002c0a0 / 0x1002c150: thumb = view*sliderH/content (min 15), offset = (sliderH-len)*scroll/(content-view).
         const sliderH = this.height - 30, isScrollable = this.contentHeight > this.height;
 
-        this.scrollBar.hidden = !isScrollable;
+        this.thumb.hidden = !isScrollable;
 
         if (!isScrollable) return;
 

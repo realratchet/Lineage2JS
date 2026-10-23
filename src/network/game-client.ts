@@ -473,6 +473,7 @@ export class GameClient {
     public requestGmList() { this.send(this.write(GamePackets.GameClientPacket_T.RequestGmList)); }
     public snoopQuit(objectId: number) { this.send(this.write(GamePackets.GameClientPacket_T.SnoopQuit).d(objectId)); }
     public requestPetition(content: string, type: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestPetition).S(content).d(type)); }
+    public petitionVote(rating: number, text: string) { this.send(this.write(GamePackets.GameClientPacket_T.PetitionVote).d(1).d(rating).S(text)); }
     public requestPetitionCancel() { this.send(this.write(GamePackets.GameClientPacket_T.RequestPetitionCancel)); }
     public requestFriendList() { this.send(this.write(GamePackets.GameClientPacket_T.RequestFriendList)); }
     public requestFriendDel(name: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestFriendDel).S(name)); }

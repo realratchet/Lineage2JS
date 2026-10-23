@@ -543,7 +543,7 @@ export class NDomLayer {
             this.setTile(icon, 12, 12, 0, 0, 12, 12, value ? SKIN_SLOTS.checkBoxChecked : SKIN_SLOTS.checkBox);
         };
         element.addEventListener("mousedown", event => {
-            if (event.button !== 0 || event.detail === 2) return;
+            if (event.button !== 0 || event.detail === 2 || element.getAttribute("aria-disabled") === "true") return;
 
             element.setChecked(!checked);
             if (onChange) onChange(checked);

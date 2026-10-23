@@ -364,10 +364,10 @@ export class NCLobbyWnd { // NCLobbyWnd OnCreate 0x1009cff0, OnPaint 0x1009c7e0:
     }
 
     public setPawnLabels(labels: LobbyPawnLabel_T[]) { // OnPaint 0x1009c849: Draw3DCoordText per pawn; a pending delete adds "Remaining Time : <time>" 9 units higher.
-        const lineHeight = this.layer.getManager().canvas.getLineHeight();
+        const lineHeight = this.layer.getManager().canvas.getLineHeight(FontType_T.LARGE);
 
         while (this.arrLabels.length < labels.length)
-            this.arrLabels.push({ name: this.layer.text(this.labels, "", TEXT_COLOR, FontType_T.SMALL, 0, 0), time: this.layer.text(this.labels, "", TEXT_COLOR, FontType_T.SMALL, 0, 0), text: null, color: 0, timeText: null });
+            this.arrLabels.push({ name: this.layer.text(this.labels, "", TEXT_COLOR, FontType_T.LARGE, 0, 0), time: this.layer.text(this.labels, "", TEXT_COLOR, FontType_T.SMALL, 0, 0), text: null, color: 0, timeText: null });
 
         this.arrLabels.forEach((element, index) => {
             const label = labels[index];
@@ -380,12 +380,12 @@ export class NCLobbyWnd { // NCLobbyWnd OnCreate 0x1009cff0, OnPaint 0x1009c7e0:
             const color = karmaColor(label.karma);
 
             if (element.text !== label.name || element.color !== color) {
-                this.layer.renderText(element.name, label.name, color);
+                this.layer.renderText(element.name, label.name, color, FontType_T.LARGE);
                 element.text = label.name;
                 element.color = color;
             }
 
-            this.layer.place(element.name, Math.trunc(label.x - this.layer.measureText(label.name) / 2), Math.trunc(label.y - lineHeight));
+            this.layer.place(element.name, label.x - Math.trunc(this.layer.measureText(label.name, FontType_T.LARGE) / 2), Math.trunc(label.y - lineHeight));
 
             if (element.time.hidden) return;
 
@@ -396,7 +396,7 @@ export class NCLobbyWnd { // NCLobbyWnd OnCreate 0x1009cff0, OnPaint 0x1009c7e0:
                 element.timeText = timeText;
             }
 
-            this.layer.place(element.time, Math.trunc(label.x - this.layer.measureText(timeText) / 2), Math.trunc(label.y - lineHeight * 2));
+            this.layer.place(element.time, Math.trunc(label.x - this.layer.measureText(timeText) / 2), Math.trunc(label.y - this.layer.getManager().canvas.getLineHeight() * 2));
         });
     }
 }

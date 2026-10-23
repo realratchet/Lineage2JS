@@ -45,7 +45,7 @@ import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
 import type AnimationComponent from "../objects/components/animation-component";
 import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
-import { getProperty, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
+import { getProperty, setProperty, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
 import ActorOwnershipComponent, { setScriptObjectProperty } from "../objects/components/actor-ownership-component";
 import type PawnAttackComponent from "../objects/components/pawn-attack-component";
 import type SkillVisualEffect from "@l2js/engine/skills/skill-visual-effect";
@@ -360,6 +360,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.getWaterEffects().underWaterEffect.removeFromParent();
         this.player.deleteLandmark();
         this.player = player;
+        this.manGame.getComponent("asset").playerController.setPawn(player);
         this.scene.add(this.getWaterEffects().underWaterEffect);
     }
     protected readonly shadowProjector = new ShadowProjector();
@@ -1190,7 +1191,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
-    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null): void {
+    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null, instigator?: ScriptHost_T): void {
         if (!(effect as any).isGameObject) throw new Error(`Transient effect '${effect.name}' is not a game object.`);
 
         const object = effect as Object3D & IObject;
@@ -1210,6 +1211,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             if (level) setScriptObjectProperty(object, "Level", level);
         }
+        if (instigator !== undefined) setProperty(object as any, "Instigator", instigator);
         if (object.findComponent("pawnMovement")) (object as BaseActor).beginPlay();
         else if (script) script.beginPlay();
         this.queueShaderCompile(effect);

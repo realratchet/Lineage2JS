@@ -16,6 +16,7 @@ import * as GamePackets from "./game-packets";
 import PawnFishingComponent from "../objects/components/pawn-fishing-component";
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component";
+import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import { getProperty } from "../ue-script/vm";
 import PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
@@ -317,7 +318,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         this.session.stopReplayRecording();
         this.actors.worldLoad = null;
+        this.actors.clearDisappearNpcActions();
         for (const objectId of this.movement.riders.keys()) this.movement.endRide(objectId);
+        const lifecycle = render.player.findComponent<NpcLifecycleComponent>("npcLifecycle");
+
+        if (lifecycle) lifecycle.resetDeath();
+        this.manGame.getComponent("asset").playerController.setPawn(null);
 
         render.clearViewportWindowParam();
         render.setZoneMusicEnabled(false);
@@ -573,7 +579,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.SpawnItem: void this.actors.onSpawnItem(packet, false); break;
             case GamePackets.GameServerPacket_T.DropItem: void this.actors.onSpawnItem(packet, true); break;
             case GamePackets.GameServerPacket_T.GetItem: this.actors.onGetItem(packet); break;
-            case GamePackets.GameServerPacket_T.DeleteObject: this.actors.removeObject(packet.d()); break;
+            case GamePackets.GameServerPacket_T.DeleteObject: this.actors.removeObject(packet.d(), true); break;
             case GamePackets.GameServerPacket_T.CharMoveToLocation: this.movement.onMoveToLocation(packet); break;
             case GamePackets.GameServerPacket_T.MoveToPawn: this.movement.onMoveToPawn(packet); break;
             case GamePackets.GameServerPacket_T.StopMove: this.movement.onStopMove(packet); break;
@@ -705,6 +711,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.Ride: this.movement.onRide(packet); break;
             case GamePackets.GameServerPacket_T.FlyToLocation: this.movement.onFlyToLocation(packet); break;
             case GamePackets.GameServerPacket_T.SpecialCamera: this.movement.specialCamera = GamePackets.readSpecialCamera(packet); break;
+            case GamePackets.GameServerPacket_T.PetitionVote: this.community.onPetitionVote(packet); break;
             case GamePackets.GameServerPacket_T.NormalCamera: this.movement.specialCamera = null; break; // OnNormalCamera 0x7473c0 -> ReleaseSpecialViewTarget.
             case GamePackets.GameServerPacket_T.CameraMode: this.movement.cameraMode = packet.d(); break;
             case GamePackets.GameServerPacket_T.ObservationMode: this.movement.onObservationMode(packet); break;
@@ -1113,6 +1120,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public requestGmList() { return this.community.requestGmList(); }
     public snoopQuit(objectId: number) { return this.community.snoopQuit(objectId); }
     public petition(content: string, type: number) { return this.community.petition(content, type); }
+    public votePetition(rating: number, text: string) { return this.community.votePetition(rating, text); }
     public cancelPetition() { return this.community.cancelPetition(); }
     public requestFriendList() { return this.community.requestFriendList(); }
     public deleteFriend(name: string) { return this.community.deleteFriend(name); }
@@ -1181,6 +1189,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (this.session.lobby && this.ui.isLobbyVisible()) this.ui.setPawnLabels(this.session.lobby.getPawnLabels(this.session.characters, this.ui.getScreenCanvas().width, this.ui.getScreenCanvas().height));
         if (!this.actors.inWorld) return;
 
+        this.actors.updateDisappearNpcActions(deltaTime);
         this.updateGNOManager(deltaTime);
         this.macroExecutor.tick(deltaTime);
         this.movement.updateVehicles(deltaTime);

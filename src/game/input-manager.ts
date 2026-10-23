@@ -235,7 +235,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         const render = this.renderManager, asset = this.manGame.getComponent("asset"), properties = asset.playerController.scriptProperties;
 
         if (this.replayCameraState) throw new Error(`Replay camera is already active.`);
-        const preset: [string, any][] = ["CurFixedDefaultCameraNo", "bDisableZoom", "DefaultCameraYaw", "DefaultCameraPitch", "DefaultCameraDist", "bCameraMovingToDefault", "bUseDefaultCameraYaw", "bUseDefaultCameraPitch", "bUseDefaultCameraDist", "SavedViewTargetYaw", "SavedViewTargetPitch", "CurZoomingDist", "DesiredZoomingDist", "OldCameraRotation", "OldCameraLocation", "CurVolumeCameraRadius"].map(name => {
+        const preset: [string, any][] = ["CurFixedDefaultCameraNo", "bDisableZoom", "DefaultCameraYaw", "DefaultCameraPitch", "DefaultCameraDist", "bCameraMovingToDefault", "bUseDefaultCameraYaw", "bUseDefaultCameraPitch", "bUseDefaultCameraDist", "SavedViewTargetYaw", "SavedViewTargetPitch", "CurZoomingDist", "DesiredZoomingDist", "OldZoomingDist", "OldCameraRotation", "OldCameraLocation", "OldViewTargetLocation", "Location", "Rotation", "CurVolumeCameraRadius"].map(name => {
             const value = properties.get(name);
 
             return [name, Array.isArray(value) ? value.slice() : value];
@@ -243,12 +243,13 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.replayCameraState = { height: properties.get("CameraViewHeightAdjust") as number, adjusted: this.isCameraHeightAdjusted, rotating: properties.get("bCameraManuallyRotating") as boolean, yaw: properties.get("ManuallyCameraYaw") as number, pitch: properties.get("ManuallyCameraPitch") as number, rightMouseDownTime: this.rightMouseDownTime, preset, hidden: render.player.getUnrealScriptProperty("bHidden") as boolean, enableRotate: this.controls.orbit.enableRotate };
         this.rightMouseDownTime = -Infinity;
         properties.set("bCameraManuallyRotating", false);
-        properties.set("ManuallyCameraYaw", 0);
+        properties.set("ManuallyCameraYaw", 1);
         properties.set("ManuallyCameraPitch", 0);
         properties.set("CurFixedDefaultCameraNo", scene.fixedCamera);
         properties.set("bCameraMovingToDefault", false);
         properties.set("CurZoomingDist", scene.zoom);
         properties.set("DesiredZoomingDist", scene.desiredZoom);
+        properties.set("OldZoomingDist", scene.zoom);
         if (scene.firstPerson) render.player.setUnrealScriptProperty("bHidden", true);
         render.player.getCameraTargetPosition(this.controls.orbit.target);
         this.controls.orbit.unclippedDistance = 0;
@@ -257,6 +258,9 @@ export class InputManager implements IEngineComponent<GameManager> {
         dirForward.set(Math.fround(cosPitch * sinRotator(yaw + 16384)), Math.fround(cosPitch * sinRotator(yaw)), sinRotator(pitch));
 
         properties.set("OldCameraLocation", [Math.fround(location[0] - dirForward.x * distance), Math.fround(location[1] - dirForward.y * distance), Math.fround(location[2] - Math.fround(dirForward.z * distance))]);
+        properties.set("Location", (properties.get("OldCameraLocation") as number[]).slice());
+        properties.set("Rotation", [pitch, yaw, (properties.get("Rotation") as number[])[2]]);
+        properties.set("OldViewTargetLocation", location.slice());
         properties.set("OldCameraRotation", [pitch, yaw, 0]);
         const orbitPitch = Math.min(pitch * Math.PI / 32768, Math.PI / 2 - 0.000001);
 

@@ -331,19 +331,16 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public removeIgnoredActor(actor: ICollidable): void { this.ignoredActors.delete(actor); }
 
-    public moveSmooth(movement: Vector3, ignoredActor?: ICollidable) {
+    public moveSmooth(movement: Vector3) {
         if (!this.isInteractive()) return;
 
         const arrSaved = moveActorDepth ? arrMoveTemps.map(value => value.clone()) : null;
-        const wasIgnored = ignoredActor && this.ignoredActors.has(ignoredActor);
         try {
             const position = tmpPosition.copy(this.getPosition());
-            if (ignoredActor) this.ignoredActors.add(ignoredActor);
             this.moveWithWallResponse(position, movement);
             this.getPosition().copy(position);
             this.renderManager.getPhysicsManager().updatePawnCollision(this.getParent());
         } finally {
-            if (ignoredActor && !wasIgnored) this.ignoredActors.delete(ignoredActor);
             if (arrSaved) arrMoveTemps.forEach((value, index) => value.copy(arrSaved[index]));
         }
     }

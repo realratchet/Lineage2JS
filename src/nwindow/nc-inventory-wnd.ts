@@ -1,7 +1,8 @@
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
-import { ItemType2_T } from "../network/game-packets";
+import { ItemType2_T, type HennaStatus_T } from "../network/game-packets";
+import NCTooltip, { TEX_TOOLTIP_SLICES } from "./nc-tooltip";
 import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.Inventory_Back";
@@ -10,6 +11,9 @@ const TEX_TAB_SELECTED = "L2UI_CH3.InventoryWnd.Inventory_tab1";
 const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
 const TEX_OUTLINE_DOWN = "L2UI_CH3.InventoryWnd.Inventory_OutLine_down";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
+const TEX_HENNA = "L2UI_CH3.InventoryWnd.Inventory_Mark";
+const TEX_DISABLED = "NWindow.ChatBack";
+const arrHennaSlots = [1, 2, 3, 3, 2, 3, 3, 2, 3, 3, 1, 2, 3, 3, 3, 2, 3, 3, 1, 2, 3, 3, 2, 3, 3, 1, 2, 3, 3, 2, 3, 1, 2, 3, 3, 2, 3, 3, 1, 2, 3, 3, 2, 3, 1, 2, 3, 2, 3, 1, 2, 3, 3, 1, 2, 3, 2, 3]; // NWindow 0x10074450, class table 0x100744a0.
 const TEX_DUAL = "L2UI.InventoryWnd.Icon_dualcap";
 const TEX_FRAME_LEFT = SKIN_SLOTS.frameLeft;
 const TEX_FRAME_MID = SKIN_SLOTS.frameMid;
@@ -53,7 +57,7 @@ function getWeaponTable(weaponType: number, bodyPart: number) { // 0x100741b0 ju
 }
 
 export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 0x10099a60, OnPaint 0x10095870.
-    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, TEX_DUAL, ...arrWeightBars, ...arrTooltipSlices, "L2UI.NWindow.Number", ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures(): string[] { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_OUTLINE_DOWN, TEX_FRAME_LEFT, TEX_FRAME_MID, TEX_FRAME_RIGHT, TEX_CLOSE, TEX_CLOSE_DOWN, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, TEX_FOLDED, TEX_CAPTION, TEX_ADENA, TEX_WEIGHT, TEX_TRASH, `${TEX_TRASH}_drag`, TEX_CRYSTAL, `${TEX_CRYSTAL}_drag`, TEX_SELECTED, TEX_DUAL, TEX_HENNA, TEX_DISABLED, ...arrWeightBars, ...arrTooltipSlices, ...TEX_TOOLTIP_SLICES, "L2UI.NWindow.Number", ...NDOM_SCROLL_TEXTURES]; }
 
     public readonly element: HTMLDivElement;
     public onUse: (item: InventoryEntry_T, isRight: boolean) => void = null;
@@ -70,6 +74,11 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
     protected readonly trash: HTMLDivElement;
     protected readonly crystal: HTMLDivElement;
     protected readonly equipment: HTMLDivElement;
+    protected readonly henna: HTMLDivElement;
+    protected hennaStatus: HennaStatus_T = null;
+    protected hennaSlots = 0;
+    protected hennaGeneration = 0;
+    protected readonly hennaTooltip = new NCTooltip();
     protected readonly arrBags: NDomScrollPane_T[] = [];
     protected getBag() { return this.arrBags[Number(this.isQuest)]; }
     protected readonly adena: HTMLDivElement;
@@ -108,7 +117,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         layer.tile(frame, 0, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME_LEFT);
         layer.tile(frame, 16, 0, 224, 20, 0, 0, 32, 20, TEX_FRAME_MID);
         layer.tile(frame, 240, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME_RIGHT);
-        layer.text(frame, layer.getManager().getSysString(138), 0xffc8d2dc, FontType_T.SMALL, 20, 5);
+        layer.text(frame, layer.getManager().getSysString(138), 0xffc8d2dc, FontType_T.SMALL, 20, 6);
 
         const close = layer.button(frame, 233, 3, 15, 15, TEX_CLOSE, TEX_CLOSE_DOWN, null, null, () => { layer.getManager().playWindowCloseSound(); this.setVisible(false); });
         const minimize = layer.button(frame, 216, 3, 15, 15, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, null, null, () => this.minimize());
@@ -188,6 +197,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         });
         this.equipment = layer.createWindow(8, 31, 240, 122, this.element);
         this.equipment.tabIndex = -1;
+        this.henna = layer.createWindow(223, 39, 26, 80, this.element);
         [false, true].forEach(isQuest => {
             const bag = layer.scrollPane(this.element, 9, 189, 236, 139, 35); // NCInvenItemWnd on NCScrollWnd, 6x4 grid of 37x35 cells.
 
@@ -302,6 +312,55 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
         this.layer.renderDigits(this.weightText, text, 0xffdcdcdc);
         this.layer.place(this.weightText, Math.trunc(85 * 0.5 - textWidth / 2), 2);
+    }
+
+    public setClass(classId: number) {
+        const slots = arrHennaSlots[classId] ?? (classId >= 88 && classId <= 118 ? 3 : 0);
+
+        if (this.hennaSlots === slots) return;
+
+        this.hennaSlots = slots;
+        this.paintHenna();
+    }
+
+    public async setHenna(status: HennaStatus_T) {
+        const generation = ++this.hennaGeneration;
+        const strings = this.layer.getManager().strings;
+
+        this.hennaStatus = status;
+        this.henna.replaceChildren();
+        if (status) await this.layer.loadTextures(status.symbols.map(symbol => {
+            const henna = strings.hennas[symbol.symbolId];
+
+            if (!henna) throw new Error(`Henna symbol '${symbol.symbolId}' does not exist.`);
+
+            return henna.icon;
+        }));
+        if (generation !== this.hennaGeneration) return;
+
+        this.paintHenna();
+    }
+
+    protected paintHenna() { // NCEquipItemWnd::OnPaint 0x100946bf..0x100947b7.
+        const layer = this.layer, strings = layer.getManager().strings;
+
+        this.henna.replaceChildren();
+        for (let i = 0; i < this.hennaSlots; i++) {
+            const frame = layer.tile(this.henna, 0, i * 27, 26, 26, 0, 0, 26, 26, TEX_HENNA);
+            const symbol = this.hennaStatus?.symbols[i];
+
+            if (!symbol) continue;
+
+            const info = strings.hennas[symbol.symbolId];
+
+            if (!layer.hasTexture(info.icon)) continue;
+
+            const icon = layer.tile(frame, 1, 1, 24, 24, 0, 0, 32, 32, info.icon);
+
+            icon.setAttribute("aria-label", info.name);
+            if (!symbol.itemId) layer.tile(frame, 2, 1, 24, 24, 0, 0, 24, 24, TEX_DISABLED);
+            this.hennaTooltip.bind(layer, this.henna, frame, { title: info.name, lines: [], description: info.description });
+        }
     }
 
     public setLimit(limit: number) {

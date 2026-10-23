@@ -58,7 +58,7 @@ export class NCFishViewportWnd {
         layer.tile(frame, 16, 0, 224, 20, 0, 0, 32, 20, TEX_FRAME[1]);
         layer.tile(frame, 240, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME[2]);
         const height = layer.getManager().canvas.getLineHeight(FontType_T.SMALL);
-        layer.text(frame, layer.getManager().getSysString(1112), 0xffc8d2dc, FontType_T.SMALL, 20, Math.trunc(10 - height / 2 + 2));
+        layer.text(frame, layer.getManager().getSysString(1112), 0xffc8d2dc, FontType_T.SMALL, 20, 12 - Math.trunc(height / 2));
         frame.addEventListener("mousedown", event => {
             if (event.button !== 0) return;
 

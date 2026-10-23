@@ -216,7 +216,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider { return this.movementComponent.createCollider(physicsWorld); }
     public releaseCollider(): void { this.movementComponent.releaseCollider(); }
     public ignoreOverlappingActors(actors: Iterable<ICollidable>): void { this.movementComponent.ignoreOverlappingActors(actors); }
-    public moveSmooth(movement: Vector3, ignoredActor?: ICollidable): void { this.movementComponent.moveSmooth(movement, ignoredActor); }
+    public moveSmooth(movement: Vector3): void { this.movementComponent.moveSmooth(movement); }
     public moveActor(position: Vector3, movement: Vector3): CheckResult_T | null { return this.movementComponent.moveActor(position, movement); }
     public isInteractive(): boolean { return this.movementComponent.isInteractive(); }
 

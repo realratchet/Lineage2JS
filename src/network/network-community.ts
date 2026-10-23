@@ -883,6 +883,7 @@ export class NetworkCommunity {
 
         if (messages) messages.push(snoop);
         else this.snoops.set(snoop.conversationId, [snoop]);
+        this.network.ui.addSnoop(snoop);
     }
 
     public getPartyMatchRooms() { return this.partyMatchRooms; }
@@ -938,6 +939,14 @@ export class NetworkCommunity {
     }
 
     public petition(content: string, type: number) { if (this.network.actors.inWorld) this.network.session.game.requestPetition(content, type); }
+
+    public votePetition(rating: number, text: string) { if (this.network.actors.inWorld) this.network.session.game.petitionVote(rating, text); }
+
+    public onPetitionVote(packet: PacketReader) {
+        if (packet.getRemaining()) throw new Error(`Invalid PetitionVote payload.`);
+
+        this.network.ui.enablePetitionEvaluation();
+    }
 
     public cancelPetition() { if (this.network.actors.inWorld) this.network.session.game.requestPetitionCancel(); }
 

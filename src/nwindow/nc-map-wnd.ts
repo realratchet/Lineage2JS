@@ -222,7 +222,8 @@ export class NCMapWnd {
             this.viewport.focus();
 
             const x = layer.toUI(event.clientX) + this.viewport.scrollLeft, y = layer.toUI(event.clientY) + this.viewport.scrollTop;
-            layer.beginDrag(e => { this.viewport.scrollLeft = x - layer.toUI(e.clientX); this.viewport.scrollTop = y - layer.toUI(e.clientY); });
+            layer.beginDrag(e => { this.viewport.scrollLeft = x - layer.toUI(e.clientX); this.viewport.scrollTop = y - layer.toUI(e.clientY); }, () => layer.getManager().setCursor(""));
+            layer.getManager().setCursor(layer.getManager().getCursor(3));
         });
         this.viewport.addEventListener("keydown", event => {
             if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"].includes(event.key)) return;

@@ -203,19 +203,46 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (!sector) throw new Error(`Pawn '${pawn.name}' has an unregistered LevelInfo.`);
         this.collisionWorld.setPawnLevel(pawn, sector.physicsVolumeActors);
     }
-    public moveActor(query: CollisionQuery_T, pawn: BaseActor = null, rotation: Vector3Arr = null, test: boolean = false): boolean {
+    public moveActor(query: CollisionQuery_T, pawn: BaseActor | CollidingMesh = null, rotation: Vector3Arr = null, test: boolean = false): boolean {
         query.hit = null;
         if (!pawn) {
             query.hit = this.collisionWorld.moveActor(query);
             return !query.hit || query.hit.time > 0;
         }
 
+        if (pawn.getUnrealScriptProperty("bStatic") || !pawn.getUnrealScriptProperty("bMovable")) return false;
+
         const hasMovement = query.delta.lengthSq() !== 0;
         const oldRotation = rotation ? pawn.getUnrealScriptProperty("Rotation") as Vector3Arr : null;
         if (!hasMovement && (!rotation || rotation.every((value, index) => value === oldRotation[index]))) return true;
 
-        // shortcut: ordinary cylinder pawn movement, extend before mesh or encroacher translation.
-        const transform = pawn.getComponent<TransformComponent>("transform"), hasBasedActors = !test && transform.getBasedActors().size > 0;
+        const transform = pawn.getComponent<TransformComponent>("transform");
+        if (!query.sourceProfile.collideActors && !query.sourceProfile.collideWorld) {
+            let hasUnbonedActors = false;
+            for (const actor of transform.getBasedActors()) {
+                const bone = (actor as BaseActor).getUnrealScriptProperty("AttachmentBone");
+                if (!bone || bone === "None") { hasUnbonedActors = true; break; }
+            }
+            if (!hasUnbonedActors) {
+                // ULevel::MoveActor 0x1058b598..0x1058b617 skips collision, zones and relative location.
+                const location = pawn.getUnrealScriptProperty("Location") as Vector3Arr;
+                query.location.set(Math.fround(Math.fround(location[0]) + Math.fround(query.delta.x)), Math.fround(Math.fround(location[1]) + Math.fround(query.delta.y)), Math.fround(Math.fround(location[2]) + Math.fround(query.delta.z)));
+                pawn.setUnrealScriptProperty("Location", query.location.toArray());
+                if (!test) this.manGame.getComponent("render").needsUpdate = true;
+                const changed = rotation && rotation.some((value, index) => value !== oldRotation[index]);
+                if (changed) {
+                    this.setActorRotation(pawn, rotation);
+                    if (!test) transform.updateRelativeRotation();
+                }
+                if (!changed && (pawn as CollidingMesh).isStaticMeshActor) (pawn as CollidingMesh).syncCollisionTransform();
+                return true;
+            }
+        }
+
+        if ((pawn as CollidingMesh).isStaticMeshActor) throw new Error(`MoveActor collision is not implemented for mesh '${pawn.name}'.`);
+
+        // shortcut: ordinary cylinder pawn collision, extend before mesh or encroacher translation.
+        const hasBasedActors = !test && transform.getBasedActors().size > 0;
         const oldLocation = hasBasedActors ? pawn.getUnrealScriptProperty("Location") as Vector3Arr : null;
         const previousRotation = hasBasedActors ? oldRotation || pawn.getUnrealScriptProperty("Rotation") as Vector3Arr : null;
         if (hasBasedActors) transform.checkBasedMovement();

@@ -3,13 +3,17 @@ import { ANIMATION_NOTIFY_EVENT, NPC_ENTER_EVENT } from "../../audio/components/
 import { Matrix4, Quaternion, Vector3, type Object3D } from "three";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
-import UnScriptVM, { type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
+import UnScriptVM, { getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-component";
 import Rotator, { getPawnRotation } from "../../utils/rotator";
 import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
 import type { IAnimationNotifyDecodeInfo, IAnimationEffectNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 import type AnimationComponent from "../../objects/components/animation-component";
+import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
+import { EClassFlags_T } from "@l2js/core/unreal/un-class";
+import { EDetailMode_T } from "../../assets/unreal/un-aactor";
+import { ENetMode_T } from "../../assets/unreal/un-level-info";
 
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();
@@ -173,8 +177,22 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
         }
 
         if (call.index === 278 || name === "spawn") {
+            const instigator = getProperty(call.context, "Instigator");
             const script = this.getComponent<ScriptComponent<BaseActor>>("script");
+            const vm = script.getVM(), defaults = vm.getDefaultObject(call.args[0] as string);
+
+            // ULevel::SpawnActor 0x105889ac..0x10588acc; gameplay admission precedes allocation.
+            if (vm.getLibrary().scriptClasses[defaults.scriptClassId].classFlags & EClassFlags_T.CLASS_Abstract || !vm.invokeNative(call.self, call.context, 258, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
+            if (getProperty(defaults, "bStatic") || getProperty(defaults, "bNoDelete")) return null;
+            if (getProperty(defaults, "bHighDetail")) {
+                const level = getProperty(call.context, "Level") as ScriptHost_T;
+
+                if (!level) throw new Error(`Spawn requires the actor's level.`);
+                if (getProperty(level, "DetailMode") === EDetailMode_T.DM_Low || getProperty(level, "bDropDetail") || getProperty(level, "NetMode") === ENetMode_T.NM_DedicatedServer) return null;
+            }
+
             const object = script.createObject(call.args[0] as string);
+            setProperty(object, "Tag", script.getVM().getLibrary().scriptClasses[object.scriptClassId].name);
 
             if ((object as any).isObject3D) {
                 const actor = object as unknown as Object3D;
@@ -186,17 +204,22 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
                 else if (context.isObject3D) context.getWorldPosition(actor.position);
                 else this.getParent().getWorldPosition(actor.position);
 
-                if ((actor as any).isActor) (actor as BaseActor).setUnrealScriptProperty("Location", actor.position.toArray());
+                setProperty(object, "Location", actor.position.toArray());
 
                 if (Array.isArray(rotation)) {
                     const [pitch, yaw, roll] = rotation as Vector3Arr;
 
                     tmpRotator.set(pitch, yaw, roll).toQuaternion(actor.quaternion);
+                    setProperty(object, "Rotation", (rotation as Vector3Arr).slice());
+                    if ((actor as any).isActor) {
+                        (actor as BaseActor).getComponent<PawnMovementComponent>("pawnMovement").syncRotationYaw(yaw);
+                        actor.rotateZ(-Math.PI / 2);
+                    }
                 }
 
                 const owner = call.args[1] as any;
 
-                this.renderManager.addTransientEffect(actor, owner);
+                this.renderManager.addTransientEffect(actor, owner, instigator as ScriptHost_T);
             }
 
             return object;

@@ -1,5 +1,7 @@
 import UnScriptVM, { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import type { DecodeLibrary } from "@l2js/engine";
+import type BaseActor from "../base-actor";
+import type NpcLifecycleComponent from "./components/npc-lifecycle-component";
 
 export class PlayerController implements ScriptHost_T {
     public readonly scriptClassId: string;
@@ -18,6 +20,15 @@ export class PlayerController implements ScriptHost_T {
     }
 
     public call(name: string, args: ScriptValue_T[] = []): ScriptValue_T { return this.scriptVM.call(this, name, args); }
+
+    public setPawn(pawn: BaseActor): void {
+        const previous = this.scriptProperties.get("Pawn") as BaseActor, target = this.scriptProperties.get("ViewTarget");
+
+        if (!pawn && previous) previous.getComponent<NpcLifecycleComponent>("npcLifecycle").setController(null);
+        this.scriptProperties.set("Pawn", pawn);
+        if (pawn) pawn.getComponent<NpcLifecycleComponent>("npcLifecycle").setController(this);
+        if (!pawn || !target || target === previous || target === this) this.scriptProperties.set("ViewTarget", pawn || this);
+    }
 
     public getUnderWaterLoopSound(): string {
         const value = this.scriptProperties.get("UnderWaterLoopSound");

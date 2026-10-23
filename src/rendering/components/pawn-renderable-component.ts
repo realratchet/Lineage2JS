@@ -62,7 +62,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
     public tickActorView(deltaTime: number): void {
         const pawn = this.getParent(), type = pawn.getUnrealScriptProperty("L2ActorViewtype");
-        if (type !== EActorViewType_T.EAVT_InSighting && type !== EActorViewType_T.EAVT_OutSighting && type !== EActorViewType_T.EAVT_Hiding && type !== EActorViewType_T.EAVT_Showing) return;
+        if (type !== EActorViewType_T.EAVT_InSighting && type !== EActorViewType_T.EAVT_OutSighting && type !== EActorViewType_T.EAVT_Hiding && type !== EActorViewType_T.EAVT_Showing && type !== EActorViewType_T.EAVT_Spawning) return;
 
         if (type === EActorViewType_T.EAVT_Hiding && pawn.getUnrealScriptProperty("bHidden")) return;
 
@@ -72,18 +72,23 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (elapsed >= duration) {
             this.clearAlphaTexModifier();
             if (type === EActorViewType_T.EAVT_Hiding) pawn.setUnrealScriptProperty("bHidden", true);
-            else pawn.setUnrealScriptProperty("L2ActorViewtype", type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight);
+            else pawn.setUnrealScriptProperty("L2ActorViewtype", type === EActorViewType_T.EAVT_Spawning ? EActorViewType_T.EAVT_None : type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight);
             pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", 0);
             return;
         }
 
         pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", Math.fround(elapsed));
-        this.texModifierAlpha = Math.trunc(Math.max(0, Math.min(255, Math.fround(type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)))) / 255;
+        this.texModifierAlpha = Math.trunc(Math.max(0, Math.min(255, Math.fround(type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing || type === EActorViewType_T.EAVT_Spawning ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)))) / 255;
     }
 
     public updateActorView(distance: number, range: number): boolean {
         const type = distance <= range - 256 ? EActorViewType_T.EAVT_InSight : distance < range ? EActorViewType_T.EAVT_InSighting : distance < range + 256 ? EActorViewType_T.EAVT_OutSighting : EActorViewType_T.EAVT_OutSight;
         return this.setActorViewType(type);
+    }
+
+    public setAlphaTexModifier(alpha: number): void {
+        this.texModifierAlpha = alpha / 255;
+        this.prepareActorView();
     }
 
     public setActorViewType(type: EActorViewType_T): boolean {
@@ -197,7 +202,11 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (!this.meshes.length || !pawn.findComponent("script") || pawn.getUnrealScriptProperty("bCreatedResource")) return;
 
         // APawn::CreateSkin 0x8b56e4..0x8b57aa; decoded meshes precede this render preparation phase.
-        if (pawn.getUnrealScriptProperty("LoadingResourceRef") === 0) pawn.setUnrealScriptProperty("LoadingResourceRef", -1);
+        if (pawn.getUnrealScriptProperty("LoadingResourceRef") === 0) {
+            pawn.setUnrealScriptProperty("LoadingResourceRef", -1);
+            this.setActorViewType(EActorViewType_T.EAVT_Spawning);
+            this.setAlphaTexModifier(1);
+        }
         pawn.setUnrealScriptProperty("bCreatedResource", true);
     }
 

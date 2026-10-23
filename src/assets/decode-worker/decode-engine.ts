@@ -406,6 +406,21 @@ function getLanguageValue(localization: UConfigLocalization, key: string): strin
     return property.value;
 }
 
+function decodePetitionCategories(localization: UConfigLocalization): GameStrings_T["petitionCategories"] {
+    const count = localization.getProperties("CategoryNum").find(property => property.name.toLowerCase() === "num");
+
+    if (!count || !Number.isInteger(Number(count.value)) || Number(count.value) < 0) throw new Error(`Invalid petition CategoryNum in localization.ini.`);
+
+    return Array.from({ length: Number(count.value) }, (_, index) => {
+        const properties = localization.getProperties(`Category${index + 1}`);
+        const title = properties.find(property => property.name.toLowerCase() === "title"), link = properties.find(property => property.name.toLowerCase() === "link");
+
+        if (!title || !Number.isInteger(Number(title.value)) || !link || !link.value) throw new Error(`Invalid petition Category${index + 1} in localization.ini.`);
+
+        return { titleId: Number(title.value), link: link.value };
+    });
+}
+
 export class DecodeEngine {
     protected assetLoader: AssetLoader = null;
     protected hasSweptCache = false;
@@ -1797,6 +1812,7 @@ export class DecodeEngine {
         }
 
         return {
+            petitionCategories: decodePetitionCategories(localization),
             trueFonts: trueFontInfo.fonts,
             bitmapFonts: { small: { texture: getLanguageValue(localization, "Font"), glyph: getLanguageValue(localization, "Glyph") }, large: { texture: getLanguageValue(localization, "Font2"), glyph: getLanguageValue(localization, "Glyph2") } },
             zoneNames: zoneNames.datarows.map((row: any) => ({ id: row.nbr, color: row.zone_color_id, sectorX: row.x_world_grid, sectorY: row.y_world_grid, top: row.top_z, bottom: row.bottom_z, name: row.zone_name })),

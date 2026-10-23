@@ -80,6 +80,8 @@ function op_mul_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return
 function op_div_vector_float(a: Vector3Arr, b: number): Vector3Arr { return op_mul_vector_float(a, 1 / b); }
 function op_add_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
 function op_sub_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+function op_add_rotator_rotator(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [(a[0] + b[0]) | 0, (a[1] + b[1]) | 0, (a[2] + b[2]) | 0]; }
+function op_sub_rotator_rotator(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [(a[0] - b[0]) | 0, (a[1] - b[1]) | 0, (a[2] - b[2]) | 0]; }
 
 function op_vec_rot_lsh(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
     getRotatorQuaternionElements(b[0], b[1], b[2], tmpRotation);
@@ -286,10 +288,10 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(289, fn_not_implemented); // static final operator(16) rotator /   ( rotator A, float    B );
     native(290, fn_not_implemented); // static final operator(34) rotator *=  ( out rotator A, float B  );
     native(291, fn_not_implemented); // static final operator(34) rotator /=  ( out rotator A, float B  );
-    native(316, fn_not_implemented); // static final operator(20) rotator +   ( rotator A, rotator B );
-    native(317, fn_not_implemented); // static final operator(20) rotator -   ( rotator A, rotator B );
-    native(318, fn_not_implemented); // static final operator(34) rotator +=  ( out rotator A, rotator B );
-    native(319, fn_not_implemented); // static final operator(34) rotator -=  ( out rotator A, rotator B );
+    native(316, op_add_rotator_rotator); // static final operator(20) rotator +   ( rotator A, rotator B );
+    native(317, op_sub_rotator_rotator); // static final operator(20) rotator -   ( rotator A, rotator B );
+    native(318, op_add_rotator_rotator); // static final operator(34) rotator +=  ( out rotator A, rotator B );
+    native(319, op_sub_rotator_rotator); // static final operator(34) rotator -=  ( out rotator A, rotator B );
     native(229, fn_not_implemented); // static final function GetAxes         ( rotator A, out vector X, out vector Y, out vector Z );
     native(230, fn_not_implemented); // static final function GetUnAxes       ( rotator A, out vector X, out vector Y, out vector Z );
     native(320, fn_not_implemented); // static final function rotator RotRand ( optional bool bRoll );

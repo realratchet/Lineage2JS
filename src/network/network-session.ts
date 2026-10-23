@@ -319,7 +319,11 @@ export class NetworkSession {
             await this.network.actors.worldLoad;
             if (this.game !== game) return;
 
-            render.player.setRotationYaw(Math.trunc(scene.actorYaw));
+            const yaw = Math.trunc(scene.actorYaw);
+
+            render.player.setUnrealScriptProperty("Rotation", [0, yaw, 0]);
+            render.player.setUnrealScriptProperty("DesiredRotation", [0, yaw, 0]);
+            render.player.setRotationYaw(yaw);
             input.startReplayCamera(scene);
             game.tickReplayPlayback(0);
             this.replayLoading = false;

@@ -25,8 +25,8 @@ import LitSkinnedMesh from "../../objects/lit-skinned-mesh";
 import UnScriptVM, { type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../../game/components";
-import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
-import ActorOwnershipComponent from "../../objects/components/actor-ownership-component";
+import { SCRIPT_NATIVE_EVENT, findScriptPropertyKey, getScriptPropertyName } from "../../game/script-component";
+import ActorOwnershipComponent, { setScriptObjectProperty } from "../../objects/components/actor-ownership-component";
 import { ENetRole_T } from "../unreal/un-aactor";
 import type { ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { DecodeLibrary, IGeometryDecodeInfo, IndexTypedArray, IndexTypedArrayAttribute, IBaseObjectDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
@@ -43,6 +43,7 @@ import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T } from "@l2js/engine/
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheGeometriesByName = new Map<string, WeakRef<THREE.BufferGeometry>>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
+const tmpScriptLocation = new Vector3();
 
 
 
@@ -164,6 +165,31 @@ class EmitterActor extends GameObject {
 
         (this as any).isEmitterActor = true;
         this.addComponent(new ActorOwnershipComponent());
+    }
+
+    public getUnrealScriptProperty(id: string): ScriptValue_T {
+        const name = getScriptPropertyName(id);
+
+        if (name === "location") return this.getWorldPosition(tmpScriptLocation).toArray();
+        const key = findScriptPropertyKey(this.scriptProperties, name);
+
+        return key === undefined ? null : this.scriptProperties.get(key);
+    }
+
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
+        const name = getScriptPropertyName(id);
+
+        if (name === "location") {
+            tmpScriptLocation.fromArray(value as number[]);
+            if (this.parent) this.parent.worldToLocal(tmpScriptLocation);
+            this.position.copy(tmpScriptLocation);
+            this.updateMatrix();
+        }
+
+        if (name === "level") return setScriptObjectProperty(this, id, value);
+        const key = findScriptPropertyKey(this.scriptProperties, name) ?? id.slice(id.lastIndexOf(".") + 1);
+
+        this.scriptProperties.set(key, value);
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {

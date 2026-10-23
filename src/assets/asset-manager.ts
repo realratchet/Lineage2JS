@@ -1063,6 +1063,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
             if (!object.isVolume && !object.isStaticMeshActor) return;
 
             object.setScriptRuntime(sector.scriptVM, classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
+            if (object.isStaticMeshActor && object.scriptClassId && !object.getUnrealScriptProperty("bStatic") && object.getUnrealScriptProperty("bMovable") && !object.findComponent("transform"))
+                object.addComponent(new TransformComponent(renderManager, object.getBasedActors()));
         });
         sector.rearrangeLevelActors();
     }

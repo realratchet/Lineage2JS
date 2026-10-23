@@ -13,6 +13,8 @@ type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "st
 const frozenUpdateMatrixWorld = function () { };
 const tmpOldPosition = new Vector3();
 const tmpOldQuaternion = new Quaternion();
+const tmpProposedPosition = new Vector3();
+const tmpProposedQuaternion = new Quaternion();
 const tmpOldInverseQuaternion = new Quaternion();
 const tmpActorLocalPosition = new Vector3();
 const tmpActorTargetPosition = new Vector3();
@@ -79,19 +81,13 @@ export class MovableObject extends CollidingMesh {
         this.position.lerpVectors(this.keyPositions[fromKey], this.keyPositions[toKey], blendAlpha);
         this.quaternion.slerpQuaternions(this.keyQuaternions[fromKey], this.keyQuaternions[toKey], blendAlpha);
 
-        if (this.rigidbody) {
-            this.rigidbody.setTranslation(this.position, true);
-            this.rigidbody.setRotation(this.quaternion, true);
-        }
+        this.syncCollisionTransform();
 
         if (actors && this.checkEncroachment(actors, tmpOldPosition, tmpOldQuaternion)) {
             this.position.copy(tmpOldPosition);
             this.quaternion.copy(tmpOldQuaternion);
 
-            if (this.rigidbody) {
-                this.rigidbody.setTranslation(this.position, true);
-                this.rigidbody.setRotation(this.quaternion, true);
-            }
+            this.syncCollisionTransform();
 
             return false;
         }
@@ -106,6 +102,8 @@ export class MovableObject extends CollidingMesh {
 
         if (!primitive) return false;
 
+        tmpProposedPosition.copy(this.position);
+        tmpProposedQuaternion.copy(this.quaternion);
         tmpOldInverseQuaternion.copy(oldQuaternion).invert();
 
         for (const actor of actors) {
@@ -126,7 +124,17 @@ export class MovableObject extends CollidingMesh {
                 tmpEncroachMovement.addScaledVector(tmpActorTargetPosition.sub(actorPrimitive.center), 1.5);
             }
 
-            actor.moveSmooth(tmpEncroachMovement, this);
+            // ULevel::CheckEncroachment 0x1058d076..0x1058d2df uses different source poses for the two moves.
+            this.position.copy(oldPosition);
+            this.quaternion.copy(oldQuaternion);
+            this.syncCollisionTransform();
+            try {
+                actor.moveSmooth(tmpEncroachMovement);
+            } finally {
+                this.position.copy(tmpProposedPosition);
+                this.quaternion.copy(tmpProposedQuaternion);
+                this.syncCollisionTransform();
+            }
 
             const movedPrimitive = actor.getCollisionPrimitive();
             const stillEncroaching = pointPrimitive(primitive, movedPrimitive.center, tmpExtent);
@@ -136,7 +144,14 @@ export class MovableObject extends CollidingMesh {
                 continue;
             }
 
-            actor.moveActor(actor.position, tmpEncroachBack.copy(tmpEncroachMovement).negate());
+            this.quaternion.copy(oldQuaternion);
+            this.syncCollisionTransform();
+            try {
+                actor.moveActor(actor.position, tmpEncroachBack.copy(tmpEncroachMovement).negate());
+            } finally {
+                this.quaternion.copy(tmpProposedQuaternion);
+                this.syncCollisionTransform();
+            }
         }
 
         return false;

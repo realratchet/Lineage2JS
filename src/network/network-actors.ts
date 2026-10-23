@@ -13,7 +13,8 @@ import PacketReader from "./packet-reader";
 import type { ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
 import { setVector } from "./network-location";
-import { ENetMode_T } from "../assets/unreal/un-level-info";
+import { EActorViewType_T } from "../assets/unreal/un-aactor";
+import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 
 type NetObjectKind_T = "user" | "player" | "npc";
 
@@ -100,6 +101,7 @@ export class NetworkActors {
     public readonly appearanceLoads = new WeakMap<BaseActor, Promise<void>>();
     protected readonly bodyKeys = new WeakMap<BaseActor, string>();
     protected readonly appearanceRequests = new WeakMap<BaseActor, number>();
+    protected readonly disappearNpcActions = new Map<BaseActor, number>();
     public petStatusType = -1;
     public deletedPetId = 0;
     public petInfo: GamePackets.PetStatus_T = { objectId: -1, npcId: -GamePackets.NPC_ID_OFFSET, name: "", x: 0, y: 0, z: 0, statusType: 0, curFood: 0, maxFood: 0, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, field42: 0, level: 0, exp: 0, minExp: 0, nextExp: 0, weight: 0, maxWeight: 0, pAtk: 0, pDef: 0, mAtk: 0, mDef: 0, accuracy: 0, evasion: 0, critical: 0, speed: 0, attackSpeed: 0, castSpeed: 0, field60: 0, isMountable: false, soulshotsUsed: 0, spiritshotsUsed: 0 };
@@ -224,8 +226,10 @@ export class NetworkActors {
 
         const object = this.findObjectByActor(actor);
 
-        if (object && object.kind === "user" || this.network.movement.riders.get(this.userId) === actor)
+        if (object && object.kind === "user" || this.network.movement.riders.get(this.userId) === actor) {
             actor.setUnrealScriptProperty("CanIngnoreCollision", false);
+            if (actor === this.network.getParent().getComponent("render").player) asset.playerController.setPawn(actor);
+        }
 
         if (object) {
             actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
@@ -260,13 +264,14 @@ export class NetworkActors {
         }
 
         this.worldLevel = level;
-        render.setLevel(level, ENetMode_T.NM_Client);
+        render.setLevel(level);
         asset.setStreaming(render, true);
 
         await this.loadAppearance(entry, render.player);
 
         if (generation !== this.teleportGeneration) return;
 
+        asset.playerController.setPawn(render.player);
         render.player.setUnrealScriptProperty("Level", level.levelInfoActor as any);
         physics.setPawnZone(render.player, false, true);
         physics.setPawnVolumes(render.player);
@@ -852,7 +857,7 @@ export class NetworkActors {
         this.removeObject(objectId);
     }
 
-    public removeObject(objectId: number) {
+    public removeObject(objectId: number, disappear = false) {
         const wasTarget = objectId === this.network.getTargetId();
 
         if (objectId === this.deletedPetId) this.deletedPetId = 0;
@@ -903,7 +908,41 @@ export class NetworkActors {
         this.objects.delete(objectId);
         this.appearances.delete(objectId);
 
-        if (object.actor) this.network.getParent().getComponent("render").removePawn(object.actor);
+        if (object.actor) {
+            if (disappear) {
+                object.actor.getComponent<PawnRenderableComponent>("pawnRenderable").setActorViewType(EActorViewType_T.EAVT_Deleting);
+                this.disappearNpcActions.set(object.actor, 0);
+            } else this.network.getParent().getComponent("render").removePawn(object.actor);
+        }
+    }
+
+    public updateDisappearNpcActions(deltaTime: number): void {
+        if (!this.disappearNpcActions.size) return;
+
+        const render = this.network.getParent().getComponent("render");
+        const level = render.getLevel();
+        const dilation = level ? level.levelInfoActor.getUnrealScriptProperty("TimeDilation") as number : 1;
+        const delta = Math.fround(Math.max(Math.fround(0.0005), Math.min(Math.fround(0.4), Math.fround(Math.fround(deltaTime / 1000) * dilation))));
+
+        // DisappearNpcAction::Tick 0x10499f90..0x1049a08d.
+        for (const [actor, previous] of this.disappearNpcActions) {
+            const elapsed = Math.fround(previous + delta);
+
+            if (elapsed > 2) {
+                this.disappearNpcActions.delete(actor);
+                render.removePawn(actor);
+            } else {
+                this.disappearNpcActions.set(actor, elapsed);
+                actor.getComponent<PawnRenderableComponent>("pawnRenderable").setAlphaTexModifier(Math.trunc(Math.max(0, Math.min(255, 255 - elapsed * 127.5))));
+            }
+        }
+    }
+
+    public clearDisappearNpcActions(): void {
+        const render = this.network.getParent().getComponent("render");
+
+        for (const actor of this.disappearNpcActions.keys()) render.removePawn(actor);
+        this.disappearNpcActions.clear();
     }
 
     public withActor(objectId: number, callback: (actor: BaseActor, object: NetObject_T) => void) {
@@ -913,6 +952,7 @@ export class NetworkActors {
     }
 
     public clearKnownObjects() {
+        this.clearDisappearNpcActions();
         for (const objectId of this.objects.keys()) if (objectId !== this.userId) this.removeObject(objectId);
         for (const objectId of this.pickups.keys()) this.removeObject(objectId);
         this.network.getParent().getComponent("render").clearDice();

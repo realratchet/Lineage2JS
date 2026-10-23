@@ -2,6 +2,7 @@ import { Say2_T } from "../network/game-packets";
 import NCChatListBox from "./nc-chat-list-box";
 import type NDomLayer from "./ndom";
 import type { NDomButton_T, NDomEdit_T } from "./ndom";
+import { DEFAULT_CHAT_FILTERS, type ChatFilter_T } from "./nc-chat-filter-wnd";
 
 const TEX_BACK1 = "L2UI_CH3.ChatWnd.Chatting_Back1";
 const TEX_BACK2 = "L2UI_CH3.ChatWnd.Chatting_Back2";
@@ -23,17 +24,9 @@ const LABEL_COLOR = 0xffe6dcbe;
 const WIDTH = 348;
 const WINDOW_NAME = "ChatWnd";
 
-type ChatListFilter_T = { types: number[], hasSystem: boolean };
-
 const TABS: [number, number, string][] = [[144, Say2_T.ALL, ""], [355, Say2_T.TRADE, "+"], [188, Say2_T.PARTY, "#"], [128, Say2_T.CLAN, "@"], [559, Say2_T.ALLIANCE, "$"]]; // 0x1005b245..0x1005b2f1 tab sysstring labels; send type per tab from jump table 0x1005a338.
 
-const DEFAULT_LIST_FILTERS: ChatListFilter_T[] = [ // Per-list enable flags +0x250..+0x270 and system flag +0x244 are not decoded; these are the defaults per tab.
-    { types: [Say2_T.ALL, Say2_T.SHOUT, Say2_T.TELL, Say2_T.PARTY, Say2_T.CLAN, Say2_T.TRADE, Say2_T.ALLIANCE, Say2_T.HERO_VOICE], hasSystem: true },
-    { types: [Say2_T.TRADE], hasSystem: false },
-    { types: [Say2_T.PARTY], hasSystem: false },
-    { types: [Say2_T.CLAN], hasSystem: false },
-    { types: [Say2_T.ALLIANCE], hasSystem: false }
-];
+const CHAT_FILTER_TYPES: { [type: number]: keyof ChatFilter_T } = { [Say2_T.ALL]: "normal", [Say2_T.SHOUT]: "shout", [Say2_T.TELL]: "tell", [Say2_T.PARTY]: "party", [Say2_T.CLAN]: "pledge", [Say2_T.TRADE]: "market", [Say2_T.ALLIANCE]: "ally", [Say2_T.HERO_VOICE]: "hero" };
 
 const CHAT_COLORS: { [type: number]: [number, number] } = { [Say2_T.SHOUT]: [0xffff7200, Say2_T.SHOUT], [Say2_T.TELL]: [0xffff00ff, Say2_T.TELL], [Say2_T.PARTY]: [0xff00ff00, Say2_T.PARTY], [Say2_T.CLAN]: [0xff7d77ff, Say2_T.CLAN], [Say2_T.PETITION_PLAYER]: [0xff80ffff, Say2_T.PETITION_PLAYER], [Say2_T.PETITION_GM]: [0xff80ffff, Say2_T.PETITION_GM], [Say2_T.TRADE]: [0xffeaa5f5, Say2_T.TRADE], [Say2_T.ALLIANCE]: [0xff77ff99, Say2_T.ALLIANCE], [Say2_T.ANNOUNCEMENT]: [0xff80ffff, Say2_T.ANNOUNCEMENT], 11: [0xffff7200, Say2_T.SHOUT], [Say2_T.PARTYROOM_ALL]: [0xffdcdcdc, Say2_T.PARTYROOM_ALL], [Say2_T.PARTYROOM_COMMANDER]: [0xffffe87b, Say2_T.PARTYROOM_COMMANDER], [Say2_T.CHANNEL_ALL]: [0xff7b7df2, Say2_T.CHANNEL_ALL], [Say2_T.HERO_VOICE]: [0xff408cff, Say2_T.HERO_VOICE], [Say2_T.CRITICAL_ANNOUNCE]: [0xff00ffff, Say2_T.CRITICAL_ANNOUNCE] }; // NConsoleWnd 0x1007d200: [color, routed type]; anything missing takes the default branch 0x1007d352 (0xffdcdcdc, type 0).
 
@@ -59,13 +52,19 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     protected selected = 0;
     protected height = MIN_HEIGHT;
     protected resizeDelta = 0;
+    protected filters: ChatFilter_T[];
 
     public onSend: (text: string, type: number, target: string) => void = null;
     public onBuildCommand: (command: string) => void = null;
     public onCommand: (command: string, isShift: boolean) => void = null;
+    public onOptions: (index: number) => void = null;
 
     public constructor(protected readonly layer: NDomLayer) {
         const W = WIDTH, H = MIN_HEIGHT, manager = layer.getManager();
+        const saved = localStorage.getItem("chatFilters");
+
+        this.filters = saved === null ? DEFAULT_CHAT_FILTERS.map(filter => ({ ...filter })) : JSON.parse(saved);
+        if (!Array.isArray(this.filters) || this.filters.length !== TABS.length || this.filters.some(filter => !filter || Object.keys(DEFAULT_CHAT_FILTERS[0]).some(key => typeof filter[key] !== "boolean"))) throw new Error(`Invalid chat filters.`);
 
         this.element = layer.createWindow(0, 0, W, H);
         this.element.hidden = true;
@@ -95,7 +94,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
             this.tabs.push(tab);
         });
 
-        this.optionButton = layer.button(this.element, 5, 0, 15, 15, TEX_OPTION1, TEX_OPTION2);
+        this.optionButton = layer.button(this.element, 5, 0, 15, 15, TEX_OPTION1, TEX_OPTION2, null, null, () => { if (this.onOptions) this.onOptions(this.selected); });
         this.messengerButton = layer.button(this.element, 5, 0, 15, 15, TEX_MSN1, TEX_MSN2);
         this.editBox = layer.edit(this.element, 39, 0, 303, 16);
         this.editBox.input.addEventListener("keydown", event => {
@@ -156,6 +155,11 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     }
 
     public setOldChatting(isEnabled: boolean) { this.oldChatting = isEnabled; }
+    public getFilter(index: number) { return this.filters[index]; }
+    public setFilter(index: number, filter: ChatFilter_T) {
+        this.filters[index] = { ...filter };
+        localStorage.setItem("chatFilters", JSON.stringify(this.filters));
+    }
 
     public setSystemMessageFilters(damage: boolean, expendableItem: boolean) { this.systemMsgWndDamage = damage; this.systemMsgWndExpendableItem = expendableItem; }
 
@@ -183,14 +187,14 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
                 break;
             case Say2_T.GM:
                 for (let i = 0; i < this.lists.length; i++)
-                    if (DEFAULT_LIST_FILTERS[i].hasSystem) this.lists[i].addString(text, color);
+                    if (group === 2 || this.filters[i].system && (group !== 3 || this.filters[i].damage) && (group !== 7 || this.filters[i].useitems)) this.lists[i].addString(text, color);
 
                 if (group !== 3 && group !== 7 || group === 3 && this.systemMsgWndDamage || group === 7 && this.systemMsgWndExpendableItem)
                     this.systemPane.addString(text, color);
                 break;
             case Say2_T.ALL: case Say2_T.SHOUT: case Say2_T.TELL: case Say2_T.PARTY: case Say2_T.CLAN: case Say2_T.TRADE: case Say2_T.ALLIANCE: case Say2_T.HERO_VOICE:
                 for (let i = 0; i < this.lists.length; i++)
-                    if (DEFAULT_LIST_FILTERS[i].types.includes(type)) this.lists[i].addString(text, color);
+                    if (this.filters[i].chat && this.filters[i][CHAT_FILTER_TYPES[type]]) this.lists[i].addString(text, color);
                 break;
         }
     }

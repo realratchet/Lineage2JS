@@ -3,7 +3,7 @@ import { ObjectComponent } from "../../game/components";
 import { NPC_ENTER_EVENT } from "../../audio/components/sound-component";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
 import { PMoveType_T } from "../../assets/unreal/un-controller";
-import type { ScriptValue_T } from "../../ue-script/vm";
+import { getProperty, setProperty, type ScriptHost_T, type ScriptValue_T } from "../../ue-script/vm";
 import { MountType_T } from "../../network/game-packets";
 import type AnimationComponent from "./animation-component";
 import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
@@ -21,18 +21,33 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     protected isReleased = false;
     protected deathSkyAnimation: string = null;
     protected isDeathFalling = false;
-    protected scriptController = { scriptClassId: "engine.Controller", scriptProperties: new Map<string, ScriptValue_T>([["bDead", false], ["WaitType", PStopType_T.STP_STAND], ["bAutoAttacking", false]]) };
+    protected readonly defaultController = { scriptClassId: "engine.Controller", scriptProperties: new Map<string, ScriptValue_T>([["bDead", false], ["WaitType", PStopType_T.STP_STAND], ["bAutoAttacking", false]]) };
+    protected scriptController: ScriptHost_T = this.defaultController;
 
-    public setControllerState(waitType: number, isAutoAttacking: boolean): void {
+    protected initializeController(): ScriptHost_T {
+        const parent = this.getParent(), rider = parent.ridePawn;
+
+        if (rider) this.scriptController = rider.getComponent<NpcLifecycleComponent>("npcLifecycle").initializeController();
+        else if (this.scriptController === this.defaultController) this.getComponent<ScriptComponent>("script").getVM().initializeHost(this.scriptController);
+
+        parent.setUnrealScriptProperty("Controller", this.scriptController);
+        return this.scriptController;
+    }
+
+    public setController(controller: ScriptHost_T): void {
         const rider = this.getParent().ridePawn;
 
-        if (rider) this.scriptController = rider.getComponent<NpcLifecycleComponent>("npcLifecycle").scriptController;
+        if (rider) rider.getComponent<NpcLifecycleComponent>("npcLifecycle").setController(controller);
+        this.scriptController = controller || this.defaultController;
+        setProperty(this.initializeController(), "bDead", this.isDying);
+    }
 
-        this.getComponent<ScriptComponent>("script").getVM().initializeHost(this.scriptController);
-        this.scriptController.scriptProperties.set("MoveType", this.getComponent<PawnMovementComponent>("pawnMovement").isWalkingMovement() ? PMoveType_T.PMT_SLOW : PMoveType_T.PMT_FAST);
-        this.scriptController.scriptProperties.set("WaitType", waitType);
-        this.scriptController.scriptProperties.set("bAutoAttacking", isAutoAttacking);
-        this.getParent().setUnrealScriptProperty("Controller", this.scriptController);
+    public setControllerState(waitType: number, isAutoAttacking: boolean): void {
+        const controller = this.initializeController();
+
+        setProperty(controller, "MoveType", this.getComponent<PawnMovementComponent>("pawnMovement").isWalkingMovement() ? PMoveType_T.PMT_SLOW : PMoveType_T.PMT_FAST);
+        setProperty(controller, "WaitType", waitType);
+        setProperty(controller, "bAutoAttacking", isAutoAttacking);
     }
 
     public onDetach(): void { this.release(); }
@@ -99,9 +114,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         this.getComponent<PawnMovementComponent>("pawnMovement").setDying();
 
         if (script) {
-            script.getVM().initializeHost(this.scriptController);
-            this.scriptController.scriptProperties.set("bDead", true);
-            parent.setUnrealScriptProperty("Controller", this.scriptController);
+            setProperty(this.initializeController(), "bDead", true);
 
             if (script.hasFunction("NotifyDie")) script.call("NotifyDie");
         }
@@ -114,9 +127,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         }
     }
 
-    public revive(): void {
-        const parent = this.getParent();
-
+    public resetDeath(): void {
         if (this.isDying) this.getComponent<PawnMovementComponent>("pawnMovement").setRevived();
         if (this.isDeathFalling) this.getComponent<PawnMovementComponent>("pawnMovement").setPhysicsMode(EPhysics_T.PHYS_Flying);
 
@@ -124,7 +135,13 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         this.deathAnimationFinishedHandler = null;
         this.deathSkyAnimation = null;
         this.isDeathFalling = false;
-        this.scriptController.scriptProperties.set("bDead", false);
+        setProperty(this.initializeController(), "bDead", false);
+    }
+
+    public revive(): void {
+        const parent = this.getParent();
+
+        this.resetDeath();
 
         const animation = (parent.getUnrealScriptProperty("DeathStandAnimName") as string[])[parent.getUnrealScriptProperty("CurWeaponType") as number];
 
@@ -143,6 +160,9 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
 
         if (script && parent.getUnrealScriptProperty("Controller") === this.scriptController)
             parent.setUnrealScriptProperty("Controller", null);
+
+        if (getProperty(this.scriptController, "Pawn") === parent) setProperty(this.scriptController, "Pawn", null);
+        if (getProperty(this.scriptController, "ViewTarget") === parent) setProperty(this.scriptController, "ViewTarget", this.scriptController);
 
         script?.destroy();
         parent.getComponent<TransformComponent>("transform").releaseTouching();

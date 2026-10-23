@@ -52,7 +52,7 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
 
         const call = data as ScriptNativeCall_T;
         const context = call.context as any;
-        const name = call.index === 267 ? "setlocation" : call.index === 299 ? "setrotation" : call.name.toLowerCase();
+        const name = call.index === 266 ? "move" : call.index === 267 ? "setlocation" : call.index === 299 ? "setrotation" : call.name.toLowerCase();
 
         if (call.index === 262 || name === "setcollision") {
             if (context !== this.getParent()) throw new Error(`SetCollision for '${context.scriptClassId}' is not implemented by '${this.getParent().name}'.`);
@@ -77,6 +77,16 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
         }
 
         switch (name) {
+            case "move": {
+                const parent = this.getParent();
+
+                if (context !== parent) throw new Error(`'${context.scriptClassId}' cannot move '${parent.name}'.`);
+
+                const delta = call.args[0] as Vector3Arr, profile = parent.getCollisionProfile();
+                const query: CollisionQuery_T = { location: new Vector3().fromArray(parent.getUnrealScriptProperty("Location") as Vector3Arr), delta: new Vector3(Math.fround(delta[0]), Math.fround(delta[1]), Math.fround(delta[2])), extent: new Vector3(profile.collisionRadius, profile.collisionRadius, profile.collisionHeight), sourceActor: parent, sourceProfile: profile, sourceCollider: parent.getCollider(), sourceBody: parent.getRigidbody(), sourceIsPlayer: !!(parent as any).isPlayer, ignorePawns: false, ignoreBases: false, ignoreCollision: false, zeroExtent: false };
+
+                return this.renderManager.getPhysicsManager().moveActor(query, parent, parent.getUnrealScriptProperty("Rotation") as Vector3Arr, false);
+            }
             case "setlocation": {
                 if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot move '${this.getParent().type}'.`);
 
