@@ -738,11 +738,13 @@ export class NetworkMovement {
 
         this.observation = { x: info.x, y: info.y, z: info.z };
         this.placeObserver(info, true);
+        this.network.ui.setObservationMode(true);
     }
 
     public startReplayObservation(position: GamePackets.Location_T) {
         this.observation = { x: position.x, y: position.y, z: position.z };
         this.network.getParent().getComponent("render").player.visible = false;
+        this.network.ui.setObservationMode(true);
     }
 
     public onObservationReturn(packet: PacketReader) {
@@ -750,6 +752,7 @@ export class NetworkMovement {
 
         this.observation = null;
         this.placeObserver(position, false);
+        this.network.ui.setObservationMode(false);
     }
 
     public getVehicleId() { return this.getVehicleIdOf(this.network.actors.userId); }

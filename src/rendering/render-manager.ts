@@ -2146,7 +2146,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
         }
 
-        const waterVolume = sector ? sector.getWaterVolumeAt(fogPosition) : null;
+        const waterSector = this.getSector(fogCamera.position);
+        const waterVolume = waterSector ? waterSector.getWaterVolumeAt(fogCamera.position) : null;
 
         if (updateAudio) {
             this.getWaterEffects().underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);

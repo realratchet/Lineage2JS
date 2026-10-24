@@ -877,6 +877,11 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected getPickDistance(origin: Vector3, direction: Vector3): number {
+        const player = this.renderManager.player;
+
+        // UGameEngine::FindMouseTargetObject 0x10559f0b..0x10559fd7: normalized view ray * 10000.
+        if (player.isSwimmingMovement() || player.isFlyingMovement()) return 10000;
+
         const sectorBounds = this.renderManager.getSectorBounds();
 
         if (sectorBounds.length === 0) return this.renderManager.camera.far;
@@ -894,7 +899,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             const max = tmpPickBounds.max.getComponent(axis);
 
             if (Math.abs(delta) < 1e-12) {
-                if (start < min || start > max) return this.renderManager.player.isFlyingMovement() ? this.renderManager.camera.far : 0;
+                if (start < min || start > max) return 0;
                 continue;
             }
 
@@ -905,7 +910,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             near = Math.max(near, a);
             far = Math.min(far, b);
 
-            if (near > far) return this.renderManager.player.isFlyingMovement() ? this.renderManager.camera.far : 0;
+            if (near > far) return 0;
         }
 
         return far;

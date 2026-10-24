@@ -457,7 +457,6 @@ export class NetworkCommunity {
     public onFriendList(packet: PacketReader) {
         if (packet.getRemaining() === 0) {
             this.friends.clear();
-            this.network.ui.setFriends([]);
             return;
         }
 
@@ -485,17 +484,16 @@ export class NetworkCommunity {
 
         this.friends.clear();
         for (const friend of friends) this.friends.set(friend.objectId, friend);
-        this.network.ui.setFriends([...this.friends.values()]);
     }
 
     public onFriendRecvMsg(packet: PacketReader) {
-        const result = packet.d();
-        const receiver = packet.S(), sender = packet.S(), message = packet.S();
+        packet.d();
+        const receiver = packet.S(), sender = packet.S();
+
+        packet.S();
 
         if (!receiver || !sender) throw new Error("Invalid FriendRecvMsg names.");
         if (packet.getRemaining()) throw new Error("Invalid FriendRecvMsg trailing data.");
-
-        this.network.ui.receiveFriendMessage(result, sender, message);
     }
 
     public onStatusUpdate(packet: PacketReader) {
