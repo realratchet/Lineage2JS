@@ -83,7 +83,7 @@ export class NCQuestWnd {
         this.nodes = [];
         this.current = null;
         this.list.setScroll(0);
-        this.paint();
+        this.paint(false);
     }
 
     public setStrings(strings: GameStrings_T) { this.strings = strings; }
@@ -98,6 +98,7 @@ export class NCQuestWnd {
 
     public async setStates(states: QuestState_T[]) {
         states = states.filter(state => this.strings.quests.some(info => info.tag !== 0 && info.id === state.id));
+        if (this.location && !states.some(state => state.id === this.location.id)) this.clearLocation();
         this.states = states;
         const nodes: QuestNode_T[] = [];
         const textures: string[] = [];
@@ -152,7 +153,7 @@ export class NCQuestWnd {
         this.paint();
     }
 
-    protected paint() {
+    protected paint(isUpdatingLocation = true) {
         const layer = this.layer;
 
         this.list.content.replaceChildren();
@@ -177,7 +178,7 @@ export class NCQuestWnd {
         for (const node of this.nodes) y += this.paintNode(node, this.nodes, 3, y);
 
         this.list.setContentHeight(y);
-        if (isVisible) this.updateLocation();
+        if (isVisible && isUpdatingLocation) this.updateLocation();
     }
 
     protected paintNode(node: QuestNode_T, siblings: QuestNode_T[], x: number, y: number): number {

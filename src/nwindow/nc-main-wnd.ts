@@ -48,7 +48,7 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
 
         arrTabs.forEach((entry, index) => {
             const select = () => this.selectTab(entry.type);
-            const tab = layer.tab(this.element, 12 + index * 44, 25, 44, 41, entry.texture, `${entry.texture}On`, null, layer.getManager().getSysString(entry.tooltip), select);
+            const tab = layer.tab(this.element, 12 + index * 45, 25, 44, 41, entry.texture, `${entry.texture}On`, null, layer.getManager().getSysString(entry.tooltip), select);
 
             this.tabs.push(tab);
         });

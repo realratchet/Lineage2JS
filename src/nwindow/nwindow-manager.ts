@@ -172,7 +172,7 @@ export class NWindowManager {
             this.dockWindow(owner, edge, null);
         }
 
-        for (const peer of document.querySelectorAll<HTMLElement>(".ndom-layer > .ndom-window")) {
+        for (const peer of document.querySelectorAll<HTMLElement>(".ndom-layer > .ndom-window, .ndom-layer > .ndom-console > .ndom-window")) {
             if (peer === owner || !peer.getClientRects().length) continue;
 
             const [otherX, otherY, otherWidth, otherHeight] = getWindowRect(peer);

@@ -16,6 +16,10 @@ export class NCDeliverWnd extends NCShopWnd {
     }
 
     public getTargetId() { return this.targetId; }
+    public setVisible(visible: boolean) {
+        if (visible) this.reset();
+        super.setVisible(visible);
+    }
     public reset() {
         this.targetId = 0;
         super.reset();

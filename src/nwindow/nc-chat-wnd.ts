@@ -61,7 +61,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     public onHideOptions: () => void = null;
     public onOptions: (index: number) => void = null;
 
-    public constructor(protected readonly layer: NDomLayer) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly filterWindow: HTMLElement) {
         const W = WIDTH, H = MIN_HEIGHT, manager = layer.getManager();
         const saved = localStorage.getItem("chatFilters");
 
@@ -109,6 +109,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         this.element.addEventListener("wheel", event => {
             if (!this.systemPane.element.contains(event.target as Node) && !this.lists.some(list => list.element.contains(event.target as Node))) this.lists[this.selected].onWheel(Math.sign(event.deltaY));
         });
+        this.element.appendChild(this.filterWindow);
         this.layout();
     }
 
@@ -144,6 +145,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         for (let i = 0; i < this.lists.length; i++)
             this.lists[i].setVisible(isVisible && i === this.selected);
         this.systemPane.setVisible(isVisible);
+        if (isVisible) this.layer.place(this.filterWindow, 0, -321);
         if (this.onHideOptions) this.onHideOptions();
         if (isVisible && !this.systemMsgWnd) this.systemPane.setVisible(false);
     }
@@ -174,7 +176,11 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
     public setSystemMessageFilters(damage: boolean, expendableItem: boolean) { this.systemMsgWndDamage = damage; this.systemMsgWndExpendableItem = expendableItem; }
 
-    public setSystemMsgWnd(isVisible: boolean) { this.systemMsgWnd = isVisible; this.systemPane.setVisible(isVisible); }
+    public setSystemMsgWnd(isVisible: boolean) {
+        this.systemMsgWnd = isVisible;
+        this.systemPane.setVisible(isVisible);
+        this.layer.place(this.filterWindow, 0, isVisible ? -321 : -191);
+    }
 
     public focusInput() { this.editBox.focus(); }
     public isInputFocused() { return document.activeElement === this.editBox.input; }

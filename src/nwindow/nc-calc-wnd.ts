@@ -79,11 +79,13 @@ export class NCCalcWnd { // NCCalcWnd: NCConsole 0x100604b5 centred SetWindowRec
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc((width - WIDTH) * 0.5), Math.trunc((height - HEIGHT) * 0.5)); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; }
+    public setVisible(visible: boolean) {
+        this.element.hidden = !visible;
+        if (visible) this.reset();
+    }
 
     public show() { // NConsole 0x10069840, NCCalcWnd::Show 0x1011f970
         this.setVisible(true);
-        this.reset();
         this.display.focus();
     }
 

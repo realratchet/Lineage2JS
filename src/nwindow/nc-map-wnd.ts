@@ -1,5 +1,6 @@
 import type NDomLayer from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
+import NCMinimizedWnd from "./nc-minimized-wnd";
 import NCTooltip from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import type { QuestLocation_T } from "./nc-quest-wnd";
@@ -41,6 +42,7 @@ const TEX_ZOOM_OUT_DOWN = "L2UI_CH3.Minimap.MapButton_ZoomOut2";
 
 const TEX_PARTY = "L2UI_CH3.Minimap.minimap_party";
 const TEX_BACK = "L2UI_CH3.Minimap.MapBack";
+const TEX_FOLDED = "L2UI_CH3.MenuIcon.menuicon3";
 const TEX_TARGET = "L2UI.MinimapWnd.TargetPos";
 const TEX_MARKER = "L2UI.MinimapWnd.MinimapPos";
 const TEX_SHADOW = "L2UI_CH3.Minimap.MapShadow";
@@ -52,9 +54,11 @@ const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrMaps = Array.from({ length: 6 }, (_, i) => `L2Font-e.Minimap.ch4_worldmap${i + 1}`);
 
 export class NCMapWnd {
-    public static getTextures() { return [TEX_BACK, TEX_MARKER, TEX_TARGET, TEX_PARTY, TEX_SHADOW, TEX_SUN, TEX_MOON, TEX_QUEST, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_ZOOM_IN, TEX_ZOOM_IN_DOWN, TEX_ZOOM_OUT, TEX_ZOOM_OUT_DOWN, ...arrMapInfo.slice(1).map(info => info.texture), ...arrMaps, ...NCFrameCtrl.getTextures(), ...new NCTooltip().getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_MARKER, TEX_TARGET, TEX_PARTY, TEX_SHADOW, TEX_SUN, TEX_MOON, TEX_QUEST, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_ZOOM_IN, TEX_ZOOM_IN_DOWN, TEX_ZOOM_OUT, TEX_ZOOM_OUT_DOWN, ...arrMapInfo.slice(1).map(info => info.texture), ...arrMaps, ...NCFrameCtrl.getTextures(), ...NCMinimizedWnd.getTextures(TEX_FOLDED), ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
+    public onShow: () => void = null;
     protected readonly layer: NDomLayer;
+    protected readonly minimized: NCMinimizedWnd;
     protected readonly viewport: HTMLDivElement;
     protected readonly map: HTMLDivElement;
     protected readonly arrMapTiles: HTMLDivElement[] = [];
@@ -98,8 +102,10 @@ export class NCMapWnd {
         this.layer = layer;
         this.element = layer.createWindow(0, 0, 334, 383);
         this.element.hidden = true;
+        this.element.tabIndex = -1;
+        this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true), TEX_FOLDED, 925, false);
         layer.tile(this.element, 0, 20, 334, 363, 0, 0, 334, 363, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 334, layer.getManager().getSysString(447)); // NWindow 0x10062182: minimap window title
+        NCFrameCtrl.createDOM(layer, this.element, 334, layer.getManager().getSysString(447), true, () => this.setVisible(false), null, () => this.minimize()); // NWindow 0x10062182: minimap window title
         this.viewport = layer.createWindow(3, 21, 328, 328, this.element);
         this.viewport.style.overflow = "hidden";
         this.viewport.tabIndex = 0;
@@ -252,11 +258,20 @@ export class NCMapWnd {
         this.viewport.addEventListener("scroll", () => { this.layer.place(this.returnButton, 301 + this.viewport.scrollLeft, 301 + this.viewport.scrollTop); this.paintGrid(); this.paintPlayerMarker(); this.paintTargetMarkers(); this.paintPartyMarkers(); this.paintQuestCaption(); });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.max(0, width - 354), Math.max(0, height * 0.5 - 252)); }
+    public placeOnScreen(width: number, height: number) { this.minimized.place(Math.max(0, width - 354), Math.max(0, height * 0.5 - 252)); }
+    protected minimize() { this.setVisible(false); this.minimized.minimize(); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
+        if (visible && this.minimized.isVisible()) { this.minimized.restore(true); return; }
+
         this.element.hidden = !visible;
-        if (visible) { this.paintPartyMarkers(); return; }
+        this.minimized.hide();
+        if (visible) {
+            if (this.onShow) this.onShow();
+            this.worldScrollX = this.worldScrollY = 0;
+            this.paintPartyMarkers();
+            return;
+        }
 
         this.hideQuestCaption();
         this.hidePartyCaptions();

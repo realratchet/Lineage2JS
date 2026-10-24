@@ -40,8 +40,9 @@ export class NCGMQuestWnd {
     public isVisible() { return !this.element.hidden; }
     public getQuestWnd() { return this.questWnd; }
     public setVisible(visible: boolean) {
-        this.element.hidden = !visible;
+        if (!visible) this.element.hidden = true;
         this.questWnd.setVisible(visible);
+        if (visible) this.element.hidden = false;
     }
     public toggle(targetName: string) {
         if (this.isVisible()) { this.setVisible(false); return; }

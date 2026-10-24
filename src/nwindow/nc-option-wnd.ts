@@ -19,6 +19,7 @@ const TEX_INITIALIZE_DOWN = "L2UI_ch3.button.smallbutton2_down";
 
 export const UI_SCALES = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.25, 1.5, 1.75, 2];
 export const PAWN_RANGES = [3, 2.5, 2, 1.5, 1];
+export const PAWN_LIMITS = [50, 100, 200, 300, 400, 10000];
 
 export class NCOptionWnd {
     public static getTextures() { return [TEX_BACK, TEX_AUDIO_BACK, TEX_GAME_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
@@ -29,6 +30,8 @@ export class NCOptionWnd {
     public onApplyAudio: (options: AudioConfig_T) => void = null;
     public getGamma: () => number = null;
     public onApplyGamma: (gamma: number) => void = null;
+    public getFogPreset: () => number = null;
+    public onApplyFogPreset: (preset: number) => void = null;
     public getPawnRange: () => number = null;
     public onApplyPawnRange: (range: number) => void = null;
     public onInitialize: () => void = null;
@@ -45,6 +48,8 @@ export class NCOptionWnd {
     protected readonly antiAliasing: NCComboBox;
     protected antiAliasingLevels: number[] = [];
     protected readonly textureDetail: NCComboBox;
+    protected readonly terrainRange: NCComboBox;
+    protected readonly pawnLimit: NCComboBox;
     protected readonly pawnRange: NCComboBox;
     protected readonly pawnShadow: NDomCheckBox_T;
     protected readonly renderDeco: NDomCheckBox_T;
@@ -82,7 +87,7 @@ export class NCOptionWnd {
         this.background = layer.tile(this.element, 0, 48, 256, 432, 0, 0, 256, 432, TEX_GAME_BACK);
         NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(146), false, () => this.setVisible(false));
         [206, 207, 208].forEach((id, index) => {
-            const tab = layer.tab(this.element, 12 + index * 74, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(id), null, () => this.selectTab(index));
+            const tab = layer.tab(this.element, 12 + index * 75, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(id), null, () => this.selectTab(index));
 
             tab.setAttribute("aria-selected", String(index === 2));
             tab.tabIndex = 0;
@@ -157,12 +162,26 @@ export class NCOptionWnd {
         this.pawnRange.element.tabIndex = 0;
         this.pawnRange.element.setAttribute("role", "combobox");
         this.pawnRange.element.setAttribute("aria-label", rangeLabel);
-        this.pawnRange.element.addEventListener("keydown", event => {
-            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        const terrainLabel = manager.getSysString(214), limitLabel = manager.getSysString(540);
 
-            event.preventDefault();
-            this.pawnRange.setSelected(Math.max(0, Math.min(PAWN_RANGES.length - 1, this.pawnRange.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
-            this.pawnRange.setOpen(false);
+        layer.text(this.video, terrainLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(terrainLabel), 142);
+        this.terrainRange = new NCComboBox(layer, this.video, 107, 139, 125, 17);
+        this.terrainRange.setItems([1238, 1239, 1240, 1241, 1242].map(id => manager.getSysString(id)));
+        this.terrainRange.element.setAttribute("aria-label", terrainLabel);
+        layer.text(this.video, limitLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(limitLabel), 180);
+        this.pawnLimit = new NCComboBox(layer, this.video, 107, 177, 125, 17);
+        this.pawnLimit.setItems([27, 1233, 1234, 1235, 1236, 1237].map(id => manager.getSysString(id)));
+        this.pawnLimit.element.setAttribute("aria-label", limitLabel);
+        [this.pawnRange, this.terrainRange, this.pawnLimit].forEach((combo, index) => {
+            combo.element.tabIndex = 0;
+            combo.element.setAttribute("role", "combobox");
+            combo.element.addEventListener("keydown", event => {
+                if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+
+                event.preventDefault();
+                combo.setSelected(Math.max(0, Math.min(index === 2 ? 5 : 4, combo.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
+                combo.setOpen(false);
+            });
         });
         layer.text(this.video, "UI Scale", 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText("UI Scale"), 377);
         this.uiScale = new NCComboBox(layer, this.video, 107, 374, 125, 17);
@@ -298,6 +317,8 @@ export class NCOptionWnd {
     public setVisible(isVisible: boolean) {
         this.gamma.setOpen(false);
         this.pawnRange.setOpen(false);
+        this.terrainRange.setOpen(false);
+        this.pawnLimit.setOpen(false);
         this.textureDetail.setOpen(false);
         this.antiAliasing.setOpen(false);
         this.language.setOpen(false);
@@ -312,6 +333,8 @@ export class NCOptionWnd {
             this.gamma.setSelected(gamma === 0 ? GAMMA_STEPS.length : GAMMA_STEPS.indexOf(gamma));
             const range = this.getPawnRange();
 
+            this.terrainRange.setSelected(5 - this.getFogPreset());
+            this.pawnLimit.setSelected(6 - this.getOptions().renderActorLimitOpt);
             this.pawnRange.setSelected(range < 1.5 ? 4 : range < 2 ? 3 : range < 2.5 ? 2 : range < 3 ? 1 : 0);
             this.uiScales = this.getUIScales();
             this.uiScale.setItems(this.uiScales.map(scale => `${scale * 100}%`));
@@ -381,6 +404,8 @@ export class NCOptionWnd {
     protected selectTab(index: number) {
         this.gamma.setOpen(false);
         this.pawnRange.setOpen(false);
+        this.terrainRange.setOpen(false);
+        this.pawnLimit.setOpen(false);
         this.textureDetail.setOpen(false);
         this.antiAliasing.setOpen(false);
         this.selectedTab = index;
@@ -424,6 +449,7 @@ export class NCOptionWnd {
         const gamma = this.gamma.getSelected();
 
         this.onApplyGamma(gamma === GAMMA_STEPS.length ? 0 : GAMMA_STEPS[gamma]);
+        this.onApplyFogPreset(5 - this.terrainRange.getSelected());
         this.onApplyPawnRange(PAWN_RANGES[this.pawnRange.getSelected()]);
         this.onApplyUIScale(this.uiScales[this.uiScale.getSelected()]);
         this.updatePartyLootControl();
@@ -432,7 +458,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio(Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])) as AudioConfig_T);
-        this.onApply({ antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
+        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
     }
 }
 

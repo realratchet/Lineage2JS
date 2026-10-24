@@ -106,6 +106,8 @@ export class NCSSQMainBoard {
     public setVisible(visible: boolean) {
         if (visible) {
             this.element.hidden = false;
+            this.select(0);
+            this.layer.getManager().playWindowSound();
             return;
         }
 

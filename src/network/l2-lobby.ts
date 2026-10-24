@@ -188,6 +188,7 @@ export class L2Lobby {
     }
 
     public getPawn(index: number) { return this.pawns[index] || null; }
+    public getSelectedPawn() { return this.getPawn(this.selected); }
     public getPawnIndex(actor: BaseActor) { return this.pawns.indexOf(actor); }
 
     public getPawnLabels(characters: { name: string, karma: number, deleteSeconds: number }[], width: number, height: number): LobbyPawnLabel_T[] {

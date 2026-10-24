@@ -19,14 +19,18 @@ export class NCGMWnd {
     public onServerTransfer: (serverId: number) => void = null;
     public onMessage: (systemMessage: number) => void = null;
     protected readonly buttons = new Map<number, NDomButton_T>();
+    protected readonly width: number;
     protected playerName = "";
 
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement = layer.root) {
-        this.element = layer.createWindow(0, 0, 256, 276, parent);
+        const buttonWidth = Math.max(54, ...arrButtons.map(([, , , text]) => Math.ceil(layer.measureText(layer.getManager().getSysString(text))) + 12));
+
+        this.width = Math.max(256, buttonWidth * 3 + 40);
+        this.element = layer.createWindow(0, 0, this.width, 276, parent);
         this.element.hidden = true;
         this.element.dataset.window = "gm";
-        layer.tile(this.element, 0, 20, 256, 256, 0, 0, 256, 256, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, "", false, () => this.setVisible(false));
+        layer.tile(this.element, 0, 20, this.width, 256, 0, 0, 256, 256, TEX_BACK);
+        NCFrameCtrl.createDOM(layer, this.element, this.width, "", false, () => this.setVisible(false));
         layer.text(this.element, layer.getManager().getSysString(50), 0xffdcdcdc, undefined, 7, 55);
         this.target = layer.edit(this.element, 35, 55, 112, 14, false, 128);
         Array.from(this.target.children).slice(0, 3).forEach(child => child.remove());
@@ -35,14 +39,14 @@ export class NCGMWnd {
         this.target.prepend(background);
         this.target.input.setAttribute("aria-label", layer.getManager().getSysString(50));
         for (const [id, x, y, text] of arrButtons) {
-            const button = layer.button(this.element, x, y, 54, 18, TEX_BUTTON, TEX_DOWN, TEX_BUTTON, layer.getManager().getSysString(text), () => this.press(id));
+            const button = layer.button(this.element, 10 + (x - 10) / 64 * (buttonWidth + 10), y, buttonWidth, 18, TEX_BUTTON, TEX_DOWN, TEX_BUTTON, layer.getManager().getSysString(text), () => this.press(id), null, 54);
 
             button.dataset.controlId = String(id);
             this.buttons.set(id, button);
         }
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 257, height - 327); }
+    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - this.width - 1, height - 327); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
     public getButtons() { return this.buttons; }

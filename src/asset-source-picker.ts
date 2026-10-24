@@ -61,7 +61,7 @@ export async function pickAssetSource(): Promise<void> {
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
 
     viewport.classList.add("asset-source");
-    viewport.innerHTML = `<main><h1>Game files</h1><p>Select an installed Lineage II folder, or an InstallShield installer folder (data1.hdr, data1.cab, data2.cab, ...).</p>${stored ? `<button class="continue">Continue with ${stored.name}</button> ` : ""}${hasDirectoryPicker ? `<button class="choose">Choose folder</button>` : `<input type="file" webkitdirectory>`}<pre></pre></main>`;
+    viewport.innerHTML = `<main><h1>Game files</h1><p>Select an installed Lineage II folder, or an InstallShield installer folder (data1.hdr, data1.cab, data2.cab, ...).</p>${stored ? `<button class="continue">Continue with ${stored.name}</button> ` : ""}${hasDirectoryPicker ? `<button class="choose">Choose folder</button>` : `<p>This browser can't remember the folder between launches. On Brave enable <code>brave://flags/#file-system-access-api</code>, otherwise use Chrome, Edge, Opera or Vivaldi.</p><input type="file" webkitdirectory>`}<pre></pre></main>`;
 
     const errors = viewport.querySelector("pre");
 

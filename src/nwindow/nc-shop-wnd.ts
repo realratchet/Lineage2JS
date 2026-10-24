@@ -169,6 +169,7 @@ export class NCShopWnd {
 
     public async show(isSell: boolean, money: number, items: ShopItem_T[], selectedItems: ShopItem_T[] = []) {
         this.setVisible(false);
+        this.setVisible(true);
         this.isSell = isSell;
         this.items = [items.slice(0, this.capacity).map(item => ({ ...item })), selectedItems.slice(0, this.capacity).map(item => ({ ...item }))];
         const strings = this.layer.getManager();
@@ -179,7 +180,6 @@ export class NCShopWnd {
         this.layer.place(this.labels[2], 156 - this.layer.measureText(strings.getSysString(labels[2])), 331);
         this.drawAmount(this.money, String(money), 350);
         this.drawTotal();
-        this.setVisible(true);
         await this.paintItems();
     }
 

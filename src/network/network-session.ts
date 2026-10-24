@@ -137,7 +137,9 @@ export class NetworkSession {
 
         const index = this.lobby.getPawnIndex(actor);
 
-        if (index >= 0) this.network.ui.pickCharacter(index);
+        if (index < 0) return;
+        if (actor === this.lobby.getSelectedPawn()) this.network.combat.playSocialAction(actor, 3);
+        this.network.ui.pickCharacter(index);
     }
 
     public previewCharacter(index: number) {

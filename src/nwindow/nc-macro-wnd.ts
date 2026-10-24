@@ -1,6 +1,7 @@
 import getCommandTokens, { CommandType_T } from "../network/command-parser";
-import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T } from "./ndom";
+import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
+import NCMinimizedWnd from "./nc-minimized-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import { MacroCommandType_T, type Macro_T, type MacroCommand_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -13,12 +14,15 @@ const TEX_SELECTED = "L2UI.NWindow.item_click";
 const TEX_HIGHLIGHT = "L2UI.MacroWnd.Macro_Line_HighLight";
 const TEX_BUTTON = SKIN_SLOTS.button;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
+const TEX_FOLDED = "L2UI_CH3.MacroWnd.MacroListIcon";
 
 export class NCMacroWnd {
-    public static getTextures() { return [...arrBack, ...arrIcons, TEX_EDIT, `${TEX_EDIT}_Drag`, TEX_TRASH, `${TEX_TRASH}_Drag`, TEX_SELECTED, TEX_HIGHLIGHT, "L2UI_CH3.MacroWnd.MacroListIcon", "L2UI_CH3.MacroWnd.MacroEditIcon", TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI_ch3.Button.Prev1", "L2UI_ch3.Button.Prev1_Down", "L2UI_ch3.Button.next1", "L2UI_ch3.Button.next1_down", "L2UI_ch3.button.SmallButton2", "L2UI_ch3.button.SmallButton2_Down", ...NCFrameCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures() { return [...arrBack, ...arrIcons, TEX_EDIT, `${TEX_EDIT}_Drag`, TEX_TRASH, `${TEX_TRASH}_Drag`, TEX_SELECTED, TEX_HIGHLIGHT, ...NCMinimizedWnd.getTextures(TEX_FOLDED), "L2UI_CH3.MacroWnd.MacroEditIcon", TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI_ch3.Button.Prev1", "L2UI_ch3.Button.Prev1_Down", "L2UI_ch3.Button.next1", "L2UI_ch3.Button.next1_down", "L2UI_ch3.button.SmallButton2", "L2UI_ch3.button.SmallButton2_Down", ...NCFrameCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, ...NDOM_SCROLL_TEXTURES]; }
     public readonly element: HTMLDivElement;
     public readonly editor: HTMLDivElement;
     public readonly info: HTMLDivElement;
+    protected readonly minimized: NCMinimizedWnd;
+    protected readonly editorMinimized: NCMinimizedWnd;
     public onSave: (macro: Macro_T) => void = null;
     public onUse: (id: number) => void = null;
     public onDelete: (macro: Macro_T) => void = null;
@@ -31,6 +35,7 @@ export class NCMacroWnd {
     protected readonly name: NDomEdit_T;
     protected readonly acronym: NDomEdit_T;
     protected readonly commands: NDomEdit_T[] = [];
+    protected readonly commandList: NDomScrollPane_T;
     protected readonly highlights: HTMLDivElement[] = [];
     protected readonly icon: HTMLDivElement;
     protected readonly description: HTMLTextAreaElement;
@@ -44,12 +49,16 @@ export class NCMacroWnd {
 
         this.layer = layer;
         this.element = layer.createWindow(0, 0, 256, 401);
+        this.element.tabIndex = -1;
         this.editor = layer.createWindow(0, 0, 256, 401);
+        this.editor.tabIndex = -1;
         this.info = layer.createWindow(0, 0, 256, 161);
+        this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true), TEX_FOLDED, 1190, false);
+        this.editorMinimized = new NCMinimizedWnd(layer, this.editor, () => this.setEditorVisible(true), "L2UI_CH3.MacroWnd.MacroEditIcon", 656, false);
         [this.element, this.editor, this.info].forEach((element, index) => {
             element.hidden = true;
             layer.tile(element, 0, 20, 256, index === 2 ? 141 : 381, 0, 0, 256, index === 2 ? 141 : 381, arrBack[index]);
-            NCFrameCtrl.createDOM(layer, element, 256, manager.getSysString(index === 2 ? 657 : 711), index !== 2, index === 1 ? () => this.setEditorVisible(false) : null);
+            NCFrameCtrl.createDOM(layer, element, 256, manager.getSysString(index === 2 ? 657 : 711), index !== 2, index === 1 ? () => this.setEditorVisible(false) : index === 0 ? () => this.setVisible(false) : null, null, index === 0 ? () => this.minimized.minimize() : index === 1 ? () => { this.setEditorVisible(false); this.editorMinimized.minimize(); } : null);
         });
         layer.text(this.element, manager.getSysString(655), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.count = layer.text(this.element, "(00/24)", 0xffdcdcdc, FontType_T.SMALL, 200, 32);
@@ -69,7 +78,7 @@ export class NCMacroWnd {
         layer.button(this.editor, 16, 93, 15, 15, "L2UI_ch3.Button.Prev1", "L2UI_ch3.Button.Prev1_Down", null, null, () => this.setIcon((this.iconIndex + 6) % 7)).setAttribute("aria-label", "Previous icon");
         layer.button(this.editor, 36, 93, 15, 15, "L2UI_ch3.Button.next1", "L2UI_ch3.Button.next1_down", null, null, () => this.setIcon((this.iconIndex + 1) % 7)).setAttribute("aria-label", "Next icon");
         layer.button(this.editor, 177, 82, 66, 21, "L2UI_ch3.button.SmallButton2", "L2UI_ch3.button.SmallButton2_Down", null, manager.getSysString(657), () => this.showDescription()).setAttribute("aria-label", manager.getSysString(657));
-        const rows = layer.scrollPane(this.editor, 7, 125, 242, 239, 26);
+        const rows = this.commandList = layer.scrollPane(this.editor, 7, 125, 242, 239, 26);
 
         for (let i = 0; i < 12; i++) {
             layer.text(rows.content, String(i + 1).padStart(2, "0"), 0xffdcdcdc, FontType_T.SMALL, 1, 9 + i * 26);
@@ -106,23 +115,40 @@ export class NCMacroWnd {
         this.description.addEventListener("change", drawDescription);
         layer.place(this.description, 9, 48, 238, 77);
         this.info.appendChild(this.description);
-        layer.button(this.info, 51, 132, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(140), () => { this.descriptionText = this.description.value; this.info.hidden = true; }).setAttribute("aria-label", manager.getSysString(140));
-        layer.button(this.info, 131, 132, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => { this.info.hidden = true; }).setAttribute("aria-label", manager.getSysString(141));
+        layer.button(this.info, 51, 132, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(140), () => { this.descriptionText = this.description.value; this.setInfoVisible(false); }).setAttribute("aria-label", manager.getSysString(140));
+        layer.button(this.info, 131, 132, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => { this.setInfoVisible(false); }).setAttribute("aria-label", manager.getSysString(141));
     }
 
     public placeOnScreen(width: number, height: number) {
-        this.layer.place(this.element, 0, Math.trunc(height * .5 - 252));
-        this.layer.place(this.editor, 0, Math.trunc(height * .5 - 252));
+        this.minimized.place(0, Math.trunc(height * .5 - 252));
+        this.editorMinimized.place(0, Math.trunc(height * .5 - 252));
         this.layer.place(this.info, 21, Math.trunc(height * .5 - 173));
     }
 
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; }
-    public hide() { this.setEditorVisible(false); this.element.hidden = true; }
+    public setVisible(visible: boolean) {
+        if (visible && this.minimized.isVisible()) this.minimized.restore(true);
+        this.element.hidden = !visible;
+        this.minimized.hide();
+    }
+    public hide() { this.setEditorVisible(false); this.setVisible(false); }
 
     public setEditorVisible(visible: boolean) {
-        if (!visible) this.info.hidden = true;
+        if (visible && this.editorMinimized.isVisible()) { this.editorMinimized.restore(true); return; }
+
+        if (!visible) this.setInfoVisible(false);
         this.editor.hidden = !visible;
+        this.editorMinimized.hide();
+        if (!visible) return;
+
+        const acronym = this.current ? this.current.acronym : "", description = this.current ? this.current.description : "";
+
+        if (acronym.length <= 4) this.acronym.setValue(acronym);
+        if (description.length <= 32) this.description.value = this.descriptionText = description;
+        this.commandList.setScroll(0);
+        this.commands[0].focus();
+        if (this.current) this.setIcon(this.current.icon);
+        this.setInfoVisible(false);
     }
 
     public highlightCommand(x: number, y: number) {
@@ -171,11 +197,17 @@ export class NCMacroWnd {
         this.layer.setTile(this.icon, 32, 32, 0, 0, 32, 32, arrIcons[index]);
     }
 
-    protected showDescription() {
+    public setInfoVisible(visible: boolean) {
+        this.info.hidden = !visible;
+        if (!visible) return;
+
         this.description.value = this.descriptionText;
         this.description.dispatchEvent(new Event("input"));
+    }
+
+    protected showDescription() {
         this.layer.place(this.info, this.editor.offsetLeft + 21, this.editor.offsetTop + 79);
-        this.info.hidden = !this.info.hidden;
+        this.setInfoVisible(this.info.hidden);
     }
 
     public edit(macro: Macro_T) {
@@ -183,15 +215,13 @@ export class NCMacroWnd {
 
         this.current = macro;
         this.name.setValue(macro ? macro.name : "");
-        this.acronym.setValue(macro ? macro.acronym : "");
-        this.descriptionText = macro ? macro.description : "";
-        this.setIcon(macro ? macro.icon : 0);
+        if (!macro) this.setIcon(0);
         this.commands.forEach((edit, index) => {
             const command = macro && macro.commands.find(command => command.index === index + 1);
 
             edit.setValue(command ? this.getCommandText(command) : "");
         });
-        this.info.hidden = true;
+        this.setInfoVisible(false);
         this.setEditorVisible(true);
     }
 

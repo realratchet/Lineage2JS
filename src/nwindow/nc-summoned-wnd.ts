@@ -122,7 +122,7 @@ export class NCSummonedWnd {
     public isVisible() { return !this.element.hidden; }
 
     public setVisible(visible: boolean) {
-        if (visible && !this.folded.hidden) this.layer.place(this.element, this.folded.offsetLeft, this.folded.offsetTop);
+        if (visible && !this.folded.hidden) this.layer.place(this.element, parseFloat(this.folded.style.left), parseFloat(this.folded.style.top));
         this.folded.hidden = true;
         this.caption.hidden = true;
         this.element.hidden = !visible;

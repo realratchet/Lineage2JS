@@ -309,6 +309,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected pawnRange: number = null;
+    protected pawnLimit = 10000;
+    protected readonly arrVisiblePawns: PawnRenderableComponent[] = [];
     protected pawnShadow = true;
     protected renderDeco = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
@@ -1397,6 +1399,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.pawnRange = range;
         this.needsUpdate = true;
     }
+    public setPawnLimit(limit: number) {
+        if (!Number.isInteger(limit) || limit < 1) throw new Error(`Invalid pawn limit '${limit}'.`);
+
+        this.pawnLimit = limit;
+        this.needsUpdate = true;
+    }
     public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
     public registerPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.add(component); }
     public unregisterPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.delete(component); }
@@ -1448,7 +1456,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const reference = !viewTarget || viewTarget === controller ? this.player : viewTarget as unknown as THREE.Object3D;
         reference.getWorldPosition(tmpPawnViewOrigin);
         const originX = Math.fround(tmpPawnViewOrigin.x), originY = Math.fround(tmpPawnViewOrigin.y);
+        const limit = inWorld ? this.pawnLimit : 10000;
 
+        this.arrVisiblePawns.length = 0;
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
             const state = this.resolvePawnLocation(pawn);
@@ -1461,8 +1471,17 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
 
             pawn.visible = !pawn.getUnrealScriptProperty("bHidden") && (pawn !== this.player || !isObserving) && inRange && state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
-            if (pawn.visible) component.createSkin();
+            if (pawn.visible) {
+                if (limit < 10000 && pawn !== this.player) this.arrVisiblePawns.push(component);
+                else component.createSkin();
+            }
         }
+        if (this.arrVisiblePawns.length > limit)
+            this.arrVisiblePawns.sort((a, b) => a.getParent().position.distanceToSquared(tmpPawnViewOrigin) - b.getParent().position.distanceToSquared(tmpPawnViewOrigin));
+        this.arrVisiblePawns.forEach((component, index) => {
+            component.getParent().visible = index < limit;
+            if (index < limit) component.createSkin();
+        });
 
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {

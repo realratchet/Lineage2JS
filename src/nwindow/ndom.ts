@@ -58,6 +58,7 @@ export class NDomLayer {
     protected readonly windowPositions = new Map<HTMLElement, [number, number]>();
     protected readonly arrModalWindows: ModalWindow_T[] = [];
     protected readonly modalBlocker = document.createElement("div");
+    protected readonly visibilityObserver = new MutationObserver(records => this.activateVisibleWindows(records));
     protected stopDrag: () => void = null;
     protected activeWindow: HTMLElement = null;
     protected zOrder = 0;
@@ -105,10 +106,7 @@ export class NDomLayer {
 
             this.activate(wnd as HTMLElement);
         }, true);
-        new MutationObserver(records => {
-            for (const { target } of records)
-                if (target instanceof HTMLElement && target !== this.consoleRoot && (target.parentElement === this.root || target.parentElement === this.consoleRoot) && !target.hidden && !target.classList.contains("ndom-opaque")) this.activate(target);
-        }).observe(this.root, { subtree: true, attributeFilter: ["hidden"] });
+        this.visibilityObserver.observe(this.root, { subtree: true, attributeFilter: ["hidden"] });
 
         window.addEventListener("resize", () => this.resize());
         document.body.appendChild(this.root);
@@ -121,6 +119,7 @@ export class NDomLayer {
         this.root.style.width = `${canvas.width}px`;
         this.root.style.height = `${canvas.height}px`;
         this.root.style.transform = `scale(${canvas.cssScale})`;
+        requestAnimationFrame(() => this.root.dispatchEvent(new Event("resize")));
     }
 
     public getManager() { return this.manager; }
@@ -136,6 +135,8 @@ export class NDomLayer {
     public setBackground(wnd: HTMLElement) { wnd.classList.add("ndom-back"); } // NCGodWnd children (login, lobby, loading screens) stay behind every popup window.
 
     public activate(wnd: HTMLElement) {
+        this.activateVisibleWindows(this.visibilityObserver.takeRecords());
+
         if (wnd && wnd !== this.activeWindow && !wnd.classList.contains("ndom-back")) wnd.style.zIndex = String(++this.zOrder);
 
         if (this.arrModalWindows.length) {
@@ -146,6 +147,11 @@ export class NDomLayer {
 
         this.activeWindow = wnd;
         this.updateTransparency();
+    }
+
+    protected activateVisibleWindows(records: MutationRecord[]) {
+        for (const { target } of records)
+            if (target instanceof HTMLElement && target !== this.consoleRoot && (target.parentElement === this.root || target.parentElement === this.consoleRoot) && !target.hidden && !target.classList.contains("ndom-opaque")) this.activate(target);
     }
 
     public setModal(wnd: HTMLElement, isModal: boolean) { // NWindow 0x10034c10/30, manager 0x1003a6f0/720.
@@ -486,7 +492,7 @@ export class NDomLayer {
 
     public measureText(text: string, font: FontType_T = FontType_T.SMALL) { return this.manager.canvas.measureText(text, font); }
 
-    public button(parent: HTMLElement, x: number, y: number, w: number, h: number, normal: string, down: string, over: string = null, label: string = null, onPress: () => void = null, onHold: (isDown: boolean) => void = null): NDomButton_T { // NCButton states (0x100010ec); NCExButton 0x100017d0 / 0x10001810 notifies both edges without click audio.
+    public button(parent: HTMLElement, x: number, y: number, w: number, h: number, normal: string, down: string, over: string = null, label: string = null, onPress: () => void = null, onHold: (isDown: boolean) => void = null, textureWidth: number = w): NDomButton_T { // NCButton states (0x100010ec); NCExButton 0x100017d0 / 0x10001810 notifies both edges without click audio.
         const element = document.createElement("div") as NDomButton_T;
         const face = document.createElement("div");
         const caption = document.createElement("div");
@@ -497,7 +503,7 @@ export class NDomLayer {
             const texture = isDown && isHover ? textures.down : isHover ? textures.over : textures.normal;
 
             face.hidden = !texture;
-            if (texture) this.setTile(face, w, h, 0, 0, w, h, texture);
+            if (texture) this.setTile(face, w, h, 0, 0, textureWidth, h, texture);
         };
         const updateLabel = () => {
             caption.hidden = !text;
@@ -717,12 +723,20 @@ export class NDomLayer {
 
     public edit(parent: HTMLElement, x: number, y: number, w: number, h: number, isPassword: boolean = false, maxLength: number = 0, isNumeric: boolean = false): NDomEdit_T { // NCEditBox paint 0x1000ef50: inputbox1/2/3 three-slice (source 8x17), text at (2,2), '*' for passwords, '|' caret.
         const element = document.createElement("div") as NDomEdit_T;
-        const left = this.tile(element, 0, 0, 8, h, 0, 0, 8, 17, SKIN_SLOTS.edit1);
-        const middle = this.tile(element, 8, 0, w - 16, h, 0, 0, 8, 17, SKIN_SLOTS.edit2);
-        const right = this.tile(element, w - 8, 0, 8, h, 0, 0, 8, 17, SKIN_SLOTS.edit3);
+        const background = document.createElement("canvas");
+
+        background.width = w;
+        background.height = h;
+        background.className = "ndom-tile";
+        this.place(background, 0, 0, w, h);
+        element.appendChild(background);
         const input = document.createElement("input");
         const overlay = document.createElement("div");
-        const text = this.text(overlay, "", TEXT_COLOR, FontType_T.SMALL, 2, 2);
+        const text = document.createElement("canvas");
+
+        text.className = "ndom-absolute";
+        this.place(text, 0, 0, w, h);
+        overlay.appendChild(text);
         const caret = this.text(overlay, "|", TEXT_COLOR, FontType_T.SMALL, 0, 2);
         const selection = document.createElement("div");
         const nwindow = this.manager.canvas;
@@ -772,7 +786,21 @@ export class NDomLayer {
 
             const visible = shown.slice(start), isFocused = document.activeElement === input;
 
-            this.renderText(text, visible, TEXT_COLOR);
+            const scale = nwindow.scale, width = Math.ceil(w * scale), height = Math.ceil(h * scale);
+
+            if (text.width !== width) text.width = width;
+            if (text.height !== height) text.height = height;
+            text.style.width = `${width / scale}px`;
+            text.style.height = `${height / scale}px`;
+            const bounds = element.getBoundingClientRect(), ratio = window.devicePixelRatio || 1;
+
+            text.style.left = `${(Math.round(bounds.left * ratio) / ratio - bounds.left) / nwindow.cssScale}px`;
+            text.style.top = `${(Math.round(bounds.top * ratio) / ratio - bounds.top) / nwindow.cssScale}px`;
+            const context = text.getContext("2d", { willReadFrequently: true });
+
+            context.setTransform(scale, 0, 0, scale, 0, 0);
+            context.clearRect(0, 0, w, h);
+            nwindow.renderText(context, 2, 2, TEXT_COLOR, visible);
             caret.hidden = !isFocused || !isCaretVisible;
 
             if (!caret.hidden) this.place(caret, 2 + nwindow.measureText(visible.slice(0, Math.max(0, getCaret() - start))) - (isPassword ? 0 : 1), 2);
@@ -928,9 +956,12 @@ export class NDomLayer {
         const updateTiles = () => { // Retail draws the unfocused box with the _disable slices.
             const isFocused = !input.disabled && document.activeElement === input;
 
-            this.setTile(left, 8, h, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit1 : SKIN_SLOTS.edit1Disabled);
-            this.setTile(middle, w - 16, h, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit2 : SKIN_SLOTS.edit2Disabled);
-            this.setTile(right, 8, h, 0, 0, 8, 17, isFocused ? SKIN_SLOTS.edit3 : SKIN_SLOTS.edit3Disabled);
+            const context = background.getContext("2d");
+
+            context.clearRect(0, 0, w, h);
+            [isFocused ? SKIN_SLOTS.edit1 : SKIN_SLOTS.edit1Disabled, isFocused ? SKIN_SLOTS.edit2 : SKIN_SLOTS.edit2Disabled, isFocused ? SKIN_SLOTS.edit3 : SKIN_SLOTS.edit3Disabled].forEach((path, index) => {
+                context.drawImage(nwindow.getTexture(path), 0, 0, 8, 17, index === 0 ? 0 : index === 1 ? 8 : w - 8, 0, index === 1 ? w - 16 : 8, h);
+            });
         };
 
         input.addEventListener("focus", () => { input.setSelectionRange(input.value.length, input.value.length); updateTiles(); draw(); });
@@ -969,12 +1000,13 @@ export class NDomLayer {
         };
 
         parent.appendChild(element);
+        this.root.addEventListener("resize", draw);
         timer = window.setInterval(() => {
-            if (!element.isConnected) { window.clearInterval(timer); return; }
+            if (!element.isConnected) { window.clearInterval(timer); this.root.removeEventListener("resize", draw); return; }
 
             isCaretVisible = !isCaretVisible;
 
-            if (document.activeElement === input) draw();
+            if (document.activeElement === input) caret.hidden = !isCaretVisible;
         }, CARET_BLINK);
         updateTiles();
         draw();

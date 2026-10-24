@@ -24,6 +24,7 @@ function formatClock(hours: number) {
 export class UIManager implements IEngineComponent<GameManager> {
     public moverPosition = 0;
     public fogPreset = "4";
+    protected fogPresetSelect: HTMLSelectElement = null;
     public showLevel = true;
     public showColliders = false;
     public followPlayer = false;
@@ -450,6 +451,15 @@ export class UIManager implements IEngineComponent<GameManager> {
         return button;
     }
 
+    public setFogPreset(preset: string) {
+        if (!/^[1-5]$/.test(preset)) throw new Error(`Invalid fog preset '${preset}'.`);
+
+        this.fogPreset = preset;
+        if (this.fogPresetSelect) this.fogPresetSelect.value = preset;
+        localStorage.setItem("fogPreset:*", preset);
+        this.manGame.getComponent("render").needsUpdate = true;
+    }
+
     protected addRenderControls(): void {
         const render = this.manGame.getComponent("render");
         const environment = render.getEnvironment();
@@ -458,9 +468,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         const sky = this.addSection("Sky", false, "environment");
         const audio = this.addSection("Audio", false, "environment");
 
-        this.addSelect(quality, "Fog Range", {
-            "1 (2k-8k)": "1", "2 (3k-10k)": "2", "3 (4k-12k)": "3", "4 (5k-14k)": "4", "5 (8k-20k)": "5"
-        }, this.fogPreset, value => this.fogPreset = value);
+        this.fogPresetSelect = this.addSelect(quality, "Fog Range", Object.fromEntries(environment.getEnv().fog.ranges.map((range, index) => [`${index + 1} (${range.x * 2048}-${range.y * 2048})`, String(index + 1)])), this.fogPreset, value => this.setFogPreset(value));
         this.addCheckbox(world, "Show Level", this.showLevel, value => { this.showLevel = value; render.setLevelVisible(value); });
         this.addCheckbox(world, "Show Colliders", this.showColliders, value => { this.showColliders = value; render.setCollidersVisible(value); });
         this.addRange(world, "Door Position", this.moverPosition, 0, 1, 0.01, value => { this.moverPosition = value; render.needsUpdate = true; });

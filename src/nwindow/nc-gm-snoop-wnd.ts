@@ -25,6 +25,7 @@ export class NCGMSnoopWnd {
 
         this.element = layer.createWindow(15, 38, 300, 301);
         this.element.hidden = true;
+        this.element.addEventListener("mousedown", () => this.activate());
         layer.tile(this.element, 0, 21, 300, 280, 0, 0, 300, 280, TEX_BACK);
         this.caption = NCFrameCtrl.createDOM(layer, this.element, 300, manager.getSysString(693), false, () => this.setVisible(false));
         this.chat = layer.scrollPane(this.element, 15, 38, 282, 195, ROW_HEIGHT, false, VISIBLE_ROWS);
@@ -60,7 +61,7 @@ export class NCGMSnoopWnd {
     public isVisible() { return !this.element.hidden; }
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;
-        if (isVisible) this.layer.activate(this.element);
+        if (isVisible) this.activate();
         else if (this.element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     }
     public setConversation(objectId: number, name: string) {
@@ -101,6 +102,32 @@ export class NCGMSnoopWnd {
         const first = Math.trunc(this.chat.getScroll() / ROW_HEIGHT), canvas = this.layer.getManager().canvas;
 
         this.lines.slice(first, first + VISIBLE_ROWS).forEach((line, index) => this.layer.text(this.chat.content, line.text, line.color, FontType_T.SMALL, 2 + line.indent, 9 - Math.trunc(canvas.getLineHeight() / 2) + index * ROW_HEIGHT));
+    }
+
+    protected activate() {
+        this.layer.activate(this.element);
+        const parent = this.element.parentElement;
+
+        if (parent !== this.layer.root && parent !== this.layer.consoleRoot) this.layer.activate(parent);
+    }
+}
+
+export class NCGMSnoopManager {
+    public readonly element: HTMLDivElement;
+
+    public constructor(layer: NDomLayer, protected readonly windows: Pick<NCGMSnoopWnd, "element" | "setVisible">[]) {
+        this.element = layer.createWindow(0, 0, 0, 0);
+        this.element.className = "ndom-absolute";
+        this.element.dataset.window = "gm-snoop-manager";
+        windows.forEach(window => this.element.appendChild(window.element));
+    }
+
+    public placeOnScreen(width: number, height: number) {}
+    public isVisible() { return !this.element.hidden; }
+    public setVisible(visible: boolean) {
+        this.element.hidden = !visible;
+        if (visible) this.windows.forEach(window => window.setVisible(true));
+        this.windows.forEach(window => window.setVisible(false));
     }
 }
 

@@ -64,7 +64,7 @@ import NCPetWnd from "./nc-pet-wnd";
 import NCPetitionBeginWnd from "./nc-petition-begin-wnd";
 import NCPetitionWnd from "./nc-petition-wnd";
 import NCPetitionFeedBackWnd from "./nc-petition-feedback-wnd";
-import NCGMSnoopWnd from "./nc-gm-snoop-wnd";
+import NCGMSnoopWnd, { NCGMSnoopManager } from "./nc-gm-snoop-wnd";
 import NCPlayerStatusWnd from "./nc-player-status-wnd";
 import NCPledgePowerWnd from "./nc-pledge-power-wnd";
 import NCPrivateBuyWnd from "./nc-private-buy-wnd";
@@ -123,11 +123,11 @@ export type LobbyWndView_T = Pick<NCLobbyWnd, "element" | "gameStart" | "onCreat
 export type LoginServerWndView_T = Pick<NCLoginServerWnd, "element" | "onCancel" | "onSelect" | "placeOnScreen" | "serverInfo" | "setServers" | "setVisible">;
 export type ReplayWndView_T = Pick<NCReplayWnd, "element" | "focus" | "onPlay" | "onDelete" | "onCancel" | "onImport" | "placeOnScreen" | "setFiles" | "setVisible">;
 export type LoginWndView_T = Pick<NCLoginWnd, "auth" | "element" | "loginFunction" | "onLogin" | "placeOnScreen" | "setBusy" | "setVisible">;
-export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "editor" | "element" | "hide" | "highlightCommand" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setEditorVisible" | "setMacros" | "setVisible">;
+export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "editor" | "element" | "hide" | "highlightCommand" | "info" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setEditorVisible" | "setInfoVisible" | "setMacros" | "setVisible">;
 export type MainWndView_T = Pick<NCMainWnd, "element" | "getSelectedTab" | "isVisible" | "placeOnScreen" | "selectTab" | "setVisible"> & { readonly detailStatusWnd: DetailStatusWndView_T, readonly skillWnd: SkillWndView_T, readonly actionWnd: ActionWndView_T, readonly questWnd: QuestWndView_T, readonly clanWnd: ClanWndView_T };
 export type ManorShopWndView_T = Pick<NCManorShopWnd, "element" | "getGrid" | "getItems" | "getPressedItem" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMove" | "onQuantity" | "onSelect" | "onSubmit" | "onTooltip" | "placeOnScreen" | "setVisible" | "showManor" | "transfer">;
 export type TownMapWndView_T = Pick<NTownMapWnd, "element" | "isVisible" | "placeOnScreen" | "setVisible" | "show">;
-export type MapWndView_T = Pick<NCMapWnd, "element" | "isVisible" | "getQuestLocation" | "openPosition" | "placeOnScreen" | "setFacing" | "setPartyMembers" | "setPosition" | "setQuestLocation" | "setTargetLocations" | "setTime" | "setVisible">;
+export type MapWndView_T = Pick<NCMapWnd, "element" | "isVisible" | "getQuestLocation" | "onShow" | "openPosition" | "placeOnScreen" | "setFacing" | "setPartyMembers" | "setPosition" | "setQuestLocation" | "setTargetLocations" | "setTime" | "setVisible">;
 export type MatchWndView_T = Pick<NCMatchWnd, "element" | "isVisible" | "onConfig" | "onCreate" | "onJoin" | "placeOnScreen" | "resetFilters" | "setVisible" | "show" | "tick">;
 export type MenuWndView_T = Pick<NCMenuWnd, "element" | "onSelect" | "placeOnScreen" | "setVisible">;
 export type MessageWndView_T = Pick<NCMessageWnd, "element" | "hide" | "placeOnScreen" | "show">;
@@ -136,7 +136,7 @@ export type ObserverWndView_T = Pick<NCObserverWnd, "element" | "isVisible" | "o
 export type OlympiadControlWndView_T = Pick<NCOlympiadControlWnd, "element" | "isVisible" | "onOtherGame" | "onStopObserving" | "placeOnScreen" | "setVisible">;
 export type OlympiadPlayerWndView_T = Pick<NCOlympiadPlayerWnd, "appendMessage" | "element" | "getObjectId" | "isVisible" | "onExpand" | "placeOnScreen" | "reset" | "setInfo" | "setVisible">;
 export type OlympiadTargetWndView_T = Pick<NCOlympiadTargetWnd, "element" | "getSide" | "initialize" | "isVisible" | "placeOnScreen" | "reset" | "setInfo" | "setVisible">;
-export type OptionWndView_T = Pick<NCOptionWnd, "canChangePartyLoot" | "element" | "getAntiAliasingLevels" | "getAudioOptions" | "getGamma" | "getOptions" | "getPawnRange" | "getUIScale" | "getUIScales" | "isVisible" | "onApply" | "onApplyAudio" | "onApplyGamma" | "onApplyPawnRange" | "onApplyUIScale" | "onInitialize" | "placeOnScreen" | "setVisible" | "toggle" | "updatePartyLootControl">;
+export type OptionWndView_T = Pick<NCOptionWnd, "canChangePartyLoot" | "element" | "getAntiAliasingLevels" | "getAudioOptions" | "getGamma" | "getOptions" | "getPawnRange" | "getFogPreset" | "getUIScale" | "getUIScales" | "isVisible" | "onApply" | "onApplyAudio" | "onApplyGamma" | "onApplyPawnRange" | "onApplyFogPreset" | "onApplyUIScale" | "onInitialize" | "placeOnScreen" | "setVisible" | "toggle" | "updatePartyLootControl">;
 export type PartyRoomMakingWndView_T = Pick<NCPartyRoomMakingWnd, "element" | "getLootType" | "isVisible" | "onSubmit" | "placeOnScreen" | "setVisible" | "showCreate" | "showEdit">;
 export type PartyRoomWndView_T = Pick<NCPartyRoomWnd, "appendChat" | "clearChat" | "element" | "isVisible" | "minimized" | "onChat" | "onInvite" | "onKick" | "onSettings" | "onTerminate" | "placeOnScreen" | "setMembers" | "setVisible" | "show" | "table" | "terminate" | "tick">;
 export type PawnCreateWndView_T = Pick<NCPawnCreateWnd, "element" | "getTemplate" | "onBack" | "onChange" | "onCreate" | "onRotate" | "onZoom" | "placeOnScreen" | "setTemplates" | "setVisible">;
@@ -179,6 +179,7 @@ export type VIPShopWndView_T = Pick<NCVIPShopWnd, "clear" | "element" | "isVisib
 export type ZoneTitleWndView_T = Pick<NCZoneTitleWnd, "clear" | "element" | "placeOnScreen" | "reset" | "tick" | "updateZone">;
 export type RecordMarkView_T = Pick<RecordMark, "element" | "placeOnScreen" | "setVisible" | "update">;
 
+export type GMSnoopManagerView_T = Pick<NCGMSnoopManager, "element" | "isVisible" | "placeOnScreen" | "setVisible">;
 export type GMSnoopWndView_T = Pick<NCGMSnoopWnd, "addChat" | "element" | "getConversationId" | "isVisible" | "onQuit" | "placeOnScreen" | "reset" | "setConversation" | "setVisible">;
 
 export type PetitionBeginWndView_T = Pick<NCPetitionBeginWnd, "element" | "getHtml" | "isVisible" | "onCancel" | "onSubmit" | "onValidation" | "placeOnScreen" | "reset" | "setVisible" | "tick">;
@@ -202,6 +203,7 @@ export class Skin {
     public createAbnormalStatusWnd(...args: ConstructorParameters<typeof NCAbnormalStatusWnd>): AbnormalStatusWndView_T { return new NCAbnormalStatusWnd(...args); }
     public createL2ChatWnd(...args: ConstructorParameters<typeof L2ChatWnd>): L2ChatWndView_T { return new L2ChatWnd(...args); }
     public createActionWnd(...args: ConstructorParameters<typeof NCActionWnd>): ActionWndView_T { return new NCActionWnd(...args); }
+    public createGMSnoopManager(...args: ConstructorParameters<typeof NCGMSnoopManager>): GMSnoopManagerView_T { return new NCGMSnoopManager(...args); }
     public createGMSnoopWnd(...args: ConstructorParameters<typeof NCGMSnoopWnd>): GMSnoopWndView_T { return new NCGMSnoopWnd(...args); }
     public createPetitionFeedBackWnd(...args: ConstructorParameters<typeof NCPetitionFeedBackWnd>): PetitionFeedBackWndView_T { return new NCPetitionFeedBackWnd(...args); }
     public createGMPetitionWnd(layer: NDomLayer): GMPetitionWndView_T { return new NCPetitionWnd(layer, true); }

@@ -4,7 +4,7 @@ const TEX_ICON = "L2UI_CH3.PartyMatchWnd.PartyMatchIcon";
 const TEX_BACK = "NWindow.ChatBack";
 
 export class NCMinimizedWnd {
-    public static getTextures() { return [TEX_ICON, TEX_BACK]; }
+    public static getTextures(texture = TEX_ICON) { return [texture, TEX_BACK]; }
     public readonly element: HTMLDivElement;
     protected readonly blink: HTMLDivElement;
     protected readonly caption: HTMLDivElement;
@@ -15,16 +15,17 @@ export class NCMinimizedWnd {
     protected timer = 0;
     protected isHovered = false;
 
-    public constructor(protected readonly layer: NDomLayer, protected readonly parentElement: HTMLElement, protected readonly onRestore: () => void) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly parentElement: HTMLElement, protected readonly onRestore: () => void, texture = TEX_ICON, protected readonly captionId = 389, protected readonly isCaptionAbove = true) {
         this.element = layer.createWindow(0, 0, 32, 32);
         this.element.hidden = true;
+        this.element.tabIndex = -1;
         this.element.style.overflow = "visible";
-        layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, TEX_ICON).style.pointerEvents = "none";
-        this.blink = layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, TEX_ICON, 0xff388080);
+        layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, texture).style.pointerEvents = "none";
+        this.blink = layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, texture, 0xff388080);
         this.blink.style.pointerEvents = "none";
         this.caption = layer.createWindow(0, 0, 0, 0, this.element);
         this.captionBack = layer.tile(this.caption, 0, 0, 0, 0, 0, 0, 1, 1, TEX_BACK);
-        this.captionText = layer.text(this.caption, layer.getManager().getSysString(389), 0xffdcdcdc, undefined, 0, 0);
+        this.captionText = layer.text(this.caption, layer.getManager().getSysString(captionId), 0xffdcdcdc, undefined, 0, 0);
         this.caption.hidden = true;
         this.caption.style.pointerEvents = "none";
         layer.createWindow(0, 0, 33, 33, this.element);
@@ -74,6 +75,12 @@ export class NCMinimizedWnd {
         this.layer.place(this.element, x, y);
         this.parentElement.hidden = true;
         this.setVisible(true);
+        this.element.focus();
+    }
+
+    public place(x: number, y: number) {
+        if (this.isVisible()) this.layer.place(this.element, this.element.offsetLeft + x - parseInt(this.parentElement.style.left), this.element.offsetTop + y - parseInt(this.parentElement.style.top));
+        this.layer.place(this.parentElement, x, y);
     }
 
     public restore(isSilent = false) {
@@ -91,6 +98,7 @@ export class NCMinimizedWnd {
         this.layer.activate(this.parentElement);
         this.onRestore();
         if (!isSilent) {
+            this.parentElement.focus();
             this.hasActivity = false;
             this.timer = 0;
             this.paint();
@@ -126,11 +134,11 @@ export class NCMinimizedWnd {
         if (!this.isHovered || !this.isVisible()) return;
 
         const canvas = this.layer.getManager().canvas;
-        const text = this.layer.getManager().getSysString(389);
+        const text = this.layer.getManager().getSysString(this.captionId);
         const width = canvas.measureText(text), height = canvas.getLineHeight();
         const left = parseInt(this.element.style.left), back = canvas.getTexture(TEX_BACK);
 
-        this.layer.place(this.caption, Math.min(left, canvas.width - width) - left, -height, width, height);
+        this.layer.place(this.caption, Math.min(left, canvas.width - width) - left, this.isCaptionAbove ? -height : 32, width, height);
         this.layer.placeTile(this.captionBack, 0, 0, width, height, 0, 0, back.width, back.height, TEX_BACK);
         this.layer.renderText(this.captionText, text, 0xffdcdcdc);
         this.caption.hidden = false;

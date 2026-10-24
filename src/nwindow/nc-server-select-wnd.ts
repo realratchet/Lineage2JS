@@ -112,7 +112,7 @@ export class NCServerSelectListCtrl { // NCServerSelectListCtrl: NCListCtrl 300x
             this.select(index);
 
             if (this.onSelect) this.onSelect(index);
-            if (this.onActivate) this.onActivate();
+            if (event.detail === 2 && this.onActivate) this.onActivate();
         });
     }
 

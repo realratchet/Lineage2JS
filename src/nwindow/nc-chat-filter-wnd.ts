@@ -53,11 +53,11 @@ export class NCChatFilterWnd {
         layer.button(this.element, 131, 160, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(141), () => this.setVisible(false));
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 128), Math.trunc(height * 0.5 - 95)); }
+    public placeOnScreen(width: number, height: number) { }
     public isVisible() { return !this.element.hidden; }
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;
-        if (isVisible) this.layer.activate(this.element);
+        if (isVisible) this.layer.activate(this.element.parentElement);
     }
 
     public show(index: number, filter: ChatFilter_T) {

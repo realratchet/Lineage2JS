@@ -458,9 +458,10 @@ export class NetworkCombat {
         if (!object || !object.actor || actionId < 1) return;
         if (actionId === 15 && objectId === this.network.actors.userId) this.network.session.game.requestSkillList();
 
-        const actor = object.actor;
-        const isNpc = object.kind === "npc";
+        this.playSocialAction(object.actor, actionId, object.kind === "npc");
+    }
 
+    public playSocialAction(actor: BaseActor, actionId: number, isNpc = false) {
         if (actionId === 15 || (actionId === 16 && !isNpc)) { void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a", actionId === 15 ? 20002 : 20004); return; } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
         const prefix = isNpc ? "NpcSocial" : "PcSocial";
         const index = isNpc ? actionId - 1 : actionId;

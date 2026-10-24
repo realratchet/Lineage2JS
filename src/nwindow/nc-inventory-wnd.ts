@@ -162,7 +162,6 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
                 if (up.type !== "mouseup" && up.type !== "pointerup" || (up as MouseEvent).button !== 0) return;
 
                 layer.getManager().playWindowSound();
-                this.place(this.folded.offsetLeft, this.folded.offsetTop);
                 this.setVisible(true);
                 this.element.focus();
             });
@@ -398,6 +397,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.caption.hidden = true;
 
         if (isVisible) {
+            this.place(parseFloat(this.folded.style.left), parseFloat(this.folded.style.top));
             this.layer.place(this.folded, parseFloat(this.element.style.left), parseFloat(this.element.style.top));
             this.hideBags();
             this.getBag().hidden = false;

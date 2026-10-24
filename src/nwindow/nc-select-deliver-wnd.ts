@@ -38,8 +38,6 @@ export class NCSelectDeliverWnd {
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;
-        if (visible) return;
-
         this.targets = [];
         this.selected = -1;
         this.combo.setOpen(false);
@@ -47,9 +45,9 @@ export class NCSelectDeliverWnd {
     }
     public show(targets: PackageTarget_T[]) {
         this.setVisible(false);
+        this.setVisible(true);
         this.targets = targets.slice(0, 8);
         this.combo.setItems(this.targets.map(target => target.name));
-        this.setVisible(true);
         this.layer.activate(this.element);
         this.element.focus();
     }

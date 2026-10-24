@@ -232,16 +232,16 @@ export class NCSiegeInfoMainWnd { // NCSiegeInfoMainWnd: NConsole 0x100635a0 (0,
     public placeOnScreen(_screenWidth: number, screenHeight: number) { this.layer.place(this.element, 0, Math.trunc(screenHeight * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
+        if (visible) this.layer.getManager().playWindowSound();
         this.element.hidden = !visible;
-        if (!visible) this.reset();
+        this.reset();
+        if (visible) this.selectTab(0);
     }
 
     public setCrestGetter(getter: CrestGetter_T) { this.getCrest = this.arrPartWnds[0].list.getCrest = this.arrPartWnds[1].list.getCrest = getter; }
 
     public show(info: SiegeInfo_T, userClanId: number) { // NConsole 0x100721f0 -> Show, 0x1010c2d0
         this.setVisible(true);
-        this.reset();
-        this.selectTab(0);
         this.info = info;
         this.userClanId = userClanId;
         this.dateWnd.setTimes(info.serverTime, info.siegeTime, this.isOwner());
