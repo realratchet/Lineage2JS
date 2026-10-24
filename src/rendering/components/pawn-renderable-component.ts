@@ -204,8 +204,10 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         // APawn::CreateSkin 0x8b56e4..0x8b57aa; decoded meshes precede this render preparation phase.
         if (pawn.getUnrealScriptProperty("LoadingResourceRef") === 0) {
             pawn.setUnrealScriptProperty("LoadingResourceRef", -1);
-            this.setActorViewType(EActorViewType_T.EAVT_Spawning);
-            this.setAlphaTexModifier(1);
+            if (this.renderManager.getParent().getComponent("network")?.isInWorld()) {
+                this.setActorViewType(EActorViewType_T.EAVT_Spawning);
+                this.setAlphaTexModifier(1);
+            }
         }
         pawn.setUnrealScriptProperty("bCreatedResource", true);
     }
