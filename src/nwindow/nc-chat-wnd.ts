@@ -39,6 +39,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     protected readonly lists: NCChatListBox[] = [];
     protected readonly systemPane: NCChatListBox;
     protected oldChatting = true;
+    protected systemMsgWnd = false;
     protected systemMsgWndDamage = true;
     protected systemMsgWndExpendableItem = true;
     protected readonly rows: HTMLDivElement;
@@ -57,6 +58,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     public onSend: (text: string, type: number, target: string) => void = null;
     public onBuildCommand: (command: string) => void = null;
     public onCommand: (command: string, isShift: boolean) => void = null;
+    public onHideOptions: () => void = null;
     public onOptions: (index: number) => void = null;
 
     public constructor(protected readonly layer: NDomLayer) {
@@ -137,7 +139,14 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     }
 
     public isVisible() { return !this.element.hidden; }
-    public setVisible(isVisible: boolean) { this.element.hidden = !isVisible; }
+    public setVisible(isVisible: boolean) {
+        this.element.hidden = !isVisible;
+        for (let i = 0; i < this.lists.length; i++)
+            this.lists[i].setVisible(isVisible && i === this.selected);
+        this.systemPane.setVisible(isVisible);
+        if (this.onHideOptions) this.onHideOptions();
+        if (isVisible && !this.systemMsgWnd) this.systemPane.setVisible(false);
+    }
 
     public placeOnScreen(_screenWidth: number, screenHeight: number) {
         const owner = this.layer.getManager().getWindowOwner();
@@ -165,7 +174,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
     public setSystemMessageFilters(damage: boolean, expendableItem: boolean) { this.systemMsgWndDamage = damage; this.systemMsgWndExpendableItem = expendableItem; }
 
-    public setSystemMsgWnd(isVisible: boolean) { this.systemPane.setVisible(isVisible); }
+    public setSystemMsgWnd(isVisible: boolean) { this.systemMsgWnd = isVisible; this.systemPane.setVisible(isVisible); }
 
     public focusInput() { this.editBox.focus(); }
     public isInputFocused() { return document.activeElement === this.editBox.input; }

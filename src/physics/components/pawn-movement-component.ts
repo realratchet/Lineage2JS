@@ -818,7 +818,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (this.getParent() !== this.renderManager.player || !network.isInWorld() || !this.actorState.locomotion || actor === this.actorState.desired.actor) return;
 
-        network.cannotMoveAnymore();
+        network.cannotMoveAnymore(true);
     }
 
     protected processHitWall(normal: Vector3, actor: ICollidable): void {

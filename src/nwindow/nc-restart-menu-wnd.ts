@@ -14,6 +14,7 @@ export class NCRestartMenuWnd { // NCRestartMenuWnd: NCConsole 0x10064824 SetWin
 
     public readonly element: HTMLDivElement;
     protected readonly buttons: NDomButton_T[] = [];
+    protected isActive = false;
 
     public onRestart: (type: number) => void = null;
 
@@ -30,6 +31,7 @@ export class NCRestartMenuWnd { // NCRestartMenuWnd: NCConsole 0x10064824 SetWin
     }
 
     public isVisible() { return !this.element.hidden; }
+    public getIsActive() { return this.isActive; }
     public setVisible(isVisible: boolean) { this.element.hidden = !isVisible; }
 
     public placeOnScreen(screenWidth: number, screenHeight: number) { this.layer.place(this.element, Math.trunc(screenWidth * 0.5 - 64), Math.trunc(screenHeight * 0.5 - 64)); }
@@ -37,12 +39,14 @@ export class NCRestartMenuWnd { // NCRestartMenuWnd: NCConsole 0x10064824 SetWin
     public setOptions(available: boolean[]) { // 0x100b6280 / 0x100b6200: unavailable buttons are hidden, the rest keep their slots.
         for (let i = 0; i < this.buttons.length; i++)
             this.buttons[i].hidden = !available[i];
+        this.isActive = true;
     }
 
     protected restart(type: number) { // 0x100b62c0..0x100b6500: send the type, then hide.
         if (this.onRestart) this.onRestart(type);
 
         this.setVisible(false);
+        this.isActive = false;
     }
 }
 

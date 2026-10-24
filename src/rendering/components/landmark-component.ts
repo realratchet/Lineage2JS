@@ -16,7 +16,6 @@ type EffectFactory_T = (classPath: string) => Object3D;
 export class LandmarkComponent extends ObjectComponent<Player> {
     protected readonly renderManager: RenderManager;
     protected readonly createEffect: EffectFactory_T;
-    protected readonly retiringEffects = new Set<Object3D>();
     protected activeEffect: Object3D = null;
     protected completionEffect: Object3D = null;
 
@@ -48,12 +47,6 @@ export class LandmarkComponent extends ObjectComponent<Player> {
     public onUpdate(_currentTime: number, _deltaTime: number): void {
         if (this.completionEffect && !this.completionEffect.parent) this.completionEffect = null;
 
-        for (const effect of this.retiringEffects) {
-            if (effect.parent) continue;
-
-            this.retiringEffects.delete(effect);
-        }
-
         if (!this.activeEffect) return;
         if (!this.activeEffect.parent) { this.activeEffect = null; return; }
 
@@ -83,12 +76,7 @@ export class LandmarkComponent extends ObjectComponent<Player> {
 
     public deleteLandmark(immediate: boolean = true): void {
         if (this.activeEffect) {
-            if (immediate) this.removeEffect(this.activeEffect);
-            else {
-                this.killEffect(this.activeEffect);
-                this.retiringEffects.add(this.activeEffect);
-            }
-
+            this.removeEffect(this.activeEffect);
             this.activeEffect = null;
         }
 
@@ -99,16 +87,6 @@ export class LandmarkComponent extends ObjectComponent<Player> {
             this.completionEffect = null;
         }
 
-        for (const effect of this.retiringEffects) this.removeEffect(effect);
-        this.retiringEffects.clear();
-    }
-
-    protected killEffect(effect: Object3D): void {
-        effect.traverse(child => {
-            const emitter = child as any;
-
-            if (emitter.particlePool) emitter.kill();
-        });
     }
 
     protected removeEffect(effect: Object3D): void {

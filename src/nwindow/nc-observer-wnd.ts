@@ -12,6 +12,7 @@ export class NCObserverWnd {
     public constructor(protected readonly layer: NDomLayer) {
         this.element = layer.createWindow(0, 0, 102, 32);
         this.element.hidden = true;
+        this.element.tabIndex = -1;
         layer.tile(this.element, 0, 0, 102, 32, 0, 0, 102, 32, TEX_BACK);
         const frame = layer.createWindow(0, 0, 12, 32, this.element);
 
@@ -29,9 +30,15 @@ export class NCObserverWnd {
         layer.button(this.element, 19, 5, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, label, () => { if (this.onReturn) this.onReturn(); }).setAttribute("aria-label", label);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 38), 0); }
+    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 51), 0); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) { this.element.hidden = !visible; }
+    public setVisible(visible: boolean) {
+        this.element.hidden = !visible;
+        if (visible) {
+            this.layer.activate(this.element);
+            this.element.focus();
+        }
+    }
 }
 
 export default NCObserverWnd;

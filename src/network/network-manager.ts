@@ -1264,13 +1264,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
     }
 
-    public cannotMoveAnymore() {
+    public cannotMoveAnymore(isHitWall = false) {
         const player = this.manGame.getComponent("render").player, base = player.getBaseActor() as Vehicle;
 
-        player.stopMoving();
+        if (!isHitWall) player.stopMoving();
         if (base && base.isVehicle) this.movement.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
-        else this.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
-        this.movement.stuckCheckAt = 0;
+        else if (!isHitWall) this.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
+        if (!isHitWall) this.movement.stuckCheckAt = 0;
     }
 
     public getNameplates(): Nameplate_T[] { return this.actors.getNameplates(); }

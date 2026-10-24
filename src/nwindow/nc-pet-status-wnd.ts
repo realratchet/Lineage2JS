@@ -53,6 +53,11 @@ export class NCPetStatusWnd extends NCStatusWnd {
         this.update();
     }
 
+    public setVisible(visible: boolean) {
+        super.setVisible(visible);
+        if (visible && (!this.info || this.info.objectId === -1 || this.info.statusType !== this.statusType)) super.setVisible(false);
+    }
+
     public showStatus() {
         if (this.isVisible()) return;
 

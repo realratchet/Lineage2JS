@@ -162,9 +162,8 @@ export class NetworkMovement {
         if (!object.actor || object.isDead) return;
 
         this.adjustPawnLocation(object, object.position);
+        object.actor.stopMove();
         object.actor.stopMoving();
-
-        object.actor.setRotationYaw(object.heading);
     }
 
     public onValidateLocation(packet: PacketReader) {
@@ -744,7 +743,6 @@ export class NetworkMovement {
     public startReplayObservation(position: GamePackets.Location_T) {
         this.observation = { x: position.x, y: position.y, z: position.z };
         this.network.getParent().getComponent("render").player.visible = false;
-        this.network.ui.setObservationMode(true);
     }
 
     public onObservationReturn(packet: PacketReader) {

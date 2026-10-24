@@ -554,6 +554,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.observerWnd.onReturn = () => network.observerReturn();
         this.chatFilterWnd = this.skin.createChatFilterWnd(this.layer);
         this.chatWnd.onOptions = index => this.chatFilterWnd.show(index, this.chatWnd.getFilter(index));
+        this.chatWnd.onHideOptions = () => this.chatFilterWnd.setVisible(false);
         this.chatFilterWnd.onApply = (index, filter) => this.chatWnd.setFilter(index, filter);
         this.olympiadPlayerWnds = [this.skin.createOlympiadPlayerWnd(this.layer, 1), this.skin.createOlympiadPlayerWnd(this.layer, 2)];
         this.olympiadAbnormalWnds = [this.skin.createAbnormalStatusWnd(this.layer), this.skin.createAbnormalStatusWnd(this.layer)];
@@ -860,6 +861,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.gmStoreWnd = this.skin.createGMStoreWnd(this.layer);
         this.gmQuestWnd = this.skin.createGMQuestWnd(this.layer);
         this.fishViewportWnd = this.skin.createFishViewportWnd(this.layer, (id, ...params) => this.formatSystemMessage(id, ...params));
+        godWindows.add(this.fishViewportWnd.element);
         this.manRender.setViewportSceneCanvas(this.fishViewportWnd.getViewportCanvas());
         this.heroTowerWnd = this.skin.createHeroTowerWnd(this.layer);
         this.heroTowerWnd.onWriteWords = words => network.writeHeroWords(words);
@@ -1419,6 +1421,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public showWorld() {
+        this.layer.consoleRoot.hidden = false;
         void this.layer.loadTextures(NCCoolTimeIcon.getTextures(), NCCoolTimeIcon.getFinishTextures().map(path => [path, NCCoolTimeIcon.FINISH_COLOR]));
         void this.manNetwork.getParent().getComponent("asset").loadSound("ItemSound.cooltime_end");
         this.show("world");
@@ -1432,6 +1435,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.abnormalStatusWnd.setVisible(true);
         this.shortCutWnd.setVisible(true);
         this.chatWnd.setVisible(true);
+    }
+
+    public hide() { // NCConsole::Hide 0x100471a0 -> CWnd::Hide 0x10035ab0.
+        this.layer.consoleRoot.hidden = true;
+        for (const wnd of Array.from(this.layer.consoleRoot.children))
+            this.setGroupWindowVisible(wnd as HTMLElement, false);
+        this.manRender.radar.isVisible = false;
     }
 
     public showNpcHtml(html: string, type: number) {
@@ -1902,6 +1912,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const owner = [...this.getDOMWindows(), this.petWnd, this.summonedWnd, this.pledgePowerWnd].find(owner => owner.element === wnd);
 
         if (owner && "setVisible" in owner) owner.setVisible(isVisible);
+        else if (owner && !isVisible && "hide" in owner) owner.hide();
         else wnd.hidden = !isVisible;
     }
 
