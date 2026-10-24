@@ -1,14 +1,15 @@
 import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import { SKIN_SLOTS } from "./skin-textures";
-import { TEX_TOOLTIP_SLICES } from "./nc-tooltip";
+import NCTooltip, { TEX_TOOLTIP_SLICES, type TooltipInfo_T } from "./nc-tooltip";
 
 const TEX_LIST = "L2UI_CH3.ListCtrl.";
 const arrClassGroups = [[2, 3, 8, 23, 36, 46, 48, 55, 57], [9, 24, 37], [5, 6, 20, 33], [21, 34], [12, 13, 27, 40], [16, 17, 30, 43, 52, 51], [14, 28, 41], [0, 1, 4, 7, 18, 19, 22, 31, 32, 35, 44, 45, 47, 53, 54, 56], [49, 50, 38, 39, 42, 25, 26, 29, 10, 11, 15], [88, 89, 93, 101, 108, 113, 114, 117, 118], [92, 102, 109], [90, 91, 99, 106], [100, 107], [94, 95, 103, 110], [97, 98, 105, 112, 116, 115], [96, 104, 111]];
+const rowTooltip = new NCTooltip();
 const arrClassIcons = ["1", "2", "3", "4", "5", "6", "7", "1_1", "1_2", "1_3", "2_3", "3_3", "4_3", "5_3", "6_3", "7_3"].map(name => `L2UI_CH3.PartyWnd.party_styleicon${name}`);
 
 export type ListColumn_T = { width: number, label: number, numeric: boolean, isClass?: boolean };
-export type ListRow_T = { id: number | string, cells: string[], classId?: number };
+export type ListRow_T = { id: number | string, cells: string[], classId?: number, tooltip?: TooltipInfo_T };
 
 export function getClassIcon(classId: number) {
     const group = arrClassGroups.findIndex(group => group.includes(classId));
@@ -19,7 +20,7 @@ export function getClassIcon(classId: number) {
 export function paintListColumn(layer: NDomLayer, parent: HTMLElement, width: number, text: string, state: string) {
     parent.replaceChildren();
     for (let part = 0; part < 3; part++) {
-        const normal = TEX_LIST + `tab${part + 1}`;
+        const normal = `${TEX_LIST}tab${part + 1}`;
         const texture = state === "_over" && !layer.hasTexture(normal + state) ? normal : normal + state;
 
         layer.tile(parent, part === 0 ? 0 : part === 1 ? 8 : width - 8, 0, part === 1 ? width - 16 : 8, 19, 0, 0, 8, 19, texture);
@@ -55,7 +56,7 @@ export function createClassTooltip(layer: NDomLayer, classId: number, x: number,
 }
 
 export class NCListCtrl {
-    public static getTextures() { return ([SKIN_SLOTS.listSelect, SKIN_SLOTS.listSelectEnd] as string[]).concat(["tab1", "tab2", "tab3", "tab1_down", "tab2_down", "tab3_down"].map(name => TEX_LIST + name), [1, 2, 3].map(index => "?" + TEX_LIST + `tab${index}_over`), ["L2UI_CH3.Etc.textbackline"], arrClassIcons, NDOM_SCROLL_TEXTURES, TEX_TOOLTIP_SLICES); }
+    public static getTextures() { return ([SKIN_SLOTS.listSelect, SKIN_SLOTS.listSelectEnd] as string[]).concat(["tab1", "tab2", "tab3", "tab1_down", "tab2_down", "tab3_down"].map(name => `${TEX_LIST}${name}`), [1, 2, 3].map(index => `?${TEX_LIST}tab${index}_over`), ["L2UI_CH3.Etc.textbackline"], arrClassIcons, NDOM_SCROLL_TEXTURES, TEX_TOOLTIP_SLICES); }
     public readonly element: HTMLDivElement;
     public onDoubleClick: (row: ListRow_T) => void = null;
     public onSelection: (row: ListRow_T) => void = null;
@@ -235,14 +236,14 @@ export class NCListCtrl {
 
         const hovered = this.list.querySelector(":scope > :hover");
 
-        if (this.hoverIndex !== this.selectedIndex || !row || row.classId === undefined || !this.list.matches(":hover") || (hovered && hovered !== this.list.content) || this.element.closest("[hidden]")) { this.hideTooltip(); return; }
+        if (this.hoverIndex !== this.selectedIndex || !row || (row.classId === undefined && !row.tooltip) || !this.list.matches(":hover") || (hovered && hovered !== this.list.content) || this.element.closest("[hidden]")) { this.hideTooltip(); return; }
         if (this.tooltipRow === row) return;
 
         this.hideTooltip();
-        const rect = this.list.getBoundingClientRect();
+        const rect = this.list.getBoundingClientRect(), x = this.layer.toUI(rect.left), y = this.layer.toUI(rect.top) + (this.hoverIndex - this.list.getScroll() / this.rowHeight) * this.rowHeight + 3;
 
         this.tooltipRow = row;
-        this.tooltip = createClassTooltip(this.layer, row.classId, this.layer.toUI(rect.left), this.layer.toUI(rect.top) + (this.hoverIndex - this.list.getScroll() / this.rowHeight) * this.rowHeight + 3);
+        this.tooltip = row.tooltip ? rowTooltip.createDOM(this.layer, this.layer.root, x, y, row.tooltip) : createClassTooltip(this.layer, row.classId, x, y); // row tooltip 0x10031b10
     }
 }
 

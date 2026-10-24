@@ -30,6 +30,7 @@ const tmpSphere = new Sphere();
 const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
 const arrLightSortKeys = new Float64Array(8);
+let arrBSPStack = new Int32Array(256);
 const arrLightNodes: number[] = [];
 const arrLightLeaves: number[] = [];
 const arrLightCandidates: number[] = [];
@@ -41,6 +42,7 @@ const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 const MAX_RECURSION_DEPTH = 4;
 
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string; actorIndex: number };
+type TranslucentBSPSection_T = { mesh: THREE.Mesh; source: Uint8Array | Uint16Array | Uint32Array; nodes: Int32Array; starts: Uint32Array; counts: Uint32Array; order: Int32Array; previous: Int32Array };
 type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number };
 type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, version: number, source: Uint8Array | Uint16Array | Uint32Array, ranges: Map<number, { count: number, bounds: Box3 }> };
 const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
@@ -320,6 +322,8 @@ export class SectorObject extends GameObject {
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
     public visibleEmitterUuids: Set<string> = new Set();
     public visibleLeaves: Set<number> = new Set();
+    protected arrTranslucentBSP: TranslucentBSPSection_T[] = null;
+    protected arrBSPRanks: Int32Array = null;
     public readonly lights: Record<string, DynamicLight> = {};
     public readonly lightList: DynamicLight[] = [];
     protected readonly cacheLightIndicesByName = new Map<string, number[]>();
@@ -1286,6 +1290,89 @@ export class SectorObject extends GameObject {
         this.visibilityCacheInitialized = false;
     }
 
+    protected getTranslucentBSP() {
+        if (this.arrTranslucentBSP) return this.arrTranslucentBSP;
+
+        this.arrTranslucentBSP = [];
+        for (const child of this.bspGroup.children as THREE.Mesh[]) {
+            if ((child as any).priority !== "transparent" || !child.geometry.index) continue;
+
+            const index = child.geometry.index, source = (index.array as Uint16Array).slice(), nodeAttr = child.geometry.getAttribute("nodeIndex").array as Uint32Array;
+            const nodes: number[] = [], starts: number[] = [], counts: number[] = [];
+
+            for (let i = 0; i < source.length; i += 3) {
+                const node = nodeAttr[source[i]];
+
+                if (nodes.length && nodes[nodes.length - 1] === node) counts[counts.length - 1] += 3;
+                else { nodes.push(node); starts.push(i); counts.push(3); }
+            }
+
+            const order = new Int32Array(nodes.length);
+
+            for (let i = 0; i < order.length; i++) order[i] = i;
+            this.arrTranslucentBSP.push({ mesh: child, source, nodes: Int32Array.from(nodes), starts: Uint32Array.from(starts), counts: Uint32Array.from(counts), order, previous: order.slice() });
+        }
+
+        return this.arrTranslucentBSP;
+    }
+
+    protected sortTranslucentBSP(cameraPosition: THREE.Vector3) { // Engine 0x1064d596: translucent nodes are prepended during the front-to-back walk, so 0x106523ec draws them back to front
+        const sections = this.getTranslucentBSP();
+        let hasVisible = false;
+
+        for (const section of sections) if (section.mesh.visible) { hasVisible = true; break; }
+        if (!hasVisible || !this.bspNodes.length) return;
+
+        const nodes = this.bspNodes, ranks = this.arrBSPRanks || (this.arrBSPRanks = new Int32Array(nodes.length));
+        const x = cameraPosition.x, y = cameraPosition.y, z = cameraPosition.z;
+        let top = 0, rank = 0;
+
+        arrBSPStack[top++] = 0;
+        while (top > 0) {
+            const entry = arrBSPStack[--top];
+
+            if (entry < 0) {
+                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) ranks[coplanar] = rank++;
+                continue;
+            }
+
+            const node = nodes[entry], plane = node.plane;
+            const isFront = x * plane.x + y * plane.y + z * plane.z - plane.w >= 0;
+            const near = isFront ? node.front : node.back, far = isFront ? node.back : node.front;
+
+            if (top + 3 > arrBSPStack.length) { const grown = new Int32Array(arrBSPStack.length * 2); grown.set(arrBSPStack); arrBSPStack = grown; }
+            if (near >= 0) arrBSPStack[top++] = near;
+            arrBSPStack[top++] = ~entry;
+            if (far >= 0) arrBSPStack[top++] = far;
+        }
+
+        for (const section of sections) {
+            if (!section.mesh.visible) continue;
+
+            const { order, previous, nodes: sectionNodes } = section;
+
+            order.sort((a, b) => ranks[sectionNodes[a]] - ranks[sectionNodes[b]]);
+
+            let isChanged = false;
+
+            for (let i = 0; i < order.length; i++) if (order[i] !== previous[i]) { isChanged = true; break; }
+            if (!isChanged) continue;
+
+            const index = section.mesh.geometry.index, target = index.array as Uint16Array;
+            let offset = 0;
+
+            for (let i = 0; i < order.length; i++) {
+                const block = order[i], start = section.starts[block], count = section.counts[block];
+
+                target.set(section.source.subarray(start, start + count), offset);
+                offset += count;
+            }
+
+            previous.set(order);
+            index.needsUpdate = true;
+        }
+    }
+
     public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false) {
         if (!auxiliary) this.updateLights(environment);
 
@@ -1430,6 +1517,8 @@ export class SectorObject extends GameObject {
             if (!auxiliary && zoneChanged && bspAmbientColor) {
                 console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
             }
+
+            if (!auxiliary) this.sortTranslucentBSP(cameraPosition);
 
             if (zoneChanged && currentZone !== null && currentZone >= 0) {
                 const finalActiveZones: number[] = [];

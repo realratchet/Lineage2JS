@@ -12,7 +12,7 @@ const TEX_DEBUFF = "L2UI_CH3.PlayerStatusWnd.debuff";
 const TEX_FRAME = "L2UI_CH3.FrameCtrl.smallbar";
 
 export class NCAbnormalStatusWnd {
-    public static getTextures(): string[] { return [TEX_BACK, TEX_DEBUFF, TEX_FRAME + "1", TEX_FRAME + "2", TEX_FRAME + "3", "NWindow.BlackTexture"]; }
+    public static getTextures(): string[] { return [TEX_BACK, TEX_DEBUFF, `${TEX_FRAME}1`, `${TEX_FRAME}2`, `${TEX_FRAME}3`, "NWindow.BlackTexture"]; }
 
     public readonly element: HTMLDivElement;
     protected readonly arrFrame: HTMLDivElement[];
@@ -33,7 +33,7 @@ export class NCAbnormalStatusWnd {
         this.element = layer.createWindow(173, 0, 0, 0);
         this.element.hidden = true;
         this.element.classList.add("ndom-opaque");
-        this.arrFrame = [1, 2, 3].map(index => layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, TEX_FRAME + index));
+        this.arrFrame = [1, 2, 3].map(index => layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_FRAME}${index}`));
         this.slots = layer.createWindow(0, 0, 0, 0, this.element);
         this.grip = NCFrameCtrl.createGrip(layer, this.element, 0, 0, 12, 0);
         this.element.addEventListener("mousemove", event => {
@@ -122,9 +122,9 @@ export class NCAbnormalStatusWnd {
         this.element.style.width = `${this.width}px`;
         this.element.style.height = `${H}px`;
         layer.place(this.grip, 0, 0, 12, H);
-        layer.placeTile(this.arrFrame[0], 0, 0, H ? 12 : 0, 8, 0, 0, 12, 8, TEX_FRAME + "1");
-        layer.placeTile(this.arrFrame[1], 0, 8, 12, H - 16, 0, 0, 12, 8, TEX_FRAME + "2");
-        layer.placeTile(this.arrFrame[2], 0, H - 8, H ? 12 : 0, 8, 0, 0, 12, 8, TEX_FRAME + "3");
+        layer.placeTile(this.arrFrame[0], 0, 0, H ? 12 : 0, 8, 0, 0, 12, 8, `${TEX_FRAME}1`);
+        layer.placeTile(this.arrFrame[1], 0, 8, 12, H - 16, 0, 0, 12, 8, `${TEX_FRAME}2`);
+        layer.placeTile(this.arrFrame[2], 0, H - 8, H ? 12 : 0, 8, 0, 0, 12, 8, `${TEX_FRAME}3`);
     }
 
     protected getIcon(effect: AbnormalStatus_T) {

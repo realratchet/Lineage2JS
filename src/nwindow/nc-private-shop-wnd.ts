@@ -50,9 +50,9 @@ export class NCPrivateShopWnd extends NCShopWnd {
         this.element.focus();
         await pending;
     }
-    public setVisible(visible: boolean) {
-        super.setVisible(visible);
-        if (!visible) this.ownerId = 0;
+    public reset() {
+        this.ownerId = 0;
+        super.reset();
     }
     public async showStore(list: PrivateStoreSellList_T) {
         this.setOwnMode(false);

@@ -101,8 +101,8 @@ export class NCGMMagicSkillWnd {
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 209, 100); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
-        this.element.hidden = !visible;
         if (!visible) this.skillWnd.clear();
+        this.element.hidden = !visible;
     }
     public toggle(targetName: string) {
         if (this.isVisible()) { this.setVisible(false); return; }

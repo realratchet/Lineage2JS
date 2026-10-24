@@ -17,7 +17,7 @@ const WIDTH = 348;
 function getBarWidth(current: number, maximum: number, width: number) { return maximum ? Math.trunc(Math.imul(current, width) / maximum) : 0; }
 
 export class NCOlympiadPlayerWnd {
-    public static getTextures(): string[] { return [1, 2, 3].flatMap(index => [TEX_BACK + index, TEX_EXPANDED + index, TEX_STRIP + index]).concat([TEX_CP, TEX_HP, TEX_CP_BACK, TEX_HP_BACK, TEX_INFO, TEX_INFO_DOWN]); }
+    public static getTextures(): string[] { return [1, 2, 3].flatMap(index => [`${TEX_BACK}${index}`, `${TEX_EXPANDED}${index}`, `${TEX_STRIP}${index}`]).concat([TEX_CP, TEX_HP, TEX_CP_BACK, TEX_HP_BACK, TEX_INFO, TEX_INFO_DOWN]); }
 
     public readonly element: HTMLDivElement;
     protected readonly arrBack: HTMLDivElement[];
@@ -40,8 +40,8 @@ export class NCOlympiadPlayerWnd {
         this.side = side;
         this.element = layer.createWindow(0, 0, WIDTH, 46);
         this.element.hidden = true;
-        this.arrBack = [layer.tile(this.element, 12, 0, 16, 46, 0, 0, 16, 46, TEX_BACK + "1"), layer.tile(this.element, 28, 0, WIDTH - 44, 46, 0, 0, 16, 46, TEX_BACK + "2"), layer.tile(this.element, WIDTH - 16, 0, 16, 46, 0, 0, 16, 46, TEX_BACK + "3")];
-        this.arrStrip = [layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, TEX_STRIP + "1"), layer.tile(this.element, 0, 8, 12, 38, 0, 0, 12, 8, TEX_STRIP + "2"), layer.tile(this.element, 0, 38, 12, 8, 0, 0, 12, 8, TEX_STRIP + "3")];
+        this.arrBack = [layer.tile(this.element, 12, 0, 16, 46, 0, 0, 16, 46, `${TEX_BACK}1`), layer.tile(this.element, 28, 0, WIDTH - 44, 46, 0, 0, 16, 46, `${TEX_BACK}2`), layer.tile(this.element, WIDTH - 16, 0, 16, 46, 0, 0, 16, 46, `${TEX_BACK}3`)];
+        this.arrStrip = [layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}1`), layer.tile(this.element, 0, 8, 12, 38, 0, 0, 12, 8, `${TEX_STRIP}2`), layer.tile(this.element, 0, 38, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}3`)];
         layer.tile(this.element, 16, 26, WIDTH - 22, 6, 0, 0, 8, 6, TEX_CP_BACK);
         layer.tile(this.element, 16, 33, WIDTH - 22, 6, 0, 0, 8, 6, TEX_HP_BACK);
         this.cpBar = layer.tile(this.element, 16, 26, 0, 6, 0, 0, 8, 6, TEX_CP);
@@ -92,11 +92,11 @@ export class NCOlympiadPlayerWnd {
 
         this.element.style.height = `${height}px`;
         layer.place(this.grip, 0, 0, 12, height);
-        layer.placeTile(this.arrBack[0], 12, 0, 16, height, 0, 0, 16, height, texture + "1");
-        layer.placeTile(this.arrBack[1], 28, 0, WIDTH - 44, height, 0, 0, 16, height, texture + "2");
-        layer.placeTile(this.arrBack[2], WIDTH - 16, 0, 16, height, 0, 0, 16, height, texture + "3");
-        layer.placeTile(this.arrStrip[1], 0, 8, 12, height - 8, 0, 0, 12, 8, TEX_STRIP + "2");
-        layer.placeTile(this.arrStrip[2], 0, height - 8, 12, 8, 0, 0, 12, 8, TEX_STRIP + "3");
+        layer.placeTile(this.arrBack[0], 12, 0, 16, height, 0, 0, 16, height, `${texture}1`);
+        layer.placeTile(this.arrBack[1], 28, 0, WIDTH - 44, height, 0, 0, 16, height, `${texture}2`);
+        layer.placeTile(this.arrBack[2], WIDTH - 16, 0, 16, height, 0, 0, 16, height, `${texture}3`);
+        layer.placeTile(this.arrStrip[1], 0, 8, 12, height - 8, 0, 0, 12, 8, `${TEX_STRIP}2`);
+        layer.placeTile(this.arrStrip[2], 0, height - 8, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}3`);
         layer.placeTile(this.cpBar, 16, 26, info && info.maxCp ? getBarWidth(info.curCp, info.maxCp, WIDTH - 22) : 0, 6, 0, 0, 8, 6, TEX_CP);
         layer.placeTile(this.hpBar, 16, 33, info && info.maxHp ? getBarWidth(info.curHp, info.maxHp, WIDTH - 22) : 0, 6, 0, 0, 8, 6, TEX_HP);
         layer.renderText(this.name, info ? info.name : "", 0xffdcdcdc);

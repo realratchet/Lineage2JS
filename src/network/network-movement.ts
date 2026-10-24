@@ -226,13 +226,17 @@ export class NetworkMovement {
         const render = this.network.getParent().getComponent("render");
         const asset = this.network.getParent().getComponent("asset");
         const generation = ++this.network.actors.teleportGeneration;
+        const sector = render.getSector(render.player.position);
+        const isLoading = !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident
 
-        render.setZoneMusicEnabled(false);
-        this.network.ui.showLoading(true);
+        if (isLoading) {
+            render.setZoneMusicEnabled(false);
+            this.network.ui.showLoading(true);
 
-        while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
+            while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
 
-        if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
+            if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
+        }
 
         this.network.actors.teleportInfoPending = true;
         this.network.session.game.appearing();
@@ -240,7 +244,7 @@ export class NetworkMovement {
         // Lisvus Appearing sends the destination known list before UserInfo.
         while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (this.network.actors.teleportInfoPending || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) await new Promise(resolve => setTimeout(resolve, 100));
 
-        if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
+        if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration || !isLoading) return;
 
         render.setZoneMusicEnabled(true);
         this.network.ui.showWorld();
@@ -734,6 +738,11 @@ export class NetworkMovement {
 
         this.observation = { x: info.x, y: info.y, z: info.z };
         this.placeObserver(info, true);
+    }
+
+    public startReplayObservation(position: GamePackets.Location_T) {
+        this.observation = { x: position.x, y: position.y, z: position.z };
+        this.network.getParent().getComponent("render").player.visible = false;
     }
 
     public onObservationReturn(packet: PacketReader) {

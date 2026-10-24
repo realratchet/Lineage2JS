@@ -15,7 +15,7 @@ type QuestNode_T = { kind: number, info: QuestInfo_T, completed: boolean, expand
 export type QuestLocation_T = { id: number, name: string, x: number, y: number, z: number, unk0: number };
 
 export class NCQuestWnd {
-    public static getTextures() { return ["QuestWndBack", "QuestWndToolTipBtn", "QuestWndPlusBtn", "QuestWndMinusBtn", "QuestWndDownBtn", "QuestWndUpBtn", "QUESTWNDPANEL1", "QUESTWNDPANEL2", "QUESTWNDPANEL3", ...Array.from({ length: 5 }, (_, i) => `QuestWndInfoIcon_${i + 1}`)].map(name => TEX_PATH + name).concat([TEX_CHECK, TEX_CHECKED, TEX_SELECT, TEX_SELECT_END, TEX_OUTLINE, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]); }
+    public static getTextures() { return ["QuestWndBack", "QuestWndToolTipBtn", "QuestWndPlusBtn", "QuestWndMinusBtn", "QuestWndDownBtn", "QuestWndUpBtn", "QUESTWNDPANEL1", "QUESTWNDPANEL2", "QUESTWNDPANEL3", ...Array.from({ length: 5 }, (_, i) => `QuestWndInfoIcon_${i + 1}`)].map(name => `${TEX_PATH}${name}`).concat([TEX_CHECK, TEX_CHECKED, TEX_SELECT, TEX_SELECT_END, TEX_OUTLINE, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]); }
     public readonly element: HTMLDivElement;
     public onShow: () => void = null;
     public onHide: () => void = null;
@@ -39,7 +39,7 @@ export class NCQuestWnd {
         this.element = layer.createWindow(0, 66, 256, 335, parent);
         this.element.hidden = true;
         this.element.dataset.window = "quest";
-        layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, TEX_PATH + "QuestWndBack");
+        layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, `${TEX_PATH}QuestWndBack`);
         layer.text(this.element, this.strings.sysStrings[324], 0xffdcdcdc, undefined, 11, 12);
         this.count = layer.text(this.element, "(0/15)", 0xffb09b79, undefined, 190, 12);
         this.list = layer.scrollPane(this.element, 7, 27, 242, 274, 16);
@@ -61,7 +61,7 @@ export class NCQuestWnd {
         const help = layer.createWindow(232, 10, 15, 15, this.element);
 
         help.dataset.questHelp = "true";
-        layer.tile(help, 0, 0, 15, 15, 0, 0, 15, 15, TEX_PATH + "QuestWndToolTipBtn");
+        layer.tile(help, 0, 0, 15, 15, 0, 0, 15, 15, `${TEX_PATH}QuestWndToolTipBtn`);
         help.addEventListener("mouseenter", () => this.showHelp(help));
         help.addEventListener("mouseleave", () => this.hideHelp());
     }
@@ -229,7 +229,7 @@ export class NCQuestWnd {
         });
         const texture = node.kind === 1 ? node.expanded ? "QuestWndMinusBtn" : "QuestWndPlusBtn" : node.expanded ? "QuestWndUpBtn" : "QuestWndDownBtn";
 
-        layer.tile(button, 0, 0, 14, 14, 0, 0, 14, 14, TEX_PATH + texture);
+        layer.tile(button, 0, 0, 14, 14, 0, 0, 14, 14, `${TEX_PATH}${texture}`);
         if (node.kind === 1) {
             if (node.expanded) {
                 layer.tile(this.list.content, x + 14, y + 1, 177, 13, 0, 0, 16, 13, TEX_SELECT);
@@ -242,12 +242,12 @@ export class NCQuestWnd {
             if (info.classification >= 0 && info.classification <= 3) {
                 const icons = info.classification < 2 ? [4, info.classification + 1] : [3, info.classification - 1];
 
-                icons.forEach((icon, index) => layer.tile(this.list.content, x + 24 + width + index * 11, y, 11, 11, 0, 0, 11, 11, TEX_PATH + `QuestWndInfoIcon_${icon}`));
+                icons.forEach((icon, index) => layer.tile(this.list.content, x + 24 + width + index * 11, y, 11, 11, 0, 0, 11, 11, `${TEX_PATH}QuestWndInfoIcon_${icon}`));
             }
             height = lineHeight + 21;
         } else {
             layer.text(this.list.content, title, 0xffdcdcdc, undefined, x + 19, y);
-            if (info.entityName) layer.tile(this.list.content, x + 24 + width, y, 11, 11, 0, 0, 11, 11, TEX_PATH + "QuestWndInfoIcon_5");
+            if (info.entityName) layer.tile(this.list.content, x + 24 + width, y, 11, 11, 0, 0, 11, 11, `${TEX_PATH}QuestWndInfoIcon_5`);
             if (node.completed && info.unk1) layer.text(this.list.content, this.strings.sysStrings[898], 0xffb09b79, undefined, x + width + (info.entityName ? 40 : 24), y);
             height = 19;
         }
@@ -261,9 +261,9 @@ export class NCQuestWnd {
         const lines = canvas.wrapText(info.description.replace(/\\n/g, "\n"), 226 - x - 5);
         const textHeight = lines.length * canvas.getLineHeight(), height = textHeight + info.itemIds.length * 37 + 10;
 
-        layer.tile(this.list.content, x - 5, y - 2, 211, 8, 0, 0, 211, 8, TEX_PATH + "QUESTWNDPANEL1");
-        layer.tile(this.list.content, x - 5, y + 6, 211, height - 16, 0, 0, 211, 8, TEX_PATH + "QUESTWNDPANEL2");
-        layer.tile(this.list.content, x - 5, y + height - 10, 211, 8, 0, 0, 211, 8, TEX_PATH + "QUESTWNDPANEL3");
+        layer.tile(this.list.content, x - 5, y - 2, 211, 8, 0, 0, 211, 8, `${TEX_PATH}QUESTWNDPANEL1`);
+        layer.tile(this.list.content, x - 5, y + 6, 211, height - 16, 0, 0, 211, 8, `${TEX_PATH}QUESTWNDPANEL2`);
+        layer.tile(this.list.content, x - 5, y + height - 10, 211, 8, 0, 0, 211, 8, `${TEX_PATH}QUESTWNDPANEL3`);
         lines.forEach((line, index) => layer.text(this.list.content, line, 0xff8c8c8c, undefined, x, y + index * canvas.getLineHeight()));
         info.itemIds.forEach((id, index) => {
             const itemY = y + textHeight + index * 37;
@@ -318,7 +318,7 @@ export class NCQuestWnd {
             layer.tile(help, [0, 8, width - 8][col], [0, 8, height - 8][row], [8, width - 16, 8][col], [8, height - 16, 8][row], 0, 0, 8, 8, texture);
         });
         for (let index = 0; index < 5; index++) {
-            const texture = TEX_PATH + `QuestWndInfoIcon_${index + 1}`, image = canvas.getTexture(texture);
+            const texture = `${TEX_PATH}QuestWndInfoIcon_${index + 1}`, image = canvas.getTexture(texture);
             const y = 5 + index * (canvas.getLineHeight() + 6);
 
             layer.tile(help, 5, y, image.width, image.height, 0, 0, image.width, image.height, texture);

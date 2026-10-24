@@ -149,7 +149,7 @@ export async function storeCachedLibraryDurable(sectorName: string, settings: Lo
     }
 
     return navigator.locks.request(cacheFileName(sectorName, settings), async () => {
-        if ((sectorName === "npc_npcs" || sectorName === "npc_monsters") && await getCachedFile(sectorName, settings)) return 0;
+        if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
 
         const bytes = serializeLibraryBlob(library, seekable);
 

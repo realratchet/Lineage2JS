@@ -14,7 +14,7 @@ type ClanRow_T = ClanMember_T & { dataObjectId: number, dataClassId: number, too
 function foldName(name: string) { return name.replace(/[A-Z]/g, value => value.toLowerCase()); }
 
 export class NCClanWnd {
-    public static getTextures() { return ["BloodHood_Back", "BloodHood_Logon", "BloodHood_Logoff"].map(name => TEX_PATH + name).concat(["L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn"], NCListCtrl.getTextures()); }
+    public static getTextures() { return ["BloodHood_Back", "BloodHood_Logon", "BloodHood_Logoff"].map(name => `${TEX_PATH}${name}`).concat(["L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn"], NCListCtrl.getTextures()); }
     public readonly element: HTMLDivElement;
     public onAction: (action: string, selected: ClanMember_T) => void = null;
     protected readonly header: HTMLDivElement;
@@ -39,7 +39,7 @@ export class NCClanWnd {
         this.element = layer.createWindow(0, 66, 256, 335, parent);
         this.element.hidden = true;
         this.element.dataset.window = "clan";
-        layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, TEX_PATH + "BloodHood_Back");
+        layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, `${TEX_PATH}BloodHood_Back`);
         this.header = layer.createWindow(0, 0, 256, 62, this.element);
         this.list = layer.scrollPane(this.element, 8, 81, 240, 118, 17);
         this.list.content.style.width = "240px";
@@ -246,7 +246,7 @@ export class NCClanWnd {
                 if (column < 2) layer.text(cell, column === 0 ? row.name : String(row.level), 0xffdcdcdc, undefined, 10, 1);
                 else if (column === 2 && row.classId > -1) {
                     layer.tile(cell, Math.trunc(width / 2) - 5, 1, 11, 11, 0, 0, 11, 11, getClassIcon(row.classId));
-                } else if (column === 3) layer.tile(cell, Math.trunc(width / 2) - 16, 1, 32, 11, 0, 0, 32, 11, TEX_PATH + (row.isOnline ? "BloodHood_Logon" : "BloodHood_Logoff"));
+                } else if (column === 3) layer.tile(cell, Math.trunc(width / 2) - 16, 1, 32, 11, 0, 0, 32, 11, `${TEX_PATH}${row.isOnline ? "BloodHood_Logon" : "BloodHood_Logoff"}`);
                 x += width;
             });
         }

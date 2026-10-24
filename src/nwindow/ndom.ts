@@ -11,6 +11,7 @@ const ATLAS_WIDTH = 2048;
 const MIN_THUMB = 15;
 
 type AtlasEntry_T = { url: string, x: number, y: number, width: number, height: number, atlasWidth: number, atlasHeight: number, frames: [number, number][], frameTime: number };
+type ModalWindow_T = { element: HTMLElement };
 
 function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with RGBA bitfields: raw canvas bytes, no PNG compression pass.
     const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
@@ -47,6 +48,7 @@ export type NDomEdit_T = HTMLDivElement & { input: HTMLInputElement, getValue():
 export class NDomLayer {
     protected readonly tooltips = new NCTooltip();
     public readonly root = document.createElement("div");
+    public readonly consoleRoot = document.createElement("div");
     protected readonly manager: NWindowManager;
     protected readonly atlas = new Map<string, AtlasEntry_T>();
     protected readonly tileAnimations = new WeakMap<HTMLElement, Animation>();
@@ -54,6 +56,8 @@ export class NDomLayer {
     protected readonly cacheTintUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
     protected readonly windowPositions = new Map<HTMLElement, [number, number]>();
+    protected readonly arrModalWindows: ModalWindow_T[] = [];
+    protected readonly modalBlocker = document.createElement("div");
     protected stopDrag: () => void = null;
     protected activeWindow: HTMLElement = null;
     protected zOrder = 0;
@@ -62,6 +66,31 @@ export class NDomLayer {
     public constructor(manager: NWindowManager) {
         this.manager = manager;
         this.root.className = "ndom-layer";
+        this.consoleRoot.className = "ndom-console";
+        this.root.appendChild(this.consoleRoot);
+
+        this.modalBlocker.className = "ndom-absolute ndom-opaque ndom-modal-blocker";
+        this.modalBlocker.style.inset = "0";
+        this.modalBlocker.hidden = true;
+        this.modalBlocker.setAttribute("aria-hidden", "true");
+        this.modalBlocker.addEventListener("mousedown", event => event.preventDefault());
+        this.root.appendChild(this.modalBlocker);
+
+        for (const type of ["keydown", "keyup"])
+            window.addEventListener(type, event => {
+                const modal = this.arrModalWindows[this.arrModalWindows.length - 1];
+
+                if (!modal || modal.element.contains(event.target as Node)) return;
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }, { capture: true, passive: false });
+
+        window.addEventListener("focusin", event => {
+            const modal = this.arrModalWindows[this.arrModalWindows.length - 1];
+
+            if (modal && !modal.element.contains(event.target as Node)) modal.element.focus();
+        }, true);
 
         for (const type of ["mousedown", "mouseup", "click", "dblclick", "wheel", "keydown", "keyup", "contextmenu"])
             this.root.addEventListener(type, event => { if (event.target !== this.root) event.stopPropagation(); });
@@ -71,13 +100,14 @@ export class NDomLayer {
         window.addEventListener("mousedown", event => {
             let wnd = event.target instanceof Element && this.root.contains(event.target) ? event.target : null;
 
-            while (wnd && wnd.parentElement !== this.root) wnd = wnd.parentElement;
+            while (wnd && wnd.parentElement !== this.root && wnd.parentElement !== this.consoleRoot) wnd = wnd.parentElement;
+            if (wnd === this.consoleRoot) wnd = null;
 
             this.activate(wnd as HTMLElement);
         }, true);
         new MutationObserver(records => {
             for (const { target } of records)
-                if (target instanceof HTMLElement && target.parentElement === this.root && !target.hidden && !target.classList.contains("ndom-opaque")) this.activate(target);
+                if (target instanceof HTMLElement && target !== this.consoleRoot && (target.parentElement === this.root || target.parentElement === this.consoleRoot) && !target.hidden && !target.classList.contains("ndom-opaque")) this.activate(target);
         }).observe(this.root, { subtree: true, attributeFilter: ["hidden"] });
 
         window.addEventListener("resize", () => this.resize());
@@ -94,14 +124,56 @@ export class NDomLayer {
     }
 
     public getManager() { return this.manager; }
+    public getModalWindows() { return this.arrModalWindows.map(entry => entry.element); }
+    public getWindows() { return [...this.consoleRoot.children, ...this.root.children].filter(wnd => wnd !== this.consoleRoot) as HTMLElement[]; }
+
+    public setConsoleWindows(windows: HTMLElement[]) {
+        for (const wnd of windows)
+            if (wnd !== this.consoleRoot && wnd !== this.modalBlocker) this.consoleRoot.appendChild(wnd);
+        this.updateTransparency();
+    }
 
     public setBackground(wnd: HTMLElement) { wnd.classList.add("ndom-back"); } // NCGodWnd children (login, lobby, loading screens) stay behind every popup window.
 
     public activate(wnd: HTMLElement) {
         if (wnd && wnd !== this.activeWindow && !wnd.classList.contains("ndom-back")) wnd.style.zIndex = String(++this.zOrder);
 
+        if (this.arrModalWindows.length) {
+            this.modalBlocker.style.zIndex = String(++this.zOrder);
+            wnd = this.arrModalWindows[this.arrModalWindows.length - 1].element;
+            wnd.style.zIndex = String(++this.zOrder);
+        }
+
         this.activeWindow = wnd;
         this.updateTransparency();
+    }
+
+    public setModal(wnd: HTMLElement, isModal: boolean) { // NWindow 0x10034c10/30, manager 0x1003a6f0/720.
+        const index = this.arrModalWindows.findIndex(entry => entry.element === wnd);
+
+        if (isModal) {
+            if (index !== -1) return;
+
+            this.cancelDrag();
+            this.arrModalWindows.push({ element: wnd });
+            this.modalBlocker.hidden = false;
+            wnd.tabIndex = -1;
+            wnd.setAttribute("role", "dialog");
+            wnd.setAttribute("aria-modal", "true");
+            this.activate(wnd);
+            wnd.focus();
+        } else {
+            if (index !== -1) {
+                this.arrModalWindows.splice(index, 1);
+                this.modalBlocker.hidden = this.arrModalWindows.length === 0;
+                if (wnd.hidden && wnd.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+            }
+            const modal = this.arrModalWindows[this.arrModalWindows.length - 1];
+
+            if (modal || index !== -1 && wnd.hidden) this.activate(null);
+            if (modal) modal.element.focus();
+            wnd.removeAttribute("aria-modal");
+        }
     }
 
     public setTransparencyMode(isEnabled: boolean) {
@@ -110,8 +182,8 @@ export class NDomLayer {
     }
 
     protected updateTransparency() { // NWindow 0x10038ecd: with GIsTransparencyMode, every top window but the active one and style 0x80000 ones paints with the canvas flag at +0x70.
-        for (const wnd of this.root.children)
-            wnd.classList.toggle("ndom-inactive", this.isTransparencyMode && wnd !== this.activeWindow && !wnd.classList.contains("ndom-opaque"));
+        for (const wnd of this.getWindows())
+            wnd.classList.toggle("ndom-inactive", this.isTransparencyMode && wnd.parentElement === this.consoleRoot && wnd !== this.activeWindow && !wnd.classList.contains("ndom-opaque"));
     }
 
     public toUI(client: number) { return this.manager.canvas.toUI(client); }
@@ -627,7 +699,7 @@ export class NDomLayer {
             this.beginDrag(moveEvent => {
                 const travel = h - 30 - thumbLen;
 
-                if (travel <= 0) return;
+                if (thumb.hidden || travel <= 0) return;
 
                 const position = Math.max(0, Math.min(travel, Math.trunc(startPos + this.toUI(moveEvent.clientY) - startY)));
 

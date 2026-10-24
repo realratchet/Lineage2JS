@@ -179,6 +179,7 @@ export class NetworkCommunity {
         for (const member of members) {
             this.partyMembers.set(member.objectId, member);
             this.applyPartyMember(member);
+            this.network.ui.addPartyMember(member, leaderId, lootDistribution);
         }
         this.network.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.network.actors.userId);
     }
@@ -190,6 +191,7 @@ export class NetworkCommunity {
         this.partyLootDistribution = lootDistribution;
         this.partyMembers.set(member.objectId, member);
         this.applyPartyMember(member);
+        this.network.ui.addPartyMember(member, leaderId, lootDistribution);
         this.network.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.network.actors.userId);
     }
 
@@ -201,16 +203,17 @@ export class NetworkCommunity {
         this.partyEffects.clear();
         this.partyLeaderId = 0;
         this.partyLootDistribution = 0;
+        this.network.ui.deleteAllPartyMembers();
         this.network.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.network.actors.userId);
     }
 
     public onPartySmallWindowDelete(packet: PacketReader) {
-        const objectId = packet.d();
+        const objectId = packet.d(), name = packet.S();
 
-        packet.S();
         this.partyMembers.delete(objectId);
         this.partyPositions.delete(objectId);
         this.partyEffects.delete(objectId);
+        this.network.ui.deletePartyMember(name);
         this.network.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.network.actors.userId);
     }
 
@@ -219,6 +222,7 @@ export class NetworkCommunity {
 
         this.partyMembers.set(member.objectId, member);
         this.applyPartyMember(member);
+        this.network.ui.updatePartyMember(member);
         this.network.ui.setMapPartyMembers(this.partyMembers, this.partyPositions, this.network.actors.userId);
     }
 
@@ -453,6 +457,7 @@ export class NetworkCommunity {
     public onFriendList(packet: PacketReader) {
         if (packet.getRemaining() === 0) {
             this.friends.clear();
+            this.network.ui.setFriends([]);
             return;
         }
 
@@ -461,26 +466,36 @@ export class NetworkCommunity {
         if (count > Math.trunc(packet.getRemaining() / 14)) throw new Error(`Invalid FriendList count ${count}.`);
 
         const friends = [];
+        let countHigh = 0;
         for (let i = 0; i < count; i++) {
-            packet.h();
+            const high = packet.h();
+            if (!i) countHigh = high;
             const objectId = packet.d(), name = packet.S(), isOnline = packet.d() !== 0;
 
             packet.h();
             friends.push({ objectId, name, isOnline });
         }
 
+        // Engine 0x1040ad90: d(dSdd); Lisvus FriendList: h(hdSdh).
+        if (packet.getRemaining() === 2) {
+            const high = packet.h();
+            if (count ? countHigh !== 0 : high !== 0) throw new Error(`Invalid FriendList count.`);
+        }
+        if (packet.getRemaining()) throw new Error(`Invalid FriendList trailing data.`);
+
         this.friends.clear();
         for (const friend of friends) this.friends.set(friend.objectId, friend);
+        this.network.ui.setFriends([...this.friends.values()]);
     }
 
     public onFriendRecvMsg(packet: PacketReader) {
-        packet.d();
+        const result = packet.d();
         const receiver = packet.S(), sender = packet.S(), message = packet.S();
 
         if (!receiver || !sender) throw new Error("Invalid FriendRecvMsg names.");
         if (packet.getRemaining()) throw new Error("Invalid FriendRecvMsg trailing data.");
 
-        this.network.ui.addChat(sender, message, GamePackets.Say2_T.TELL);
+        this.network.ui.receiveFriendMessage(result, sender, message);
     }
 
     public onStatusUpdate(packet: PacketReader) {

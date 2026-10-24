@@ -149,9 +149,11 @@ export class NCShopWnd {
     public getItems(side: number) { return this.items[side]; }
     public getPressedItem(side: number) { return this.items[side][this.pressed[side]]; }
     public setVisible(visible: boolean) {
+        if (!visible) this.reset();
         this.element.hidden = !visible;
-        if (visible) return;
-
+        if (!visible && this.onHide) this.onHide();
+    }
+    public reset() {
         this.generation++;
         this.endDrag();
         this.items = [[], []];
@@ -160,8 +162,9 @@ export class NCShopWnd {
         this.hoveredIndices.fill(-1);
         this.heldSide = this.hoveredSide = this.hoveredIndex = -1;
         this.lists.forEach(list => { list.content.replaceChildren(); list.setContentHeight(0); });
+        this.drawAmount(this.money, "0", 350);
+        this.drawTotal();
         if (this.onHideTooltip) this.onHideTooltip();
-        if (this.onHide) this.onHide();
     }
 
     public async show(isSell: boolean, money: number, items: ShopItem_T[], selectedItems: ShopItem_T[] = []) {

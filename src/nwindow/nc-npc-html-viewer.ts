@@ -22,6 +22,7 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
     public onBypass: (command: string) => void = null;
     public onLink: (path: string) => void = null;
     public onFile: (path: string) => void = null;
+    public onConfirm: (text: string, onOk: () => void) => void = null;
     public onClose: () => void = null;
     protected readonly layer: NDomLayer;
     protected readonly frame: HTMLDivElement;
@@ -57,6 +58,7 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
         this.viewer.onBypass = command => { if (this.onBypass) this.onBypass(command); };
         this.viewer.onLink = path => { if (this.onLink) this.onLink(path); };
         this.viewer.onFile = path => { if (this.onFile) this.onFile(path); };
+        this.viewer.onConfirm = (text, onOk) => this.onConfirm(text, onOk);
         this.viewer.onHide = () => this.hide();
     }
 

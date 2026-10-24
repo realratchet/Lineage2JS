@@ -31,7 +31,7 @@ function formatPercent(value: number) {
 }
 
 export class NCPetWnd {
-    public static getTextures(): string[] { return [TEX_BACK + "1", TEX_BACK + "2", TEX_BACK + "31", TEX_BACK + "32", TEX_BACK + "33", TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_FOLDED, TEX_CAPTION, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, TEX_EQUIPPED, TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI.NWindow.Number", ...arrBars, ...arrWeight, ...NCFrameCtrl.getTextures(), ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
+    public static getTextures(): string[] { return [`${TEX_BACK}1`, `${TEX_BACK}2`, `${TEX_BACK}31`, `${TEX_BACK}32`, `${TEX_BACK}33`, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_FOLDED, TEX_CAPTION, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, TEX_EQUIPPED, TEX_BUTTON, TEX_BUTTON_DOWN, "L2UI.NWindow.Number", ...arrBars, ...arrWeight, ...NCFrameCtrl.getTextures(), ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
     public readonly inventoryGrid: NDomScrollPane_T;
     public onUseItem: (objectId: number) => void = null;
@@ -80,8 +80,8 @@ export class NCPetWnd {
             event.stopImmediatePropagation();
             this.setVisible(false);
         }, true);
-        layer.tile(this.element, 0, 20, 256, 95, 0, 0, 256, 95, TEX_BACK + "1");
-        layer.tile(this.element, 0, 115, 256, 23, 0, 0, 256, 23, TEX_BACK + "2");
+        layer.tile(this.element, 0, 20, 256, 95, 0, 0, 256, 95, `${TEX_BACK}1`);
+        layer.tile(this.element, 0, 115, 256, 23, 0, 0, 256, 23, `${TEX_BACK}2`);
         this.bars = [[35, 51], [35, 65], [35, 79], [35, 93], [156, 51]].map(([x, y], index) => layer.tile(this.element, x, y, 0, 12, 0, 0, 8, 12, index === 4 ? arrWeight[0] : arrBars[index]));
         this.values = this.createValues(this.element, 256, 115);
         this.rename = layer.button(this.element, 167, 28, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(497), () => { if (this.onRename) this.onRename(); });
@@ -90,7 +90,7 @@ export class NCPetWnd {
         for (let index = 0; index < 3; index++) {
             const pane = layer.createWindow(0, 138, 256, 91, this.element);
 
-            layer.tile(pane, 0, 0, 256, 91, 0, 0, 256, 91, TEX_BACK + (31 + index));
+            layer.tile(pane, 0, 0, 256, 91, 0, 0, 256, 91, `${TEX_BACK}${31 + index}`);
             this.panes.push(pane);
             this.tabs.push(layer.tab(this.element, 12 + index * 74, 115, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(491 + index), null, () => this.selectTab(index)));
         }

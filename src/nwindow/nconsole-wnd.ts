@@ -34,7 +34,7 @@ import { encodeCrestImage, PLEDGE_CREST_WIDTH, PLEDGE_CREST_HEIGHT, PLEDGE_LARGE
 import NCTooltip from "./nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { IEngineComponent } from "../game/components";
-import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type ChatFilterWndView_T, type CommandInfoWndView_T, type CommunityWndView_T, type DeliverWndView_T, type DialogBoxView_T, type FishViewportWndView_T, type GMClanWndView_T, type GMDetailStatusWndView_T, type GMInventoryWndView_T, type GMMagicSkillWndView_T, type GMQuestWndView_T, type GMStoreWndView_T, type GMWndView_T, type GMSnoopWndView_T, type GMPetitionWndView_T, type HennaInfoWndView_T, type HennaListWndView_T, type HeroTowerWndView_T, type InventoryWndView_T, type ItemEnchantWndView_T, type LoadingWndView_T, type LobbyWndView_T, type LoginServerWndView_T, type LoginWndView_T, type ReplayWndView_T, type MacroWndView_T, type MainWndView_T, type ManorShopWndView_T, type MapWndView_T, type TownMapWndView_T, type MatchWndView_T, type MenuWndView_T, type MessageWndView_T, type NPCHtmlViewerView_T, type OlympiadControlWndView_T, type OlympiadPlayerWndView_T, type OlympiadTargetWndView_T, type OptionWndView_T, type PartyRoomMakingWndView_T, type PartyRoomWndView_T, type PawnCreateWndView_T, type PetStatusWndView_T, type PetWndView_T, type PetitionBeginWndView_T, type PetitionWndView_T, type PetitionFeedBackWndView_T, type PlayerStatusWndView_T, type PledgePowerWndView_T, type PrivateBuyWndView_T, type PrivateShopWndView_T, type RecipeBookWndView_T, type RecipeBuyListWndView_T, type RecipeBuyManufactureWndView_T, type RecipeManufactureWndView_T, type RecipeShopWndView_T, type RecipeTreeWndView_T, type RecordMarkView_T, type RestartMenuWndView_T, type SSQMainBoardView_T, type SelectDeliverWndView_T, type ShopWndView_T, type ShortCutWndView_T, type SkillWndView_T, type StoreWndView_T, type SummonedWndView_T, type SystemMenuWndView_T, type TargetStatusWndView_T, type TradeWndView_T, type TrainWndView_T, type VIPShopWndView_T, type ZoneTitleWndView_T } from "./skin";
+import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type MessengerWndView_T, type ChatFilterWndView_T, type CommandInfoWndView_T, type CommunityWndView_T, type DeliverWndView_T, type DialogBoxView_T, type FishViewportWndView_T, type GMClanWndView_T, type GMDetailStatusWndView_T, type GMInventoryWndView_T, type GMMagicSkillWndView_T, type GMQuestWndView_T, type GMStoreWndView_T, type GMWndView_T, type GMSnoopWndView_T, type GMPetitionWndView_T, type HennaInfoWndView_T, type HennaListWndView_T, type HeroTowerWndView_T, type InventoryWndView_T, type ItemEnchantWndView_T, type LoadingWndView_T, type LobbyWndView_T, type LoginServerWndView_T, type LoginWndView_T, type ReplayWndView_T, type MacroWndView_T, type MainWndView_T, type ManorShopWndView_T, type MapWndView_T, type TownMapWndView_T, type MatchWndView_T, type MenuWndView_T, type MessageWndView_T, type NPCHtmlViewerView_T, type OlympiadControlWndView_T, type OlympiadPlayerWndView_T, type OlympiadTargetWndView_T, type OptionWndView_T, type PartyRoomMakingWndView_T, type PartyRoomWndView_T, type PawnCreateWndView_T, type PetStatusWndView_T, type PetWndView_T, type PetitionBeginWndView_T, type PetitionWndView_T, type PetitionFeedBackWndView_T, type PartyWndView_T, type CalcWndView_T, type TutorialViewerWndView_T, type TutorialBtnView_T, type SiegeInfoWndView_T, type ManorInfoWndView_T, type ManorSeedSettingWndView_T, type ManorCropSettingWndView_T, type ManorCropSellWndView_T, type XMasSealWndView_T, type PlayerStatusWndView_T, type PledgePowerWndView_T, type PrivateBuyWndView_T, type PrivateShopWndView_T, type RecipeBookWndView_T, type RecipeBuyListWndView_T, type RecipeBuyManufactureWndView_T, type RecipeManufactureWndView_T, type RecipeShopWndView_T, type RecipeTreeWndView_T, type RecordMarkView_T, type RestartMenuWndView_T, type SSQMainBoardView_T, type SelectDeliverWndView_T, type ShopWndView_T, type ShortCutWndView_T, type SkillWndView_T, type StoreWndView_T, type SummonedWndView_T, type SystemMenuWndView_T, type TargetStatusWndView_T, type TradeWndView_T, type TrainWndView_T, type VIPShopWndView_T, type ZoneTitleWndView_T } from "./skin";
 import type GameManager from "../game/game-manager";
 
 export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, hasQuestMark: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, clanCrestId: number, allyCrestId: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
@@ -82,6 +82,7 @@ function getTitleColor(plate: Nameplate_T): number { // DrawTargetName 0x1051e74
 
 type Screen_T = "login" | "replay" | "servers" | "lobby" | "create" | "loading" | "world";
 type SkillPointerDrag_T = { type: "skill" | "action", id: number, pointerId: number, icon: string, button: HTMLElement, isDragging: boolean };
+type WindowGroupEntry_T = { element: HTMLElement, modalIndex: number };
 
 function getEquipmentSlot(bodyPart: number, objectId: number, paperdoll: number[]): number {
     if (bodyPart & 0x6) {
@@ -103,6 +104,16 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected layer: NDomLayer;
     protected playerStatusWnd: PlayerStatusWndView_T = null;
     protected petStatusWnd: PetStatusWndView_T = null;
+    protected partyWnd: PartyWndView_T = null;
+    protected calcWnd: CalcWndView_T = null;
+    protected tutorialViewerWnd: TutorialViewerWndView_T = null;
+    protected tutorialBtn: TutorialBtnView_T = null;
+    protected siegeInfoWnd: SiegeInfoWndView_T = null;
+    protected manorInfoWnd: ManorInfoWndView_T = null;
+    protected manorSeedSettingWnd: ManorSeedSettingWndView_T = null;
+    protected manorCropSettingWnd: ManorCropSettingWndView_T = null;
+    protected manorCropSellWnd: ManorCropSellWndView_T = null;
+    protected xmasSealWnd: XMasSealWndView_T = null;
     protected summonedStatusWnd: PetStatusWndView_T = null;
     protected abnormalStatusWnd: AbnormalStatusWndView_T = null;
     protected targetStatusWnd: TargetStatusWndView_T = null;
@@ -110,6 +121,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected readonly skillCoolTimes = new Map<string, NCCoolTimeIcon>();
     protected shortCutWnd: ShortCutWndView_T = null;
     protected chatWnd: ChatWndView_T = null;
+    protected messengerWnd: MessengerWndView_T = null;
     protected chatFilterWnd: ChatFilterWndView_T = null;
     protected loginWnd: LoginWndView_T = null;
     protected replayWnd: ReplayWndView_T = null;
@@ -169,7 +181,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected olympiadTargetWnd: OlympiadTargetWndView_T = null;
     protected windowGroup = 0;
     protected savedLandmarkEnabled: boolean = null;
-    protected readonly savedWindowGroups: HTMLElement[][] = [[], [], []];
+    protected readonly savedWindowGroups: WindowGroupEntry_T[][] = [[], [], []];
     protected deliverWnd: DeliverWndView_T = null;
     protected selectDeliverWnd: SelectDeliverWndView_T = null;
     protected inventory: GamePackets.InventoryItem_T[] = [];
@@ -256,8 +268,12 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         window.addEventListener("keydown", replayInput, true);
         window.addEventListener("keyup", replayInput, true);
-        window.addEventListener("keydown", event => { // NConsole 0x1007610a: Escape requests target cancellation before dispatching to the focused window.
+        window.addEventListener("keydown", event => { // UL2Console 0x100760c4..0x100760e1.
+            if (this.screen === "world") this.shortCutWnd.onKeyDown(event);
+        }, true);
+        window.addEventListener("keydown", event => { // UL2Console 0x100760e7..0x10076126.
             if (event.key !== "Escape" || this.screen !== "world") return;
+            if (asset.playerController.scriptProperties.get("bCameraWalking")) return;
 
             event.preventDefault();
             network.cancelTarget();
@@ -283,7 +299,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         window.addEventListener("keydown", event => {
             const target = event.target as HTMLElement;
 
-            if (this.options.game.enterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
+            if (asset.playerController.isEnterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
             if (this.chatWnd.isInputFocused() || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
             if (event.key === " " && target.closest('[role="checkbox"], [role="tab"], [role="button"], [role="combobox"]')) return;
 
@@ -311,6 +327,19 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         });
         window.addEventListener("keydown", event => {
             const target = event.target as HTMLElement;
+
+            if (this.screen === "world" && event.code === "KeyY") {
+                if (event.altKey) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (this.windowGroup === 0 && !this.layer.getModalWindows().length) this.toggleMessenger();
+                } else if (!event.defaultPrevented && asset.playerController.isEnterChatting && this.windowGroup === 0 && target.tagName !== "INPUT" && target.tagName !== "TEXTAREA" && !target.isContentEditable && !this.layer.getModalWindows().length) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.toggleMessenger();
+                }
+                return;
+            }
 
             if (this.screen !== "world" || !event.altKey || !["KeyI", "KeyT", "KeyK", "KeyC", "KeyU", "KeyN", "KeyV", "KeyM", "KeyX"].includes(event.code) || event.repeat || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
@@ -344,6 +373,22 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public getStrings() { return this.strings; }
+    public addPartyMember(member: GamePackets.PartyMember_T, leaderId: number, lootType: number) { this.partyWnd.addMember(member, leaderId, lootType); }
+    public updatePartyMember(member: GamePackets.PartyMember_T) { this.partyWnd.updateMember(member); }
+    public deletePartyMember(name: string) { this.partyWnd.deleteMember(name); }
+    public deleteAllPartyMembers() { this.partyWnd.deleteAll(); }
+    public showCalculator(itemId: number) { if (itemId === 4393) this.calcWnd.show(); } // NWindow 0x10069840 only opens for the Calculator item
+    public async showXMasSeal(itemId: number) { await this.xmasSealWnd.toggle(itemId); }
+    public showSiegeInfo(info: GamePackets.SiegeInfo_T) { this.siegeInfoWnd.show(info, this.manNetwork.actors.userInfo.clanId); }
+    public showManorSeedInfo(info: GamePackets.ManorSeedInfo_T, manors: GamePackets.ManorEntry_T[]) { this.manorInfoWnd.showSeedInfo(info, manors); }
+    public showManorCropInfo(info: GamePackets.ManorCropInfo_T, manors: GamePackets.ManorEntry_T[]) { this.manorInfoWnd.showCropInfo(info, manors); }
+    public showManorSeedSetting(settings: GamePackets.ManorSeedSettings_T) { this.manorSeedSettingWnd.show(settings); }
+    public showManorCropSetting(settings: GamePackets.ManorCropSettings_T) { this.manorCropSettingWnd.show(settings); }
+    public showManorDefaultInfo(info: GamePackets.ManorDefaultInfo_T) { this.manorInfoWnd.showDefaultInfo(info); }
+    public showManorSellCropList(info: GamePackets.ManorSellCropList_T) { this.manorCropSellWnd.showSellCropList(info); }
+    public showManorProcureCropDetail(detail: GamePackets.ManorProcureCropDetail_T) { this.manorCropSellWnd.changeWnd.showDetail(detail); }
+    public addSiegeClans(isDefender: boolean, list: GamePackets.SiegeClanList_T) { this.siegeInfoWnd.addClans(isDefender, list.clans); }
+
     public setPetInfo(info: GamePackets.PetStatus_T) { this.petWnd.setInfo(info); this.summonedWnd.setInfo(info); this.petStatusWnd.setInfo(info); this.summonedStatusWnd.setInfo(info); }
 
     public showPetStatus(statusType: number) {
@@ -354,7 +399,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public setPetStatusEffects(spelled: GamePackets.PartySpelled_T) {
-        if (spelled.type === GamePackets.PartySpelledType_T.PET) this.petStatusWnd.setEffects(spelled.effects);
+        if (spelled.type === GamePackets.PartySpelledType_T.PLAYER) this.partyWnd.setEffects(spelled.objectId, spelled.effects);
+        else if (spelled.type === GamePackets.PartySpelledType_T.PET) this.petStatusWnd.setEffects(spelled.effects);
         else if (spelled.type === GamePackets.PartySpelledType_T.SUMMON) this.summonedStatusWnd.setEffects(spelled.effects);
     }
 
@@ -488,12 +534,38 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         this.playerStatusWnd = this.skin.createPlayerStatusWnd(this.layer);
         this.petStatusWnd = this.skin.createPetStatusWnd(this.layer, 2);
+        this.partyWnd = this.skin.createPartyWnd(this.layer);
+        this.calcWnd = this.skin.createCalcWnd(this.layer);
+        this.xmasSealWnd = this.skin.createXMasSealWnd(this.layer);
+        this.siegeInfoWnd = this.skin.createSiegeInfoWnd(this.layer);
+        this.manorInfoWnd = this.skin.createManorInfoWnd(this.layer);
+        this.manorInfoWnd.onBypass = command => network.bypass(command);
+        this.manorSeedSettingWnd = this.skin.createManorSeedSettingWnd(this.layer);
+        this.manorCropSettingWnd = this.skin.createManorCropSettingWnd(this.layer);
+        for (const wnd of [this.manorSeedSettingWnd, this.manorCropSettingWnd]) {
+            wnd.setAlertHandler(text => this.dialogBox.show(text, DialogType_T.OK, null, true, 0, 0, true));
+            wnd.onConfirm = (text, onOk) => this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true);
+        }
+        this.manorSeedSettingWnd.onSubmit = (manorId, items) => network.setManorSeeds(manorId, items);
+        this.manorCropSettingWnd.onSubmit = (manorId, items) => network.setManorCrops(manorId, items);
+        this.manorCropSellWnd = this.skin.createManorCropSellWnd(this.layer);
+        this.manorCropSellWnd.onBypass = command => network.bypass(command);
+        this.manorCropSellWnd.onProcure = items => network.procureCrops(items);
+        this.siegeInfoWnd.setCrestGetter((clanId, isAlly) => { const info = network.community.pledgeInfos.get(clanId); return info ? isAlly ? info.allyCrest : info.crest : null; });
+        this.siegeInfoWnd.onRequestList = (castleId, isDefender) => isDefender ? network.requestSiegeDefenderList(castleId) : network.requestSiegeAttackerList(castleId);
+        this.siegeInfoWnd.onParticipate = (castleId, isDefender) => this.siegeConfirm(isDefender ? 668 : 667, this.strings.residences[castleId], () => network.requestJoinSiege(castleId, !isDefender, true)); // 0x1010ac40
+        this.siegeInfoWnd.onCancelApplication = (castleId, isDefender) => this.siegeConfirm(669, this.strings.residences[castleId], () => network.requestJoinSiege(castleId, !isDefender, false)); // 0x1010ad20
+        this.siegeInfoWnd.onApprove = (castleId, clan) => this.siegeConfirm(671, clan.name, () => network.confirmSiegeWaitingList(castleId, clan.clanId, true)); // 0x1010ae00
+        this.siegeInfoWnd.onRefuse = (castleId, clan) => this.siegeConfirm(670, clan.name, () => network.confirmSiegeWaitingList(castleId, clan.clanId, false)); // 0x1010af20
         this.summonedStatusWnd = this.skin.createPetStatusWnd(this.layer, 1);
         this.abnormalStatusWnd = this.skin.createAbnormalStatusWnd(this.layer);
         this.targetStatusWnd = this.skin.createTargetStatusWnd(this.layer);
         this.restartMenuWnd = this.skin.createRestartMenuWnd(this.layer);
         this.shortCutWnd = this.skin.createShortCutWnd(this.layer, this.skillCoolTimes);
         this.chatWnd = this.skin.createChatWnd(this.layer);
+        this.messengerWnd = this.skin.createMessengerWnd(this.layer);
+        this.messengerWnd.onSend = (peer, message) => this.manNetwork.community.sendFriendMessage(peer, message);
+        this.chatWnd.onMessenger = () => this.toggleMessenger();
         this.chatFilterWnd = this.skin.createChatFilterWnd(this.layer);
         this.chatWnd.onOptions = index => this.chatFilterWnd.show(index, this.chatWnd.getFilter(index));
         this.chatFilterWnd.onApply = (index, filter) => this.chatWnd.setFilter(index, filter);
@@ -527,6 +599,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.chatWnd.setSystemMessageFilters(this.options.game.systemMsgWndDamage, this.options.game.systemMsgWndExpendableItem);
 
         await network.getParent().getComponent("ui").createStatsWindow(this.layer);
+
+        const consoleWindows = new Set(this.layer.root.children);
 
         this.loginWnd = this.skin.createLoginWnd(this.layer);
         this.loginWnd.onLogin = (account, password) => void network.connectLogin(account, password);
@@ -568,14 +642,24 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.messageWnd = this.skin.createMessageWnd(this.layer);
         this.dialogBox = this.skin.createDialogBox(this.layer);
         this.yesNoDialogBox = this.skin.createDialogBox(this.layer);
+        const godWindows = new Set(Array.from(this.layer.root.children).filter(wnd => !consoleWindows.has(wnd)));
+
         this.npcHtmlViewer = this.skin.createNPCHtmlViewer(this.layer);
         this.npcHtmlViewer.onBypass = command => network.bypass(command);
         this.npcHtmlViewer.onLink = path => network.link(path);
         this.npcHtmlViewer.onFile = path => { void this.loadHtmlFile(this.npcHtmlViewer, path); };
+        this.npcHtmlViewer.onConfirm = (text, onOk) => this.confirmLink(text, onOk);
+        this.tutorialViewerWnd = this.skin.createTutorialViewerWnd(this.layer);
+        this.tutorialViewerWnd.onLink = link => network.tutorialLink(link);
+        this.tutorialViewerWnd.onPassCmd = command => network.tutorialPassCmd(command);
+        this.tutorialViewerWnd.onFile = path => { void this.loadHtmlFile(this.tutorialViewerWnd, path); };
+        this.tutorialBtn = this.skin.createTutorialBtn(this.layer);
+        this.tutorialBtn.onPress = id => network.tutorialQuestionMark(id);
         this.npcItemHtmlViewer = this.skin.createNPCHtmlViewer(this.layer);
         this.npcItemHtmlViewer.onBypass = command => network.bypass(command);
         this.npcItemHtmlViewer.onLink = path => network.link(path);
         this.npcItemHtmlViewer.onFile = path => { void this.loadHtmlFile(this.npcItemHtmlViewer, path); };
+        this.npcItemHtmlViewer.onConfirm = (text, onOk) => this.confirmLink(text, onOk);
         this.communityWnd = this.skin.createCommunityWnd(this.layer);
         this.communityWnd.onRequest = () => network.showBoard();
         this.communityWnd.onAction = target => this.communityWnd.viewer.dispatchCommand(target);
@@ -584,6 +668,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.communityWnd.viewer.onVariableError = id => this.clanError(id);
         this.communityWnd.viewer.isInvalidVariableName = value => !this.nwindow.canvas.hasGlyphs(value);
         this.communityWnd.viewer.onLink = path => network.link(path);
+        this.communityWnd.viewer.onConfirm = (text, onOk) => this.confirmLink(text, onOk);
         this.communityWnd.viewer.onFile = async path => {
             const html = await this.manNetwork.getParent().getComponent("asset").getL2Text(path.replace(/^\.\.[\\/]L2text[\\/]/i, ""));
 
@@ -1096,7 +1181,11 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.macroWnd.onDrop = (id, x, y) => this.registerSkillDrop("macro", id, x, y);
         this.zoneTitleWnd = this.skin.createZoneTitleWnd(this.layer);
         this.recordMark = this.skin.createRecordMark(this.layer);
+        const beforeOptions = new Set(this.layer.root.children);
+
         this.optionWnd = this.skin.createOptionWnd(this.layer);
+        for (const wnd of this.layer.root.children)
+            if (!beforeOptions.has(wnd)) godWindows.add(wnd);
         this.optionWnd.getOptions = () => this.getGameOptions();
         this.optionWnd.onApply = options => this.setGameOptions(options);
         this.optionWnd.getAudioOptions = () => this.getAudioOptions();
@@ -1162,13 +1251,15 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             }
         };
 
+        godWindows.add(network.getParent().getComponent("ui").getStatsWindow());
+        this.layer.setConsoleWindows(Array.from(this.layer.root.children).filter(wnd => !godWindows.has(wnd)) as HTMLElement[]);
         this.placeScreens();
         this.show(null);
     }
 
-    protected getDOMWindows() { return [this.loginWnd, this.replayWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.npcItemHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.ssqMainBoard, this.itemEnchantWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.fishViewportWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.townMapWnd, this.macroWnd, this.systemMenuWnd, this.optionWnd, this.zoneTitleWnd, this.recordMark, this.messageWnd, this.dialogBox, this.yesNoDialogBox, this.playerStatusWnd, this.petStatusWnd, this.summonedStatusWnd, this.abnormalStatusWnd, this.targetStatusWnd, this.restartMenuWnd, this.shortCutWnd, this.chatWnd, this.chatFilterWnd, this.petitionBeginWnd, this.petitionWnd, this.petitionFeedBackWnd, this.gmPetitionWnd, ...this.gmSnoopWnds, ...this.olympiadPlayerWnds, ...this.olympiadAbnormalWnds, this.olympiadTargetWnd]; }
+    protected getDOMWindows() { return [this.loginWnd, this.replayWnd, this.loginServerWnd, this.lobbyWnd, this.pawnCreateWnd, this.loadingWnd, this.npcHtmlViewer, this.tutorialViewerWnd, this.tutorialBtn, this.npcItemHtmlViewer, this.communityWnd, this.helpWnd, this.inventoryWnd, this.tradeWnd, this.shopWnd, this.manorShopWnd, this.recipeBookWnd, this.recipeManufactureWnd, this.recipeTreeWnd, this.recipeShopWnd, this.recipeBuyListWnd, this.recipeBuyManufactureWnd, this.hennaListWnd, this.hennaInfoWnd, this.ssqMainBoard, this.itemEnchantWnd, this.matchWnd, this.partyRoomMakingWnd, this.partyRoomWnd, this.heroTowerWnd, this.fishViewportWnd, this.commandInfoWnd, this.trainWnd, this.gmSkillWnd, this.gmInventoryWnd, this.gmStoreWnd, this.gmQuestWnd, this.gmDetailWnd, this.gmClanWnd, this.gmWnd, this.olympiadControlWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.vipShopWnd, this.selectDeliverWnd, this.menuWnd, this.mainWnd, this.mapWnd, this.townMapWnd, this.macroWnd, this.systemMenuWnd, this.optionWnd, this.zoneTitleWnd, this.recordMark, this.messageWnd, this.dialogBox, this.yesNoDialogBox, this.playerStatusWnd, this.petStatusWnd, this.partyWnd, this.calcWnd, this.siegeInfoWnd, this.manorInfoWnd, this.manorSeedSettingWnd, this.manorCropSettingWnd, this.manorCropSellWnd, this.manorCropSellWnd.changeWnd, this.xmasSealWnd, this.summonedStatusWnd, this.abnormalStatusWnd, this.targetStatusWnd, this.restartMenuWnd, this.shortCutWnd, this.chatWnd, this.messengerWnd, this.chatFilterWnd, this.petitionBeginWnd, this.petitionWnd, this.petitionFeedBackWnd, this.gmPetitionWnd, ...this.gmSnoopWnds, ...this.olympiadPlayerWnds, ...this.olympiadAbnormalWnds, this.olympiadTargetWnd]; }
 
-    protected getSavedWindows(): [string, HTMLElement][] { return [["DebugStatsWnd", this.manNetwork.getParent().getComponent("ui").getStatsWindow()], ["InventoryWnd", this.inventoryWnd.element], ["MainWnd", this.mainWnd.element], ["MenuWnd", this.menuWnd.element], ["SystemMenuWnd", this.systemMenuWnd.element], ["OptionWnd", this.optionWnd.element], ["MapWnd", this.mapWnd.element], ["TownMapWnd", this.townMapWnd.element], ["MacroWnd", this.macroWnd.element], ["CommunityWnd", this.communityWnd.element], ["PetWnd", this.petWnd.element], ["SummonedWnd", this.summonedWnd.element], ["PledgePowerWnd", this.pledgePowerWnd.element], ["NPCHtmlViewer", this.npcHtmlViewer.element], ["NPCItemHtmlViewer", this.npcItemHtmlViewer.element], ["HelpHtmlViewer", this.helpWnd.element], ["TradeWnd", this.tradeWnd.element], ["ShopWnd", this.shopWnd.element], ["PreviewShopWnd", this.previewShopWnd.element], ["ManorShopWnd", this.manorShopWnd.element], ["StoreWnd", this.storeWnd.element], ["DeliverWnd", this.deliverWnd.element], ["SelectDeliverWnd", this.selectDeliverWnd.element], ["PrivateShopWnd", this.privateShopWnd.element], ["PrivateBuyWnd", this.privateBuyWnd.element], ["VIPShopWnd", this.vipShopWnd.element], ["RecipeBookWnd", this.recipeBookWnd.element], ["RecipeManufactureWnd", this.recipeManufactureWnd.element], ["RecipeBuyManufactureWnd", this.recipeBuyManufactureWnd.element], ["RecipeTreeWnd", this.recipeTreeWnd.element], ["RecipeShopWnd", this.recipeShopWnd.element], ["RecipeBuyListWnd", this.recipeBuyListWnd.element], ["HennaListWnd", this.hennaListWnd.element], ["HennaInfoWnd", this.hennaInfoWnd.element], ["SSQMainBoard", this.ssqMainBoard.element], ["ItemEnchantWnd", this.itemEnchantWnd.element], ["MatchWnd", this.matchWnd.element], ["PartyRoomWnd", this.partyRoomWnd.element], ["HeroTowerWnd", this.heroTowerWnd.element], ["TrainWnd", this.trainWnd.element], ["FishViewportWnd", this.fishViewportWnd.element], ["CommandInfoWnd", this.commandInfoWnd.element], ["OlympiadControlWnd", this.olympiadControlWnd.element], ["GMWnd", this.gmWnd.element], ["GMMagicSkillWnd", this.gmSkillWnd.element], ["GMInventoryWnd", this.gmInventoryWnd.element], ["GMStoreWnd", this.gmStoreWnd.element], ["GMQuestWnd", this.gmQuestWnd.element], ["GMDetailStatusWnd", this.gmDetailWnd.element], ["GMClanWnd", this.gmClanWnd.element], ["PlayerStatusWnd", this.playerStatusWnd.element], ["PetStatusWnd", this.petStatusWnd.element], ["SummonedStatusWnd", this.summonedStatusWnd.element], ["AbnormalStatusWnd", this.abnormalStatusWnd.element], ["TargetStatusWnd", this.targetStatusWnd.element], ["ShortCutWnd", this.shortCutWnd.element], ["ChatWnd", this.chatWnd.element], ["OlympiadPlayerWnd1", this.olympiadPlayerWnds[0].element], ["OlympiadPlayerWnd2", this.olympiadPlayerWnds[1].element], ["OlympiadAbnormalWnd1", this.olympiadAbnormalWnds[0].element], ["OlympiadAbnormalWnd2", this.olympiadAbnormalWnds[1].element], ["OlympiadTargetWnd", this.olympiadTargetWnd.element]]; }
+    protected getSavedWindows(): [string, HTMLElement][] { return [["DebugStatsWnd", this.manNetwork.getParent().getComponent("ui").getStatsWindow()], ["InventoryWnd", this.inventoryWnd.element], ["MainWnd", this.mainWnd.element], ["MenuWnd", this.menuWnd.element], ["SystemMenuWnd", this.systemMenuWnd.element], ["OptionWnd", this.optionWnd.element], ["MapWnd", this.mapWnd.element], ["TownMapWnd", this.townMapWnd.element], ["MacroWnd", this.macroWnd.element], ["CommunityWnd", this.communityWnd.element], ["PetWnd", this.petWnd.element], ["SummonedWnd", this.summonedWnd.element], ["PledgePowerWnd", this.pledgePowerWnd.element], ["NPCHtmlViewer", this.npcHtmlViewer.element], ["NPCItemHtmlViewer", this.npcItemHtmlViewer.element], ["HelpHtmlViewer", this.helpWnd.element], ["TradeWnd", this.tradeWnd.element], ["ShopWnd", this.shopWnd.element], ["PreviewShopWnd", this.previewShopWnd.element], ["ManorShopWnd", this.manorShopWnd.element], ["StoreWnd", this.storeWnd.element], ["DeliverWnd", this.deliverWnd.element], ["SelectDeliverWnd", this.selectDeliverWnd.element], ["PrivateShopWnd", this.privateShopWnd.element], ["PrivateBuyWnd", this.privateBuyWnd.element], ["VIPShopWnd", this.vipShopWnd.element], ["RecipeBookWnd", this.recipeBookWnd.element], ["RecipeManufactureWnd", this.recipeManufactureWnd.element], ["RecipeBuyManufactureWnd", this.recipeBuyManufactureWnd.element], ["RecipeTreeWnd", this.recipeTreeWnd.element], ["RecipeShopWnd", this.recipeShopWnd.element], ["RecipeBuyListWnd", this.recipeBuyListWnd.element], ["HennaListWnd", this.hennaListWnd.element], ["HennaInfoWnd", this.hennaInfoWnd.element], ["SSQMainBoard", this.ssqMainBoard.element], ["ItemEnchantWnd", this.itemEnchantWnd.element], ["MatchWnd", this.matchWnd.element], ["PartyRoomWnd", this.partyRoomWnd.element], ["HeroTowerWnd", this.heroTowerWnd.element], ["TrainWnd", this.trainWnd.element], ["FishViewportWnd", this.fishViewportWnd.element], ["CommandInfoWnd", this.commandInfoWnd.element], ["OlympiadControlWnd", this.olympiadControlWnd.element], ["GMWnd", this.gmWnd.element], ["GMMagicSkillWnd", this.gmSkillWnd.element], ["GMInventoryWnd", this.gmInventoryWnd.element], ["GMStoreWnd", this.gmStoreWnd.element], ["GMQuestWnd", this.gmQuestWnd.element], ["GMDetailStatusWnd", this.gmDetailWnd.element], ["GMClanWnd", this.gmClanWnd.element], ["PlayerStatusWnd", this.playerStatusWnd.element], ["PetStatusWnd", this.petStatusWnd.element], ["PartyWnd", this.partyWnd.element], ["CalcWnd", this.calcWnd.element], ["SiegeInfoMainWnd", this.siegeInfoWnd.element], ["ManorInfoWnd", this.manorInfoWnd.element], ["ManorSeedInfoSettingWnd", this.manorSeedSettingWnd.element], ["ManorCropInfoSettingWnd", this.manorCropSettingWnd.element], ["ManorCropSellWnd", this.manorCropSellWnd.element], ["ManorCropSellChangeWnd", this.manorCropSellWnd.changeWnd.element], ["XMasSealWnd", this.xmasSealWnd.element], ["SummonedStatusWnd", this.summonedStatusWnd.element], ["AbnormalStatusWnd", this.abnormalStatusWnd.element], ["TargetStatusWnd", this.targetStatusWnd.element], ["ShortCutWnd", this.shortCutWnd.element], ["ChatWnd", this.chatWnd.element], ["MessengerWnd", this.messengerWnd.element], ["OlympiadPlayerWnd1", this.olympiadPlayerWnds[0].element], ["OlympiadPlayerWnd2", this.olympiadPlayerWnds[1].element], ["OlympiadAbnormalWnd1", this.olympiadAbnormalWnds[0].element], ["OlympiadAbnormalWnd2", this.olympiadAbnormalWnds[1].element], ["OlympiadTargetWnd", this.olympiadTargetWnd.element]]; }
 
     protected placeScreens() {
         if (!this.loginWnd) return;
@@ -1200,7 +1291,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         else this.messageWnd.show(text);
     }
 
-    protected confirm(text: string, onYes: () => void, messageId = 0) { this.dialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
+    protected siegeConfirm(id: number, name: string, onOk: () => void) { this.dialogBox.show(this.formatSystemMessage(id, name), DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true, 0, id); }
+    protected confirmLink(text: string, onOk: () => void) { this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }); }
+    protected confirm(text: string, onYes: () => void, messageId = 0) {this.dialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
     public showNotice(messageId: number) { this.dialogBox.show(this.nwindow.getSystemMessage(messageId), DialogType_T.OK, null, true, 0, messageId); }
 
     public playSystemMessageSound(id: number) { this.nwindow.playSystemMessageSound(id); }
@@ -1222,7 +1315,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     protected async showServerHelp(name: string) { await this.loginServerWnd.serverInfo.viewer.setHtml(await this.manNetwork.getParent().getComponent("asset").getL2Text(name)); }
-    protected async loadHtmlFile(wnd: NPCHtmlViewerView_T, path: string) {
+    protected async loadHtmlFile(wnd: Pick<NPCHtmlViewerView_T, "isVisible" | "show">, path: string) {
         const html = await this.manNetwork.getParent().getComponent("asset").getL2Text(path.replace(/^\.\.[\\/]L2text[\\/]/i, ""));
 
         if (this.screen === "world" && wnd.isVisible()) await wnd.show(html);
@@ -1334,6 +1427,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         this.areHudWindowsAdded = true;
         this.petStatusWnd.onTargetAction = this.summonedStatusWnd.onTargetAction = (objectId, shift) => this.manNetwork.requestPetAction(objectId, shift);
+        this.partyWnd.onAction = (objectId, shift, ctrl) => this.manNetwork.requestPartyMemberAction(objectId, shift, ctrl);
+        this.partyWnd.onAssist = objectId => this.manNetwork.requestPartyMemberTarget(objectId);
         void this.nwindow.canvas.loadTextures([TEX_TARGET_BRACKET, TEX_MOUSE_TARGET_BRACKET, ...arrGaugeTextures, ...arrGaugeBack, ...arrBalloonTextures]);
     }
 
@@ -1362,8 +1457,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         else if (type > 0) void this.npcItemHtmlViewer.showPacket(html, this.strings.itemNames[type]);
     }
 
-    public showHtml(html: string) { void this.npcHtmlViewer.show(html); }
-    public hideHtml() { this.npcHtmlViewer.hide(); }
+    public showTutorialHtml(html: string) { void this.tutorialViewerWnd.show(html); }
+    public hideTutorialHtml() { this.tutorialViewerWnd.hide(); }
+    public showTutorialQuestionMark(id: number) { this.tutorialBtn.show(id, parseInt(this.chatWnd.element.style.top) - (this.options.game.systemMsgWnd ? 130 : 0)); }
     public setReplayRecording(visible: boolean) { this.recordMark.setVisible(visible && this.screen === "world"); }
 
     public tick(deltaTime: number) {
@@ -1389,6 +1485,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.recordMark.update(performance.now() / 1000, this.manNetwork.getReplayRecordingTime());
         this.communityWnd.viewer.tick(deltaSeconds);
         this.npcHtmlViewer.tick(deltaSeconds);
+        this.tutorialViewerWnd.tick(deltaSeconds);
+        this.tutorialBtn.tick(deltaTime);
         this.npcItemHtmlViewer.tick(deltaSeconds);
         this.helpWnd.tick(deltaSeconds);
         this.petitionBeginWnd.tick(deltaSeconds);
@@ -1546,6 +1644,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         }
     }
 
+    public setRegenStatus(count: number, period: number, tick: number) { this.playerStatusWnd.setRegenStatus(count, period, tick); }
+
     public setupGauge(color: GamePackets.GaugeColor_T, remaining: number, maximum: number) {
         if (!arrGaugeTextures[color]) throw new Error(`Unknown gauge color '${color}'.`);
 
@@ -1625,6 +1725,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.abnormalStatusWnd.setShortEffect(null);
         this.abnormalStatusWnd.setVisible(false);
         this.npcHtmlViewer.hide();
+        this.tutorialViewerWnd.hide();
+        this.tutorialBtn.hide();
         this.npcItemHtmlViewer.hide();
         this.communityWnd.hide();
         this.helpWnd.hide();
@@ -1695,12 +1797,26 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.optionWnd.setVisible(false);
         this.macroWnd.hide();
         this.playerStatusWnd.setVisible(false);
+        this.partyWnd.deleteAll();
+        this.calcWnd.setVisible(false);
+        this.siegeInfoWnd.setVisible(false);
+        this.manorInfoWnd.setVisible(false);
+        this.manorSeedSettingWnd.setVisible(false);
+        this.manorCropSettingWnd.setVisible(false);
+        this.manorCropSellWnd.setVisible(false);
+        this.manorCropSellWnd.changeWnd.setVisible(false);
+        this.xmasSealWnd.setVisible(false);
         this.shortCutWnd.setVisible(false);
         this.chatWnd.setVisible(false);
         this.chatFilterWnd.setVisible(false);
+        this.messengerWnd.reset();
         this.restartMenuWnd.setVisible(false);
         this.targetStatusWnd.setTarget(null);
     }
+
+    public toggleMessenger() { this.messengerWnd.setVisible(!this.messengerWnd.isVisible()); }
+    public setFriends(friends: GamePackets.FriendEntry_T[]) { this.messengerWnd.setFriends(friends); }
+    public receiveFriendMessage(result: number, peer: string, message: string) { this.messengerWnd.receiveMessage(result, peer, this.nwindow.filterText(message)); }
 
     public showSSQStatus(status: GamePackets.SSQStatus_T) { this.ssqMainBoard.show(status); }
 
@@ -1747,6 +1863,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public setStatus(info: GamePackets.UserInfo_T) {
         this.statusInfo = info;
+        this.messengerWnd.setPlayerName(info.name);
         this.trainWnd.setStatus(info);
         this.mainWnd.actionWnd.setClass(info.classId);
         this.playerStatusWnd.setStatus(info);
@@ -1796,6 +1913,12 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public setMacros(macros: GamePackets.Macro_T[]) { this.macroWnd.setMacros(macros); }
 
     protected setGroupWindowVisible(wnd: HTMLElement, isVisible: boolean) {
+        if (wnd === this.messengerWnd.folded) { this.messengerWnd.setFoldedVisible(isVisible); return; }
+        if (this.messengerWnd.setChildVisible(wnd, isVisible)) return;
+        if (wnd === this.macroWnd.editor) {
+            this.macroWnd.setEditorVisible(isVisible);
+            return;
+        }
         const owner = [...this.getDOMWindows(), this.petWnd, this.summonedWnd, this.pledgePowerWnd].find(owner => owner.element === wnd);
 
         if (owner && "setVisible" in owner) owner.setVisible(isVisible);
@@ -1810,13 +1933,20 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (group !== 0 && this.savedLandmarkEnabled === null) { this.savedLandmarkEnabled = landmark.isEnabled; landmark.isEnabled = false; }
         if (group === 0 && this.savedLandmarkEnabled !== null) { landmark.isEnabled = this.savedLandmarkEnabled; this.savedLandmarkEnabled = null; }
 
-        const saved = this.savedWindowGroups[this.windowGroup];
+        const saved = this.savedWindowGroups[this.windowGroup], modals = this.layer.getModalWindows();
 
         saved.length = 0;
-        for (const wnd of Array.from(this.layer.root.children) as HTMLElement[])
-            if (!wnd.hidden) saved.push(wnd);
-        for (const wnd of saved) this.setGroupWindowVisible(wnd, false);
-        for (const wnd of this.savedWindowGroups[group]) this.setGroupWindowVisible(wnd, true);
+        for (const wnd of this.layer.getWindows())
+            if (!wnd.hidden && !wnd.classList.contains("ndom-modal-blocker")) saved.push({ element: wnd, modalIndex: modals.indexOf(wnd) });
+        saved.sort((a, b) => a.modalIndex - b.modalIndex);
+        for (const entry of saved) {
+            this.setGroupWindowVisible(entry.element, false);
+            if (entry.modalIndex !== -1) this.layer.setModal(entry.element, false);
+        }
+        for (const entry of this.savedWindowGroups[group]) {
+            this.setGroupWindowVisible(entry.element, true);
+            if (entry.modalIndex !== -1) this.layer.setModal(entry.element, true);
+        }
         this.windowGroup = group;
         if (group === 2) {
             this.olympiadControlWnd.setVisible(true);
@@ -2268,7 +2398,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             }
         }
 
-        this.options.game = { ...this.manNetwork.getParent().getComponent("asset").userConfig.game, ...options };
+        const asset = this.manNetwork.getParent().getComponent("asset");
+
+        this.options.game = { ...asset.userConfig.game, ...options };
+        asset.playerController.isEnterChatting = this.options.game.enterChatting;
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
         this.manRender.setRenderDeco(this.options.game.renderDeco);
         this.manRender.setUseTrilinear(this.options.game.useTrilinear);

@@ -1,6 +1,7 @@
 import NetworkSession, { GMTransferPhase_T } from "./network-session";
 import NetworkActors, { type NetObject_T } from "./network-actors";
 import NetworkMovement, { tmpVehicleOrigin } from "./network-movement";
+import NetworkMonRace from "./network-mon-race";
 import NetworkCombat from "./network-combat";
 import NetworkItems from "./network-items";
 import NetworkCommunity from "./network-community";
@@ -38,6 +39,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public readonly session = new NetworkSession(this);
     public readonly actors = new NetworkActors(this);
     public readonly movement = new NetworkMovement(this);
+    public readonly monRace = new NetworkMonRace(this);
     public readonly combat = new NetworkCombat(this);
     public readonly items = new NetworkItems(this);
     public readonly community = new NetworkCommunity(this);
@@ -139,6 +141,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 break;
             }
             case CommandType_T.partymatching: this.ui.openPartyMatch(); break;
+            case CommandType_T.Invite: if (tokens.length > 1) this.community.inviteToParty(tokens.slice(1).join(" "), this.ui.getGameOptions().partyLooting); else this.useAction(ActionType_T.partyinvite); break;
+            case CommandType_T.Leave: this.useAction(ActionType_T.partyleave); break;
+            case CommandType_T.Dismiss: if (tokens.length > 1) this.community.oustPartyMember(tokens.slice(1).join(" ")); else this.useAction(ActionType_T.partydismiss); break;
+            case CommandType_T.changepartyleader: if (tokens.length > 1) this.community.changePartyLeader(tokens.slice(1).join(" ")); else this.useAction(ActionType_T.leaderchange); break;
+            case CommandType_T.vendor: this.useAction(ActionType_T.vendor); break;
+            case CommandType_T.buy: this.useAction(ActionType_T.buy); break;
+            case CommandType_T.evaluate: this.useAction(ActionType_T.commend); break;
+            case CommandType_T.friendinvite: if (tokens.length > 1) this.session.game.requestFriendInvite(tokens.slice(1).join(" ")); break;
+            case CommandType_T.friendlist: this.community.requestFriendList(); break;
+            case CommandType_T.frienddel: if (tokens.length > 1) this.community.deleteFriend(tokens.slice(1).join(" ")); break;
+            case CommandType_T.block: case CommandType_T.unblock: if (tokens.length > 1) this.community.block(type === CommandType_T.block ? GamePackets.BlockType_T.BLOCK : GamePackets.BlockType_T.UNBLOCK, tokens.slice(1).join(" ")); break;
+            case CommandType_T.blocklist: this.community.block(GamePackets.BlockType_T.BLOCKLIST); break;
+            case CommandType_T.allblock: this.community.block(GamePackets.BlockType_T.ALLBLOCK); break;
+            case CommandType_T.allunblock: this.community.block(GamePackets.BlockType_T.ALLUNBLOCK); break;
             case CommandType_T.socialhello: case CommandType_T.socialvictory: case CommandType_T.socialcharge: this.session.game.requestSocialAction(type - 19); break;
             case CommandType_T.socialno: case CommandType_T.socialyes: case CommandType_T.socialbow: case CommandType_T.socialunaware: case CommandType_T.socialwaitinga: case CommandType_T.sociallaugh: this.session.game.requestSocialAction(type - 41); break;
             case CommandType_T.socialapplause: case CommandType_T.socialdance: case CommandType_T.socialsad: this.session.game.requestSocialAction(type - 43); break;
@@ -201,6 +217,19 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         else this.session.game.action(objectId, this.manGame.getComponent("render").player.position, isShift);
 
         return true;
+    }
+
+    public requestPartyMemberAction(objectId: number, isShift: boolean, isCtrl: boolean) { // NWindow 0x1010daa0 -> 0x10071c00 / 0x100718b0
+        const player = this.manGame.getComponent("render").player;
+
+        if (isCtrl) this.session.game.attackRequest(objectId, player.position, isShift);
+        else this.session.game.action(objectId, player.position, isShift);
+    }
+
+    public requestPartyMemberTarget(objectId: number) { // NWindow 0x1010db60 -> 0x10071a60: the member's own selected target
+        const member = this.actors.objects.get(objectId), target = member && this.actors.objects.get(member.selectedId);
+
+        if (target) this.session.game.action(target.objectId, this.manGame.getComponent("render").player.position, false);
     }
 
     public requestPetAction(objectId: number, isShift: boolean) {
@@ -322,7 +351,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         for (const objectId of this.movement.riders.keys()) this.movement.endRide(objectId);
         const lifecycle = render.player.findComponent<NpcLifecycleComponent>("npcLifecycle");
 
-        if (lifecycle) lifecycle.resetDeath();
+        if (this.actors.inWorld) { // ServerClose at character select reaches here with a lobby pawn that has no script host
+            if (lifecycle) lifecycle.resetDeath();
+            for (const name of ["PhysicsVolume", "HeadVolume", "FootVolume"]) render.player.setUnrealScriptProperty(name, null); // sector volumes unload with the world
+        }
         this.manGame.getComponent("asset").playerController.setPawn(null);
 
         render.clearViewportWindowParam();
@@ -462,6 +494,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.community.xmasSealItemId = 0;
         this.actors.dice = null;
         this.community.monRace = null;
+        this.monRace.reset();
         this.community.ssqStatus.clear();
         this.community.clanHallDecoration.clear();
         this.community.siegeInfo = null;
@@ -508,7 +541,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.items.manors = [];
         this.items.manorSeedInfo = null;
         this.items.manorCropInfo = null;
-        this.items.manorDefaultCrops = [];
+        this.items.manorDefaultInfo = null;
         this.items.manorSeedSettings = null;
         this.items.manorCropSettings = null;
         this.items.manorSellCrops = null;
@@ -651,8 +684,8 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.PlaySound: void this.combat.onPlaySound(packet); break;
             case GamePackets.GameServerPacket_T.StaticObject: this.movement.onStaticObject(packet); break;
             case GamePackets.GameServerPacket_T.ShowMiniMap: this.ui.showMap(packet.d()); break;
-            case GamePackets.GameServerPacket_T.TutorialShowHtml: this.ui.showHtml(packet.S()); break;
-            case GamePackets.GameServerPacket_T.TutorialCloseHtml: this.ui.hideHtml(); break;
+            case GamePackets.GameServerPacket_T.TutorialShowHtml: this.ui.showTutorialHtml(packet.S()); break;
+            case GamePackets.GameServerPacket_T.TutorialCloseHtml: this.ui.hideTutorialHtml(); break;
             case GamePackets.GameServerPacket_T.NicknameChanged: this.community.onNicknameChanged(packet); break;
             case GamePackets.GameServerPacket_T.PledgeStatusChanged: this.community.onPledgeStatusChanged(packet); break;
             case GamePackets.GameServerPacket_T.RelationChanged: this.community.onRelationChanged(packet); break;
@@ -670,6 +703,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 for (let i = 0, count = packet.d(); i < count; i++) this.items.setShortCut(GamePackets.readShortCut(packet));
                 break;
             case GamePackets.GameServerPacket_T.ShortCutRegister: this.items.setShortCut(GamePackets.readShortCut(packet)); break;
+            case GamePackets.GameServerPacket_T.ShortCutDelete: this.items.onShortCutDelete(packet); break;
             case GamePackets.GameServerPacket_T.ManagePledgePower: this.community.onManagePledgePower(packet); break;
             case GamePackets.GameServerPacket_T.StartPledgeWar: this.community.pledgeWarStart = GamePackets.readPledgeWar(packet, true); break;
             case GamePackets.GameServerPacket_T.StopPledgeWar: this.community.pledgeWarStop = GamePackets.readPledgeWar(packet, false); break;
@@ -718,13 +752,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.ObservationReturn: this.movement.onObservationReturn(packet); break;
             case GamePackets.GameServerPacket_T.RadarControl: this.community.onRadarControl(packet); break;
             case GamePackets.GameServerPacket_T.ShowTownMap: this.community.townMap = GamePackets.readTownMap(packet); this.ui.showTownMap(this.community.townMap); break;
-            case GamePackets.GameServerPacket_T.ShowCalculator: this.community.calculatorId = packet.d(); break;
-            case GamePackets.GameServerPacket_T.ShowXMasSeal: this.community.xmasSealItemId = packet.d(); break;
+            case GamePackets.GameServerPacket_T.ShowCalculator: this.community.calculatorId = packet.d(); this.ui.showCalculator(this.community.calculatorId); break;
+            case GamePackets.GameServerPacket_T.ShowXMasSeal: this.community.xmasSealItemId = packet.d(); void this.ui.showXMasSeal(this.community.xmasSealItemId); break;
             case GamePackets.GameServerPacket_T.Dice:
                 this.actors.dice = GamePackets.readDice(packet);
                 void this.actors.onDice(this.actors.dice);
                 break;
-            case GamePackets.GameServerPacket_T.MonRaceInfo: this.community.monRace = GamePackets.readMonRaceInfo(packet); break;
+            case GamePackets.GameServerPacket_T.MonRaceInfo: this.community.monRace = GamePackets.readMonRaceInfo(packet); this.monRace.onMonRaceInfo(this.community.monRace); break;
             case GamePackets.GameServerPacket_T.SSQStatus: this.community.onSSQStatus(packet); break;
             case GamePackets.GameServerPacket_T.ClanHallDecoration: {
                 const info = GamePackets.readClanHallDecoration(packet);
@@ -732,9 +766,9 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 this.manGame.getComponent("render").updateClanHallDecorations();
                 break;
             }
-            case GamePackets.GameServerPacket_T.SiegeInfo: this.community.siegeInfo = GamePackets.readSiegeInfo(packet); break;
-            case GamePackets.GameServerPacket_T.SiegeAttackerList: this.community.siegeAttackers = GamePackets.readSiegeClanList(packet, false); break;
-            case GamePackets.GameServerPacket_T.SiegeDefenderList: this.community.siegeDefenders = GamePackets.readSiegeClanList(packet, true); break;
+            case GamePackets.GameServerPacket_T.SiegeInfo: this.community.siegeInfo = GamePackets.readSiegeInfo(packet); this.ui.showSiegeInfo(this.community.siegeInfo); break;
+            case GamePackets.GameServerPacket_T.SiegeAttackerList: this.community.siegeAttackers = GamePackets.readSiegeClanList(packet, false); this.ui.addSiegeClans(false, this.community.siegeAttackers); break;
+            case GamePackets.GameServerPacket_T.SiegeDefenderList: this.community.siegeDefenders = GamePackets.readSiegeClanList(packet, true); this.ui.addSiegeClans(true, this.community.siegeDefenders); break;
             case GamePackets.GameServerPacket_T.GameGuardQuery: this.community.onGameGuardQuery(packet); break;
             case GamePackets.GameServerPacket_T.RecipeBookItemList: this.items.recipeBook = GamePackets.readRecipeBookItemList(packet); this.ui.showRecipeBook(this.items.recipeBook); break;
             case GamePackets.GameServerPacket_T.RecipeItemMakeInfo: this.items.recipeItemMakeInfo = GamePackets.readRecipeItemMakeInfo(packet); this.ui.showRecipeManufacture(this.items.recipeItemMakeInfo); break;
@@ -759,7 +793,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 this.ui.showPartyMatchDetail(this.community.partyMatchDetail);
                 break;
             case GamePackets.GameServerPacket_T.PartySpelled: this.community.onPartySpelled(packet); break;
-            case GamePackets.GameServerPacket_T.TutorialShowQuestionMark: this.community.tutorialQuestionMarks.add(packet.d()); break;
+            case GamePackets.GameServerPacket_T.TutorialShowQuestionMark: {
+                const id = packet.d();
+
+                this.community.tutorialQuestionMarks.add(id);
+                this.ui.showTutorialQuestionMark(id);
+                break;
+            }
             case GamePackets.GameServerPacket_T.TutorialEnableClientEvent: this.community.tutorialClientEvents = packet.d(); break;
             case GamePackets.GameServerPacket_T.GMViewCharacterInfo: this.community.gmCharacterInfo = GamePackets.readGMViewCharacterInfo(packet); this.community.updateGMCharacterInfo(); break;
             case GamePackets.GameServerPacket_T.GMViewPledgeInfo: this.community.gmPledgeInfo = GamePackets.readGMViewPledgeInfo(packet); this.ui.setGMPledgeInfo(this.community.gmPledgeInfo); break;
@@ -771,6 +811,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.Snoop: this.community.onSnoop(packet); break;
             case GamePackets.GameServerPacket_T.Extended:
                 switch (packet.h()) {
+                    case GamePackets.GameServerExPacket_T.ExRegMax: packet.d(); this.ui.setRegenStatus(packet.d(), packet.d(), packet.f()); break; // Engine 0x1040b0e0: "dddf", first value unused by NWindow 0x1006cab0.
                     case GamePackets.GameServerExPacket_T.ExAutoSoulShot: this.items.onAutoSoulShot(packet); break;
                     case GamePackets.GameServerExPacket_T.ExStorageMaxCount: this.items.onStorageMaxCount(packet); break;
                     case GamePackets.GameServerExPacket_T.ExPledgeCrestLarge: this.community.onPledgeCrestLarge(packet); break;
@@ -793,13 +834,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     case GamePackets.GameServerExPacket_T.ExQuestInfo: if (packet.getRemaining()) throw new Error("Invalid ExQuestInfo payload."); break;
                     case GamePackets.GameServerExPacket_T.ExShowQuestMark: this.community.onShowQuestMark(packet); break;
                     case GamePackets.GameServerExPacket_T.ExSendManorList: this.items.manors = GamePackets.readManorList(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSeedInfo: this.items.manorSeedInfo = GamePackets.readShowSeedInfo(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowCropInfo: this.items.manorCropInfo = GamePackets.readShowCropInfo(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowManorDefaultInfo: this.items.manorDefaultCrops = GamePackets.readShowManorDefaultInfo(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSeedSetting: this.items.manorSeedSettings = GamePackets.readShowSeedSetting(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowCropSetting: this.items.manorCropSettings = GamePackets.readShowCropSetting(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSellCropList: this.items.manorSellCrops = GamePackets.readShowSellCropList(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowProcureCropDetail: this.items.manorProcureCropDetail = GamePackets.readShowProcureCropDetail(packet); break;
+                    case GamePackets.GameServerExPacket_T.ExShowSeedInfo: this.items.manorSeedInfo = GamePackets.readShowSeedInfo(packet); this.ui.showManorSeedInfo(this.items.manorSeedInfo, this.items.manors); break;
+                    case GamePackets.GameServerExPacket_T.ExShowCropInfo: this.items.manorCropInfo = GamePackets.readShowCropInfo(packet); this.ui.showManorCropInfo(this.items.manorCropInfo, this.items.manors); break;
+                    case GamePackets.GameServerExPacket_T.ExShowManorDefaultInfo: this.items.manorDefaultInfo = GamePackets.readShowManorDefaultInfo(packet); this.ui.showManorDefaultInfo(this.items.manorDefaultInfo); break;
+                    case GamePackets.GameServerExPacket_T.ExShowSeedSetting: this.items.manorSeedSettings = GamePackets.readShowSeedSetting(packet); this.ui.showManorSeedSetting(this.items.manorSeedSettings); break;
+                    case GamePackets.GameServerExPacket_T.ExShowCropSetting: this.items.manorCropSettings = GamePackets.readShowCropSetting(packet); this.ui.showManorCropSetting(this.items.manorCropSettings); break;
+                    case GamePackets.GameServerExPacket_T.ExShowSellCropList: this.items.manorSellCrops = GamePackets.readShowSellCropList(packet); this.ui.showManorSellCropList(this.items.manorSellCrops); break;
+                    case GamePackets.GameServerExPacket_T.ExShowProcureCropDetail: this.items.manorProcureCropDetail = GamePackets.readShowProcureCropDetail(packet); this.ui.showManorProcureCropDetail(this.items.manorProcureCropDetail); break;
                     case GamePackets.GameServerExPacket_T.ExHeroList: this.community.heroes = GamePackets.readHeroList(packet); this.ui.showHeroList(this.community.heroes); break;
                     case GamePackets.GameServerExPacket_T.ExOpenMPCC: this.community.onOpenMPCC(packet); break;
                     case GamePackets.GameServerExPacket_T.ExCloseMPCC: this.community.onCloseMPCC(packet); break;
@@ -1193,6 +1234,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.updateGNOManager(deltaTime);
         this.macroExecutor.tick(deltaTime);
         this.movement.updateVehicles(deltaTime);
+        this.monRace.tick(deltaTime / 1000);
 
         const player = this.manGame.getComponent("render").player;
         const isMoving = player.isLocomoting();
@@ -1214,18 +1256,21 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             this.movement.stuckCheckAt = currentTime;
             this.movement.stuckPosition.copy(player.position);
         } else if (currentTime - this.movement.stuckCheckAt >= STUCK_INTERVAL) { // Server walks straight through whatever blocked us; CannotMoveAnymore makes it adopt our stop point.
-            if (player.position.distanceTo(this.movement.stuckPosition) < STUCK_DISTANCE) {
-                player.stopMoving();
-                const base = player.getBaseActor() as Vehicle;
-
-                if (base && base.isVehicle) this.movement.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
-                else this.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
-                this.movement.stuckCheckAt = 0;
-            } else {
+            if (player.position.distanceTo(this.movement.stuckPosition) < STUCK_DISTANCE) this.cannotMoveAnymore();
+            else {
                 this.movement.stuckCheckAt = currentTime;
                 this.movement.stuckPosition.copy(player.position);
             }
         }
+    }
+
+    public cannotMoveAnymore() {
+        const player = this.manGame.getComponent("render").player, base = player.getBaseActor() as Vehicle;
+
+        player.stopMoving();
+        if (base && base.isVehicle) this.movement.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
+        else this.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
+        this.movement.stuckCheckAt = 0;
     }
 
     public getNameplates(): Nameplate_T[] { return this.actors.getNameplates(); }

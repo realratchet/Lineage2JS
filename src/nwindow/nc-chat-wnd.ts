@@ -57,6 +57,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     public onSend: (text: string, type: number, target: string) => void = null;
     public onBuildCommand: (command: string) => void = null;
     public onCommand: (command: string, isShift: boolean) => void = null;
+    public onMessenger: () => void = null;
     public onOptions: (index: number) => void = null;
 
     public constructor(protected readonly layer: NDomLayer) {
@@ -95,7 +96,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         });
 
         this.optionButton = layer.button(this.element, 5, 0, 15, 15, TEX_OPTION1, TEX_OPTION2, null, null, () => { if (this.onOptions) this.onOptions(this.selected); });
-        this.messengerButton = layer.button(this.element, 5, 0, 15, 15, TEX_MSN1, TEX_MSN2);
+        this.messengerButton = layer.button(this.element, 5, 0, 15, 15, TEX_MSN1, TEX_MSN2, null, null, () => { if (this.onMessenger) this.onMessenger(); });
         this.editBox = layer.edit(this.element, 39, 0, 303, 16);
         this.editBox.input.addEventListener("keydown", event => {
             if (event.key === "Enter") this.submit(this.editBox.getValue(), event.shiftKey);

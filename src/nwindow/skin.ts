@@ -6,6 +6,9 @@ import NCAbnormalStatusWnd from "./nc-abnormal-status-wnd";
 import NCActionWnd from "./nc-action-wnd";
 import NCChatWnd from "./nc-chat-wnd";
 import NCChatFilterWnd from "./nc-chat-filter-wnd";
+import L2FriendTree from "./l2-friend-tree";
+import L2ChatWnd from "./l2-chat-wnd";
+import MessengerWnd from "./messenger-wnd";
 import NCClanWnd from "./nc-clan-wnd";
 import NCCommandInfoWnd from "./nc-command-info-wnd";
 import NCCommunityWnd from "./nc-community-wnd";
@@ -47,6 +50,15 @@ import NCPartyRoomMakingWnd from "./nc-party-room-making-wnd";
 import NCPartyRoomWnd from "./nc-party-room-wnd";
 import NCPawnCreateWnd from "./nc-pawn-create-wnd";
 import NCPetStatusWnd from "./nc-pet-status-wnd";
+import NCPartyWnd from "./nc-party-wnd";
+import NCCalcWnd from "./nc-calc-wnd";
+import NCTutorialViewerWnd from "./nc-tutorial-viewer-wnd";
+import NCTutorialBtn from "./nc-tutorial-btn";
+import NCSiegeInfoMainWnd from "./nc-siege-info-wnd";
+import NCManorInfoWnd from "./nc-manor-info-wnd";
+import NCManorSeedInfoSettingWnd, { NCManorCropInfoSettingWnd } from "./nc-manor-setting-wnd";
+import NCManorCropSellWnd from "./nc-manor-crop-sell-wnd";
+import NCXMasSealWnd from "./nc-xmas-seal-wnd";
 import NCPetWnd from "./nc-pet-wnd";
 import NCPetitionBeginWnd from "./nc-petition-begin-wnd";
 import NCPetitionWnd from "./nc-petition-wnd";
@@ -82,7 +94,10 @@ import RecordMark from "./record-mark";
 export type AbnormalStatusWndView_T = Pick<NCAbnormalStatusWnd, "element" | "getEffects" | "isVisible" | "placeOnScreen" | "setEffects" | "setSecondaryEffects" | "setShortEffect" | "setVisible" | "tick">;
 export type ActionWndView_T = Pick<NCActionWnd, "clearSelection" | "element" | "onUse" | "setActions" | "setClass" | "setMountable">;
 export type ChatFilterWndView_T = Pick<NCChatFilterWnd, "element" | "isVisible" | "onApply" | "placeOnScreen" | "setVisible" | "show">;
-export type ChatWndView_T = Pick<NCChatWnd, "getFilter" | "setFilter" | "onOptions" | "addCreatureSay" | "addSystemMessage" | "dispatchCommand" | "element" | "focusInput" | "isInputFocused" | "isVisible" | "onBuildCommand" | "onCommand" | "onSend" | "placeOnScreen" | "resetLayout" | "sendText" | "setOldChatting" | "setSystemMessageFilters" | "setSystemMsgWnd" | "setVisible">;
+export type MessengerWndView_T = Pick<MessengerWnd, "element" | "folded" | "onSend" | "isVisible" | "placeOnScreen" | "receiveMessage" | "reset" | "setChildVisible" | "setFoldedVisible" | "setFriends" | "setPlayerName" | "setVisible">;
+export type L2ChatWndView_T = Pick<L2ChatWnd, "element" | "onClose" | "onSend" | "getPeer" | "getActive" | "isVisible" | "setPeer" | "setVisible" | "show" | "clearEdit" | "reset" | "addMessage">;
+
+export type ChatWndView_T = Pick<NCChatWnd, "getFilter" | "setFilter" | "onMessenger" | "onOptions" | "addCreatureSay" | "addSystemMessage" | "dispatchCommand" | "element" | "focusInput" | "isInputFocused" | "isVisible" | "onBuildCommand" | "onCommand" | "onSend" | "placeOnScreen" | "resetLayout" | "sendText" | "setOldChatting" | "setSystemMessageFilters" | "setSystemMsgWnd" | "setVisible">;
 export type ClanWndView_T = Pick<NCClanWnd, "addMember" | "clearMembers" | "deleteMember" | "element" | "onAction" | "setClan" | "setStatus" | "setStrings" | "setVisible" | "updateMember">;
 export type CommandInfoWndView_T = Pick<NCCommandInfoWnd, "addChat" | "closeChannel" | "element" | "isVisible" | "onLeave" | "onOust" | "onSay" | "onUpdate" | "open" | "placeOnScreen" | "setInfo" | "setVisible" | "tick">;
 export type CommunityWndView_T = Pick<NCCommunityWnd, "element" | "hide" | "isVisible" | "onAction" | "onRequest" | "openClan" | "placeOnScreen" | "setBoard" | "setVisible" | "toggle" | "viewer">;
@@ -107,7 +122,7 @@ export type LobbyWndView_T = Pick<NCLobbyWnd, "element" | "gameStart" | "onCreat
 export type LoginServerWndView_T = Pick<NCLoginServerWnd, "element" | "onCancel" | "onSelect" | "placeOnScreen" | "serverInfo" | "setServers" | "setVisible">;
 export type ReplayWndView_T = Pick<NCReplayWnd, "element" | "focus" | "onPlay" | "onDelete" | "onCancel" | "onImport" | "placeOnScreen" | "setFiles" | "setVisible">;
 export type LoginWndView_T = Pick<NCLoginWnd, "auth" | "element" | "loginFunction" | "onLogin" | "placeOnScreen" | "setBusy" | "setVisible">;
-export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "element" | "hide" | "highlightCommand" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setMacros" | "setVisible">;
+export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "editor" | "element" | "hide" | "highlightCommand" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setEditorVisible" | "setMacros" | "setVisible">;
 export type MainWndView_T = Pick<NCMainWnd, "element" | "getSelectedTab" | "isVisible" | "placeOnScreen" | "selectTab" | "setVisible"> & { readonly detailStatusWnd: DetailStatusWndView_T, readonly skillWnd: SkillWndView_T, readonly actionWnd: ActionWndView_T, readonly questWnd: QuestWndView_T, readonly clanWnd: ClanWndView_T };
 export type ManorShopWndView_T = Pick<NCManorShopWnd, "element" | "getGrid" | "getItems" | "getPressedItem" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMove" | "onQuantity" | "onSelect" | "onSubmit" | "onTooltip" | "placeOnScreen" | "setVisible" | "showManor" | "transfer">;
 export type TownMapWndView_T = Pick<NTownMapWnd, "element" | "isVisible" | "placeOnScreen" | "setVisible" | "show">;
@@ -115,32 +130,42 @@ export type MapWndView_T = Pick<NCMapWnd, "element" | "isVisible" | "getQuestLoc
 export type MatchWndView_T = Pick<NCMatchWnd, "element" | "isVisible" | "onConfig" | "onCreate" | "onJoin" | "placeOnScreen" | "resetFilters" | "setVisible" | "show" | "tick">;
 export type MenuWndView_T = Pick<NCMenuWnd, "element" | "onSelect" | "placeOnScreen" | "setVisible">;
 export type MessageWndView_T = Pick<NCMessageWnd, "element" | "hide" | "placeOnScreen" | "show">;
-export type NPCHtmlViewerView_T = Pick<NCNPCHtmlViewer, "element" | "hide" | "isVisible" | "onBypass" | "onFile" | "onLink" | "placeOnScreen" | "setVisible" | "show" | "showPacket" | "tick">;
+export type NPCHtmlViewerView_T = Pick<NCNPCHtmlViewer, "element" | "hide" | "isVisible" | "onBypass" | "onConfirm" | "onFile" | "onLink" | "placeOnScreen" | "setVisible" | "show" | "showPacket" | "tick">;
 export type OlympiadControlWndView_T = Pick<NCOlympiadControlWnd, "element" | "isVisible" | "onOtherGame" | "onStopObserving" | "placeOnScreen" | "setVisible">;
 export type OlympiadPlayerWndView_T = Pick<NCOlympiadPlayerWnd, "appendMessage" | "element" | "getObjectId" | "isVisible" | "onExpand" | "placeOnScreen" | "reset" | "setInfo" | "setVisible">;
 export type OlympiadTargetWndView_T = Pick<NCOlympiadTargetWnd, "element" | "getSide" | "initialize" | "isVisible" | "placeOnScreen" | "reset" | "setInfo" | "setVisible">;
 export type OptionWndView_T = Pick<NCOptionWnd, "canChangePartyLoot" | "element" | "getAntiAliasingLevels" | "getAudioOptions" | "getGamma" | "getOptions" | "getPawnRange" | "getUIScale" | "getUIScales" | "isVisible" | "onApply" | "onApplyAudio" | "onApplyGamma" | "onApplyPawnRange" | "onApplyUIScale" | "onInitialize" | "placeOnScreen" | "setVisible" | "toggle" | "updatePartyLootControl">;
 export type PartyRoomMakingWndView_T = Pick<NCPartyRoomMakingWnd, "element" | "getLootType" | "isVisible" | "onSubmit" | "placeOnScreen" | "setVisible" | "showCreate" | "showEdit">;
-export type PartyRoomWndView_T = Pick<NCPartyRoomWnd, "appendChat" | "clearChat" | "element" | "isVisible" | "minimized" | "onChat" | "onInvite" | "onKick" | "onSettings" | "onTerminate" | "placeOnScreen" | "setMembers" | "setVisible" | "show" | "table" | "tick">;
+export type PartyRoomWndView_T = Pick<NCPartyRoomWnd, "appendChat" | "clearChat" | "element" | "isVisible" | "minimized" | "onChat" | "onInvite" | "onKick" | "onSettings" | "onTerminate" | "placeOnScreen" | "setMembers" | "setVisible" | "show" | "table" | "terminate" | "tick">;
 export type PawnCreateWndView_T = Pick<NCPawnCreateWnd, "element" | "getTemplate" | "onBack" | "onChange" | "onCreate" | "onRotate" | "onZoom" | "placeOnScreen" | "setTemplates" | "setVisible">;
+export type CalcWndView_T = Pick<NCCalcWnd, "element" | "isVisible" | "placeOnScreen" | "setVisible" | "show">;
+export type TutorialViewerWndView_T = Pick<NCTutorialViewerWnd, "element" | "hide" | "isVisible" | "onFile" | "onLink" | "onPassCmd" | "placeOnScreen" | "setVisible" | "show" | "tick">;
+export type TutorialBtnView_T = Pick<NCTutorialBtn, "element" | "hide" | "isVisible" | "onPress" | "placeOnScreen" | "setVisible" | "show" | "tick">;
+export type XMasSealWndView_T = Pick<NCXMasSealWnd, "element" | "isVisible" | "placeOnScreen" | "setVisible" | "toggle">;
+export type ManorSeedSettingWndView_T = Pick<NCManorSeedInfoSettingWnd, "element" | "isVisible" | "onConfirm" | "onSubmit" | "placeOnScreen" | "setAlertHandler" | "setVisible" | "show">;
+export type ManorCropSettingWndView_T = Pick<NCManorCropInfoSettingWnd, "element" | "isVisible" | "onConfirm" | "onSubmit" | "placeOnScreen" | "setAlertHandler" | "setVisible" | "show">;
+export type ManorInfoWndView_T = Pick<NCManorInfoWnd, "element" | "isVisible" | "onBypass" | "placeOnScreen" | "setVisible" | "showCropInfo" | "showDefaultInfo" | "showSeedInfo">;
+export type ManorCropSellWndView_T = Pick<NCManorCropSellWnd, "changeWnd" | "element" | "isVisible" | "onBypass" | "onProcure" | "placeOnScreen" | "setVisible" | "showSellCropList">;
+export type SiegeInfoWndView_T = Pick<NCSiegeInfoMainWnd, "addClans" | "element" | "isVisible" | "onApprove" | "onCancelApplication" | "onParticipate" | "onRefuse" | "onRequestList" | "placeOnScreen" | "setCrestGetter" | "setVisible" | "show">;
+export type PartyWndView_T = Pick<NCPartyWnd, "addMember" | "deleteAll" | "deleteMember" | "element" | "isVisible" | "onAction" | "onAssist" | "placeOnScreen" | "setEffects" | "setVisible" | "updateMember">;
 export type PetStatusWndView_T = Pick<NCPetStatusWnd, "element" | "isVisible" | "onTargetAction" | "placeOnScreen" | "resetGauge" | "setEffects" | "setInfo" | "setRemainTime" | "setVisible" | "showStatus" | "tick">;
 export type PetWndView_T = Pick<NCPetWnd, "element" | "getItemOwner" | "isVisible" | "onAction" | "onDropItem" | "onGetItem" | "onHideBag" | "onRename" | "onUseItem" | "setActions" | "setInfo" | "setItems" | "setRenameAvailable" | "setVisible">;
-export type PlayerStatusWndView_T = Pick<NCPlayerStatusWnd, "element" | "isVisible" | "onClick" | "placeOnScreen" | "setStatus" | "setVisible">;
+export type PlayerStatusWndView_T = Pick<NCPlayerStatusWnd, "element" | "isVisible" | "onClick" | "placeOnScreen" | "setRegenStatus" | "setStatus" | "setVisible">;
 export type PledgePowerWndView_T = Pick<NCPledgePowerWnd, "element" | "onSave" | "placeOnScreen" | "setPower" | "setVisible" | "showFor">;
-export type PrivateBuyWndView_T = Pick<NCPrivateBuyWnd, "canMove" | "element" | "getGrid" | "getItems" | "getMaxCount" | "getOwnedCount" | "getOwnerId" | "getPressedItem" | "getTooltipCount" | "isOwnMode" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "needsPriceConfirmation" | "onClose" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMessage" | "onMove" | "onQuit" | "onSelect" | "onTooltip" | "placeOnScreen" | "setLimit" | "setVisible" | "showBuyStore" | "showManageBuyStore" | "transfer">;
-export type PrivateShopWndView_T = Pick<NCPrivateShopWnd, "element" | "getGrid" | "getItems" | "getOriginalCount" | "getOwnerId" | "getPackageChecked" | "getPressedItem" | "isOwnMode" | "isPackageMode" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "needsPriceConfirmation" | "onClose" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMessage" | "onMove" | "onQuit" | "onSelect" | "onTooltip" | "placeOnScreen" | "setLimit" | "setVisible" | "showManageStore" | "showStore" | "transfer">;
+export type PrivateBuyWndView_T = Pick<NCPrivateBuyWnd, "canMove" | "element" | "getGrid" | "getItems" | "getMaxCount" | "getOwnedCount" | "getOwnerId" | "getPressedItem" | "getTooltipCount" | "isOwnMode" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "needsPriceConfirmation" | "onClose" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMessage" | "onMove" | "onQuit" | "onSelect" | "onTooltip" | "placeOnScreen" | "setLimit" | "reset" | "setVisible" | "showBuyStore" | "showManageBuyStore" | "transfer">;
+export type PrivateShopWndView_T = Pick<NCPrivateShopWnd, "element" | "getGrid" | "getItems" | "getOriginalCount" | "getOwnerId" | "getPackageChecked" | "getPressedItem" | "isOwnMode" | "isPackageMode" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "needsPriceConfirmation" | "onClose" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMessage" | "onMove" | "onQuit" | "onSelect" | "onTooltip" | "placeOnScreen" | "setLimit" | "reset" | "setVisible" | "showManageStore" | "showStore" | "transfer">;
 export type QuestWndView_T = Pick<NCQuestWnd, "clearLocation" | "element" | "onAbort" | "onHide" | "onLocationChange" | "onShow" | "setInventory" | "setStates" | "setStrings" | "setVisible">;
 export type RecipeBookWndView_T = Pick<NCRecipeBookWnd, "element" | "getGrid" | "isVisible" | "onDelete" | "onDrop" | "onHide" | "onHideTooltip" | "onOpen" | "onTooltip" | "placeOnScreen" | "setLimits" | "setVisible" | "show">;
 export type RecipeBuyListWndView_T = Pick<NCRecipeBuyListWnd, "element" | "isVisible" | "onOpen" | "placeOnScreen" | "setVisible" | "show">;
 export type RecipeBuyManufactureWndView_T = Pick<NCRecipeBuyManufactureWnd, "element" | "getGrid" | "isVisible" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onSelect" | "onShopBack" | "onShopCreate" | "onTooltip" | "onTree" | "placeOnScreen" | "setInventory" | "setVisible" | "showShop">;
 export type RecipeManufactureWndView_T = Pick<NCRecipeManufactureWnd, "element" | "getGrid" | "isVisible" | "onBack" | "onCreate" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onSelect" | "onTooltip" | "onTree" | "placeOnScreen" | "setInventory" | "setVisible" | "show">;
-export type RecipeShopWndView_T = Pick<NCRecipeShopWnd, "element" | "getGrid" | "isVisible" | "onCancel" | "onHideTooltip" | "onMessage" | "onPrice" | "onQuit" | "onStart" | "onTooltip" | "placeOnScreen" | "setVisible" | "show" | "transfer">;
+export type RecipeShopWndView_T = Pick<NCRecipeShopWnd, "element" | "getGrid" | "isVisible" | "onCancel" | "onHideTooltip" | "onMessage" | "onPrice" | "onQuit" | "onStart" | "onTooltip" | "placeOnScreen" | "reset" | "setVisible" | "show" | "transfer">;
 export type RecipeTreeWndView_T = Pick<NCRecipeTreeWnd, "element" | "isVisible" | "placeOnScreen" | "setVisible" | "show">;
 export type RestartMenuWndView_T = Pick<NCRestartMenuWnd, "element" | "isVisible" | "onRestart" | "placeOnScreen" | "setOptions" | "setVisible">;
 export type SSQMainBoardView_T = Pick<NCSSQMainBoard, "element" | "isVisible" | "onRequest" | "placeOnScreen" | "setVisible" | "show">;
 export type SelectDeliverWndView_T = Pick<NCSelectDeliverWnd, "element" | "isVisible" | "onConfirm" | "placeOnScreen" | "setVisible" | "show">;
-export type ShopWndView_T = Pick<NCShopWnd, "element" | "getGrid" | "getItems" | "getPressedItem" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMove" | "onSelect" | "onTooltip" | "placeOnScreen" | "setVisible" | "show" | "transfer">;
-export type ShortCutWndView_T = Pick<NCShortCutWnd, "clearSlots" | "element" | "getPage" | "getSlotAt" | "hasCoolTime" | "isVisible" | "onAutoSoulShot" | "onDelete" | "onDrag" | "onDragMove" | "onDrop" | "onMove" | "onUse" | "placeOnScreen" | "renderCoolTimes" | "resetLayout" | "setSlot" | "setVisible">;
+export type ShopWndView_T = Pick<NCShopWnd, "element" | "getGrid" | "getItems" | "getPressedItem" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMove" | "onSelect" | "onTooltip" | "placeOnScreen" | "reset" | "setVisible" | "show" | "transfer">;
+export type ShortCutWndView_T = Pick<NCShortCutWnd, "clearSlots" | "element" | "getPage" | "getSlotAt" | "hasCoolTime" | "isVisible" | "onAutoSoulShot" | "onDelete" | "onDrag" | "onDragMove" | "onDrop" | "onKeyDown" | "onMove" | "onUse" | "placeOnScreen" | "renderCoolTimes" | "resetLayout" | "setSlot" | "setVisible">;
 export type SkillWndView_T = Pick<NCSkillWnd, "clearSelection" | "element" | "getMacroCommand" | "isVisible" | "onShow" | "onUse" | "renderCoolTimes" | "setSkills" | "setVisible">;
 export type StoreWndView_T = Pick<NCStoreWnd, "element" | "getGrid" | "getItems" | "getLogicalSide" | "getPressedItem" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "onConfirm" | "onDrop" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMove" | "onSelect" | "onTooltip" | "onTransfer" | "paintItems" | "placeOnScreen" | "setDestination" | "setLimit" | "setVisible" | "showWarehouse" | "transfer" | "updateFee">;
 export type SummonedWndView_T = Pick<NCSummonedWnd, "element" | "isVisible" | "onAction" | "setActions" | "setInfo" | "setVisible">;
@@ -168,11 +193,12 @@ export class Skin {
     public getTextures(strings: GameStrings_T): string[] {
         return [
             ...NCLoginWnd.getTextures(), ...NCReplayWnd.getTextures(), ...NCLoginServerWnd.getTextures(), ...NCLobbyWnd.getTextures(), ...NCPawnCreateWnd.getTextures(), ...NCLoadingWnd.getTextures(), ...NCNPCHtmlViewer.getTextures(), ...NCCommunityWnd.getTextures(), "L2UI_ch3.NpcWnd.Npc2_back", ...NCInventoryWnd.getTextures(), ...["graded", "gradec", "gradeb", "gradea", "grades"].map(key => strings.symbols[key]), ...NCPetWnd.getTextures(), ...NCSummonedWnd.getTextures(), ...NCPledgePowerWnd.getTextures(), ...NCTradeWnd.getTextures(), ...NCShopWnd.getTextures(), ...NCRecipeBookWnd.getTextures(), ...NCRecipeManufactureWnd.getTextures(), ...NCRecipeTreeWnd.getTextures(), ...NCRecipeShopWnd.getTextures(), ...NCRecipeBuyListWnd.getTextures(), ...NCHennaListWnd.getTextures(), ...NCHennaInfoWnd.getTextures(), ...NCSSQMainBoard.getTextures(), ...NCItemEnchantWnd.getTextures(), ...NCMatchWnd.getTextures(), ...NCPartyRoomMakingWnd.getTextures(), ...NCPartyRoomWnd.getTextures(), ...NCTrainWnd.getTextures(), ...NCHeroTowerWnd.getTextures(), ...NCFishViewportWnd.getTextures(), ...NCCommandInfoWnd.getTextures(), ...NCGMQuestWnd.getTextures(), ...NCGMDetailStatusWnd.getTextures(), ...NCGMClanWnd.getTextures(), ...NCGMWnd.getTextures(), ...NCOlympiadControlWnd.getTextures(), ...NCPrivateBuyWnd.getTextures(), ...NCVIPShopWnd.getTextures(), ...NCSelectDeliverWnd.getTextures(), ...NCMenuWnd.getTextures(), ...NCMainWnd.getTextures(), ...NCMapWnd.getTextures(), ...NTownMapWnd.getTextures(), ...NCSystemMenuWnd.getTextures(), ...NCOptionWnd.getTextures(), ...NCZoneTitleWnd.getTextures(), ...RecordMark.getTextures(), ...NCMacroWnd.getTextures(), ...NCMessageWnd.getTextures(), ...NCDialogBox.getTextures(), ...NDOM_EDIT_TEXTURES,
-            ...NCPlayerStatusWnd.getTextures(), ...NCPetStatusWnd.getTextures(), ...NCAbnormalStatusWnd.getTextures(), ...NCTargetStatusWnd.getTextures(), ...NCShortCutWnd.getTextures(), ...NCChatWnd.getTextures(), ...NCChatFilterWnd.getTextures(), ...NCPetitionBeginWnd.getTextures(), ...NCPetitionWnd.getTextures(), ...NCPetitionFeedBackWnd.getTextures(), ...NCGMSnoopWnd.getTextures(), ...NCRestartMenuWnd.getTextures(), ...NCOlympiadPlayerWnd.getTextures(), ...NCOlympiadTargetWnd.getTextures()
+            ...NCPlayerStatusWnd.getTextures(), ...NCPetStatusWnd.getTextures(), ...NCPartyWnd.getTextures(), ...NCCalcWnd.getTextures(), ...NCTutorialViewerWnd.getTextures(), ...NCTutorialBtn.getTextures(), ...NCSiegeInfoMainWnd.getTextures(), ...NCManorInfoWnd.getTextures(), ...NCManorSeedInfoSettingWnd.getTextures(), ...NCManorCropSellWnd.getTextures(), ...NCXMasSealWnd.getTextures(), ...NCAbnormalStatusWnd.getTextures(), ...NCTargetStatusWnd.getTextures(), ...NCShortCutWnd.getTextures(), ...NCChatWnd.getTextures(), ...NCChatFilterWnd.getTextures(), ...L2FriendTree.getTextures(), ...L2ChatWnd.getTextures(), ...MessengerWnd.getTextures(), ...NCPetitionBeginWnd.getTextures(), ...NCPetitionWnd.getTextures(), ...NCPetitionFeedBackWnd.getTextures(), ...NCGMSnoopWnd.getTextures(), ...NCRestartMenuWnd.getTextures(), ...NCOlympiadPlayerWnd.getTextures(), ...NCOlympiadTargetWnd.getTextures()
         ];
     }
 
     public createAbnormalStatusWnd(...args: ConstructorParameters<typeof NCAbnormalStatusWnd>): AbnormalStatusWndView_T { return new NCAbnormalStatusWnd(...args); }
+    public createL2ChatWnd(...args: ConstructorParameters<typeof L2ChatWnd>): L2ChatWndView_T { return new L2ChatWnd(...args); }
     public createActionWnd(...args: ConstructorParameters<typeof NCActionWnd>): ActionWndView_T { return new NCActionWnd(...args); }
     public createGMSnoopWnd(...args: ConstructorParameters<typeof NCGMSnoopWnd>): GMSnoopWndView_T { return new NCGMSnoopWnd(...args); }
     public createPetitionFeedBackWnd(...args: ConstructorParameters<typeof NCPetitionFeedBackWnd>): PetitionFeedBackWndView_T { return new NCPetitionFeedBackWnd(...args); }
@@ -181,6 +207,8 @@ export class Skin {
     public createPetitionBeginWnd(...args: ConstructorParameters<typeof NCPetitionBeginWnd>): PetitionBeginWndView_T { return new NCPetitionBeginWnd(...args); }
     public createChatFilterWnd(...args: ConstructorParameters<typeof NCChatFilterWnd>): ChatFilterWndView_T { return new NCChatFilterWnd(...args); }
     public createChatWnd(...args: ConstructorParameters<typeof NCChatWnd>): ChatWndView_T { return new NCChatWnd(...args); }
+    public createMessengerWnd(...args: ConstructorParameters<typeof MessengerWnd>): MessengerWndView_T { return new MessengerWnd(...args); }
+    public createFriendTree(...args: ConstructorParameters<typeof L2FriendTree>) { return new L2FriendTree(...args); }
     public createClanWnd(...args: ConstructorParameters<typeof NCClanWnd>): ClanWndView_T { return new NCClanWnd(...args); }
     public createCommandInfoWnd(...args: ConstructorParameters<typeof NCCommandInfoWnd>): CommandInfoWndView_T { return new NCCommandInfoWnd(...args); }
     public createCommunityWnd(...args: ConstructorParameters<typeof NCCommunityWnd>): CommunityWndView_T { return new NCCommunityWnd(...args); }
@@ -221,6 +249,16 @@ export class Skin {
     public createPartyRoomMakingWnd(...args: ConstructorParameters<typeof NCPartyRoomMakingWnd>): PartyRoomMakingWndView_T { return new NCPartyRoomMakingWnd(...args); }
     public createPartyRoomWnd(...args: ConstructorParameters<typeof NCPartyRoomWnd>): PartyRoomWndView_T { return new NCPartyRoomWnd(...args); }
     public createPawnCreateWnd(...args: ConstructorParameters<typeof NCPawnCreateWnd>): PawnCreateWndView_T { return new NCPawnCreateWnd(...args); }
+    public createCalcWnd(...args: ConstructorParameters<typeof NCCalcWnd>): CalcWndView_T { return new NCCalcWnd(...args); }
+    public createTutorialViewerWnd(...args: ConstructorParameters<typeof NCTutorialViewerWnd>): TutorialViewerWndView_T { return new NCTutorialViewerWnd(...args); }
+    public createTutorialBtn(...args: ConstructorParameters<typeof NCTutorialBtn>): TutorialBtnView_T { return new NCTutorialBtn(...args); }
+    public createXMasSealWnd(...args: ConstructorParameters<typeof NCXMasSealWnd>): XMasSealWndView_T { return new NCXMasSealWnd(...args); }
+    public createManorSeedSettingWnd(...args: ConstructorParameters<typeof NCManorSeedInfoSettingWnd>): ManorSeedSettingWndView_T { return new NCManorSeedInfoSettingWnd(...args); }
+    public createManorCropSettingWnd(...args: ConstructorParameters<typeof NCManorCropInfoSettingWnd>): ManorCropSettingWndView_T { return new NCManorCropInfoSettingWnd(...args); }
+    public createManorInfoWnd(...args: ConstructorParameters<typeof NCManorInfoWnd>): ManorInfoWndView_T { return new NCManorInfoWnd(...args); }
+    public createManorCropSellWnd(...args: ConstructorParameters<typeof NCManorCropSellWnd>): ManorCropSellWndView_T { return new NCManorCropSellWnd(...args); }
+    public createSiegeInfoWnd(...args: ConstructorParameters<typeof NCSiegeInfoMainWnd>): SiegeInfoWndView_T { return new NCSiegeInfoMainWnd(...args); }
+    public createPartyWnd(...args: ConstructorParameters<typeof NCPartyWnd>): PartyWndView_T { return new NCPartyWnd(...args); }
     public createPetStatusWnd(...args: ConstructorParameters<typeof NCPetStatusWnd>): PetStatusWndView_T { return new NCPetStatusWnd(...args); }
     public createPetWnd(...args: ConstructorParameters<typeof NCPetWnd>): PetWndView_T { return new NCPetWnd(...args); }
     public createPlayerStatusWnd(...args: ConstructorParameters<typeof NCPlayerStatusWnd>): PlayerStatusWndView_T { return new NCPlayerStatusWnd(...args); }

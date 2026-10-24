@@ -126,9 +126,10 @@ export class NCRecipeShopWnd {
     public getItems(side: number) { return this.items[side]; }
     public getPressedItem(side: number) { return this.items[side][this.pressed[side]]; }
     public setVisible(visible: boolean) {
+        if (!visible) this.reset();
         this.element.hidden = !visible;
-        if (visible) return;
-
+    }
+    public reset() {
         this.generation++;
         this.endDrag();
         this.items = [[], []];

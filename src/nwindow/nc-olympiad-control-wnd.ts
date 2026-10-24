@@ -7,7 +7,7 @@ const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_STRIP = "L2UI_CH3.FrameCtrl.smallbar";
 
 export class NCOlympiadControlWnd {
-    public static getTextures() { return [TEX_BACK, TEX_BUTTON, TEX_BUTTON_DOWN, ...[1, 2, 3].map(index => TEX_STRIP + index)]; }
+    public static getTextures() { return [TEX_BACK, TEX_BUTTON, TEX_BUTTON_DOWN, ...[1, 2, 3].map(index => `${TEX_STRIP}${index}`)]; }
     public readonly element: HTMLDivElement;
     public onStopObserving: () => void = null;
     public onOtherGame: () => void = null;
@@ -20,9 +20,9 @@ export class NCOlympiadControlWnd {
         layer.tile(this.element, 12, 0, 90, 56, 0, 0, 90, 56, TEX_BACK);
         const frame = layer.createWindow(0, 0, 12, 56, this.element);
 
-        layer.tile(frame, 0, 0, 12, 8, 0, 0, 12, 8, TEX_STRIP + "1");
-        layer.tile(frame, 0, 8, 12, 48, 0, 0, 12, 8, TEX_STRIP + "2");
-        layer.tile(frame, 0, 48, 12, 8, 0, 0, 12, 8, TEX_STRIP + "3");
+        layer.tile(frame, 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}1`);
+        layer.tile(frame, 0, 8, 12, 48, 0, 0, 12, 8, `${TEX_STRIP}2`);
+        layer.tile(frame, 0, 48, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}3`);
         frame.addEventListener("mousedown", event => {
             if (event.button !== 0) return;
 

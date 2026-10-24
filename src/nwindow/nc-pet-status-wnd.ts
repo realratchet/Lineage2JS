@@ -9,7 +9,7 @@ const TEX_BUTTON = "L2UI_CH3.Etc.pet_button";
 const HEIGHT = 46;
 
 export class NCPetStatusWnd extends NCStatusWnd {
-    public static getTextures(): string[] { return [...NCStatusWnd.getTextures(), TEX_BACK + "1", TEX_BACK + "2", TEX_BACK + "3_ex", TEX_BUTTON, `${TEX_BUTTON}_down`, `?${TEX_BUTTON}_over`, ...arrBars, ...arrBars.map(path => `${path}_BACK`)]; }
+    public static getTextures(): string[] { return [...NCStatusWnd.getTextures(), `${TEX_BACK}1`, `${TEX_BACK}2`, `${TEX_BACK}3_ex`, TEX_BUTTON, `${TEX_BUTTON}_down`, `?${TEX_BUTTON}_over`, ...arrBars, ...arrBars.map(path => `${path}_BACK`)]; }
 
     public onTargetAction: (objectId: number, shift: boolean) => void = null;
     protected readonly arrBarBacks: HTMLDivElement[];
@@ -121,7 +121,7 @@ export class NCPetStatusWnd extends NCStatusWnd {
     protected update() {
         const layer = this.layer, width = this.width, barWidth = width - 22, info = this.info;
 
-        this.layoutFrame(HEIGHT, [TEX_BACK + "1", TEX_BACK + "2", TEX_BACK + "3_ex"], HEIGHT);
+        this.layoutFrame(HEIGHT, [`${TEX_BACK}1`, `${TEX_BACK}2`, `${TEX_BACK}3_ex`], HEIGHT);
         this.setName(info ? info.name || "" : "", 0xffdcdcdc, 12, 6, width - 12);
         this.effects.replaceChildren();
 

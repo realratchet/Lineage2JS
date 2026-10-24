@@ -332,6 +332,8 @@ export class InputManager implements IEngineComponent<GameManager> {
         }
     }
 
+    public isRenderingWide() { return this.specialView.isWide(); }
+
     public updateCamera(): void {
         if (this.isOrbitControls || this.specialView.isActive()) return;
 

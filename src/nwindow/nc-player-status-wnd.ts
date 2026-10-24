@@ -13,6 +13,7 @@ const TEX_CPBAR_BACK = "L2UI_CH3.PlayerStatusWnd.ps_cpbar_back";
 const TEX_HPBAR = "L2UI_CH3.PlayerStatusWnd.ps_hpbar";
 const TEX_HPBAR_BACK = "L2UI_CH3.PlayerStatusWnd.ps_hpbar_back";
 const TEX_HPBAR_WARN = "L2UI_CH3.PlayerStatusWnd.ps_hpbarwarn1";
+const TEX_HPBAR_FILL = "L2UI_CH3.PlayerStatusWnd.ps_hpbarfill";
 const TEX_MPBAR = "L2UI_CH3.PlayerStatusWnd.ps_mpbar";
 const TEX_MPBAR_BACK = "L2UI_CH3.PlayerStatusWnd.ps_mpbar_back";
 const TEX_EXPBAR = "L2UI_CH3.PlayerStatusWnd.ps_expbar";
@@ -26,12 +27,18 @@ export type PlayerStatus_T = { name: string, level: number, exp: number, curHp: 
 function barWidth(current: number, maximum: number, width: number) { return maximum ? Math.min(Math.trunc(current * width / maximum), width) : 0; }
 
 export class NCPlayerStatusWnd extends NCStatusWnd { // NCPlayerStatusWnd: NCConsole 0x10060dae SetWindowRect(0, 0, 172, 84); paint 0x10113be0.
-    public static getTextures(): string[] { return [...NCStatusWnd.getTextures(), TEX_BACK1, TEX_BACK2, TEX_SIZECONTROL1, TEX_SIZECONTROL2, TEX_LEVELBACK, TEX_CPBAR, TEX_CPBAR_BACK, TEX_HPBAR, TEX_HPBAR_BACK, TEX_HPBAR_WARN, TEX_MPBAR, TEX_MPBAR_BACK, TEX_EXPBAR, TEX_EXPBAR_BACK]; }
+    public static getTextures(): string[] { return [...NCStatusWnd.getTextures(), TEX_BACK1, TEX_BACK2, TEX_SIZECONTROL1, TEX_SIZECONTROL2, TEX_LEVELBACK, TEX_CPBAR, TEX_CPBAR_BACK, TEX_HPBAR, TEX_HPBAR_BACK, TEX_HPBAR_WARN, TEX_HPBAR_FILL, TEX_MPBAR, TEX_MPBAR_BACK, TEX_EXPBAR, TEX_EXPBAR_BACK]; }
 
     protected readonly sizeControl2: HTMLDivElement;
     protected readonly arrBars: HTMLDivElement[];
     protected readonly values: HTMLDivElement;
     protected status: PlayerStatus_T = null;
+    protected curHp = 0;
+    protected regenTime = 0;
+    protected regenPeriod = 0;
+    protected regenTick = 0;
+    protected regenAmount = 0;
+    protected regenStamp = 0;
 
     public onClick: (shift: boolean) => void = null;
 
@@ -40,7 +47,8 @@ export class NCPlayerStatusWnd extends NCStatusWnd { // NCPlayerStatusWnd: NCCon
 
         layer.tile(this.element, 16, 6, 22, 20, 0, 0, 22, 20, TEX_LEVELBACK);
         this.sizeControl2 = layer.tile(this.element, 0, 4, 9, 13, 0, 0, 9, 13, TEX_SIZECONTROL2);
-        this.arrBars = [TEX_CPBAR_BACK, TEX_MPBAR_BACK, TEX_EXPBAR_BACK, TEX_CPBAR, TEX_MPBAR, TEX_EXPBAR, TEX_HPBAR_BACK, TEX_HPBAR, TEX_HPBAR_WARN].map(texture => layer.tile(this.element, 0, 0, 0, 12, 0, 0, 8, 12, texture));
+        this.arrBars = [TEX_CPBAR_BACK, TEX_MPBAR_BACK, TEX_EXPBAR_BACK, TEX_CPBAR, TEX_MPBAR, TEX_EXPBAR, TEX_HPBAR_BACK, TEX_HPBAR, TEX_HPBAR_FILL, TEX_HPBAR_WARN].map(texture => layer.tile(this.element, 0, 0, 0, 12, 0, 0, 8, 12, texture));
+        layer.setAlpha(this.arrBars[8], 0x80);
         this.values = layer.createWindow(0, 0, 0, HEIGHT, this.element);
         this.values.style.pointerEvents = "none";
         this.createSizeCtrl();
@@ -53,9 +61,33 @@ export class NCPlayerStatusWnd extends NCStatusWnd { // NCPlayerStatusWnd: NCCon
 
     public placeOnScreen() { this.restoreWidth(); }
 
-    public setStatus(status: PlayerStatus_T) {
+    public setStatus(status: PlayerStatus_T) { // HP gauge SetValue 0x10112bb0
+        if (status.curHp !== this.curHp) this.advanceRegen();
+        this.curHp = status.curHp;
+        if (status.curHp <= 0) this.regenTime = this.regenPeriod = this.regenTick = this.regenAmount = 0;
+
         this.status = status;
         this.update();
+    }
+
+    public setRegenStatus(count: number, period: number, tick: number) { // ExRegenMax -> UGameEngine::OnRegenStatus -> 0x1010e3e0
+        this.regenTime = count - Math.trunc(period / 2) * 0.666;
+        this.regenAmount = this.regenTime / (period * 0.666) * tick;
+        this.regenTick = tick;
+        this.regenPeriod = period;
+        this.regenStamp = performance.now() / 1000;
+        this.update();
+    }
+
+    protected advanceRegen() { // 0x1010e4a0: only runs when the HP value changes
+        if (!(this.regenTime > 0 && this.regenAmount >= 0)) return;
+
+        const now = performance.now() / 1000, elapsed = now - this.regenStamp;
+
+        this.regenTime -= elapsed;
+        this.regenAmount -= this.regenTick / this.regenPeriod * elapsed * 1.5015015015015014;
+        if (this.regenTime <= 0 || this.regenAmount < 0) this.regenTime = this.regenAmount = 0;
+        this.regenStamp = now;
     }
 
     protected drawValueRow(y: number, barW: number, label: string, current: number, maximum: number) {
@@ -84,7 +116,8 @@ export class NCPlayerStatusWnd extends NCStatusWnd { // NCPlayerStatusWnd: NCCon
         const levelStart = EXPERIENCE_TABLE[status.level], levelEnd = EXPERIENCE_TABLE[status.level + 1];
         const expW = levelEnd ? Math.min(Math.trunc((status.exp - levelStart) * barW / (levelEnd - levelStart)), barW) : 0;
         const hpW = status.curHp ? Math.trunc(status.curHp * barW / status.maxHp) : 0, isWarning = status.curHp < Math.trunc(status.maxHp / 10) * 3; // NCStatusBarCtrl 0x10112be0: warning below 30% of max, max/10 truncated first.
-        const [cpBack, mpBack, expBack, cp, mp, exp, hpBack, hp, hpWarn] = this.arrBars;
+        const [cpBack, mpBack, expBack, cp, mp, exp, hpBack, hp, hpFill, hpWarn] = this.arrBars;
+        const fillW = this.regenAmount !== 0 ? Math.min(Math.trunc(barW * this.regenAmount / status.maxHp), barW - hpW) : 0; // overlay clipped by the gauge SetClip
 
         layer.placeTile(cpBack, 16, 27, barW, 12, 0, 0, 8, 12, TEX_CPBAR_BACK);
         layer.placeTile(mpBack, 16, 55, barW, 12, 0, 0, 8, 12, TEX_MPBAR_BACK);
@@ -94,6 +127,7 @@ export class NCPlayerStatusWnd extends NCStatusWnd { // NCPlayerStatusWnd: NCCon
         layer.placeTile(exp, 16, 69, expW, 12, 0, 0, 8, 12, TEX_EXPBAR);
         layer.placeTile(hpBack, 16, 41, barW, 12, 0, 0, 8, 12, TEX_HPBAR_BACK); // NCStatusBarCtrl paint 0x10112c10
         layer.placeTile(hp, 16, 41, hpW, 12, 0, 0, 8, 12, TEX_HPBAR);
+        layer.placeTile(hpFill, 16 + hpW, 41, Math.max(0, fillW), 12, 0, 0, 8, 12, TEX_HPBAR_FILL);
         layer.placeTile(hpWarn, 16, 41, isWarning ? hpW : 0, 12, 0, 0, 8, 12, TEX_HPBAR_WARN);
 
         if (levelEnd) {

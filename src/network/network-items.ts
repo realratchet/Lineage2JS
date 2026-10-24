@@ -64,7 +64,7 @@ export class NetworkItems {
     public manors: GamePackets.ManorEntry_T[] = [];
     public manorSeedInfo: GamePackets.ManorSeedInfo_T = null;
     public manorCropInfo: GamePackets.ManorCropInfo_T = null;
-    public manorDefaultCrops: GamePackets.ManorDefaultCrop_T[] = [];
+    public manorDefaultInfo: GamePackets.ManorDefaultInfo_T = null;
     public manorSeedSettings: GamePackets.ManorSeedSettings_T = null;
     public manorCropSettings: GamePackets.ManorCropSettings_T = null;
     public manorSellCrops: GamePackets.ManorSellCropList_T = null;
@@ -684,6 +684,15 @@ export class NetworkItems {
         if (shortcut.type === GamePackets.ShortCutType_T.TYPE_ITEM && shortcut.characterType === 2 && !item) return;
         this.shortcuts.set(shortcut.slot, shortcut);
         this.network.ui.setShortCut(shortcut, item, !!item && this.autoSoulShots.has(item.itemId), this.macros.get(shortcut.id));
+    }
+
+    public onShortCutDelete(packet: PacketReader) { // Engine 0x10403f30 reads one "d"; NWindow 0x10108500 only clears the slot.
+        const index = packet.d();
+
+        if (index >= 120) return;
+
+        this.shortcuts.delete(index);
+        this.network.ui.removeShortCut(index);
     }
 
     public onAutoSoulShot(packet: PacketReader) {

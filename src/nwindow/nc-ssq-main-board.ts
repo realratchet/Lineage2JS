@@ -104,8 +104,10 @@ export class NCSSQMainBoard {
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
-        this.element.hidden = !visible;
-        if (visible) return;
+        if (visible) {
+            this.element.hidden = false;
+            return;
+        }
 
         this.requested.clear();
         this.isProjection = false;
@@ -127,6 +129,7 @@ export class NCSSQMainBoard {
             list.setContentHeight(0);
             list.setScroll(0);
         }
+        this.element.hidden = true;
     }
 
     public show(status: SSQStatus_T) {

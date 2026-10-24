@@ -34,7 +34,7 @@ export class NCPartyRoomWnd {
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 600, 411, 0, 0, 600, 411, TEX_BACK);
         this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true));
-        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.terminate(), null, () => { this.table.hide(); this.minimized.minimize(); });
+        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.close(), null, () => { this.table.hide(); this.minimized.minimize(); });
         this.header = layer.createWindow(0, 20, 600, 82, this.element);
         this.table = new NCListCtrl(layer, this.element, 7, 123, 586, 172, [
             { width: 204, label: 393, numeric: false }, { width: 54, label: 391, numeric: true, isClass: true }, { width: 74, label: 392, numeric: true }, { width: 132, label: 1029, numeric: false }, { width: 121, label: 1031, numeric: false }
@@ -68,7 +68,7 @@ export class NCPartyRoomWnd {
 
             if (row && this.detail && this.onInvite) this.onInvite(row.cells[0], this.detail.lootType);
         }));
-        layer.button(this.element, 523, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(908), () => this.terminate());
+        layer.button(this.element, 523, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(908), () => this.close());
         this.setMode(0);
     }
 
@@ -123,8 +123,13 @@ export class NCPartyRoomWnd {
         this.chat.setScroll(Math.max(0, this.chat.content.children.length - 4) * 17);
         this.minimized.setActivity();
     }
-    protected terminate() {
+    public terminate() { // CPartyRoomWnd 0x100b1b40..0x100b1c00.
+        if (this.mode !== 0 && this.mode !== 1 && this.mode !== 2) return;
+
         if (this.onTerminate) this.onTerminate(this.mode);
+    }
+    protected close() {
+        this.terminate();
         this.setVisible(false);
     }
     protected getLocation(location: number) {

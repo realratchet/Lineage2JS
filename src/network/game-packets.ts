@@ -95,6 +95,7 @@ export enum GameServerPacket_T {
     WareHouseDone = 0x43,
     ShortCutRegister = 0x44,
     ShortCutInit = 0x45,
+    ShortCutDelete = 0x46,
     StopMove = 0x47,
     MagicSkillUse = 0x48,
     MagicSkillCanceld = 0x49,
@@ -239,6 +240,7 @@ export enum GameServerPacket_T {
 }
 
 export enum GameServerExPacket_T {
+    ExRegMax = 0x01,
     ExEventMatchMessage = 0x04,
     ExPartyRoomMember = 0x0e,
     ExClosePartyRoom = 0x0f,
@@ -1817,8 +1819,9 @@ export type ManorSeedSetting_T = ManorRewards_T & { seedId: number, level: numbe
 export type ManorCropSetting_T = ManorRewards_T & { cropId: number, level: number, nextPurchaseLimit: number, unknown: number, minPrice: number, maxPrice: number, todayBuy: number, todayPrice: number, todayRewardType: number, nextBuy: number, nextPrice: number, nextRewardType: number };
 export type ManorSellCrop_T = ManorRewards_T & { objectId: number, cropId: number, level: number, procureManorId: number, remaining: number, price: number, rewardType: number, ownedCount: number };
 export type ManorProcureCrop_T = { manorId: number, remaining: number, price: number, rewardType: number };
-export type ManorSeedInfo_T = { manorId: number, seeds: ManorSeed_T[] };
-export type ManorCropInfo_T = { manorId: number, crops: ManorCrop_T[] };
+export type ManorSeedInfo_T = { isButtonHidden: boolean, manorId: number, seeds: ManorSeed_T[] };
+export type ManorCropInfo_T = { isButtonHidden: boolean, manorId: number, crops: ManorCrop_T[] };
+export type ManorDefaultInfo_T = { isButtonHidden: boolean, crops: ManorDefaultCrop_T[] };
 export type ManorSeedSettings_T = { manorId: number, seeds: ManorSeedSetting_T[] };
 export type ManorCropSettings_T = { manorId: number, crops: ManorCropSetting_T[] };
 export type ManorSellCropList_T = { manorId: number, crops: ManorSellCrop_T[] };
@@ -1928,7 +1931,7 @@ export function readManorList(packet: PacketReader): ManorEntry_T[] {
 }
 
 export function readShowSeedInfo(packet: PacketReader): ManorSeedInfo_T {
-    packet.c();
+    const isButtonHidden = packet.c() === 1; // NWindow 0x1013a72a
 
     const manorId = packet.d();
 
@@ -1946,11 +1949,11 @@ export function readShowSeedInfo(packet: PacketReader): ManorSeedInfo_T {
 
     if (packet.getRemaining()) throw new Error("Invalid ExShowSeedInfo trailing data.");
 
-    return { manorId, seeds };
+    return { isButtonHidden, manorId, seeds };
 }
 
 export function readShowCropInfo(packet: PacketReader): ManorCropInfo_T {
-    packet.c();
+    const isButtonHidden = packet.c() === 1;
 
     const manorId = packet.d();
 
@@ -1968,11 +1971,11 @@ export function readShowCropInfo(packet: PacketReader): ManorCropInfo_T {
 
     if (packet.getRemaining()) throw new Error("Invalid ExShowCropInfo trailing data.");
 
-    return { manorId, crops };
+    return { isButtonHidden, manorId, crops };
 }
 
-export function readShowManorDefaultInfo(packet: PacketReader): ManorDefaultCrop_T[] {
-    packet.c();
+export function readShowManorDefaultInfo(packet: PacketReader): ManorDefaultInfo_T {
+    const isButtonHidden = packet.c() === 1; // NWindow 0x10135daa
 
     const count = readListCount(packet, 26, "ExShowManorDefaultInfo");
     const crops: ManorDefaultCrop_T[] = [];
@@ -1986,7 +1989,7 @@ export function readShowManorDefaultInfo(packet: PacketReader): ManorDefaultCrop
 
     if (packet.getRemaining()) throw new Error("Invalid ExShowManorDefaultInfo trailing data.");
 
-    return crops;
+    return { isButtonHidden, crops };
 }
 
 export function readShowSeedSetting(packet: PacketReader): ManorSeedSettings_T {

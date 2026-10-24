@@ -17,7 +17,7 @@ const TEX_FRAME = "L2UI_CH3.FrameCtrl.smallbar";
 type CommandChatLine_T = { text: string, color: number, indent: number };
 
 export class NCCommandInfoWnd {
-    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, "?" + TEX_TAB + "_over", TEX_TOGGLE, TEX_TOGGLE_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, ...[1, 2, 3].map(index => TEX_FRAME + index), ...NCListCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, ...NDOM_SCROLL_TEXTURES]; }
+    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `?${TEX_TAB}_over`, TEX_TOGGLE, TEX_TOGGLE_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, ...[1, 2, 3].map(index => `${TEX_FRAME}${index}`), ...NCListCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, ...NDOM_SCROLL_TEXTURES]; }
     public readonly element: HTMLDivElement;
     public readonly table: NCListCtrl;
     public readonly input: NDomEdit_T;
@@ -51,9 +51,9 @@ export class NCCommandInfoWnd {
         layer.tile(this.element, 12, 0, 336, 187, 0, 0, 336, 187, TEX_BACK);
         const frame = layer.createWindow(0, 0, 12, 187, this.element);
 
-        layer.tile(frame, 0, 0, 12, 8, 0, 0, 12, 8, TEX_FRAME + "1");
-        layer.tile(frame, 0, 8, 12, 171, 0, 0, 12, 8, TEX_FRAME + "2");
-        layer.tile(frame, 0, 179, 12, 8, 0, 0, 12, 8, TEX_FRAME + "3");
+        layer.tile(frame, 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_FRAME}1`);
+        layer.tile(frame, 0, 8, 12, 171, 0, 0, 12, 8, `${TEX_FRAME}2`);
+        layer.tile(frame, 0, 179, 12, 8, 0, 0, 12, 8, `${TEX_FRAME}3`);
         frame.addEventListener("mousedown", event => {
             if (event.button !== 0) return;
 

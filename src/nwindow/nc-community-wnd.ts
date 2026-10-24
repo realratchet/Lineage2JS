@@ -5,8 +5,8 @@ import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
 
 const TEX_PATH = "L2UI_CH3.BoardWnd.";
-const TEX_TAB = TEX_PATH + "Board_tab2";
-const TEX_SELECTED = TEX_PATH + "Board_tab1";
+const TEX_TAB = `${TEX_PATH}Board_tab2`;
+const TEX_SELECTED = `${TEX_PATH}Board_tab1`;
 const TEX_BUTTON = SKIN_SLOTS.smallButton;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.smallButtonDown;
 const TEX_CAPTION = "NWindow.Icon.chatback";
@@ -14,7 +14,7 @@ const arrTabs = [[377, 0], [379, 75], [381, 157], [382, 232], [403, 314], [905, 
 const arrActions = ["bypass _bbshome", "bypass _bbsgetfav", "bypass _bbsloc", "bypass _bbsclan", "bypass _bbsmemo", "bypass _maillist_0_1_0_", "bypass _friendlist_0_"];
 
 export class NCCommunityWnd {
-    public static getTextures(): string[] { return [TEX_PATH + "board_back1", TEX_PATH + "board_back2", TEX_PATH + "board_icon", TEX_TAB, TEX_SELECTED, "?" + TEX_TAB + "_over", TEX_BUTTON, TEX_BUTTON_DOWN, TEX_CAPTION, ...NCFrameCtrl.getTextures(), ...CBBSHtmlViewer.getTextures()]; }
+    public static getTextures(): string[] { return [`${TEX_PATH}board_back1`, `${TEX_PATH}board_back2`, `${TEX_PATH}board_icon`, TEX_TAB, TEX_SELECTED, `?${TEX_TAB}_over`, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_CAPTION, ...NCFrameCtrl.getTextures(), ...CBBSHtmlViewer.getTextures()]; }
     public readonly element: HTMLDivElement;
     public readonly viewer: CBBSHtmlViewer;
     public onRequest: () => void = null;
@@ -38,15 +38,15 @@ export class NCCommunityWnd {
 
         minimize.setAttribute("aria-label", "Minimize");
         minimize.addEventListener("mousedown", event => event.stopPropagation());
-        layer.tile(this.element, 0, 20, 646, 28, 0, 0, 646, 28, TEX_PATH + "board_back1");
-        layer.tile(this.element, 0, 48, 646, 482, 0, 0, 646, 482, TEX_PATH + "board_back2");
+        layer.tile(this.element, 0, 20, 646, 28, 0, 0, 646, 28, `${TEX_PATH}board_back1`);
+        layer.tile(this.element, 0, 48, 646, 482, 0, 0, 646, 482, `${TEX_PATH}board_back2`);
         this.viewer = new CBBSHtmlViewer(layer, this.element, 8, 51, 633, 474);
         this.viewer.onHide = () => this.hide();
         layer.button(this.element, 574, 25, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(380), () => {
             if (this.actions[7].length && !this.requestPending) this.submit(this.actions[7]);
         });
         arrTabs.forEach(([label, x], index) => {
-            const tab = layer.button(this.element, 12 + x, 25, 74, 23, TEX_TAB, TEX_TAB, TEX_TAB + "_over", manager.getSysString(label), null, isDown => {
+            const tab = layer.button(this.element, 12 + x, 25, 74, 23, TEX_TAB, TEX_TAB, `${TEX_TAB}_over`, manager.getSysString(label), null, isDown => {
                 if (!isDown) return;
 
                 this.selectTab(index);
@@ -65,7 +65,7 @@ export class NCCommunityWnd {
         this.folded.hidden = true;
         this.folded.tabIndex = -1;
         this.folded.setAttribute("aria-label", manager.getSysString(390));
-        layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_PATH + "board_icon");
+        layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, `${TEX_PATH}board_icon`);
         const captionText = manager.getSysString(390), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
@@ -170,7 +170,7 @@ export class NCCommunityWnd {
         this.tabs.forEach((tab, tabIndex) => {
             const texture = index === tabIndex ? TEX_SELECTED : TEX_TAB;
 
-            tab.setTextures(texture, texture, index === tabIndex ? texture : TEX_TAB + "_over");
+            tab.setTextures(texture, texture, index === tabIndex ? texture : `${TEX_TAB}_over`);
             tab.setAttribute("aria-selected", String(index === tabIndex));
         });
         this.viewer.element.hidden = false;

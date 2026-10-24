@@ -2,6 +2,7 @@ import type NetworkManager from "./network-manager";
 import type AnimationComponent from "../objects/components/animation-component";
 import { LoopOnce, Vector3 } from "three";
 import BaseActor from "../base-actor";
+import { RACE_WINNER_EFFECT } from "../assets/asset-manager";
 import PawnAttackComponent, { type NAttackActionParam_T } from "../objects/components/pawn-attack-component";
 import PawnEquipmentComponent from "../objects/components/pawn-equipment-component";
 import * as GamePackets from "./game-packets";
@@ -496,6 +497,19 @@ export class NetworkCombat {
 
             void this.network.getParent().getComponent("audio").playOneShotSound(uri, actor.position, sound.volume / 255, 1, sound.radius, sound.radius * 100);
         }
+    }
+
+    public async spawnRaceWinnerEffect(actor: BaseActor) { // monster race finish 0x104997e0: effect owned by the pawn, ItemSound2.race_end at Location, volume 1, radius 300
+        const asset = this.network.getParent().getComponent("asset"), render = this.network.getParent().getComponent("render");
+        const [library, uri] = await Promise.all([asset.loadRaceEffects(), asset.loadSound("ItemSound2.race_end")]);
+
+        if (!actor.parent) return;
+
+        const effect = asset.createScriptObject(render, library, RACE_WINNER_EFFECT);
+
+        effect.position.copy(actor.position);
+        render.addTransientEffect(effect, actor);
+        void this.network.getParent().getComponent("audio").playOneShotSound(uri, actor.position, 1, 1, 300, 300 * 100);
     }
 
     public async onPlaySound(packet: PacketReader) {

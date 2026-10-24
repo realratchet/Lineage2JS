@@ -17,7 +17,7 @@ const arrBars = ["ps_HPbar", "ps_MPbar"].map(name => `L2UI_CH3.PlayerStatusWnd.$
 const arrLabels = [94, 95, 96, 113, 111, 404, 98, 99, 97, 432, 112, 496];
 
 export class NCSummonedWnd {
-    public static getTextures(): string[] { return [TEX_BACK + "1", TEX_BACK + "2", TEX_BACK + "31", TEX_BACK + "32", TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_FOLDED, TEX_CAPTION, TEX_OUTLINE, TEX_PRESSED, "L2UI.NWindow.Number", ...arrBars, ...NCFrameCtrl.getTextures(), ...new NCTooltip().getTextures()]; }
+    public static getTextures(): string[] { return [`${TEX_BACK}1`, `${TEX_BACK}2`, `${TEX_BACK}31`, `${TEX_BACK}32`, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_FOLDED, TEX_CAPTION, TEX_OUTLINE, TEX_PRESSED, "L2UI.NWindow.Number", ...arrBars, ...NCFrameCtrl.getTextures(), ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
     public onAction: (id: number, ctrl: boolean, shift: boolean) => void = null;
     protected readonly folded: HTMLDivElement;
@@ -51,15 +51,15 @@ export class NCSummonedWnd {
             event.stopImmediatePropagation();
             this.setVisible(false);
         }, true);
-        layer.tile(this.element, 0, 20, 256, 67, 0, 0, 256, 67, TEX_BACK + "1");
-        layer.tile(this.element, 0, 87, 256, 23, 0, 0, 256, 23, TEX_BACK + "2");
+        layer.tile(this.element, 0, 20, 256, 67, 0, 0, 256, 67, `${TEX_BACK}1`);
+        layer.tile(this.element, 0, 87, 256, 23, 0, 0, 256, 23, `${TEX_BACK}2`);
         this.bars = [[35, 51], [35, 65]].map(([x, y], index) => layer.tile(this.element, x, y, 0, 12, 0, 0, 8, 12, arrBars[index]));
         this.values = this.createValues(this.element, 256, 87);
 
         for (let index = 0; index < 2; index++) {
             const pane = layer.createWindow(0, 110, 256, 91, this.element);
 
-            layer.tile(pane, 0, 0, 256, 91, 0, 0, 256, 91, TEX_BACK + (31 + index));
+            layer.tile(pane, 0, 0, 256, 91, 0, 0, 256, 91, `${TEX_BACK}${31 + index}`);
             this.panes.push(pane);
             this.tabs.push(layer.tab(this.element, 12 + index * 74, 87, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(491 + index), null, () => this.selectTab(index)));
         }

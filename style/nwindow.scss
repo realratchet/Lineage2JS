@@ -21,6 +21,14 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 
     > * { pointer-events: auto; }
 
+    > .ndom-console {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+
+        > * { pointer-events: auto; }
+    }
+
     [hidden] { display: none; }
 }
 
@@ -89,4 +97,9 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     image-rendering: auto;
 
     > div:not(.ndom-text) > b { position: absolute; background: rgba(255, 255, 255, 0.502); }
+}
+
+@keyframes l2-task-notification {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
 }

@@ -93,7 +93,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.musicGainNode.gain.value = 0.1;
 
         this.ambientGainNode = this.audioContext.createGain();
-        this.ambientGainNode.connect(this.soundscapeGainNode);
+        this.ambientGainNode.connect(this.masterGain);
         this.ambientGainNode.gain.value = 0.3;
 
         this.effectsGainNode = this.audioContext.createGain();
@@ -572,7 +572,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.isAmbientGridDirty = false;
     }
 
-    public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isDaytime: boolean, isSubmerged: boolean): void {
+    public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isSoundDay: boolean, isSoundNight: boolean, isSubmerged: boolean): void {
         const candidates = this.ambientCandidates;
         let maxPriority = -Infinity;
 
@@ -584,9 +584,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
         for (const component of this.cacheAmbientCells.get(getAmbientCellKey(Math.floor(px / AMBIENT_CELL_SIZE), Math.floor(py / AMBIENT_CELL_SIZE))) || arrNoAmbientSounds) {
             const info = component.info;
 
-            if (info.soundType === "day" && !isDaytime) continue;
-            if (info.soundType === "night" && isDaytime) continue;
-            if (info.soundType === "water" && !isSubmerged) continue;
+            if ((info.soundType === "water") !== isSubmerged) continue; // alaudio 0x1000ca0b: Always/Day/Night need dry, Water needs submerged
+            if (info.soundType === "day" && !isSoundDay) continue;
+            if (info.soundType === "night" && !isSoundNight) continue;
 
             const dx = info.position[0] - px;
             const dy = info.position[1] - py;

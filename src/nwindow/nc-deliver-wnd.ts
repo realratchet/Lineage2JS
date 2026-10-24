@@ -16,9 +16,9 @@ export class NCDeliverWnd extends NCShopWnd {
     }
 
     public getTargetId() { return this.targetId; }
-    public setVisible(visible: boolean) {
-        super.setVisible(visible);
-        if (!visible) this.targetId = 0;
+    public reset() {
+        this.targetId = 0;
+        super.reset();
     }
     public async showPackage(list: PackageSendableList_T) {
         const pending = this.show(false, list.adena, list.items.map(item => ({ ...item, price: 0 })));

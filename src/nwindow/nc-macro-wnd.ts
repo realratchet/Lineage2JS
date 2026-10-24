@@ -49,7 +49,7 @@ export class NCMacroWnd {
         [this.element, this.editor, this.info].forEach((element, index) => {
             element.hidden = true;
             layer.tile(element, 0, 20, 256, index === 2 ? 141 : 381, 0, 0, 256, index === 2 ? 141 : 381, arrBack[index]);
-            NCFrameCtrl.createDOM(layer, element, 256, manager.getSysString(index === 2 ? 657 : 711), index !== 2);
+            NCFrameCtrl.createDOM(layer, element, 256, manager.getSysString(index === 2 ? 657 : 711), index !== 2, index === 1 ? () => this.setEditorVisible(false) : null);
         });
         layer.text(this.element, manager.getSysString(655), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.count = layer.text(this.element, "(00/24)", 0xffdcdcdc, FontType_T.SMALL, 200, 32);
@@ -87,7 +87,7 @@ export class NCMacroWnd {
         rows.setContentHeight(312);
         layer.button(this.editor, 11, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(145), () => { if (this.onHelp) this.onHelp(); }).setAttribute("aria-label", manager.getSysString(145));
         layer.button(this.editor, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(658), () => this.save()).setAttribute("aria-label", manager.getSysString(658));
-        layer.button(this.editor, 171, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => { this.editor.hidden = true; this.info.hidden = true; }).setAttribute("aria-label", manager.getSysString(141));
+        layer.button(this.editor, 171, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => this.setEditorVisible(false)).setAttribute("aria-label", manager.getSysString(141));
         layer.text(this.info, manager.getSysString(57), 0xffdcdcdc, FontType_T.SMALL, 9, 30);
         this.description = document.createElement("textarea");
         this.description.maxLength = 32;
@@ -118,7 +118,12 @@ export class NCMacroWnd {
 
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
-    public hide() { this.element.hidden = this.editor.hidden = this.info.hidden = true; }
+    public hide() { this.setEditorVisible(false); this.element.hidden = true; }
+
+    public setEditorVisible(visible: boolean) {
+        if (!visible) this.info.hidden = true;
+        this.editor.hidden = !visible;
+    }
 
     public highlightCommand(x: number, y: number) {
         if (this.editor.hidden) return;
@@ -187,7 +192,7 @@ export class NCMacroWnd {
             edit.setValue(command ? this.getCommandText(command) : "");
         });
         this.info.hidden = true;
-        this.editor.hidden = false;
+        this.setEditorVisible(true);
     }
 
     protected getCommandText(command: MacroCommand_T) {
@@ -246,8 +251,7 @@ export class NCMacroWnd {
         }
         if (!commands.length) { if (this.onError) this.onError(810); return; }
         if (this.onSave) this.onSave({ id: this.current ? this.current.id : 0, name, acronym: this.acronym.getValue(), description: this.descriptionText, icon: this.iconIndex, commands });
-        this.editor.hidden = true;
-        this.info.hidden = true;
+        this.setEditorVisible(false);
     }
 
     public setMacros(macros: Macro_T[]) {

@@ -47,7 +47,7 @@ type HtmlToken_T = { tag: string, isOpen: boolean, attrs: Record<string, string>
 type HtmlBlock_T = { element: HTMLElement, paragraph: HTMLDivElement, paragraphAlign: number, width: number, minimumWidth: number, tables: HtmlTable_T[] };
 type HtmlCell_T = { element: HTMLTableCellElement, block: HtmlBlock_T, fixedWidth: number };
 type HtmlTable_T = { table: HTMLTableElement, frame: SVGSVGElement, row: HTMLTableRowElement, cell: HTMLTableCellElement, border: number, padding: number, spacing: number, width: number, height: number, isPercentage: boolean, rows: HtmlCell_T[][], columns: number[], naturalWidth: number, minimumWidth: number };
-type HtmlLink_T = { target: string, isUnderlined: boolean };
+type HtmlLink_T = { target: string, isUnderlined: boolean, msg: string };
 type HtmlVariable_T = { name: string, isMultiline: boolean, edit: { getValue(): string, setValue(value: string): void } };
 
 function measureHtmlTable(table: HtmlTable_T) { // NWindow 0x1003e2e2..0x1003e477.
@@ -441,6 +441,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     public onLink: (path: string) => void = null;
     public onFile: (path: string) => void = null;
     public onHide: () => void = null;
+    public onConfirm: (text: string, onOk: () => void) => void = null;
     protected readonly layer: NDomLayer;
     protected readonly width: number;
     protected readonly height: number;
@@ -660,9 +661,9 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     break;
                 case "A": // Layout 0x100415bd: LINK -> mode 1, ACTION -> mode 2, CMD -> mode 9 (target not kept for CMD).
                     if (!token.isOpen) link = null;
-                    else if ("LINK" in attrs) link = { target: attrs.LINK, isUnderlined: true };
-                    else if ("ACTION" in attrs) link = { target: attrs.ACTION, isUnderlined: false };
-                    else if ("CMD" in attrs) link = { target: null, isUnderlined: false };
+                    else if ("LINK" in attrs) link = { target: attrs.LINK, isUnderlined: true, msg: null };
+                    else if ("ACTION" in attrs) link = { target: attrs.ACTION, isUnderlined: false, msg: attrs.MSG || null }; // MSG kept for ACTION only (0x1004162a)
+                    else if ("CMD" in attrs) link = { target: null, isUnderlined: false, msg: null };
                     else link = null;
                     break;
                 case "BR": if (token.isOpen) addRow().style.height = `${BR_HEIGHT}px`; break;
@@ -892,6 +893,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                         word.addEventListener("click", () => {
                             this.layer.getManager().playButtonSound(true);
                             if (link.isUnderlined) { if (this.onFile) this.onFile(target); }
+                            else if (link.msg) this.confirmLink(link.msg, target);
                             else this.dispatch(target);
                         });
                     }
@@ -997,6 +999,15 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
         const variable = this.variables.find(entry => entry.name === name);
 
         return variable ? variable.edit.getValue() : null;
+    }
+
+    protected confirmLink(msg: string, target: string) { // link click 0x1004baa0 -> 0x1004b8e0: "id;param" becomes sysmsg id with the first $s1 replaced, OK/Cancel instance (console +0x240)
+        if (!this.onConfirm) throw new Error(`No confirm handler for link message '${msg}'.`);
+
+        const id = Number.parseInt(msg, 10), separator = msg.lastIndexOf(";");
+        const text = id > 0 ? this.layer.getManager().getSystemMessage(id).replace("$s1", separator < 0 ? "" : msg.slice(separator + 1)) : msg;
+
+        this.onConfirm(text, () => this.dispatch(target));
     }
 
     public dispatch(target: string): number { // Console link handler 0x10072560: BYPASS args re-tokenized, first "-h" dropped and hides the window, "$var" replaced by the edit value.

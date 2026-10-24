@@ -10,7 +10,7 @@ const TEX_CP_BACK = "L2UI_CH3.SmallWnd.CpBar_back";
 const TEX_HP_BACK = "L2UI_CH3.SmallWnd.HpBar_back";
 
 export class NCOlympiadTargetWnd {
-    public static getTextures(): string[] { return [1, 2, 3].flatMap(index => [TEX_BACK + index, TEX_STRIP + index]).concat([TEX_CP, TEX_HP, TEX_CP_BACK, TEX_HP_BACK]); }
+    public static getTextures(): string[] { return [1, 2, 3].flatMap(index => [`${TEX_BACK}${index}`, `${TEX_STRIP}${index}`]).concat([TEX_CP, TEX_HP, TEX_CP_BACK, TEX_HP_BACK]); }
 
     public readonly element: HTMLDivElement;
     protected readonly cpBar: HTMLDivElement;
@@ -22,12 +22,12 @@ export class NCOlympiadTargetWnd {
     public constructor(protected readonly layer: NDomLayer) {
         this.element = layer.createWindow(0, 0, 172, 46);
         this.element.hidden = true;
-        layer.tile(this.element, 12, 0, 16, 46, 0, 0, 16, 46, TEX_BACK + "1");
-        layer.tile(this.element, 28, 0, 172 - 44, 46, 0, 0, 16, 46, TEX_BACK + "2");
-        layer.tile(this.element, 172 - 16, 0, 16, 46, 0, 0, 16, 46, TEX_BACK + "3");
-        layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, TEX_STRIP + "1");
-        layer.tile(this.element, 0, 8, 12, 38, 0, 0, 12, 8, TEX_STRIP + "2");
-        layer.tile(this.element, 0, 38, 12, 8, 0, 0, 12, 8, TEX_STRIP + "3");
+        layer.tile(this.element, 12, 0, 16, 46, 0, 0, 16, 46, `${TEX_BACK}1`);
+        layer.tile(this.element, 28, 0, 172 - 44, 46, 0, 0, 16, 46, `${TEX_BACK}2`);
+        layer.tile(this.element, 172 - 16, 0, 16, 46, 0, 0, 16, 46, `${TEX_BACK}3`);
+        layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}1`);
+        layer.tile(this.element, 0, 8, 12, 38, 0, 0, 12, 8, `${TEX_STRIP}2`);
+        layer.tile(this.element, 0, 38, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}3`);
         layer.tile(this.element, 16, 26, 150, 6, 0, 0, 8, 6, TEX_CP_BACK);
         layer.tile(this.element, 16, 33, 150, 6, 0, 0, 8, 6, TEX_HP_BACK);
         this.cpBar = layer.tile(this.element, 16, 26, 0, 6, 0, 0, 8, 6, TEX_CP);

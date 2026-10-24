@@ -459,6 +459,13 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected calcVelocity(position: Vector3, accelDir: Vector3, deltaTime: number, maxSpeed: number) {
+        const parent = this.getParent(), controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (controller && (controller as any).isPlayerController && getProperty(controller, "bCameraWalking")) {
+            this.calcCameraWalkingVelocity(controller, accelDir, deltaTime, maxSpeed);
+            return;
+        }
+
         if (this.acceleration.lengthSq() === 0) {
             this.velocity.set(0, 0, 0);
             return;
@@ -471,6 +478,31 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const speed = Math.min(maxSpeed, Math.max(0, distance / deltaTime));
 
         this.velocity.copy(accelDir).multiplyScalar(speed);
+    }
+
+    protected calcCameraWalkingVelocity(controller: ScriptHost_T, direction: Vector3, deltaTime: number, speed: number) { // APawn::calcVelocity 0x105ff0e9..0x105ff390.
+        const parent = this.getParent(), target = getProperty(controller, "MoveTarget") as ScriptHost_T;
+        const destination = getProperty(target || controller, target ? "Location" : "Destination") as Vector3Arr, location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
+        const dx = Math.fround(destination[0] - location[0]), dy = Math.fround(destination[1] - location[1]), dz = Math.fround(destination[2] - location[2]);
+        const distance = Math.fround(Math.sqrt(dx * dx + dy * dy + dz * dz));
+        const minimum = parent.getUnrealScriptProperty("fMinAirSpeed") as number, acceleration = parent.getUnrealScriptProperty("fAirSpeedAccel") as number;
+
+        deltaTime = Math.fround(deltaTime);
+        const nextMaximum = Math.fround((parent.getUnrealScriptProperty("fMaxAirSpeed") as number) + deltaTime * (parent.getUnrealScriptProperty("fMaxAirSpeedIncRate") as number));
+        const maximum = nextMaximum < minimum ? minimum : Math.min(1000, nextMaximum);
+        const mode = parent.getUnrealScriptProperty("CameraWalkingAccelMode") as number;
+        const braking = mode !== 2 && speed / acceleration * speed * 0.5 >= distance;
+
+        parent.setUnrealScriptProperty("fMaxAirSpeed", maximum);
+        if (mode === 2) speed = maximum;
+        else {
+            speed = Math.fround((parent.getUnrealScriptProperty("AirSpeed") as number) + deltaTime * acceleration * (braking ? -1 : 1));
+            speed = braking ? Math.max(0, speed) : Math.min(maximum, speed);
+        }
+        parent.setUnrealScriptProperty("AirSpeed", speed);
+        this.velocity.set(Math.fround(direction.x * speed), Math.fround(direction.y * speed), Math.fround(direction.z * speed));
+        if ((mode === 2 || braking) && deltaTime > 0 && Math.fround(this.velocity.length()) * deltaTime > distance)
+            this.velocity.set(Math.fround(dx / deltaTime), Math.fround(dy / deltaTime), Math.fround(dz / deltaTime));
     }
 
     protected updateBaseMovement(position: Vector3) {
@@ -724,12 +756,13 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (hit) this.getHitNormal(hit, tmpStepNormal);
         else tmpStepNormal.set(0, 0, 0);
 
-        let current: CheckResult_T | null = hit;
+        let current: CheckResult_T | null = hit, isSteppedUp = false;
 
         if (Math.abs(tmpStepNormal.z) < MAX_STEP_SIDE_Z || tmpStepNormal.z >= MIN_FLOOR_Z) {
             this.moveActor(position, tmpStepUp.set(0, 0, MAX_STEP_HEIGHT));
 
             current = this.moveActor(position, movement);
+            isSteppedUp = true;
         } else if (this.physicsMode !== "walking") {
             tmpStepRemaining.set(movement.x, movement.y, movement.z + movement.length() * tmpStepNormal.z);
             current = this.moveActor(position, tmpStepRemaining);
@@ -739,6 +772,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
             return;
         }
+
+        if (isSteppedUp) this.hitWallNotify(current.actor); // APawn::stepUp 0x8cf894
 
         this.getHitNormal(current, tmpNormal);
 
@@ -776,6 +811,14 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         }
 
         this.moveActor(position, tmpDown.set(0, 0, -MAX_STEP_HEIGHT));
+    }
+
+    protected hitWallNotify(actor: ICollidable) { // ALineagePlayerController::HitWallNotify 0x8049d0
+        const network = this.renderManager.getParent().getComponent("network");
+
+        if (this.getParent() !== this.renderManager.player || !network.isInWorld() || !this.actorState.locomotion || actor === this.actorState.desired.actor) return;
+
+        network.cannotMoveAnymore();
     }
 
     protected processHitWall(normal: Vector3, actor: ICollidable): void {
@@ -1684,6 +1727,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (mode !== "nMover") this.stopNMover();
         this.physicsMode = mode;
+        this.hasStartedPhysics = true;
     }
 
     public flyTo(destination: Vector3): void {

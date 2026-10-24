@@ -271,8 +271,8 @@ export class NetworkActors {
 
         if (generation !== this.teleportGeneration) return;
 
-        asset.playerController.setPawn(render.player);
         render.player.setUnrealScriptProperty("Level", level.levelInfoActor as any);
+        asset.playerController.setPawn(render.player);
         physics.setPawnZone(render.player, false, true);
         physics.setPawnVolumes(render.player);
         this.userAppearanceLoad = null;
@@ -426,6 +426,7 @@ export class NetworkActors {
         if (!this.inWorld) return;
 
         render.setZoneMusicEnabled(true);
+        this.network.items.requestManorList(); // NConsole 0x1006fa20 -> 0x1006db90 on the switch into the game console
         this.network.ui.showWorld();
     }
 
@@ -625,7 +626,7 @@ export class NetworkActors {
         if (objectId === this.network.getTargetId()) this.network.combat.updateTarget();
     }
 
-    protected setNpc(info: GamePackets.NpcInfo_T, updateLocation: boolean = true) {
+    public setNpc(info: GamePackets.NpcInfo_T, updateLocation: boolean = true) {
         const object = this.objects.get(info.objectId);
 
         if (object) {
@@ -861,6 +862,7 @@ export class NetworkActors {
         const wasTarget = objectId === this.network.getTargetId();
 
         if (objectId === this.deletedPetId) this.deletedPetId = 0;
+        this.network.monRace.removeRacer(objectId);
 
         if (this.petInfo.objectId === objectId) {
             Object.assign(this.petInfo, { objectId: -1, x: 0, y: 0, z: 0 });

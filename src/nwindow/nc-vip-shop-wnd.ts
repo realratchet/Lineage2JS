@@ -232,7 +232,7 @@ export class NCVIPShopWnd {
                 length--;
             }
             reduction = baseWidth - prefixWidth - dots;
-            text = length < 0 ? "." : baseName.slice(0, length) + ".."; // NCItemTooltip::Paint 0x1002ca1e: exhausted index -1 leaves one visible dot.
+            text = length < 0 ? "." : `${baseName.slice(0, length)}..`; // NCItemTooltip::Paint 0x1002ca1e: exhausted index -1 leaves one visible dot.
         }
         this.layer.text(name, text, 0xffdcdcdc, FontType_T.SMALL, 0, 0);
         if (extra) this.layer.text(name, extra, 0xffffd969, FontType_T.SMALL, baseWidth - reduction + 2, 0);

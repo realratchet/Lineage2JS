@@ -58,6 +58,7 @@ export class SpecialView {
     public constructor(protected readonly input: InputManager) {}
 
     public isActive() { return this.objectId !== 0; }
+    public isWide() { return this.isActive() && !this.isReturning && !!this.request && this.request.wideScreen === 1; } // bRenderWide: set by SetSpecialViewTarget, cleared when release starts (0x1053077e)
     public reset() { if (this.isActive()) this.finish(); }
 
     public update(network: NetworkManager, delta: number) { // SetSpecialViewTarget 0x800000, SpecialViewTick 0x800860, ReleaseSpecialViewTarget 0x800700.

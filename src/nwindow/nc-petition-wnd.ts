@@ -66,7 +66,7 @@ export class NCPetitionWnd {
     public isVisible() { return !this.element.hidden; }
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;
-        if (isVisible) this.layer.activate(this.element);
+        if (isVisible) { this.layer.activate(this.element); if (this.isGM) this.input.focus(); } // retail Alt+O shows the GM edit caret on open
         else { this.input.input.blur(); if (!this.isGM) this.evaluate.setEnabled(false); }
     }
 

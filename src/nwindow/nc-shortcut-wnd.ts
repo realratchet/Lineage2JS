@@ -101,17 +101,16 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
         this.element.addEventListener("mousemove", event => { if (!this.isPressed) this.setHoveredSlot(this.getSlotAtClient(event.clientX, event.clientY)); });
         this.element.addEventListener("mouseleave", () => this.setHoveredSlot(-1));
 
-        window.addEventListener("keydown", event => {
-            if (!this.isVisible()) return;
+    }
 
-            const match = /^F(\d+)$/.exec(event.key);
+    public onKeyDown(event: KeyboardEvent) {
+        const match = /^F(\d+)$/.exec(event.key);
 
-            if (!match || Number(match[1]) > SLOTS_PER_PAGE) return;
+        if (!match || Number(match[1]) > SLOTS_PER_PAGE) return;
 
-            event.preventDefault();
+        event.preventDefault();
 
-            if (this.onUse) this.onUse(this.page, Number(match[1]) - 1, event.ctrlKey, event.shiftKey);
-        }, true);
+        if (this.onUse) this.onUse(this.page, Number(match[1]) - 1, event.ctrlKey, event.shiftKey);
     }
 
     public isVisible() { return !this.element.hidden; }

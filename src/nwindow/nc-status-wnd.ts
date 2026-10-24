@@ -14,7 +14,7 @@ export function fitName(layer: NDomLayer, text: string, width: number) { // 0x10
 }
 
 export abstract class NCStatusWnd {
-    public static getTextures(): string[] { return [TEX_FRAME + "1", TEX_FRAME + "2", TEX_FRAME + "3"]; }
+    public static getTextures(): string[] { return [`${TEX_FRAME}1`, `${TEX_FRAME}2`, `${TEX_FRAME}3`]; }
 
     public readonly element: HTMLDivElement;
     protected readonly arrFrame: HTMLDivElement[];
@@ -32,8 +32,8 @@ export abstract class NCStatusWnd {
         this.element = layer.createWindow(x, y, MIN_WIDTH, height);
         this.element.hidden = true;
         this.element.classList.add("ndom-opaque");
-        this.arrFrame = [1, 2, 3].map(index => layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, TEX_FRAME + index));
-        this.arrBack = [0, 1, 2].map(() => layer.tile(this.element, 0, 0, 0, 0, 0, 0, 1, 1, TEX_FRAME + "1"));
+        this.arrFrame = [1, 2, 3].map(index => layer.tile(this.element, 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_FRAME}${index}`));
+        this.arrBack = [0, 1, 2].map(() => layer.tile(this.element, 0, 0, 0, 0, 0, 0, 1, 1, `${TEX_FRAME}1`));
         this.grip = NCFrameCtrl.createGrip(layer, this.element, 0, gripY, 12, height - gripY);
         this.name = layer.text(this.element, "", 0xffdcdcdc, undefined, 0, 0);
         this.name.style.pointerEvents = "none";
@@ -97,9 +97,9 @@ export abstract class NCStatusWnd {
         this.height = height;
         this.element.style.width = `${W}px`;
         this.element.style.height = `${height}px`;
-        layer.placeTile(this.arrFrame[0], 0, 0, 12, 8, 0, 0, 12, 8, TEX_FRAME + "1");
-        layer.placeTile(this.arrFrame[1], 0, 8, 12, height - 16, 0, 0, 12, 8, TEX_FRAME + "2");
-        layer.placeTile(this.arrFrame[2], 0, height - 8, 12, 8, 0, 0, 12, 8, TEX_FRAME + "3");
+        layer.placeTile(this.arrFrame[0], 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_FRAME}1`);
+        layer.placeTile(this.arrFrame[1], 0, 8, 12, height - 16, 0, 0, 12, 8, `${TEX_FRAME}2`);
+        layer.placeTile(this.arrFrame[2], 0, height - 8, 12, 8, 0, 0, 12, 8, `${TEX_FRAME}3`);
         layer.placeTile(this.arrBack[0], 12, 0, 16, height, 0, 0, 16, sourceHeight, back[0]);
         layer.placeTile(this.arrBack[1], 28, 0, W - 28 - endOffset, height, 0, 0, 16, sourceHeight, back[1]);
         layer.placeTile(this.arrBack[2], W - endOffset, 0, endWidth, height, 0, 0, endWidth, sourceHeight, back[2]);

@@ -51,13 +51,16 @@ export class NCItemEnchantWnd {
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
-        this.element.hidden = !visible;
-        if (visible) return;
+        if (visible) {
+            this.element.hidden = false;
+            return;
+        }
 
         this.items = [];
         this.selected = -1;
         this.frames.length = 0;
         this.list.content.replaceChildren();
+        this.element.hidden = true;
         if (this.onHideTooltip) this.onHideTooltip();
     }
 

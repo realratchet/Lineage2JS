@@ -113,7 +113,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
             this.layer.place(this.element, Math.trunc(screenWidth * 0.5 - 128), Math.trunc(screenHeight * 0.5 - 54));
     }
 
-    public show(text: string, type: DialogType_T, onResult: (isOk: boolean, value?: string) => void, cancelOnReplace = true, timerDuration = 0, messageId = 0) {
+    public show(text: string, type: DialogType_T, onResult: (isOk: boolean, value?: string) => void, cancelOnReplace = true, timerDuration = 0, messageId = 0, isModal = false) {
         const manager = this.layer.getManager();
 
         if (this.isOpen()) {
@@ -155,6 +155,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         }
 
         this.element.hidden = false;
+        this.layer.setModal(this.element, isModal);
         if (messageId) manager.playSystemMessageSound(messageId); // NCGaraDialogBox::Show 0x100095c0 submits item_sound, then sys_msg_ref.
         this.renderText(text.split("\\n").join("\r\n"));
         this.placeOnScreen(this.screenWidth, this.screenHeight);
@@ -212,6 +213,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         this.timerFrame = 0;
         this.timer.hidden = true;
         this.element.hidden = true;
+        this.layer.setModal(this.element, false);
         this.owner = null;
         this.onResult = null;
         this.onTextResult = null;

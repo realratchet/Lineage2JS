@@ -56,6 +56,7 @@ const NPC_SPAWN_FLOOR_DISTANCE = 2000;
 const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
 const UNDERWATER_EFFECTS = ["LineageEffect.e_u061_cam", "LineageEffect.e_u061_beam"];
 const SOCIAL_EFFECTS = ["LineageEffect.e_u004_a", "LineageEffect.e_u091_a"];
+export const RACE_WINNER_EFFECT = "LineageEffect.s_u007_b";
 const ABNORMAL_EFFECTS = ["000", "001", "002", "004", "005", "006", "007", "008"].map(id => `LineageEffect.a_u${id}_a`);
 const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
 
@@ -238,6 +239,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected cursorLoad: Promise<void> = null;
     protected questEffectLibrary: Promise<DecodeLibrary> = null;
     protected socialEffectLibrary: Promise<DecodeLibrary> = null;
+    protected raceEffectLibrary: Promise<DecodeLibrary> = null;
     protected bigHeadScales: Promise<Record<string, number>> = null;
     protected abnormalEffectLibrary: Promise<DecodeLibrary> = null;
     protected fishingLibrary: Promise<DecodeLibrary> = null;
@@ -409,6 +411,16 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!this.questEffectLibrary) this.questEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, ["LineageEffect.e_u088_a", "LineageEffect.e_u088_b"]);
 
         const library = await this.questEffectLibrary;
+
+        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (library as any).preferCompressedTextures = this.preferCompressedTextures;
+        return library;
+    }
+
+    public async loadRaceEffects(): Promise<DecodeLibrary> {
+        if (!this.raceEffectLibrary) this.raceEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, [RACE_WINNER_EFFECT], [], [RACE_WINNER_EFFECT]);
+
+        const library = await this.raceEffectLibrary;
 
         library.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (library as any).preferCompressedTextures = this.preferCompressedTextures;

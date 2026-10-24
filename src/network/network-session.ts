@@ -274,8 +274,8 @@ export class NetworkSession {
         const properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
 
         file.setScene(scene);
-        // shortcut: follow-camera presets; extend after observer/free-camera initialization is traced.
-        if (scene.cameraMode || scene.observerMode) throw new Error(`Replay camera mode is not implemented.`);
+        // shortcut: follow-camera presets; extend after free-camera initialization is traced.
+        if (scene.cameraMode) throw new Error(`Replay camera mode is not implemented.`);
         const presetCount = properties.get("FixedDefaultViewNum") as number;
 
         if (scene.fixedCamera < 0 || scene.fixedCamera >= Math.max(1, presetCount)) throw new Error(`Invalid replay camera preset '${scene.fixedCamera}'.`);
@@ -313,6 +313,7 @@ export class NetworkSession {
             await this.network.actors.enterWorld(info);
             if (this.game !== game) return;
 
+            if (scene.observerMode) this.network.movement.startReplayObservation(info); // SetCameraPosition 0x10489775: GL2 observer flag and controller observer bit
             render.getEnvironment().setTimeOfDay(scene.hour + scene.minute / 60 + scene.second / 3600);
             render.getEnvironment().setTimeScale(GAME_TIME_SCALE);
             game.prepareReplayPlayback();

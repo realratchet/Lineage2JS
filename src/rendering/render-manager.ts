@@ -56,6 +56,7 @@ import type { INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn"
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import Radar from "./radar";
 import OverHeadAlarm from "./over-head-alarm";
+import WideScreenBars from "./wide-screen-bars";
 import QuestArrow from "./quest-arrow";
 import ViewportWindow from "./viewport-window";
 import type PawnFishingComponent from "../objects/components/pawn-fishing-component";
@@ -292,6 +293,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly visualizer: Visualizer;
     public readonly radar = new Radar();
     public readonly overHeadAlarm = new OverHeadAlarm();
+    protected readonly wideScreenBars = new WideScreenBars();
     public readonly questArrow = new QuestArrow(this);
     protected viewportWindow: ViewportWindow = null;
     protected viewportSceneCanvas: HTMLCanvasElement = null;
@@ -2286,10 +2288,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         {
             const camPos = this.camera.position;
             const timeOfDay = this.environment.getTimeOfDay();
-            const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
+            const isSoundDay = timeOfDay >= 5.999 || timeOfDay <= 0.001, isSoundNight = timeOfDay < 6.001 || timeOfDay > 23.999; // UL2NEnvManager::IsSoundDay 0x104e7360 / IsSoundNight 0x104e73a0
             const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
 
-            this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isDaytime, isSubmerged);
+            this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isSoundDay, isSoundNight, isSubmerged);
 
             if (!this.lastListenerPos.equals(camPos) || !this.lastListenerQuat.equals(this.camera.quaternion)) {
                 this.lastListenerPos.copy(camPos);
@@ -2555,6 +2557,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.getWaterEffects().underWaterEffect.renderCellophane(this.renderer);
         this.renderer.getSize(tmpSize);
+        if (this.getInputManager().isRenderingWide()) this.wideScreenBars.render(this.renderer, tmpSize);
         this.overHeadAlarm.draw(this.renderer);
         this.questArrow.draw();
         this.radar.render(this.renderer, this.camera, this.player.position, tmpSize.x, tmpSize.y);
