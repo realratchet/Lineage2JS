@@ -33,7 +33,7 @@ import type GroundPickup from "../objects/ground-pickup";
 import ShadowProjector from "../objects/shadow-projector";
 import type DynamicLight from "../objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
-import type { ZoneObject, SectorObject } from "../objects/zone-object";
+import type { ZoneObject, SectorObject, FogInfoObject } from "../objects/zone-object";
 import { IEngineComponent, IObject } from "../game/components";
 import type GameManager from "../game/game-manager";
 import type UIManager from "../game/ui-manager";
@@ -294,6 +294,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly radar = new Radar();
     public readonly overHeadAlarm = new OverHeadAlarm();
     protected readonly wideScreenBars = new WideScreenBars();
+    protected readonly fogBlend = new FogBlendState();
+    protected fogSource: L2Environment | ZoneObject | FogInfoObject | null = null;
     public readonly questArrow = new QuestArrow(this);
     protected viewportWindow: ViewportWindow = null;
     protected viewportSceneCanvas: HTMLCanvasElement = null;
@@ -1162,6 +1164,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public getLevel(): SectorObject { return this.level; }
     public setLevel(level: SectorObject, netMode: ENetMode_T = ENetMode_T.NM_Standalone): void {
         this.level = level;
+        this.fogSource = null;
         if (level) {
             level.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
             for (const sector of this.arrSceneSectors) sector.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
@@ -1876,6 +1879,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected updateEnvironment(camera = this.camera, updateAudio = true) {
         const env = this.environment;
         if (!env) return;
+        const followsPawn = camera === this.camera && this.manGame.getComponent("network")?.isInWorld() && this.getInputManager().isFollowingPlayer() && this.getInputManager().isUsingOrbitControls();
+        const fogCamera = camera === this.camera && this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : camera;
+        const fogPosition = followsPawn ? this.player.position : fogCamera.position;
 
         const targetSkyColor = env.getSkyColor(tmpColorByte);
 
@@ -1897,11 +1903,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         let targetFogColor = env.getHazeColor(tmpColorByte_2);
+        let fogSource: L2Environment | ZoneObject | FogInfoObject = env;
 
         // targetFogStart = 1;
         // targetFogEnd = 10
 
-        const sector = this.getSector(camera.position);
+        const sector = this.getSector(fogPosition);
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let skyVisibility = 1.0;
 
@@ -1912,12 +1919,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
         ];
 
         if (sector) {
-            const zoneIndex = sector.findPositionZone(camera.position);
+            const zoneIndex = sector.findPositionZone(fogPosition);
             const cameraZoneMask = 1n << BigInt(zoneIndex);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
             // FLevelSceneNode::Render: direct zone fog (0x8f327c); outdoor world fog (0x8f3077-0x8f31b2).
             if (zone && zone.fog && (!zone.isSunAffected || !this.manGame.getComponent("asset").getStreaming())) {
+                fogSource = zone;
                 targetFogStart = zone.fog.near;
                 targetFogEnd = zone.fog.far;
                 targetFogColor.set(zone.fog.color.r * 255, zone.fog.color.g * 255, zone.fog.color.b * 255);
@@ -1938,8 +1946,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             const fogInfosAll: any[] = [];
             const sectorSize = 256 * 128;
-            const currentX = Math.floor(camera.position.x / sectorSize) + 20;
-            const currentY = Math.floor(camera.position.y / sectorSize) + 18;
+            const currentX = Math.floor(fogPosition.x / sectorSize) + 20;
+            const currentY = Math.floor(fogPosition.y / sectorSize) + 18;
 
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
@@ -1957,8 +1965,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             this.activeFogId = null;
             let minFogDist = Infinity;
-            const bspCullingCamera = (camera === this.camera && this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : camera;
-            const fogRefPosition = bspCullingCamera.position;
+            const fogRefPosition = fogPosition;
 
             let maxHArrLen = 0;
             const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
@@ -2063,6 +2070,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             });
 
             if (this.activeFogId) {
+                fogSource = activeInfos[0].fogInfo;
                 targetFogStart = accStart / totalFogWeight;
                 targetFogEnd = accEnd / totalFogWeight;
                 targetFogColor.set(
@@ -2119,7 +2127,26 @@ export class RenderManager implements IEngineComponent<GameManager> {
             } else tmpColorByte_4.set(255, 255, 255, 255);
         }
 
-        const waterVolume = sector ? sector.getWaterVolumeAt(camera.position) : null;
+        if (camera === this.camera) {
+            if (updateAudio) {
+                if (!this.fogSource) this.fogBlend.snapToTarget(targetFogColor, targetFogStart, targetFogEnd);
+                else if (fogSource !== this.fogSource) this.fogBlend.setTarget(targetFogColor, targetFogStart, targetFogEnd);
+                else {
+                    this.fogBlend.targetColor.copy(targetFogColor);
+                    this.fogBlend.targetStart = targetFogStart;
+                    this.fogBlend.targetEnd = targetFogEnd;
+                }
+                this.fogSource = fogSource;
+                this.fogBlend.update(this.viewShakeDelta);
+            }
+            if (this.fogSource) {
+                targetFogColor.copy(this.fogBlend.currentColor);
+                targetFogStart = this.fogBlend.currentStart;
+                targetFogEnd = this.fogBlend.currentEnd;
+            }
+        }
+
+        const waterVolume = sector ? sector.getWaterVolumeAt(fogPosition) : null;
 
         if (updateAudio) {
             this.getWaterEffects().underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
