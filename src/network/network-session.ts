@@ -35,6 +35,7 @@ export class NetworkSession {
     public charGroups: ICharacterGroup[] = null;
     public selectedSlot = -1;
     public replayLoading = false;
+    public replayStopAt = -1;
 
     public constructor(protected readonly network: NetworkManager) {}
 
@@ -281,7 +282,7 @@ export class NetworkSession {
         const presetCount = properties.get("FixedDefaultViewNum") as number;
 
         if (scene.fixedCamera < 0 || scene.fixedCamera >= Math.max(1, presetCount)) throw new Error(`Invalid replay camera preset '${scene.fixedCamera}'.`);
-        if (!first || first.opcode !== GamePackets.GameServerPacket_T.UserInfo || first.time !== 0) throw new Error(`Replay requires an initial UserInfo snapshot.`);
+        if (!first || first.opcode !== GamePackets.GameServerPacket_T.UserInfo) throw new Error(`Replay requires an initial UserInfo snapshot.`);
         if (lockCamera) {
             for (const { key, action, amount } of file.arrCameraInstructions) {
                 if ((key === EInputKey_T.IK_MouseX || key === EInputKey_T.IK_MouseY) && action === EInputAction_T.IST_Axis) {
@@ -336,6 +337,16 @@ export class NetworkSession {
         }
     }
 
+    public requestReplayStop(): void {
+        if (!this.game?.isPlayingReplay() || this.replayStopAt >= 0) return;
+        if (this.replayLoading) { void this.stopReplayPlayback(); return; }
+
+        const parent = this.network.getParent();
+
+        this.replayStopAt = parent.getCurrentTime() + 1000;
+        parent.getComponent("render").screenFadeOut(1000, [0, 0, 0, 255]);
+    }
+
     public async stopReplayPlayback(): Promise<void> {
         const game = this.game;
 
@@ -344,6 +355,8 @@ export class NetworkSession {
         game.close();
         this.game = null;
         this.replayLoading = false;
+        if (this.replayStopAt >= 0) this.network.getParent().getComponent("render").resetScreenFade();
+        this.replayStopAt = -1;
         this.network.getParent().getComponent("input").endReplayCamera();
         await this.showLogin(this.loginUrl);
     }

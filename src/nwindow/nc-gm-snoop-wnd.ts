@@ -61,8 +61,7 @@ export class NCGMSnoopWnd {
     public isVisible() { return !this.element.hidden; }
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;
-        if (isVisible) this.activate();
-        else if (this.element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+        if (!isVisible && this.element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     }
     public setConversation(objectId: number, name: string) {
         this.conversationId = objectId;

@@ -55,12 +55,15 @@ export class NDomLayer {
     protected readonly cacheWrapUrls = new Map<string, string>();
     protected readonly cacheTintUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
+    protected readonly windowOrder = new WeakMap<HTMLElement, HTMLElement[]>();
+    protected arrRootWindows = [this.consoleRoot, this.root];
     protected readonly windowPositions = new Map<HTMLElement, [number, number]>();
     protected readonly arrModalWindows: ModalWindow_T[] = [];
     protected readonly modalBlocker = document.createElement("div");
     protected readonly visibilityObserver = new MutationObserver(records => this.activateVisibleWindows(records));
     protected stopDrag: () => void = null;
     protected activeWindow: HTMLElement = null;
+    protected activeConsoleWindow: HTMLElement = null;
     protected zOrder = 0;
     protected isTransparencyMode = false;
 
@@ -98,7 +101,7 @@ export class NDomLayer {
 
         this.root.addEventListener("contextmenu", event => event.preventDefault());
 
-        window.addEventListener("mousedown", event => {
+        this.root.addEventListener("mousedown", event => {
             let wnd = event.target instanceof Element && this.root.contains(event.target) ? event.target : null;
 
             while (wnd && wnd.parentElement !== this.root && wnd.parentElement !== this.consoleRoot) wnd = wnd.parentElement;
@@ -126,10 +129,23 @@ export class NDomLayer {
     public getModalWindows() { return this.arrModalWindows.map(entry => entry.element); }
     public getWindows() { return [...this.consoleRoot.children, ...this.root.children].filter(wnd => wnd !== this.consoleRoot) as HTMLElement[]; }
 
+    public getNextWindow(parent: HTMLElement, wnd: HTMLElement = null) {
+        if (!this.windowOrder.has(parent)) this.orderWindows(parent, null);
+        const peers = this.windowOrder.get(parent), index = wnd ? peers.indexOf(wnd) : -1;
+
+        if (wnd && index < 0) throw new Error(`Cannot traverse an unregistered child window.`);
+        return peers[index + 1] || null;
+    }
+
     public setConsoleWindows(windows: HTMLElement[]) {
         for (const wnd of windows)
             if (wnd !== this.consoleRoot && wnd !== this.modalBlocker) this.consoleRoot.appendChild(wnd);
         this.updateTransparency();
+    }
+
+    public setRootWindows(windows: HTMLElement[]) {
+        this.arrRootWindows = windows;
+        this.orderWindows(this.root, null);
     }
 
     public setBackground(wnd: HTMLElement) { wnd.classList.add("ndom-back"); } // NCGodWnd children (login, lobby, loading screens) stay behind every popup window.
@@ -137,7 +153,11 @@ export class NDomLayer {
     public activate(wnd: HTMLElement) {
         this.activateVisibleWindows(this.visibilityObserver.takeRecords());
 
-        if (wnd && wnd !== this.activeWindow && !wnd.classList.contains("ndom-back")) wnd.style.zIndex = String(++this.zOrder);
+        if (wnd && wnd !== this.activeWindow && !wnd.classList.contains("ndom-back")) {
+            this.orderWindows(wnd.parentElement, wnd);
+            this.orderWindows(this.root, null);
+            this.zOrder = this.arrRootWindows.length * (this.getWindows().length + 1);
+        }
 
         if (this.arrModalWindows.length) {
             this.modalBlocker.style.zIndex = String(++this.zOrder);
@@ -145,8 +165,39 @@ export class NDomLayer {
             wnd.style.zIndex = String(++this.zOrder);
         }
 
+        const consoleWindows = this.windowOrder.get(this.consoleRoot);
+
+        if (consoleWindows?.length) this.activeConsoleWindow = consoleWindows[0];
         this.activeWindow = wnd;
         this.updateTransparency();
+    }
+
+    protected orderWindows(parent: HTMLElement, wnd: HTMLElement) { // NWindow 0x100345f0 raises through owners after the leading priority siblings.
+        const children = Array.from(parent.children).filter(child => !this.arrRootWindows.includes(child as HTMLElement) && child !== this.modalBlocker && !child.matches(".ndom-back, .ndom-tooltip")) as HTMLElement[];
+        const peers = (this.windowOrder.get(parent) || []).filter(child => children.includes(child));
+
+        for (const child of children)
+            if (!peers.includes(child)) peers.push(child);
+        const index = peers.indexOf(wnd);
+
+        if (index > 0) {
+            peers.splice(index, 1);
+            let next = 0;
+
+            if (peers[0].classList.contains("ndom-priority"))
+                while (next < peers.length && peers[next].classList.contains("ndom-priority")) next++;
+            peers.splice(next, 0, wnd);
+        }
+
+        const size = this.getWindows().length + 1;
+        const offset = parent === this.root || parent === this.consoleRoot ? this.arrRootWindows.indexOf(parent) * size : 0;
+
+        if (parent === this.root)
+            this.arrRootWindows.forEach((root, index) => { if (root !== this.root && root !== this.consoleRoot) root.style.zIndex = String(index * size + 1); });
+
+        peers.forEach((peer, index) => peer.style.zIndex = String(offset + peers.length - index));
+        this.windowOrder.set(parent, peers);
+        if (wnd && parent !== this.root && parent !== this.consoleRoot) this.orderWindows(parent.parentElement, parent);
     }
 
     protected activateVisibleWindows(records: MutationRecord[]) {
@@ -176,7 +227,8 @@ export class NDomLayer {
             }
             const modal = this.arrModalWindows[this.arrModalWindows.length - 1];
 
-            if (modal || index !== -1 && wnd.hidden) this.activate(null);
+            if (modal) this.activate(modal.element);
+            else if (index !== -1 && wnd.hidden && wnd.contains(this.activeWindow)) this.activate(null);
             if (modal) modal.element.focus();
             wnd.removeAttribute("aria-modal");
         }
@@ -187,9 +239,9 @@ export class NDomLayer {
         this.updateTransparency();
     }
 
-    protected updateTransparency() { // NWindow 0x10038ecd: with GIsTransparencyMode, every top window but the active one and style 0x80000 ones paints with the canvas flag at +0x70.
+    protected updateTransparency() { // NWindow 0x10038eac: the Console list head stays opaque independently of global focus.
         for (const wnd of this.getWindows())
-            wnd.classList.toggle("ndom-inactive", this.isTransparencyMode && wnd.parentElement === this.consoleRoot && wnd !== this.activeWindow && !wnd.classList.contains("ndom-opaque"));
+            wnd.classList.toggle("ndom-inactive", this.isTransparencyMode && wnd.parentElement === this.consoleRoot && wnd !== this.activeConsoleWindow && !wnd.classList.contains("ndom-opaque"));
     }
 
     public toUI(client: number) { return this.manager.canvas.toUI(client); }

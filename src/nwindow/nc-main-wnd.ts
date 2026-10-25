@@ -1,5 +1,6 @@
 import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
+import NCMinimizedWnd from "./nc-minimized-wnd";
 import NCSkillWnd from "./nc-skill-wnd";
 import NCActionWnd from "./nc-action-wnd";
 import NCQuestWnd from "./nc-quest-wnd";
@@ -20,7 +21,7 @@ const arrTabs: { type: MainTab_T, title: number, tooltip: number, texture: strin
 export type MainTab_T = "status" | "skills" | "actions" | "clan" | "quest";
 
 export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 256x335 pages at (0,66).
-    public static getTextures() { return [TEX_BACK, ...arrTabs.flatMap(tab => [tab.texture, `${tab.texture}On`]), ...NCFrameCtrl.getTextures(), ...NCSkillWnd.getTextures(), ...NCActionWnd.getTextures(), ...NCQuestWnd.getTextures(), ...NCClanWnd.getTextures(), ...NCDetailStatusWnd.getTextures()]; }
+    public static getTextures() { return [TEX_BACK, ...arrTabs.flatMap(tab => [tab.texture, `${tab.texture}On`, ...NCMinimizedWnd.getTextures(tab.texture.replace("Btn", "Icon"))]), ...NCFrameCtrl.getTextures(), ...NCSkillWnd.getTextures(), ...NCActionWnd.getTextures(), ...NCQuestWnd.getTextures(), ...NCClanWnd.getTextures(), ...NCDetailStatusWnd.getTextures()]; }
     public readonly element: HTMLDivElement;
     public readonly skillWnd: SkillWndView_T;
     public readonly actionWnd: ActionWndView_T;
@@ -32,12 +33,15 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly pages: Record<MainTab_T, HTMLDivElement>;
     protected selectedTab: MainTab_T = "status";
+    protected readonly minimized: NCMinimizedWnd;
 
     public constructor(protected readonly layer: NDomLayer, coolTimes: Map<string, NCCoolTimeIcon>, skin: Skin) {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
+        this.element.tabIndex = -1;
+        this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true), arrTabs[0].texture.replace("Btn", "Icon"), arrTabs[0].tooltip, false);
         layer.tile(this.element, 0, 20, 256, 46, 0, 0, 256, 46, TEX_BACK);
-        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(433), false, () => this.setVisible(false));
+        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(433), true, () => this.setVisible(false), null, () => this.minimize());
         this.detailStatusWnd = skin.createDetailStatusWnd(layer, this.element);
         this.skillWnd = skin.createSkillWnd(layer, coolTimes, this.element);
         this.actionWnd = skin.createActionWnd(layer, this.element);
@@ -55,17 +59,31 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
         this.selectTab("status");
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 266, Math.max(0, height * 0.5 - 252)); }
+    public placeOnScreen(width: number, height: number) { this.minimized.place(width - 266, Math.max(0, height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
+    protected minimize() {
+        const tab = arrTabs.find(tab => tab.type === this.selectedTab);
+
+        this.minimized.setIcon(tab.texture.replace("Btn", "Icon"), tab.tooltip);
+        this.setVisible(false);
+        this.minimized.minimize();
+    }
     public setVisible(visible: boolean) {
+        if (visible && this.minimized.isVisible()) { this.minimized.restore(true); return; }
+
         this.element.hidden = !visible;
+        this.minimized.hide();
         this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
-        this.skillWnd.setVisible(visible && this.selectedTab === "skills");
-        this.clanWnd.setVisible(visible && this.selectedTab === "clan");
-        if (visible && this.selectedTab === "quest") { // NCMainWnd Show 0x10064a1d / 0x1005f1a4 each show the selected page.
-            this.questWnd.setVisible(true);
-            this.questWnd.setVisible(true);
-        } else this.questWnd.setVisible(false);
+        for (let i = 0; i < (visible ? 2 : 1); i++) { // NCMainWnd Show 0x10064a1d / 0x1005f1a4 each refresh the tabs.
+            this.skillWnd.setVisible(false);
+            this.clanWnd.setVisible(false);
+            this.questWnd.setVisible(false);
+            if (!visible) continue;
+
+            if (this.selectedTab === "skills") this.skillWnd.setVisible(true);
+            else if (this.selectedTab === "clan") this.clanWnd.setVisible(true);
+            else if (this.selectedTab === "quest") this.questWnd.setVisible(true);
+        }
     }
     public getSelectedTab() { return this.selectedTab; }
 

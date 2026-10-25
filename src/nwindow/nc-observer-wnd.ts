@@ -32,12 +32,10 @@ export class NCObserverWnd {
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 51), 0); }
     public isVisible() { return !this.element.hidden; }
-    public setVisible(visible: boolean) {
-        this.element.hidden = !visible;
-        if (visible) {
-            this.layer.activate(this.element);
-            this.element.focus();
-        }
+    public setVisible(visible: boolean) { this.element.hidden = !visible; }
+    public focus() {
+        this.layer.activate(this.element);
+        this.element.focus();
     }
 }
 

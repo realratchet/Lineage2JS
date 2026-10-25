@@ -49,6 +49,7 @@ export class GameClient {
         if (this.replayPlayback) return;
         const body = writer.toBytes();
 
+        L2Socket.checkPacketSize(body.length);
         this.crypt.encrypt(body);
         this.socket.send(body);
     }
@@ -160,6 +161,7 @@ export class GameClient {
 
     public stopReplayPlayback(): void { this.replayPlayback = null; }
     public isPlayingReplay(): boolean { return this.replayPlayback !== null; }
+    public useChatData(): boolean { return !!this.replayPlayback?.useChatData; }
 
     public startRecording(file: L2ReplayFile): void {
         if (this.replayRecorder) throw new Error(`Replay recording is already active.`);

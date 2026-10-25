@@ -102,6 +102,8 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         this.messengerButton.setAttribute("aria-disabled", "true");
         this.editBox = layer.edit(this.element, 39, 0, 303, 16);
         this.editBox.input.addEventListener("keydown", event => {
+            if (event.isComposing) return;
+
             if (event.key === "Enter") this.submit(this.editBox.getValue(), event.shiftKey);
             if (event.key === "Escape") this.editBox.input.blur();
         });

@@ -64,14 +64,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (!this.isPlayingReplay()) return deltaTime;
         if (this.session.game.isReplayPaused()) return null;
 
-        return Math.fround(Math.fround(deltaTime / 1000) * (this.session.replayLoading ? 1 : this.session.game.getReplayPlaySpeed())) * 1000;
+        return Math.fround(Math.fround(deltaTime / 1000) * (this.session.replayLoading || this.session.replayStopAt >= 0 ? 1 : this.session.game.getReplayPlaySpeed())) * 1000;
     }
 
     public inputReplay(key: number, action: number): boolean {
         if (!this.isPlayingReplay()) return false;
         if (key !== 27) return this.session.game.inputReplay(key, action);
         if (action !== 1 && action !== 3) return false;
-        if (action === 3) void this.session.stopReplayPlayback();
+        if (action === 3) this.session.requestReplayStop();
 
         return true;
     }
@@ -831,7 +831,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                         this.items.enchantSkillInfo = GamePackets.readEnchantSkillInfo(packet);
                         this.ui.showEnchantSkillInfo(this.items.enchantSkillInfo);
                         break;
-                    case GamePackets.GameServerExPacket_T.ExQuestInfo: if (packet.getRemaining()) throw new Error("Invalid ExQuestInfo payload."); break;
+                    case GamePackets.GameServerExPacket_T.ExQuestInfo: if (packet.getRemaining()) throw new Error("Invalid ExQuestInfo payload."); this.ui.showQuestInfo(); break;
                     case GamePackets.GameServerExPacket_T.ExShowQuestMark: this.community.onShowQuestMark(packet); break;
                     case GamePackets.GameServerExPacket_T.ExSendManorList: this.items.manors = GamePackets.readManorList(packet); break;
                     case GamePackets.GameServerExPacket_T.ExShowSeedInfo: this.items.manorSeedInfo = GamePackets.readShowSeedInfo(packet); this.ui.showManorSeedInfo(this.items.manorSeedInfo, this.items.manors); break;
@@ -1214,9 +1214,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public onEngineTick(currentTime: number, deltaTime: number): void {
         this.session.tickGMServerTransfer();
         if (this.session.getReplayRecordingTime() > 1800) this.session.stopReplayRecording(); // FL2ReplayManager::Tick 0x75f8a6.
-        if (this.session.game?.isPlayingReplay() && !this.session.replayLoading && !this.session.game.tickReplayPlayback(deltaTime / 1000)) {
-            void this.session.stopReplayPlayback();
-            return;
+        if (this.session.game?.isPlayingReplay() && !this.session.replayLoading) {
+            if (this.session.replayStopAt >= 0) {
+                if (currentTime >= this.session.replayStopAt) { void this.session.stopReplayPlayback(); return; }
+            } else if (!this.session.game.tickReplayPlayback(deltaTime / 1000)) {
+                this.session.requestReplayStop();
+                return;
+            }
         }
 
         if (this.resolveNextTick) {

@@ -41,6 +41,7 @@ export class NCManorCropSellChangeWnd { // NCManorCropSellChangeWnd: NConsole 0x
         createTextButton(layer, this.element, 91, 277, 140, () => this.onOk());
         createTextButton(layer, this.element, 171, 277, 141, () => this.setVisible(false));
         this.countEdit = layer.edit(this.element, 123, 241, 68, 17, false, 10, true);
+        this.element.focus = () => this.countEdit.focus();
         this.manorCombo = new NCComboBox(layer, this.element, 123, 216, 138, 17);
         this.list = new NCListCtrl(layer, this.element, 7, 92, 322, 109, [{ width: 115, label: 1153, numeric: false }, { width: 70, label: 1154, numeric: true }, { width: 70, label: 1126, numeric: true }, { width: 67, label: 1127, numeric: false }]);
         this.paint();
@@ -51,7 +52,7 @@ export class NCManorCropSellChangeWnd { // NCManorCropSellChangeWnd: NConsole 0x
     public setVisible(visible: boolean) {
         if (!visible) this.list.hide();
         this.element.hidden = !visible;
-        this.layer.setModal(this.element, visible);
+        if (!visible) this.layer.setModal(this.element, false);
     }
 
     public setCrop(name: string, reward1: string, reward2: string) { // NCManorCropSellWnd::OnChangeBtnClick 0x101350e0
@@ -68,6 +69,7 @@ export class NCManorCropSellChangeWnd { // NCManorCropSellChangeWnd: NConsole 0x
         this.countEdit.setValue(""); // DoModal 0x101335f0
         this.manorCombo.setSelected(0);
         this.setVisible(true);
+        this.layer.setModal(this.element, true);
         this.countEdit.focus();
     }
 

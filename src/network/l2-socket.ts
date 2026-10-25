@@ -16,7 +16,7 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
             socket.binaryType = "arraybuffer";
             socket.onopen = () => resolve(this);
             socket.onerror = () => reject(new Error(`Could not connect to '${url}'.`));
-            socket.onmessage = event => this.receive(event.data);
+            socket.onmessage = event => { if (this.socket === socket) this.receive(event.data); };
             socket.onclose = event => {
                 this.socket = null;
 
@@ -29,9 +29,14 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
     public isOpen() { return !!this.socket && this.socket.readyState === WebSocket.OPEN; }
 
+    public static checkPacketSize(size: number) {
+        if (size + 2 > 0xffff) throw new Error(`L2 packet body length ${size} exceeds 65533 bytes.`);
+    }
+
     protected receive(data: ArrayBuffer | string) {
         if (typeof data === "string") throw new Error(`L2 socket received a text frame.`);
 
+        const socket = this.socket;
         const chunk = new Uint8Array(data);
         const buffer = new Uint8Array(this.pending.length + chunk.length);
 
@@ -51,6 +56,7 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
             offset += size;
 
             if (body.length > 0) this.onPacket(body);
+            if (this.socket !== socket) return;
         }
 
         this.pending = buffer.slice(offset);
@@ -58,6 +64,7 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
     public send(body: Uint8Array) {
         if (!this.isOpen()) throw new Error(`L2 socket is not open.`);
+        L2Socket.checkPacketSize(body.length);
 
         const frame = new Uint8Array(body.length + 2);
 
@@ -70,6 +77,7 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
     public close() {
         this.isClosedByUs = true;
+        this.pending = new Uint8Array(0);
 
         if (this.socket) this.socket.close(1000);
 

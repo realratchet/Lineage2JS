@@ -179,7 +179,7 @@ export class NCPartyWnd extends NCStatusWnd { // NCPartyWnd: NCConsole 0x10060fd
 
     public placeOnScreen() { this.restoreWidth(); }
 
-    protected getCount() { return this.arrMembers.filter(member => !member.isEmpty()).length; }
+    public getCount() { return this.arrMembers.filter(member => !member.isEmpty()).length; }
 
     public addMember(member: PartyMember_T, leaderId: number, lootType: number) { // 0x10115630
         const slot = this.arrMembers.find(entry => entry.isEmpty());

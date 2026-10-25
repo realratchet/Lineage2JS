@@ -14,6 +14,35 @@ const TEX_OUTLINE = "L2UI_CH3.Etc.menu_outline";
 type QuestNode_T = { kind: number, info: QuestInfo_T, completed: boolean, expanded: boolean, selected: boolean, children: QuestNode_T[], available: number[] };
 export type QuestLocation_T = { id: number, name: string, x: number, y: number, z: number, unk0: number };
 
+export function createQuestHelp(layer: NDomLayer, parent: HTMLElement, anchor: HTMLElement, count: number) {
+    const canvas = layer.getManager().canvas;
+    const width = 184, height = count * (canvas.getLineHeight() + 6) + 10;
+    const rect = anchor.getBoundingClientRect(), parentRect = parent.getBoundingClientRect();
+    const x = Math.max(0, Math.min(layer.toUI(rect.left), canvas.width - width));
+    let y = layer.toUI(rect.top) - height;
+
+    if (y < 0) y = layer.toUI(rect.top) + 32;
+    const help = layer.createWindow(x - layer.toUI(parentRect.left), y - layer.toUI(parentRect.top), width, height, parent);
+
+    help.classList.add("ndom-opaque", "ndom-tooltip");
+    help.setAttribute("role", "tooltip");
+    help.style.zIndex = "2147483647";
+    help.style.pointerEvents = "none";
+    new NCTooltip().getTextures().forEach((texture, index) => {
+        const col = index % 3, row = Math.trunc(index / 3);
+
+        layer.tile(help, [0, 8, width - 8][col], [0, 8, height - 8][row], [8, width - 16, 8][col], [8, height - 16, 8][row], 0, 0, 8, 8, texture);
+    });
+    for (let index = 0; index < count; index++) {
+        const texture = `${TEX_PATH}QuestWndInfoIcon_${index + 1}`, image = canvas.getTexture(texture);
+        const y = 5 + index * (canvas.getLineHeight() + 6);
+
+        layer.tile(help, 5, y, image.width, image.height, 0, 0, image.width, image.height, texture);
+        layer.text(help, layer.getManager().strings.sysStrings[861 + index], 0xffdcdcdc, undefined, image.width + 10, y);
+    }
+    return help;
+}
+
 export class NCQuestWnd {
     public static getTextures() { return ["QuestWndBack", "QuestWndToolTipBtn", "QuestWndPlusBtn", "QuestWndMinusBtn", "QuestWndDownBtn", "QuestWndUpBtn", "QUESTWNDPANEL1", "QUESTWNDPANEL2", "QUESTWNDPANEL3", ...Array.from({ length: 5 }, (_, i) => `QuestWndInfoIcon_${i + 1}`)].map(name => `${TEX_PATH}${name}`).concat([TEX_CHECK, TEX_CHECKED, TEX_SELECT, TEX_SELECT_END, TEX_OUTLINE, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]); }
     public readonly element: HTMLDivElement;
@@ -300,31 +329,7 @@ export class NCQuestWnd {
 
     protected showHelp(anchor: HTMLElement) {
         this.hideHelp();
-        const layer = this.layer, canvas = layer.getManager().canvas;
-        const width = 184, height = 5 * (canvas.getLineHeight() + 6) + 10;
-        const rect = anchor.getBoundingClientRect(), parentRect = this.element.getBoundingClientRect();
-        const x = Math.max(0, Math.min(layer.toUI(rect.left), canvas.width - width));
-        let y = layer.toUI(rect.top) - height;
-
-        if (y < 0) y = layer.toUI(rect.top) + 32;
-        const help = this.help = layer.createWindow(x - layer.toUI(parentRect.left), y - layer.toUI(parentRect.top), width, height, this.element);
-
-        help.classList.add("ndom-opaque", "ndom-tooltip");
-        help.setAttribute("role", "tooltip");
-        help.style.zIndex = "2147483647";
-        help.style.pointerEvents = "none";
-        new NCTooltip().getTextures().forEach((texture, index) => {
-            const col = index % 3, row = Math.trunc(index / 3);
-
-            layer.tile(help, [0, 8, width - 8][col], [0, 8, height - 8][row], [8, width - 16, 8][col], [8, height - 16, 8][row], 0, 0, 8, 8, texture);
-        });
-        for (let index = 0; index < 5; index++) {
-            const texture = `${TEX_PATH}QuestWndInfoIcon_${index + 1}`, image = canvas.getTexture(texture);
-            const y = 5 + index * (canvas.getLineHeight() + 6);
-
-            layer.tile(help, 5, y, image.width, image.height, 0, 0, image.width, image.height, texture);
-            layer.text(help, this.strings.sysStrings[861 + index], 0xffdcdcdc, undefined, image.width + 10, y);
-        }
+        this.help = createQuestHelp(this.layer, this.element, anchor, 5);
     }
 }
 

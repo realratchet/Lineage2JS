@@ -80,7 +80,6 @@ export class NCMatchWnd {
         this.element.hidden = !visible;
         this.minimized.hide();
         if (!visible) this.table.hide();
-        else this.layer.activate(this.element);
     }
     public show(list: PartyMatchList_T) {
         this.page = list.page;

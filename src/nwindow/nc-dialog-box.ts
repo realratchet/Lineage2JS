@@ -72,6 +72,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         this.quantityEditor.hidden = true;
         this.textEditor = layer.edit(this.element, 50, 48, 156, 17, false, 150);
         this.textEditor.hidden = true;
+        this.element.focus = () => this.focus();
         this.keypad = layer.createWindow(256, 0, 108, 108);
         this.element.appendChild(this.keypad);
         this.keypad.hidden = true;
@@ -93,12 +94,14 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
             button.addEventListener("mousedown", event => event.preventDefault());
         });
 
-        this.element.addEventListener("keydown", event => { // OnKeyDown 0x10007c70 accepts input and kinds16/29/31.
-            if (event.key !== "Enter") return;
+        this.element.addEventListener("keydown", event => this.onKeyDown(event));
+    }
 
-            event.preventDefault();
-            this.close(this.isQuantity || !this.textEditor.hidden || this.type === DialogType_T.OK);
-        });
+    protected onKeyDown(event: KeyboardEvent) { // OnKeyDown 0x10007c70 accepts input and kinds16/29/31.
+        if (event.key !== "Enter") return;
+
+        event.preventDefault();
+        this.close(this.isQuantity || !this.textEditor.hidden || this.type === DialogType_T.OK);
     }
 
     public placeOnScreen(screenWidth: number, screenHeight: number) { // Game Yes/No 0x10061a93: (347, H-110); lobby 0x1009d0f5: (W/2-101, H/2-44).
@@ -213,7 +216,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
         this.timerFrame = 0;
         this.timer.hidden = true;
         this.element.hidden = true;
-        this.layer.setModal(this.element, false);
+        if (this.layer.getModalWindows().includes(this.element)) this.layer.setModal(this.element, false);
         this.owner = null;
         this.onResult = null;
         this.onTextResult = null;
@@ -222,7 +225,7 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
     public isOpen() { return !this.element.hidden; }
     public isYesNo() { return this.type === DialogType_T.YES_NO; }
     public focus() {
-        this.element.focus();
+        HTMLElement.prototype.focus.call(this.element);
         if (!this.quantityEditor.hidden) this.quantityEditor.focus();
         else if (!this.textEditor.hidden) this.textEditor.focus();
     }

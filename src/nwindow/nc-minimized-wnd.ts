@@ -6,6 +6,7 @@ const TEX_BACK = "NWindow.ChatBack";
 export class NCMinimizedWnd {
     public static getTextures(texture = TEX_ICON) { return [texture, TEX_BACK]; }
     public readonly element: HTMLDivElement;
+    protected readonly icon: HTMLDivElement;
     protected readonly blink: HTMLDivElement;
     protected readonly caption: HTMLDivElement;
     protected readonly captionBack: HTMLDivElement;
@@ -15,12 +16,13 @@ export class NCMinimizedWnd {
     protected timer = 0;
     protected isHovered = false;
 
-    public constructor(protected readonly layer: NDomLayer, protected readonly parentElement: HTMLElement, protected readonly onRestore: () => void, texture = TEX_ICON, protected readonly captionId = 389, protected readonly isCaptionAbove = true) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly parentElement: HTMLElement, protected readonly onRestore: () => void, texture = TEX_ICON, protected captionId = 389, protected readonly isCaptionAbove = true) {
         this.element = layer.createWindow(0, 0, 32, 32);
         this.element.hidden = true;
         this.element.tabIndex = -1;
         this.element.style.overflow = "visible";
-        layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, texture).style.pointerEvents = "none";
+        this.icon = layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, texture);
+        this.icon.style.pointerEvents = "none";
         this.blink = layer.tile(this.element, 0, 0, 32, 32, 0, 0, 32, 32, texture, 0xff388080);
         this.blink.style.pointerEvents = "none";
         this.caption = layer.createWindow(0, 0, 0, 0, this.element);
@@ -60,6 +62,13 @@ export class NCMinimizedWnd {
     public isVisible() { return !this.element.hidden; }
     public hide() { this.setVisible(false); }
 
+    public setIcon(texture: string, captionId: number) {
+        this.layer.setTile(this.icon, 32, 32, 0, 0, 32, 32, texture);
+        this.layer.setTile(this.blink, 32, 32, 0, 0, 32, 32, texture, 0xff388080);
+        this.captionId = captionId;
+        this.paintCaption();
+    }
+
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;
         this.caption.hidden = true;
@@ -95,7 +104,7 @@ export class NCMinimizedWnd {
         this.hide();
         if (!isSilent) this.layer.getManager().playWindowSound();
         this.parentElement.hidden = false;
-        this.layer.activate(this.parentElement);
+        if (!isSilent) this.layer.activate(this.parentElement);
         this.onRestore();
         if (!isSilent) {
             this.parentElement.focus();

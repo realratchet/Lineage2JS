@@ -417,13 +417,16 @@ export class NetworkActors {
     protected async finishLoading() {
         const render = this.network.getParent().getComponent("render");
         const asset = this.network.getParent().getComponent("asset");
+        const generation = this.teleportGeneration;
 
         await this.userAppearanceLoad;
+        if (!this.inWorld || generation !== this.teleportGeneration) return;
+
         await this.network.items.skillListLoad;
 
-        while (this.inWorld && (!asset.isAreaLoaded(render, render.player.position) || this.npcSpawnCount > 0)) await new Promise(resolve => setTimeout(resolve, 100));
+        while (this.inWorld && generation === this.teleportGeneration && (!asset.isAreaLoaded(render, render.player.position) || this.npcSpawnCount > 0)) await new Promise(resolve => setTimeout(resolve, 100));
 
-        if (!this.inWorld) return;
+        if (!this.inWorld || generation !== this.teleportGeneration) return;
 
         render.setZoneMusicEnabled(true);
         this.network.items.requestManorList(); // NConsole 0x1006fa20 -> 0x1006db90 on the switch into the game console

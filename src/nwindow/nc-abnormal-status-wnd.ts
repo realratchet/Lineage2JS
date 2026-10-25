@@ -48,6 +48,7 @@ export class NCAbnormalStatusWnd {
     public setVisible(isVisible: boolean) { this.element.hidden = !isVisible; }
     public placeOnScreen() { }
     public getEffects() { return this.effects; }
+    public hasEffects() { return this.effects.length > 0 || this.secondaryEffects.length > 0 || this.shortEffect !== null; }
 
     public setEffects(effects: AbnormalStatus_T[]) {
         this.effects = effects.map(effect => ({ ...effect, alpha: 255, isFading: true, tooltipTime: effect.duration }));

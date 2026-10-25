@@ -52,12 +52,13 @@ export class NCPetitionBeginWnd {
     public setVisible(isVisible: boolean) {
         this.category.setOpen(false);
         this.element.hidden = !isVisible;
-        if (isVisible) this.layer.activate(this.element);
-        else {
+        if (!isVisible) {
             this.generation++;
             if (this.element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
         }
     }
+
+    public focus() { this.layer.activate(this.element); this.message.input.focus(); }
 
     protected async showFile(path: string) {
         const generation = ++this.generation, html = await this.getHtml(path.replace(/^\.\.[\\/]L2text[\\/]/i, ""));

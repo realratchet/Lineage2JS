@@ -77,6 +77,7 @@ export class NCCommunityWnd {
             if (event.button !== 0 || event.detail === 2) return;
 
             event.preventDefault();
+            layer.activate(this.folded);
             this.folded.focus();
             const startX = layer.toUI(event.clientX) - this.folded.offsetLeft, startY = layer.toUI(event.clientY) - this.folded.offsetTop;
             let isDragging = false;
@@ -92,6 +93,7 @@ export class NCCommunityWnd {
                 manager.playWindowSound();
                 layer.place(this.element, this.folded.offsetLeft, this.folded.offsetTop);
                 this.show();
+                this.focus();
             });
         });
         window.addEventListener("mousemove", event => {
@@ -121,6 +123,8 @@ export class NCCommunityWnd {
         this.layer.place(this.folded, this.element.offsetLeft, this.element.offsetTop);
         this.folded.hidden = true;
         this.caption.hidden = true;
+    }
+    protected focus() {
         this.layer.activate(this.element);
         this.element.focus();
     }
@@ -160,6 +164,7 @@ export class NCCommunityWnd {
         this.actions = actions.slice();
         this.requestPending = false;
         this.show();
+        this.focus();
         await pending;
     }
 
@@ -186,6 +191,7 @@ export class NCCommunityWnd {
         this.hide();
         this.layer.place(this.folded, Math.max(0, x), y);
         this.folded.hidden = false;
+        this.layer.activate(this.folded);
         this.folded.focus();
         this.placeCaption();
     }

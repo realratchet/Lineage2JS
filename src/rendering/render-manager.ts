@@ -841,6 +841,19 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public enableZoneCulling = true;
 
+    public screenFadeOut(duration: number, color: readonly number[]): void {
+        if (this.screenFadeStartedAt >= 0) return;
+
+        this.screenFadeBlink({ fadeOutDuration: duration, blackOutDuration: Infinity, fadeInDuration: 0, fadeOutColor: [color[0], color[1], color[2], 255] } as IAnimationScreenFadeNotifyDecodeInfo);
+        this.screenFadeElement.style.zIndex = "9";
+    }
+
+    public resetScreenFade(): void {
+        this.screenFadeStartedAt = -1;
+        this.screenFadeElement.style.opacity = "0";
+        this.needsUpdate = true;
+    }
+
     public screenFadeBlink(info: IAnimationScreenFadeNotifyDecodeInfo): void {
         // UGameEngine::ScreenFadeBlink (L2.exe 0x825650) rejects a blink while either fade state is active.
         if (this.screenFadeStartedAt >= 0) return;
@@ -851,6 +864,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.screenBlackOutDuration = Math.max(0, info.blackOutDuration);
         this.screenFadeInDuration = Math.max(0, info.fadeInDuration);
         this.screenFadeColorAlpha = color[3] / 255;
+        this.screenFadeElement.style.zIndex = "9999";
         this.screenFadeElement.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
         this.screenFadeStartedAt = this.manGame.getCurrentTime();
         this.needsUpdate = true;
@@ -968,6 +982,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             if (time < this.screenBlackOutDuration) {
                 opacity = 1;
+                if (this.screenBlackOutDuration === Infinity) this.screenFadeStartedAt = -1;
             } else {
                 time -= this.screenBlackOutDuration;
 

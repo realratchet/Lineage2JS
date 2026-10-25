@@ -43,13 +43,14 @@ class NCManorInfoChangeWnd { // shared by NCManorSeedInfoChangeWnd / NCManorCrop
         createTextButton(layer, this.element, 131, 172, 141, () => this.setVisible(false));
         this.amountEdit = layer.edit(this.element, 145, 68, 68, 17, false, 10, true);
         this.priceEdit = layer.edit(this.element, 145, 118, 68, 17, false, 10, true);
+        this.element.focus = () => this.amountEdit.focus();
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 128), Math.trunc(height * 0.5 - 100)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;
-        this.layer.setModal(this.element, visible);
+        if (!visible) this.layer.setModal(this.element, false);
     }
 
     protected open(name: string, limit: number, amount: string, price: string, minPrice: number, maxPrice: number) { // DoModal 0x10137de0: focus on the amount edit
@@ -61,6 +62,7 @@ class NCManorInfoChangeWnd { // shared by NCManorSeedInfoChangeWnd / NCManorCrop
         this.priceEdit.setValue(price);
         this.paint();
         this.setVisible(true);
+        this.layer.setModal(this.element, true);
         this.amountEdit.focus();
     }
 

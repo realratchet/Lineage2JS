@@ -85,7 +85,7 @@ export class L2Lobby {
         if (!skyZone) throw new Error(`Lobby SkyZoneInfo is missing`);
 
         render.skyRenderer.setSkyZone(skyZone);
-        render.setHorizontalFov(50, 4 / 3);
+        render.setHorizontalFov(50);
         this.backdropPlanes = ["StaticMeshActor1", "StaticMeshActor43", "StaticMeshActor90"].map(name => { // widescreen fix
             const object = skyZone.getObjectByName(name);
 

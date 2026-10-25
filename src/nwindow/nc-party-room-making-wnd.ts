@@ -28,6 +28,7 @@ export class NCPartyRoomMakingWnd {
 
         this.element = layer.createWindow(0, 0, 356, 141);
         this.element.hidden = true;
+        this.element.tabIndex = -1;
         layer.tile(this.element, 0, 0, 356, 141, 0, 0, 356, 141, TEX_BACK);
         this.title = layer.edit(this.element, 103, 17, 236, 17);
         this.minimum = layer.edit(this.element, 131, 57, 26, 17, false, 0, true);
@@ -51,8 +52,7 @@ export class NCPartyRoomMakingWnd {
         this.members.setOpen(false);
         this.element.hidden = !isVisible;
 
-        if (isVisible) this.layer.activate(this.element);
-        else if (this.element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+        if (!isVisible && this.element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     }
 
     public showCreate(playerLevel: number, clientLootType: number) {
@@ -70,6 +70,8 @@ export class NCPartyRoomMakingWnd {
         this.maximum.setValue(String(settings.maxLevel));
         this.members.setSelected(settings.maxMembers - 2);
         this.setVisible(true);
+        this.layer.activate(this.element);
+        this.element.focus();
     }
 
     public submit() {
