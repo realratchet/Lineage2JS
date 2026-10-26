@@ -23,6 +23,7 @@ export class NetworkSession {
     public login: LoginClient = null;
     public lobby: L2Lobby = null;
     protected loginUrl: string = null;
+    protected connectingGame: LoginClient = null;
     public gameServerUrl: string = null;
     public game: GameClient = null;
     public account: string = null;
@@ -99,8 +100,11 @@ export class NetworkSession {
 
     public async connectGame(serverId: number) {
         const login = this.login, transfer = this.gmTransfer;
+
+        if (this.connectingGame === login || this.game?.isConnected()) return;
         const server = login.servers.find(entry => entry.id === serverId);
 
+        this.connectingGame = login;
         try {
             const key = await login.selectServer(server.id);
 
@@ -119,7 +123,7 @@ export class NetworkSession {
             if (transfer) transfer.error = (e as Error).message;
             this.network.ui.showLogin();
             this.network.ui.showMessage(this.getLoginErrorMessage(e));
-        }
+        } finally { if (this.connectingGame === login) this.connectingGame = null; }
     }
 
     protected getLoginErrorMessage(e: any): string {

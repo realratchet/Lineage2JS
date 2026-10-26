@@ -866,7 +866,7 @@ export class NDomLayer {
             nwindow.renderText(context, 2, 2, TEXT_COLOR, visible);
             caret.hidden = !isFocused || !isCaretVisible;
 
-            if (!caret.hidden) this.place(caret, 2 + nwindow.measureText(visible.slice(0, Math.max(0, getCaret() - start))) - (isPassword ? 0 : 1), 2);
+            this.place(caret, 2 + nwindow.measureText(visible.slice(0, Math.max(0, getCaret() - start))) - (isPassword ? 0 : 1), 2);
 
             const selectionStart = input.selectionStart || 0, selectionEnd = input.selectionEnd || 0;
             let html = "";
