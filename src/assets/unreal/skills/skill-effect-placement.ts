@@ -632,7 +632,8 @@ export class SkillEffectPlacement {
         if (spirit) {
             if (grade > 5) return;
 
-            const suffix = critical ? (caster as any).isPlayer ? "d" : "e" : "c";
+            // APawn::AssociateAttackedNotify 0x8bf605..0x8bf638: bUseDarkEffect (+0x1708, bit 0).
+            const suffix = critical ? caster.getUnrealScriptProperty("bUseDarkEffect") ? "d" : "e" : "c";
             add(this.host.createEffect(caster, `LineageEffect.e_u${505 + grade}_${suffix}`));
         } else if (critical && !shield) add(this.host.createEffect(caster, "LineageEffect.p_u004_a"));
     }

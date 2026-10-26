@@ -423,6 +423,7 @@ export enum GameClientPacket_T {
     RequestJoinSiege = 0xa4,
     RequestConfirmSiegeWaitingList = 0xa5,
     MultiSellChoose = 0xa7,
+    RequestRemainTime = 0xa9,
     RequestUserCommand = 0xaa,
     SnoopQuit = 0xab,
     RequestRecipeBookOpen = 0xac,
@@ -605,9 +606,9 @@ export type CharSelected_T = Location_T & { name: string, charId: number, title:
 
 export type CreatureInfo_T = Location_T & Speeds_T & { objectId: number, heading: number, name: string, title: string, isRunning: boolean, isInCombat: boolean, isAlikeDead: boolean, karma: number, pvpFlag: number, recommendations: number, nameColor: number, abnormalState: number };
 
-export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, largeCrestId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[] };
+export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: number, str: number, dex: number, con: number, int: number, wit: number, men: number, sp: number, curLoad: number, maxLoad: number, pAtk: number, atkSpd: number, pDef: number, evasion: number, accuracy: number, critical: number, mAtk: number, castSpd: number, mDef: number, maxHp: number, curHp: number, maxMp: number, curMp: number, maxCp: number, curCp: number, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, largeCrestId: number, clanRelation: number, pledgePrivileges: Uint8Array, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, hasDwarvenCraft: boolean, pkKills: number, pvpKills: number, recommendationsLeft: number, isNoble: boolean, isHero: boolean, gmLevel: number, isGM: boolean, paperdollObjects: number[], cubics: number[], team: number };
 
-export type CharInfo_T = CreatureInfo_T & Appearance_T & { clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, cubics: number[] };
+export type CharInfo_T = CreatureInfo_T & Appearance_T & { isHero: boolean, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, cubics: number[], team: number };
 
 export type NpcInfo_T = CreatureInfo_T & { npcId: number, isAttackable: boolean, rightHand: number, chest: number, leftHand: number, spawnType: number, isSummon: boolean };
 export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number };
@@ -777,7 +778,7 @@ export function readUserInfo(packet: PacketReader): UserInfo_T {
     info.curCp = packet.d();
     info.isRunning = info.isInCombat = info.isAlikeDead = false;
     info.enchantLevel = packet.c();
-    packet.skip(1);
+    info.team = packet.c();
     info.largeCrestId = packet.d();
     info.isNoble = packet.c() !== 0;
     info.isHero = packet.c() !== 0;
@@ -834,9 +835,11 @@ export function readCharInfo(packet: PacketReader): CharInfo_T {
     info.mountNpcId = packet.d() - NPC_ID_OFFSET;
     packet.skip(4 + 4);
     info.enchantLevel = packet.c();
-    packet.skip(1);
+    info.team = packet.c();
     info.largeCrestId = packet.d();
-    packet.skip(1 + 1 + 1 + 3 * 4);
+    packet.skip(1);
+    info.isHero = packet.c() !== 0;
+    packet.skip(1 + 3 * 4);
 
     info.nameColor = packet.d() >>> 0;
 
@@ -887,7 +890,7 @@ export function readServerObjectInfo(packet: PacketReader): ServerObjectInfo_T {
 
 export type PetStatus_T = { objectId: number, npcId: number, name: string, x: number, y: number, z: number, statusType: number, curFood: number, maxFood: number, curHp: number, maxHp: number, curMp: number, maxMp: number, field42: number, level: number, exp: number, minExp: number, nextExp: number, weight: number, maxWeight: number, pAtk: number, pDef: number, mAtk: number, mDef: number, accuracy: number, evasion: number, critical: number, speed: number, attackSpeed: number, castSpeed: number, field60: number, isMountable: boolean, soulshotsUsed: number, spiritshotsUsed: number };
 
-export type PetInfo_T = NpcInfo_T & PetStatus_T;
+export type PetInfo_T = NpcInfo_T & PetStatus_T & { environment: number, team: number };
 
 export function readPetInfo(packet: PacketReader): PetInfo_T { // Engine 0x1041cdf0, format 0x107c6e58.
     const statusType = packet.d();
@@ -903,15 +906,15 @@ export function readPetInfo(packet: PacketReader): PetInfo_T { // Engine 0x1041c
     const weight = packet.d(), maxWeight = packet.d();
     const pAtk = packet.d(), pDef = packet.d(), mAtk = packet.d(), mDef = packet.d(), accuracy = packet.d(), evasion = packet.d(), critical = packet.d(), speed = packet.d(), attackSpeed = packet.d(), castSpeed = packet.d();
 
-    packet.d();
+    info.abnormalState = packet.d();
 
     const field60 = packet.d(), isMountable = (field60 & 0xffff) !== 0;
 
-    packet.skip(2);
+    const environment = packet.c() << 24 >> 24, team = packet.c() << 24 >> 24;
 
     const soulshotsUsed = packet.d(), spiritshotsUsed = packet.d();
 
-    return { ...info, statusType, curFood, maxFood, curHp, maxHp, curMp, maxMp, field42, level, exp, minExp, nextExp, weight, maxWeight, pAtk, pDef, mAtk, mDef, accuracy, evasion, critical, speed, attackSpeed, castSpeed, field60, isMountable, soulshotsUsed, spiritshotsUsed };
+    return { ...info, statusType, curFood, maxFood, curHp, maxHp, curMp, maxMp, field42, level, exp, minExp, nextExp, weight, maxWeight, pAtk, pDef, mAtk, mDef, accuracy, evasion, critical, speed, attackSpeed, castSpeed, field60, isMountable, environment, team, soulshotsUsed, spiritshotsUsed };
 }
 
 export function readCharTemplates(packet: PacketReader): CharTemplate_T[] {

@@ -114,6 +114,7 @@ export type MainToWorkerMessage_T =
     | DecodeCharacterMessage_T
     | DecodeCharacterEquipmentMessage_T
     | DecodeSkeletalMeshMessage_T
+    | { type: "decodeHeroEffects"; requestId: number; settings: LoadSettings_T; }
     | DecodeEffectTemplatesMessage_T
     | CharGroupsMessage_T
     | ResolveNpcMessage_T

@@ -1,4 +1,4 @@
-import { WeaponType } from "../../assets/unreal/un-pawn";
+import { NActionList_T, RideType_T, WeaponType } from "../../assets/unreal/un-pawn";
 import { Mesh, SkinnedMesh } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
 import { MESHES_CHANGED_EVENT } from "./animation-component";
@@ -7,6 +7,7 @@ import DynamicHairSimulation from "../dynamic-hair-simulation";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type PawnAttackComponent from "./pawn-attack-component";
 
 export class HairSimulationComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "hairSimulation";
@@ -50,6 +51,8 @@ export class HairSimulationComponent extends ObjectComponent<BaseActor> {
     }
 
     public update(deltaTime: number): void {
+        if (!this.simulations.length) return;
+
         const parent = this.getParent();
         const action = parent.getAnimationAction();
         const clip = action ? action.getClip() : null;
@@ -65,8 +68,18 @@ export class HairSimulationComponent extends ObjectComponent<BaseActor> {
         const isDying = this.movementComponent.isDying();
         const isBowRunning = weaponType === WeaponType.WT_BOW && isRunning;
         const isSpecialAttack = lowerName.startsWith("spatk01_") || lowerName.startsWith("spatk02_");
+        const attack = parent.findComponent<PawnAttackComponent>("pawnAttack");
+        let attackState = NActionList_T.NACT_NONE;
 
-        for (const simulation of this.simulations) simulation.update(deltaTime, animationName, animationFrame, 0, attackEffectFrame, attackEndEffectFrame, isMoving, isRunning, isDying, isBowRunning, isSpecialAttack);
+        if (lowerName && attack && attack.isPhysicalAttacking() && weaponType !== WeaponType.WT_THROW && !(parent.ridePawn && parent.ridePawn.getUnrealScriptProperty("bRide") && parent.ridePawn.getUnrealScriptProperty("CurRideType") === RideType_T.RD_WYVERN)) {
+            const isAttackAnimation = parent.getUnrealScriptProperty("bRide")
+                ? lowerName === (parent.getUnrealScriptProperty("RiderAtkAnimName") as string[])[parent.getUnrealScriptProperty("CurRideType") as number].toLowerCase()
+                : lowerName === (parent.getUnrealScriptProperty("Atk01AnimName") as string[])[weaponType].toLowerCase() || lowerName === (parent.getUnrealScriptProperty("Atk02AnimName") as string[])[weaponType].toLowerCase() || lowerName === (parent.getUnrealScriptProperty("Atk03AnimName") as string[])[weaponType].toLowerCase();
+
+            if (isAttackAnimation) attackState = weaponType === WeaponType.WT_BOW ? NActionList_T.NACT_BOWATTACK : NActionList_T.NACT_MELLEATTACK;
+        }
+
+        for (const simulation of this.simulations) simulation.update(deltaTime, animationName, animationFrame, attackState, attackEffectFrame, attackEndEffectFrame, isMoving, isRunning, isDying, isBowRunning, isSpecialAttack);
     }
 
     protected setMeshes(meshes: Mesh[]): void {

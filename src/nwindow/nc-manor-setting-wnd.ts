@@ -218,11 +218,6 @@ export class NCManorSeedInfoSettingWnd extends NCManorInfoSettingWnd { // NConso
         this.changeWnd.placeOnScreen(width, height);
     }
 
-    public setVisible(visible: boolean) {
-        if (!visible) this.changeWnd.setVisible(false);
-        super.setVisible(visible);
-    }
-
     public setAlertHandler(handler: AlertHandler_T) { this.onAlert = this.changeWnd.onAlert = handler; }
 
     public show(settings: ManorSeedSettings_T) { // OnShowSeedSetting 0x10139d40
@@ -286,11 +281,6 @@ export class NCManorCropInfoSettingWnd extends NCManorInfoSettingWnd { // NConso
     public placeOnScreen(width: number, height: number) {
         super.placeOnScreen(width, height);
         this.changeWnd.placeOnScreen(width, height);
-    }
-
-    public setVisible(visible: boolean) {
-        if (!visible) this.changeWnd.setVisible(false);
-        super.setVisible(visible);
     }
 
     public setAlertHandler(handler: AlertHandler_T) { this.onAlert = this.changeWnd.onAlert = handler; }

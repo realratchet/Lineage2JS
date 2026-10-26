@@ -15,6 +15,7 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     left: 0;
     top: 0;
     transform-origin: 0 0;
+    will-change: transform;
     pointer-events: none;
     z-index: 11;
     overflow: hidden;
@@ -27,6 +28,11 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
         pointer-events: none;
 
         > * { pointer-events: auto; }
+
+        &[hidden]:has(> [aria-modal="true"]:not([hidden])) {
+            display: block;
+            > * { opacity: 0; }
+        }
     }
 
     [hidden] { display: none; }

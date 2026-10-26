@@ -16,6 +16,26 @@ export enum WeaponType {
     WT_DUALFIST
 }
 
+export enum RideType_T {
+    RD_NONE,
+    RD_STRIDER,
+    RD_WYVERN
+}
+
+// Retail Pawn.NActionList omits the editor leak's NACT_SKILLINPUTWAIT.
+export enum NActionList_T {
+    NACT_NONE,
+    NACT_MELLEATTACK,
+    NACT_BOWATTACK,
+    NACT_PICITEM,
+    NACT_CHANGEITEM,
+    NACT_SKILLUSE,
+    NACT_THROWATTACK,
+    NACT_SHOTATTACK,
+    NACT_PRIVATESTORE,
+    NACT_OBSERVING
+}
+
 export type INpcDefinition = {
     movementAnimationRate: number;
     id: number;

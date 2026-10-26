@@ -1020,7 +1020,7 @@ export class SectorObject extends GameObject {
                 }
 
                 const planeDot = cameraPos.dot(node.plane);
-                const isFront = planeDot >= 0;
+                const isFront = planeDot > 0;
 
                 const farChild = isFront ? node.back : node.front;
                 const nearChild = isFront ? node.front : node.back;
@@ -1066,7 +1066,7 @@ export class SectorObject extends GameObject {
 
                     if (hasViewZone && hasPortalFlag && nodeZone0 >= 0 && nodeZone1 >= 0 && nodeZone0 !== nodeZone1) {
                         const planeDot = cameraPos.dot(currentNode.plane);
-                        const isFront = planeDot >= 0;
+                        const isFront = planeDot > 0;
 
                         const currentZone = isFront ? nodeZone1 : nodeZone0;
                         const oppositeZone = isFront ? nodeZone0 : nodeZone1;
@@ -1316,7 +1316,7 @@ export class SectorObject extends GameObject {
         return this.arrTranslucentBSP;
     }
 
-    protected sortTranslucentBSP(cameraPosition: THREE.Vector3) { // Engine 0x1064d596: translucent nodes are prepended during the front-to-back walk, so 0x106523ec draws them back to front
+    public sortTranslucentBSP(cameraPosition: THREE.Vector3) { // Engine 0x1064d596: translucent nodes are prepended during the front-to-back walk, so 0x106523ec draws them back to front
         const sections = this.getTranslucentBSP();
         let hasVisible = false;
 
@@ -1332,12 +1332,15 @@ export class SectorObject extends GameObject {
             const entry = arrBSPStack[--top];
 
             if (entry < 0) {
-                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) ranks[coplanar] = rank++;
+                let lastRank = rank;
+                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) lastRank++;
+                rank = lastRank;
+                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) ranks[coplanar] = --lastRank;
                 continue;
             }
 
             const node = nodes[entry], plane = node.plane;
-            const isFront = x * plane.x + y * plane.y + z * plane.z - plane.w >= 0;
+            const isFront = x * plane.x + y * plane.y + z * plane.z - plane.w > 0;
             const near = isFront ? node.front : node.back, far = isFront ? node.back : node.front;
 
             if (top + 3 > arrBSPStack.length) { const grown = new Int32Array(arrBSPStack.length * 2); grown.set(arrBSPStack); arrBSPStack = grown; }
@@ -1518,7 +1521,7 @@ export class SectorObject extends GameObject {
                 console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
             }
 
-            if (!auxiliary) this.sortTranslucentBSP(cameraPosition);
+            this.sortTranslucentBSP(cameraPosition);
 
             if (zoneChanged && currentZone !== null && currentZone >= 0) {
                 const finalActiveZones: number[] = [];

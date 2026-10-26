@@ -457,6 +457,7 @@ export class UNativePackage extends ANativePackage {
             case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
             case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
             case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
+            case "ConstantColor": Constructor = UnMaterials.UConstantColor; break;
             case "Shader": Constructor = UnMaterials.UShader; break;
             case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
             case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;

@@ -355,6 +355,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected screenBlackOutDuration = 0;
     protected screenFadeInDuration = 0;
     protected screenFadeColorAlpha = 1;
+    protected screenFadeDone: () => void = null;
+    protected screenFadeElapsed = 0;
+    protected screenFadeLastTime = 0;
     protected manPhysics: PhysicsManager = null;
     protected manUI: UIManager = null;
     protected manInput: InputManager = null;
@@ -397,13 +400,18 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public constructor(viewport: HTMLViewportElement_T) {
         this.viewport = viewport;
         ColorManagement.enabled = false;
-        this.renderer = new WebGLRenderer({
-            antialias: false,
-            preserveDrawingBuffer: true,
-            premultipliedAlpha: false,
-            logarithmicDepthBuffer: true,
-            alpha: true,
-        });
+        try {
+            this.renderer = new WebGLRenderer({
+                antialias: false,
+                preserveDrawingBuffer: true,
+                premultipliedAlpha: false,
+                logarithmicDepthBuffer: true,
+                alpha: true,
+            });
+        } catch (error) {
+            document.body.dataset.gpuUnavailable = "";
+            throw error;
+        }
 
         this.nameplateDepth = new NameplateDepth(this.renderer);
         const renderBufferDirect = this.renderer.renderBufferDirect;
@@ -841,15 +849,20 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public enableZoneCulling = true;
 
-    public screenFadeOut(duration: number, color: readonly number[]): void {
-        if (this.screenFadeStartedAt >= 0) return;
+    public screenFadeOut(duration: number, color: readonly number[], done: () => void = null): boolean {
+        if (this.screenFadeStartedAt >= 0) return false;
 
         this.screenFadeBlink({ fadeOutDuration: duration, blackOutDuration: Infinity, fadeInDuration: 0, fadeOutColor: [color[0], color[1], color[2], 255] } as IAnimationScreenFadeNotifyDecodeInfo);
         this.screenFadeElement.style.zIndex = "9";
+        this.screenFadeDone = done;
+        this.screenFadeElapsed = 0;
+        this.screenFadeLastTime = this.screenFadeStartedAt;
+        return true;
     }
 
     public resetScreenFade(): void {
         this.screenFadeStartedAt = -1;
+        this.screenFadeDone = null;
         this.screenFadeElement.style.opacity = "0";
         this.needsUpdate = true;
     }
@@ -974,6 +987,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         let time = currentTime - this.screenFadeStartedAt;
         let opacity: number;
+        let done: () => void = null;
+
+        if (this.screenFadeDone) {
+            const elapsed = this.screenFadeElapsed + Math.fround((currentTime - this.screenFadeLastTime) / 1000) * 1000;
+
+            this.screenFadeElapsed = Math.fround(elapsed);
+            this.screenFadeLastTime = currentTime;
+            time = this.screenFadeOutDuration > 0 ? Math.max(Math.fround(0.0001), Math.min(1, Math.fround(elapsed / this.screenFadeOutDuration))) * this.screenFadeOutDuration : 0;
+        }
 
         if (time < this.screenFadeOutDuration) {
             opacity = this.screenFadeOutDuration > 0 ? time / this.screenFadeOutDuration : 1;
@@ -982,7 +1004,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             if (time < this.screenBlackOutDuration) {
                 opacity = 1;
-                if (this.screenBlackOutDuration === Infinity) this.screenFadeStartedAt = -1;
+                if (this.screenBlackOutDuration === Infinity) {
+                    this.screenFadeStartedAt = -1;
+                    done = this.screenFadeDone;
+                    this.screenFadeDone = null;
+                }
             } else {
                 time -= this.screenBlackOutDuration;
 
@@ -995,6 +1021,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         this.screenFadeElement.style.opacity = `${opacity * this.screenFadeColorAlpha}`;
+        if (done) done();
     }
 
     protected applyViewShake(_currentTime: number): boolean {
@@ -1480,12 +1507,23 @@ export class RenderManager implements IEngineComponent<GameManager> {
             const dx = Math.fround(state.position.x) - originX, dy = Math.fround(state.position.y) - originY;
             const inRange = inWorld ? component.updateActorView(Math.sqrt(dx * dx + dy * dy), range) : component.prepareActorView();
 
-            if (!state.sector || !state.sector.staticMeshGroup || state.leafIndex === null) {
+            if (!state.sector || !state.sector.staticMeshGroup) {
                 pawn.visible = false;
                 continue;
             }
 
-            pawn.visible = !pawn.getUnrealScriptProperty("bHidden") && (pawn !== this.player || !isObserving) && inRange && state.sector.visibleLeaves.has(state.leafIndex) && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            pawn.visible = !pawn.getUnrealScriptProperty("bHidden") && (pawn !== this.player || !isObserving) && inRange;
+            if (pawn.visible) {
+                let leafVisible = false;
+                if (pawn.findComponent("script")) {
+                    const leaves = component.getAmbientZone(state.sector).leaves;
+
+                    for (let i = 0; i < leaves.length; i++)
+                        if (state.sector.visibleLeaves.has(leaves[i])) { leafVisible = true; break; }
+                } else leafVisible = state.leafIndex !== null && state.sector.visibleLeaves.has(state.leafIndex);
+
+                pawn.visible = leafVisible && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            }
             if (pawn.visible) {
                 if (limit < 10000 && pawn !== this.player) this.arrVisiblePawns.push(component);
                 else component.createSkin();
@@ -1660,7 +1698,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const boundsChanged = state.lightingRadius !== radius;
         const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
         const envVersion = this.environment.getEnvVersion();
-        const ambientChanged = state.envVersion !== envVersion || state.ambientZoneVersion !== ambientZoneVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
+        const renderLeavesChanged = state.ambientZoneVersion !== ambientZoneVersion;
+        const ambientChanged = state.envVersion !== envVersion || renderLeavesChanged || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
         const pawnLightVersion = pawnLights ? pawnLights.version : -1;
         let relevantLightsChanged = false;
@@ -1669,8 +1708,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         for (const light of state.lights)
             relevantLightUpdated = relevantLightUpdated || light.needsUpdate;
 
-        if (moved || boundsChanged || locationChanged || specialLitChanged) {
-            sector.getRelevantLights(center, radius, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected, state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights, isSpecialLit);
+        if (moved || boundsChanged || locationChanged || specialLitChanged || renderLeavesChanged) {
+            const permeatingLights = ambientZone ? ambientZone.permeatingLights : state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights;
+
+            sector.getRelevantLights(center, radius, arrPawnLights, NUM_ACTOR_LIGHTS, !!(ambientZone || zoneInfo)?.isSunAffected, permeatingLights, isSpecialLit);
             relevantLightsChanged = state.lights.length !== arrPawnLights.length;
 
             for (let i = 0, len = arrPawnLights.length; i < len; i++) {
@@ -2465,6 +2506,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
                     this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
                 } finally {
                     viewport.restore(renderer, this.scene);
+                    const camera = this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.camera;
+                    for (const sector of this.arrSceneSectors) if (sector.visible && sector.bspGroup) sector.sortTranslucentBSP(camera.position);
                 }
             }
         }

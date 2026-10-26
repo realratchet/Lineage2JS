@@ -6,6 +6,7 @@ import type { FRotator } from "./un-rotator";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { ParticleBlendModes_T } from "./emitters/un-particle-emitter";
 import type { ColorArr, Vector3Arr, EulerArr } from "./library-types";
+import type { ITextureDecodeInfo } from "./un-texture";
 
 export type IDecodedParameter = {
     uniforms: Record<string, any>,
@@ -542,6 +543,20 @@ export abstract class UShader extends UMaterial {
 
     public getTextureSize(): { width: number; height: number; } | null {
         return this.diffuse?.loadSelf?.().getTextureSize() || this.opacity?.loadSelf?.().getTextureSize() || null;
+    }
+}
+
+export abstract class UConstantColor extends UBaseMaterial {
+    declare protected Color: FColor;
+
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo {
+        return { name: this.uuid, materialType: "texture", textureType: "rgba", buffer: new Uint8Array([this.Color.r, this.Color.g, this.Color.b, this.Color.a]).buffer, width: 1, height: 1, detailScale: 1 } as ITextureDecodeInfo;
+    }
+
+    public getTextureSize() { return { width: 1, height: 1 }; }
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), { "Color": "Color" });
     }
 }
 

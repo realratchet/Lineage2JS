@@ -1,3 +1,4 @@
+import PawnHeroComponent from "../objects/components/pawn-hero-component";
 import type NetworkManager from "./network-manager";
 import { Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
@@ -15,6 +16,7 @@ import type MovableObject from "../objects/movable-object";
 import { setVector } from "./network-location";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import type { CollisionQuery_T } from "../physics/collision-world";
 
 type NetObjectKind_T = "user" | "player" | "npc";
 
@@ -63,11 +65,15 @@ export type NetObject_T = {
     isInCombat: boolean;
     waitType: GamePackets.WaitType_T;
     privateStoreType: GamePackets.PrivateStoreType_T;
+    matchedStoreType: GamePackets.PrivateStoreType_T;
     chatMessage: string;
     chatTime: number;
     chairStaticObjectId: number;
     cubics: number[];
     abnormalState: number;
+    appendixState: number;
+    isHero: boolean;
+    pendingTeam: number;
     fishing: GamePackets.FishingState_T;
     skill?: NetSkill_T;
     pendingFly: { origin: Vector3, destination: Vector3 };
@@ -89,6 +95,9 @@ const CHAT_BALLOON_TIME = 6000; // NCConsole 0x1005f070: 1 s timer, the balloon 
 const NETWORK_BOW_RANGE = 2000;
 
 const NPC_SPAWN_CONCURRENCY = 8;
+
+const tmpNpcSpawnPosition = new Vector3();
+const tmpNpcSpawnQuery: CollisionQuery_T = { location: new Vector3(), delta: new Vector3(), extent: new Vector3(), sourceIsPlayer: false, traceWorld: true, ignorePawns: true };
 
 export class NetworkActors {
     public readonly objects = new Map<number, NetObject_T>();
@@ -284,7 +293,7 @@ export class NetworkActors {
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {
-        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, actorReady: null, resolveActor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, hasQuestMark: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, environment: null, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingFly: null, pendingVehicleMove: null, pendingRotation: null, pendingAttack: null, pendingSkill: null, pendingTransientSkills: [] };
+        const object: NetObject_T = { objectId, npcId: kind === "npc" ? (info as GamePackets.NpcInfo_T).npcId : 0, selectedId: 0, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, kind, actor: null, actorReady: null, resolveActor: null, isRemoved: false, position: setVector(new Vector3(), info), destination: null, heading: info.heading, name: info.name, title: info.title, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, levelDifference: 0, karma: info.karma, pvpFlag: info.pvpFlag, recommendations: info.recommendations, nameColor: info.nameColor, titleColor: 0, isSummon: false, hasQuestMark: false, isAttackable: false, isDead: info.isAlikeDead, chairStaticObjectId: 0, cubics: (info as any).cubics || [], abnormalState: info.abnormalState, appendixState: 0, isHero: false, pendingTeam: null, fishing: null, appearanceKey: null, speeds: info, isRunning: info.isRunning, environment: null, isInCombat: info.isInCombat, waitType: (info as any).isSitting ? GamePackets.WaitType_T.WT_SITTING : GamePackets.WaitType_T.WT_STANDING, privateStoreType: (info as any).privateStoreType || GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, matchedStoreType: GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, chatMessage: null, chatTime: 0, pendingFly: null, pendingVehicleMove: null, pendingRotation: null, pendingAttack: null, pendingSkill: null, pendingTransientSkills: [] };
 
         object.actorReady = new Promise(resolve => object.resolveActor = resolve);
         this.objects.set(objectId, object);
@@ -409,6 +418,8 @@ export class NetworkActors {
         }
 
         this.network.movement.setRide({ objectId: info.objectId, isMounted: info.mountType !== GamePackets.MountType_T.NONE, mountType: info.mountType, npcId: info.mountNpcId });
+        this.updateHero(object, info.isHero);
+        this.network.combat.updateTeam(object, info.team);
 
         if (isFirst) this.worldLoad = this.finishLoading();
         this.teleportInfoPending = false;
@@ -491,6 +502,8 @@ export class NetworkActors {
             }
 
             this.network.movement.setRide({ objectId: info.objectId, isMounted: info.mountType !== GamePackets.MountType_T.NONE, mountType: info.mountType, npcId: info.mountNpcId });
+            this.updateHero(object, info.isHero);
+            this.network.combat.updateTeam(object, info.team);
             return;
         }
 
@@ -499,6 +512,8 @@ export class NetworkActors {
         object.appearanceKey = this.getAppearanceKey(info);
         this.network.community.applyPartyMember(object);
         this.network.movement.setRide({ objectId: info.objectId, isMounted: info.mountType !== GamePackets.MountType_T.NONE, mountType: info.mountType, npcId: info.mountNpcId });
+        this.updateHero(object, info.isHero);
+        this.network.combat.updateTeam(object, info.team);
 
         void this.spawnPlayer(object, info);
     }
@@ -541,11 +556,15 @@ export class NetworkActors {
         const info = GamePackets.readNpcInfo(packet);
 
         info.abnormalState = packet.d(); // NpcInfo 0x6f66ca: PetInfo's shared prefix stops before this field.
-        packet.skip(18);
+        packet.skip(16);
+        const environment = packet.c() << 24 >> 24, team = packet.c() << 24 >> 24;
         info.originalCollisionRadius = packet.f();
         info.originalCollisionHeight = packet.f();
         packet.d();
-        this.setNpc(info);
+        const object = this.setNpc(info);
+        object.environment = environment;
+        if (object.actor) object.actor.setUnrealScriptProperty("Environment", environment);
+        this.network.combat.updateTeam(object, team);
     }
 
     public onServerObjectInfo(packet: PacketReader) {
@@ -566,7 +585,13 @@ export class NetworkActors {
         this.network.ui.setPetRenameAvailable(info.name.length === 0);
         this.network.ui.setPetInfo(this.petInfo);
         this.updateMountable();
+        const existing = this.objects.get(info.objectId);
+        if (existing) {
+            existing.environment = info.environment;
+            if (existing.actor) existing.actor.setUnrealScriptProperty("Environment", info.environment);
+        }
         const object = this.setNpc(info, false);
+        this.network.combat.updateTeam(object, info.team);
 
         object.curHp = info.curHp;
         object.maxHp = info.maxHp;
@@ -735,11 +760,53 @@ export class NetworkActors {
         const questMark = npc.questMark, user = this.userInfo;
 
         object.hasQuestMark = !!questMark && !!user && user.level >= questMark.minLevel && user.level <= questMark.maxLevel && (!questMark.classIds.length || questMark.classIds.includes(user.classId));
-        this.attachActor(object, actor);
+        this.attachActor(object, actor, this.findNpcSpawnLocation(object, actor, object.environment ?? (info as GamePackets.PetInfo_T).environment));
         if (info.spawnType === 2 && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
     }
 
-    protected attachActor(object: NetObject_T, actor: BaseActor) {
+    protected findNpcSpawnLocation(object: NetObject_T, actor: BaseActor, environment: number = object.environment): Vector3 {
+        if (environment === 1) return object.position;
+
+        const render = this.network.getParent().getComponent("render");
+
+        if (!render.isSectorCollisionReady(object.position) || object.pendingFly || this.network.movement.getVehicleIdOf(object.objectId)) return null;
+
+        const height = actor.getCollisionHeight(), query = tmpNpcSpawnQuery;
+        query.sourceActor = actor;
+        query.extent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), height);
+
+        // UGameEngine::OnNpcInfo 0x10479461..0x104798ae places the pawn before SpawnEnterEvent.
+        for (let pass = 0; pass < 2; pass++) for (let i = 0; i < 30; i++) {
+            query.location.copy(object.position);
+            query.location.z += height + 20 + (pass ? i * 30 : 0);
+            query.delta.set(0, 0, object.position.z - 10 - i * 30 - query.location.z);
+
+            const hit = render.getPhysicsManager().singleLineCheck(query);
+
+            if (!hit || hit.location.z === 0) continue;
+
+            tmpNpcSpawnPosition.copy(hit.location);
+            tmpNpcSpawnPosition.z -= height;
+            const distance = hit.time * 12;
+            if (distance < 1.9) tmpNpcSpawnPosition.z += (2.4 + 1.9) * 0.5 - distance;
+            return tmpNpcSpawnPosition;
+        }
+        return null;
+    }
+
+    protected updateHero(object: NetObject_T, isHero: boolean = object.isHero): void {
+        object.isHero = isHero;
+        const actor = this.network.movement.riders.get(object.objectId) || object.actor;
+
+        if (!actor) return;
+        const component = actor.findComponent<PawnHeroComponent>("pawnHero");
+
+        if (isHero) {
+            if (!component) actor.addComponent(new PawnHeroComponent(this.network.getParent().getComponent("render")));
+        } else if (component) actor.removeComponent(component);
+    }
+
+    protected attachActor(object: NetObject_T, actor: BaseActor, position: Vector3 = null) {
         object.actor = actor;
 
         actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
@@ -749,7 +816,7 @@ export class NetworkActors {
         if (object.waitType === GamePackets.WaitType_T.WT_SITTING) actor.playMovementAnimation("idle");
         actor.setRotationYaw(object.heading);
 
-        actor.teleportTo(object.pendingFly ? object.pendingFly.origin : object.position, true);
+        actor.teleportTo(object.pendingFly ? object.pendingFly.origin : position || object.position, !position);
         const vehicle = this.network.movement.vehicles.get(this.network.movement.getVehicleIdOf(object.objectId));
 
         if (vehicle) {
@@ -758,6 +825,8 @@ export class NetworkActors {
         }
         this.network.combat.updateCubics(object);
         this.network.combat.updateAbnormalState(object);
+        this.network.combat.updateAppendixState(object);
+        this.updateHero(object);
         if (object.pendingVehicleMove) {
             const move = object.pendingVehicleMove;
             this.network.movement.moveInVehicle(object, move.vehicleId, move.position);
@@ -995,7 +1064,7 @@ export class NetworkActors {
 
             const storeMessages = object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ? this.network.items.privateStoreBuyMsgs : object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.network.items.recipeShopMessages : this.network.items.privateStoreSellMsgs;
 
-            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", hasQuestMark: object.hasQuestMark, isSummon: object.isSummon, isAttackable: object.isAttackable, isSelf: object.objectId === this.userId, isPartyMember: this.network.community.partyMembers.has(object.objectId), isPledgeMember: clanId !== 0 && object.clanId === clanId, isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0, abnormalState: object.abnormalState, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, clanCrestId: object.clanCrestId, allyCrestId: object.allyCrestId, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
+            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", hasQuestMark: object.hasQuestMark, isSummon: object.isSummon, isAttackable: object.isAttackable, isSelf: object.objectId === this.userId, isPartyMember: this.network.community.partyMembers.has(object.objectId), isPledgeMember: clanId !== 0 && object.clanId === clanId, isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0, abnormalState: object.abnormalState, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, clanCrestId: object.clanCrestId, allyCrestId: object.allyCrestId, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, matchedStoreType: object.matchedStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
         }
 
         return plates;

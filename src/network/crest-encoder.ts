@@ -4,6 +4,8 @@ export const PLEDGE_CREST_MAX_BYTES = 256;
 export const PLEDGE_LARGE_CREST_WIDTH = 64;
 export const PLEDGE_LARGE_CREST_HEIGHT = 64;
 export const PLEDGE_LARGE_CREST_MAX_BYTES = 2176;
+export const ALLY_CREST_WIDTH = 8;
+export const ALLY_CREST_HEIGHT = 12;
 export const ALLY_CREST_MAX_BYTES = 192;
 
 type CrestImage_T = { width: number, height: number, pixels: Uint32Array };

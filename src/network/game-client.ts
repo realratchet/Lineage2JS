@@ -14,7 +14,7 @@ export type CharacterCreate_T = { name: string, race: number, sex: number, class
 
 export class GameClient {
     protected readonly socket = new L2Socket();
-    protected readonly crypt = new GameCrypt();
+    protected crypt = new GameCrypt();
     protected replayRecorder: L2ReplayRecorder = null;
     protected replayPlayback: ReplayPlayback_T = null;
     protected isConnecting = false;
@@ -62,6 +62,7 @@ export class GameClient {
 
         this.isConnecting = true;
         try {
+            this.crypt = new GameCrypt();
             await this.socket.connect(url);
             this.send(this.write(GamePackets.GameClientPacket_T.ProtocolVersion).d(GamePackets.PROTOCOL_REVISION));
         } finally { this.isConnecting = false; }
@@ -485,6 +486,7 @@ export class GameClient {
     public requestDeleteMacro(id: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestDeleteMacro).d(id)); }
     public requestShortCutDel(slot: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestShortCutDel).d(slot)); }
     public requestUserCommand(id: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestUserCommand).d(id)); }
+    public requestRemainTime() { this.send(this.write(GamePackets.GameClientPacket_T.RequestRemainTime)); }
     public requestEvaluate(objectId: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestEvaluate).d(objectId)); }
     public requestShowBoard(unknown: number) { this.send(this.write(GamePackets.GameClientPacket_T.RequestShowBoard).d(unknown)); }
     public requestBBSwrite(url: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string) { this.send(this.write(GamePackets.GameClientPacket_T.RequestBBSwrite).S(url).S(arg1).S(arg2).S(arg3).S(arg4).S(arg5)); }

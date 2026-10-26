@@ -195,7 +195,7 @@ export class LoginClient {
         return `${this.url.protocol}//${this.url.hostname}:${server.port}${this.url.pathname}`;
     }
 
-    public close() { this.socket.close(); }
+    public close() { this.socket.close(); this.fail(new Error(`Login connection canceled.`)); }
 }
 
 export default LoginClient;

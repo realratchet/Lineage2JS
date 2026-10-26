@@ -32,6 +32,7 @@ export class L2Lobby {
     protected spots: [number, number, number, number][] = [];
     protected pawns: BaseActor[] = [];
     protected readonly previewPawns = new Map<number, BaseActor>();
+    protected readonly previewLoads = new WeakMap<BaseActor, number>();
     protected readonly pendingRestYaws = new Map<BaseActor, number>();
     protected createSelection: PawnCreateSelection_T = null;
     protected createStage = 0;
@@ -239,10 +240,14 @@ export class L2Lobby {
             this.previewPawns.set(index, actor);
         }
 
+        const request = (this.previewLoads.get(actor) || 0) + 1;
+
+        this.previewLoads.set(actor, request);
+
         await this.loadAppearance({ race, sex, classId: PREVIEW_CLASS_IDS[race][isMystic ? 1 : 0], hairStyle, hairColor, face, enchantLevel: 0, paperdoll: new Array(16).fill(0) }, actor);
 
         if (generation !== this.generation) return actor.release();
-        if (!isNew) return;
+        if (this.previewLoads.get(actor) !== request || actor.parent) return;
 
         const height = actor.getCollisionHeight(), radius = actor.getCollisionRadius();
         // SpawnDefaultCharacter 0x1042e6fb..0x1042e7cf traces Z+60 to the row before placement.

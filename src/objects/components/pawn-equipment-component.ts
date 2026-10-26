@@ -121,7 +121,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
             for (const material of materials) {
                 const fade = material.uniforms.shDiffuse.value?.fadeColors;
 
-                if (!fade) continue;
+                if (!fade || !info.colors) continue;
 
                 fade.color1.fromArray(info.colors[0]);
                 fade.color2.fromArray(info.colors[1]);

@@ -11,14 +11,22 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
     public connect(url: string): Promise<this> {
         return new Promise((resolve, reject) => {
+            this.close();
+
             const socket = new WebSocket(url);
+
+            this.pending = new Uint8Array(0);
+            this.isClosedByUs = false;
 
             socket.binaryType = "arraybuffer";
             socket.onopen = () => resolve(this);
             socket.onerror = () => reject(new Error(`Could not connect to '${url}'.`));
             socket.onmessage = event => { if (this.socket === socket) this.receive(event.data); };
             socket.onclose = event => {
+                if (this.socket !== socket) return;
+
                 this.socket = null;
+                this.pending = new Uint8Array(0);
 
                 if (!this.isClosedByUs && this.onClose) this.onClose(event.code, event.reason);
             };
@@ -45,21 +53,23 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
         let offset = 0;
 
-        while (buffer.length - offset >= 2) {
-            const size = buffer[offset] | (buffer[offset + 1] << 8);
+        try {
+            while (buffer.length - offset >= 2) {
+                const size = buffer[offset] | (buffer[offset + 1] << 8);
 
-            if (size < 2) throw new Error(`L2 socket received invalid packet length ${size}.`);
-            if (buffer.length - offset < size) break;
+                if (size < 2) throw new Error(`L2 socket received invalid packet length ${size}.`);
+                if (buffer.length - offset < size) break;
 
-            const body = buffer.slice(offset + 2, offset + size);
+                const body = buffer.slice(offset + 2, offset + size);
 
-            offset += size;
+                offset += size;
 
-            if (body.length > 0) this.onPacket(body);
-            if (this.socket !== socket) return;
+                if (body.length > 0) this.onPacket(body);
+                if (this.socket !== socket) return;
+            }
+        } finally {
+            if (this.socket === socket) this.pending = buffer.slice(offset);
         }
-
-        this.pending = buffer.slice(offset);
     }
 
     public send(body: Uint8Array) {

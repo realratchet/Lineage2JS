@@ -22,7 +22,6 @@ const tmpMatrix = new Matrix4();
 const tmpOrigin = new Matrix4();
 const tmpVec = new Vector3();
 const tmpActorCenter = new Vector3();
-const arrAmbientLeaves: number[] = [];
 const tmpWhite = new Vector3(1, 1, 1);
 
 export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
@@ -38,7 +37,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     protected boundsNeedUpdate = true;
     protected readonly predictedBox = new Box3();
     protected ambientSector: SectorObject = null;
-    protected readonly ambientZone = { isSunAffected: false, ambient: [0, 0, 0], version: 0 };
+    protected readonly ambientZone = { isSunAffected: false, ambient: [0, 0, 0], leaves: [] as number[], permeatingLights: [] as string[], version: 0 };
     protected meshes: Mesh[] = [];
     protected equipmentMeshes: Mesh[] = [];
     protected batches: PawnMesh[] = [];
@@ -185,6 +184,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         this.texModifierAlpha = -1;
         for (const [mesh, entry] of this.fadeMeshes)
             if (mesh.material === entry.material) mesh.material = entry.source;
+        if (this.fadeMeshes.size) this.renderManager.invalidatePawnLighting(this.getParent());
         this.fadeMeshes.clear();
         for (const material of this.fadeMaterials.values()) material.dispose();
         this.fadeMaterials.clear();
@@ -423,12 +423,15 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         // AActor::UpdateRenderData 0x7cfdac..0x7cfdf5 retains leaves until the render box leaves this margin.
         if (parent.getComponent<PawnMovementComponent>("pawnMovement").getPhysicsMode() !== "none") this.predictedBox.expandByScalar(128);
 
-        sector.boxLeafIndices(this.predictedBox, arrAmbientLeaves, (parent.getUnrealScriptProperty("ForcedRegionTag") as string) ?? "None", parent.getUnrealScriptProperty("ForcedRegion") as number);
+        sector.boxLeafIndices(this.predictedBox, zone.leaves, (parent.getUnrealScriptProperty("ForcedRegionTag") as string) ?? "None", parent.getUnrealScriptProperty("ForcedRegion") as number);
         zone.isSunAffected = false;
         zone.ambient.fill(0);
+        zone.permeatingLights.length = 0;
 
-        for (const index of arrAmbientLeaves) {
-            const info = sector.bspZones[sector.bspLeaves[index].zone].zoneInfo;
+        for (const index of zone.leaves) {
+            const leaf = sector.bspLeaves[index], info = sector.bspZones[leaf.zone].zoneInfo;
+
+            for (const name of leaf.permeatingLights) if (!zone.permeatingLights.includes(name)) zone.permeatingLights.push(name);
 
             zone.isSunAffected = zone.isSunAffected || info.isSunAffected;
             if (info.ambient)

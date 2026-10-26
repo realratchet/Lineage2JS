@@ -9,6 +9,7 @@ import * as GamePackets from "./game-packets";
 import PawnFishingComponent, { FishingType_T } from "../objects/components/pawn-fishing-component";
 import PawnCubicComponent from "../objects/components/pawn-cubic-component";
 import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component";
+import PawnAppendixComponent, { APPENDIX_TEAM_RED, APPENDIX_TEAM_BLUE } from "../objects/components/pawn-appendix-component";
 import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
 import PacketReader from "./packet-reader";
 import type { NetSkill_T, NetObject_T } from "./network-actors";
@@ -312,6 +313,8 @@ export class NetworkCombat {
         object.pendingFly = null;
         object.pendingVehicleMove = null;
         this.stopSkill(objectId);
+        object.pendingTeam = null;
+        this.updateAppendixState(object, 0);
 
         if (object.actor) object.actor.playDeathAnimation(() => { });
         if (object.kind !== "user") return;
@@ -377,6 +380,31 @@ export class NetworkCombat {
 
         if (!component) component = actor.addComponent(new PawnAbnormalComponent(this.network.getParent().getComponent("render")));
         void component.setAbnormalState(abnormalState);
+    }
+
+    public updateTeam(object: NetObject_T, team: number): void {
+        if (team < 0 || team > 2) return;
+        if (this.network.movement.mounts.has(object.objectId) && !this.network.movement.riders.has(object.objectId)) {
+            object.pendingTeam = team;
+            return;
+        }
+        object.pendingTeam = null;
+        this.updateAppendixState(object, (object.appendixState & ~(APPENDIX_TEAM_RED | APPENDIX_TEAM_BLUE)) | (team === 1 ? APPENDIX_TEAM_BLUE : team === 2 ? APPENDIX_TEAM_RED : 0));
+    }
+
+    public updateAppendixState(object: NetObject_T, state: number = object.appendixState): void {
+        object.appendixState = state;
+        const actor = object.actor;
+
+        if (!actor) return;
+        let component = actor.findComponent<PawnAppendixComponent>("pawnAppendix");
+
+        if (!state) {
+            if (component) actor.removeComponent(component);
+            return;
+        }
+        if (!component) component = actor.addComponent(new PawnAppendixComponent(this.network.getParent().getComponent("render")));
+        void component.setAppendixState(state);
     }
 
     public setIdleAnimation(object: NetObject_T, updatePose: boolean = true) {

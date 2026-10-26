@@ -131,10 +131,7 @@ export class NCManorCropSellWnd { // NCManorCropSellWnd: NConsole 0x10063dfb (W*
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 300), Math.trunc(height * 0.5 - 163)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
-        if (!visible) {
-            this.list.hide();
-            this.changeWnd.setVisible(false);
-        }
+        if (!visible) this.list.hide();
         this.element.hidden = !visible;
     }
 

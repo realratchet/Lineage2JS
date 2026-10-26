@@ -1,9 +1,9 @@
-import getCommandTokens, { CommandType_T } from "../network/command-parser";
+import getCommandTokens, { CommandType_T, getSkillCommandId } from "../network/command-parser";
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCMinimizedWnd from "./nc-minimized-wnd";
 import { FontType_T } from "./nwindow-canvas";
-import { MacroCommandType_T, type Macro_T, type MacroCommand_T } from "../network/game-packets";
+import { MacroCommandType_T, ShortCutType_T, type Macro_T, type MacroCommand_T, type ShortCut_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
 
 const arrBack = ["macro2_back", "macro1_back", "macro3_back"].map(name => `L2UI_CH3.MacroWnd.${name}`);
@@ -29,6 +29,7 @@ export class NCMacroWnd {
     public onHelp: () => void = null;
     public onError: (id: number) => void = null;
     public onDrop: (id: number, x: number, y: number) => void = null;
+    public shortcuts: ReadonlyMap<number, ShortCut_T> = new Map();
     protected readonly layer: NDomLayer;
     protected readonly list: HTMLDivElement;
     protected readonly count: HTMLDivElement;
@@ -183,7 +184,7 @@ export class NCMacroWnd {
         }
 
         const strings = this.layer.getManager().strings, name = strings.actions[id].macroCommand.toLowerCase();
-        const alias = { partyinvite: 16, partyleave: 17, partydismiss: 18 }[name]; // Engine 0x1045ed40 resolves canonical action names to command types.
+        const alias = { partyinvite: CommandType_T.Invite, partyleave: CommandType_T.Leave, partydismiss: CommandType_T.Dismiss, petpickup: CommandType_T.petpickup, manufacture: CommandType_T.manufacture, commend: CommandType_T.evaluate, leaderchange: CommandType_T.changepartyleader, manufacture2: CommandType_T.manufacture2, unsummon: CommandType_T.unsummon, summonmove: CommandType_T.summonmove, petmove: CommandType_T.petmove, invitechannel: CommandType_T.invitechannel }[name]; // Engine 0x1045ed40 resolves canonical action names to command types.
         const entry = Object.entries(strings.commands).find(([, command]) => command.toLowerCase() === name);
 
         if (alias === undefined && !entry) throw new Error(`Missing macro command for action '${id}'.`);
@@ -239,13 +240,6 @@ export class NCMacroWnd {
     }
 
     protected save() {
-        const name = this.name.getValue();
-        let id = 0;
-
-        if (!name) id = 838;
-        else if (this.macros.some(macro => (!this.current || macro.id !== this.current.id) && macro.name === name)) id = 839;
-        if (id) { if (this.onError) this.onError(id); return; }
-
         const commands: MacroCommand_T[] = [];
         for (let i = 0; i < 12; i++) {
             const text = this.commands[i].getValue();
@@ -259,8 +253,8 @@ export class NCMacroWnd {
             const entry = text[0] === "/" && Object.entries(strings.commands).find(([, name]) => `/${name.toLowerCase()}` === tokens[0].toLowerCase());
             const type = entry ? Number(entry[0]) : -1;
 
-            if (type >= CommandType_T.useskill && type <= CommandType_T.useskillstand) {
-                const skillId = strings.skillCommands[tokens.slice(1).join(" ").toLowerCase()];
+            if (type === CommandType_T.useskill) {
+                const skillId = getSkillCommandId(strings.skillCommands, tokens.slice(1).join(" "));
 
                 command.type = MacroCommandType_T.SKILL;
                 command.data1 = skillId || 0;
@@ -269,7 +263,7 @@ export class NCMacroWnd {
             } else if (type >= CommandType_T.useshortcut && type <= CommandType_T.useshortcutstand || type === CommandType_T.delay) {
                 const data1 = parseInt(tokens[1], 10), data2 = type === CommandType_T.delay ? 0 : parseInt(tokens[2], 10);
 
-                if (!Number.isFinite(data1) || data1 < 1 || data1 > 0x7fffffff || type !== CommandType_T.delay && (!Number.isFinite(data2) || data1 > 10 || data2 < 1 || data2 > 12)) { if (this.onError) this.onError(810); return; }
+                if (!Number.isFinite(data1) || data1 < 1 || data1 > 0x7fffffff || type !== CommandType_T.delay && (!Number.isFinite(data2) || data1 > 10 || data2 < 1 || data2 > 12 || this.shortcuts.get((data1 - 1) * 12 + data2 - 1)?.type === ShortCutType_T.TYPE_MACRO)) { if (this.onError) this.onError(810); return; }
                 if (type === CommandType_T.useshortcut || type === CommandType_T.delay) {
                     command.type = type === CommandType_T.delay ? MacroCommandType_T.DELAY : MacroCommandType_T.SHORTCUT;
                     command.data1 = type === CommandType_T.delay ? data1 : data1 - 1;
@@ -280,6 +274,13 @@ export class NCMacroWnd {
             commands.push(command);
         }
         if (!commands.length) { if (this.onError) this.onError(810); return; }
+        const name = this.name.getValue();
+        let id = 0;
+
+        if (!name) id = 838;
+        else if (this.macros.some(macro => (!this.current || macro.id !== this.current.id) && macro.name === name)) id = 839;
+        if (id) { if (this.onError) this.onError(id); return; }
+
         if (this.onSave) this.onSave({ id: this.current ? this.current.id : 0, name, acronym: this.acronym.getValue(), description: this.descriptionText, icon: this.iconIndex, commands });
         this.setEditorVisible(false);
     }

@@ -30,14 +30,14 @@ import { DialogType_T } from "./nc-dialog-box";
 import type NetworkManager from "../network/network-manager";
 import type AssetManager from "../assets/asset-manager";
 import type { GameServerInfo_T } from "../network/login-client";
-import { encodeCrestImage, PLEDGE_CREST_WIDTH, PLEDGE_CREST_HEIGHT, PLEDGE_LARGE_CREST_WIDTH, PLEDGE_LARGE_CREST_HEIGHT } from "../network/crest-encoder";
+import { encodeCrestImage, PLEDGE_CREST_WIDTH, PLEDGE_CREST_HEIGHT, PLEDGE_LARGE_CREST_WIDTH, PLEDGE_LARGE_CREST_HEIGHT, ALLY_CREST_WIDTH, ALLY_CREST_HEIGHT } from "../network/crest-encoder";
 import NCTooltip from "./nc-tooltip";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { IEngineComponent } from "../game/components";
 import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type ChatFilterWndView_T, type CommandInfoWndView_T, type CommunityWndView_T, type DeliverWndView_T, type DialogBoxView_T, type WarningDialogBoxView_T, type FishViewportWndView_T, type GMClanWndView_T, type GMDetailStatusWndView_T, type GMInventoryWndView_T, type GMMagicSkillWndView_T, type GMQuestWndView_T, type GMStoreWndView_T, type GMWndView_T, type GMSnoopWndView_T, type GMSnoopManagerView_T, type GMPetitionWndView_T, type HennaInfoWndView_T, type HennaListWndView_T, type HeroTowerWndView_T, type InventoryWndView_T, type ItemEnchantWndView_T, type LoadingWndView_T, type LobbyWndView_T, type LoginServerWndView_T, type LoginWndView_T, type ReplayWndView_T, type ReplayLogoWndView_T, type MacroWndView_T, type MainWndView_T, type ManorShopWndView_T, type MapWndView_T, type TownMapWndView_T, type MatchWndView_T, type MenuWndView_T, type MessageWndView_T, type NPCHtmlViewerView_T, type ObserverWndView_T, type OlympiadControlWndView_T, type OlympiadPlayerWndView_T, type OlympiadTargetWndView_T, type OptionWndView_T, type PartyRoomMakingWndView_T, type PartyRoomWndView_T, type PawnCreateWndView_T, type PetStatusWndView_T, type PetWndView_T, type PetitionBeginWndView_T, type PetitionWndView_T, type PetitionFeedBackWndView_T, type PartyWndView_T, type CalcWndView_T, type QuestListInfoWndView_T, type TutorialViewerWndView_T, type TutorialBtnView_T, type SiegeInfoWndView_T, type ManorInfoWndView_T, type ManorSeedSettingWndView_T, type ManorCropSettingWndView_T, type ManorCropSellWndView_T, type XMasSealWndView_T, type PlayerStatusWndView_T, type PledgePowerWndView_T, type PrivateBuyWndView_T, type PrivateShopWndView_T, type RecipeBookWndView_T, type RecipeBuyListWndView_T, type RecipeBuyManufactureWndView_T, type RecipeManufactureWndView_T, type RecipeShopWndView_T, type RecipeTreeWndView_T, type RecordMarkView_T, type RestartMenuWndView_T, type SSQMainBoardView_T, type SelectDeliverWndView_T, type ShopWndView_T, type ShortCutWndView_T, type SkillWndView_T, type StoreWndView_T, type SummonedWndView_T, type SystemMenuWndView_T, type TargetStatusWndView_T, type TradeWndView_T, type TrainWndView_T, type VIPShopWndView_T, type ZoneTitleWndView_T } from "./skin";
 import type GameManager from "../game/game-manager";
 
-export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, hasQuestMark: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, clanCrestId: number, allyCrestId: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
+export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, hasQuestMark: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, clanCrestId: number, allyCrestId: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, matchedStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
 
 const TEX_TARGET_BRACKET = "L2ui.NWindow.target";
 const TEX_MOUSE_TARGET_BRACKET = "L2ui.NWindow.normal"; // UCanvas::Init 0x7f0769, TargetRenderType 1
@@ -45,6 +45,7 @@ const arrGaugeTextures = ["L2UI_CH3.Etc.Minibar_Magic", "L2UI_CH3.Etc.Minibar_Ar
 const arrGaugeBack = ["L2UI_CH3.Etc.Minibar_Back21", "L2UI_CH3.Etc.Minibar_Back22", "L2UI_CH3.Etc.Minibar_Back23"];
 const arrGaugeOrder = [GamePackets.GaugeColor_T.CYAN, GamePackets.GaugeColor_T.RED, GamePackets.GaugeColor_T.BLUE, GamePackets.GaugeColor_T.GREEN];
 const arrBalloonTextures = ["L2UI_ch3.ChatBack.balloon1_1", "L2UI_ch3.ChatBack.balloon1_2", "L2UI_ch3.ChatBack.balloon1_3", "L2UI_ch3.ChatBack.balloon1_4", "L2UI_ch3.ChatBack.balloon2_1", "L2UI_ch3.ChatBack.balloon2_2", "L2UI_ch3.ChatBack.balloon2_3", "L2UI_ch3.ChatBack.balloon2_4"];
+const storeMatchColors: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [0xff00ff00, 0xff3cff3c], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [0xff00ffff, 0xff3cffc8], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [0xffffff00, 0xffc0ff00], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [0xff3cc8ff, 0xff1788f2] };
 const arrChatStoreTypes = [GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE_MANAGE];
 const storeBalloons: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [500, 0xffeaa5f5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [499, 0xfffdfea5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [665, 0xffffbb33], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [1273, 0xfffc7575] }; // FDynamicActor::DrawChat 0x106185ef..0x1061889d: sysstring label, text colour.
 const equipmentSlots: Record<number, number> = { 1: 0, 8: 4, 64: 1, 128: 5, 256: 7, 512: 10, 1024: 6, 2048: 11, 4096: 12, 8192: 2, 16384: 5, 32768: 6, 65536: 3, 131072: 6 }; // NWindow 0x100744e0, primary cells for 16 / 15 / 17.
@@ -602,6 +603,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.chatWnd.onSend = (text, type, target) => network.say(text, type, target);
         this.chatWnd.onBuildCommand = command => network.sendBypassBuildCmd(command);
         this.chatWnd.onCommand = (command, isShift) => network.execCommand(command, isShift);
+        this.chatWnd.onExpandText = text => network.expandChatText(text);
         this.chatWnd.setSystemMsgWnd(this.options.game.systemMsgWnd);
         this.chatWnd.setOldChatting(this.options.game.oldChatting);
         this.chatWnd.setSystemMessageFilters(this.options.game.systemMsgWndDamage, this.options.game.systemMsgWndExpendableItem);
@@ -1194,6 +1196,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             else if (!location && network.community.questArrowDestination === previous) network.community.questArrowDestination = null;
         };
         this.macroWnd = this.skin.createMacroWnd(this.layer);
+        this.macroWnd.shortcuts = network.items.shortcuts;
         this.macroWnd.onSave = macro => network.makeMacro(macro);
         this.macroWnd.onUse = id => network.activateMacro(id);
         this.macroWnd.onDelete = macro => this.dialogBox.show(this.formatSystemMessage(828, macro.name), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.deleteMacro(macro.id); }, true, 0, 828);
@@ -1340,6 +1343,16 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public showConfirm(messageId: number, text: string, onAnswer: (isOk: boolean) => void) {
         if (messageId === 0) this.dialogBox.hide();
         else this.dialogBox.show(text, DialogType_T.OK_CANCEL, onAnswer, messageId !== 1510, 0, messageId); // NCGaraDialogBox::SetDialog, NWindow RVA 0x8b90: replacement does not decline resurrection.
+    }
+
+    public showAllyDismiss() {
+        this.dialogBox.showText(this.nwindow.getSystemMessage(513), name => {
+            if (!name) return true;
+
+            this.dialogBox.hide();
+            this.showConfirm(1251, this.formatSystemMessage(1251, name), isOk => { if (isOk) this.manNetwork.dismissAllyClan(name); });
+            return false;
+        }, "", 0, 513);
     }
 
     public showPartyInvite(name: string, onAnswer: (isAccepted: boolean) => void, itemDistribution = 0) { this.yesNoDialogBox.show(this.formatSystemMessage([572, 573, 967, 968, 969][itemDistribution], name), DialogType_T.YES_NO, onAnswer, true, 10000, [572, 573, 967, 968, 969][itemDistribution]); }
@@ -1604,6 +1617,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         const deltaSeconds = deltaTime / 1000;
 
+        this.chatWnd.tick(deltaSeconds);
         if (this.screen === "world") {
             this.zoneTitleWnd.updateZone(deltaSeconds, this.manRender.player.position, this.options.game.showZoneTitle);
             this.zoneTitleWnd.tick(deltaSeconds);
@@ -1769,7 +1783,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 this.manRender.scene.add(balloon);
             }
 
-            balloon.setText(canvas, text, isChat ? 0xffffffff : store[1], isChat);
+            const matchColors = !isChat && plate.matchedStoreType === plate.privateStoreType ? storeMatchColors[plate.privateStoreType] : null;
+
+            balloon.setText(canvas, text, isChat ? 0xffffffff : matchColors ? matchColors[1] : store[1], isChat, matchColors ? matchColors[0] : 0);
             tmpBalloonAnchor.x = Math.trunc((tmpBalloonAnchor.x + 1) * 0.5 * width) / width * 2 - 1;
             tmpBalloonAnchor.y = 1 - Math.trunc((1 - tmpBalloonAnchor.y) * 0.5 * height) / height * 2;
             balloon.position.copy(tmpBalloonAnchor.unproject(camera));
@@ -1942,9 +1958,12 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.manorCropSettingWnd.setVisible(false);
         this.manorCropSellWnd.setVisible(false);
         this.manorCropSellWnd.changeWnd.setVisible(false);
+        this.manorSeedSettingWnd.changeWnd.setVisible(false);
+        this.manorCropSettingWnd.changeWnd.setVisible(false);
         this.xmasSealWnd.setVisible(false);
         this.shortCutWnd.setVisible(false);
         this.chatWnd.setVisible(false);
+        this.chatWnd.resetRecipients();
         this.chatFilterWnd.setVisible(false);
         this.restartMenuWnd.setVisible(false);
         this.targetStatusWnd.setTarget(null);
@@ -2659,7 +2678,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (id > 0) this.dialogBox.owner = this.mainWnd.questWnd.element;
     }
 
-    protected clanAction(action: string, member: GamePackets.ClanMember_T) {
+    public clanAction(action: string, member: GamePackets.ClanMember_T) {
         const network = this.manNetwork, dialog = this.dialogBox;
 
         switch (action) {
@@ -2743,18 +2762,23 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 break;
             case "setCrest":
             case "setInsignia":
-                dialog.show(this.getCrestMessage(action === "setCrest"), action === "setCrest" ? DialogType_T.OK : DialogType_T.OK_CANCEL, isOk => {
-                    if (isOk) this.pickCrest(action === "setCrest");
-                }, true, 0, action === "setCrest" ? 211 : 1478);
+            case "setAllyCrest": {
+                const isAlly = action === "setAllyCrest", isSmall = action !== "setInsignia";
+
+                dialog.show(this.getCrestMessage(isSmall, isAlly), action === "setCrest" ? DialogType_T.OK : DialogType_T.OK_CANCEL, isOk => {
+                    if (isOk) this.pickCrest(isSmall, isAlly);
+                }, true, 0, isAlly ? 515 : isSmall ? 211 : 1478);
                 break;
+            }
             case "penalty": network.userCommand(100); break;
             case "community": this.communityWnd.openClan(); break;
             default: throw new Error(`Unknown clan action '${action}'.`);
         }
     }
 
-    protected pickCrest(isSmall: boolean) { // NWindow 0x10080bf0 crest / 0x100809d0 insignia read the BMP path from sysmsg 208; a file picker replaces it.
+    protected pickCrest(isSmall: boolean, isAlly = false) { // NWindow 0x10080bf0 crest / 0x100809d0 insignia / 0x10080ec0 alliance read BMP paths; a file picker replaces filename entry.
         const input = document.createElement("input");
+        const width = isAlly ? ALLY_CREST_WIDTH : isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH, height = isAlly ? ALLY_CREST_HEIGHT : isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT, error = isAlly ? 529 : isSmall ? 211 : 1478;
 
         input.type = "file";
         input.accept = "image/*";
@@ -2773,21 +2797,22 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             let data: Uint8Array;
 
             try {
-                data = await encodeCrestImage(new Blob([bytes.buffer as ArrayBuffer], { type: input.files[0].type }), isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH, isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT);
+                data = await encodeCrestImage(new Blob([bytes.buffer as ArrayBuffer], { type: input.files[0].type }), width, height);
             } catch {
-                this.clanError(isSmall ? 211 : 1478);
+                this.clanError(error);
                 return;
             }
 
-            if (!data) this.clanError(isSmall ? 211 : 1478);
+            if (!data) this.clanError(error);
+            else if (isAlly) this.manNetwork.setAllyCrest(data);
             else if (isSmall) this.manNetwork.setPledgeCrest(data);
             else this.manNetwork.setPledgeLargeCrest(data);
         };
         input.click();
     }
 
-    protected getCrestMessage(isSmall: boolean) { return `Select a supported image measuring ${isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH}x${isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT} pixels.`; }
-    protected clanError(id: number) { this.addSystemMessage(id === 211 || id === 1478 ? this.getCrestMessage(id === 211) : this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); this.manNetwork.playSystemMessageSound(id); }
+    protected getCrestMessage(isSmall: boolean, isAlly = false) { return `Select a supported image measuring ${isAlly ? ALLY_CREST_WIDTH : isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH}x${isAlly ? ALLY_CREST_HEIGHT : isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT} pixels.`; }
+    protected clanError(id: number) { this.addSystemMessage(id === 211 || id === 1478 || id === 529 ? this.getCrestMessage(id !== 1478, id === 529) : this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); this.manNetwork.playSystemMessageSound(id); }
 
     protected isValidName(name: string) {
         const lower = name.replace(/[A-Z]/g, char => String.fromCharCode(char.charCodeAt(0) + 32));
@@ -2886,6 +2911,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         if (window.getConversationId() === -1) window.setConversation(snoop.conversationId, snoop.name);
         window.addChat(snoop);
+    }
+
+    public openPetition(text: string) {
+        this.petitionBeginWnd.reset();
+        this.petitionBeginWnd.setMessage(text);
+        this.petitionBeginWnd.setVisible(true);
+        this.petitionBeginWnd.focus();
     }
 
     public enablePetitionEvaluation() { this.petitionWnd.setEvaluationEnabled(true); }

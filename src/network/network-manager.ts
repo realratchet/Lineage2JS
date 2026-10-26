@@ -9,7 +9,7 @@ import { Raycaster, Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
 import type { CharacterCreate_T } from "./game-client";
 import type { GameGUI_T, Nameplate_T } from "../nwindow/nconsole-wnd";
-import getCommandTokens, { CommandType_T, ActionType_T } from "./command-parser";
+import getCommandTokens, { CommandType_T, ActionType_T, getSkillCommandId } from "./command-parser";
 import MacroExecutor from "./macro-executor";
 import Vehicle from "../objects/vehicle";
 import GroundPickup from "../objects/ground-pickup";
@@ -102,6 +102,58 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public say(text: string, type: GamePackets.Say2_T, target: string = null) { this.session.game.say2(text, type, target); }
 
+    public expandCommandTokens(tokens: string[]): string[] {
+        for (let i = 1; i < tokens.length; i++) {
+            const name = this.getCommandTokenName(tokens[i]);
+
+            if (name !== null) tokens[i] = name;
+        }
+
+        return tokens;
+    }
+
+    public expandChatText(text: string): string { // NWindow 0x10053a50.
+        if (!text.includes("%")) return text;
+
+        const tokens = getCommandTokens(text);
+        let output = "", hasExpanded = false, wasExpanded = false;
+
+        for (let i = 0; i < tokens.length; i++) {
+            const name = this.getCommandTokenName(tokens[i]), isExpanded = name !== null;
+
+            if (i === 0 && text[0] === "$") output += isExpanded ? "$" : "$ ";
+            if (i > 0 && !wasExpanded) output += " ";
+            output += isExpanded ? name : tokens[i];
+            if (isExpanded) hasExpanded = true;
+            wasExpanded = isExpanded;
+        }
+
+        return hasExpanded ? output : text;
+    }
+
+    protected getCommandTokenName(token: string): string {
+        const key = token.toLowerCase();
+
+        switch (key) {
+            case "%target": case "%self": {
+                const user = this.actors.objects.get(this.actors.userId);
+                const object = key === "%self" ? user : user && user.actor ? this.actors.objects.get(user.selectedId) : null;
+
+                return object && object.actor ? object.name : null;
+            }
+            case "%pet": return this.actors.petInfo.name || null;
+            default: {
+                let index = key.charCodeAt(6) - 49;
+
+                if (key.length === 7 && key.startsWith("%party") && index >= 0 && index < 8)
+                    for (const member of this.community.partyMembers.values())
+                        if (index-- === 0) return member.name;
+
+                return null;
+            }
+        }
+    }
+
     public execCommand(text: string, isShift: boolean = false) {
         if (!this.actors.inWorld) return;
         if (text.startsWith("//")) { this.sendBypassBuildCmd(text.slice(2)); return; }
@@ -114,7 +166,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
         const type = Number(entry[0]);
 
+        if ([CommandType_T.target, CommandType_T.Dismiss, CommandType_T.useskill, CommandType_T.useskillforce, CommandType_T.useskillstand, CommandType_T.useshortcut, CommandType_T.useshortcutforce, CommandType_T.useshortcutstand, CommandType_T.friendinvite, CommandType_T.frienddel, CommandType_T.block, CommandType_T.unblock, CommandType_T.equip].includes(type))
+            this.expandCommandTokens(tokens);
+
         switch (type) {
+            case CommandType_T.petition: {
+                const end = text.search(/[\]\u3000\n\t\r ={}$]/);
+
+                this.ui.openPetition(end < 0 ? "" : text.slice(end + 1));
+                break;
+            }
+            case CommandType_T.petitioncancel: this.community.cancelPetition(); break;
+            case CommandType_T.gmlist: this.community.requestGmList(); break;
+            case CommandType_T.remaintime: this.session.game.requestRemainTime(); break;
+            case CommandType_T.findprivatestore: this.items.findPrivateStore(tokens[1] || ""); break;
             case CommandType_T.sit: case CommandType_T.stand: this.session.game.changeWaitType(type === CommandType_T.stand); break;
             case CommandType_T.walk: case CommandType_T.run: this.session.game.changeMoveType(type === CommandType_T.run); break;
             case CommandType_T.attack: case CommandType_T.attackforce: case CommandType_T.attackstand: this.useAction(2, type === CommandType_T.attackforce, type === CommandType_T.attackstand); break;
@@ -122,6 +187,22 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case CommandType_T.targetnext: this.useAction(4, false, isShift); break;
             case CommandType_T.pickup: this.useAction(5, false, isShift); break;
             case CommandType_T.assist: this.useAction(6, false, isShift); break;
+            case CommandType_T.allyinvite: {
+                const target = this.community.getSelectedPlayer();
+
+                if (target && target.actor) {
+                    this.ui.addSystemMessage(strings.systemMessages[510], 0xffb09b79);
+                    this.community.requestJoinAlly(target.objectId);
+                } else this.ui.addSystemMessage(strings.systemMessages[511], 0xffb09b79);
+                break;
+            }
+            case CommandType_T.allyleave: this.ui.showConfirm(512, strings.systemMessages[512], isOk => { if (isOk) this.community.leaveAlly(); }); break;
+            case CommandType_T.allyoust: this.ui.showAllyDismiss(); break;
+            case CommandType_T.allydismiss: this.ui.showConfirm(514, strings.systemMessages[514], isOk => { if (isOk) this.community.dissolveAlly(); }); break;
+            case CommandType_T.allyinfo: this.community.requestAllyInfo(); break;
+            case CommandType_T.allycrest: this.ui.clanAction("setAllyCrest", null); break;
+            case CommandType_T.clanwarstart: case CommandType_T.clanwarstop: this.ui.clanAction(type === CommandType_T.clanwarstart ? "declareWar" : "endWar", null); break;
+            case CommandType_T.deletealliancecrest: this.community.setAllyCrest(new Uint8Array(0)); break;
             case CommandType_T.target: {
                 if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]); break; }
 
@@ -141,42 +222,84 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 break;
             }
             case CommandType_T.partymatching: this.ui.openPartyMatch(); break;
-            case CommandType_T.Invite: if (tokens.length > 1) this.community.inviteToParty(tokens.slice(1).join(" "), this.ui.getGameOptions().partyLooting); else this.useAction(ActionType_T.partyinvite); break;
+            case CommandType_T.Invite: if (tokens[1]) this.community.inviteToParty(tokens[1], this.ui.getGameOptions().partyLooting); else this.useAction(ActionType_T.partyinvite); break;
             case CommandType_T.Leave: this.useAction(ActionType_T.partyleave); break;
             case CommandType_T.Dismiss: if (tokens.length > 1) this.community.oustPartyMember(tokens.slice(1).join(" ")); else this.useAction(ActionType_T.partydismiss); break;
-            case CommandType_T.changepartyleader: if (tokens.length > 1) this.community.changePartyLeader(tokens.slice(1).join(" ")); else this.useAction(ActionType_T.leaderchange); break;
+            case CommandType_T.changepartyleader: if (tokens[1]) this.community.changePartyLeader(tokens[1]); else this.useAction(ActionType_T.leaderchange); break;
             case CommandType_T.vendor: this.useAction(ActionType_T.vendor); break;
             case CommandType_T.buy: this.useAction(ActionType_T.buy); break;
             case CommandType_T.evaluate: this.useAction(ActionType_T.commend); break;
-            case CommandType_T.friendinvite: if (tokens.length > 1) this.session.game.requestFriendInvite(tokens.slice(1).join(" ")); break;
+            case CommandType_T.manufacture: this.useAction(ActionType_T.manufacture); break;
+            case CommandType_T.manufacture2: this.useAction(ActionType_T.manufacture2); break;
+            case CommandType_T.petpickup: this.useAction(ActionType_T.petpickup); break;
+            case CommandType_T.pethold: this.useAction(ActionType_T.pethold); break;
+            case CommandType_T.petattack: this.useAction(ActionType_T.petattack); break;
+            case CommandType_T.petstop: this.useAction(ActionType_T.petstop); break;
+            case CommandType_T.petrevert: this.useAction(ActionType_T.petrevert); break;
+            case CommandType_T.summonhold: this.useAction(ActionType_T.summonhold); break;
+            case CommandType_T.summonattack: this.useAction(ActionType_T.summonattack); break;
+            case CommandType_T.summonstop: this.useAction(ActionType_T.summonstop); break;
+            case CommandType_T.unsummon: this.useAction(ActionType_T.unsummon); break;
+            case CommandType_T.summonmove: this.useAction(ActionType_T.summonmove); break;
+            case CommandType_T.petmove: this.useAction(ActionType_T.petmove); break;
+            case CommandType_T.invitechannel: {
+                const target = this.actors.objects.get(this.getTargetId());
+
+                if (tokens[1]) this.community.inviteToCommandChannel(tokens[1]);
+                else if (target && target.kind !== "npc") this.community.inviteToCommandChannel(target.name);
+                else this.ui.addSystemMessage(strings.systemMessages[1530], 0xffb09b79);
+                break;
+            }
+            case CommandType_T.banchannel: {
+                const target = this.actors.objects.get(this.getTargetId());
+
+                if (tokens.length > 1) this.community.oustFromCommandChannel(tokens.slice(1).join(" "));
+                else if (target && target.kind !== "npc") this.community.oustFromCommandChannel(target.name);
+                else this.ui.addSystemMessage(strings.systemMessages[1530], 0xffb09b79);
+                break;
+            }
+            case CommandType_T.friendinvite: case CommandType_T.frienddel: case CommandType_T.block: case CommandType_T.unblock: {
+                const target = type === CommandType_T.block ? this.community.getSelectedPlayer() : null;
+                const name = tokens.length > 1 ? tokens.slice(1).join(" ") : target ? target.name : null;
+
+                if (name === null) this.ui.addSystemMessage(strings.systemMessages[1256], 0xffb09b79);
+                else if (type === CommandType_T.friendinvite) this.session.game.requestFriendInvite(name);
+                else if (type === CommandType_T.frienddel) this.community.deleteFriend(name);
+                else this.community.block(type === CommandType_T.block ? GamePackets.BlockType_T.BLOCK : GamePackets.BlockType_T.UNBLOCK, name);
+                break;
+            }
             case CommandType_T.friendlist: this.community.requestFriendList(); break;
-            case CommandType_T.frienddel: if (tokens.length > 1) this.community.deleteFriend(tokens.slice(1).join(" ")); break;
-            case CommandType_T.block: case CommandType_T.unblock: if (tokens.length > 1) this.community.block(type === CommandType_T.block ? GamePackets.BlockType_T.BLOCK : GamePackets.BlockType_T.UNBLOCK, tokens.slice(1).join(" ")); break;
             case CommandType_T.blocklist: this.community.block(GamePackets.BlockType_T.BLOCKLIST); break;
             case CommandType_T.allblock: this.community.block(GamePackets.BlockType_T.ALLBLOCK); break;
             case CommandType_T.allunblock: this.community.block(GamePackets.BlockType_T.ALLUNBLOCK); break;
             case CommandType_T.socialhello: case CommandType_T.socialvictory: case CommandType_T.socialcharge: this.session.game.requestSocialAction(type - 19); break;
             case CommandType_T.socialno: case CommandType_T.socialyes: case CommandType_T.socialbow: case CommandType_T.socialunaware: case CommandType_T.socialwaitinga: case CommandType_T.sociallaugh: this.session.game.requestSocialAction(type - 41); break;
             case CommandType_T.socialapplause: case CommandType_T.socialdance: case CommandType_T.socialsad: this.session.game.requestSocialAction(type - 43); break;
-            case CommandType_T.sitstand: this.useAction(0, this.ui.getInputModifiers()[0], isShift); break;
+            case CommandType_T.sitstand: this.useAction(0); break;
+            case CommandType_T.walkrun: this.useAction(ActionType_T.walkrun); break;
+            case CommandType_T.mountdismount: this.useAction(ActionType_T.mountdismount); break;
             case CommandType_T.start_videorecording: this.session.startReplayRecording(); break;
             case CommandType_T.end_videorecording: this.session.stopReplayRecording(); break;
             case CommandType_T.startend_videorecording: this.useAction(55); break;
             case CommandType_T.useskill: case CommandType_T.useskillforce: case CommandType_T.useskillstand: {
                 if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]); break; }
 
-                const id = strings.skillCommands[tokens.slice(1).join(" ").toLowerCase()];
+                const id = getSkillCommandId(strings.skillCommands, tokens.slice(1).join(" "));
 
                 if (id) this.session.game.requestMagicSkillUse(id, type === CommandType_T.useskillforce, type === CommandType_T.useskillstand);
                 break;
             }
-            case CommandType_T.useshortcut: case CommandType_T.useshortcutforce: case CommandType_T.useshortcutstand: {
+            case CommandType_T.useshortcut: case CommandType_T.useshortcutforce: case CommandType_T.useshortcutstand: case CommandType_T.equip: {
                 const page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
 
-                if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12) this.items.useShortCut(page - 1, slot - 1, type === CommandType_T.useshortcutforce, type === CommandType_T.useshortcutstand);
+                if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12) {
+                    if (type === CommandType_T.equip) this.items.equipShortCut(page - 1, slot - 1);
+                    else this.items.useShortCut(page - 1, slot - 1, type === CommandType_T.useshortcutforce, type === CommandType_T.useshortcutstand);
+                }
                 break;
             }
-            case CommandType_T.loc: case CommandType_T.unstuck: case CommandType_T.Time: case CommandType_T.partyinfo: case CommandType_T.enemylist: case CommandType_T.attackerlist: case CommandType_T.clanwarlist: case CommandType_T.channeldelete: case CommandType_T.channelleave: case CommandType_T.channelinfo: case CommandType_T.clanpenalty: case CommandType_T["View Current Results"]: this.session.game.requestUserCommand(type); break;
+            case CommandType_T.loc: case CommandType_T.unstuck: case CommandType_T.Time: case CommandType_T.partyinfo: case CommandType_T.enemylist: case CommandType_T.attackerlist: case CommandType_T.clanwarlist: case CommandType_T.channeldelete: case CommandType_T.channelleave: case CommandType_T.clanpenalty: case CommandType_T["View Current Results"]: case CommandType_T.mount: case CommandType_T.dismount: case CommandType_T.summonsiege: case CommandType_T.skill4036: case CommandType_T.skill4138: case CommandType_T.delay: case CommandType_T.pledgewarinfo: case CommandType_T.allywarinfo: case CommandType_T.openchannel: case CommandType_T.selfnickname: case CommandType_T.warstatus: case CommandType_T.chinatime: this.session.game.requestUserCommand(type); break;
+            case CommandType_T.allywarstart: case CommandType_T.allywarstop: case CommandType_T.allywarsurrender: case CommandType_T.petspecial: case CommandType_T.channelinfo: break;
             default: debugger; break;
         }
     }
@@ -343,6 +466,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public leaveWorld() {
+        this.movement.cancelTeleport();
         const render = this.manGame.getComponent("render");
 
         this.session.stopReplayRecording();
@@ -747,7 +871,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.SpecialCamera: this.movement.specialCamera = GamePackets.readSpecialCamera(packet); break;
             case GamePackets.GameServerPacket_T.PetitionVote: this.community.onPetitionVote(packet); break;
             case GamePackets.GameServerPacket_T.NormalCamera: this.movement.specialCamera = null; break; // OnNormalCamera 0x7473c0 -> ReleaseSpecialViewTarget.
-            case GamePackets.GameServerPacket_T.CameraMode: this.movement.cameraMode = packet.d(); break;
+            case GamePackets.GameServerPacket_T.CameraMode: this.movement.onCameraMode(packet); break;
             case GamePackets.GameServerPacket_T.ObservationMode: this.movement.onObservationMode(packet); break;
             case GamePackets.GameServerPacket_T.ObservationReturn: this.movement.onObservationReturn(packet); break;
             case GamePackets.GameServerPacket_T.RadarControl: this.community.onRadarControl(packet); break;

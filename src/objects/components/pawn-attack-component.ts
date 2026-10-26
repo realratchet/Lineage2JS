@@ -153,11 +153,13 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public onDetach(): void {
+        const parent = this.getParent();
+
         this.detachSkillVisuals();
         for (const [visual, effects] of [[this.transientSkillEffects, this.transientEffects], [this.skillEffects, this.attackEffects]] as const) {
             if (this.renderManager.isRetainingSkillVisual(visual)) continue;
             for (const effect of effects)
-                if (effect.parent) this.renderManager.removeTransientEffect(effect);
+                if (effect.parent && (!(effect as any).scriptOwner || (effect as any).scriptOwner === parent)) this.renderManager.removeTransientEffect(effect);
             effects.length = 0;
             visual.clear();
         }

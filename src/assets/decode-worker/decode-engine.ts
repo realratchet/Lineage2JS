@@ -2701,6 +2701,7 @@ export class DecodeEngine {
     protected async pullCharacterEquipment(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, equipment: ICharacterEquipment, hairVariant: number): Promise<void> {
         if (!equipment) return;
 
+        const weapon = equipment.rightHand ? (await this.decodeWeaponGrp()).find(weapon => weapon.id === equipment.rightHand) : null;
         const parts = [
             { rightHand: equipment.rightHand, enchantLevel: equipment.enchantLevel },
             { leftHand: equipment.leftHand !== equipment.rightHand ? equipment.leftHand : 0 },
@@ -2713,7 +2714,7 @@ export class DecodeEngine {
 
             if (!part.rightHand && !part.leftHand && !part.head && !part.hair) continue;
 
-            const key = JSON.stringify([part, i === 2 ? row.face_mesh[0] : null, part.hair ? hairVariant : null]);
+            const key = `${i === 0 && weapon && weapon.is_hero > -1 ? "hero:" : ""}${JSON.stringify([part, i === 2 ? row.face_mesh[0] : null, part.hair ? hairVariant : null])}`;
             const assets = await this.getStoredAssets("character_equipment", key, builder.getSettings(), async () => {
                 const assets = new DecodeLibrary();
 
@@ -2843,33 +2844,62 @@ export class DecodeEngine {
         library.pawnEquipment = info;
     }
 
-    protected async pullWeaponEnchant(library: DecodeLibrary, builder: DecodeLibraryBuilder, weapon: Record<string, any>, level: number, index: number, item: IPawnEquipmentDecodeInfo["items"][number]): Promise<void> {
+    protected async getEnchantConfig(): Promise<Record<string, string>> {
         if (!this.cacheEnchantConfig) {
             const file = await new UConfigLocalization("assets/system/env.int").decode();
 
             await file.load();
             this.cacheEnchantConfig = Object.fromEntries(file.getProperties("EnchantEffect").map(entry => [entry.name.toLowerCase(), entry.value]));
         }
+        return this.cacheEnchantConfig;
+    }
 
-        const config = this.cacheEnchantConfig;
+    public async decodeHeroEffects(settings: LoadSettings_T): Promise<DecodeLibrary> {
+        const config = await this.getEnchantConfig();
+        const path = config.heroauramesh ?? "LineageWeapons.rangesample";
+        const skin = config.heroauratex ?? "LineageEffectsTextures.Hero.Hero_Aura000_Shader00";
+        const library = new DecodeLibrary();
+        const builder = new DecodeLibraryBuilder(library, settings);
+
+        library.name = path;
+        await this.pullScriptAssets(library, builder, null, { Mesh: path, Skins: [skin] });
+        const mesh = library.scriptMeshes[path.toLowerCase()] as ISkinnedMeshObjectDecodeInfo;
+        const material = library.materials[mesh.materials] as IMaterialGroupDecodeInfo;
+
+        if (material.materialType !== "group") throw new Error(`Hero mesh '${path}' has no material group.`);
+        material.materials.fill(library.scriptMaterials[skin.toLowerCase()]);
+        library.pawnActors.push(mesh);
+        await this.pullEffectTemplate(library, builder, "LineageEffect.e_u091_aura", true);
+        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
+        return library;
+    }
+
+    public async decodeHeroEffectsBinary(settings: LoadSettings_T): Promise<ArrayBuffer> {
+        return this.serializeTransfer(await this.decodeHeroEffects(settings));
+    }
+
+    protected async pullWeaponEnchant(library: DecodeLibrary, builder: DecodeLibraryBuilder, weapon: Record<string, any>, level: number, index: number, item: IPawnEquipmentDecodeInfo["items"][number]): Promise<void> {
+        const config = await this.getEnchantConfig();
+        const isHero = weapon.is_hero > -1;
         const values = consumeTuple(config[`enchant${level}`] || config.enchant || "()");
         const meshShow = Number(config.enchantmeshshow ?? -1), effectShow = Number(config.enchanteffectshow ?? -1);
         const mesh = weapon.enchantedMesh[index], effect = weapon.enchantedEffect[index];
 
         // APawn::GetEnchantedWeaponMesh 0x8c2ed0 / UpdateAbnormalState 0x7663c4.
-        if (meshShow >= 0 && level >= meshShow && mesh && mesh.toLowerCase() !== "none") {
-            const skin = config.cubetexname;
+        if (meshShow >= 0 && (isHero || level >= meshShow) && mesh && mesh.toLowerCase() !== "none") {
+            const skin = isHero ? config.heroweapontex : config.cubetexname;
 
-            if (!skin) throw new Error(`EnchantEffect has no CubeTexName.`);
+            if (!skin) throw new Error(`EnchantEffect has no ${isHero ? "HeroWeaponTex" : "CubeTexName"}.`);
 
             await this.pullScriptAssets(library, builder, null, { Mesh: mesh, Skins: [skin] });
-            item.enchantMesh = { mesh, skin, scale: weapon.enchantedMeshScale[index], offset: weapon.enchantedMeshOffset[index], colors: [1, 2].map(n => ["r", "g", "b"].map(c => Number(values[`${c}${n}`] ?? 100) / 255)) };
+            item.enchantMesh = { mesh, skin, scale: weapon.enchantedMeshScale[index], offset: weapon.enchantedMeshOffset[index], colors: isHero ? null : [1, 2].map(n => ["r", "g", "b"].map(c => Number(values[`${c}${n}`] ?? 100) / 255)) };
         }
 
-        if (effectShow >= 0 && level >= effectShow && effect && effect.toLowerCase() !== "none") {
+        if (effectShow >= 0 && (isHero || level >= effectShow) && effect && effect.toLowerCase() !== "none") {
             if (!library.effectTemplates[effect]) await this.pullEffectTemplate(library, builder, effect, true);
 
-            item.enchantEffect = { path: effect, offset: weapon.enchantedEffectOffset[index], scale: weapon.enchantedEffectScale[index], velocityScale: weapon.enchantedEffectVelocityScale[index], opacity: Number(values.opacity ?? 1), num: Number(values.num ?? 1) };
+            item.enchantEffect = { path: effect, offset: weapon.enchantedEffectOffset[index], scale: weapon.enchantedEffectScale[index], velocityScale: weapon.enchantedEffectVelocityScale[index], opacity: isHero ? 1 : Number(values.opacity ?? 1), num: isHero ? 1 : Number(values.num ?? 1) };
         }
     }
 

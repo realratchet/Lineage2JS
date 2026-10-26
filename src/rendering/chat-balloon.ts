@@ -4,13 +4,15 @@ import Nameplate from "./nameplate";
 export class ChatBalloon extends Nameplate {
     protected text: string = null;
     protected color = 0;
+    protected backgroundColor = 0;
     protected isChat = false;
 
-    public setText(canvas: NWindowCanvas, text: string, color: number, isChat: boolean) { // UCanvas::DrawChatting 0x10518620: black-tinted 8px caps, stretched middle and tail around SmallFont text, 5px padding.
-        if (text === this.text && color === this.color && isChat === this.isChat) return;
+    public setText(canvas: NWindowCanvas, text: string, color: number, isChat: boolean, backgroundColor = 0) { // UCanvas::DrawChatting 0x10518620: black-tinted 8px caps, stretched middle and tail around SmallFont text, 5px padding.
+        if (text === this.text && color === this.color && isChat === this.isChat && backgroundColor === this.backgroundColor) return;
 
         this.text = text;
         this.color = color;
+        this.backgroundColor = backgroundColor;
         this.isChat = isChat;
 
         const prefix = isChat ? "L2UI_ch3.ChatBack.balloon1_" : "L2UI_ch3.ChatBack.balloon2_", boxHeight = isChat ? 19 : 32, tailHeight = isChat ? 25 : 38;
@@ -28,11 +30,11 @@ export class ChatBalloon extends Nameplate {
         const context = this.canvas.getContext("2d");
 
         context.imageSmoothingEnabled = false;
-        context.drawImage(canvas.getTintedImage(`${prefix}1`, 0), 0, 0, 8, boxHeight, 0, 0, 8, boxHeight);
-        context.drawImage(canvas.getTintedImage(`${prefix}2`, 0), 0, 0, 8, boxHeight, 8, 0, half - 8, boxHeight);
-        context.drawImage(canvas.getTintedImage(`${prefix}3`, 0), 0, 0, 8, tailHeight, half, 0, 8, tailHeight);
-        context.drawImage(canvas.getTintedImage(`${prefix}2`, 0), 0, 0, 8, boxHeight, half + 8, 0, textWidth - half - 6, boxHeight);
-        context.drawImage(canvas.getTintedImage(`${prefix}4`, 0), 0, 0, 8, boxHeight, textWidth + 2, 0, 8, boxHeight);
+        context.drawImage(canvas.getTintedImage(`${prefix}1`, backgroundColor), 0, 0, 8, boxHeight, 0, 0, 8, boxHeight);
+        context.drawImage(canvas.getTintedImage(`${prefix}2`, backgroundColor), 0, 0, 8, boxHeight, 8, 0, half - 8, boxHeight);
+        context.drawImage(canvas.getTintedImage(`${prefix}3`, backgroundColor), 0, 0, 8, tailHeight, half, 0, 8, tailHeight);
+        context.drawImage(canvas.getTintedImage(`${prefix}2`, backgroundColor), 0, 0, 8, boxHeight, half + 8, 0, textWidth - half - 6, boxHeight);
+        context.drawImage(canvas.getTintedImage(`${prefix}4`, backgroundColor), 0, 0, 8, boxHeight, textWidth + 2, 0, 8, boxHeight);
         canvas.renderText(context, 5, 5, color, text);
         if (isResized) {
             this.material.map.dispose();

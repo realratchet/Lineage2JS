@@ -101,7 +101,7 @@ export type ChatFilterWndView_T = Pick<NCChatFilterWnd, "element" | "isVisible" 
 export type MessengerWndView_T = Pick<MessengerWnd, "element" | "folded" | "onSend" | "isVisible" | "placeOnScreen" | "receiveMessage" | "reset" | "setChildVisible" | "setFoldedVisible" | "setFriends" | "setPlayerName" | "setVisible">;
 export type L2ChatWndView_T = Pick<L2ChatWnd, "element" | "onClose" | "onSend" | "getPeer" | "getActive" | "isVisible" | "setPeer" | "setVisible" | "show" | "clearEdit" | "reset" | "addMessage">;
 
-export type ChatWndView_T = Pick<NCChatWnd, "getFilter" | "setFilter" | "onOptions" | "onHideOptions" | "addCreatureSay" | "addSystemMessage" | "dispatchCommand" | "element" | "focusInput" | "isInputFocused" | "isVisible" | "onBuildCommand" | "onCommand" | "onSend" | "placeOnScreen" | "resetLayout" | "sendText" | "setOldChatting" | "setSystemMessageFilters" | "setSystemMsgWnd" | "setVisible">;
+export type ChatWndView_T = Pick<NCChatWnd, "getFilter" | "setFilter" | "onOptions" | "onHideOptions" | "addCreatureSay" | "addSystemMessage" | "dispatchCommand" | "element" | "focusInput" | "isInputFocused" | "isVisible" | "onBuildCommand" | "onCommand" | "onExpandText" | "onSend" | "placeOnScreen" | "resetLayout" | "resetRecipients" | "sendText" | "setOldChatting" | "setSystemMessageFilters" | "setSystemMsgWnd" | "setVisible" | "tick">;
 export type ClanWndView_T = Pick<NCClanWnd, "addMember" | "clearMembers" | "deleteMember" | "element" | "onAction" | "setClan" | "setStatus" | "setStrings" | "setVisible" | "updateMember">;
 export type CommandInfoWndView_T = Pick<NCCommandInfoWnd, "addChat" | "closeChannel" | "element" | "isVisible" | "onLeave" | "onOust" | "onSay" | "onUpdate" | "open" | "placeOnScreen" | "setInfo" | "setVisible" | "tick">;
 export type CommunityWndView_T = Pick<NCCommunityWnd, "element" | "hide" | "isVisible" | "onAction" | "onRequest" | "openClan" | "placeOnScreen" | "setBoard" | "setVisible" | "toggle" | "viewer">;
@@ -128,7 +128,7 @@ export type LoginServerWndView_T = Pick<NCLoginServerWnd, "element" | "onCancel"
 export type ReplayLogoWndView_T = Pick<NCReplayLogoWnd, "element" | "placeOnScreen" | "setVisible">;
 export type ReplayWndView_T = Pick<NCReplayWnd, "element" | "focus" | "onPlay" | "onDelete" | "onCancel" | "onImport" | "placeOnScreen" | "setFiles" | "setVisible">;
 export type LoginWndView_T = Pick<NCLoginWnd, "auth" | "element" | "loginFunction" | "onLogin" | "placeOnScreen" | "setBusy" | "setVisible">;
-export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "editor" | "element" | "hide" | "highlightCommand" | "info" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setEditorVisible" | "setInfoVisible" | "setMacros" | "setVisible">;
+export type MacroWndView_T = Pick<NCMacroWnd, "dropAction" | "dropCommand" | "editor" | "element" | "hide" | "highlightCommand" | "info" | "isVisible" | "onDelete" | "onDrop" | "onError" | "onHelp" | "onSave" | "onUse" | "placeOnScreen" | "setEditorVisible" | "setInfoVisible" | "setMacros" | "setVisible" | "shortcuts">;
 export type MainWndView_T = Pick<NCMainWnd, "element" | "getSelectedTab" | "isVisible" | "placeOnScreen" | "selectTab" | "setVisible"> & { readonly detailStatusWnd: DetailStatusWndView_T, readonly skillWnd: SkillWndView_T, readonly actionWnd: ActionWndView_T, readonly questWnd: QuestWndView_T, readonly clanWnd: ClanWndView_T };
 export type ManorShopWndView_T = Pick<NCManorShopWnd, "element" | "getGrid" | "getItems" | "getPressedItem" | "isPreviewMode" | "isSellMode" | "isStoreMode" | "isVisible" | "onConfirm" | "onFocusDialog" | "onHide" | "onHideTooltip" | "onMove" | "onQuantity" | "onSelect" | "onSubmit" | "onTooltip" | "placeOnScreen" | "setVisible" | "showManor" | "transfer">;
 export type TownMapWndView_T = Pick<NTownMapWnd, "element" | "isVisible" | "placeOnScreen" | "setVisible" | "show">;
@@ -188,7 +188,7 @@ export type RecordMarkView_T = Pick<RecordMark, "element" | "placeOnScreen" | "s
 export type GMSnoopManagerView_T = Pick<NCGMSnoopManager, "element" | "isVisible" | "placeOnScreen" | "setVisible">;
 export type GMSnoopWndView_T = Pick<NCGMSnoopWnd, "addChat" | "element" | "getConversationId" | "isVisible" | "onQuit" | "placeOnScreen" | "reset" | "setConversation" | "setVisible">;
 
-export type PetitionBeginWndView_T = Pick<NCPetitionBeginWnd, "element" | "focus" | "getHtml" | "isVisible" | "onCancel" | "onSubmit" | "onValidation" | "placeOnScreen" | "reset" | "setVisible" | "tick">;
+export type PetitionBeginWndView_T = Pick<NCPetitionBeginWnd, "element" | "focus" | "getHtml" | "isVisible" | "onCancel" | "onSubmit" | "onValidation" | "placeOnScreen" | "reset" | "setMessage" | "setVisible" | "tick">;
 
 export type PetitionFeedBackWndView_T = Pick<NCPetitionFeedBackWnd, "element" | "isVisible" | "onClose" | "onSubmit" | "onValidation" | "placeOnScreen" | "setVisible" | "tick">;
 

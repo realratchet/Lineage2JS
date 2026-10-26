@@ -88,10 +88,12 @@ export class NetworkSession {
 
     public cancelLogin() {
         this.gmTransfer = null;
-        const login = this.login;
+        const login = this.login, game = this.game;
 
         this.login = null;
+        this.game = null;
         if (login) login.close();
+        if (game) game.close();
         this.network.ui.showLogin();
     }
 

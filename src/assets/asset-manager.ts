@@ -241,6 +241,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected socialEffectLibrary: Promise<DecodeLibrary> = null;
     protected raceEffectLibrary: Promise<DecodeLibrary> = null;
     protected bigHeadScales: Promise<Record<string, number>> = null;
+    protected heroEffectLibrary: Promise<DecodeLibrary> = null;
+    protected appendixEffectLibrary: Promise<DecodeLibrary> = null;
     protected abnormalEffectLibrary: Promise<DecodeLibrary> = null;
     protected fishingLibrary: Promise<DecodeLibrary> = null;
     protected readonly pawnLibraries = new WeakMap<BaseActor, DecodeLibrary>();
@@ -447,6 +449,28 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         await config.load();
         return config.scales;
+    }
+
+    public async loadHeroEffects(): Promise<DecodeLibrary> {
+        if (!this.heroEffectLibrary) this.heroEffectLibrary = this.decodeWorker.decodeHeroEffects(this.loadSettings);
+        const library = await this.heroEffectLibrary;
+
+        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (library as any).preferCompressedTextures = this.preferCompressedTextures;
+        return library;
+    }
+
+    public async loadAppendixEffects(): Promise<DecodeLibrary> {
+        if (!this.appendixEffectLibrary) {
+            const paths = ["LineageEffect.e_u520_identifier_r", "LineageEffect.e_u520_identifier_b"];
+
+            this.appendixEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, paths, [], paths);
+        }
+        const library = await this.appendixEffectLibrary;
+
+        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
+        (library as any).preferCompressedTextures = this.preferCompressedTextures;
+        return library;
     }
 
     public async loadAbnormalEffects(): Promise<DecodeLibrary> {

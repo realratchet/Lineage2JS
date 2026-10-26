@@ -59,6 +59,7 @@ export class NCPetitionBeginWnd {
     }
 
     public focus() { this.layer.activate(this.element); this.message.input.focus(); }
+    public setMessage(text: string) { this.message.setValue(text); }
 
     protected async showFile(path: string) {
         const generation = ++this.generation, html = await this.getHtml(path.replace(/^\.\.[\\/]L2text[\\/]/i, ""));

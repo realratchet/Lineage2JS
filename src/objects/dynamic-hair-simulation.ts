@@ -3,6 +3,7 @@ import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mes
 import { evaluateDeferredPose } from "./skeletal-animation-mixer";
 import { requireBonePose } from "./local-space-skeleton";
 import Rotator from "../utils/rotator";
+import { NActionList_T } from "../assets/unreal/un-pawn";
 
 const tmpMatrix = new Matrix4();
 const tmpParentMatrix = new Matrix4();
@@ -178,7 +179,7 @@ export class DynamicHairSimulation {
     protected userForceScale = 0;
     protected animationName: string = null;
     protected animationFrame = 0;
-    protected attackState = 0;
+    protected attackState = NActionList_T.NACT_NONE;
     protected attackEffectFrame = 0;
     protected attackEndEffectFrame = 0;
     protected attackForceCount = 0;
@@ -264,7 +265,7 @@ export class DynamicHairSimulation {
 
     public reset(): void { this.needsReset = true; }
 
-    public update(deltaTime: number, animationName: string, animationFrame: number, attackState: number, attackEffectFrame: number, attackEndEffectFrame: number, isMoving: boolean, isRunning: boolean, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
+    public update(deltaTime: number, animationName: string, animationFrame: number, attackState: NActionList_T, attackEffectFrame: number, attackEndEffectFrame: number, isMoving: boolean, isRunning: boolean, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
         if (!this.bones || deltaTime < 0 || !Number.isFinite(deltaTime)) throw new Error(`Invalid dynamic hair delta '${deltaTime}'.`);
 
         deltaTime = Math.fround(deltaTime);
@@ -310,7 +311,7 @@ export class DynamicHairSimulation {
         this.applyPose();
     }
 
-    protected updateAction(animationName: string, animationFrame: number, attackState: number, attackEffectFrame: number, attackEndEffectFrame: number, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
+    protected updateAction(animationName: string, animationFrame: number, attackState: NActionList_T, attackEffectFrame: number, attackEndEffectFrame: number, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
         const changed = animationName !== this.animationName;
         const action = animationName === null ? null : this.actions.get(animationName.toLowerCase());
 
@@ -497,10 +498,10 @@ export class DynamicHairSimulation {
 
         let scale = 0;
 
-        if (this.attackState === 1) {
+        if (this.attackState === NActionList_T.NACT_MELLEATTACK) {
             if (this.animationFrame > 0 && this.attackForceCount < 4) scale = this.frameDelta * 20;
             else if (this.animationFrame > this.attackEffectFrame - 0.1 && this.animationFrame < this.attackEffectFrame + 0.2 && this.attackForceCount < 9) scale = this.frameDelta * 20;
-        } else if (this.attackState === 2 && this.animationFrame > this.attackEndEffectFrame && this.attackForceCount < 4) scale = 1;
+        } else if (this.attackState === NActionList_T.NACT_BOWATTACK && this.animationFrame > this.attackEndEffectFrame && this.attackForceCount < 4) scale = 1;
 
         if (scale === 0) return;
 
@@ -557,7 +558,7 @@ export class DynamicHairSimulation {
     protected checkCollisions(): number {
         if (this.info.type === 9) return this.checkCollisions9();
         if (this.isDying) return 0;
-        if (this.attackState === 1 && this.animationFrame > 0.1 && this.animationFrame < 0.9) return 0;
+        if (this.attackState === NActionList_T.NACT_MELLEATTACK && this.animationFrame > 0.1 && this.animationFrame < 0.9) return 0;
         if ((this.info.type === 2 || this.info.type === 7) && this.isSpecialAttack) return 0;
 
         let result = 0;

@@ -32,6 +32,8 @@ const CHAT_COLORS: { [type: number]: [number, number] } = { [Say2_T.SHOUT]: [0xf
 
 const CHAT_PREFIXES = new Map<string, number>([["~", Say2_T.ALL], ["～", Say2_T.ALL], ["!", Say2_T.SHOUT], ["！", Say2_T.SHOUT], ["\"", Say2_T.TELL], ["”", Say2_T.TELL], ["#", Say2_T.PARTY], ["＃", Say2_T.PARTY], ["@", Say2_T.CLAN], ["＠", Say2_T.CLAN], ["&", Say2_T.PETITION_PLAYER], ["＆", Say2_T.PETITION_PLAYER], ["*", Say2_T.PETITION_GM], ["＊", Say2_T.PETITION_GM], ["+", Say2_T.TRADE], ["＋", Say2_T.TRADE], ["$", Say2_T.ALLIANCE], ["＄", Say2_T.ALLIANCE], ["%", Say2_T.HERO_VOICE], ["％", Say2_T.HERO_VOICE]]); // Prefix table 0x1023dbb8 (ASCII, fullwidth per type).
 
+function foldName(name: string) { return name.replace(/[A-Z]/g, value => value.toLowerCase()); } // NWindow 0x10171e76: C-locale comparison folds ASCII only.
+
 export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 SetWindow(0, H - 187, 348, 187), bottom anchored.
     public static getTextures(): string[] { return [TEX_BACK1, TEX_BACK2, TEX_BACK3, TEX_BACK4, TEX_SIZECONTROL, TEX_IME_EN, TEX_TAB1, TEX_TAB2, TEX_OPTION1, TEX_OPTION2, `?${TEX_OPTION1}_over`, TEX_MSN1, TEX_MSN2, `?${TEX_MSN1}_over`, ...NCChatListBox.getTextures()]; }
 
@@ -54,10 +56,18 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     protected height = MIN_HEIGHT;
     protected resizeDelta = 0;
     protected filters: ChatFilter_T[];
+    protected chatScore = 0;
+    protected readonly chatScores = new Map<string, number>();
+    protected isChatBlocked = false;
+    protected chatTimer = 0;
+    protected readonly tellTargets: string[] = [];
+    protected tellTargetIndex = -1;
+    protected isReplyMode = false;
 
     public onSend: (text: string, type: number, target: string) => void = null;
     public onBuildCommand: (command: string) => void = null;
     public onCommand: (command: string, isShift: boolean) => void = null;
+    public onExpandText: (text: string) => string = null;
     public onHideOptions: () => void = null;
     public onOptions: (index: number) => void = null;
 
@@ -106,6 +116,20 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
             if (event.key === "Enter") this.submit(this.editBox.getValue(), event.shiftKey);
             if (event.key === "Escape") this.editBox.input.blur();
+            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+                this.selectTell(event.key === "ArrowUp");
+            }
+        });
+        this.editBox.input.addEventListener("input", event => {
+            const input = event as InputEvent;
+
+            if (input.isComposing || input.inputType !== "insertText" || input.data !== "\"" || this.editBox.input.selectionStart !== 1) return;
+
+            const target = this.tellTargets[this.tellTargets.length - 1];
+
+            if (target) this.editBox.appendValue(target + " ");
+            this.isReplyMode = true;
         });
         this.createResizeFrame();
         this.element.addEventListener("wheel", event => {
@@ -188,6 +212,8 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     public isInputFocused() { return document.activeElement === this.editBox.input; }
 
     public addCreatureSay(name: string, text: string, type: number) { // NConsoleWnd 0x1007d200 -> NCConsole 0x1005d580 "%s: %s" (0x101ad5e8).
+        if (type === Say2_T.TELL) this.rememberTell(name);
+
         const [color, routed] = CHAT_COLORS[type] || [DEFAULT_COLOR, Say2_T.ALL];
 
         if (routed === Say2_T.PETITION_PLAYER || routed === Say2_T.PETITION_GM || routed === Say2_T.PARTYROOM_ALL || routed === Say2_T.PARTYROOM_COMMANDER || routed === Say2_T.CHANNEL_ALL) return; // 0x1005d5e9..0x1005d622: 6/7 go to the petition window, 14 to the party room, 15/16 to [+0x264].
@@ -239,6 +265,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     }
 
     protected submit(line: string, isShift: boolean = false) { // Enter handler 0x10059a3a..0x10059f66; U+FF02 is a tell prefix (0x10059aff) outside the strip list.
+        this.isReplyMode = false;
         this.editBox.setValue("");
 
         this.sendText(line, isShift);
@@ -263,16 +290,17 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
     public sendText(line: string, isShift: boolean = false) {
         if (this.dispatchCommand(line, isShift)) return;
+        if (this.onExpandText) line = this.onExpandText(line);
 
         const first = line.charAt(0);
-        const hasPrefix = CHAT_PREFIXES.has(first);
+        const hasPrefix = CHAT_PREFIXES.has(first) && (!this.oldChatting || first !== "~" && first !== "～");
         const type = first === "＂" ? Say2_T.TELL : hasPrefix ? CHAT_PREFIXES.get(first) : this.oldChatting ? Say2_T.ALL : TABS[this.selected][1];
 
         if (type === Say2_T.TELL) return this.sendTell(line);
 
         const text = hasPrefix ? line.slice(1) : line;
 
-        if (text && this.onSend) this.onSend(text, type, "");
+        if (text) this.sendMessage(text, type, "");
     }
 
     protected sendTell(line: string) { // 0x10059bff..0x10059da2: target runs to ' ' or U+3000; no target sends the whole line untargeted.
@@ -283,10 +311,99 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
         if (!this.onSend) return;
 
-        if (length === 0) return this.onSend(line, Say2_T.TELL, "");
+        if (length === 0) return this.sendMessage(line, Say2_T.TELL, "");
         if (rest.length <= length + 1) return;
 
-        this.onSend(rest.slice(length + 1), Say2_T.TELL, rest.slice(0, length));
+        const target = rest.slice(0, length);
+
+        this.rememberTell(target);
+        this.sendMessage(rest.slice(length + 1), Say2_T.TELL, target);
+    }
+
+    protected rememberTell(name: string) { // NCChatWnd 0x10056cd0.
+        if (!name || name.length >= 24 || name.charAt(0) === "-") return;
+
+        const key = foldName(name), index = this.tellTargets.findIndex(target => foldName(target) === key);
+
+        if (index >= 0) name = this.tellTargets.splice(index, 1)[0];
+        else if (this.tellTargets.length === 64) this.tellTargets.shift();
+
+        this.tellTargets.push(name);
+        this.tellTargetIndex = this.tellTargets.length - 1;
+    }
+
+    protected selectTell(isUp: boolean) { // NCChatWnd 0x10054380.
+        if (!this.isReplyMode) return;
+
+        const last = this.tellTargets.length - 1;
+
+        if (isUp) this.tellTargetIndex = Math.max(0, this.tellTargetIndex - 1);
+        else if (this.tellTargetIndex === last) {
+            this.tellTargetIndex++;
+            this.editBox.setValue("");
+            this.editBox.appendValue("\"");
+            return;
+        } else if (this.tellTargetIndex > last) return;
+        else this.tellTargetIndex = Math.min(this.tellTargetIndex + 1, last);
+
+        if (!this.tellTargets.length) return;
+
+        this.editBox.setValue("");
+        this.editBox.appendValue("\"" + this.tellTargets[this.tellTargetIndex] + " ");
+    }
+
+    public resetRecipients() { // NCChatWnd 0x100576a0 retains the cursor integer.
+        this.editBox.setValue("");
+        this.tellTargets.length = 0;
+        this.isReplyMode = false;
+    }
+
+    protected sendMessage(text: string, type: number, target: string) {
+        if (type === Say2_T.ALL || type === Say2_T.SHOUT || type === Say2_T.TELL || type === Say2_T.TRADE) {
+            const factor = Math.fround(0.1), previous = this.chatScores.get(text);
+            const score = previous === undefined ? 2000 : previous + Math.trunc(previous * factor + 2000) | 0;
+
+            this.chatScore = this.chatScore + Math.trunc(this.chatScore * factor + (text.length * 60 + 100 | 0)) | 0;
+            this.chatScores.set(text, score);
+
+            if (!this.isChatBlocked && (this.chatScore > 20000 || score > 20000)) {
+                this.isChatBlocked = true;
+                this.addChatWarning(964);
+                this.addChatWarning(1078);
+            }
+            if (this.isChatBlocked) {
+                this.addChatWarning(966);
+                return;
+            }
+        }
+        if (this.onSend) this.onSend(text, type, target);
+    }
+
+    protected addChatWarning(id: number) {
+        this.addSystemMessage(this.layer.getManager().getSystemMessage(id), 0xffb09b79);
+    }
+
+    public tick(deltaSeconds: number) { // NConsole 0x1007fa5c and NCChatWnd 0x10053e50; main-thread CTRL=0x027f.
+        const elapsed = Math.fround(deltaSeconds) + this.chatTimer, period = 1000 * Math.fround(0.001);
+
+        this.chatTimer = Math.fround(elapsed);
+        if (elapsed <= period) return;
+
+        this.chatTimer = Math.fround(elapsed - period);
+        this.chatScore = Math.max(0, this.chatScore - 200 | 0);
+
+        let isBlocked = this.chatScore > 10000;
+
+        for (const [text, score] of this.chatScores) {
+            const next = Math.max(0, score - 200 | 0);
+
+            this.chatScores.set(text, next);
+            if (next > 10000) isBlocked = true;
+        }
+        if (this.isChatBlocked && !isBlocked) {
+            this.isChatBlocked = false;
+            this.addChatWarning(965);
+        }
     }
 
     public onResizeWnd(delta: number, save = true) { // OnResizeWnd 0x10054d50: 15 px steps, 187 <= H <= 502, grows upward; the delta resets either way.

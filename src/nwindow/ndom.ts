@@ -80,23 +80,22 @@ export class NDomLayer {
         this.modalBlocker.addEventListener("mousedown", event => event.preventDefault());
         this.root.appendChild(this.modalBlocker);
 
-        for (const type of ["keydown", "keyup"])
+        for (const type of ["keydown", "keyup", "beforeinput"])
             window.addEventListener(type, event => {
-                const modal = this.arrModalWindows[this.arrModalWindows.length - 1];
-
-                if (!modal || modal.element.contains(event.target as Node)) return;
+                if (this.isInputAdmitted(event.target as Node)) return;
 
                 event.preventDefault();
                 event.stopImmediatePropagation();
             }, { capture: true, passive: false });
 
         window.addEventListener("focusin", event => {
+            this.updateInputAdmission();
             const modal = this.arrModalWindows[this.arrModalWindows.length - 1];
 
             if (modal && !modal.element.contains(event.target as Node)) modal.element.focus();
         }, true);
 
-        for (const type of ["mousedown", "mouseup", "click", "dblclick", "wheel", "keydown", "keyup", "contextmenu"])
+        for (const type of ["mousedown", "mouseup", "click", "dblclick", "wheel", "keydown", "keyup", "beforeinput", "contextmenu"])
             this.root.addEventListener(type, event => { if (event.target !== this.root) event.stopPropagation(); });
 
         this.root.addEventListener("contextmenu", event => event.preventDefault());
@@ -201,6 +200,7 @@ export class NDomLayer {
     }
 
     protected activateVisibleWindows(records: MutationRecord[]) {
+        if (records.length) this.updateInputAdmission();
         for (const { target } of records)
             if (target instanceof HTMLElement && target !== this.consoleRoot && (target.parentElement === this.root || target.parentElement === this.consoleRoot) && !target.hidden && !target.classList.contains("ndom-opaque")) this.activate(target);
     }
@@ -232,6 +232,17 @@ export class NDomLayer {
             if (modal) modal.element.focus();
             wnd.removeAttribute("aria-modal");
         }
+        this.updateInputAdmission();
+    }
+
+    protected isInputAdmitted(target: Node) {
+        const modal = this.arrModalWindows[this.arrModalWindows.length - 1];
+        return !modal || !modal.element.hidden && modal.element.contains(target);
+    }
+
+    protected updateInputAdmission() {
+        for (const input of this.root.querySelectorAll<HTMLInputElement>("input.ndom-input"))
+            input.readOnly = !this.isInputAdmitted(input);
     }
 
     public setTransparencyMode(isEnabled: boolean) {
@@ -1052,6 +1063,7 @@ export class NDomLayer {
         };
 
         parent.appendChild(element);
+        input.readOnly = !this.isInputAdmitted(input);
         this.root.addEventListener("resize", draw);
         timer = window.setInterval(() => {
             if (!element.isConnected) { window.clearInterval(timer); this.root.removeEventListener("resize", draw); return; }

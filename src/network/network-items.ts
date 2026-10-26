@@ -804,6 +804,38 @@ export class NetworkItems {
         if (target) this.requestShortCutReg(target.type, index, target.id, target.characterType ?? 1);
     }
 
+    public findPrivateStore(text: string) {
+        const query = caps(text);
+
+        for (const object of this.network.actors.objects.values()) {
+            if (object.kind === "npc") continue;
+            object.matchedStoreType = GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE;
+
+            if (!query || !object.actor) continue;
+            const type = object.privateStoreType;
+            const messages = type === GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL || type === GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL ? this.privateStoreSellMsgs : type === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ? this.privateStoreBuyMsgs : type === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.recipeShopMessages : null;
+
+            if (!messages) continue;
+            const message = messages.get(object.objectId);
+
+            if (message && caps(message).includes(query)) object.matchedStoreType = type;
+        }
+    }
+
+    public equipShortCut(page: number, slot: number) {
+        const shortcut = this.shortcuts.get(page * 12 + slot);
+
+        if (!shortcut || shortcut.type !== GamePackets.ShortCutType_T.TYPE_ITEM) return;
+        const item = this.inventory.get(shortcut.id), info = item ? this.network.ui.getStrings().itemInfos[item.itemId] : null;
+
+        if (!info || (info.templateClass !== "weapon" && info.templateClass !== "armor")) return;
+
+        for (const equipped of this.inventory.values())
+            if (equipped.isEquipped && equipped.itemId === item.itemId) return;
+
+        this.useItem(item.objectId);
+    }
+
     public useShortCut(page: number, slot: number, ctrl: boolean = false, shift: boolean = false) {
         const shortcut = this.shortcuts.get(page * 12 + slot);
 
@@ -1087,5 +1119,7 @@ export class NetworkItems {
 
     public setManorCrops(manorId: number, items: GamePackets.CropSettingRequest_T[]) { if (this.network.actors.inWorld) this.network.session.game.requestSetCrop(manorId, items); }
 }
+
+function caps(text: string) { return text.replace(/[a-z]/g, char => String.fromCharCode(char.charCodeAt(0) - 32)); } // Core FString::Caps 0x1011d018..0x1011d02f.
 
 export default NetworkItems;

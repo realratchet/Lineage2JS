@@ -5,6 +5,7 @@ import { Vector3 } from "three";
 import BaseActor from "../base-actor";
 import Player from "../player";
 import PawnAttackComponent from "../objects/components/pawn-attack-component";
+import type PawnAppendixComponent from "../objects/components/pawn-appendix-component";
 import Vehicle from "../objects/vehicle";
 import { sinRotator } from "../assets/unreal/utils/rotator";
 import * as GamePackets from "./game-packets";
@@ -37,6 +38,9 @@ export class NetworkMovement {
     public specialCamera: GamePackets.SpecialCamera_T = null;
     public cameraMode = 0;
     public stuckCheckAt = 0;
+    protected readonly teleportPosition = new Vector3();
+    protected teleportPending = false;
+    protected teleportLoading = false;
 
     public constructor(protected readonly network: NetworkManager) {}
 
@@ -198,6 +202,7 @@ export class NetworkMovement {
         if (!object) return;
 
         setVector(object.position, this.readLocation(packet));
+        const fast = packet.d() !== 0;
         object.destination = null;
         object.pendingFly = null;
         object.pendingVehicleMove = null;
@@ -215,10 +220,32 @@ export class NetworkMovement {
             tmpTeleportPosition.copy(object.position);
             tmpTeleportPosition.z = Math.fround(tmpTeleportPosition.z + Math.fround(object.speeds.collisionHeight) + 10);
             if (object.actor === this.network.getParent().getComponent("render").player) {
+                this.teleportPosition.copy(tmpTeleportPosition);
+                if (object.kind === "user" && !fast) {
+                    const render = this.network.getParent().getComponent("render"), game = this.network.session.game;
+
+                    if (render.screenFadeOut(1000, [0, 0, 0, 255], () => {
+                        this.teleportPending = false;
+                        render.resetScreenFade();
+                        if (!this.network.actors.inWorld || this.network.session.game !== game || this.network.actors.objects.get(object.objectId) !== object) return;
+
+                        render.player.l2Teleport(this.teleportPosition);
+                        void this.finishTeleport();
+                    })) this.teleportPending = true;
+                    return;
+                }
                 object.actor.l2Teleport(tmpTeleportPosition);
             } else this.network.getParent().getComponent("physics").farMoveActor(object.actor, tmpTeleportPosition);
         }
         if (object.kind === "user") void this.finishTeleport();
+    }
+
+    public cancelTeleport(): void {
+        this.teleportLoading = false;
+        if (!this.teleportPending) return;
+
+        this.teleportPending = false;
+        this.network.getParent().getComponent("render").resetScreenFade();
     }
 
     protected async finishTeleport() {
@@ -229,6 +256,7 @@ export class NetworkMovement {
         const isLoading = !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident
 
         if (isLoading) {
+            this.teleportLoading = true;
             render.setZoneMusicEnabled(false);
             this.network.ui.showLoading(true);
 
@@ -243,8 +271,9 @@ export class NetworkMovement {
         // Lisvus Appearing sends the destination known list before UserInfo.
         while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (this.network.actors.teleportInfoPending || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) await new Promise(resolve => setTimeout(resolve, 100));
 
-        if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration || !isLoading) return;
+        if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration || !this.teleportLoading) return;
 
+        this.teleportLoading = false;
         render.setZoneMusicEnabled(true);
         this.network.ui.showWorld();
     }
@@ -629,6 +658,7 @@ export class NetworkMovement {
         mount.setUnrealScriptProperty("bHidden", rider.getUnrealScriptProperty("bHidden"));
         rider.stopMoving();
         physics.removePawn(rider);
+        for (const child of rider.children) physics.registerSimulationObjects(child);
         rider.setUnrealScriptProperty("bRide", true);
         rider.setUnrealScriptProperty("CurRideType", ride.mountType);
         mount.ridePawn = rider;
@@ -638,6 +668,8 @@ export class NetworkMovement {
         mount.setFlying(ride.mountType === GamePackets.MountType_T.WYVERN);
         this.riders.set(ride.objectId, rider);
         object.actor = mount;
+        object.appendixState = 0;
+        if (object.pendingTeam !== null) this.network.combat.updateTeam(object, object.pendingTeam);
         for (const movement of physics.getPhysicsComponents<PawnMovementComponent>("pawnMovement")) {
             movement.replaceTarget(rider, mount);
             movement.getParent().findComponent<PawnAttackComponent>("pawnAttack")?.replaceTarget(rider, mount);
@@ -656,6 +688,7 @@ export class NetworkMovement {
     public endRide(objectId: number): void {
         const rider = this.riders.get(objectId), object = this.network.actors.objects.get(objectId);
 
+        if (object) object.pendingTeam = null;
         if (!rider || !object) return;
 
         const render = this.network.getParent().getComponent("render"), mount = object.actor;
@@ -668,6 +701,7 @@ export class NetworkMovement {
         rider.setUnrealScriptProperty("CurRideType", 0);
         render.scene.add(rider);
         object.actor = rider;
+        object.appendixState = rider.findComponent<PawnAppendixComponent>("pawnAppendix")?.getAppendixState() || 0;
         this.riders.delete(objectId);
         this.network.combat.updateAbnormalState(object);
         this.network.getParent().getComponent("physics").addPawn(rider);
@@ -751,6 +785,14 @@ export class NetworkMovement {
         this.observation = null;
         this.placeObserver(position, false);
         this.network.ui.setObservationMode(false);
+    }
+
+    public onCameraMode(packet: PacketReader) {
+        this.cameraMode = packet.d();
+        const controller = this.network.getParent().getComponent("asset").playerController;
+
+        if (!controller.setCameraMode(this.cameraMode)) return;
+        if (this.cameraMode === 1 || !this.network.session.game.isPlayingReplay()) this.network.ui.setHUDVisible(this.cameraMode !== 1);
     }
 
     public getVehicleId() { return this.getVehicleIdOf(this.network.actors.userId); }

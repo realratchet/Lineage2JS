@@ -1,5 +1,5 @@
 import * as GamePackets from "./game-packets";
-import getCommandTokens, { CommandType_T } from "./command-parser";
+import getCommandTokens, { CommandType_T, getSkillCommandId } from "./command-parser";
 import type NetworkManager from "./network-manager";
 import type { NetObject_T } from "./network-actors";
 
@@ -89,7 +89,7 @@ export class MacroExecutor {
                     row.duration = Math.fround(command.command.length * Math.fround(0.2));
 
                 if (type === CommandType_T.useshortcutforce || type === CommandType_T.useshortcutstand) {
-                    const tokens = getCommandTokens(command.command), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
+                    const tokens = this.network.expandCommandTokens(getCommandTokens(command.command)), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
 
                     if (page >= 1 && page <= 10 && slot >= 1 && slot <= 12 && this.shortcuts.get((page - 1) * 12 + slot - 1)?.type === GamePackets.ShortCutType_T.TYPE_MACRO) this.cancelRecursiveMacro();
                 }
@@ -149,9 +149,9 @@ export class MacroExecutor {
             if (command.data1 < 0 || command.data1 > 9 || command.data2 < 0 || command.data2 > 11) return;
             skillId = this.shortcuts.get(command.data1 * 12 + command.data2)?.id;
         } else if (command.type === GamePackets.MacroCommandType_T.CHAT) {
-            const type = this.getMacroCommandType(command.command), tokens = getCommandTokens(command.command);
+            const type = this.getMacroCommandType(command.command), tokens = this.network.expandCommandTokens(getCommandTokens(command.command));
 
-            if (type === CommandType_T.useskillforce || type === CommandType_T.useskillstand) skillId = this.ui.getStrings().skillCommands[tokens.slice(1).join(" ").toLowerCase()];
+            if (type === CommandType_T.useskillforce || type === CommandType_T.useskillstand) skillId = getSkillCommandId(this.ui.getStrings().skillCommands, tokens.slice(1).join(" "));
             else if (type === CommandType_T.useshortcutforce || type === CommandType_T.useshortcutstand) {
                 const page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
 
@@ -199,7 +199,7 @@ export class MacroExecutor {
                     let target: NetObject_T = null;
 
                     if (type === CommandType_T.target) {
-                        const name = getCommandTokens(command.command).slice(1).join(" ").toLowerCase();
+                        const name = this.network.expandCommandTokens(getCommandTokens(command.command)).slice(1).join(" ").toLowerCase();
 
                         for (const object of this.objects.values()) {
                             if (object.name.toLowerCase() !== name) continue;
@@ -212,7 +212,7 @@ export class MacroExecutor {
                         this.notifyCommand([CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist], Math.fround(0.001));
                 }
                 if (type === CommandType_T.useshortcutforce || type === CommandType_T.useshortcutstand) {
-                    const tokens = getCommandTokens(command.command), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
+                    const tokens = this.network.expandCommandTokens(getCommandTokens(command.command)), page = parseInt(tokens[1], 10), slot = parseInt(tokens[2], 10);
                     const shortcut = page >= 1 && page <= 10 && slot >= 1 && slot <= 12 ? this.shortcuts.get((page - 1) * 12 + slot - 1) : null;
 
                     if (shortcut && shortcut.type === GamePackets.ShortCutType_T.TYPE_MACRO) { execution.active = false; execution.current = 0; this.cancelRecursiveMacro(); continue; }
