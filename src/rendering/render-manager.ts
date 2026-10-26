@@ -296,6 +296,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly wideScreenBars = new WideScreenBars();
     protected readonly fogBlend = new FogBlendState();
     protected fogSource: L2Environment | ZoneObject | FogInfoObject | null = null;
+    protected readonly skyColors: ColorByte[] = [];
+    protected readonly prevSkyColors: ColorByte[] = [];
     public readonly questArrow = new QuestArrow(this);
     protected viewportWindow: ViewportWindow = null;
     protected viewportSceneCanvas: HTMLCanvasElement = null;
@@ -1951,6 +1953,19 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updateEnvironment();
     }
 
+    protected blendSkyColor(color: ColorByte, index: number, update: boolean) {
+        let current = this.skyColors[index];
+
+        if (!current) {
+            current = this.skyColors[index] = color.clone();
+            this.prevSkyColors[index] = color.clone();
+        } else if (update) {
+            current.copy(this.prevSkyColors[index]).lerp(color, 1 - this.fogBlend.remainingTime / this.fogBlend.totalTime);
+        }
+
+        color.copy(current);
+    }
+
     protected updateEnvironment(camera = this.camera, updateAudio = true) {
         const env = this.environment;
         if (!env) return;
@@ -2204,9 +2219,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (camera === this.camera) {
             if (updateAudio) {
-                if (!this.fogSource) this.fogBlend.snapToTarget(targetFogColor, targetFogStart, targetFogEnd);
-                else if (fogSource !== this.fogSource) this.fogBlend.setTarget(targetFogColor, targetFogStart, targetFogEnd);
-                else {
+                if (!this.fogSource) {
+                    this.fogBlend.snapToTarget(targetFogColor, targetFogStart, targetFogEnd);
+                    this.skyColors.length = this.prevSkyColors.length = 0;
+                } else if (fogSource !== this.fogSource) {
+                    this.prevSkyColors.forEach((color, index) => color.copy(this.skyColors[index]));
+                    this.fogBlend.setTarget(targetFogColor, targetFogStart, targetFogEnd);
+                } else {
                     this.fogBlend.targetColor.copy(targetFogColor);
                     this.fogBlend.targetStart = targetFogStart;
                     this.fogBlend.targetEnd = targetFogEnd;
@@ -2218,6 +2237,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 targetFogColor.copy(this.fogBlend.currentColor);
                 targetFogStart = this.fogBlend.currentStart;
                 targetFogEnd = this.fogBlend.currentEnd;
+                this.blendSkyColor(targetSkyColor, 0, updateAudio);
+                this.blendSkyColor(tmpColorByte_4, 1, updateAudio);
+                for (let i = 0; i < targetCloudColors.length; i++) this.blendSkyColor(targetCloudColors[i], i + 2, updateAudio);
+                for (let i = 0; i < blendedHazeColors.length; i++) this.blendSkyColor(blendedHazeColors[i], i + 5, updateAudio);
             }
         }
 

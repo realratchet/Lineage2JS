@@ -50,13 +50,6 @@ export class FogBlendState {
     }
 
     public setTarget(color: ColorByte, start: number, end: number): void {
-        const colorChanged = color.r !== this.targetColor.r ||
-            color.g !== this.targetColor.g ||
-            color.b !== this.targetColor.b;
-        const rangeChanged = start !== this.targetStart || end !== this.targetEnd;
-
-        if (!colorChanged && !rangeChanged) return;
-
         this.prevColor.copy(this.currentColor);
         this.prevStart = this.currentStart;
         this.prevEnd = this.currentEnd;
