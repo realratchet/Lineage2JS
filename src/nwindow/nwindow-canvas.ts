@@ -75,19 +75,25 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     public getScreenSize(uiScale: number) { return [Math.floor(window.innerWidth / uiScale), Math.floor(window.innerHeight / uiScale)]; }
     public toUI(client: number) { return Math.floor(client / this.cssScale); }
 
-    public async loadTextures(paths: string[]) {
+    public getTextureKey(path: string, useIntrinsicAlpha = true) {
+        const key = (path[0] === "?" ? path.slice(1) : path).toLowerCase();
+
+        return useIntrinsicAlpha ? key : `${key}:normal`;
+    }
+
+    public async loadTextures(paths: string[], useIntrinsicAlpha = true) {
         const missing = paths.filter(path => {
-            const key = path.replace(/^\?/, "").toLowerCase();
+            const key = this.getTextureKey(path, useIntrinsicAlpha);
 
             return !this.textures.has(key) && !this.pending.has(key);
         });
 
-        const pending = paths.map(path => this.pending.get(path.replace(/^\?/, "").toLowerCase())).filter(Boolean);
+        const pending = paths.map(path => this.pending.get(this.getTextureKey(path, useIntrinsicAlpha))).filter(Boolean);
 
         if (missing.length) {
-            const loading = this.loadMissingTextures(missing);
+            const loading = this.loadMissingTextures(missing, useIntrinsicAlpha);
 
-            for (const path of missing) this.pending.set(path.replace(/^\?/, "").toLowerCase(), loading);
+            for (const path of missing) this.pending.set(this.getTextureKey(path, useIntrinsicAlpha), loading);
 
             pending.push(loading);
         }
@@ -95,13 +101,13 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         await Promise.all(pending);
     }
 
-    protected async loadMissingTextures(missing: string[]) {
+    protected async loadMissingTextures(missing: string[], useIntrinsicAlpha: boolean) {
         const byPackage = new Map<string, string[]>();
         const keysBySource = new Map<string, string[]>();
         const images: [string, string][] = [];
 
         for (const path of missing) {
-            const key = path.replace(/^\?/, "").toLowerCase(), source = this.skin.resolve(key);
+            const key = this.getTextureKey(path, useIntrinsicAlpha), source = this.skin.resolve(path.replace(/^\?/, "").toLowerCase());
 
             if (isSkinImageUrl(source)) { images.push([key, source]); continue; }
 
@@ -115,7 +121,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         }
 
         try {
-            const decoded = (await Promise.all([...byPackage.values()].map(group => this.asset.decodeUITextures(group)))).flat();
+            const decoded = (await Promise.all([...byPackage.values()].map(group => this.asset.decodeUITextures(group, useIntrinsicAlpha)))).flat();
 
             for (const texture of decoded) {
                 const image = { frames: await Promise.all(texture.frames.map(frame => createImageBitmap(new ImageData(new Uint8ClampedArray(frame), texture.width, texture.height)))), frameTime: texture.frameTime };
@@ -132,20 +138,20 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
             }
 
             for (const path of missing) {
-                const key = path.replace(/^\?/, "").toLowerCase();
+                const key = this.getTextureKey(path, useIntrinsicAlpha);
 
                 if (!this.textures.has(key)) this.textures.set(key, null);
             }
         } finally {
-            for (const path of missing) this.pending.delete(path.replace(/^\?/, "").toLowerCase());
+            for (const path of missing) this.pending.delete(this.getTextureKey(path, useIntrinsicAlpha));
         }
     }
 
-    public hasTexture(path: string): boolean { return !!this.textures.get(path.toLowerCase()); }
-    public getTextureAnimation(path: string): UIImage_T { return this.textures.get(path.toLowerCase()); }
+    public hasTexture(path: string, useIntrinsicAlpha = true): boolean { return !!this.textures.get(this.getTextureKey(path, useIntrinsicAlpha)); }
+    public getTextureAnimation(path: string, useIntrinsicAlpha = true): UIImage_T { return this.textures.get(this.getTextureKey(path, useIntrinsicAlpha)); }
 
-    public getTexture(path: string): ImageBitmap {
-        const key = path.toLowerCase();
+    public getTexture(path: string, useIntrinsicAlpha = true): ImageBitmap {
+        const key = this.getTextureKey(path, useIntrinsicAlpha);
 
         if (!this.textures.has(key) && !this.pending.has(key)) throw new Error(`UI texture '${path}' was never loaded.`);
 
@@ -281,13 +287,13 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         return count * DIGIT_FONTS[type][1];
     }
 
-    public getTintedImage(path: string, color: number, alphaRef: number = -1): HTMLCanvasElement {
-        const key = `${path.toLowerCase()}:${color & 0xffffff}` + (alphaRef < 0 ? "" : `:${alphaRef}`);
+    public getTintedImage(path: string, color: number, alphaRef: number = -1, useIntrinsicAlpha = true): HTMLCanvasElement {
+        const key = `${this.getTextureKey(path, useIntrinsicAlpha)}:${color & 0xffffff}` + (alphaRef < 0 ? "" : `:${alphaRef}`);
         let atlas = this.tinted.get(key);
 
         if (atlas) return atlas;
 
-        const texture = this.getTexture(path);
+        const texture = this.getTexture(path, useIntrinsicAlpha);
 
         atlas = document.createElement("canvas");
         atlas.width = texture.width;

@@ -448,14 +448,14 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "listPlayerSkills", includeAssetVariants });
     }
 
-    public decodeUITextures(settings: LoadSettings_T, paths: string[]): Promise<UITexture_T[]> {
-        if (this.mainThreadEngine) return this.mainThreadEngine.decodeUITextures(settings, paths);
+    public decodeUITextures(settings: LoadSettings_T, paths: string[], useIntrinsicAlpha = true): Promise<UITexture_T[]> {
+        if (this.mainThreadEngine) return this.mainThreadEngine.decodeUITextures(settings, paths, useIntrinsicAlpha);
 
         const workerIndex = this.pickWorker();
 
         if (workerIndex < 0) return Promise.reject(new Error("Decode worker is dead"));
 
-        return this.dispatch(workerIndex, { type: "decodeUITextures", settings, paths });
+        return this.dispatch(workerIndex, { type: "decodeUITextures", settings, paths, useIntrinsicAlpha });
     }
 
     public decodeMatineeScenes(levelName: string): Promise<MatineeScene_T[]> {

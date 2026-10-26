@@ -192,6 +192,15 @@ export class NCPawnSetupWnd { // NCPawnSetupWnd OnCreate 0x100cf680, OnPaint 0x1
     public getSelection(step: PawnCreateStep_T): PawnCreateSelection_T {
         return { race: this.race, isMystic: this.classType === 1, sex: this.sex, hairStyle: this.hairStyle, hairColor: this.hairColor, face: this.face, step };
     }
+
+    public reset() {
+        this.race = this.classType = this.sex = this.hairStyle = this.hairColor = this.face = -1;
+        this.nameEdit.setValue("");
+        this.classCtrl.setOptions(CLASS_OPTIONS);
+        this.hairStyleCtrl.setOptions(HAIR_STYLE_FEMALE);
+        this.syncIndices();
+        this.setEnabled(1);
+    }
 }
 
 export class NCPawnInfoWnd { // NCPawnInfoWnd OnCreate 0x100ccc10, OnPaint 0x100ccc70: (24,249) 256x205 class description box.
@@ -331,7 +340,13 @@ export class NCPawnCreateWnd { // NCPawnCreateWnd OnCreate 0x100cfbd0: character
 
     public setVisible(isVisible: boolean) { this.element.hidden = !isVisible; }
 
-    public setTemplates(templates: PawnCreateTemplate_T[]) { this.templates = templates; }
+    public setTemplates(templates: PawnCreateTemplate_T[]) {
+        this.templates = templates;
+        this.setup.reset();
+        this.step = "race";
+        this.info.setDescription(0);
+        this.showControls(false);
+    }
 
     public getTemplate(selection: PawnCreateSelection_T): PawnCreateTemplate_T {
         const classId = BASE_CLASS_IDS[selection.race][selection.isMystic ? 1 : 0];

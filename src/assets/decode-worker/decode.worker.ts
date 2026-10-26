@@ -138,7 +138,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decodeUITextures": {
             try {
-                const textures = await engine.decodeUITextures(msg.settings, msg.paths);
+                const textures = await engine.decodeUITextures(msg.settings, msg.paths, msg.useIntrinsicAlpha);
 
                 post({ type: "uiTexturesDecoded", requestId: msg.requestId, textures }, textures.flatMap(texture => texture.frames));
             } catch (e) {

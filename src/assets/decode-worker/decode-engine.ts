@@ -360,7 +360,7 @@ function resolveCharacterPartPaths(row: Record<string, any>, headParts: Characte
     ];
 }
 
-function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: number, buffer: ArrayBuffer } {
+function decodeTextureRGBA(info: ITextureDecodeInfo, useIntrinsicAlpha = true): { width: number, height: number, buffer: ArrayBuffer } {
     let width = info.width, height = info.height, buffer: ArrayBuffer;
     let hasAlpha = info.isAlphaTexture || info.isMasked;
 
@@ -381,8 +381,8 @@ function decodeTextureRGBA(info: ITextureDecodeInfo): { width: number, height: n
 
         switch (fourCC) {
             case DDSConstants.FOURCC_DXT1: buffer = dxt1ToRgba(width, height, input).buffer as ArrayBuffer; break;
-            case DDSConstants.FOURCC_DXT3: buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = true; break;
-            case DDSConstants.FOURCC_DXT5: buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = true; break;
+            case DDSConstants.FOURCC_DXT3: buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = hasAlpha || useIntrinsicAlpha; break;
+            case DDSConstants.FOURCC_DXT5: buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = hasAlpha || useIntrinsicAlpha; break;
             default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
         }
     }
@@ -1667,7 +1667,7 @@ export class DecodeEngine {
         return scenes;
     }
 
-    public async decodeUITextures(settings: LoadSettings_T, paths: string[]): Promise<UITexture_T[]> {
+    public async decodeUITextures(settings: LoadSettings_T, paths: string[], useIntrinsicAlpha = true): Promise<UITexture_T[]> {
         const library = new DecodeLibrary();
         const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as LoadSettings_T);
         const textures: UITexture_T[] = [];
@@ -1697,11 +1697,11 @@ export class DecodeEngine {
             const info = (pkg.fetchObject(ref) as UTexture).loadSelf().getDecodeInfo(builder) as ITextureDecodeInfo | IAnimatedSpriteDecodeInfo;
 
             if (info.materialType === "sprite") {
-                const frames = (info as IAnimatedSpriteDecodeInfo).sprites.map(sprite => decodeTextureRGBA(sprite as ITextureDecodeInfo));
+                const frames = (info as IAnimatedSpriteDecodeInfo).sprites.map(sprite => decodeTextureRGBA(sprite as ITextureDecodeInfo, useIntrinsicAlpha));
 
                 textures.push({ path, width: frames[0].width, height: frames[0].height, frames: frames.map(frame => frame.buffer), frameTime: (info as IAnimatedSpriteDecodeInfo).framerate });
             } else if (info.materialType === "texture") {
-                const frame = decodeTextureRGBA(info as ITextureDecodeInfo);
+                const frame = decodeTextureRGBA(info as ITextureDecodeInfo, useIntrinsicAlpha);
 
                 textures.push({ path, width: frame.width, height: frame.height, frames: [frame.buffer], frameTime: 0 });
             } else throw new Error(`UI texture '${path}' decoded to unsupported material '${info.materialType}'.`);

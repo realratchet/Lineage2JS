@@ -565,11 +565,11 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
     public async setHtml(html: string) { // Load from string 0x100419d0: tokenize, build, layout, create controls.
         const serial = ++this.loadSerial;
         const tokens = tokenizeHtml(html);
-        const textures: string[] = [];
+        const textures: string[] = [], images: string[] = [];
 
         for (const token of tokens) {
             if (token.tag === "MULTIEDIT") textures.push(...CHtmlMultiEdit.getTextures());
-            if (token.tag === "IMG" && token.attrs.SRC) textures.push(`?${token.attrs.SRC}`);
+            if (token.tag === "IMG" && token.attrs.SRC) images.push(`?${token.attrs.SRC}`);
             if (token.tag === "HTML" && token.attrs.IMGSRC) textures.push(`?${token.attrs.IMGSRC}`);
             if (token.tag === "BUTTON") {
                 const fore = token.attrs.FORE || DEFAULT_FORE;
@@ -578,7 +578,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
             }
         }
 
-        await this.layer.loadTextures(textures);
+        await Promise.all([this.layer.loadTextures(textures), this.layer.loadTextures(images, [], false)]);
 
         if (serial !== this.loadSerial) return;
 
@@ -674,8 +674,11 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     const width = atoi(attrs.WIDTH), height = atoi(attrs.HEIGHT);
                     const holder = addHolder(addRow(), width, height);
 
-                    if (width > 0 && height > 0 && attrs.SRC && this.layer.hasTexture(attrs.SRC))
-                        this.layer.tile(holder, 0, 0, width, height, 0, 0, width, height, attrs.SRC);
+                    if (width > 0 && height > 0 && attrs.SRC && this.layer.hasTexture(attrs.SRC, false)) {
+                        const image = this.layer.tile(holder, 0, 0, width, height, 0, 0, width, height, attrs.SRC, 0xffffff, false);
+
+                        image.style.backgroundRepeat = "no-repeat";
+                    }
                     break;
                 }
                 case "BUTTON": { // BUTTON 0x10040a91: defaults 10x10, fore = normal, back = down; VALUE "&$NNN;" is a sysstring id (0x1003d71a).

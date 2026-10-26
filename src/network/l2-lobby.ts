@@ -135,6 +135,7 @@ export class L2Lobby {
     }
 
     public showLogin() {
+        this.manGame.getComponent("render").setHorizontalFov(50);
         this.isBackdropExpanded = true;
         this.resizeBackdrop();
         this.matinee.trigger("LogOn_Warp"); // MoveCameraByState 0x1042e9e0: to-state 2 fires LogOn_Warp, 4 fires Char_Select_Warp.
@@ -143,6 +144,7 @@ export class L2Lobby {
 
     public async showSelect(characters: Appearance_T[]) {
         const render = this.manGame.getComponent("render");
+        render.setHorizontalFov(50);
         this.isBackdropExpanded = false;
         this.resizeBackdrop();
         this.matinee.trigger("Char_Select_Warp");
@@ -215,6 +217,7 @@ export class L2Lobby {
     }
 
     public showCreate() {
+        this.manGame.getComponent("render").setHorizontalFov(50, 4 / 3);
         this.isBackdropExpanded = true;
         this.resizeBackdrop();
         this.clearPawns();

@@ -318,21 +318,21 @@ export class NDomLayer {
         for (const [element, position] of this.windowPositions) this.place(element, position[0], position[1]);
     }
 
-    public async loadTextures(paths: string[], tinted: [string, number][] = []) { // tinted copies share the atlas image of the same call
+    public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true) { // tinted copies share the atlas image of the same call
         const canvas = this.manager.canvas;
 
-        await canvas.loadTextures([...paths, ...tinted.map(([path]) => path)]);
+        await canvas.loadTextures([...paths, ...tinted.map(([path]) => path)], useIntrinsicAlpha);
 
         const requests = [...new Map<string, [string, number]>([...paths.map(path => [path, 0xffffff] as [string, number]), ...tinted].map(([path, tint]) => {
-            const key = path.replace(/^\?/, "").toLowerCase(), atlasKey = tint === 0xffffff ? key : `${key}:${tint & 0xffffff}`;
+            const key = path.replace(/^\?/, "").toLowerCase(), imageKey = canvas.getTextureKey(key, useIntrinsicAlpha), atlasKey = tint === 0xffffff ? imageKey : `${imageKey}:${tint & 0xffffff}`;
 
             return [atlasKey, [key, tint]];
-        })).entries()].filter(([atlasKey, [key]]) => !this.atlas.has(atlasKey) && canvas.hasTexture(key));
+        })).entries()].filter(([atlasKey, [key]]) => !this.atlas.has(atlasKey) && canvas.hasTexture(key, useIntrinsicAlpha));
 
         if (requests.length === 0) return;
 
         const keys = requests.map(([atlasKey]) => atlasKey);
-        const animations: { frames: (ImageBitmap | HTMLCanvasElement)[], frameTime: number }[] = requests.map(([, [key, tint]]) => tint === 0xffffff ? canvas.getTextureAnimation(key) : { frames: [canvas.getTintedImage(key, tint)], frameTime: 0 });
+        const animations: { frames: (ImageBitmap | HTMLCanvasElement)[], frameTime: number }[] = requests.map(([, [key, tint]]) => tint === 0xffffff ? canvas.getTextureAnimation(key, useIntrinsicAlpha) : { frames: [canvas.getTintedImage(key, tint, -1, useIntrinsicAlpha)], frameTime: 0 });
         const images = animations.flatMap(image => image.frames);
         const atlasWidth = Math.max(ATLAS_WIDTH, ...images.map(image => image.width));
         const places: [number, number][] = [];
@@ -370,13 +370,13 @@ export class NDomLayer {
         });
     }
 
-    public hasTexture(path: string) { return this.atlas.has(path.toLowerCase()); }
+    public hasTexture(path: string, useIntrinsicAlpha = true) { return this.atlas.has(this.manager.canvas.getTextureKey(path, useIntrinsicAlpha)); }
 
-    public getWrapUrl(path: string): string {
-        const key = path.toLowerCase();
+    public getWrapUrl(path: string, useIntrinsicAlpha = true): string {
+        const key = this.manager.canvas.getTextureKey(path, useIntrinsicAlpha);
 
         if (!this.cacheWrapUrls.has(key)) {
-            const image = this.manager.canvas.getTexture(path);
+            const image = this.manager.canvas.getTexture(path, useIntrinsicAlpha);
             const canvas = document.createElement("canvas");
 
             canvas.width = image.width;
@@ -406,12 +406,13 @@ export class NDomLayer {
         if (height !== null) element.style.height = `${height}px`;
     }
 
-    public setTile(element: HTMLElement, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff) {
-        const tinted = color === 0xffffff ? null : this.atlas.get(`${path.toLowerCase()}:${color & 0xffffff}`);
+    public setTile(element: HTMLElement, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff, useIntrinsicAlpha = true) {
+        const imageKey = this.manager.canvas.getTextureKey(path, useIntrinsicAlpha);
+        const tinted = color === 0xffffff ? null : this.atlas.get(`${imageKey}:${color & 0xffffff}`);
 
         if (tinted) color = 0xffffff;
 
-        const entry = tinted || this.atlas.get(path.toLowerCase());
+        const entry = tinted || this.atlas.get(imageKey);
 
         if (!entry) throw new Error(`UI texture '${path}' was not loaded for the DOM layer.`);
 
@@ -422,7 +423,7 @@ export class NDomLayer {
         if (previous) { previous.cancel(); this.tileAnimations.delete(element); }
 
         if (color !== 0xffffff || u < 0 || v < 0 || u + uw > entry.width || v + vh > entry.height) { // Wrapping and tinted tiles need the texture on its own.
-            element.style.backgroundImage = `url(${color === 0xffffff ? this.getWrapUrl(path) : this.getTintUrl(path, color)})`;
+            element.style.backgroundImage = `url(${color === 0xffffff ? this.getWrapUrl(path, useIntrinsicAlpha) : this.getTintUrl(path, color, -1, useIntrinsicAlpha)})`;
             element.style.backgroundSize = `${entry.width * scaleX}px ${entry.height * scaleY}px`;
             element.style.backgroundPosition = `${-u * scaleX}px ${-v * scaleY}px`;
             return;
@@ -440,12 +441,12 @@ export class NDomLayer {
         }
     }
 
-    public tile(parent: HTMLElement, x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff): HTMLDivElement {
+    public tile(parent: HTMLElement, x: number, y: number, w: number, h: number, u: number, v: number, uw: number, vh: number, path: string, color: number = 0xffffff, useIntrinsicAlpha = true): HTMLDivElement {
         const element = document.createElement("div");
 
         element.className = "ndom-tile";
         this.place(element, x, y, w, h);
-        this.setTile(element, w, h, u, v, uw, vh, path, color);
+        this.setTile(element, w, h, u, v, uw, vh, path, color, useIntrinsicAlpha);
         parent.appendChild(element);
 
         return element;
@@ -460,10 +461,10 @@ export class NDomLayer {
         this.setTile(element, w, h, u, v, uw, vh, path, color);
     }
 
-    public getTintUrl(path: string, color: number, alphaRef: number = -1): string {
-        const key = `${path.toLowerCase()}:${color & 0xffffff}:${alphaRef}`;
+    public getTintUrl(path: string, color: number, alphaRef: number = -1, useIntrinsicAlpha = true): string {
+        const key = `${this.manager.canvas.getTextureKey(path, useIntrinsicAlpha)}:${color & 0xffffff}:${alphaRef}`;
 
-        if (!this.cacheTintUrls.has(key)) this.cacheTintUrls.set(key, URL.createObjectURL(encodeBitmap(this.manager.canvas.getTintedImage(path, color, alphaRef))));
+        if (!this.cacheTintUrls.has(key)) this.cacheTintUrls.set(key, URL.createObjectURL(encodeBitmap(this.manager.canvas.getTintedImage(path, color, alphaRef, useIntrinsicAlpha))));
 
         return this.cacheTintUrls.get(key);
     }

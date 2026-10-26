@@ -1016,7 +1016,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         return this.gameStrings;
     }
-    public decodeUITextures(paths: string[]): Promise<UITexture_T[]> { return this.decodeWorker.decodeUITextures(this.loadSettings, paths); }
+    public decodeUITextures(paths: string[], useIntrinsicAlpha = true): Promise<UITexture_T[]> { return this.decodeWorker.decodeUITextures(this.loadSettings, paths, useIntrinsicAlpha); }
     public decodeMatineeScenes(levelName: string): Promise<MatineeScene_T[]> { return this.decodeWorker.decodeMatineeScenes(levelName); }
 
     protected getClassName(charIndex: number): string {
