@@ -530,13 +530,13 @@ export class DecodeEngine {
         return buffers;
     }
 
-    public async decodeSector(sectorName: string, settings: LoadSettings_T): Promise<{ library: any, fromCache: boolean }> {
+    public async decodeSector(sectorName: string, settings: LoadSettings_T, onCache?: (fromCache: boolean) => void): Promise<{ library: any, fromCache: boolean }> {
         await this.sweepCache(settings);
 
         console.log(`[decode] decoding sector '${sectorName}'`);
 
         const start = performance.now();
-        const result = await this.decodeSectorCore(sectorName, settings);
+        const result = await this.decodeSectorCore(sectorName, settings, true, onCache);
 
         console.log(`[decode] sector '${sectorName}' decoded in ${(performance.now() - start).toFixed(0)}ms${result.fromCache ? " (from cache)" : ""}`);
 
@@ -556,15 +556,16 @@ export class DecodeEngine {
         return result;
     }
 
-    public async decodeSectorTransfer(sectorName: string, settings: LoadSettings_T): Promise<{ library: DecodeLibrary, buffers: ArrayBuffer[] }> {
+    public async decodeSectorTransfer(sectorName: string, settings: LoadSettings_T, onCache?: (fromCache: boolean) => void): Promise<{ library: DecodeLibrary, buffers: ArrayBuffer[] }> {
         await this.sweepCache(settings);
         const cached = !(settings as any).isSkyLevel ? await DecodeCache.openCachedLibrary(sectorName, settings) : null;
+        if (cached && onCache) onCache(true);
 
         if (cached)
             for (const sound of cached.library.soundBlobCache.values())
                 if (!sound.assetName || !this.sentSoundIds.has(sound.assetName.toLowerCase())) sound.data = await getLibraryChunkBlob(cached, sound.data, sound.mimeType);
 
-        const library = cached ? await this.hydrateSectorTransfer(cached) : (await this.decodeSectorCore(sectorName, settings, false)).library;
+        const library = cached ? await this.hydrateSectorTransfer(cached) : (await this.decodeSectorCore(sectorName, settings, false, onCache)).library;
         const { transfer, fresh } = this.prepareTransfer(library);
         const retained = new Set(this.cacheTextureBuffers.values());
 
@@ -629,13 +630,14 @@ export class DecodeEngine {
         }
     }
 
-    protected async decodeSectorCore(sectorName: string, settings: LoadSettings_T, withSoundUris: boolean = true): Promise<{ library: any, fromCache: boolean }> {
+    protected async decodeSectorCore(sectorName: string, settings: LoadSettings_T, withSoundUris: boolean = true, onCache?: (fromCache: boolean) => void): Promise<{ library: any, fromCache: boolean }> {
         const convertToRGBA = (settings as any).rgbaTextures !== false; // false = client uploads DDS as-is (s3tc)
 
         // Sky-level material UUIDs are session-random.
         const cacheable = !(settings as any).isSkyLevel;
 
         const cached = cacheable ? await DecodeCache.loadCachedLibrary(sectorName, settings) : null;
+        if (onCache) onCache(!!cached);
 
         if (cached) {
             if (withSoundUris) DecodeCache.refreshSoundBlobUris(cached);

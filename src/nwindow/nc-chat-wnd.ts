@@ -38,6 +38,8 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     public static getTextures(): string[] { return [TEX_BACK1, TEX_BACK2, TEX_BACK3, TEX_BACK4, TEX_SIZECONTROL, TEX_IME_EN, TEX_TAB1, TEX_TAB2, TEX_OPTION1, TEX_OPTION2, `?${TEX_OPTION1}_over`, TEX_MSN1, TEX_MSN2, `?${TEX_MSN1}_over`, ...NCChatListBox.getTextures()]; }
 
     public readonly element: HTMLDivElement;
+    protected readonly loadingStatus = document.createElement("div");
+    protected loadingAssetCount = 0;
     protected readonly lists: NCChatListBox[] = [];
     protected readonly systemPane: NCChatListBox;
     protected oldChatting = true;
@@ -81,6 +83,11 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         this.element = layer.createWindow(0, 0, W, H);
         this.element.hidden = true;
         this.element.classList.add("ndom-opaque");
+        this.loadingStatus.className = "chat-loading-status";
+        this.loadingStatus.textContent = "Loading assets…";
+        this.loadingStatus.hidden = true;
+        this.loadingStatus.setAttribute("role", "status");
+        this.element.appendChild(this.loadingStatus);
         layer.tile(this.element, 0, 0, 348, 18, 0, 0, 348, 18, TEX_BACK2); // OnPaint 0x100544a0: 1:1 stacked tiles, Back3 rows = int((H - 82) / 15).
         layer.tile(this.element, 0, -3, 24, 10, 0, 0, 24, 10, TEX_SIZECONTROL);
         this.rows = layer.createWindow(0, 18, W, 0, this.element);
@@ -166,6 +173,13 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     }
 
     public isVisible() { return !this.element.hidden; }
+    public setLoadingAssets(count: number) {
+        if (this.loadingAssetCount === count) return;
+
+        this.loadingAssetCount = count;
+        this.loadingStatus.hidden = count === 0;
+        this.loadingStatus.textContent = `Loading assets (${count} pending)…`;
+    }
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;
         for (let i = 0; i < this.lists.length; i++)
@@ -204,6 +218,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
     public setSystemMsgWnd(isVisible: boolean) {
         this.systemMsgWnd = isVisible;
+        this.element.classList.toggle("has-system-messages", isVisible);
         this.systemPane.setVisible(isVisible);
         this.layer.place(this.filterWindow, 0, isVisible ? -321 : -191);
     }

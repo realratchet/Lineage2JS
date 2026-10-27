@@ -1,4 +1,5 @@
 import PawnHeroComponent from "../objects/components/pawn-hero-component";
+import { setLoadingProgress } from "../loading-progress";
 import type NetworkManager from "./network-manager";
 import { Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
@@ -430,12 +431,21 @@ export class NetworkActors {
         const asset = this.network.getParent().getComponent("asset");
         const generation = this.teleportGeneration;
 
+        setLoadingProgress(0.1, "Loading player appearance…");
         await this.userAppearanceLoad;
         if (!this.inWorld || generation !== this.teleportGeneration) return;
 
+        setLoadingProgress(0.3, "Loading skills…");
         await this.network.items.skillListLoad;
 
-        while (this.inWorld && generation === this.teleportGeneration && (!asset.isAreaLoaded(render, render.player.position) || this.npcSpawnCount > 0)) await new Promise(resolve => setTimeout(resolve, 100));
+        while (this.inWorld && generation === this.teleportGeneration) {
+            const isAreaLoaded = asset.isAreaLoaded(render, render.player.position);
+
+            if (isAreaLoaded && this.npcSpawnCount === 0) break;
+
+            setLoadingProgress(isAreaLoaded ? 0.9 : 0.5, isAreaLoaded ? `Loading nearby characters (${this.npcSpawnCount} remaining)…` : "Loading terrain, textures and lighting…");
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         if (!this.inWorld || generation !== this.teleportGeneration) return;
 

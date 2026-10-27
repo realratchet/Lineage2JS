@@ -42,6 +42,20 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     position: absolute;
 }
 
+.chat-loading-status {
+    position: absolute;
+    left: 5px;
+    bottom: 100%;
+    margin-bottom: 8px;
+    color: rgba(202, 163, 68, 0.75);
+    font: 13px/1.6 "Noto Sans", Arial, sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 1px 3px #000;
+}
+
+.has-system-messages > .chat-loading-status { bottom: calc(100% + 130px); }
+
 .ndom-tile, .ndom-button {
     background-repeat: repeat;
     image-rendering: auto;

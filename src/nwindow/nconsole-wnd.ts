@@ -1,4 +1,5 @@
 import saveFile from "../utils/save-file";
+import { setLoadingProgress, hideLoadingProgress } from "../loading-progress";
 import captureScreenshot from "./capture-screenshot";
 import * as GamePackets from "../network/game-packets";
 import { EDrawType_T } from "../assets/unreal/un-aactor";
@@ -1321,6 +1322,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     protected show(screen: Screen_T) {
+        if (screen && screen !== "loading") hideLoadingProgress();
         this.screen = screen;
         this.dialogBox.isInGame = this.yesNoDialogBox.isInGame = screen === "world";
         this.loginWnd.setVisible(screen === "login" || screen === "servers", screen === "login");
@@ -1486,6 +1488,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public showLoading(isTeleport = false) {
+        setLoadingProgress(0, isTeleport ? "Loading destination…" : "Waiting for world data…");
         this.prepareWorld();
         this.loadingWnd.setBlack(isTeleport);
         this.show("loading");
@@ -1635,6 +1638,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const deltaSeconds = deltaTime / 1000;
 
         this.chatWnd.tick(deltaSeconds);
+        this.chatWnd.setLoadingAssets(this.screen === "world" ? this.manNetwork.getParent().getComponent("asset").getPendingAssetCount() : 0);
         if (this.screen === "world") {
             this.zoneTitleWnd.updateZone(deltaSeconds, this.manRender.player.position, this.options.game.showZoneTitle);
             this.zoneTitleWnd.tick(deltaSeconds);

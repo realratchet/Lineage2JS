@@ -12,6 +12,7 @@ import PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import { setVector } from "./network-location";
+import { setLoadingProgress } from "../loading-progress";
 
 export enum GMTransferPhase_T { Idle, Queued, Restart, Reconnect, Login, SelectServer, SelectCharacter, Complete }
 
@@ -46,6 +47,7 @@ export class NetworkSession {
         const asset = this.network.getParent().getComponent("asset"), render = this.network.getParent().getComponent("render");
 
         asset.setStreaming(render, false);
+        setLoadingProgress(0.1, "Loading interface and game text…", true);
 
         if (!this.network.ui) {
             this.network.ui = this.network.getParent().getComponent("gui");
@@ -57,10 +59,21 @@ export class NetworkSession {
             void this.network.actors.loadNpcNames();
             void this.network.community.loadRadar();
 
-            await Promise.all([this.network.ui.createScreens(), this.lobby.enter(this.network.ui.getStrings().logonSpots), asset.precacheCharacters()]);
+            const arrPending = ["interface textures", "login scene", "character assets"];
+
+            setLoadingProgress(0.2, `Loading ${arrPending.join(", ")}…`, true);
+            await Promise.all([this.network.ui.createScreens(), this.lobby.enter(this.network.ui.getStrings().logonSpots), asset.precacheCharacters()].map(async (task, i) => {
+                await task;
+                arrPending[i] = null;
+                const remaining = arrPending.filter(Boolean);
+
+                setLoadingProgress(0.2 + (3 - remaining.length) * 0.2, remaining.length ? `Loading ${remaining.join(", ")}…` : "Preparing login scene…", true);
+            }));
         } else await this.lobby.enter(this.network.ui.getStrings().logonSpots);
 
         this.lobby.showLogin();
+        setLoadingProgress(0.9, "Preparing login textures and lighting…", true);
+        while (!render.isSectorWarm(render.getLevel())) await new Promise(resolve => setTimeout(resolve, 50));
         this.network.ui.showLogin();
     }
 

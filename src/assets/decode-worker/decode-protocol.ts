@@ -134,6 +134,7 @@ export type MainToWorkerMessage_T =
 export type ReadyMessage_T = { type: "ready"; }
 export type InitErrorMessage_T = { type: "initError"; message: string; }
 export type DecodedMessage_T = { type: "decoded"; requestId: number; buffer?: ArrayBuffer; library?: import("@l2js/engine").DecodeLibrary; }
+export type SectorCacheMessage_T = { type: "sectorCache"; requestId: number; sectorName: string; fromCache: boolean; };
 export type PrecacheResult_T = { cached: boolean, bytes: number };
 export type PrecachedMessage_T = { type: "precached"; requestId: number; result: PrecacheResult_T; };
 
@@ -166,6 +167,7 @@ export type WorkerToMainMessage_T =
     | ReadyMessage_T
     | InitErrorMessage_T
     | DecodedMessage_T
+    | SectorCacheMessage_T
     | PrecachedMessage_T
     | DecodeErrorMessage_T
     | EnvDecodedMessage_T

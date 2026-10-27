@@ -7,6 +7,7 @@ import GameManager from "./game/game-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import fetchAsset from "./assets/asset-source";
 import pickAssetSource from "./asset-source-picker";
+import { setLoadingProgress } from "./loading-progress";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -100,6 +101,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
+    if (new URLSearchParams(location.search).has("login")) setLoadingProgress(0, "Loading game data…", true);
     const assetList = await (await fetchAsset("asset-list.json")).json();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
     const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");

@@ -33,7 +33,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decode": {
             try {
-                const { library, buffers } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings);
+                const { library, buffers } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings, fromCache => post({ type: "sectorCache", requestId: msg.requestId, sectorName: msg.sectorName, fromCache }));
 
                 post({ type: "decoded", requestId: msg.requestId, library }, buffers);
             } catch (e) {

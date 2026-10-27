@@ -267,6 +267,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected gameManager: GameManager;
     public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
     public getParent(): GameManager { return this.gameManager; }
+    public getPendingAssetCount(): number { return this.decodeWorker.getPendingAssetCount() + this.pendingStaticMeshBuilds.length; }
 
     public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
@@ -286,23 +287,36 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public isAreaLoaded(renderManager: RenderManager, position: THREE.Vector3): boolean {
-        const sector = renderManager.getSector(position);
+        const progress = this.getAreaLoadProgress(renderManager, position);
 
-        if (!sector || !sector.staticMeshGroup || !renderManager.isSectorWarm(sector)) return false;
+        return progress.ready === progress.total;
+    }
 
+    public getAreaLoadProgress(renderManager: RenderManager, position: THREE.Vector3) {
+        const progress = { total: 0, decoded: 0, built: 0, ready: 0, building: 0 };
         const [sx, sy] = renderManager.getSectorId(position), ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
 
         for (let x = sx - ring; x <= sx + ring; x++) {
             for (let y = sy - ring; y <= sy + ring; y++) {
-                if ((x === sx && y === sy) || !this.hasSector(`${x}_${y}`) || sectorDistance(position, x, y) > this.renderDistance) continue;
+                const isCenter = x === sx && y === sy;
 
-                const neighbour = renderManager.getSectorByCoords(x, y);
+                if (!isCenter && (!this.hasSector(`${x}_${y}`) || sectorDistance(position, x, y) > this.renderDistance)) continue;
 
-                if (!neighbour || !neighbour.staticMeshGroup || !renderManager.isSectorWarm(neighbour)) return false;
+                progress.total++;
+                const sector = isCenter ? renderManager.getSector(position) : renderManager.getSectorByCoords(x, y);
+                const isWarm = sector && sector.staticMeshGroup && renderManager.isSectorWarm(sector);
+
+                if (!isWarm && this.decodeWorker.isBuildingSector(`${x}_${y}`)) progress.building++;
+
+                if (!sector) continue;
+                progress.decoded++;
+                if (!sector.staticMeshGroup) continue;
+                progress.built++;
+                if (isWarm) progress.ready++;
             }
         }
 
-        return true;
+        return progress;
     }
 
     public async onInit(): Promise<this> {

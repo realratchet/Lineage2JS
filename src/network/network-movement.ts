@@ -14,6 +14,7 @@ import { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import PacketReader from "./packet-reader";
 import type { NetObject_T } from "./network-actors";
 import { setVector } from "./network-location";
+import { setLoadingProgress } from "../loading-progress";
 
 type NetVehicle_T = { actor: Vehicle, actorReady: Promise<void>, objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 
@@ -252,6 +253,7 @@ export class NetworkMovement {
         const render = this.network.getParent().getComponent("render");
         const asset = this.network.getParent().getComponent("asset");
         const generation = ++this.network.actors.teleportGeneration;
+        const startTime = performance.now();
         const sector = render.getSector(render.player.position);
         const isLoading = !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident
 
@@ -260,7 +262,18 @@ export class NetworkMovement {
             render.setZoneMusicEnabled(false);
             this.network.ui.showLoading(true);
 
-            while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && !asset.isAreaLoaded(render, render.player.position)) await new Promise(resolve => setTimeout(resolve, 100));
+            while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration) {
+                const progress = asset.getAreaLoadProgress(render, render.player.position);
+
+                if (progress.ready === progress.total) break;
+
+                const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
+                const action = progress.building > 0 ? "Building" : "Loading";
+                const stage = progress.decoded < progress.total ? `${action} region packages (${progress.decoded}/${progress.total})` : progress.built < progress.total ? `${action} scenery (${progress.built}/${progress.total} regions)` : `${action} textures and lighting (${progress.ready}/${progress.total} regions)`;
+
+                setLoadingProgress(value || null, `${stage} · ${Math.round(value * 100)}% · ${Math.floor((performance.now() - startTime) / 1000)}s elapsed`);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
 
             if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
         }
@@ -269,7 +282,14 @@ export class NetworkMovement {
         this.network.session.game.appearing();
 
         // Lisvus Appearing sends the destination known list before UserInfo.
-        while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (this.network.actors.teleportInfoPending || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) await new Promise(resolve => setTimeout(resolve, 100));
+        while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (this.network.actors.teleportInfoPending || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) {
+            if (this.teleportLoading) {
+                const stage = this.network.actors.teleportInfoPending ? "Waiting for destination server response" : `Loading nearby characters (${this.network.actors.npcSpawnCount} loading, ${this.network.actors.npcSpawnWaiters.length} queued)`;
+
+                setLoadingProgress(0.9, `${stage} · 90% · ${Math.floor((performance.now() - startTime) / 1000)}s elapsed`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration || !this.teleportLoading) return;
 

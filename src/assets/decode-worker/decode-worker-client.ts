@@ -152,12 +152,14 @@ export class DecodeWorkerClient {
     protected readonly cacheScriptLibraries = new Map<string, Promise<DecodeLibrary>>();
     protected nextRequestId = 1;
     protected sectorWorker = new Map<string, number>();
+    protected readonly cacheSectorHits = new Map<string, boolean>();
     protected npcWorker = new Map<string, number>();
     protected mainThreadEngine: DecodeEngine = null;
     protected characterAnimationSets = new Set<number>();
     protected npcAnimationSets = new Set<string>();
     protected readonly binaryDecodeQueue: BinaryDecodeRequest_T[] = [];
     protected isDecodingBinary = false;
+    protected decodingBinaryCount = 0;
 
     public readonly ready: Promise<void>;
 
@@ -237,8 +239,9 @@ export class DecodeWorkerClient {
     protected pickCharacterWorker(): number { return this.pickScriptWorker(); }
 
     public async decodeSector(sectorName: string, settings: LoadSettings_T): Promise<DecodeLibrary> {
+        this.cacheSectorHits.delete(sectorName);
         if (this.mainThreadEngine) {
-            const { library } = await this.mainThreadEngine.decodeSector(sectorName, settings);
+            const { library } = await this.mainThreadEngine.decodeSector(sectorName, settings, fromCache => this.cacheSectorHits.set(sectorName, fromCache));
 
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
@@ -263,7 +266,10 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "precache", sectorName, settings });
     }
 
+    public isBuildingSector(sectorName: string): boolean { return this.cacheSectorHits.get(sectorName) === false; }
+
     public freeSector(sectorName: string) {
+        this.cacheSectorHits.delete(sectorName);
         if (this.mainThreadEngine) {
             this.mainThreadEngine.freeSector(sectorName);
             return;
@@ -614,6 +620,10 @@ export class DecodeWorkerClient {
                 this.slots[workerIndex].readyReject(new Error(msg.message));
                 break;
             }
+            case "sectorCache": {
+                if (this.pending.has(msg.requestId)) this.cacheSectorHits.set(msg.sectorName, msg.fromCache);
+                break;
+            }
             case "decoded": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
@@ -751,6 +761,7 @@ export class DecodeWorkerClient {
 
         while (this.binaryDecodeQueue.length > 0) {
             const { buffer, library: transferred, request } = this.binaryDecodeQueue.shift();
+            this.decodingBinaryCount++;
 
             try {
                 if (request.isRaw) { // registers its script entries in worker order, later results may only carry their ids
@@ -766,6 +777,8 @@ export class DecodeWorkerClient {
                 request.resolve(Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary);
             } catch (e) {
                 request.reject(e as Error);
+            } finally {
+                this.decodingBinaryCount--;
             }
         }
 
@@ -778,6 +791,7 @@ export class DecodeWorkerClient {
 
         while ((index = this.binaryDecodeQueue.findIndex(entry => entry.request.urgent)) >= 0) {
             const { buffer, library: transferred, request } = this.binaryDecodeQueue.splice(index, 1)[0];
+            this.decodingBinaryCount++;
 
             try {
                 const library = transferred || await deserializeLibraryAsync(buffer, true);
@@ -787,6 +801,8 @@ export class DecodeWorkerClient {
                 request.resolve(Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary);
             } catch (e) {
                 request.reject(e as Error);
+            } finally {
+                this.decodingBinaryCount--;
             }
         }
     }
@@ -807,7 +823,8 @@ export class DecodeWorkerClient {
         slot.worker.terminate();
     }
 
-    public hasPendingAssets(): boolean { return this.pending.size > 0 || this.isDecodingBinary || this.binaryDecodeQueue.length > 0; }
+    public getPendingAssetCount(): number { return this.pending.size + this.binaryDecodeQueue.length + this.decodingBinaryCount; }
+    public hasPendingAssets(): boolean { return this.getPendingAssetCount() > 0; }
 
     public forgetSharedTextures(keys: string[]): void {
         if (!keys.length) return;

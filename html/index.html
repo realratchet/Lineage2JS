@@ -10,6 +10,12 @@
 </head>
 <body>
     <viewport></viewport>
+    <section class="loading-progress" hidden aria-label="Loading">
+        <div>
+            <progress max="1" value="0" aria-label="Loading progress"></progress>
+            <p role="status" aria-live="polite"></p>
+        </div>
+    </section>
     <section class="gpu-error" role="alert">
         <main>
             <h1>GPU rendering is unavailable</h1>
