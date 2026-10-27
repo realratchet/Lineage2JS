@@ -596,7 +596,7 @@ export class NetworkItems {
             this.abnormalStatuses.push(effect);
         }
 
-        this.network.ui.setAbnormalStatus(this.abnormalStatuses.slice(0, 31));
+        this.network.ui.setAbnormalStatus(this.abnormalStatuses);
     }
 
     public onShortBuffStatusUpdate(packet: PacketReader) {

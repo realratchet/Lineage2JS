@@ -49,7 +49,7 @@ export class SkillViewerGame extends GameManager {
 }
 
 export async function runSkillViewer(isPlayer: boolean = false): Promise<void> {
-    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 165 }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
+    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 178 }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
 
     await pickAssetSource();
 

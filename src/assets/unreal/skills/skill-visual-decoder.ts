@@ -176,12 +176,12 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
                     attachBoneName: String(action.attachBoneName || "None"),
                     isAbsolute: !!action.isAbsolute,
                     spawnDelay: Number(action.spawnDelay) || 0,
-                    useCharacterRotation: !!action.useCharacterRotation,
+                    useCharacterRotation: !!action.isUsingCharacterRotation,
                     offset: offset && typeof offset.getElements === "function" ? offset.getElements() : [0, 0, 0],
-                    relativeToCylinder: !!action.relativeToCylinder,
-                    spawnOnTarget: !!action.spawnOnTarget,
-                    sizeScale: !!action.sizeScale,
-                    onMultiTarget: !!action.onMultiTarget
+                    relativeToCylinder: !!action.isRelativeToCylinder,
+                    spawnOnTarget: !!action.isSpawningOnTarget,
+                    sizeScale: !!action.isSizeScaled,
+                    onMultiTarget: !!action.isMultiTarget
                 });
 
                 if (pulledEffects.has(effectPath.toLowerCase())) continue;

@@ -1,5 +1,6 @@
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, IObject, ObjectComponent } from "./components";
 import UnScriptVM, { getProperty, setProperty, registerLevelActor, ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
+import { setActorOwner, type OwnedActor_T } from "../objects/components/actor-ownership-component";
 
 export const SCRIPT_CALL_EVENT = "scriptCall";
 export const SCRIPT_NATIVE_EVENT = "scriptNative";
@@ -43,20 +44,22 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     protected vm: UnScriptVM;
     protected objectFactory: ScriptObjectFactory_T;
     protected readonly classId: string;
+    protected readonly initializeHost: boolean;
     protected readonly properties = new Map<string, ScriptValue_T>();
     protected hasBegunPlay = false;
     protected isDestroyed = false;
 
-    public constructor(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T, classId: string) {
+    public constructor(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T, classId: string, initializeHost: boolean = true) {
         super();
 
         this.vm = vm;
         this.objectFactory = objectFactory;
         this.classId = classId;
+        this.initializeHost = initializeHost;
     }
 
-    public setRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T): void {
-        vm.bindHost(this.getParent());
+    public setRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T, requireFrame: boolean = true): void {
+        vm.bindHost(this.getParent(), requireFrame);
         this.vm = vm;
         this.objectFactory = objectFactory;
     }
@@ -64,8 +67,11 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     public onAttach(): void {
         const parent = this.getParent();
 
-        this.vm.initializeHost(parent);
-        if (this.vm.getLevelInfo()) setProperty(parent, "Level", this.vm.getLevelInfo());
+        if (this.initializeHost) {
+            this.vm.initializeHost(parent);
+            if (this.vm.getLevelInfo()) setProperty(parent, "Level", this.vm.getLevelInfo());
+            if (this.vm.getLevel() && this.vm.invokeNative(parent, parent, 303, "IsA", ["Actor"])) setProperty(parent, "XLevel", this.vm.getLevel());
+        } else this.vm.bindHost(parent, false);
         registerLevelActor(parent);
     }
 
@@ -128,6 +134,14 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
     }
 
     public dispatchNative(call: ScriptNativeCall_T): ComponentEventResult_T<ScriptValue_T> {
+        if (call.index === 272) {
+            const parent = this.getParent();
+
+            if (call.context !== parent) throw new Error(`SetOwner context does not match '${parent.scriptClassId}'.`);
+            if (!(parent as any).isObject3D || !this.vm.invokeNative(parent, parent, 303, "IsA", ["Actor"])) throw new Error(`SetOwner requires an actor host.`);
+            setActorOwner(parent as unknown as OwnedActor_T, (call.args[0] ?? null) as unknown as OwnedActor_T);
+            return;
+        }
         return this.dispatchEvent<ScriptValue_T>(SCRIPT_NATIVE_EVENT, call);
     }
 

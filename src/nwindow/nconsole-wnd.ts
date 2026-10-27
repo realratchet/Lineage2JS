@@ -1,3 +1,5 @@
+import saveFile from "../utils/save-file";
+import captureScreenshot from "./capture-screenshot";
 import * as GamePackets from "../network/game-packets";
 import { EDrawType_T } from "../assets/unreal/un-aactor";
 import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
@@ -161,6 +163,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected commandInfoWnd: CommandInfoWndView_T = null;
     protected trainWnd: TrainWndView_T = null;
     protected options: AssetManager["userConfig"];
+    protected screenshotPending = false;
+    protected takingScreenshot = false;
+    protected screenshotIndex = 1;
     protected privateShopWnd: PrivateShopWndView_T = null;
     protected privateBuyWnd: PrivateBuyWndView_T = null;
     protected vipShopWnd: VIPShopWndView_T = null;
@@ -233,7 +238,14 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public isCreated() { return this.nwindow !== null; }
 
     public onEngineTick(_currentTime: number, deltaTime: number): void { if (this.nwindow) this.tick(deltaTime); }
-    public onAfterEngineTick(_currentTime: number, _deltaTime: number): void { if (this.nwindow) this.render(); }
+    public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
+        if (!this.nwindow) return;
+        this.render();
+        if (this.screenshotPending) {
+            this.screenshotPending = false;
+            void this.saveScreenshot();
+        }
+    }
 
     public create() {
         const network = this.manGame.getComponent("network"), asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
@@ -275,6 +287,11 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             event.stopImmediatePropagation();
         };
 
+        window.addEventListener("keyup", event => {
+            if (event.code !== "PrintScreen" || event.isComposing) return;
+            event.preventDefault();
+            this.takeScreenshot();
+        }, true);
         window.addEventListener("keydown", replayInput, true);
         window.addEventListener("keyup", replayInput, true);
         window.addEventListener("keydown", event => { // UL2Console 0x100760c4..0x100760e1.
@@ -1871,7 +1888,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.gauges.clear();
         this.updateGaugeOverlay();
         this.skillCoolTimes.clear();
-        this.abnormalStatusWnd.setEffects([]);
+        this.setAbnormalStatus([]);
         this.abnormalStatusWnd.setSecondaryEffects([]);
         this.abnormalStatusWnd.setShortEffect(null);
         this.abnormalStatusWnd.setVisible(false);
@@ -1972,7 +1989,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public showSSQStatus(status: GamePackets.SSQStatus_T) { this.ssqMainBoard.show(status); }
 
-    public setAbnormalStatus(effects: GamePackets.AbnormalStatus_T[]) { this.abnormalStatusWnd.setEffects(effects); }
+    public setAbnormalStatus(effects: GamePackets.AbnormalStatus_T[]) {
+        const active = new Set(effects.filter(effect => this.strings.skillInfos[`${effect.id}:${effect.level}`]?.isToggle).map(effect => `${effect.id}:${effect.level}`));
+
+        this.shortCutWnd.setActiveSkills(active);
+        this.skillWnd.setActiveSkills(active);
+        this.abnormalStatusWnd.setEffects(effects.filter(effect => !active.has(`${effect.id}:${effect.level}`)).slice(0, 31));
+    }
     public setSecondaryAbnormalStatus(effects: GamePackets.AbnormalStatus_T[]) { this.abnormalStatusWnd.setSecondaryEffects(effects); }
     public setShortBuff(effect: GamePackets.AbnormalStatus_T) {
         const skill = this.strings.skillInfos[`${effect.id}:${effect.level}`];
@@ -1988,6 +2011,31 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (remaining === 0) this.skillCoolTimes.delete(key);
         else this.skillCoolTimes.set(key, new NCCoolTimeIcon(duration, remaining, this.manNetwork.getParent().getCurrentTime()));
     }
+
+    public takeScreenshot() {
+        if (this.takingScreenshot) return;
+        this.takingScreenshot = this.screenshotPending = true;
+        this.manRender.needsUpdate = true;
+    }
+
+    protected async saveScreenshot() {
+        let worker: Worker = null;
+        try {
+            const quality = this.options.game.screenshotQuality, image = await this.captureScreenshot(this.manRender.renderer.domElement);
+            worker = new Worker(new URL("../rendering/screenshot.worker.ts", import.meta.url), { name: "screenshot" });
+            const blob = await new Promise<Blob>((resolve, reject) => {
+                worker.onmessage = event => resolve(event.data);
+                worker.onerror = event => reject(new Error(event.message));
+                worker.postMessage({ image, quality }, [image.data.buffer]);
+            });
+            saveFile(blob, `Shot${String(this.screenshotIndex++).padStart(5, "0")}.${quality === 0 ? "bmp" : "jpg"}`);
+        } finally {
+            if (worker) worker.terminate();
+            this.takingScreenshot = false;
+        }
+    }
+
+    public captureScreenshot(world: HTMLCanvasElement): Promise<ImageData> { return captureScreenshot(world, this.nwindow.canvas.element, this.layer.root); }
 
     public render() {
         const now = this.manNetwork.getParent().getCurrentTime();
@@ -2547,6 +2595,9 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "antiAliasing":
                 case "textureDetail":
                     if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`Invalid game option '${key}'.`);
+                    break;
+                case "screenshotQuality":
+                    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`Invalid game option '${key}'.`);
                     break;
                 case "renderActorLimitOpt":
                     if (!Number.isInteger(value) || value < 1 || value > 6) throw new Error(`Invalid game option '${key}'.`);

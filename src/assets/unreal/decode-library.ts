@@ -120,6 +120,9 @@ export class DecodeLibrary {
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
     public levelInfo: IBaseZoneDecodeInfo;
+    public levelPackageName: string = null;
+    public levelObjectName: string = null;
+    public levelObjectOuter: string = null;
     public levelInfoCollisionRadius: number;
     public bspRootOutside: boolean;
     public helpersZoneBounds = false;

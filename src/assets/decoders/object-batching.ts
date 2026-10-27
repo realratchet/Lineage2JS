@@ -1,6 +1,7 @@
 import { batchStaticMeshTextures } from "./static-mesh-texture-batching";
-import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending } from "three";
+import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
+import SortedIndexBuffer from "../../rendering/sorted-index-buffer";
 import Terrain from "../../objects/terrain";
 import CollidingMesh from "../../objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
@@ -95,6 +96,33 @@ function createBatchObject(
     }
 
     return mergedObject;
+}
+
+function makeSortedIndexBuffers(library: DecodeLibrary, object: CollidingMesh, batch: StaticMeshBatchManifest_T["batches"][number]) {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const buffers = new Map<number, SortedIndexBuffer>();
+
+    for (let i = 0; i < batch.actors.length; i++) {
+        const actor = batch.actors[i], geometry = library.geometries[actor.instance.mesh.geometry];
+        let inverse: Matrix4 = null, center: Vector3 = null;
+
+        for (const group of object.batchElements[i].groups) {
+            if (!(materials[group.materialIndex] as any).requiresSorting || !group.count) continue;
+
+            if (!inverse) {
+                const matrix = new Matrix4().compose(new Vector3().fromArray(actor.position), new Quaternion().fromArray(actor.quaternion), new Vector3().fromArray(actor.scale));
+                center = new Vector3().fromArray(geometry.bounds.sphere.center).applyMatrix4(matrix);
+                center.set(Math.fround(center.x), Math.fround(center.y), Math.fround(center.z));
+                inverse = matrix.invert();
+            }
+            if (group.count % 3) throw new Error(`Invalid sorted static mesh section: ${actor.name}`);
+            buffers.set(group.start, new SortedIndexBuffer(geometry.attributes.positions as Float32Array, object.batchIndices, group.start, group.count, batch.perActorAmbient[i].startVertex, inverse, center));
+        }
+    }
+    if (buffers.size) {
+        object.sortedIndexBuffers = buffers;
+        object.sortedIndexRange = { start: 0, count: 0 };
+    }
 }
 
 export function decodeStaticMeshActorLight(_library: DecodeLibrary, info?: ILightInstanceDecodeInfo): MeshLight_T | null {
@@ -202,6 +230,7 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
                 const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
                 batchObject.batchIndices = target;
                 job.indexCopy = { source, target, offset: 0 };
+                makeSortedIndexBuffers(library, batchObject, batch);
             }
 
             staticMeshGroup.add(batchObject);

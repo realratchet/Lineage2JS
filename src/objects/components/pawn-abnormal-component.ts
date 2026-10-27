@@ -243,7 +243,8 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
         stat.effect = effect;
         effect.position.copy(parent.position);
-        if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_ROOT) effect.position.z -= height;
+        if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_ROOT)
+            effect.scriptProperties.get("TrailerPrePivot")[2] = Math.fround(-(parent.getUnrealScriptProperty("DrawScale") as number) * mesh.meshOrigin.z);
         this.renderManager.addTransientEffect(effect, parent);
 
         switch (stat.state) {

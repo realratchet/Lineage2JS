@@ -724,7 +724,6 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onHandleMouseUp(event: MouseEvent): void {
         if (event.button === 2) {
-            if (Math.fround(event.timeStamp - this.rightMouseDownTime) <= 200) this.setFixedDefaultCamera(0);
             this.rightMouseDownTime = -Infinity;
             return;
         }

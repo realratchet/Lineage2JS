@@ -212,6 +212,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
     public replaceTarget(actor: SkillActor_T, replacement: SkillActor_T): void {
         const casts = new Set(this.projectileCasts.values());
 
+        if (!replacement) for (const cast of casts) cast.associatedActors = cast.associatedActors.filter(target => target !== actor);
         for (const frame of [...this.pendingEffects, ...this.associatedActions.map(entry => entry.frame)]) {
             casts.add(frame.cast);
             if (frame.target === actor) frame.target = replacement;
@@ -222,6 +223,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
             if (cast.target === actor) cast.target = replacement;
             cast.associatedActors = cast.associatedActors.map(target => target === actor ? replacement : target);
         }
+        for (const [projectile, cast] of this.projectileCasts) projectile.scriptProperties.get("MagicInfo").AssociatedActor = cast.associatedActors;
         for (const entry of this.associatedActions) entry.actors = entry.actors.map(target => target === actor ? replacement : target);
         for (const pending of this.pendingSounds)
             if (pending.pawn === actor) pending.pawn = replacement;
@@ -231,9 +233,10 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         const previous = this.frame;
 
         try {
-            for (const cast of this.projectileCasts.values()) {
+            for (const [projectile, cast] of this.projectileCasts) {
                 if (cast.skill.id !== skillId) continue;
                 cast.associatedActors = actors.slice();
+                projectile.scriptProperties.get("MagicInfo").AssociatedActor = cast.associatedActors;
                 cast.targetExcepted = actors.length > 0;
             }
             for (const pending of this.pendingEffects) {
@@ -353,6 +356,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
 
                     actor.scriptProperties.set("SkillID", skill.id);
                     actor.scriptProperties.set("Physics", EPhysics_T.PHYS_NProjectile);
+                    actor.scriptProperties.get("MagicInfo").AssociatedActor = projectileCast.associatedActors;
                     this.projectileCasts.set(actor, projectileCast);
                     this.host.initProjectile(actor, caster, destination, projectile => {
                         const destination = projectile.scriptProperties.get("TargetActor") as SkillActor_T;
@@ -448,6 +452,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         if (phase !== "preshot") properties.set("Physics", EPhysics_T.PHYS_NProjectile);
         // Engine.dll Explosion 0x7913ae/0x7913d8 reads the projectile's retained list.
         const projectileCast = { ...cast, associatedActors: frame.associatedActors.slice() };
+        properties.get("MagicInfo").AssociatedActor = projectileCast.associatedActors;
         this.projectileCasts.set(actor, projectileCast);
         const projectile = this.host.initProjectile(actor, caster, destination, (projectile, hitActor, impactActor) => {
             const destination = projectile.scriptProperties.get("TargetActor") as SkillActor_T;

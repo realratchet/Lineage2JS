@@ -598,6 +598,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.levelInfo = library.levelInfo;
     sector.levelActorUuids = library.levelActorUuids;
     sector.scriptVM = new UnScriptVM(library);
+    sector.scriptVM.initializeLevel(sector);
 
     if (library.sector) {
         sector.index = new Vector2().fromArray(library.sector);

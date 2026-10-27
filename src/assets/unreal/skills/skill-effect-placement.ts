@@ -433,14 +433,14 @@ export class SkillEffectPlacement {
             tmpPosition[2] += this.host.getCollisionHeight(caster);
             this.addTrailer(effect, caster, tmpPosition, false, false);
         }
-        let hasNamedBone = false;
+        let hasNamedBone = false, isBoneAttached = true;
         if (info.boneProperty) {
             const bone = effectHost.getUnrealScriptProperty(info.boneProperty);
             if (typeof bone !== "string") throw new Error(`${effectHost.name} has invalid bone property '${info.boneProperty}': '${bone}'.`);
             hasNamedBone = bone.toLowerCase() !== "none";
             // Engine.dll Init 0x7a1883 and PreShot 0x7a446c ignore AttachToBone's return value.
             // Engine.dll Init 0x79bdea/0x79e29c: NAME_None selects bone 2, an unmatched name does not.
-            if (!this.host.attachToBone(effectHost, effect, !hasNamedBone && info.boneFallback !== undefined ? info.boneFallback : bone, info.isAbsolute)) console.warn(`[skill-effects] ${effectHost.name} has no bone '${bone}' from '${info.boneProperty}'; '${info.effectClass}' remains unattached.`);
+            isBoneAttached = this.host.attachToBone(effectHost, effect, !hasNamedBone && info.boneFallback !== undefined ? info.boneFallback : bone, info.isAbsolute);
         } else if (info.bone !== undefined) {
             let bone: number | string = info.bone;
             if (info.boneFallback !== undefined) {
@@ -449,8 +449,8 @@ export class SkillEffectPlacement {
                 else if (typeof bone === "string" && this.host.matchBone(effectHost, bone) < 0) bone = info.boneFallback;
             }
             const attached = bone !== null && this.host.attachToBone(effectHost, effect, bone, info.isAbsolute);
-            // Engine.dll 0x78f6eb ignores AttachToBone failure; 0x7ceb50 rejects non-skeletal hosts.
-            if (!attached && !info.boneOptional) throw new Error(`${effectHost.name} has no bone ${info.bone}.`);
+            isBoneAttached = attached;
+            // Engine.dll 0x78f6eb/0x79e8b3 ignore AttachToBone failure.
             const properties = effect.scriptProperties;
             const owner = effect.scriptOwner;
             // Engine.dll physTrailer 0x8ce46a..0x8ce581: an unbased PHYS_Trailer still follows Owner after AttachToBone fails.
@@ -467,13 +467,13 @@ export class SkillEffectPlacement {
         }
         if (info.relativeLocation && (!info.relativeLocationOnNamedBone || hasNamedBone)) {
             effect.scriptProperties.set("RelativeLocation", info.relativeLocation.slice());
-            this.host.setPosition(effect, info.relativeLocation);
+            if (isBoneAttached) this.host.setPosition(effect, info.relativeLocation);
         }
         // Engine.dll Init 0x7a1984 skips the rotation write on the NAME_None branch.
         if (info.relativeRotation && (!info.relativeRotationOnNamedBone || hasNamedBone)) {
             effect.scriptProperties.set("RelativeRotation", info.relativeRotation.slice());
             getRotatorQuaternionElements(...info.relativeRotation, effectRotation);
-            this.host.setRotation(effect, effectRotation);
+            if (isBoneAttached) this.host.setRotation(effect, effectRotation);
         }
 
         if (info.damageEffect === true && effectHost.isActor) {

@@ -1,10 +1,11 @@
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../game/components";
-import UnScriptVM, { unregisterLevelActor, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { unregisterLevelActor, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
 import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
 import type { ICollidable } from "./objects";
 import type BaseActor from "../base-actor";
-import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import { setActorOwner, setScriptObjectProperty, type OwnedActor_T } from "./components/actor-ownership-component";
 import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./components/transform-component";
+import { EL2EventCmd_T } from "../assets/unreal/un-aactor";
 
 type ActorInfo_T = { uuid: string; name: string; scriptClassId: string; scriptProperties: Record<string, ScriptValue_T>; sharedScriptProperties?: Record<string, ScriptValue_T> };
 
@@ -34,11 +35,42 @@ export class Actor extends GameObject {
             return;
         }
 
+        setScriptObjectProperty(this, "Name", this.name);
+        setScriptObjectProperty(this, "Class", this.scriptClassId);
         this.scriptComponent = this.addComponent(new ScriptComponent(vm, objectFactory, this.scriptClassId));
         if (beginPlay) this.beginPlay();
     }
 
+    public bindScriptRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T): void {
+        if (this.scriptComponent) {
+            this.scriptComponent.setRuntime(vm, objectFactory, false);
+            return;
+        }
+
+        vm.bindHost(this, false);
+        this.scriptComponent = this.addComponent(new ScriptComponent(vm, objectFactory, this.scriptClassId, false));
+    }
+
     public beginPlay(initialize?: () => void): void { this.scriptComponent.beginPlay(initialize); }
+    public getLevel(): ScriptLevelActors_T { return this.getUnrealScriptProperty("XLevel") as unknown as ScriptLevelActors_T; }
+
+    public spawned(): void { }
+
+    public postBeginPlay(): void {
+        for (let index = 0; ; index++) {
+            const arrEvents = this.getUnrealScriptProperty("L2GameEvent") as { EventID: number, EventCmd: number }[];
+
+            if (index >= arrEvents.length) return;
+            switch (arrEvents[index].EventCmd) {
+                case EL2EventCmd_T.LEC_Show: this.l2EventShow(0); break;
+                case EL2EventCmd_T.LEC_Play: this.l2EventPlay(0); break;
+            }
+        }
+    }
+
+    public l2EventShow(value: number): void { this.setUnrealScriptProperty("bHidden", value === 0); }
+    public l2EventPlay(_value: number): void { }
+    public setOwner(owner: OwnedActor_T): void { setActorOwner(this, owner); }
 
     public setUnrealScriptProperty(id: string, value: ScriptValue_T): void { setScriptObjectProperty(this, id, value); }
 

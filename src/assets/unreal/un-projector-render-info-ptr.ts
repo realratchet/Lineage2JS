@@ -3,10 +3,10 @@ import UObject from "./un-object";
 export abstract class FProjectorRenderInfoPtr extends UObject {
     public static readonly plainStructFields = true;
 
-    declare public Ptr: number;
+    declare public ptr: number;
 
     protected getPropertyMap() {
-        return { "Ptr": "Ptr" };
+        return { "Ptr": "ptr" };
     }
 }
 

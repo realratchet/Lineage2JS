@@ -191,12 +191,12 @@ export abstract class UAnimNotifyEffect extends UAnimNotify {
     declare protected bone: string;
     declare protected offsetLocation: FVector;
     declare protected offsetRotation: FRotator;
-    declare protected attach: boolean;
+    declare protected isAttached: boolean;
     declare protected tag: string;
     declare protected drawScale: number;
     declare protected drawScale3D: FVector;
-    declare protected trailCamera: boolean;
-    declare protected independentRotation: boolean;
+    declare protected isTrailCamera: boolean;
+    declare protected hasIndependentRotation: boolean;
     declare protected effectScale: number;
 
     protected getPropertyMap(): Record<string, string> {
@@ -205,12 +205,12 @@ export abstract class UAnimNotifyEffect extends UAnimNotify {
             "Bone": "bone",
             "OffsetLocation": "offsetLocation",
             "OffsetRotation": "offsetRotation",
-            "Attach": "attach",
+            "Attach": "isAttached",
             "Tag": "tag",
             "DrawScale": "drawScale",
             "DrawScale3D": "drawScale3D",
-            "TrailCamera": "trailCamera",
-            "IndependentRotation": "independentRotation",
+            "TrailCamera": "isTrailCamera",
+            "IndependentRotation": "hasIndependentRotation",
             "EffectScale": "effectScale"
         });
     }
@@ -226,12 +226,12 @@ export abstract class UAnimNotifyEffect extends UAnimNotify {
             bone: requireNotifyProperty(this, "bone", this.bone),
             offsetLocation: requireNotifyProperty(this, "offsetLocation", this.offsetLocation).getElements(),
             offsetRotation: requireNotifyProperty(this, "offsetRotation", this.offsetRotation).toArray() as Vector3Arr,
-            attach: requireNotifyProperty(this, "attach", this.attach),
+            attach: requireNotifyProperty(this, "isAttached", this.isAttached),
             tag: requireNotifyProperty(this, "tag", this.tag),
             drawScale: requireNotifyProperty(this, "drawScale", this.drawScale),
             drawScale3D: requireNotifyProperty(this, "drawScale3D", this.drawScale3D).getElements(),
-            trailCamera: requireNotifyProperty(this, "trailCamera", this.trailCamera),
-            independentRotation: requireNotifyProperty(this, "independentRotation", this.independentRotation),
+            trailCamera: requireNotifyProperty(this, "isTrailCamera", this.isTrailCamera),
+            independentRotation: requireNotifyProperty(this, "hasIndependentRotation", this.hasIndependentRotation),
             effectScale: requireNotifyProperty(this, "effectScale", this.effectScale)
         };
     }

@@ -10,7 +10,7 @@ export enum TagState_T {
 export abstract class UL2Float extends UAActor {
     declare public readonly state: TagState_T;
     declare public readonly fishType: number;
-    declare public readonly gut: boolean;
+    declare public readonly hasGut: boolean;
     declare public readonly waterEffectTimer: number;
     declare public readonly oldEffectLocation: FVector;
     declare public readonly effectElapsedTime: number;
@@ -24,7 +24,7 @@ export abstract class UL2Float extends UAActor {
         return Object.assign({}, super.getPropertyMap(), {
             "State": "state",
             "FishType": "fishType",
-            "Gut": "gut",
+            "Gut": "hasGut",
             "WaterEffectTimer": "waterEffectTimer",
             "OldEffectLoc": "oldEffectLocation",
             "fEffectElapsedTime": "effectElapsedTime",

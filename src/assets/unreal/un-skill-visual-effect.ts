@@ -6,10 +6,10 @@ export enum EAttachMethod_T { EAM_None = 0, EAM_RH = 1, EAM_LH = 2, EAM_BoneSpec
 
 export abstract class USkillAction extends UObject {
     declare public effectClass: UClass;
-    declare public onMultiTarget: boolean;
+    declare public isMultiTarget: boolean;
 
     protected getPropertyMap(): Record<string, string> {
-        return Object.assign({}, super.getPropertyMap(), { "EffectClass": "effectClass", "bOnMultiTarget": "onMultiTarget" });
+        return Object.assign({}, super.getPropertyMap(), { "EffectClass": "effectClass", "bOnMultiTarget": "isMultiTarget" });
     }
 }
 
@@ -41,14 +41,14 @@ export abstract class USkillActionLocateEffect extends USkillAction {
     declare public attachBoneName: string;
     declare public isAbsolute: boolean;
     declare public spawnDelay: number;
-    declare public useCharacterRotation: boolean;
+    declare public isUsingCharacterRotation: boolean;
     declare public offset: FVector;
-    declare public relativeToCylinder: boolean;
-    declare public spawnOnTarget: boolean;
-    declare public sizeScale: boolean;
+    declare public isRelativeToCylinder: boolean;
+    declare public isSpawningOnTarget: boolean;
+    declare public isSizeScaled: boolean;
 
     protected getPropertyMap(): Record<string, string> {
-        return Object.assign({}, super.getPropertyMap(), { "AttachOn": "attachOn", "AttachBoneName": "attachBoneName", "bAbsolute": "isAbsolute", "SpawnDelay": "spawnDelay", "bUseCharacterRotation": "useCharacterRotation", "offset": "offset", "bRelativeToCylinder": "relativeToCylinder", "bSpawnOnTarget": "spawnOnTarget", "bSizeScale": "sizeScale" });
+        return Object.assign({}, super.getPropertyMap(), { "AttachOn": "attachOn", "AttachBoneName": "attachBoneName", "bAbsolute": "isAbsolute", "SpawnDelay": "spawnDelay", "bUseCharacterRotation": "isUsingCharacterRotation", "offset": "offset", "bRelativeToCylinder": "isRelativeToCylinder", "bSpawnOnTarget": "isSpawningOnTarget", "bSizeScale": "isSizeScaled" });
     }
 }
 

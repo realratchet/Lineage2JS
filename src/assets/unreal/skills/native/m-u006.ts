@@ -7,7 +7,7 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "casting", effectClass: "LineageEffect.m_u006_b", host: "caster", position: "center", heightOffset: 1, physics: "none", adjustParticleLife: "shotTime", pawnLight: { color: [0.6, 0, 0], radius: 30, spot: true, target: "caster" } },
     { phase: "shot", effectClass: "LineageEffect.m_u006_c", host: "caster", position: "center", heightOffset: 1, rotation: "caster", projectile: { target: "target" } },
     // 0x790b8d..0x790c12: actual hit actor, zero transform, rate1, optional absolute bone0; Owner is not required.
-    { phase: "explosion", effectClass: "LineageEffect.m_u006_e", host: "impactActor", owner: "impactActor", hitActor: true, location: [0, 0, 0], rotation: "zero", speedRate: 1, bone: 0, boneOptional: true, isAbsolute: true },
+    { phase: "explosion", effectClass: "LineageEffect.m_u006_e", host: "impactActor", owner: "impactActor", hitActor: true, location: [0, 0, 0], rotation: "zero", speedRate: 1, bone: 0, isAbsolute: true },
     // 0x790c17..0x790cdf: hit-Pawn Location minus 2*radius*1.2 along HitRot; independent red light, radius30, .3s.
     { phase: "explosion", effectClass: "LineageEffect.m_u006_e", host: "impactActor", hitActor: true, pawnLightOnly: true, pawnLight: { color: [1, 0, 0], radius: 30, lifeTime: 0.3, spot: true, position: "center", rotation: "hit", radiusOffset: -2.4 } },
     // 0x790b04..0x790b88: Owner-gated miss, null actor arguments, LastTargetLocation/HitRot, rate1, no light.

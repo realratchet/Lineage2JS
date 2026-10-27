@@ -1,4 +1,5 @@
 import NameplateDepth from "./nameplate-depth";
+import TranslucentRenderList from "./translucent-render-list";
 import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
@@ -272,6 +273,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected fovMaxAspect = Infinity;
     public readonly cameraTarget = new Vector3(-87086.51708877791, 239936.94718888338, -3685.930229617832);
     public readonly scene = new Scene();
+    protected readonly translucentRenderList = new TranslucentRenderList();
+    protected worldCamera: Camera = null;
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
     public needsUpdate: boolean = true;
@@ -443,6 +446,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             return a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || b.z - a.z || a.id - b.id;
         });
+        const worldList = this.renderer.renderLists.get(this.scene, 0), sortWorldList = worldList.sort;
+        worldList.sort = (opaque, transparent) => {
+            sortWorldList(opaque, transparent);
+            this.translucentRenderList.sort(worldList.transparent, this.worldCamera, this.arrSceneSectors);
+        };
         this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
@@ -688,13 +696,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         ].join("\n"));
     }
 
-    public takeScreenshot() {
-        this.renderer.domElement.toBlob((blob) => {
-            if (!blob) return;
-
-            window.open(URL.createObjectURL(blob), "_blank");
-        }, "image/jpeg", 0.98);
-    }
+    public takeScreenshot() { this.manGame.getComponent("gui").takeScreenshot(); }
 
     public toggleFrustumCulling(): void {
         this.frustumCullingEnabled = !this.frustumCullingEnabled;
@@ -2507,6 +2509,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 if (emitter.instancedMesh?.visible && emitter.instancedMesh.isWorldBatchCandidate) this.arrViewportBatchEmitters.push(emitter);
             });
             this.particleBatcher.update(this.arrViewportBatchEmitters, viewport.camera);
+            this.worldCamera = viewport.camera;
             renderer.render(this.scene, viewport.camera);
             if (this.viewportSceneCanvas) {
                 const canvas = this.viewportSceneCanvas, ratio = renderer.getPixelRatio(), scale = Math.max(1, Math.floor(ratio));
@@ -2705,6 +2708,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
         this.nameplateDepth.begin(this.scene);
         try {
+            this.worldCamera = this.camera;
             this.renderer.render(this.scene, this.camera);
         } finally {
             this.nameplateDepth.end();

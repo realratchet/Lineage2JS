@@ -13,7 +13,9 @@ export type IScriptFieldDecodeInfo = {
     name: string,
     type: PropertyTypes_T,
     arrayDimensions: number,
-    flags: number
+    flags: number,
+    innerId?: string,
+    structFieldIds?: string[]
 };
 
 export type IScriptFunctionDecodeInfo = {
@@ -44,7 +46,9 @@ export type IScriptStateDecodeInfo = {
 
 export type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
     superClassId: string | null,
+    withinClassId: string,
     classFlags: number,
+    propertyFields: Record<string, IScriptFieldDecodeInfo>,
     isNative: boolean,
     stateIds: string[],
     defaults: Record<string, ScriptPropertyValue_T>
@@ -184,7 +188,8 @@ function dumpBytecodeValue(script: UStruct, entry: ScriptBytecodeEntry_T, entrie
         case "contextSkipOffset": {
             const virtualOffset = entry.offset + 3 + value;
 
-            return { virtualOffset, entryIndex: resolveEntryIndex(entriesByOffset, virtualSize, virtualOffset) };
+            // Retail PlayerInput.ChangeSnapView has an unused null-context target inside a property operand.
+            return { virtualOffset, entryIndex: virtualOffset === virtualSize ? entriesByOffset.size : entriesByOffset.get(virtualOffset) ?? -1 };
         }
         case "label": return value.isNone()
             ? { name: value.name, virtualOffset: value.offset, entryIndex: -1 }
@@ -242,6 +247,42 @@ function dumpFields(script: UStruct): IScriptFieldDecodeInfo[] {
             flags: field.getPropertyFlags()
         };
     });
+}
+
+function getClassWithin(cls: UClass): UClass {
+    const index = (cls as any).classWithinId;
+
+    if (!Number.isInteger(index) || !index) throw new Error(`Script class '${cls.name}' has no Within class.`);
+    const within = (cls as any).pkg.fetchObject(index).loadSelf() as UClass;
+
+    if (!within.isClass) throw new Error(`Script class '${cls.name}' has invalid Within '${within.name}'.`);
+    return within;
+}
+
+function dumpPropertyFields(script: UStruct): Record<string, IScriptFieldDecodeInfo> {
+    const fields: Record<string, IScriptFieldDecodeInfo> = {};
+
+    function pullField(field: UProperty): string {
+        field = field.loadSelf();
+        const id = getObjectId(field);
+
+        if (id in fields) return id;
+
+        const info: IScriptFieldDecodeInfo = fields[id] = { id, name: field.propertyName, type: field.getTypeName(), arrayDimensions: field.arrayDimensions, flags: field.getPropertyFlags() };
+
+        if (info.type === "Array") info.innerId = pullField((field as UArrayProperty).value);
+        if (info.type === "Struct") {
+            info.structFieldIds = [];
+
+            for (let struct = (field as UStructProperty).value.loadSelf(); struct; struct = struct.superField as UStruct)
+                for (const child of struct.childPropFields.values()) info.structFieldIds.push(pullField(child));
+        }
+        return id;
+    }
+
+    for (const field of script.childPropFields.values()) pullField(field);
+
+    return fields;
 }
 
 function dumpFunction(fn: UFunction): IScriptFunctionDecodeInfo {
@@ -356,11 +397,14 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
         library.scriptClasses[id] = {
             ...stateInfo,
             superClassId: superClass ? getObjectId(superClass) : null,
+            withinClassId: getObjectId(getClassWithin(cls)),
             classFlags: cls.getClassFlags(),
+            propertyFields: dumpPropertyFields(cls),
             isNative: !!(cls.exp.flags & ObjectFlags_T.RF_Native),
             stateIds: cls.childStates.map(state => getObjectId(state)),
             defaults: dumpClassDefaults(cls)
         };
+        pullClass(getClassWithin(cls));
         for (const constructed of getConstructedClasses(cls)) pullClass(constructed);
     }
 
@@ -407,11 +451,14 @@ export function pullScriptClassFunctions(library: DecodeLibrary, classes: Iterab
             functionIds: functions.map(fn => getObjectId(fn)),
             program: { virtualSize: 0, entries: [] },
             superClassId: superClass ? getObjectId(superClass) : null,
+            withinClassId: getObjectId(getClassWithin(cls)),
             classFlags: cls.getClassFlags(),
+            propertyFields: dumpPropertyFields(cls),
             isNative: !!(cls.exp.flags & ObjectFlags_T.RF_Native),
             stateIds: [],
             defaults: dumpClassDefaults(cls)
         };
+        pullClass(getClassWithin(cls));
         pullScriptClasses(library, functions.flatMap(getConstructedClasses));
     }
 

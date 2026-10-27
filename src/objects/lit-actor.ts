@@ -3,6 +3,7 @@ import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
 import { Box3, BufferAttribute, Color, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
 import { computeStaticLighting } from "../rendering/static-lighting";
+import SortedIndexBuffer from "../rendering/sorted-index-buffer";
 import VertexLighting, { getAffectedVertices } from "../rendering/vertex-lighting";
 import type { L2Environment } from "../rendering/l2-env";
 import { ColorByte } from "../utils/color-byte";
@@ -48,6 +49,8 @@ export class LitActorMesh extends GameMesh {
     public batchElements?: any[];
     public allGroups?: { start: number, count: number, materialIndex: number }[];
     public batchIndices?: Uint8Array | Uint16Array | Uint32Array | null;
+    public sortedIndexBuffers?: Map<number, SortedIndexBuffer>;
+    public sortedIndexRange?: { start: number, count: number };
     public transparentMaterialIndexes?: Set<number>;
     public sortedTransparentMaterialIndexes?: Set<number>;
     public elemVisibility?: Uint8Array;

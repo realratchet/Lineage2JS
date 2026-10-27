@@ -89,6 +89,8 @@ export function getCanonicalStaticMaterialKey(material: any): string {
         visible: material.visible,
         side: material.side,
         transparent: material.transparent,
+        forceSinglePass: material.forceSinglePass,
+        requiresSorting: material.requiresSorting,
         depthWrite: material.depthWrite,
         depthTest: material.depthTest,
         blending: material.blending,
@@ -136,6 +138,7 @@ export function decodeStaticMeshMaterial(library: DecodeLibrary, info: MaterialC
 
     (materials instanceof Array ? materials : [materials]).forEach((mat: any) => {
         if (!mat) return;
+        if (mat.isStaticMeshMaterial) mat.forceSinglePass = true;
         if (instanced) mat.setInstanced?.();
         if (sway) mat.setSway?.();
         if (terrainDecoration) mat.setTerrainDecoration?.();
@@ -538,6 +541,27 @@ function decodeCombiner(library: DecodeLibrary, info: MaterialContracts.ICombine
     });
 }
 
+export function requiresMaterialSorting(library: DecodeLibrary, info: MaterialContracts.IBaseMaterialDecodeInfo): boolean {
+    if (!info) return false;
+
+    switch (info.materialType) {
+        case "shader": {
+            const shader = info as MaterialContracts.IShaderDecodeInfo;
+            return ["additive", "modulate", "translucent", "darken"].includes(shader.blendingMode) || shader.blendingMode === "normal" && !!shader.opacity;
+        }
+        case "texture": return !!(info as ITextureDecodeInfo).isAlphaTexture;
+        case "modifier": {
+            const modifier = info as any;
+            if (modifier.modifierType === "finalBlend") return modifier.blendingMode !== "invisible" && (modifier.blendingMode !== "normal" || modifier.transparent);
+
+            return requiresMaterialSorting(library, library.materials[modifier.material || modifier.map || modifier.transform?.map]);
+        }
+        case "instance": return requiresMaterialSorting(library, library.materials[(info as IMaterialInstancedDecodeInfo).baseMaterial]);
+        case "lightmapped": return requiresMaterialSorting(library, library.materials[(info as MaterialContracts.ILightmappedDecodeInfo).material]);
+        default: return false;
+    }
+}
+
 function decodeShader(library: DecodeLibrary, info: MaterialContracts.IShaderDecodeInfo): MeshStaticMaterial {
     // D3DTSS_COLOROP = D3DTOP_BLENDCURRENTALPHA (L2.dusk_and_dawn.trace call 9416187, TextureStageState2)
     const useSelfIllumination = !info.specular && !!info.selfIllumination && !!info.selfIlluminationMask;
@@ -820,6 +844,8 @@ export function decodeMaterial(library: DecodeLibrary, info: MaterialContracts.I
             default: throw new Error(`Unknown decodable type: ${info.materialType}`);
         }
     })();
+
+    if ((material as MeshStaticMaterial).isStaticMeshMaterial) (material as MeshStaticMaterial).requiresSorting = requiresMaterialSorting(library, info);
 
     if (info.name && material) {
         if (Array.isArray(material)) {

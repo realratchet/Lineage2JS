@@ -224,6 +224,7 @@ function copyScriptClass(target: DecodeLibrary, source: DecodeLibrary, classId: 
         target.scriptClasses[id] = cls;
 
         if (cls.superClassId) copyClass(cls.superClassId);
+        if (cls.withinClassId in source.scriptClasses) copyClass(cls.withinClassId);
         for (const functionId of cls.functionIds) copyFunction(functionId);
         for (const stateId of cls.stateIds) copyState(stateId);
     }
@@ -1788,7 +1789,7 @@ export class DecodeEngine {
 
             if (text && [0, 1, 3].includes(row.oper_type)) skillRecords[`${row.skill_id}:${row.skill_level}`] = this.getSkillRecord(tables, row.skill_id, row.skill_level);
 
-            if (text) skillInfos[`${row.skill_id}:${row.skill_level}`] = { name: text.name, description: text.description.replace(/\\n/g, "\n"), icon: row.icon_name, type: row.is_magic ? 313 : row.oper_type === 2 ? 312 : 311, hpConsume: row.hp_consume, mpConsume: row.mp_consume, range: row.cast_range, isDebuff: row.extra_eff !== 0, isEnchanted: row.is_ench !== 0, enchantName: text.desc_add1, enchantDescription: text.desc_add2.replace(/\\n/g, "\n"), enchantSkillLevel: row.ench_skill_id };
+            if (text) skillInfos[`${row.skill_id}:${row.skill_level}`] = { name: text.name, description: text.description.replace(/\\n/g, "\n"), icon: row.icon_name, type: row.is_magic ? 313 : row.oper_type === 2 ? 312 : 311, hpConsume: row.hp_consume, mpConsume: row.mp_consume, range: row.cast_range, isToggle: row.oper_type === 3, isDebuff: row.extra_eff !== 0, isEnchanted: row.is_ench !== 0, enchantName: text.desc_add1, enchantDescription: text.desc_add2.replace(/\\n/g, "\n"), enchantSkillLevel: row.ench_skill_id };
         }
 
         for (const row of tables.names)

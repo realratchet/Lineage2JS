@@ -10,12 +10,12 @@ import type MovableObject from "./movable-object";
 import { isPortalBlocked } from "../rendering/door-portals";
 import MusicVolume from "./music-volume";
 import Actor from "./actor";
-import type { BatchRenderGroup_T } from "./lit-actor";
+import type { BatchRenderGroup_T, LitActorMesh } from "./lit-actor";
 import { setScriptObjectProperty } from "./components/actor-ownership-component";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
-import UnScriptVM, { getProperty, setLevelActors, deleteLevelActors, registerLevelActor, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
+import UnScriptVM, { getProperty, setLevelActors, deleteLevelActors, registerLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
 import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
@@ -275,6 +275,9 @@ export type LightInfo_T = {
 
 export class SectorObject extends GameObject {
     public readonly isSectorObject = true;
+    public readonly isLevelActor = false;
+    public readonly scriptClassId = "engine.Level";
+    public readonly scriptProperties = new Map<string, ScriptValue_T>();
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
     public scriptVM: UnScriptVM;
@@ -396,6 +399,18 @@ export class SectorObject extends GameObject {
         this.hasRearrangedLevelActors = true;
     }
 
+    public allocateLevelActor(construct: () => ScriptHost_T): ScriptHost_T {
+        const index = this.arrLevelActors.length;
+
+        this.arrLevelActors.push(null);
+        this.arrLevelActorRecords.push(null);
+        const actor = construct();
+
+        if (!actor || typeof actor !== "object" || typeof actor.scriptClassId !== "string" || !actor.scriptClassId || actor.isLevelActor === false) throw new Error(`Invalid constructed level actor in '${this.name}'.`);
+        this.arrLevelActors[index] = actor;
+        return actor;
+    }
+
     public addLevelActor(actor: ScriptHost_T): void {
         const index = this.cacheLevelActorIndices.get((actor as any).actorUuid);
 
@@ -447,6 +462,7 @@ export class SectorObject extends GameObject {
         } else {
             if (!(actor as any).findComponent || !(actor as any).findComponent("script")) this.scriptVM.initializeHost(actor);
             setScriptObjectProperty(actor as any, "Level", this.scriptVM.getLevelInfo());
+            setScriptObjectProperty(actor as any, "XLevel", this);
             registerLevelActor(actor);
         }
         if (actor.scriptClassId !== info.scriptClassId) throw new Error(`Actor '${info.uuid}' has class '${actor.scriptClassId}', expected '${info.scriptClassId}'`);
@@ -1290,7 +1306,7 @@ export class SectorObject extends GameObject {
         this.visibilityCacheInitialized = false;
     }
 
-    protected getTranslucentBSP() {
+    public getTranslucentBSP() {
         if (this.arrTranslucentBSP) return this.arrTranslucentBSP;
 
         this.arrTranslucentBSP = [];
@@ -1705,6 +1721,24 @@ export class SectorObject extends GameObject {
                         }
 
                         object.visible = groupCount > 0;
+                    }
+
+                    if (object.visible && (object as any).sortedIndexBuffers) {
+                        const mesh = object as LitActorMesh, index = geometry.index;
+                        let offset = 0, changed = false;
+
+                        for (const group of mesh.visibleBatchGroups) {
+                            const sorted = mesh.sortedIndexBuffers.get(group.start);
+                            if (sorted && sorted.apply(index.array as Uint8Array | Uint16Array | Uint32Array, offset, cameraPosition, auxiliary, visibilityChanged || sortChanged)) changed = true;
+                            offset += group.count;
+                        }
+                        if (changed) {
+                            mesh.sortedIndexRange.count = offset;
+                            index.clearUpdateRanges();
+                            index.updateRanges.push(mesh.sortedIndexRange);
+                            index.needsUpdate = true;
+                            for (const group of mesh.batchRenderGroups) group.indexVersion = index.version;
+                        }
                     }
 
                     if (object.visible) visibleCount++;

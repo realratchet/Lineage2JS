@@ -1,5 +1,5 @@
 import UNativeRegistry from "./native-registry";
-import { CastToken_T, ExprToken_T, EStateFlags_T, ObjectFlags_T } from "@l2js/core";
+import { CastToken_T, ExprToken_T, EStateFlags_T, ObjectFlags_T, PropertyFlags_T } from "@l2js/core";
 import { EClassFlags_T } from "@l2js/core/unreal/un-class";
 import { ENetRole_T } from "../assets/unreal/un-aactor";
 import type { DecodeLibrary } from "@l2js/engine";
@@ -472,6 +472,7 @@ class ScriptExecutor {
         this.next();
 
         if (contextValue === null || contextValue === undefined) {
+            if (target.entryIndex < 0) throw new Error(`UnrealScript '${this.frame.fn.id}' cannot skip null context to non-expression offset '${target.virtualOffset}'.`);
             this.pc = target.entryIndex;
             return null;
         }
@@ -877,22 +878,38 @@ class ScriptExecutor {
 export class UnScriptVM {
     protected readonly library: DecodeLibrary;
     protected levelInfo: ScriptHost_T = null;
+    protected level: ScriptHost_T & ScriptLevelActors_T = null;
+    protected readonly levelPackage: ScriptHost_T = null;
+    protected readonly constructingTemplates = new Set<ScriptHost_T>();
     protected readonly functionsById = new Map<string, IScriptFunctionDecodeInfo>();
     protected readonly functionsByClass = new Map<string, Map<string, IScriptFunctionDecodeInfo>>();
 
     public constructor(library: DecodeLibrary) {
         this.library = library;
+        if (library.levelPackageName) this.levelPackage = { scriptClassId: "core.Package", isLevelActor: false, scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 } };
         this.loadFunctions();
     }
 
     public getLibrary(): DecodeLibrary { return this.library; }
     public getLevelInfo(): ScriptHost_T { return this.levelInfo; }
     public setLevelInfo(level: ScriptHost_T): void { this.levelInfo = level; }
+    public getLevel(): ScriptHost_T & ScriptLevelActors_T { return this.level; }
 
-    public constructObject(classId: string, outer: ScriptHost_T, name: string, flags: number): ScriptHost_T {
+    public initializeLevel(level: ScriptHost_T & ScriptLevelActors_T): void {
+        if (this.level && this.level !== level) throw new Error(`UnrealScript world is already initialized.`);
+        if (!this.levelPackage || !this.library.levelObjectName) throw new Error(`Decode library '${this.library.name}' has no level identity.`);
+        if (this.library.levelObjectOuter !== this.library.levelPackageName) throw new Error(`Level Outer '${this.library.levelObjectOuter}' is unresolved.`);
+
+        setProperty(level, "Name", this.library.levelObjectName);
+        setProperty(level, "Class", level.scriptClassId);
+        setProperty(level, "Outer", this.levelPackage);
+        this.level = level;
+    }
+
+    public constructObject(classId: string, outer: ScriptHost_T, name: string, flags: number, template: ScriptHost_T = null, superObject: ScriptHost_T = null): ScriptHost_T {
         // Core.dll execNew 0x101454d0; StaticAllocateObject 0x101687f0; MakeUniqueObjectName 0x1015ef10.
         if (typeof classId !== "string" || !this.library.scriptClasses[classId]) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
-        if (outer !== null && (!outer || typeof outer !== "object" || !outer.scriptClassId)) throw new Error(`Invalid UnrealScript object outer.`);
+        if (outer !== null && (!outer || typeof outer !== "object" || typeof outer.scriptClassId !== "string" || !outer.scriptClassId)) throw new Error(`Invalid UnrealScript object outer.`);
         if (typeof name !== "string" || !Number.isInteger(flags) || flags < -0x80000000 || flags > 0x7fffffff || flags & ~ObjectFlags_T.RF_ScriptMask) throw new Error(`Invalid UnrealScript object name or flags.`);
         // shortcut: unnamed script objects; native replacement and derived native constructors remain unsupported.
         if (name) throw new Error(`UnrealScript construction of named objects is not implemented.`);
@@ -900,16 +917,212 @@ export class UnScriptVM {
         const cls = this.library.scriptClasses[classId];
 
         if (cls.classFlags & EClassFlags_T.CLASS_Abstract) throw new Error(`Cannot construct abstract UnrealScript class '${classId}'.`);
+        if (cls.classFlags & EClassFlags_T.CLASS_PerObjectConfig) throw new Error(`Per-object configuration for '${classId}' is not implemented.`);
+        this.validateConstructorOuter(cls, outer || transientPackage);
+        this.validateConstructorTemplate(cls, template, superObject);
         for (let parent = cls; parent; parent = this.library.scriptClasses[parent.superClassId])
             if (parent.isNative && parent.superClassId) throw new Error(`UnrealScript native constructor '${parent.id}' is not implemented.`);
 
         const object: ScriptHost_T = { scriptClassId: classId, isLevelActor: false, scriptProperties: new Map() };
 
-        this.initializeHost(object);
-        // StaticAllocateObject 0x10168c4c leaves UObject.StateFrame null.
-        cacheStateFrames.delete(object);
+        this.initializeObject(object, outer, flags);
+        this.initializeTemplate(object, template || this.getDefaultObject(classId), superObject);
+        return object;
+    }
+
+    public constructActor(object: ScriptHost_T, outer: ScriptHost_T, template: ScriptHost_T = null): void {
+        const cls = this.library.scriptClasses[object.scriptClassId];
+
+        if (!cls) throw new Error(`UnrealScript class '${object.scriptClassId}' is not in the decode library`);
+        if (outer !== null && (!outer || typeof outer !== "object" || typeof outer.scriptClassId !== "string" || !outer.scriptClassId)) throw new Error(`Invalid UnrealScript object outer.`);
+        if (cls.classFlags & EClassFlags_T.CLASS_Abstract) throw new Error(`Cannot construct abstract UnrealScript class '${cls.id}'.`);
+        if (cls.classFlags & EClassFlags_T.CLASS_PerObjectConfig) throw new Error(`Per-object configuration for '${cls.id}' is not implemented.`);
+        const properties = getProperties(object);
+
+        if (object.isClassDefaultObject || (properties instanceof Map ? properties.size : Object.keys(properties).length)) throw new Error(`Actor construction requires uninitialized property storage.`);
+
+        this.validateConstructorOuter(cls, outer || transientPackage);
+        this.validateConstructorTemplate(cls, template, null);
+        let isActor = false;
+
+        for (let parent = cls; parent; parent = this.library.scriptClasses[parent.superClassId]) {
+            if (parent.id.toLowerCase() === "engine.actor") isActor = true;
+            if (parent.isNative && parent.superClassId && !["engine.actor", "engine.info", "engine.mutator", "engine.gameinfo"].includes(parent.id.toLowerCase())) throw new Error(`UnrealScript native constructor '${parent.id}' is not implemented.`);
+        }
+        if (!isActor) throw new Error(`UnrealScript class '${cls.id}' is not an actor class.`);
+
+        this.initializeObject(object, outer, 0);
+        this.initializeTemplate(object, template || this.getDefaultObject(cls.id), null);
+
+        const modify = getProperty(object, "TexModifyInfo") as Record<string, any>;
+
+        // AActor::AActor 0x1032821a resets TexModifyInfo after InitProperties.
+        modify.bUseModify = modify.bTwoSide = modify.bAlphaBlend = false;
+        modify.Color.fill(255);
+        modify.AlphaOp = modify.ColorOp = 1;
+    }
+
+    protected validateConstructorOuter(cls: IScriptClassDecodeInfo, outer: ScriptHost_T): void {
+        if (typeof cls.withinClassId !== "string" || !cls.withinClassId) throw new Error(`UnrealScript class '${cls.id}' has no Within metadata.`);
+        const within = cls.withinClassId.toLowerCase();
+
+        // Core.Object accepts native-only outers such as Core.Package.
+        if (within === "core.object") return;
+        const script = typeof (outer as any).findComponent === "function" ? (outer as any).findComponent("script") : null;
+        const vm = cacheStateFrames.get(outer)?.vm || (script ? script.getVM() as UnScriptVM : this);
+        let classId = outer.scriptClassId;
+
+        while (classId) {
+            if (classId.toLowerCase() === within) return;
+            const parent = vm.library.scriptClasses[classId];
+
+            if (!parent) throw new Error(`Within validation class '${classId}' is not in the decode library.`);
+            classId = parent.superClassId;
+        }
+        throw new Error(`UnrealScript class '${cls.id}' requires outer within '${cls.withinClassId}', got '${outer.scriptClassId}'.`);
+    }
+
+    protected validateConstructorTemplate(cls: IScriptClassDecodeInfo, template: ScriptHost_T, superObject: ScriptHost_T): void {
+        // shortcut: same-class templates; cross-class native memory layouts need qualification before accepting them.
+        if (template !== null && (!template || typeof template !== "object" || (typeof template.scriptClassId !== "string" || template.scriptClassId.toLowerCase() !== cls.id.toLowerCase()))) throw new Error(`Invalid constructor template for '${cls.id}'.`);
+        if (superObject !== null && (!superObject || typeof superObject !== "object" || (typeof superObject.scriptClassId !== "string" || !superObject.scriptClassId))) throw new Error(`Invalid constructor SuperObject for '${cls.id}'.`);
+    }
+
+    protected initializeTemplate(object: ScriptHost_T, template: ScriptHost_T, superObject: ScriptHost_T): void {
+        if (this.constructingTemplates.has(template)) throw new Error(`Recursive constructor template '${template.scriptClassId}' is not supported.`);
+        this.constructingTemplates.add(template);
+        try {
+            const defaults = this.getDefaultObject(object.scriptClassId);
+
+            const properties = getProperties(object);
+
+            for (let pass = 0; pass < 2; pass++) {
+                for (let cls = this.library.scriptClasses[object.scriptClassId]; cls.superClassId; cls = this.library.scriptClasses[cls.superClassId]) {
+                    const fields = cls.propertyFields;
+
+                    if (!fields) throw new Error(`UnrealScript class '${cls.id}' has no constructor property metadata.`);
+                    for (const field of cls.fields) {
+                        if (!fields[field.id]) throw new Error(`Missing constructor property metadata for '${field.name}'.`);
+                        if (pass === 0 ? template === defaults && !superObject : !(field.flags & PropertyFlags_T.CPF_NeedCtorLink)) continue;
+                        const source = superObject && field.flags & PropertyFlags_T.CPF_Transient ? defaults : template;
+                        const sourceValue = getProperty(source, field.name);
+                        const value = pass === 0 ? field.flags & PropertyFlags_T.CPF_NeedCtorLink ? sourceValue : cloneScriptValue(sourceValue) : this.getConstructorZero(fields, fields[field.id], sourceValue, field.name);
+                        const key = findPropertyKey(properties, field.name) ?? field.name;
+
+                        if (properties instanceof Map) properties.set(key, value);
+                        else properties[key] = value;
+                        if (pass === 1) {
+                            const copied = this.copyConstructorProperty(fields, fields[field.id], sourceValue, value, superObject || object, field.name);
+
+                            if (properties instanceof Map) properties.set(key, copied);
+                            else properties[key] = copied;
+                        }
+                    }
+                }
+            }
+        } finally { this.constructingTemplates.delete(template); }
+    }
+
+    protected getConstructorZero(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], value: ScriptValue_T, path: string, index: number = -1): ScriptValue_T {
+        if (!field) throw new Error(`Missing constructor property metadata for '${path}'.`);
+        if (index < 0 && field.arrayDimensions > 1)
+            return Array.from({ length: field.arrayDimensions }, (_, i) => this.getConstructorZero(fields, field, value[i], `${path}[${i}]`, i)) as ScriptValue_T;
+
+        switch (field.type) {
+            case "Object":
+            case "Class": return null;
+            case "Str":
+            case "String": return "";
+            case "Name": return "None";
+            case "Bool": return false;
+            case "Byte":
+            case "Int":
+            case "Float":
+            case "Pointer": return 0;
+            case "Array": return [];
+            case "Struct": {
+                if (!field.structFieldIds) throw new Error(`Missing constructor struct metadata for '${path}'.`);
+                if (Array.isArray(value)) {
+                    if (value.length !== field.structFieldIds.length || !field.structFieldIds.every(id => fields[id] && ["Byte", "Int", "Float"].includes(fields[id].type) && fields[id].arrayDimensions === 1)) throw new Error(`Unsupported packed constructor struct '${path}'.`);
+                    return value.map(() => 0);
+                }
+                const result: Record<string, ScriptValue_T> = {};
+
+                for (const id of field.structFieldIds) {
+                    const child = fields[id];
+
+                    if (!child) throw new Error(`Missing constructor property metadata '${id}'.`);
+                    result[child.name] = this.getConstructorZero(fields, child, value[child.name], `${path}.${child.name}`);
+                }
+                return result as ScriptValue_T;
+            }
+            default: throw new Error(`Constructor zero storage for '${field.type}' property '${path}' is not implemented.`);
+        }
+    }
+
+    protected copyConstructorProperty(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], value: ScriptValue_T, target: ScriptValue_T, context: ScriptHost_T, path: string, index: number = -1): ScriptValue_T {
+        if (!field) throw new Error(`Missing constructor property metadata for '${path}'.`);
+        if (index < 0 && field.arrayDimensions > 1) {
+            const result = target as ScriptValue_T[];
+
+            for (let i = 0; i < field.arrayDimensions; i++) result[i] = this.copyConstructorProperty(fields, field, value[i], result[i], context, `${path}[${i}]`, i);
+            return result as ScriptValue_T;
+        }
+
+        if ((field.type === "Object" || field.type === "Class") && field.flags & PropertyFlags_T.CPF_NeedCtorLink && context) {
+            if (value === null) return null;
+            const template = value as ScriptHost_T;
+
+            if (!template || typeof template !== "object" || !template.scriptClassId) throw new Error(`Constructor-linked object '${path}' has no resolved template.`);
+            const cls = this.library.scriptClasses[template.scriptClassId];
+
+            if (!cls) throw new Error(`Constructor-linked object '${path}' class '${template.scriptClassId}' is not in the decode library.`);
+            for (let parent = cls; parent; parent = this.library.scriptClasses[parent.superClassId])
+                if (parent.isNative && parent.superClassId) throw new Error(`Constructor-linked object '${path}' requires unsupported native constructor '${parent.id}'.`);
+            const outer = getProperty(context, "Outer") as ScriptHost_T;
+
+            if (!outer || typeof outer !== "object" || typeof outer.scriptClassId !== "string" || !outer.scriptClassId) throw new Error(`Constructor-linked object '${path}' has invalid outer.`);
+            return this.constructObject(cls.id, outer, "", 0, template, context);
+        }
+        if (field.type === "Array") {
+            const inner = fields[field.innerId], source = value as ScriptValue_T[], result = target as ScriptValue_T[];
+
+            if (!inner) throw new Error(`Missing constructor array metadata for '${path}'.`);
+            result.length = source.length;
+            if (inner.flags & PropertyFlags_T.CPF_NeedCtorLink) {
+                for (let i = 0; i < source.length; i++) result[i] = this.getConstructorZero(fields, inner, source[i], `${path}[${i}]`);
+                for (let i = 0; i < source.length; i++) result[i] = this.copyConstructorProperty(fields, inner, source[i], result[i], context, `${path}[${i}]`);
+            } else {
+                for (let i = 0; i < source.length; i++) result[i] = cloneScriptValue(source[i]);
+            }
+            return result as ScriptValue_T;
+        }
+        if (field.type === "Struct") {
+            if (Array.isArray(value)) {
+                const result = target as ScriptValue_T[];
+
+                for (let i = 0; i < value.length; i++) result[i] = value[i];
+                return result as ScriptValue_T;
+            }
+            const result = target as Record<string, ScriptValue_T>;
+
+            for (const id of field.structFieldIds) {
+                const child = fields[id];
+
+                result[child.name] = this.copyConstructorProperty(fields, child, value[child.name], result[child.name], context, `${path}.${child.name}`);
+            }
+            return result as ScriptValue_T;
+        }
+        return cloneScriptValue(value);
+    }
+
+    protected initializeObject(object: ScriptHost_T, outer: ScriptHost_T, flags: number): void {
+        const cls = this.library.scriptClasses[object.scriptClassId];
+
+        this.initializeHostDefaults(object);
         outer = outer || transientPackage;
         let names = cacheOuterObjects.get(outer), index = cacheObjectNames.get(cls) ?? 0;
+        let name: string;
 
         if (!names) cacheOuterObjects.set(outer, names = new Map());
         do {
@@ -924,9 +1137,8 @@ export class UnScriptVM {
         objectNames.register(object, { names, name: lowerName, object: reference });
         setProperty(object, "Outer", outer);
         setProperty(object, "Name", name);
-        setProperty(object, "Class", classId);
+        setProperty(object, "Class", cls.id);
         setProperty(object, "ObjectFlags", flags | (cls.classFlags & EClassFlags_T.CLASS_Transient ? ObjectFlags_T.RF_Transient : 0));
-        return object;
     }
 
     public loadFunctions(): void {
@@ -959,8 +1171,7 @@ export class UnScriptVM {
 
         if (!object) {
             object = { scriptClassId: cls.id, isLevelActor: false, isClassDefaultObject: true, scriptProperties: new Map() };
-            this.initializeHost(object);
-            cacheStateFrames.delete(object);
+            this.initializeHostDefaults(object);
             setProperty(object, "Class", cls.id);
             cacheDefaultObjects.set(cls, object);
         }
@@ -969,13 +1180,36 @@ export class UnScriptVM {
     }
 
     public initializeHost(host: ScriptHost_T): void {
+        this.initExecution(host);
+        this.initializeHostDefaults(host);
+        if (this.levelPackage && getProperty(host, "Outer") === this.library.levelPackageName) setProperty(host, "Outer", this.levelPackage);
+    }
+
+    public initExecution(host: ScriptHost_T): void {
+        const cls = this.library.scriptClasses[host.scriptClassId];
+
+        if (!cls) throw new Error(`UnrealScript class '${host.scriptClassId}' is not in the decode library`);
+        cacheStateFrames.set(host, { node: cls, cls, vm: this, probeMask: 0xffffffffffffffffn, execution: null, latentAction: 0, isEndingState: false, stateChanged: false, hasTick: false });
+        this.updateStateTick(host);
+        setProperty(host, "ObjectFlags", (getProperty(host, "ObjectFlags") as number) | ObjectFlags_T.RF_HasStack);
+    }
+
+    public initActorExecution(host: ScriptHost_T): void {
+        this.initExecution(host);
+        const level = getProperty(host, "XLevel") as unknown as ScriptLevelActors_T;
+
+        if (!level) throw new Error(`Actor '${host.scriptClassId}' has no world.`);
+        const levelInfo = level.getLevelActor(0);
+
+        if (!levelInfo) throw new Error(`Actor '${host.scriptClassId}' world has no first actor.`);
+        if (getProperty(host, "Level") !== levelInfo) throw new Error(`Actor '${host.scriptClassId}' Level does not match its world's first actor.`);
+    }
+
+    protected initializeHostDefaults(host: ScriptHost_T): void {
         const classes = new Array<IScriptClassDecodeInfo>();
         let cls = this.library.scriptClasses[host.scriptClassId];
 
         if (!cls) throw new Error(`UnrealScript class '${host.scriptClassId}' is not in the decode library`);
-
-        cacheStateFrames.set(host, { node: cls, cls, vm: this, probeMask: 0xffffffffffffffffn, execution: null, latentAction: 0, isEndingState: false, stateChanged: false, hasTick: false });
-        this.updateStateTick(host);
 
         while (cls) {
             classes.push(cls);
@@ -1132,10 +1366,11 @@ export class UnScriptVM {
 
     public hasTickFunction(context: ScriptHost_T): boolean { return cacheStateFrames.get(context)?.hasTick ?? false; }
 
-    public bindHost(context: ScriptHost_T): void {
+    public bindHost(context: ScriptHost_T, requireFrame: boolean = true): void {
         const frame = cacheStateFrames.get(context), cls = this.library.scriptClasses[context.scriptClassId];
 
-        if (!frame || !cls) throw new Error(`UnrealScript runtime replacement requires an initialized class '${context.scriptClassId}'`);
+        if (!cls || !frame && requireFrame) throw new Error(`UnrealScript runtime replacement requires an initialized class '${context.scriptClassId}'`);
+        if (!frame) return;
         const node = frame.node === frame.cls ? cls : this.library.scriptStates[frame.node.id] || this.library.scriptClasses[frame.node.id];
 
         if (!node) throw new Error(`UnrealScript state '${frame.node.id}' is not in the replacement decode library`);

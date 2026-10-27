@@ -677,7 +677,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     if (width > 0 && height > 0 && attrs.SRC && this.layer.hasTexture(attrs.SRC, false)) {
                         const image = this.layer.tile(holder, 0, 0, width, height, 0, 0, width, height, attrs.SRC, 0xffffff, false);
 
-                        image.style.backgroundRepeat = "no-repeat";
+                        image.style.backgroundRepeat = "repeat-x";
                     }
                     break;
                 }
@@ -696,12 +696,10 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                 case "EDIT": { // EDIT 0x10040bfd: defaults 50x15, element height HEIGHT+6, TYPE "password" masks.
                     if (!token.isOpen) break;
 
-                    const width = "WIDTH" in attrs ? atoi(attrs.WIDTH) : 50, height = "HEIGHT" in attrs ? atoi(attrs.HEIGHT) : 15;
+                    const width = "WIDTH" in attrs ? atoi(attrs.WIDTH) : 50, height = ("HEIGHT" in attrs ? atoi(attrs.HEIGHT) : 15) + LINE_SPACING;
                     const row = addRow();
                     const holder = addHolder(row, width, height);
                     const edit = this.layer.edit(holder, 0, 0, width, height, attrs.TYPE === "password", atoi(attrs.LENGTH));
-
-                    holder.style.marginBottom = `${LINE_SPACING}px`;
 
                     this.variables.push({ name: attrs.VAR, isMultiline: false, edit });
                     break;
@@ -709,11 +707,10 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                 case "MULTIEDIT": { // 0x10040b7e: defaults 50x40, HEIGHT+6 layout.
                     if (!token.isOpen) break;
 
-                    const width = "WIDTH" in attrs ? atoi(attrs.WIDTH) : 50, height = "HEIGHT" in attrs ? atoi(attrs.HEIGHT) : 40;
+                    const width = "WIDTH" in attrs ? atoi(attrs.WIDTH) : 50, height = ("HEIGHT" in attrs ? atoi(attrs.HEIGHT) : 40) + LINE_SPACING;
                     const holder = addHolder(addRow(), width, height);
                     const edit = new CHtmlMultiEdit(this.layer, holder, 0, 0, width, height);
 
-                    holder.style.marginBottom = `${LINE_SPACING}px`;
                     edit.input.setAttribute("aria-label", attrs.VAR || "");
                     this.arrMultiEdits.push(edit);
                     this.variables.push({ name: attrs.VAR, isMultiline: true, edit });
@@ -777,6 +774,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
                     const table = tables[tables.length - 1];
 
                     if (!table) break;
+                    if (token.isOpen && table.cell) break;
 
                     closeCell(table);
 
@@ -871,7 +869,7 @@ export class NCHtmlViewer { // NCHtmlViewer (vtable 0x101a8a18) on NCScrollWnd: 
         }
 
         for (const segment of segments) {
-            const color = link ? LINK_COLOR : segment.color === null ? TEXT_COLOR : segment.color;
+            const color = segment.color === null ? link ? LINK_COLOR : TEXT_COLOR : segment.color;
             const parts = segment.text.split(" ");
 
             for (let i = 0; i < parts.length; i++) {

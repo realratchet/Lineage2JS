@@ -9,9 +9,10 @@ const TEX_TAB_SELECTED = "L2UI_CH3.SkillWnd.Skill_Tab1";
 const TEX_OUTLINE = "L2UI.NWindow.Icon_Back";
 const TEX_PRESSED = "L2UI.NWindow.Icon_Click";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
+const TEX_TOGGLE = "L2_SkillTime.ToggleEffect.ToggleEffect001";
 
 export class NCSkillWnd {
-    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, TEX_TOGGLE, ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
     public onShow: () => void = null;
     public onUse: (id: number, ctrl: boolean, shift: boolean) => void = null;
@@ -24,6 +25,8 @@ export class NCSkillWnd {
     protected pressedSelection: HTMLDivElement = null;
     protected pressedFrame: HTMLDivElement = null;
     protected readonly coolTimeIcons = new Map<string, HTMLDivElement>();
+    protected readonly toggleIcons = new Map<string, HTMLDivElement>();
+    protected activeSkills = new Set<string>();
 
     public constructor(layer: NDomLayer, protected readonly coolTimes: Map<string, NCCoolTimeIcon>, parent: HTMLElement) {
         this.layer = layer;
@@ -90,6 +93,11 @@ export class NCSkillWnd {
         this.pressedSelection = this.pressedFrame = null;
     }
 
+    public setActiveSkills(skills: Set<string>) {
+        this.activeSkills = skills;
+        for (const [key, icon] of this.toggleIcons) icon.hidden = !skills.has(key);
+    }
+
     public renderCoolTimes() {
         if (!this.isVisible()) return;
 
@@ -119,6 +127,7 @@ export class NCSkillWnd {
         this.clearSelection();
         this.list.content.replaceChildren();
         this.coolTimeIcons.clear();
+        this.toggleIcons.clear();
 
         const skills = this.skills.filter(skill => skill.isPassive === this.isPassive);
 
@@ -145,6 +154,13 @@ export class NCSkillWnd {
             const frame = skill.isPassive ? null : layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_PRESSED);
 
             if (frame) frame.hidden = true;
+
+            if (strings.skillInfos[`${skill.id}:${skill.level}`]?.isToggle) {
+                const toggle = layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, TEX_TOGGLE);
+
+                toggle.hidden = !this.activeSkills.has(`${skill.id}:${skill.level}`);
+                this.toggleIcons.set(`${skill.id}:${skill.level}`, toggle);
+            }
 
             const coolTimeIcon = layer.createWindow(1, 1, 32, 32, button);
 

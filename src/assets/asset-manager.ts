@@ -4,6 +4,7 @@ import UConfigBigHead from "./unreal/conf-files/un-conf-bighead";
 import fetchAssetHandle from "./unreal/asset-handle";
 import RenderManager from "../rendering/render-manager";
 import BaseActor from "../base-actor";
+import Actor from "../objects/actor";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
@@ -17,9 +18,9 @@ import decodeEnv from "./decoders/env-decoder";
 import DecodeWorkerClient from "./decode-worker/decode-worker-client";
 import type { GameStrings_T, MatineeScene_T, PlayerSkillInfo_T, UITexture_T } from "./decode-worker/decode-protocol";
 import { refreshSoundBlobUris, revokeSoundUri } from "./decode-worker/decode-cache";
-import { AnimationClip, Matrix4, Vector3 } from "three";
+import { AnimationClip, MathUtils, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "../objects/zone-object";
-import UnScriptVM from "../ue-script/vm";
+import UnScriptVM, { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import PlayerController from "../objects/player-controller";
 import { IEngineComponent } from "../game/components";
 import type { GameManager } from "../game/game-manager"
@@ -900,6 +901,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!this.cacheNpcs.has(selector)) this.cacheNpcs.set(selector, this.decodeWorker.resolveNpc(selector, this.loadSettings));
 
         return this.cacheNpcs.get(selector);
+    }
+
+    public createScriptActor(vm: UnScriptVM, classId: string, outer: ScriptHost_T, template: ScriptHost_T = null): Actor {
+        const actor = new Actor({ uuid: MathUtils.generateUUID(), name: "", scriptClassId: vm.getDefaultObject(classId).scriptClassId, scriptProperties: {} });
+
+        actor.scriptProperties.delete("Touching");
+        vm.constructActor(actor, outer, template);
+        actor.name = getProperty(actor, "Name") as string;
+        return actor;
     }
 
     public createScriptObject(renderManager: RenderManager, library: DecodeLibrary, classId: string, vm: UnScriptVM = new UnScriptVM(library)): any {

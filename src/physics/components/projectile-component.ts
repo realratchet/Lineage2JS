@@ -238,10 +238,16 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     }
 
     public removeTarget(target: BaseActor): void {
-        if (this.target !== target) return;
+        const properties = this.getParent().scriptProperties;
 
-        this.target = null;
-        this.getParent().scriptProperties.set("TargetActor", null);
+        if (this.target === target) {
+            this.target = null;
+            properties.set("TargetActor", null);
+        }
+        const arrAssociated = properties.get("MagicInfo").AssociatedActor as BaseActor[];
+
+        for (let index = arrAssociated.length - 1; index >= 0; index--)
+            if (arrAssociated[index] === target) arrAssociated.splice(index, 1);
     }
 
     public detachFromBase(): void {

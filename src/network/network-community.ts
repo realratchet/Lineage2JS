@@ -134,7 +134,13 @@ export class NetworkCommunity {
 
         if (remaining !== 0 && remaining !== 2) throw new Error(`Invalid SignsSky payload size ${remaining}.`);
 
-        this.signsSky = remaining === 2 ? packet.h() : 0;
+        const sky = remaining === 2 ? packet.h() : 0, index = sky & 255;
+        if (index > 2) throw new Error(`Unsupported SignsSky environment ${index}.`);
+
+        this.signsSky = sky;
+        const render = this.network.getParent().getComponent("render");
+        render.getEnvironment().setActiveEnv(index as 0 | 1 | 2);
+        render.needsUpdate = true;
     }
 
     public onShowBoard(packet: PacketReader) {

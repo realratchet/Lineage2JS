@@ -120,6 +120,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     protected proceduralMaps: any[] = [];
 
     public isUpdatable = false;
+    public requiresSorting = false;
     public shadowOpacity: IDecodedParameter = null;
     protected shadowMaterial: MeshStaticMaterial = null;
 
@@ -309,8 +310,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         switch (info.blendingMode) {
             case "normal":
                 this.blending = NormalBlending;
-                // UE2 OB_Normal: when opacity is present, forces ZWrite=0 and enables alpha blending
-                if (info.opacity) this.depthWrite = false;
+                if (info.opacity) this.depthWrite = info.depthWrite;
                 break;
             case "masked":
                 // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending - AlphaRef=127 (~0.498), ZWrite=1
@@ -663,6 +663,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.spriteEntries = source.spriteEntries;
         this.proceduralMaps = getProceduralMaps(this.uniforms);
         this.isUpdatable = source.isUpdatable;
+        this.requiresSorting = source.requiresSorting;
         this.shadowOpacity = source.shadowOpacity;
         if (this.shadowMaterial) this.shadowMaterial.dispose();
         this.shadowMaterial = null;

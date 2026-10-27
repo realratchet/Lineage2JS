@@ -241,6 +241,9 @@ export class DecodeLibraryBuilder {
 
     public pullLevel(level: ULevel, sectorName: string): void {
         level = level.loadSelf();
+        this.library.levelPackageName = (level as any).pkg.getObjectPath(0);
+        this.library.levelObjectName = level.objectName;
+        this.library.levelObjectOuter = (level as any).pkg.getObjectPath(level.exp.idPackage);
 
         const levelInfo = level.levelInfo.loadSelf();
         const batching = this.settings.batching ?? { terrain: true, staticMeshes: true };
@@ -510,6 +513,7 @@ export class DecodeLibraryBuilder {
 
         info.scriptClassId = cls.name;
         info.scriptProperties = dumpObjectScriptProperties(actor);
+        if (this.library.levelPackageName) info.scriptProperties.Outer = (actor as any).pkg.getObjectPath(actor.exp.idPackage);
         info.ownerUuid = owner ? owner.uuid : null;
     }
 }

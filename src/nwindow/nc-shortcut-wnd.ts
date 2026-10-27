@@ -59,6 +59,7 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
     protected readonly rotateButton: NDomButton_T;
     protected readonly tooltip = new NCTooltip();
     protected readonly entries: ShortcutEntry_T[] = new Array(SLOTS_PER_PAGE * PAGE_COUNT).fill(null);
+    protected activeSkills = new Set<string>();
     protected hoveredTooltip: HTMLDivElement = null;
     protected isHorizontal = false;
     protected page = 0;
@@ -154,6 +155,11 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
 
         if (entry) void this.loadIcon(entry.icon);
 
+        this.update();
+    }
+
+    public setActiveSkills(skills: Set<string>) {
+        this.activeSkills = skills;
         this.update();
     }
 
@@ -370,7 +376,7 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
             this.placeSlotTile(slot.outline, 6, offset - 1, 34, TEX_OUTLINE);
 
             if (isPressed) this.placeSlotTile(slot.outlineDown, 6, offset - 1, 34, TEX_OUTLINE_DOWN);
-            if (entry.isAutoSoulShot) this.placeSlotTile(slot.toggle, 7, offset, ICON_SIZE, TEX_TOGGLE);
+            if (entry.isAutoSoulShot || this.activeSkills.has(entry.skillKey)) this.placeSlotTile(slot.toggle, 7, offset, ICON_SIZE, TEX_TOGGLE);
 
             if (entry.acronym) {
                 for (let j = 0; j < entry.acronym.length; j++) {

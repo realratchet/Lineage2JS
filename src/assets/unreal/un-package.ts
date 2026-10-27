@@ -30,6 +30,8 @@ import USpriteEmitter from "./emitters/un-sprite-emitter";
 import FRotator from "./un-rotator";
 import UCamera from "./un-camera";
 import UPointRegion from "./un-point-region";
+import UL2Event from "./un-l2-event";
+import UNMagicInfo from "./un-nmagic-info";
 import UTextureModifyInfo from "./un-texture-modify-info";
 import UTexture from "./un-texture";
 import UPlatte from "./un-palette";
@@ -315,6 +317,8 @@ export class UNativePackage extends ANativePackage {
             case "Color": Constructor = FColor; break;
             case "Rotator": Constructor = FRotator; break;
             case "PointRegion": Constructor = UPointRegion; break;
+            case "L2Event": Constructor = UL2Event; break;
+            case "NMagicInfo": Constructor = UNMagicInfo; break;
             case "TextureModifyinfo": Constructor = UTextureModifyInfo; break;
             case "Box": Constructor = FBox; break;
             case "Plane": Constructor = FPlane; break;
@@ -360,8 +364,6 @@ export class UNativePackage extends ANativePackage {
             case "Interpolator":
             case "AnimRep":
             case "Orientation":
-            case "L2Event":
-            case "NMagicInfo":
             case "ParticleBeamEndPoint": Constructor = PEmitter.UParticleBeamEndPoint; break;
             case "ParticleBeamScale": Constructor = PEmitter.UParticleBeamScale; break;
             case "ADrop": Constructor = UADrop; break;

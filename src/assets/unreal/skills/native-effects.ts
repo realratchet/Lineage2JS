@@ -119,7 +119,6 @@ export type NativeSkillEffect_T = {
     attach?: "trail";
     weaponTrail?: boolean;
     bone?: number | string;
-    boneOptional?: boolean;
     boneFallback?: number;
     positionBone?: string;
     missingBoneStopsPhase?: boolean | "beforeTarget";
