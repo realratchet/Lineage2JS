@@ -688,7 +688,8 @@ void main() {
         float swayPhase = sway.w;
 
         if (swayPeriod > 0.0 && swayMaxAngle != 0.0) {
-            float swayAngle = sin(globalTimeSeconds / swayPeriod * PI2 + swayPhase) * radians(swayMaxAngle);
+            // Engine 0x10554df3 advances 0.05 per draw; use 60 draws/second without FPS dependence.
+            float swayAngle = sin(globalTimeSeconds * 3.0 / swayPeriod * PI + swayPhase) * radians(swayMaxAngle);
             float swayHeight = max(transformed.z - swayPivotZ, 0.0);
             transformed.xy += vec2(cos(swayPhase), sin(swayPhase)) * tan(swayAngle) * swayHeight;
         }
