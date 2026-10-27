@@ -52,6 +52,7 @@ export class NCOptionWnd {
     protected readonly terrainRange: NCComboBox;
     protected readonly pawnLimit: NCComboBox;
     protected readonly pawnRange: NCComboBox;
+    protected readonly sortTransparent: NDomCheckBox_T;
     protected readonly pawnShadow: NDomCheckBox_T;
     protected readonly renderDeco: NDomCheckBox_T;
     protected readonly useTrilinear: NDomCheckBox_T;
@@ -146,7 +147,8 @@ export class NCOptionWnd {
         this.pawnShadow = layer.checkbox(this.video, 25, 270, 109, 17, manager.getSysString(212));
         this.renderDeco = layer.checkbox(this.video, 135, 270, 109, 17, manager.getSysString(213));
         this.useTrilinear = layer.checkbox(this.video, 135, 287, 100, 17, manager.getSysString(464));
-        [this.pawnShadow, this.renderDeco, this.useTrilinear].forEach(checkbox => {
+        this.sortTransparent = layer.checkbox(this.video, 25, 287, 109, 17, "Sort transparent");
+        [this.pawnShadow, this.renderDeco, this.useTrilinear, this.sortTransparent].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
                 if (event.repeat || event.key !== " " && event.key !== "Enter") return;
@@ -352,6 +354,7 @@ export class NCOptionWnd {
 
             this.screenshot.setSelected(options.screenshotQuality);
             this.pawnShadow.setChecked(options.pawnShadow);
+            this.sortTransparent.setChecked(options.sortTransparent);
             this.renderDeco.setChecked(options.renderDeco);
             this.useTrilinear.setChecked(options.useTrilinear);
             this.textureDetail.setSelected(options.textureDetail);
@@ -468,7 +471,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio(Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])) as AudioConfig_T);
-        this.onApply({ screenshotQuality: this.screenshot.getSelected(), renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
+        this.onApply({ screenshotQuality: this.screenshot.getSelected(), renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
     }
 }
 

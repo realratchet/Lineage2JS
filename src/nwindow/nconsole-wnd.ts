@@ -2574,6 +2574,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "useTrilinear":
                 case "renderDeco":
                 case "pawnShadow":
+                case "sortTransparent":
                 case "useColorCursor":
                 case "autoTrackingPawn":
                 case "arrowMode":
@@ -2615,6 +2616,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         asset.playerController.isEnterChatting = this.options.game.enterChatting;
         this.manRender.setPawnLimit(PAWN_LIMITS[this.options.game.renderActorLimitOpt - 1]);
         this.manRender.setPawnShadow(this.options.game.pawnShadow);
+        this.manRender.setSortTransparent(this.options.game.sortTransparent);
         this.manRender.setRenderDeco(this.options.game.renderDeco);
         this.manRender.setUseTrilinear(this.options.game.useTrilinear);
         this.manRender.setTextureDetail(this.options.game.textureDetail);

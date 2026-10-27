@@ -336,6 +336,7 @@ export class SectorObject extends GameObject {
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
 
     protected renderDeco = true;
+    protected sortTransparent = true;
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
@@ -1299,6 +1300,20 @@ export class SectorObject extends GameObject {
         return false;
     }
 
+    public setSortTransparent(enabled: boolean) {
+        if (this.sortTransparent === enabled) return;
+
+        this.sortTransparent = enabled;
+        this.visibilityCacheInitialized = false;
+        if (this.staticMeshGroup) this.staticMeshGroup.traverse(object => {
+            const mesh = object as LitActorMesh;
+            if (!mesh.sortedIndexBuffers) return;
+
+            if (mesh.elemVisibility) mesh.elemVisibility.fill(2);
+            if (!enabled) mesh.sortedIndexBuffers.forEach(buffer => buffer.dispose());
+        });
+    }
+
     public setRenderDeco(enabled: boolean) {
         if (this.renderDeco === enabled) return;
 
@@ -1699,6 +1714,8 @@ export class SectorObject extends GameObject {
                             const distance = elemDistances[ei];
 
                             for (const g of batchElements[ei].groups) {
+                                if (!g.count) continue;
+
                                 let entry = groupPool[groupCount];
                                 if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
 
@@ -1723,7 +1740,7 @@ export class SectorObject extends GameObject {
                         object.visible = groupCount > 0;
                     }
 
-                    if (object.visible && (object as any).sortedIndexBuffers) {
+                    if (this.sortTransparent && object.visible && (object as any).sortedIndexBuffers) {
                         const mesh = object as LitActorMesh, index = geometry.index;
                         let offset = 0, changed = false;
 

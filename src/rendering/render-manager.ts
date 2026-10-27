@@ -317,6 +317,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected pawnLimit = 10000;
     protected readonly arrVisiblePawns: PawnRenderableComponent[] = [];
     protected pawnShadow = true;
+    protected sortTransparent = true;
     protected renderDeco = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
@@ -449,7 +450,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const worldList = this.renderer.renderLists.get(this.scene, 0), sortWorldList = worldList.sort;
         worldList.sort = (opaque, transparent) => {
             sortWorldList(opaque, transparent);
-            this.translucentRenderList.sort(worldList.transparent, this.worldCamera, this.arrSceneSectors);
+            if (this.sortTransparent) this.translucentRenderList.sort(worldList.transparent, this.worldCamera, this.arrSceneSectors);
         };
         this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
@@ -1588,6 +1589,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public setUseTrilinear(enabled: boolean) { setUseTrilinear(enabled); }
 
     public setTextureDetail(detail: number) { setTextureDetail(this.renderer, detail); }
+
+    public setSortTransparent(enabled: boolean) {
+        this.sortTransparent = enabled;
+        this.arrSceneSectors.forEach(sector => sector.setSortTransparent(enabled));
+    }
 
     public setRenderDeco(enabled: boolean) {
         this.renderDeco = enabled;
@@ -2782,6 +2788,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public addSector(sector: SectorObject) {
         sector.setRenderDeco(this.renderDeco);
+        sector.setSortTransparent(this.sortTransparent);
         if (this.level) {
             sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", Math.fround(this.levelTimeSeconds));
             sector.levelInfoActor.setUnrealScriptProperty("NetMode", this.level.levelInfoActor.getUnrealScriptProperty("NetMode"));
@@ -3177,6 +3184,7 @@ function collectSectorResources(root: THREE.Object3D, target: Set<Disposable_T>)
         if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
 
         if (mesh.geometry) target.add(mesh.geometry);
+        if ((mesh as any).sortedIndexBuffers) (mesh as any).sortedIndexBuffers.forEach((buffer: Disposable_T) => target.add(buffer));
         if ((child as AgitStaticMeshActor).isAgitStaticMeshActor) target.add((child as AgitStaticMeshActor).emptyGeometry);
 
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
