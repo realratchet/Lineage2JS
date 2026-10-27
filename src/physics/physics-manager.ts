@@ -428,7 +428,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             tmpWaterHitLocation.lerpVectors(tmpWaterHitStart, tmpWaterHitEnd, time);
             tmpWaterHitLocation.set(Math.fround(tmpWaterHitLocation.x), Math.fround(tmpWaterHitLocation.y), Math.fround(tmpWaterHitLocation.z));
         }
-        if (tmpWaterHitLocation.z - location[2] <= height * 0.8500000238418579) {
+        if (tmpWaterHitLocation.z - location[2] >= height * 0.85) {
             owner.setUnrealScriptProperty("HitLocation", [0, 0, 0]);
             return;
         }
