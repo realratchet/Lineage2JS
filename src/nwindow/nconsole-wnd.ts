@@ -2938,7 +2938,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public setMountable(canMount: boolean) { if (this.mainWnd) this.mainWnd.actionWnd.setMountable(canMount); }
 
-    public setTarget(target: TargetStatus_T) { this.targetStatusWnd.setTarget(target); }
+    public setTarget(target: TargetStatus_T) {
+        if (!target && this.targetStatusWnd.isVisible()) this.nwindow.playWindowCloseSound();
+        this.targetStatusWnd.setTarget(target);
+    }
 
     public startFishing() { this.fishViewportWnd.start(); }
     public startFishingCombat(hp: number, time: number, mode: number, lureType: number) {
