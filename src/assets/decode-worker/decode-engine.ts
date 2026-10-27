@@ -827,12 +827,12 @@ export class DecodeEngine {
         }
     }
 
-    protected async pullCharacterSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, chestId: number = 0, leftHandId: number = 0): Promise<void> {
-        const key = JSON.stringify([row.face_mesh[0], chestId, leftHandId, "attack-item"]);
+    protected async pullCharacterSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, chestId: number = 0, leftHandId: number = 0, bootsId: number = 0): Promise<void> {
+        const key = JSON.stringify([row.face_mesh[0], chestId, leftHandId, bootsId, "attack-item"]);
         const sounds = await this.getStoredAssets("character_sounds", key, builder.getSettings(), async () => {
             const sounds = new DecodeLibrary();
 
-            await this.decodeCharacterSounds(sounds, new DecodeLibraryBuilder(sounds, builder.getSettings()), row, chestId, leftHandId);
+            await this.decodeCharacterSounds(sounds, new DecodeLibraryBuilder(sounds, builder.getSettings()), row, chestId, leftHandId, bootsId);
             prepareLibraryForTransfer(sounds, this.collectPackageBuffers());
 
             return sounds;
@@ -842,14 +842,16 @@ export class DecodeEngine {
         library.pawnSounds = sounds.pawnSounds;
     }
 
-    protected async decodeCharacterSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, chestId: number, leftHandId: number): Promise<void> {
+    protected async decodeCharacterSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, row: Record<string, any>, chestId: number, leftHandId: number, bootsId: number): Promise<void> {
         const audio = await this.getAudioConfig();
         const config = audio.getPawnSound("CharSound");
         const itemConfig = audio.getPawnSound("ItemSound");
         const armor = chestId ? (await this.decodeArmorGrp()).find(item => item.id === chestId) : null;
         const shield = leftHandId ? (await this.decodeWeaponGrp()).find(item => item.id === leftHandId) : null;
+        const boots = bootsId ? (await this.decodeArmorGrp()).find(item => item.id === bootsId) : null;
 
         if (chestId && !armor) throw new Error(`Defense item '${chestId}' was not found in armorgrp.`);
+        if (bootsId && !boots) throw new Error(`Boots item '${bootsId}' was not found in armorgrp.`);
 
         // Engine.dll CharDataLoad 0x70ce21/0x70ce83 caps defense/damage lists at 5/3 without removing NAME_None slots.
         await this.pullPawnSounds(library, builder, {
@@ -860,6 +862,8 @@ export class DecodeEngine {
             item: armor && armor.tag === 1 ? { sounds: armor.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null,
             shield: shield && shield.tag === 0 ? { sounds: shield.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null
         });
+
+        if (boots && boots.tag === 1) library.pawnSounds.boots = await Promise.all(boots.item_sound.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
     }
 
     protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string, required: boolean = true, isMetadataOnly = false): Promise<string> {
@@ -2252,7 +2256,7 @@ export class DecodeEngine {
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
         await this.pullCharacterPawnEffects(library, settings, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
-        await this.pullCharacterSounds(library, new DecodeLibraryBuilder(library, settings), row, armor.chest, equipment?.leftHand || 0);
+        await this.pullCharacterSounds(library, new DecodeLibraryBuilder(library, settings), row, armor.chest, equipment?.leftHand || 0, armor.boots);
         await this.pullCharacterEquipment(library, new DecodeLibraryBuilder(library, settings), row, equipment, hairVariant);
         const notifyEffects = await this.getStoredAssets("character_effects", `notifies:${charIndex}`, settings, async () => {
             const effects = new DecodeLibrary();

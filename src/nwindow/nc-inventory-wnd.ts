@@ -559,6 +559,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
 
                 arrSlots.forEach((slot, index) => { // NCEquipItemWnd::OnPaint 0x1009433b..0x100946ac.
                     if (icon && arrIcons[index] && arrIcons[index].toLowerCase() !== "none") icon = arrIcons[index];
+                    if (index > 0 && arrItems.some(equipped => equipped.slot === slot)) return;
 
                     this.addItem(this.equipment, [7, 46, 85, 130, 169][slot % 5] - 1, 6 + Math.trunc(slot / 5) * 38, item, icon || item.icon, index > 0);
                 });

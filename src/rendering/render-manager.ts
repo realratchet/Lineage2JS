@@ -705,7 +705,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         ].join("\n"));
     }
 
-    public takeScreenshot() { this.manGame.getComponent("gui").takeScreenshot(); }
 
     public toggleFrustumCulling(): void {
         this.frustumCullingEnabled = !this.frustumCullingEnabled;

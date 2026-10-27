@@ -118,6 +118,12 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         let soundName = info.sound;
 
         if (!soundName) {
+            const boots = this.library.pawnSounds?.boots;
+            const bootsSound = boots?.length ? boots[Math.floor(Math.random() * boots.length)] : null;
+
+            // Engine.dll AnimNotify_Sound 0x94d9f4..0x94dafd adds GetBootsSound before the surface step.
+            if (bootsSound) this.play(bootsSound, info.volume / 255, 1, info.radius, info.radius * 100, true, `Pawn '${actor.name}' boots`);
+
             const sounds = actor.isSwimmingMovement()
                 ? actor.isWalkingMovement() ? info.waterWalkSounds : info.waterRunSounds
                 : actor.isWalkingMovement() ? info.defaultWalkSounds : info.defaultRunSounds;

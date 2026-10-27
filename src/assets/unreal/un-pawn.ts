@@ -141,6 +141,7 @@ export type IPawnSoundsDecodeInfo = {
     damage: IPawnSoundSetDecodeInfo & { random: number };
     item: IPawnSoundSetDecodeInfo | null;
     shield?: IPawnSoundSetDecodeInfo | null;
+    boots?: (string | null)[];
     critical?: { sound: string | null; volume: number; radius: number };
     soulshot?: { sound: string | null; volume: number; radius: number };
 };

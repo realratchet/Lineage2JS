@@ -49,7 +49,6 @@ export class NCOptionWnd {
     protected readonly antiAliasing: NCComboBox;
     protected antiAliasingLevels: number[] = [];
     protected readonly textureDetail: NCComboBox;
-    protected readonly screenshot: NCComboBox;
     protected readonly terrainRange: NCComboBox;
     protected readonly pawnLimit: NCComboBox;
     protected readonly pawnRange: NCComboBox;
@@ -176,20 +175,14 @@ export class NCOptionWnd {
         this.pawnLimit = new NCComboBox(layer, this.video, 107, 177, 125, 17);
         this.pawnLimit.setItems([SysString_T.None, SysString_T.VeryHigh, SysString_T.High, SysString_T.Average, SysString_T.Low, SysString_T.VeryLow].map(id => manager.getSysString(id)));
         this.pawnLimit.element.setAttribute("aria-label", limitLabel);
-        const screenshotLabel = manager.getSysString(SysString_T.Screenshot);
-
-        layer.text(this.video, screenshotLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(screenshotLabel), 320);
-        this.screenshot = new NCComboBox(layer, this.video, 107, 317, 125, 17);
-        this.screenshot.setItems([SysString_T.Bitmap, SysString_T.ScreenshotHigh, SysString_T.ScreenshotAverage, SysString_T.ScreenshotLow].map(id => manager.getSysString(id)));
-        this.screenshot.element.setAttribute("aria-label", screenshotLabel);
-        [this.pawnRange, this.terrainRange, this.pawnLimit, this.screenshot].forEach((combo, index) => {
+        [this.pawnRange, this.terrainRange, this.pawnLimit].forEach((combo, index) => {
             combo.element.tabIndex = 0;
             combo.element.setAttribute("role", "combobox");
             combo.element.addEventListener("keydown", event => {
                 if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
 
                 event.preventDefault();
-                combo.setSelected(Math.max(0, Math.min([4, 4, 5, 3][index], combo.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
+                combo.setSelected(Math.max(0, Math.min([4, 4, 5][index], combo.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
                 combo.setOpen(false);
             });
         });
@@ -330,7 +323,6 @@ export class NCOptionWnd {
         this.terrainRange.setOpen(false);
         this.pawnLimit.setOpen(false);
         this.textureDetail.setOpen(false);
-        this.screenshot.setOpen(false);
         this.antiAliasing.setOpen(false);
         this.language.setOpen(false);
         this.partyLooting.setOpen(false);
@@ -353,7 +345,6 @@ export class NCOptionWnd {
 
             const options = this.getOptions();
 
-            this.screenshot.setSelected(options.screenshotQuality);
             this.pawnShadow.setChecked(options.pawnShadow);
             this.sortTransparent.setChecked(options.sortTransparent);
             this.renderDeco.setChecked(options.renderDeco);
@@ -420,7 +411,6 @@ export class NCOptionWnd {
         this.terrainRange.setOpen(false);
         this.pawnLimit.setOpen(false);
         this.textureDetail.setOpen(false);
-        this.screenshot.setOpen(false);
         this.antiAliasing.setOpen(false);
         this.selectedTab = index;
         this.game.hidden = index !== 2;
@@ -472,7 +462,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio(Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])) as AudioConfig_T);
-        this.onApply({ screenshotQuality: this.screenshot.getSelected(), renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
+        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
     }
 }
 

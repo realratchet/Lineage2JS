@@ -14,7 +14,7 @@ export class NCObserverWnd {
         this.element = layer.createWindow(0, 0, 102, 32);
         this.element.hidden = true;
         this.element.tabIndex = -1;
-        layer.tile(this.element, 0, 0, 102, 32, 0, 0, 102, 32, TEX_BACK);
+        layer.tile(this.element, 12, 0, 90, 32, 0, 0, 90, 32, TEX_BACK);
         const frame = layer.createWindow(0, 0, 12, 32, this.element);
 
         layer.tile(frame, 0, 0, 12, 8, 0, 0, 12, 8, `${TEX_STRIP}1`);
