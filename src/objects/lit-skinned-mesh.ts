@@ -5,6 +5,7 @@ import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mes
 import type { PawnLight_T } from "../rendering/components/pawn-light-component";
 import type MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import type LocalSpaceSkeleton from "./local-space-skeleton";
+import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 
 const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];
@@ -18,6 +19,7 @@ export class LitSkinnedMesh extends SkinnedMesh {
     public ambientGlow: number = 0;
     public isUnlit: boolean = false;
     public dynamicHairInfo: IDynamicHairDecodeInfo = null;
+    public actorRenderable: PawnRenderableComponent = null;
     public readonly meshOrigin = new Vector3();
     public readonly meshScale = new Vector3(1, 1, 1);
     public tagAliases: string[] = [];

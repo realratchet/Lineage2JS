@@ -155,6 +155,13 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         return type !== EActorViewType_T.EAVT_OutSight;
     }
 
+    public isOpaque(): boolean {
+        if (this.texModifierAlpha >= 0 || !this.meshes.length) return false;
+
+        const material = this.meshes[0].material;
+        return !(Array.isArray(material) ? material[0] : material).transparent;
+    }
+
     protected prepareAlphaMaterial(mesh: Mesh): void {
         if (mesh.layers.mask === 0 || this.fadeMeshes.get(mesh)?.material === mesh.material) return;
         const source = mesh.material;
@@ -265,6 +272,8 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         }
 
         for (const mesh of [...meshes, ...this.equipmentMeshes, ...this.batches]) {
+            if ((mesh as LitSkinnedMesh).isLitSkinnedMesh) (mesh as LitSkinnedMesh).actorRenderable = this;
+
             for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
                 const mat = material as MeshStaticMaterial;
                 if (!mat?.isStaticMeshMaterial || "USE_TEX_MODIFIER" in mat.defines) continue;

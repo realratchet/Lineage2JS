@@ -4,7 +4,7 @@ import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
-import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, NormalBlending, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS, { getLocalUniforms } from "../materials/global-uniforms";
 import Player from "../player";
@@ -450,6 +450,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const worldList = this.renderer.renderLists.get(this.scene, 0), sortWorldList = worldList.sort;
         worldList.sort = (opaque, transparent) => {
             sortWorldList(opaque, transparent);
+            // Engine 0x1065238d draws opaque actors before the translucent world list.
+            let count = 0;
+            for (const item of worldList.transparent) {
+                const actor = (item.object as LitSkinnedMesh).actorRenderable;
+                if (actor && actor.isOpaque() && item.material.blending === NormalBlending && item.material.depthWrite) worldList.opaque.push(item);
+                else worldList.transparent[count++] = item;
+            }
+            worldList.transparent.length = count;
             if (this.sortTransparent) this.translucentRenderList.sort(worldList.transparent, this.worldCamera, this.arrSceneSectors);
         };
         this.renderer.info.autoReset = false;
