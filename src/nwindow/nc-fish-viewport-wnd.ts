@@ -1,5 +1,7 @@
 import NDomLayer from "./ndom";
 import { DigitFont_T, FontType_T } from "./nwindow-canvas";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.FishingWnd.fishing_back";
 const TEX_CLOCK = "L2UI_CH3.FishingWnd.fishing_clockicon";
@@ -39,7 +41,7 @@ export class NCFishViewportWnd {
         this.element.hidden = true;
         this.element.style.overflow = "hidden";
         this.element.setAttribute("role", "dialog");
-        this.element.setAttribute("aria-label", layer.getManager().getSysString(1112));
+        this.element.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.Fishing));
         layer.tile(this.element, 0, 20, 256, 256, 0, 0, 256, 256, TEX_BACK);
 
         this.viewport = document.createElement("canvas");
@@ -58,7 +60,7 @@ export class NCFishViewportWnd {
         layer.tile(frame, 16, 0, 224, 20, 0, 0, 32, 20, TEX_FRAME[1]);
         layer.tile(frame, 240, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME[2]);
         const height = layer.getManager().canvas.getLineHeight(FontType_T.SMALL);
-        layer.text(frame, layer.getManager().getSysString(1112), 0xffc8d2dc, FontType_T.SMALL, 20, 12 - Math.trunc(height / 2));
+        layer.text(frame, layer.getManager().getSysString(SysString_T.Fishing), 0xffc8d2dc, FontType_T.SMALL, 20, 12 - Math.trunc(height / 2));
         frame.addEventListener("mousedown", event => {
             if (event.button !== 0) return;
 
@@ -110,13 +112,13 @@ export class NCFishViewportWnd {
             this.hasCombatUI = true;
             if (this.lureType === 0) this.hintsEnabled = true;
         }
-        if (animation === 3) this.setMessage(1261, 0);
-        else if (animation === 4) { this.hintsEnabled = false; this.setMessage(1264, 0); }
+        if (animation === 3) this.setMessage(SysString_T.FishTookBait, 0);
+        else if (animation === 4) { this.hintsEnabled = false; this.setMessage(SysString_T.FishingSuccessful, 0); }
         if (this.hasCombatUI) {
             if (goodUse) this.startEffect();
             if (animation === 1 || animation === 2) {
-                if (delta < 0) this.setMessage(penalty > 0 ? animation === 1 ? 1672 : 1671 : animation === 1 ? 1256 : 1257, delta, penalty);
-                else this.setMessage(animation === 1 ? 1258 : 1259, delta);
+                if (delta < 0) this.setMessage(penalty > 0 ? animation === 1 ? SystemMessage_T.PumpingMasteryPenalty : SystemMessage_T.ReelingMasteryPenalty : animation === 1 ? SysString_T.PumpingSuccessful : SysString_T.ReelingSuccessful, delta, penalty);
+                else this.setMessage(animation === 1 ? SysString_T.PumpingFailed : SysString_T.ReelingFailed, delta);
             }
         }
         this.paint();
@@ -177,7 +179,7 @@ export class NCFishViewportWnd {
         const phase = this.hintPhase;
         if (this.hintsEnabled && (phase >= 0 && phase < Math.fround(.1) || phase >= Math.fround(.2) && phase < Math.fround(.3) || phase >= Math.fround(.4))) {
             this.paintTile(TEX_HINT[this.mode === 0 ? 0 : 1], 13, 33, 32, 32, 32, 32);
-            layer.wrappedText(hud, 53, 33, 0xffe7dcb6, layer.getManager().getSystemMessage(this.mode === 0 ? 1665 : 1664), 193);
+            layer.wrappedText(hud, 53, 33, 0xffe7dcb6, layer.getManager().getSystemMessage(this.mode === 0 ? SystemMessage_T.FishExhausted : SystemMessage_T.FishResisting), 193);
         }
     }
 }

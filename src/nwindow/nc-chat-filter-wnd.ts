@@ -1,12 +1,13 @@
 import type NDomLayer from "./ndom";
 import type { NDomCheckBox_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.ChatWnd.Chatting_Back5";
 
 export type ChatFilter_T = { system: boolean, damage: boolean, chat: boolean, normal: boolean, shout: boolean, pledge: boolean, party: boolean, market: boolean, tell: boolean, ally: boolean, useitems: boolean, hero: boolean };
 
-const CONTROLS: [keyof ChatFilter_T, number, number, number, number][] = [["system", 356, 17, 17, 100], ["damage", 357, 28, 37, 80], ["chat", 358, 17, 61, 100], ["normal", 383, 28, 81, 80], ["shout", 359, 28, 99, 80], ["pledge", 360, 28, 117, 80], ["party", 361, 138, 81, 80], ["market", 362, 138, 99, 80], ["tell", 363, 138, 117, 80], ["ally", 592, 28, 135, 80], ["useitems", 796, 138, 37, 92], ["hero", 1211, 138, 135, 92]];
+const CONTROLS: [keyof ChatFilter_T, number, number, number, number][] = [["system", SysString_T.System, 17, 17, 100], ["damage", SysString_T.Damage, 28, 37, 80], ["chat", SysString_T.ChatFilter, 17, 61, 100], ["normal", SysString_T.GeneralChatFilter, 28, 81, 80], ["shout", SysString_T.Shout, 28, 99, 80], ["pledge", SysString_T.ClanChatFilter, 28, 117, 80], ["party", SysString_T.PartyChatFilter, 138, 81, 80], ["market", SysString_T.TradeChatFilter, 138, 99, 80], ["tell", SysString_T.Whisper, 138, 117, 80], ["ally", SysString_T.AllianceChatFilter, 28, 135, 80], ["useitems", SysString_T.Consumables, 138, 37, 92], ["hero", SysString_T.HeroVoice, 138, 135, 92]];
 const TAB_CHANNELS: (keyof ChatFilter_T)[] = [null, "market", "party", "pledge", "ally"];
 
 export const DEFAULT_CHAT_FILTERS: ChatFilter_T[] = [ // NCChatFilterWnd config defaults 0x10055870..0x100562ef, in browser tab order.
@@ -43,14 +44,14 @@ export class NCChatFilterWnd {
             });
             this.controls.set(key, control);
         }
-        layer.button(this.element, 51, 160, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(140), () => {
+        layer.button(this.element, 51, 160, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(SysString_T.OK), () => {
             const filter = {} as ChatFilter_T;
 
             for (const [key, control] of this.controls) filter[key] = control.getChecked();
             if (this.onApply) this.onApply(this.selected, filter);
             this.setVisible(false);
         });
-        layer.button(this.element, 131, 160, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(141), () => this.setVisible(false));
+        layer.button(this.element, 131, 160, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(SysString_T.Cancel), () => this.setVisible(false));
     }
 
     public placeOnScreen(width: number, height: number) { }

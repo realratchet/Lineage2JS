@@ -104,7 +104,7 @@ export class PawnCubicComponent extends ObjectComponent<BaseActor> {
             const effect = cubic.effect;
             const destination = cubic.destination;
             const yaw = owner.getRotationYaw() * Math.PI / 32768;
-            let angle = this.cubics.length === 3 ? 24576 + i * 8192 : this.cubics.length === 2 ? 24576 + i * 16384 : 24576;
+            let angle = this.cubics.length === 3 ? 3 * 8192 + i * 8192 : this.cubics.length === 2 ? 3 * 8192 + i * 16384 : 3 * 8192;
 
             if (!isFollowing && isLying) angle += 32768;
             tmpDirection.set(Math.cos(yaw), Math.sin(yaw), 0).applyAxisAngle(tmpAxis, angle * Math.PI / 32768);

@@ -171,7 +171,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
             properties.set("CurZoomingDist", value);
             properties.set("DesiredZoomingDist", value);
-            return replay ? Math.max(0.000001, Math.abs(value + 250)) : value + 250;
+            return replay ? Math.max(1e-6, Math.abs(value + 250)) : value + 250;
         };
         this.controls.orbit.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("change", () => renderManager.needsUpdate = true);
@@ -262,10 +262,10 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("Rotation", [pitch, yaw, (properties.get("Rotation") as number[])[2]]);
         properties.set("OldViewTargetLocation", location.slice());
         properties.set("OldCameraRotation", [pitch, yaw, 0]);
-        const orbitPitch = Math.min(pitch * Math.PI / 32768, Math.PI / 2 - 0.000001);
+        const orbitPitch = Math.min(pitch * Math.PI / 32768, Math.PI / 2 - 1e-6);
 
         tmpVolumeOffset.set(Math.cos(orbitPitch) * Math.cos(yaw * Math.PI / 32768), Math.cos(orbitPitch) * Math.sin(yaw * Math.PI / 32768), Math.sin(orbitPitch));
-        this.controls.orbit.unclippedOffset = tmpVolumeOffset.multiplyScalar(-Math.max(0.000001, Math.abs(distance)));
+        this.controls.orbit.unclippedOffset = tmpVolumeOffset.multiplyScalar(-Math.max(1e-6, Math.abs(distance)));
         this.controls.orbit.update();
         render.camera.position.copy(this.controls.orbit.target).addScaledVector(dirForward, -distance);
         lookAtCameraRotation(render.camera, pitch, yaw);
@@ -376,7 +376,7 @@ export class InputManager implements IEngineComponent<GameManager> {
                 const zoom = properties.get("DesiredZoomingDist") as number;
 
                 properties.set("CurZoomingDist", zoom);
-                this.controls.orbit.unclippedDistance = Math.max(0.000001, Math.abs(zoom + 250));
+                this.controls.orbit.unclippedDistance = Math.max(1e-6, Math.abs(zoom + 250));
             }
 
             if (yaw !== 0 || pitch !== 0) {
@@ -424,10 +424,10 @@ export class InputManager implements IEngineComponent<GameManager> {
             tmpVolumeRotation[2] = 0;
             if (properties.get("bUseVolumeCamera")) this.volumeCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
             else this.behindViewCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
-            const cosPitch = sinRotator(tmpVolumeRotation[0] + 16384), distance = Math.max(0.000001, Math.abs((properties.get("CurZoomingDist") as number) + 250));
+            const cosPitch = sinRotator(tmpVolumeRotation[0] + 16384), distance = Math.max(1e-6, Math.abs((properties.get("CurZoomingDist") as number) + 250));
 
             dirForward.set(cosPitch * sinRotator(tmpVolumeRotation[1] + 16384), cosPitch * sinRotator(tmpVolumeRotation[1]), sinRotator(tmpVolumeRotation[0]));
-            const orbitPitch = Math.min(tmpVolumeRotation[0] * Math.PI / 32768, Math.PI / 2 - 0.000001);
+            const orbitPitch = Math.min(tmpVolumeRotation[0] * Math.PI / 32768, Math.PI / 2 - 1e-6);
 
             tmpVolumeOffset.set(Math.cos(orbitPitch) * Math.cos(tmpVolumeRotation[1] * Math.PI / 32768), Math.cos(orbitPitch) * Math.sin(tmpVolumeRotation[1] * Math.PI / 32768), Math.sin(orbitPitch)).multiplyScalar(-distance);
             lookAtCameraRotation(renderManager.camera, tmpVolumeRotation[0], tmpVolumeRotation[1]);

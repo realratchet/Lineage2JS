@@ -668,9 +668,8 @@ export abstract class ATerrainInfo extends AInfo {
     }
 
     public getSWMapXY(s: number, w: number): [number, number] {
-        // 1 / 32768 -> 0.000030517578125
-        const x = Math.floor((s + 360448.0) * 0.000030517578125 + 9.0);
-        const y = Math.floor((w + 294912.0) * 0.000030517578125 + 9.0);
+        const x = Math.floor((s + 11 * 32768) * (1 / 32768) + 9.0);
+        const y = Math.floor((w + 9 * 32768) * (1 / 32768) + 9.0);
 
         return [x, y];
     }

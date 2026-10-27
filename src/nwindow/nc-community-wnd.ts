@@ -3,6 +3,7 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import CBBSHtmlViewer from "./cbbs-html-viewer";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_PATH = "L2UI_CH3.BoardWnd.";
 const TEX_TAB = `${TEX_PATH}Board_tab2`;
@@ -10,7 +11,7 @@ const TEX_SELECTED = `${TEX_PATH}Board_tab1`;
 const TEX_BUTTON = SKIN_SLOTS.smallButton;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.smallButtonDown;
 const TEX_CAPTION = "NWindow.Icon.chatback";
-const arrTabs = [[377, 0], [379, 75], [381, 157], [382, 232], [403, 314], [905, 389], [904, 464]];
+const arrTabs = [[SysString_T.Top, 0], [SysString_T.Favorite, 75], [SysString_T.Region, 157], [SysString_T.ClanCommunity, 232], [SysString_T.Memo, 314], [SysString_T.Mail, 389], [SysString_T.Friends, 464]];
 const arrActions = ["bypass _bbshome", "bypass _bbsgetfav", "bypass _bbsloc", "bypass _bbsclan", "bypass _bbsmemo", "bypass _maillist_0_1_0_", "bypass _friendlist_0_"];
 
 export class NCCommunityWnd {
@@ -33,7 +34,7 @@ export class NCCommunityWnd {
         this.element.hidden = true;
         this.element.tabIndex = -1;
         this.element.dataset.window = "community";
-        const title = NCFrameCtrl.createDOM(layer, this.element, 646, manager.getSysString(387), false, () => this.hide());
+        const title = NCFrameCtrl.createDOM(layer, this.element, 646, manager.getSysString(SysString_T.Community), false, () => this.hide());
         const minimize = layer.button(title.parentElement, 606, 3, 15, 15, "L2UI_CH3.FrameCtrl.FrameMiniBtn", "L2UI_CH3.FrameCtrl.FrameMiniOnBtn", null, null, () => this.minimize());
 
         minimize.setAttribute("aria-label", "Minimize");
@@ -42,7 +43,7 @@ export class NCCommunityWnd {
         layer.tile(this.element, 0, 48, 646, 482, 0, 0, 646, 482, `${TEX_PATH}board_back2`);
         this.viewer = new CBBSHtmlViewer(layer, this.element, 8, 51, 633, 474);
         this.viewer.onHide = () => this.hide();
-        layer.button(this.element, 574, 25, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(380), () => {
+        layer.button(this.element, 574, 25, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.AddFav), () => {
             if (this.actions[7].length && !this.requestPending) this.submit(this.actions[7]);
         });
         arrTabs.forEach(([label, x], index) => {
@@ -64,9 +65,9 @@ export class NCCommunityWnd {
         this.folded.classList.add("ndom-opaque");
         this.folded.hidden = true;
         this.folded.tabIndex = -1;
-        this.folded.setAttribute("aria-label", manager.getSysString(390));
+        this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.CommunityAltB));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, `${TEX_PATH}board_icon`);
-        const captionText = manager.getSysString(390), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
+        const captionText = manager.getSysString(SysString_T.CommunityAltB), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
         this.caption.hidden = true;

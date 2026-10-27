@@ -2,7 +2,7 @@ import { Box3, Vector3 } from "three";
 
 const tmpBounds = new Box3();
 const ACTORBOX_EPSILON = Math.fround(4.2);
-const WORLD_RADIUS = 360448;
+const WORLD_RADIUS = 11 * 32768;
 
 type CollisionOctreeActor_T = { uuid: string, bounds: Box3, singleNode: boolean, nodes: OctreeNode[], queryTag: number };
 

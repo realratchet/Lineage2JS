@@ -3,19 +3,20 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import type NDomLayer from "./ndom";
 import type { ClanInfo_T, ClanMember_T, GMViewPledgeInfo_T, UserInfo_T } from "../network/game-packets";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
+import SysString_T from "./sys-string";
 
 class NCGMClanPage extends NCClanWnd {
     public constructor(layer: NDomLayer, parent: HTMLElement) {
         super(layer, parent);
         layer.place(this.element, 0, 20, 256, 335);
         this.element.dataset.window = "gm-clan-page";
-        this.buttons[5].setLabel(this.strings.sysStrings[883]);
+        this.buttons[5].setLabel(this.strings.sysStrings[SysString_T.ViewRights]);
         this.updateEnabled();
     }
 
     public setStrings(strings: GameStrings_T) {
         super.setStrings(strings);
-        this.buttons[5].setLabel(strings.sysStrings[883]);
+        this.buttons[5].setLabel(strings.sysStrings[SysString_T.ViewRights]);
     }
 
     public setClan(clan: ClanInfo_T) {
@@ -38,17 +39,17 @@ class NCGMClanPage extends NCClanWnd {
 
         parent.replaceChildren();
         if (clan && clan.name) layer.text(parent, clan.name, 0xffb09b79, undefined, 19, 10);
-        layer.text(parent, strings[342], 0xffa3a3a3, undefined, 19, 26);
+        layer.text(parent, strings[SysString_T.ClanLeader], 0xffa3a3a3, undefined, 19, 26);
         if (clan && clan.leaderName) layer.text(parent, clan.leaderName, 0xffb09b79, undefined, 61, 26);
-        layer.text(parent, strings[88], 0xffa3a3a3, undefined, 192, 26);
+        layer.text(parent, strings[SysString_T.Level], 0xffa3a3a3, undefined, 192, 26);
         layer.text(parent, String(clan ? clan.level : 0), 0xffb09b79, undefined, 208, 26);
-        layer.text(parent, strings[343], 0xffa3a3a3, undefined, 19, 42);
+        layer.text(parent, strings[SysString_T.Base], 0xffa3a3a3, undefined, 19, 42);
         if (!clan) return;
 
         if (clan.hasCastle) {
-            layer.text(parent, strings[345], 0xffb09b79, undefined, 61, 42);
-            if (clan.hasHideout) layer.text(parent, strings[344], 0xffb09b79, undefined, 63 + layer.measureText(strings[345]), 42);
-        } else if (clan.hasHideout) layer.text(parent, strings[344], 0xffb09b79, undefined, 61, 42);
+            layer.text(parent, strings[SysString_T.CastleExists], 0xffb09b79, undefined, 61, 42);
+            if (clan.hasHideout) layer.text(parent, strings[SysString_T.HideoutExists], 0xffb09b79, undefined, 63 + layer.measureText(strings[SysString_T.CastleExists]), 42);
+        } else if (clan.hasHideout) layer.text(parent, strings[SysString_T.HideoutExists], 0xffb09b79, undefined, 61, 42);
     }
 }
 

@@ -5,6 +5,7 @@ import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeShopSellList_T, RecipeShopItem_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe3_Back";
 const TEX_MP = "L2UI_CH3.PlayerStatusWnd.ps_mpbar";
@@ -39,10 +40,10 @@ export class NCRecipeBuyListWnd {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(663), false, () => this.setVisible(false));
-        this.element.setAttribute("aria-label", manager.getSysString(663));
-        layer.text(this.element, manager.getSysString(643), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
-        layer.text(this.element, manager.getSysString(644), 0xffdcdcdc, FontType_T.SMALL, 18, 323);
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.ItemCreation), false, () => this.setVisible(false));
+        this.element.setAttribute("aria-label", manager.getSysString(SysString_T.ItemCreation));
+        layer.text(this.element, manager.getSysString(SysString_T.RecipeList), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
+        layer.text(this.element, manager.getSysString(SysString_T.CreatorMP), 0xffdcdcdc, FontType_T.SMALL, 18, 323);
         this.mp = layer.tile(this.element, 75, 323, 165, 12, 0, 0, 8, 12, TEX_MP);
         this.adena = layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 157, 341);
         this.list = layer.createWindow(9, 49, 238, 254, this.element);
@@ -101,7 +102,7 @@ export class NCRecipeBuyListWnd {
 
             if (row && this.onOpen) this.onOpen(this.ownerId, row.recipeId);
         });
-        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(646), () => {
+        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Close), () => {
             this.setVisible(false);
             manager.playWindowCloseSound();
         });
@@ -176,15 +177,15 @@ export class NCRecipeBuyListWnd {
             if (this.selected === this.scroll + index) layer.tile(element, 0, 4, 216, 46, 0, 0, 32, 40, TEX_SELECTED);
             layer.tile(element, 7, 11, 32, 32, 0, 0, 32, 32, icon);
             layer.text(element, strings.itemNames[row.recipe.productId] ?? "", 0xffdcdcdc, FontType_T.SMALL, 49, 7);
-            const costLabel = manager.getSysString(641), separator = " : ", price = row.cost.toLocaleString("en-US"), digits = price.replace(/,/g, "").length;
+            const costLabel = manager.getSysString(SysString_T.ManufacturingCost), separator = " : ", price = row.cost.toLocaleString("en-US"), digits = price.replace(/,/g, "").length;
             const color = digits < 5 ? 0xffdcdcdc : [0xffff80ff, 0xffffff00, 0xff00ff00, 0xff00ffff][(digits - 2) % 4];
             const separatorX = 49 + layer.measureText(costLabel), priceX = separatorX + layer.measureText(separator);
 
             layer.text(element, costLabel, 0xffffff00, FontType_T.SMALL, 49, 21);
             layer.text(element, separator, 0xffdcdcdc, FontType_T.SMALL, separatorX, 21);
             layer.text(element, price, color, FontType_T.SMALL, priceX, 21);
-            layer.text(element, manager.getSysString(503), 0xffffff00, FontType_T.SMALL, priceX + layer.measureText(price) + 5, 21);
-            const rateLabel = manager.getSysString(642), rateSeparatorX = 49 + layer.measureText(rateLabel);
+            layer.text(element, manager.getSysString(SysString_T.ForSale), 0xffffff00, FontType_T.SMALL, priceX + layer.measureText(price) + 5, 21);
+            const rateLabel = manager.getSysString(SysString_T.SuccessRate), rateSeparatorX = 49 + layer.measureText(rateLabel);
 
             layer.text(element, rateLabel, 0xffa3a3a3, FontType_T.SMALL, 49, 35);
             layer.text(element, separator, 0xffdcdcdc, FontType_T.SMALL, rateSeparatorX, 35);

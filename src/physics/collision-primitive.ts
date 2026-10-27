@@ -886,17 +886,17 @@ function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Ve
 
             if (!intersectPlanes(a, b)) continue;
 
-            if ((flags & 3) === 3 && a[1] * b[1] + a[2] * b[2] > 0.0010000000474974513) {
+            if ((flags & 3) === 3 && a[1] * b[1] + a[2] * b[2] > 1e-3) {
                 tmpN.set(0, -tmpD.z, tmpD.y).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
                 if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
             }
-            if ((flags & 12) === 12 && a[0] * b[0] + a[2] * b[2] > 0.0010000000474974513) {
+            if ((flags & 12) === 12 && a[0] * b[0] + a[2] * b[2] > 1e-3) {
                 tmpN.set(tmpD.z, 0, -tmpD.x).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
                 if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
             }
-            if ((flags & 48) === 48 && a[0] * b[0] + a[1] * b[1] > 0.0010000000474974513) {
+            if ((flags & 48) === 48 && a[0] * b[0] + a[1] * b[1] > 1e-3) {
                 tmpN.set(-tmpD.y, tmpD.x, 0).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
                 if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
@@ -1188,7 +1188,7 @@ function intersectPlanes(a: [number, number, number, number, number], b: [number
 
     const denominator = tmpD.lengthSq();
 
-    if (denominator < 0.000001) return false; // FIntersectPlanes2 0x9cc310 zeroes I and D below this, which makes the convolved plane a NaN no-op
+    if (denominator < 1e-6) return false; // FIntersectPlanes2 0x9cc310 zeroes I and D below this, which makes the convolved plane a NaN no-op
 
     tmpIntersection.crossVectors(tmpN2, tmpD).multiplyScalar(a[3]);
     tmpIntersection.add(tmpE.crossVectors(tmpD, tmpN).multiplyScalar(b[3])).multiplyScalar(1 / denominator);

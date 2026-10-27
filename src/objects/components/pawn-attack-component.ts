@@ -369,7 +369,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.flexibleAnimationIndex = selected.flexibleIndex;
         // Engine.dll SetSkillAnim 0x7977ca..0x797825: mobskillanimgrp replaces only the NPC's final slot.
         if (attack.animation && (parent.getUnrealScriptProperty("bNpc") || animation.getAnimationClip(attack.animation))) names[Math.max(0, names.length - 1)] = attack.animation;
-        if (!parent.getUnrealScriptProperty("bNpc") && !names.some(name => animation.getAnimationClip(name))) {
+        if (!parent.getUnrealScriptProperty("bNpc") && attack.animation && !names.some(name => animation.getAnimationClip(name))) {
             const fallback = getSkillAnimation(parent, "C");
 
             names.length = 0;
@@ -571,6 +571,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         const parent = this.getParent();
 
         const skill = selection === "random" ? null : this.attacks[selection].skill;
+
+        if (skill && skill.castStyle !== 0 && !parent.getUnrealScriptProperty("bNpc") && !skill.animation && !skill.animationCategory) return;
 
         if (skill && skill.castStyle === 0) {
             if (!skill.visual) return;

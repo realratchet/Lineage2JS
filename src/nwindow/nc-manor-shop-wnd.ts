@@ -1,6 +1,7 @@
 import NCShopWnd from "./nc-shop-wnd";
 import type NDomLayer from "./ndom";
 import type { ManorItem_T, ShopItem_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 export type ManorShopItem_T = ShopItem_T & { initialCount: number };
 
@@ -12,7 +13,7 @@ export class NCManorShopWnd extends NCShopWnd {
     public constructor(layer: NDomLayer) {
         super(layer);
         this.isStore = true;
-        const title = layer.getManager().getSysString(738);
+        const title = layer.getManager().getSysString(SysString_T.Manor);
 
         layer.renderText(this.caption, title, 0xffc8d2dc);
         this.element.setAttribute("aria-label", title);

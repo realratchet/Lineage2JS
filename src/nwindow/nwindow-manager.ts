@@ -4,6 +4,7 @@ import type AssetManager from "../assets/asset-manager";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import fetchAsset from "../assets/asset-source";
 import type SkinTextures from "./skin-textures";
+import SysString_T, { CLASS_NAME_OFFSET } from "./sys-string";
 
 const SNAP_DISTANCE = 10;
 
@@ -250,7 +251,7 @@ export class NWindowManager {
     public getZoneName(x: number, y: number, z: number): string { return this.getZoneNameInfo(x, y, z)?.name || ""; }
 
     public getZoneNameInfo(x: number, y: number, z: number) { // Engine.dll 0x105984b3/0x1044c980: indexed sector mask, bottom < Z <= top.
-        const sectorX = Math.trunc((Math.trunc(x) + 360448) / 32768 + 9), sectorY = Math.trunc((Math.trunc(y) + 294912) / 32768 + 9);
+        const sectorX = Math.trunc((Math.trunc(x) + 11 * 32768) / 32768 + 9), sectorY = Math.trunc((Math.trunc(y) + 9 * 32768) / 32768 + 9);
         const mask = this.strings.zoneNameMasks[`${sectorX}_${sectorY}`];
 
         if (!mask) return null;
@@ -267,7 +268,7 @@ export class NWindowManager {
     public getSystemMessage(id: number): string { return this.strings.systemMessages[id] ?? ""; }
 
     public filterText(value: string) {
-        const replacement = this.getSysString(740);
+        const replacement = this.getSysString(SysString_T.ObsceneNameReplacement);
         let text = "";
 
         for (let i = 0; i < value.length; i++) {
@@ -293,7 +294,7 @@ export class NWindowManager {
         return text;
     }
 
-    public getClassName(classId: number): string { return this.getSysString(classId >= 0 && classId < 88 ? 247 + classId : 1071 + classId); } // 0x1006b250: class names are sysstrings 247+id below class 88, 1071+id above.
+    public getClassName(classId: number): string { return this.getSysString(classId >= 0 && classId < 88 ? SysString_T.HumanFighter + classId : CLASS_NAME_OFFSET + classId); } // 0x1006b250: class names are sysstrings 247+id below class 88, 1071+id above.
 
     public getCursor(index: number) { return this.asset.getCursor(index); }
 

@@ -3,6 +3,7 @@ import NCListCtrl, { type ListRow_T, type ListColumn_T } from "./nc-list-ctrl";
 import type { default as NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
 import type { HeroEntry_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T, { CLASS_NAME_OFFSET } from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.HeroTower.herotower1_back";
 const TEX_BUTTON = SKIN_SLOTS.button;
@@ -22,7 +23,7 @@ class HeroListCtrl extends NCListCtrl {
     protected arrCrests: { clan: CanvasImageSource, ally: CanvasImageSource }[] = [];
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, 7, 34, 586, 255, [{ width: 169, label: 393, numeric: false }, { width: 120, label: 391, numeric: false }, { width: 128, label: 604, numeric: false }, { width: 119, label: 605, numeric: false }, { width: 50, label: 1191, numeric: false }], 18, 13);
+        super(layer, parent, 7, 34, 586, 255, [{ width: 169, label: SysString_T.CharacterName, numeric: false }, { width: 120, label: SysString_T.ClassAbbreviation, numeric: false }, { width: 128, label: SysString_T.HeroClan, numeric: false }, { width: 119, label: SysString_T.Ally, numeric: false }, { width: 50, label: SysString_T.Count, numeric: false }], 18, 13);
     }
 
     public setEntries(entries: HeroEntry_T[]) {
@@ -30,7 +31,7 @@ class HeroListCtrl extends NCListCtrl {
         const manager = this.layer.getManager();
 
         this.arrCrests = this.entries.map(entry => ({ clan: this.getCrest ? this.getCrest(entry.clanCrestId, false) : null, ally: this.getCrest ? this.getCrest(entry.allyCrestId, true) : null }));
-        this.setRows(this.entries.map((entry, index) => ({ id: index, cells: [entry.name, manager.getSysString((entry.classId < 88 ? 247 : 1071) + entry.classId), entry.clanName, entry.allyName, String(entry.count | 0)] })), true);
+        this.setRows(this.entries.map((entry, index) => ({ id: index, cells: [entry.name, manager.getSysString((entry.classId < 88 ? SysString_T.HumanFighter : CLASS_NAME_OFFSET) + entry.classId), entry.clanName, entry.allyName, String(entry.count | 0)] })), true);
     }
     public getEntry(row: ListRow_T) { return row ? this.entries[Number(row.id)] : null; }
     public refreshCrests() { this.paintRows(); }
@@ -69,14 +70,14 @@ export class NCHeroTowerWnd {
         this.element = layer.createWindow(0, 0, 600, 326, parent);
         this.element.hidden = true;
         this.element.dataset.window = "heroTower";
-        this.element.setAttribute("aria-label", manager.getSysString(1222));
+        this.element.setAttribute("aria-label", manager.getSysString(SysString_T.MonumentOfHeroes));
         layer.tile(this.element, 0, 20, 600, 306, 0, 0, 600, 306, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(1222), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(SysString_T.MonumentOfHeroes), false, () => this.setVisible(false));
         this.list = new HeroListCtrl(layer, this.element);
         this.list.onDoubleClick = () => this.openDiary();
         this.words = layer.edit(this.element, 25, 300, 405, 16, false, 64);
-        this.submitButton = layer.button(this.element, 440, 297, 76, 23, TEX_BUTTON, TEX_DOWN, null, manager.getSysString(1192), () => this.submit());
-        layer.button(this.element, 518, 297, 76, 23, TEX_BUTTON, TEX_DOWN, null, manager.getSysString(1193), () => this.openDiary());
+        this.submitButton = layer.button(this.element, 440, 297, 76, 23, TEX_BUTTON, TEX_DOWN, null, manager.getSysString(SysString_T.HeroMessage), () => this.submit());
+        layer.button(this.element, 518, 297, 76, 23, TEX_BUTTON, TEX_DOWN, null, manager.getSysString(SysString_T.ViewRecord), () => this.openDiary());
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 300), Math.trunc(height * 0.5 - 163)); }

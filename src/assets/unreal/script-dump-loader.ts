@@ -1,4 +1,4 @@
-import { ExprToken_T, ObjectFlags_T, type ScriptBytecodeEntry_T, type UClass, type UFunction, type UObject, type UState, type UStruct, type UProperty, type UStructProperty, type UArrayProperty, type PropertyTypes_T } from "@l2js/core";
+import { ExprToken_T, ObjectFlags_T, type ScriptBytecodeEntry_T, type UClass, type UFunction, type UObject, type UState, type UStruct, type UProperty, type UStructProperty, type UArrayProperty, type UByteProperty, type UObjectProperty, type UClassProperty, type PropertyTypes_T } from "@l2js/core";
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector3Arr } from "./library-types";
 
@@ -14,7 +14,13 @@ export type IScriptFieldDecodeInfo = {
     type: PropertyTypes_T,
     arrayDimensions: number,
     flags: number,
+    isPublic: boolean,
+    categoryName: string,
+    enumNames?: string[],
+    propertyClassId?: string | null,
+    metaClassId?: string | null,
     innerId?: string,
+    arrayElementDefault?: ScriptPropertyValue_T,
     structFieldIds?: string[]
 };
 
@@ -49,6 +55,10 @@ export type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
     withinClassId: string,
     classFlags: number,
     propertyFields: Record<string, IScriptFieldDecodeInfo>,
+    enums: Record<string, string[]>,
+    classParents: Record<string, string | null>,
+    classAliases: Record<string, string>,
+    objectClasses: Record<string, string>,
     isNative: boolean,
     stateIds: string[],
     defaults: Record<string, ScriptPropertyValue_T>
@@ -68,8 +78,29 @@ function getOwnerId(id: string): string {
 
 function getObjectId(object: UObject): string {
     if (!object.name) throw new Error(`Script object '${object.objectName}' has no stable package path`);
+    if ((object as any).isClass && object.name === "__native__.Object") return "core.Object";
 
     return object.name;
+}
+
+function getObjectClass(object: UObject): UClass {
+    const pkg = (object as any).pkg, cls = object.exp.idClass ? pkg.fetchObject(object.exp.idClass) as UClass : (object as any).isClass ? pkg.loader.getNativePackage().fetchObjectByType("Class", "Class") as UClass : null;
+
+    if (!cls || !cls.isClass) throw new Error(`Script object '${getObjectId(object)}' has no class descriptor.`);
+    return cls;
+}
+
+export function dumpObjectClass(object: UObject) {
+    const cls = getObjectClass(object), classParents: Record<string, string | null> = {};
+    let parent = cls;
+
+    while (parent) {
+        const id = getObjectId(parent), next = parent.exp.idSuper ? (parent as any).pkg.fetchObject(parent.exp.idSuper) as UClass : null;
+
+        classParents[id] = next ? getObjectId(next) : null;
+        parent = next;
+    }
+    return { classId: getObjectId(cls), classParents };
 }
 
 function dumpPropertyValue(value: any): ScriptPropertyValue_T {
@@ -79,7 +110,7 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
     if (typeof value.getTypedArray === "function") return Array.from(value.getTypedArray(), dumpPropertyValue);
     if (typeof value.getElements === "function") return value.getElements().map(dumpPropertyValue);
     if (typeof value.toArray === "function") return value.toArray().map(dumpPropertyValue);
-    if (value.constructor?.plainStructFields) {
+    if (value.constructor?.plainStructFields || value.constructor?.hostClass?.isStruct && !value.constructor.hostClass.isClass) {
         const propertyMap = value.constructor._propertyMapCache || value.getPropertyMap();
         const result: Record<string, ScriptPropertyValue_T> = {};
 
@@ -87,7 +118,7 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
 
         return result;
     }
-    if (value.isObject) return value.name || value.objectName || null;
+    if (value.isObject) return value.isClass ? getObjectId(value) : value.name || value.objectName || null;
 
     throw new Error(`Cannot transfer UnrealScript default '${value.constructor?.name ?? typeof value}'.`);
 }
@@ -121,11 +152,12 @@ function makeStructDefault(field: UStructProperty): ScriptPropertyValue_T {
 
     const value: Record<string, ScriptPropertyValue_T> = {};
 
-    for (const child of struct.childPropFields.values()) {
-        child.loadSelf();
+    for (let node = struct; node; node = node.superField as UStruct)
+        for (const child of node.childPropFields.values()) {
+            child.loadSelf();
 
-        value[child.propertyName] = dumpFieldValue(child, child.getDefaultValue());
-    }
+            value[child.propertyName] = dumpFieldValue(child, child.getDefaultValue());
+        }
 
     return value;
 }
@@ -174,9 +206,18 @@ function dumpBytecodeValue(script: UStruct, entry: ScriptBytecodeEntry_T, entrie
 
     switch (entry.type) {
         case "nameRef": return script.getScriptName(value);
+        case "classRef": {
+            const object = (script as any).pkg.fetchObject(value);
+
+            if (object && !object.isClass) throw new Error(`Script cast reference '${object.name}' is not a class.`);
+            return object ? script.getScriptObjectPath(value) : null;
+        }
+        case "objectRef": {
+            const object = (script as any).pkg.fetchObject(value);
+
+            return object ? script.getScriptObjectPath(value) : null;
+        }
         case "propertyRef":
-        case "objectRef":
-        case "classRef":
         case "structRef":
         case "functionRef": return script.getScriptObjectPath(value);
         case "codeOffset": return value === 0xffff ? value : { virtualOffset: value, entryIndex: resolveEntryIndex(entriesByOffset, virtualSize, value) };
@@ -235,18 +276,30 @@ function dumpProgram(script: UStruct): IScriptProgramDecodeInfo {
     };
 }
 
-function dumpFields(script: UStruct): IScriptFieldDecodeInfo[] {
-    return [...script.childPropFields.values()].map(field => {
-        field = field.loadSelf();
+function dumpField(field: UProperty): IScriptFieldDecodeInfo {
+    field = field.loadSelf();
+    const info: IScriptFieldDecodeInfo = { id: getObjectId(field), name: field.propertyName, type: field.getTypeName(), arrayDimensions: field.arrayDimensions, flags: field.getPropertyFlags(), isPublic: !!field.objectFlags.RF_Public, categoryName: (field as any).categoryName };
 
-        return {
-            id: getObjectId(field),
-            name: field.propertyName,
-            type: field.getTypeName(),
-            arrayDimensions: field.arrayDimensions,
-            flags: field.getPropertyFlags()
-        };
-    });
+    if (info.type === "Byte") {
+        const enumeration = (field as UByteProperty).value;
+
+        if (enumeration) info.enumNames = [...enumeration.loadSelf().names];
+    }
+    if (info.type === "Object" || info.type === "Class") {
+        const cls = (field as UObjectProperty).value;
+
+        info.propertyClassId = cls ? getObjectId(cls) : null;
+    }
+    if (info.type === "Class") {
+        const cls = (field as UClassProperty).metaClass;
+
+        info.metaClassId = cls ? getObjectId(cls) : null;
+    }
+    return info;
+}
+
+function dumpFields(script: UStruct): IScriptFieldDecodeInfo[] {
+    return [...script.childPropFields.values()].map(dumpField);
 }
 
 function getClassWithin(cls: UClass): UClass {
@@ -268,9 +321,14 @@ function dumpPropertyFields(script: UStruct): Record<string, IScriptFieldDecodeI
 
         if (id in fields) return id;
 
-        const info: IScriptFieldDecodeInfo = fields[id] = { id, name: field.propertyName, type: field.getTypeName(), arrayDimensions: field.arrayDimensions, flags: field.getPropertyFlags() };
+        const info = fields[id] = dumpField(field);
 
-        if (info.type === "Array") info.innerId = pullField((field as UArrayProperty).value);
+        if (info.type === "Array") {
+            const inner = (field as UArrayProperty).value.loadSelf();
+
+            info.innerId = pullField(inner);
+            info.arrayElementDefault = dumpFieldValue(inner, inner.getDefaultValue());
+        }
         if (info.type === "Struct") {
             info.structFieldIds = [];
 
@@ -343,6 +401,96 @@ function getConstructedClasses(script: UStruct): UClass[] {
     return classes;
 }
 
+function dumpScriptReferences(script: UStruct) {
+    const enums: Record<string, string[]> = {}, classParents: Record<string, string | null> = {}, classAliases: Record<string, string> = {}, objectClasses: Record<string, string> = {};
+    const seenFields = new Set<UProperty>();
+
+    function pullObject(object: UObject, id = getObjectId(object)): void {
+        const cls = getObjectClass(object);
+
+        objectClasses[id] = getObjectId(cls);
+        pullClass(cls);
+    }
+
+    function pullClass(cls: UClass): void {
+        // Casts need export-table ancestry without loading unrelated class defaults.
+        while (cls) {
+            const id = getObjectId(cls);
+
+            if (id in classParents) return;
+            if (!cls.isClass) throw new Error(`Script class reference '${id}' is not a class.`);
+            const parent = cls.exp.idSuper ? (cls as any).pkg.fetchObject(cls.exp.idSuper) as UClass : null;
+
+            classParents[id] = parent ? getObjectId(parent) : null;
+            pullObject(cls);
+            cls = parent;
+        }
+    }
+
+    function pullStruct(struct: UStruct): void {
+        for (const field of struct.childPropFields.values()) pullField(field);
+        for (const object of struct.childEnums) {
+            enums[getObjectId(object)] = [...object.loadSelf().names];
+            pullObject(object);
+        }
+        for (const entry of struct.getScriptBytecode()) {
+            if (entry.type !== "objectRef" && entry.type !== "classRef" || !entry.value) continue;
+            const object = (struct as any).pkg.fetchObject(entry.value);
+
+            if (!object) continue;
+            pullObject(object, struct.getScriptObjectPath(entry.value));
+            if (object.isClass) {
+                const id = struct.getScriptObjectPath(entry.value), actual = getObjectId(object);
+
+                if (id !== actual) classAliases[id] = actual;
+                pullClass(object);
+            }
+            else if ((object.constructor as any).getConstructorName() === "Enum") enums[getObjectId(object)] = [...object.loadSelf().names];
+        }
+        for (const child of [...struct.childFunctions, ...struct.childStates, ...struct.childStructs]) pullStruct(child.loadSelf());
+    }
+
+    function pullField(field: UProperty): void {
+        field = field.loadSelf();
+        if (seenFields.has(field)) return;
+        seenFields.add(field);
+        const type = field.getTypeName();
+
+        if (type === "Object" || type === "Class") {
+            const cls = (field as UObjectProperty).value;
+
+            if (cls) pullClass(cls);
+        }
+        if (type === "Class") {
+            const cls = (field as UClassProperty).metaClass;
+
+            if (cls) pullClass(cls);
+        }
+        if (type === "Array") pullField((field as UArrayProperty).value);
+        if (type === "Struct")
+            for (let struct = (field as UStructProperty).value.loadSelf(); struct; struct = struct.superField as UStruct)
+                for (const child of struct.childPropFields.values()) pullField(child);
+    }
+
+    function pullValue(value: any): void {
+        if (!value) return;
+        if (value.isClass) { pullClass(value); pullObject(value); }
+        else if (Array.isArray(value)) value.forEach(pullValue);
+        else if (value.constructor?.plainStructFields || value.constructor?.hostClass?.isStruct && !value.constructor.hostClass.isClass) {
+            const properties = value.constructor._propertyMapCache || value.getPropertyMap();
+
+            for (const field of Object.values(properties)) pullValue(value[field as string]);
+        }
+        else if (value.isObject) pullObject(value);
+    }
+
+    pullClass(script as UClass);
+    pullStruct(script);
+    for (const value of script.propertyDict.values()) pullValue(value);
+    for (const field of script.childPropFields.values()) pullValue(field.loadSelf().getDefaultValue());
+    return { enums, classParents, classAliases, objectClasses };
+}
+
 export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): void {
     const seenClasses = new Set<string>();
 
@@ -400,6 +548,7 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
             withinClassId: getObjectId(getClassWithin(cls)),
             classFlags: cls.getClassFlags(),
             propertyFields: dumpPropertyFields(cls),
+            ...dumpScriptReferences(cls),
             isNative: !!(cls.exp.flags & ObjectFlags_T.RF_Native),
             stateIds: cls.childStates.map(state => getObjectId(state)),
             defaults: dumpClassDefaults(cls)
@@ -454,6 +603,7 @@ export function pullScriptClassFunctions(library: DecodeLibrary, classes: Iterab
             withinClassId: getObjectId(getClassWithin(cls)),
             classFlags: cls.getClassFlags(),
             propertyFields: dumpPropertyFields(cls),
+            ...dumpScriptReferences(cls),
             isNative: !!(cls.exp.flags & ObjectFlags_T.RF_Native),
             stateIds: [],
             defaults: dumpClassDefaults(cls)

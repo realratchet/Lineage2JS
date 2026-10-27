@@ -3,6 +3,7 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_ch3.PetitionWnd.petition2_back";
 
@@ -27,7 +28,7 @@ export class NCPetitionWnd {
         this.element = layer.createWindow(0, 0, 310, 412);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 310, 392, 0, 0, 310, 392, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 310, manager.getSysString(isGM ? 472 : 470), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, 310, manager.getSysString(isGM ? SysString_T.PetitionGM : SysString_T.Petition), false, () => this.setVisible(false));
         this.chat = layer.scrollPane(this.element, 8, 37, 294, 312, 17, false, 17);
         this.chat.content.setAttribute("role", "log");
         const setScroll = this.chat.setScroll;
@@ -47,13 +48,13 @@ export class NCPetitionWnd {
             if (text.length && this.onSay) this.onSay(text);
             this.input.setValue("");
         });
-        layer.button(this.element, 80, 383, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(isGM ? 474 : 473), () => {
+        layer.button(this.element, 80, 383, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(isGM ? SysString_T.BeginConsultation : SysString_T.CancelPetition), () => {
             if (isGM) { if (this.onBegin) this.onBegin(); return; }
 
             this.evaluate.setEnabled(false);
             if (this.onCancel) this.onCancel();
         });
-        this.evaluate = layer.button(this.element, 160, 383, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(isGM ? 475 : 849), () => {
+        this.evaluate = layer.button(this.element, 160, 383, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(isGM ? SysString_T.EndConsultation : SysString_T.Evaluate), () => {
             const callback = isGM ? this.onEnd : this.onEvaluate;
 
             if (callback) callback();

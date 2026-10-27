@@ -5,6 +5,7 @@ import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomButton_T,
 import { FontType_T } from "./nwindow-canvas";
 import type { PartyMatchDetail_T, PartyRoomMember_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.PartyMatchWnd.PartyMatch2_Back";
 const TEX_BUTTON = SKIN_SLOTS.smallButton;
@@ -34,10 +35,10 @@ export class NCPartyRoomWnd {
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 600, 411, 0, 0, 600, 411, TEX_BACK);
         this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true));
-        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.close(), null, () => { this.table.hide(); this.minimized.minimize(); });
+        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(SysString_T.PartyMatching), true, () => this.close(), null, () => { this.table.hide(); this.minimized.minimize(); });
         this.header = layer.createWindow(0, 20, 600, 82, this.element);
         this.table = new NCListCtrl(layer, this.element, 7, 123, 586, 172, [
-            { width: 204, label: 393, numeric: false }, { width: 54, label: 391, numeric: true, isClass: true }, { width: 74, label: 392, numeric: true }, { width: 132, label: 1029, numeric: false }, { width: 121, label: 1031, numeric: false }
+            { width: 204, label: SysString_T.CharacterName, numeric: false }, { width: 54, label: SysString_T.ClassAbbreviation, numeric: true, isClass: true }, { width: 74, label: SysString_T.MemberLevel, numeric: true }, { width: 132, label: SysString_T.Location, numeric: false }, { width: 121, label: SysString_T.PartyMembership, numeric: false }
         ]);
         this.chat = layer.scrollPane(this.element, 7, 302, 586, 72, 17, false, 4);
         const chatViewport = layer.createWindow(0, 0, 571, 68, this.chat);
@@ -55,20 +56,20 @@ export class NCPartyRoomWnd {
             if (text && this.onChat) this.onChat(text);
             this.input.setValue("");
         });
-        this.ownerButtons.push(layer.button(this.element, 298, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(1032), () => {
+        this.ownerButtons.push(layer.button(this.element, 298, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.SetRoom), () => {
             if (this.detail && this.onSettings) this.onSettings(this.detail);
         }));
-        this.ownerButtons.push(layer.button(this.element, 373, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(1033), () => {
+        this.ownerButtons.push(layer.button(this.element, 373, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Kick), () => {
             const row = this.table.getSelectedRow();
 
             if (row && this.onKick) this.onKick(Number(row.id));
         }));
-        this.ownerButtons.push(layer.button(this.element, 448, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(396), () => {
+        this.ownerButtons.push(layer.button(this.element, 448, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.InviteToParty), () => {
             const row = this.table.getSelectedRow();
 
             if (row && this.detail && this.onInvite) this.onInvite(row.cells[0], this.detail.lootType);
         }));
-        layer.button(this.element, 523, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(908), () => this.close());
+        layer.button(this.element, 523, 402, 66, 21, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Terminate), () => this.close());
         this.setMode(0);
     }
 
@@ -98,7 +99,7 @@ export class NCPartyRoomWnd {
         this.table.setRows(members.slice(0, 20).map(member => {
             const level = member.level < 10 ? "1 ~ 9" : member.level >= 70 ? "70 ~ 78" : `${Math.trunc(member.level / 10) * 10} ~ ${Math.trunc(member.level / 10) * 10 + 9}`;
 
-            return { id: member.objectId, classId: member.classId, cells: [member.name, String(member.classId), level, this.getLocation(member.location), manager.getSysString(1061 + member.role)] };
+            return { id: member.objectId, classId: member.classId, cells: [member.name, String(member.classId), level, this.getLocation(member.location), manager.getSysString(SysString_T.PartyCandidate + member.role)] };
         }), isReset);
         this.paintHeader();
     }
@@ -133,14 +134,14 @@ export class NCPartyRoomWnd {
         this.setVisible(false);
     }
     protected getLocation(location: number) {
-        return location >= 1 && location <= 13 ? this.layer.getManager().getSysString(1047 + location) : location === 14 ? this.layer.getManager().getSysString(1247) : location === 15 ? this.layer.getManager().getSysString(1248) : "";
+        return location >= 1 && location <= 13 ? this.layer.getManager().getSysString(SysString_T.NearMe + location) : location === 14 ? this.layer.getManager().getSysString(SysString_T.Rune) : location === 15 ? this.layer.getManager().getSysString(SysString_T.Goddard) : "";
     }
     protected paintHeader() {
         this.header.replaceChildren();
         if (!this.detail) return;
 
         const layer = this.layer, manager = layer.getManager(), detail = this.detail;
-        const fields: [number, number, number, number, string][] = [[416, 59, 68, 41, String(detail.roomId)], [413, 59, 68, 56, detail.title], [1029, 59, 68, 71, this.getLocation(detail.location)], [1036, 254, 263, 71, `${this.table.getRows().length}/${detail.maxMembers}`], [489, 59, 68, 86, manager.getSysString([487, 488, 798, 799, 800][detail.lootType])], [1030, 254, 263, 86, `${detail.minLevel}-${detail.maxLevel}`]];
+        const fields: [number, number, number, number, string][] = [[SysString_T.Number, 59, 68, 41, String(detail.roomId)], [SysString_T.RoomTitle, 59, 68, 56, detail.title], [SysString_T.Location, 59, 68, 71, this.getLocation(detail.location)], [SysString_T.PartySize, 254, 263, 71, `${this.table.getRows().length}/${detail.maxMembers}`], [SysString_T.LootDist, 59, 68, 86, manager.getSysString([SysString_T.FindersKeepers, SysString_T.Random, SysString_T.RandomIncludingSpoil, SysString_T.ByTurn, SysString_T.ByTurnIncludingSpoil][detail.lootType])], [SysString_T.LevelLimit, 254, 263, 86, `${detail.minLevel}-${detail.maxLevel}`]];
 
         fields.forEach(([id, right, x, y, value]) => {
             const label = manager.getSysString(id);

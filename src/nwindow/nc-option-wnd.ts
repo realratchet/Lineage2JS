@@ -5,6 +5,7 @@ import { FontType_T } from "./nwindow-canvas";
 import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
 import { SKIN_SLOTS } from "./skin-textures";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_ch3.OptionWnd.option1_back";
 const TEX_AUDIO_BACK = "L2UI_ch3.OptionWnd.option2_back";
@@ -87,8 +88,8 @@ export class NCOptionWnd {
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 28, 0, 0, 256, 28, TEX_TAB_BACK);
         this.background = layer.tile(this.element, 0, 48, 256, 432, 0, 0, 256, 432, TEX_GAME_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(146), false, () => this.setVisible(false));
-        [206, 207, 208].forEach((id, index) => {
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.Options), false, () => this.setVisible(false));
+        [SysString_T.Video, SysString_T.Audio, SysString_T.Game].forEach((id, index) => {
             const tab = layer.tab(this.element, 12 + index * 75, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(id), null, () => this.selectTab(index));
 
             tab.setAttribute("aria-selected", String(index === 2));
@@ -100,11 +101,11 @@ export class NCOptionWnd {
         this.audio.hidden = true;
         this.video = layer.createWindow(0, 48, 256, 400, this.element);
         this.video.hidden = true;
-        const gammaLabel = manager.getSysString(210);
+        const gammaLabel = manager.getSysString(SysString_T.Gamma);
 
         layer.text(this.video, gammaLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(gammaLabel), 52);
         this.gamma = new NCComboBox(layer, this.video, 107, 49, 125, 17);
-        this.gamma.setItems([1233, 1234, 1235, 1236, 1237, 228].map(id => manager.getSysString(id)));
+        this.gamma.setItems([SysString_T.VeryHigh, SysString_T.High, SysString_T.Average, SysString_T.Low, SysString_T.VeryLow, SysString_T.Off].map(id => manager.getSysString(id)));
         this.gamma.element.tabIndex = 0;
         this.gamma.element.setAttribute("role", "combobox");
         this.gamma.element.setAttribute("aria-label", gammaLabel);
@@ -115,11 +116,11 @@ export class NCOptionWnd {
             this.gamma.setSelected(Math.max(0, Math.min(GAMMA_STEPS.length, this.gamma.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
             this.gamma.setOpen(false);
         });
-        const textureLabel = manager.getSysString(211);
+        const textureLabel = manager.getSysString(SysString_T.Texture);
 
         layer.text(this.video, textureLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(textureLabel), 71);
         this.textureDetail = new NCComboBox(layer, this.video, 107, 68, 125, 17);
-        this.textureDetail.setItems([224, 225, 226].map(id => manager.getSysString(id)));
+        this.textureDetail.setItems([SysString_T.TextureHigh, SysString_T.TextureAverage, SysString_T.TextureLow].map(id => manager.getSysString(id)));
         this.textureDetail.element.tabIndex = 0;
         this.textureDetail.element.setAttribute("role", "combobox");
         this.textureDetail.element.setAttribute("aria-label", textureLabel);
@@ -130,7 +131,7 @@ export class NCOptionWnd {
             this.textureDetail.setSelected(Math.max(0, Math.min(2, this.textureDetail.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
             this.textureDetail.setOpen(false);
         });
-        const antiAliasingLabel = manager.getSysString(868);
+        const antiAliasingLabel = manager.getSysString(SysString_T.AntiAliasing);
 
         layer.text(this.video, antiAliasingLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(antiAliasingLabel), 251);
         this.antiAliasing = new NCComboBox(layer, this.video, 107, 248, 125, 17);
@@ -144,9 +145,9 @@ export class NCOptionWnd {
             this.antiAliasing.setSelected(Math.max(0, Math.min(this.antiAliasingLevels.length - 1, this.antiAliasing.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
             this.antiAliasing.setOpen(false);
         });
-        this.pawnShadow = layer.checkbox(this.video, 25, 270, 109, 17, manager.getSysString(212));
-        this.renderDeco = layer.checkbox(this.video, 135, 270, 109, 17, manager.getSysString(213));
-        this.useTrilinear = layer.checkbox(this.video, 135, 287, 100, 17, manager.getSysString(464));
+        this.pawnShadow = layer.checkbox(this.video, 25, 270, 109, 17, manager.getSysString(SysString_T.Shadows));
+        this.renderDeco = layer.checkbox(this.video, 135, 270, 109, 17, manager.getSysString(SysString_T.GroundDetail));
+        this.useTrilinear = layer.checkbox(this.video, 135, 287, 100, 17, manager.getSysString(SysString_T.TextureFilter));
         this.sortTransparent = layer.checkbox(this.video, 25, 287, 109, 17, "Sort transparent");
         [this.pawnShadow, this.renderDeco, this.useTrilinear, this.sortTransparent].forEach(checkbox => {
             checkbox.tabIndex = 0;
@@ -157,29 +158,29 @@ export class NCOptionWnd {
                 checkbox.setChecked(!checkbox.getChecked());
             });
         });
-        const rangeLabel = manager.getSysString(215);
+        const rangeLabel = manager.getSysString(SysString_T.PCNPCRange);
 
         layer.text(this.video, rangeLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(rangeLabel), 161);
         this.pawnRange = new NCComboBox(layer, this.video, 107, 158, 125, 17);
-        this.pawnRange.setItems([1238, 1239, 1240, 1241, 1242].map(id => manager.getSysString(id)));
+        this.pawnRange.setItems([SysString_T.VeryWide, SysString_T.Wide, SysString_T.RangeAverage, SysString_T.Narrow, SysString_T.VeryNarrow].map(id => manager.getSysString(id)));
         this.pawnRange.element.tabIndex = 0;
         this.pawnRange.element.setAttribute("role", "combobox");
         this.pawnRange.element.setAttribute("aria-label", rangeLabel);
-        const terrainLabel = manager.getSysString(214), limitLabel = manager.getSysString(540);
+        const terrainLabel = manager.getSysString(SysString_T.TerrainRange), limitLabel = manager.getSysString(SysString_T.PCNPCLimit);
 
         layer.text(this.video, terrainLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(terrainLabel), 142);
         this.terrainRange = new NCComboBox(layer, this.video, 107, 139, 125, 17);
-        this.terrainRange.setItems([1238, 1239, 1240, 1241, 1242].map(id => manager.getSysString(id)));
+        this.terrainRange.setItems([SysString_T.VeryWide, SysString_T.Wide, SysString_T.RangeAverage, SysString_T.Narrow, SysString_T.VeryNarrow].map(id => manager.getSysString(id)));
         this.terrainRange.element.setAttribute("aria-label", terrainLabel);
         layer.text(this.video, limitLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(limitLabel), 180);
         this.pawnLimit = new NCComboBox(layer, this.video, 107, 177, 125, 17);
-        this.pawnLimit.setItems([27, 1233, 1234, 1235, 1236, 1237].map(id => manager.getSysString(id)));
+        this.pawnLimit.setItems([SysString_T.None, SysString_T.VeryHigh, SysString_T.High, SysString_T.Average, SysString_T.Low, SysString_T.VeryLow].map(id => manager.getSysString(id)));
         this.pawnLimit.element.setAttribute("aria-label", limitLabel);
-        const screenshotLabel = manager.getSysString(979);
+        const screenshotLabel = manager.getSysString(SysString_T.Screenshot);
 
         layer.text(this.video, screenshotLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(screenshotLabel), 320);
         this.screenshot = new NCComboBox(layer, this.video, 107, 317, 125, 17);
-        this.screenshot.setItems([980, 981, 982, 983].map(id => manager.getSysString(id)));
+        this.screenshot.setItems([SysString_T.Bitmap, SysString_T.ScreenshotHigh, SysString_T.ScreenshotAverage, SysString_T.ScreenshotLow].map(id => manager.getSysString(id)));
         this.screenshot.element.setAttribute("aria-label", screenshotLabel);
         [this.pawnRange, this.terrainRange, this.pawnLimit, this.screenshot].forEach((combo, index) => {
             combo.element.tabIndex = 0;
@@ -204,12 +205,12 @@ export class NCOptionWnd {
             this.uiScale.setSelected(Math.max(0, Math.min(this.uiScales.length - 1, this.uiScale.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
             this.uiScale.setOpen(false);
         });
-        layer.text(game, manager.getSysString(478), 0xffdcdcdc, FontType_T.SMALL, 24, 15);
-        const initialize = layer.button(game, 88, 11, 66, 21, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, null, manager.getSysString(479), () => this.onInitialize());
+        layer.text(game, manager.getSysString(SysString_T.Interface), 0xffdcdcdc, FontType_T.SMALL, 24, 15);
+        const initialize = layer.button(game, 88, 11, 66, 21, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, null, manager.getSysString(SysString_T.Initialize), () => this.onInitialize());
 
         initialize.tabIndex = 0;
         initialize.setAttribute("role", "button");
-        initialize.setAttribute("aria-label", manager.getSysString(479));
+        initialize.setAttribute("aria-label", manager.getSysString(SysString_T.Initialize));
         initialize.addEventListener("keydown", event => {
             if (event.repeat || event.key !== " " && event.key !== "Enter") return;
 
@@ -217,26 +218,26 @@ export class NCOptionWnd {
             manager.playButtonSound(true);
             this.onInitialize();
         });
-        layer.text(game, manager.getSysString(329), 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText(manager.getSysString(329)), 49); // NCGameOptionWnd::OnPaint 0x100c7940..0x100c794c.
+        layer.text(game, manager.getSysString(SysString_T.Language), 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText(manager.getSysString(SysString_T.Language)), 49); // NCGameOptionWnd::OnPaint 0x100c7940..0x100c794c.
         this.language = new NCComboBox(layer, game, 87, 46, 125, 17);
         this.language.setItems(["English"]);
         this.language.setSelected(0);
         this.language.element.tabIndex = 0;
         this.language.element.setAttribute("role", "combobox");
-        this.language.element.setAttribute("aria-label", manager.getSysString(329));
+        this.language.element.setAttribute("aria-label", manager.getSysString(SysString_T.Language));
         this.language.element.addEventListener("keydown", event => {
             if (!["Enter", " ", "ArrowUp", "ArrowDown", "Escape"].includes(event.key)) return;
 
             event.preventDefault();
             this.language.setOpen(event.key === "Escape" ? false : event.key === "Enter" || event.key === " " ? !this.language.isOpen() : true);
         });
-        layer.text(game, manager.getSysString(435), 0xffdcdcdc, FontType_T.SMALL, 76 - layer.measureText(manager.getSysString(435)), 82);
-        [216, 217, 977, 978].forEach((id, index) => {
+        layer.text(game, manager.getSysString(SysString_T.Display), 0xffdcdcdc, FontType_T.SMALL, 76 - layer.measureText(manager.getSysString(SysString_T.Display)), 82);
+        [SysString_T.SFXVol, SysString_T.MusicVol, SysString_T.SystemVoice, SysString_T.TutorialVoice].forEach((id, index) => {
             const label = manager.getSysString(id);
             const combo = new NCComboBox(layer, this.audio, 107, 11 + index * 19, 125, 17);
 
             layer.text(this.audio, label, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(label), 14 + index * 19);
-            combo.setItems([1233, 1234, 1235, 1236, 1237, 228].map(id => manager.getSysString(id)));
+            combo.setItems([SysString_T.VeryHigh, SysString_T.High, SysString_T.Average, SysString_T.Low, SysString_T.VeryLow, SysString_T.Off].map(id => manager.getSysString(id)));
             combo.element.tabIndex = 0;
             combo.element.setAttribute("role", "combobox");
             combo.element.setAttribute("aria-label", label);
@@ -250,28 +251,28 @@ export class NCOptionWnd {
             this.audioCombos.push(combo);
         });
 
-        [436, 437, 438, 439, 440, 441].forEach((id, index) => {
+        [SysString_T.Player, SysString_T.Monsters, SysString_T.OtherPCs, SysString_T.Clan, SysString_T.PartyNames, SysString_T.GeneralNames].forEach((id, index) => {
             const x = index < 3 ? 84 : 95, y = index < 3 ? [85, 99, 116][index] : 133 + (index - 3) * 17;
             const checkbox = layer.checkbox(game, x, y, 100, 12, manager.getSysString(id), index === 2 ? () => this.updateNameControls() : null);
 
             this.nameChecks.push(checkbox);
         });
-        this.autoTrackingPawn = layer.checkbox(game, 25, 240, 100, 12, manager.getSysString(463));
-        this.useColorCursor = layer.checkbox(game, 135, 240, 100, 12, manager.getSysString(305));
-        this.arrowMode = layer.checkbox(game, 25, 257, 100, 12, manager.getSysString(928));
-        this.showZoneTitle = layer.checkbox(game, 135, 257, 100, 12, manager.getSysString(1196));
-        this.enterChatting = layer.checkbox(game, 25, 200, 100, 12, manager.getSysString(442));
-        this.oldChatting = layer.checkbox(game, 135, 200, 100, 12, manager.getSysString(566));
-        const keySecurity = layer.checkbox(game, 25, 217, 100, 12, manager.getSysString(926));
+        this.autoTrackingPawn = layer.checkbox(game, 25, 240, 100, 12, manager.getSysString(SysString_T.Tracking));
+        this.useColorCursor = layer.checkbox(game, 135, 240, 100, 12, manager.getSysString(SysString_T.GraphicCursor));
+        this.arrowMode = layer.checkbox(game, 25, 257, 100, 12, manager.getSysString(SysString_T.Arrow3D));
+        this.showZoneTitle = layer.checkbox(game, 135, 257, 100, 12, manager.getSysString(SysString_T.ShowRegion));
+        this.enterChatting = layer.checkbox(game, 25, 200, 100, 12, manager.getSysString(SysString_T.EnterChat));
+        this.oldChatting = layer.checkbox(game, 135, 200, 100, 12, manager.getSysString(SysString_T.AutoCode));
+        const keySecurity = layer.checkbox(game, 25, 217, 100, 12, manager.getSysString(SysString_T.KeySecurity));
 
         keySecurity.inert = true;
         keySecurity.setAttribute("aria-disabled", "true");
         keySecurity.tabIndex = -1;
         keySecurity.style.opacity = "0.5";
-        this.transparencyMode = layer.checkbox(game, 164, 15, 100, 12, manager.getSysString(927));
-        this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(1197), () => this.updateSystemMessageControls());
-        this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(357));
-        this.systemMsgWndExpendableItem = layer.checkbox(game, 120, 344, 130, 12, manager.getSysString(796));
+        this.transparencyMode = layer.checkbox(game, 164, 15, 100, 12, manager.getSysString(SysString_T.Transparent));
+        this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(SysString_T.SystemMessageWindow), () => this.updateSystemMessageControls());
+        this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(SysString_T.Damage));
+        this.systemMsgWndExpendableItem = layer.checkbox(game, 120, 344, 130, 12, manager.getSysString(SysString_T.Consumables));
         [...this.nameChecks, this.autoTrackingPawn, this.useColorCursor, this.arrowMode, this.showZoneTitle, this.enterChatting, this.oldChatting, this.transparencyMode, this.systemMsgWnd, this.systemMsgWndDamage, this.systemMsgWndExpendableItem].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
@@ -283,11 +284,11 @@ export class NCOptionWnd {
                 if (checkbox === this.systemMsgWnd) this.updateSystemMessageControls();
             });
         });
-        const lootLabel = manager.getSysString(486);
+        const lootLabel = manager.getSysString(SysString_T.PartyLoot);
 
         layer.text(game, lootLabel, 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText(lootLabel), 377);
         this.partyLooting = new NCComboBox(layer, game, 87, 374, 125, 17);
-        this.partyLooting.setItems([487, 488, 798, 799, 800].map(id => manager.getSysString(id)));
+        this.partyLooting.setItems([SysString_T.FindersKeepers, SysString_T.Random, SysString_T.RandomIncludingSpoil, SysString_T.ByTurn, SysString_T.ByTurnIncludingSpoil].map(id => manager.getSysString(id)));
         this.partyLooting.onChange = index => { this.lootType = index; };
         this.partyLooting.element.tabIndex = 0;
         this.partyLooting.element.setAttribute("role", "combobox");
@@ -300,7 +301,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
             this.partyLooting.setOpen(false);
         });
-        [140, 141, 218].forEach((id, index) => {
+        [SysString_T.OK, SysString_T.Cancel, SysString_T.Apply].forEach((id, index) => {
             const press = () => {
                 if (index !== 1) this.apply();
                 if (index !== 2) this.setVisible(false);
@@ -359,7 +360,7 @@ export class NCOptionWnd {
             this.useTrilinear.setChecked(options.useTrilinear);
             this.textureDetail.setSelected(options.textureDetail);
             this.antiAliasingLevels = this.getAntiAliasingLevels();
-            this.antiAliasing.setItems(this.antiAliasingLevels.map(level => this.layer.getManager().getSysString(869 + level)));
+            this.antiAliasing.setItems(this.antiAliasingLevels.map(level => this.layer.getManager().getSysString(SysString_T.NoAntiAliasing + level)));
             this.antiAliasing.setSelected(Math.max(0, this.antiAliasingLevels.indexOf(options.antiAliasing)));
 
             this.nameChecks.forEach((checkbox, index) => checkbox.setChecked(options[this.nameKeys[index]] as boolean));

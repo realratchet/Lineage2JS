@@ -5,6 +5,7 @@ import L2TaskWnd from "./l2-task-wnd";
 import type NDomLayer from "./ndom";
 import type { NDomButton_T, NDomEdit_T } from "./ndom";
 import type { FriendEntry_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.Msn.msn_back";
 const TEX_FRIENDS = "L2UI_CH3.Msn.msn_back0";
@@ -48,7 +49,7 @@ export class MessengerWnd {
         this.element.hidden = true;
         this.element.style.overflow = "hidden";
         layer.tile(this.element, 0, 20, 276, 28, 0, 0, 276, 28, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(999), true, () => this.setVisible(false), null, () => this.minimize());
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.Lineage2MessengerAltY), true, () => this.setVisible(false), null, () => this.minimize());
         this.msn = layer.createWindow(0, 48, 256, 353, this.element);
         this.friends = layer.createWindow(0, 48, 256, 353, this.element);
         layer.tile(this.friends, 0, 0, 256, 353, 0, 0, 256, 353, TEX_FRIENDS);
@@ -57,24 +58,24 @@ export class MessengerWnd {
         this.login = layer.createWindow(0, 0, 256, 353, this.msn);
         layer.tile(this.login, 0, 0, 256, 353, 0, 0, 256, 353, TEX_LOGIN);
         layer.tile(this.login, 95, 278, 142, 23, 0, 0, 142, 23, TEX_LOGO);
-        const label = manager.getSysString(1003);
+        const label = manager.getSysString(SysString_T.LogInToNETPassport);
 
         layer.text(this.login, label, 0xffdcdcdc, undefined, Math.trunc((256 - layer.measureText(label)) / 2), 109);
-        layer.text(this.login, manager.getSysString(1004), 0xffdcdcdc, undefined, 16, 134);
-        layer.text(this.login, manager.getSysString(1005), 0xffdcdcdc, undefined, 16, 155);
+        layer.text(this.login, manager.getSysString(SysString_T.EMail), 0xffdcdcdc, undefined, 16, 134);
+        layer.text(this.login, manager.getSysString(SysString_T.MessengerPassword), 0xffdcdcdc, undefined, 16, 155);
         this.email = layer.edit(this.login, 92, 131, 151, 17, false, 100);
         this.password = layer.edit(this.login, 92, 151, 151, 17, true, 16);
-        this.email.input.setAttribute("aria-label", manager.getSysString(1004));
-        this.password.input.setAttribute("aria-label", manager.getSysString(1005));
+        this.email.input.setAttribute("aria-label", manager.getSysString(SysString_T.EMail));
+        this.password.input.setAttribute("aria-label", manager.getSysString(SysString_T.MessengerPassword));
         this.password.input.addEventListener("keydown", event => {
             if (event.key !== "Enter") return;
 
             event.preventDefault();
             this.submit();
         });
-        layer.button(this.login, 72, 176, 66, 21, TEX_SMALL, `${TEX_SMALL}_down`, null, manager.getSysString(140), () => this.submit());
-        layer.button(this.login, 142, 176, 66, 21, TEX_SMALL, `${TEX_SMALL}_down`, null, manager.getSysString(141), () => this.clearLogin());
-        layer.button(this.login, 72, 204, 134, 23, TEX_BIG, `${TEX_BIG}_down`, null, manager.getSysString(995), () => {
+        layer.button(this.login, 72, 176, 66, 21, TEX_SMALL, `${TEX_SMALL}_down`, null, manager.getSysString(SysString_T.OK), () => this.submit());
+        layer.button(this.login, 142, 176, 66, 21, TEX_SMALL, `${TEX_SMALL}_down`, null, manager.getSysString(SysString_T.Cancel), () => this.clearLogin());
+        layer.button(this.login, 72, 204, 134, 23, TEX_BIG, `${TEX_BIG}_down`, null, manager.getSysString(SysString_T.MSNMessengerInfo), () => {
             this.login.hidden = true;
             this.info.hidden = false;
         });
@@ -83,15 +84,15 @@ export class MessengerWnd {
         layer.tile(this.info, 0, 0, 256, 353, 0, 0, 256, 353, TEX_LOGIN);
         // NWindow 0x10156720: English strings at global string-table +0x8186c/+0x8189c/+0x818cc.
         layer.wrappedText(this.info, 18, 44, 0xffdcdcdc, "For full functionality, the latest version of MSN Messenger client must be installed on the user's computer.\n\n\nPrevious versions of MSN Messenger only provide the basic features to chat in the game. Add/Delete Contacts and other options aren't available.\n\n\nThe latest version of MSN Messenger may be obtained from the MSN web site (http://messenger.msn.com).", 220);
-        layer.button(this.info, 79, 274, 96, 23, TEX_BACK_BUTTON, `${TEX_BACK_BUTTON}_down`, null, manager.getSysString(1008), () => {
+        layer.button(this.info, 79, 274, 96, 23, TEX_BACK_BUTTON, `${TEX_BACK_BUTTON}_down`, null, manager.getSysString(SysString_T.BackToFriends), () => {
             this.info.hidden = true;
             this.login.hidden = false;
         });
-        for (let i = 0; i < 2; i++) this.arrTabs.push(layer.tab(this.element, 12 + i * 115, 25, 114, 23, i ? TEX_TAB : TEX_SELECTED, TEX_SELECTED, manager.getSysString(996 + i), null, () => this.select(i)));
+        for (let i = 0; i < 2; i++) this.arrTabs.push(layer.tab(this.element, 12 + i * 115, 25, 114, 23, i ? TEX_TAB : TEX_SELECTED, TEX_SELECTED, manager.getSysString(SysString_T.MSNMessenger + i), null, () => this.select(i)));
         this.friends.hidden = true;
         this.folded = layer.createWindow(384, 180, 32, 32);
         this.folded.hidden = true;
-        this.folded.setAttribute("aria-label", manager.getSysString(999));
+        this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.Lineage2MessengerAltY));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
         this.folded.addEventListener("mousedown", event => {
             if (event.button !== 0) return;

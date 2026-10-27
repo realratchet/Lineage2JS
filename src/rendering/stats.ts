@@ -84,7 +84,7 @@ export var Stats = function () {
                 if (memPanel) {
 
                     var memory = performance.memory;
-                    memPanel.update(memory.usedJSHeapSize / 1048576);
+                    memPanel.update(memory.usedJSHeapSize / (1024 * 1024));
 
                 }
 

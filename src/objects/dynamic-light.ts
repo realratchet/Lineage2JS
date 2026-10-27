@@ -12,7 +12,7 @@ type HardwareLight_T = { color: Color, attenuation: Vector2, cone: number };
 // ~0.1 degree of rotation on a unit direction vector, squared
 const DIRECTION_CHANGE_EPSILON_SQ = 3e-6;
 
-const DEG2RAD = 0.017453292519943295;
+const DEG2RAD = Math.PI / 180;
 const HALF_PI = Math.PI / 2;  // 1.5707963267948966
 const NEG_PI = -Math.PI;      // -3.1415927
 
@@ -23,9 +23,9 @@ export function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 1
     let pitch: number;
 
     if (timeOfDay >= 5.0 && timeOfDay < 24.0) {
-        pitch = (timeOfDay - 6.0) * 0.17453292519943295 - HALF_PI;
+        pitch = (timeOfDay - 6.0) * (Math.PI / 18) - HALF_PI;
     } else if (timeOfDay >= 1.0 && timeOfDay < 5.0) {
-        pitch = (timeOfDay + 24.0 - 6.0) * 0.17453292519943295 - HALF_PI;
+        pitch = (timeOfDay + 24.0 - 6.0) * (Math.PI / 18) - HALF_PI;
     } else {
         pitch = NEG_PI;
     }
@@ -42,7 +42,7 @@ export function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 
     if (timeOfDay >= 7.0 && timeOfDay < 23.0)
         polar = NEG_PI;
     else
-        polar = timeOfDay * 0.5235987755982988 - HALF_PI;
+        polar = timeOfDay * (Math.PI / 6) - HALF_PI;
 
     return [polar, yaw, brightness];
 }

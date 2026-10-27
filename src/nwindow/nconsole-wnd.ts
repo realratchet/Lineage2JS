@@ -39,6 +39,8 @@ import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { IEngineComponent } from "../game/components";
 import Skin, { type AbnormalStatusWndView_T, type ChatWndView_T, type ChatFilterWndView_T, type CommandInfoWndView_T, type CommunityWndView_T, type DeliverWndView_T, type DialogBoxView_T, type WarningDialogBoxView_T, type FishViewportWndView_T, type GMClanWndView_T, type GMDetailStatusWndView_T, type GMInventoryWndView_T, type GMMagicSkillWndView_T, type GMQuestWndView_T, type GMStoreWndView_T, type GMWndView_T, type GMSnoopWndView_T, type GMSnoopManagerView_T, type GMPetitionWndView_T, type HennaInfoWndView_T, type HennaListWndView_T, type HeroTowerWndView_T, type InventoryWndView_T, type ItemEnchantWndView_T, type LoadingWndView_T, type LobbyWndView_T, type LoginServerWndView_T, type LoginWndView_T, type ReplayWndView_T, type ReplayLogoWndView_T, type MacroWndView_T, type MainWndView_T, type ManorShopWndView_T, type MapWndView_T, type TownMapWndView_T, type MatchWndView_T, type MenuWndView_T, type MessageWndView_T, type NPCHtmlViewerView_T, type ObserverWndView_T, type OlympiadControlWndView_T, type OlympiadPlayerWndView_T, type OlympiadTargetWndView_T, type OptionWndView_T, type PartyRoomMakingWndView_T, type PartyRoomWndView_T, type PawnCreateWndView_T, type PetStatusWndView_T, type PetWndView_T, type PetitionBeginWndView_T, type PetitionWndView_T, type PetitionFeedBackWndView_T, type PartyWndView_T, type CalcWndView_T, type QuestListInfoWndView_T, type TutorialViewerWndView_T, type TutorialBtnView_T, type SiegeInfoWndView_T, type ManorInfoWndView_T, type ManorSeedSettingWndView_T, type ManorCropSettingWndView_T, type ManorCropSellWndView_T, type XMasSealWndView_T, type PlayerStatusWndView_T, type PledgePowerWndView_T, type PrivateBuyWndView_T, type PrivateShopWndView_T, type RecipeBookWndView_T, type RecipeBuyListWndView_T, type RecipeBuyManufactureWndView_T, type RecipeManufactureWndView_T, type RecipeShopWndView_T, type RecipeTreeWndView_T, type RecordMarkView_T, type RestartMenuWndView_T, type SSQMainBoardView_T, type SelectDeliverWndView_T, type ShopWndView_T, type ShortCutWndView_T, type SkillWndView_T, type StoreWndView_T, type SummonedWndView_T, type SystemMenuWndView_T, type TargetStatusWndView_T, type TradeWndView_T, type TrainWndView_T, type VIPShopWndView_T, type ZoneTitleWndView_T } from "./skin";
 import type GameManager from "../game/game-manager";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 export type Nameplate_T = { actor: BaseActor, name: string, title: string, isNpc: boolean, hasQuestMark: boolean, isSummon: boolean, isAttackable: boolean, isSelf: boolean, isPartyMember: boolean, isPledgeMember: boolean, isDead: boolean, isSitting: boolean, isChairSitting: boolean, abnormalState: number, karma: number, pvpFlag: number, recommendations: number, nameColor: number, titleColor: number, clanCrestId: number, allyCrestId: number, isTarget: boolean, isMouseTarget: boolean, isChatRange: boolean, privateStoreType: GamePackets.PrivateStoreType_T, matchedStoreType: GamePackets.PrivateStoreType_T, storeMessage: string, chatMessage: string };
 
@@ -50,7 +52,7 @@ const arrGaugeOrder = [GamePackets.GaugeColor_T.CYAN, GamePackets.GaugeColor_T.R
 const arrBalloonTextures = ["L2UI_ch3.ChatBack.balloon1_1", "L2UI_ch3.ChatBack.balloon1_2", "L2UI_ch3.ChatBack.balloon1_3", "L2UI_ch3.ChatBack.balloon1_4", "L2UI_ch3.ChatBack.balloon2_1", "L2UI_ch3.ChatBack.balloon2_2", "L2UI_ch3.ChatBack.balloon2_3", "L2UI_ch3.ChatBack.balloon2_4"];
 const storeMatchColors: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [0xff00ff00, 0xff3cff3c], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [0xff00ffff, 0xff3cffc8], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [0xffffff00, 0xffc0ff00], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [0xff3cc8ff, 0xff1788f2] };
 const arrChatStoreTypes = [GamePackets.PrivateStoreType_T.STORE_PRIVATE_NONE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY_MANAGE, GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE_MANAGE];
-const storeBalloons: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [500, 0xffeaa5f5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [499, 0xfffdfea5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [665, 0xffffbb33], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [1273, 0xfffc7575] }; // FDynamicActor::DrawChat 0x106185ef..0x1061889d: sysstring label, text colour.
+const storeBalloons: Record<number, [number, number]> = { [GamePackets.PrivateStoreType_T.STORE_PRIVATE_SELL]: [SysString_T.PrivateStoreSell, 0xffeaa5f5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY]: [SysString_T.PrivateStoreBuy, 0xfffdfea5], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE]: [SysString_T.PrivateCreation, 0xffffbb33], [GamePackets.PrivateStoreType_T.STORE_PRIVATE_PACKAGE_SELL]: [SysString_T.PrivateStoreSaleByBulk, 0xfffc7575] }; // FDynamicActor::DrawChat 0x106185ef..0x1061889d: sysstring label, text colour.
 const equipmentSlots: Record<number, number> = { 1: 0, 8: 4, 64: 1, 128: 5, 256: 7, 512: 10, 1024: 6, 2048: 11, 4096: 12, 8192: 2, 16384: 5, 32768: 6, 65536: 3, 131072: 6 }; // NWindow 0x100744e0, primary cells for 16 / 15 / 17.
 const tmpNameplateAnchor = new Vector3();
 const tmpBalloonAnchor = new Vector3();
@@ -577,10 +579,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.manorCropSellWnd.onProcure = items => network.procureCrops(items);
         this.siegeInfoWnd.setCrestGetter((clanId, isAlly) => { const info = network.community.pledgeInfos.get(clanId); return info ? isAlly ? info.allyCrest : info.crest : null; });
         this.siegeInfoWnd.onRequestList = (castleId, isDefender) => isDefender ? network.requestSiegeDefenderList(castleId) : network.requestSiegeAttackerList(castleId);
-        this.siegeInfoWnd.onParticipate = (castleId, isDefender) => this.siegeConfirm(isDefender ? 668 : 667, this.strings.residences[castleId], () => network.requestJoinSiege(castleId, !isDefender, true)); // 0x1010ac40
-        this.siegeInfoWnd.onCancelApplication = (castleId, isDefender) => this.siegeConfirm(669, this.strings.residences[castleId], () => network.requestJoinSiege(castleId, !isDefender, false)); // 0x1010ad20
-        this.siegeInfoWnd.onApprove = (castleId, clan) => this.siegeConfirm(671, clan.name, () => network.confirmSiegeWaitingList(castleId, clan.clanId, true)); // 0x1010ae00
-        this.siegeInfoWnd.onRefuse = (castleId, clan) => this.siegeConfirm(670, clan.name, () => network.confirmSiegeWaitingList(castleId, clan.clanId, false)); // 0x1010af20
+        this.siegeInfoWnd.onParticipate = (castleId, isDefender) => this.siegeConfirm(isDefender ? SystemMessage_T.ConfirmSiegeDefenderRegistration : SystemMessage_T.ConfirmSiegeAttackerRegistration, this.strings.residences[castleId], () => network.requestJoinSiege(castleId, !isDefender, true)); // 0x1010ac40
+        this.siegeInfoWnd.onCancelApplication = (castleId, isDefender) => this.siegeConfirm(SystemMessage_T.ConfirmCancelSiegeRegistration, this.strings.residences[castleId], () => network.requestJoinSiege(castleId, !isDefender, false)); // 0x1010ad20
+        this.siegeInfoWnd.onApprove = (castleId, clan) => this.siegeConfirm(SystemMessage_T.ConfirmApproveSiegeDefender, clan.name, () => network.confirmSiegeWaitingList(castleId, clan.clanId, true)); // 0x1010ae00
+        this.siegeInfoWnd.onRefuse = (castleId, clan) => this.siegeConfirm(SystemMessage_T.ConfirmRejectSiegeDefender, clan.name, () => network.confirmSiegeWaitingList(castleId, clan.clanId, false)); // 0x1010af20
         this.summonedStatusWnd = this.skin.createPetStatusWnd(this.layer, 1);
         this.abnormalStatusWnd = this.skin.createAbnormalStatusWnd(this.layer);
         this.targetStatusWnd = this.skin.createTargetStatusWnd(this.layer);
@@ -656,8 +658,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.lobbyWnd.onSelect = index => network.previewCharacter(index);
         this.lobbyWnd.onStart = index => network.selectCharacter(index);
         this.lobbyWnd.onCreate = () => network.requestNewCharacter();
-        this.lobbyWnd.onDelete = index => this.confirm(this.formatSystemMessage(78, this.characterNames[index]), () => network.deleteCharacter(index), 78);
-        this.lobbyWnd.onRestore = index => this.confirm(this.nwindow.getSystemMessage(1555), () => network.restoreCharacter(index), 1555);
+        this.lobbyWnd.onDelete = index => this.confirm(this.formatSystemMessage(SystemMessage_T.ConfirmDeleteCharacter, this.characterNames[index]), () => network.deleteCharacter(index), SystemMessage_T.ConfirmDeleteCharacter);
+        this.lobbyWnd.onRestore = index => this.confirm(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmCancelCharacterDeletion), () => network.restoreCharacter(index), SystemMessage_T.ConfirmCancelCharacterDeletion);
         this.lobbyWnd.onRelogin = () => network.relogin();
         this.lobbyWnd.onSystemMessage = id => this.showMessage(this.nwindow.getSystemMessage(id));
 
@@ -752,7 +754,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.recipeBookWnd = this.skin.createRecipeBookWnd(this.layer);
         this.recipeBookWnd.onOpen = id => network.requestRecipeItemMakeInfo(id);
         this.recipeBookWnd.onDelete = recipe => {
-            this.dialogBox.show(this.formatSystemMessage(74, this.strings.itemNames[recipe.itemId]), DialogType_T.OK_CANCEL, accepted => { if (accepted) network.destroyRecipe(recipe.id); }, true, 0, 74);
+            this.dialogBox.show(this.formatSystemMessage(SystemMessage_T.ConfirmDestroyItem, this.strings.itemNames[recipe.itemId]), DialogType_T.OK_CANCEL, accepted => { if (accepted) network.destroyRecipe(recipe.id); }, true, 0, SystemMessage_T.ConfirmDestroyItem);
             this.dialogBox.owner = this.recipeBookWnd.getGrid();
         };
         this.recipeBookWnd.onDrop = (id, x, y) => {
@@ -776,15 +778,15 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.recipeShopWnd.onQuit = () => network.quitRecipeShopManage();
         this.recipeShopWnd.onCancel = () => network.cancelRecipeShopManage();
         this.recipeShopWnd.onMessage = () => {
-            this.dialogBox.showText(this.nwindow.getSystemMessage(334), message => {
+            this.dialogBox.showText(this.nwindow.getSystemMessage(SystemMessage_T.EnterStoreMessage), message => {
                 if (message) network.setRecipeShopMessage(message);
                 return true;
-            }, network.getOwnRecipeShopMessage(), 294, 334);
+            }, network.getOwnRecipeShopMessage(), 294, SystemMessage_T.EnterStoreMessage);
         };
         this.recipeShopWnd.onPrice = row => {
-            this.dialogBox.showQuantity(this.formatSystemMessage(963, this.strings.itemNames[row.recipe.itemId]), 0, this.strings.itemInfos[row.recipe.itemId].consumeType, (price, value) => {
+            this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.EnterManufacturingPrice, this.strings.itemNames[row.recipe.itemId]), 0, this.strings.itemInfos[row.recipe.itemId].consumeType, (price, value) => {
                 if (value) this.recipeShopWnd.transfer(row, price);
-            }, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), true, 963);
+            }, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), true, SystemMessage_T.EnterManufacturingPrice);
             this.dialogBox.owner = this.recipeShopWnd.getGrid(0);
         };
         this.recipeShopWnd.onHideTooltip = () => this.inventoryWnd.hideTooltip();
@@ -851,11 +853,11 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.trainWnd.onAquire = (id, level, mode) => network.aquireSkill(id, level, mode);
         this.manorShopWnd = this.skin.createManorShopWnd(this.layer);
         this.manorShopWnd.onQuantity = (side, item, allCount) => {
-            this.dialogBox.showQuantity(this.formatSystemMessage(72, this.strings.itemNames[item.itemId]), allCount, this.strings.itemInfos[item.itemId].consumeType, count => {
+            this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.MoveItemQuantity, this.strings.itemNames[item.itemId]), allCount, this.strings.itemInfos[item.itemId].consumeType, count => {
                 const current = this.manorShopWnd.getPressedItem(side);
 
                 if (current && count > 0) this.manorShopWnd.transfer(side, current, Math.min(count, current.count));
-            }, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, 72);
+            }, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, SystemMessage_T.MoveItemQuantity);
             this.dialogBox.owner = this.manorShopWnd.getGrid(side);
         };
         this.manorShopWnd.onSubmit = (isSell, listId, items) => {
@@ -871,10 +873,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             this.privateShopWnd.setVisible(false);
         };
         this.privateShopWnd.onMessage = () => {
-            this.dialogBox.showText(this.nwindow.getSystemMessage(334), message => {
+            this.dialogBox.showText(this.nwindow.getSystemMessage(SystemMessage_T.EnterStoreMessage), message => {
                 if (message) network.setPrivateStoreMsgSell(message);
                 return true;
-            }, network.getPrivateStoreMsgSell(), 294, 334);
+            }, network.getPrivateStoreMsgSell(), 294, SystemMessage_T.EnterStoreMessage);
             this.dialogBox.owner = this.privateShopWnd.getGrid(0);
         };
         this.privateBuyWnd = this.skin.createPrivateBuyWnd(this.layer);
@@ -889,17 +891,17 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             this.privateBuyWnd.setVisible(false);
         };
         this.privateBuyWnd.onMessage = () => {
-            this.dialogBox.showText(this.nwindow.getSystemMessage(334), message => {
+            this.dialogBox.showText(this.nwindow.getSystemMessage(SystemMessage_T.EnterStoreMessage), message => {
                 if (message) network.setPrivateStoreMsgBuy(message);
                 return true;
-            }, network.getPrivateStoreMsgBuy(), 294, 334);
+            }, network.getPrivateStoreMsgBuy(), 294, SystemMessage_T.EnterStoreMessage);
             this.dialogBox.owner = this.privateBuyWnd.getGrid(0);
         };
         this.vipShopWnd = this.skin.createVIPShopWnd(this.layer, this.inventoryWnd);
         this.vipShopWnd.onHide = () => network.clearMultiSell();
         this.vipShopWnd.onSelect = () => { if (this.dialogBox.isOpen() && this.dialogBox.owner === this.vipShopWnd.element) this.dialogBox.hide(); };
         this.vipShopWnd.onConfirm = (listId, entryId, amount) => {
-            this.dialogBox.show(this.nwindow.getSystemMessage(1383), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.chooseMultiSell(listId, entryId, amount); }, true, 0, 1383);
+            this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmExchange), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.chooseMultiSell(listId, entryId, amount); }, true, 0, SystemMessage_T.ConfirmExchange);
             this.dialogBox.owner = this.vipShopWnd.element;
         };
         this.previewShopWnd = this.skin.createShopWnd(this.layer, true);
@@ -938,7 +940,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.gmSkillWnd.skillWnd.onDragMove = event => this.macroWnd.highlightCommand(event.clientX, event.clientY);
         this.gmSkillWnd.skillWnd.onDragEnd = () => this.macroWnd.highlightCommand(-1, -1);
         this.gmStoreWnd.onQuantity = (side, item, maxCount) => {
-            this.dialogBox.showQuantity(this.formatSystemMessage(72, this.strings.itemNames[item.itemId]), maxCount, this.strings.itemInfos[item.itemId].consumeType, count => this.gmStoreWnd.transferQuantity(side, count), id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, 72);
+            this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.MoveItemQuantity, this.strings.itemNames[item.itemId]), maxCount, this.strings.itemInfos[item.itemId].consumeType, count => this.gmStoreWnd.transferQuantity(side, count), id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, SystemMessage_T.MoveItemQuantity);
             this.dialogBox.owner = this.gmStoreWnd.getGrid(side);
         };
         for (const wnd of [this.storeWnd, this.gmStoreWnd]) {
@@ -978,19 +980,19 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                         const needsQuantity = side === 0 || isStackable && (isDrag ? this.privateBuyWnd.getOwnedCount(selected) > 1 : isPointer || selected.count > 1);
 
                         if (!needsQuantity) { wnd.transfer(side, selected, 1); return; }
-                        const messageId = side === 0 ? 570 : 571;
+                        const messageId = side === 0 ? SystemMessage_T.PurchaseItemQuantity : SystemMessage_T.PurchaseItemQuantityAlternate;
                         const allCount = side === 0 ? this.privateBuyWnd.getOwnedCount(selected) : selected.count | 0;
 
                         this.dialogBox.showQuantity(this.formatSystemMessage(messageId, this.strings.itemNames[selected.itemId]), allCount, consumeType, count => {
                             const current = wnd.getPressedItem(side);
 
-                            if (current && count > 0) wnd.transfer(side, current, Math.min(count, 100000000));
+                            if (current && count > 0) wnd.transfer(side, current, Math.min(count, 1e8));
                         }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, false, messageId);
                         this.dialogBox.owner = wnd.getGrid(side);
                     };
 
                     if (side === 1) { quantity(); return; }
-                    this.dialogBox.showQuantity(this.nwindow.getSystemMessage(585), 0, this.strings.itemInfos[item.itemId].consumeType, price => {
+                    this.dialogBox.showQuantity(this.nwindow.getSystemMessage(SystemMessage_T.EnterPrice), 0, this.strings.itemInfos[item.itemId].consumeType, price => {
                         const selected = wnd.getPressedItem(0);
 
                         if (!selected || price <= 0) return;
@@ -998,10 +1000,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                         const reference = (selected as GamePackets.ShopItem_T & { referencePrice: number }).referencePrice;
 
                         if (reference > 0 && (price <= Math.trunc(reference / 5) || price >= (reference * 5 | 0))) {
-                            this.dialogBox.show(this.nwindow.getSystemMessage(569), DialogType_T.OK_CANCEL, isOk => { if (isOk) quantity(); }, true, 0, 569);
+                            this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmUnusualItemPrice), DialogType_T.OK_CANCEL, isOk => { if (isOk) quantity(); }, true, 0, SystemMessage_T.ConfirmUnusualItemPrice);
                             this.dialogBox.owner = wnd.getGrid(0);
                         } else quantity();
-                    }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, true, 585);
+                    }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, true, SystemMessage_T.EnterPrice);
                     this.dialogBox.owner = wnd.getGrid(0);
                     return;
                 }
@@ -1014,22 +1016,22 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                         const needsQuantity = consumeType >= 1 && consumeType <= 3 && (side === 1 && isDrag ? this.privateShopWnd.getOriginalCount(selected) > 1 : selected.count > 1);
 
                         if (!needsQuantity) { wnd.transfer(side, selected, 1); return; }
-                        this.dialogBox.showQuantity(this.formatSystemMessage(72, this.strings.itemNames[selected.itemId]), selected.count, consumeType, count => {
+                        this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.MoveItemQuantity, this.strings.itemNames[selected.itemId]), selected.count, consumeType, count => {
                             const current = wnd.getPressedItem(side);
 
                             if (!current || count <= 0) return;
                             if (count > current.count) {
-                                this.addSystemMessage(this.nwindow.getSystemMessage(1036), this.strings.systemMessageColors[1036]);
-                                network.playSystemMessageSound(1036);
+                                this.addSystemMessage(this.nwindow.getSystemMessage(SystemMessage_T.InputQuantityExceeded), this.strings.systemMessageColors[SystemMessage_T.InputQuantityExceeded]);
+                                network.playSystemMessageSound(SystemMessage_T.InputQuantityExceeded);
                                 return;
                             }
                             wnd.transfer(side, current, count);
-                        }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, true, 72);
+                        }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, true, SystemMessage_T.MoveItemQuantity);
                         this.dialogBox.owner = wnd.getGrid(side);
                     };
 
                     if (side === 1) { quantity(); return; }
-                    this.dialogBox.showQuantity(this.formatSystemMessage(322, this.strings.itemNames[item.itemId]), 0, this.strings.itemInfos[item.itemId].consumeType, price => {
+                    this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.EnterSalesPrice, this.strings.itemNames[item.itemId]), 0, this.strings.itemInfos[item.itemId].consumeType, price => {
                         const selected = wnd.getPressedItem(0);
 
                         if (!selected || price <= 0) return;
@@ -1037,10 +1039,10 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                         const reference = (selected as GamePackets.ShopItem_T & { referencePrice: number }).referencePrice;
 
                         if (reference > 0 && (price <= Math.trunc(reference / 5) || price >= (reference * 5 | 0))) {
-                            this.dialogBox.show(this.nwindow.getSystemMessage(569), DialogType_T.OK_CANCEL, isOk => { if (isOk) quantity(); }, true, 0, 569);
+                            this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmUnusualItemPrice), DialogType_T.OK_CANCEL, isOk => { if (isOk) quantity(); }, true, 0, SystemMessage_T.ConfirmUnusualItemPrice);
                             this.dialogBox.owner = wnd.getGrid(0);
                         } else quantity();
-                    }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, true, 322);
+                    }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, true, SystemMessage_T.EnterSalesPrice);
                     this.dialogBox.owner = wnd.getGrid(0);
                     return;
                 }
@@ -1052,16 +1054,16 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
                 if (!needsQuantity) { wnd.transfer(side, item, 1); return; }
 
-                this.dialogBox.showQuantity(this.formatSystemMessage(72, this.strings.itemNames[item.itemId]), item.count, consumeType, count => {
+                this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.MoveItemQuantity, this.strings.itemNames[item.itemId]), item.count, consumeType, count => {
                     const selected = wnd.getPressedItem(side);
 
                     if (selected && (wnd === this.privateShopWnd && count > selected.count || wnd === this.privateBuyWnd && count > this.privateBuyWnd.getMaxCount(selected))) {
-                        this.addSystemMessage(this.nwindow.getSystemMessage(1036), this.strings.systemMessageColors[1036]);
-                        network.playSystemMessageSound(1036);
+                        this.addSystemMessage(this.nwindow.getSystemMessage(SystemMessage_T.InputQuantityExceeded), this.strings.systemMessageColors[SystemMessage_T.InputQuantityExceeded]);
+                        network.playSystemMessageSound(SystemMessage_T.InputQuantityExceeded);
                         return;
                     }
                     if (selected) wnd.transfer(side, selected, count);
-                }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, false, 72);
+                }, id => { this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id); }, false, SystemMessage_T.MoveItemQuantity);
                 this.dialogBox.owner = wnd.isStoreMode() ? wnd.getGrid(side) : wnd.element;
             };
             wnd.onConfirm = (isSell, items) => {
@@ -1078,7 +1080,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
                     if (!this.privateBuyWnd.needsPriceConfirmation()) { send(); return; }
 
-                    this.dialogBox.show(this.nwindow.getSystemMessage(569), DialogType_T.OK_CANCEL, isOk => { if (isOk) send(); }, true, 0, 569);
+                    this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmUnusualItemPrice), DialogType_T.OK_CANCEL, isOk => { if (isOk) send(); }, true, 0, SystemMessage_T.ConfirmUnusualItemPrice);
                     this.dialogBox.owner = wnd.element;
                     return;
                 }
@@ -1095,7 +1097,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
                     if (!this.privateShopWnd.needsPriceConfirmation()) { send(); return; }
 
-                    this.dialogBox.show(this.nwindow.getSystemMessage(569), DialogType_T.OK_CANCEL, isOk => { if (isOk) send(); else wnd.setVisible(false); }, true, 0, 569);
+                    this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmUnusualItemPrice), DialogType_T.OK_CANCEL, isOk => { if (isOk) send(); else wnd.setVisible(false); }, true, 0, SystemMessage_T.ConfirmUnusualItemPrice);
                     this.dialogBox.owner = wnd.element;
                     return;
                 }
@@ -1115,7 +1117,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 if (wnd.isPreviewMode()) {
                     if (!items.length) return;
 
-                    this.dialogBox.show(this.nwindow.getSystemMessage(1157), DialogType_T.OK_CANCEL, isOk => {
+                    this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.TryingOnDuration), DialogType_T.OK_CANCEL, isOk => {
                         if (!isOk) return;
 
                         const selected = wnd.getItems(1).filter(item => item.count > 0);
@@ -1124,12 +1126,12 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
                         network.requestPreviewItems(selected.map(item => item.itemId));
                         wnd.setVisible(false);
-                    }, true, 0, 1157);
+                    }, true, 0, SystemMessage_T.TryingOnDuration);
                     this.dialogBox.owner = wnd.element;
                     return;
                 }
                 if (!isSell && wnd.getItems(0).some(stock => stock.count > 0 && items.filter(item => item.itemId === stock.itemId).reduce((sum, item) => sum + item.count, 0) > stock.count)) {
-                    this.dialogBox.show(this.nwindow.getSystemMessage(1338), DialogType_T.OK, null, true, 0, 1338);
+                    this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.TransferQuantityExceeded), DialogType_T.OK, null, true, 0, SystemMessage_T.TransferQuantityExceeded);
                     this.dialogBox.owner = wnd.element;
                     return;
                 }
@@ -1152,20 +1154,20 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             const consumeType = this.strings.itemInfos[item.itemId].consumeType;
 
             if (consumeType >= 1 && consumeType <= 3 && item.count > 1) {
-                this.dialogBox.showQuantity(this.formatSystemMessage(72, this.strings.itemNames[item.itemId]), item.initialCount, consumeType, count => {
+                this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.MoveItemQuantity, this.strings.itemNames[item.itemId]), item.initialCount, consumeType, count => {
                     const pressed = this.tradeWnd.getPressedItem();
 
                     if (!pressed || count === 0) return;
 
                     if (count > pressed.count) {
-                        this.addSystemMessage(this.nwindow.getSystemMessage(1036), this.strings.systemMessageColors[1036]);
-                        network.playSystemMessageSound(1036);
+                        this.addSystemMessage(this.nwindow.getSystemMessage(SystemMessage_T.InputQuantityExceeded), this.strings.systemMessageColors[SystemMessage_T.InputQuantityExceeded]);
+                        network.playSystemMessageSound(SystemMessage_T.InputQuantityExceeded);
                         return;
                     }
 
                     network.addTradeItem(pressed.objectId, count);
                     this.tradeWnd.clearSelection();
-                }, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, 72);
+                }, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, SystemMessage_T.MoveItemQuantity);
                 return;
             }
 
@@ -1217,7 +1219,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.macroWnd.shortcuts = network.items.shortcuts;
         this.macroWnd.onSave = macro => network.makeMacro(macro);
         this.macroWnd.onUse = id => network.activateMacro(id);
-        this.macroWnd.onDelete = macro => this.dialogBox.show(this.formatSystemMessage(828, macro.name), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.deleteMacro(macro.id); }, true, 0, 828);
+        this.macroWnd.onDelete = macro => this.dialogBox.show(this.formatSystemMessage(SystemMessage_T.ConfirmDeleteMacro, macro.name), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.deleteMacro(macro.id); }, true, 0, SystemMessage_T.ConfirmDeleteMacro);
         this.macroWnd.onError = id => { this.addSystemMessage(this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); network.playSystemMessageSound(id); };
         this.macroWnd.onHelp = () => { this.helpWnd.setVisible(!this.helpWnd.isVisible()); if (this.helpWnd.isVisible()) void this.loadHtmlFile(this.helpWnd, "help_macro.htm"); };
         this.macroWnd.onDrop = (id, x, y) => this.registerSkillDrop("macro", id, x, y);
@@ -1283,7 +1285,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.petitionBeginWnd.onSubmit = (text, category) => {
             network.petition(text, category);
             this.petitionWnd.reset();
-            this.petitionWnd.addString(`${this.nwindow.getSysString(708)} : ${text}`, 0xffdcdcdc);
+            this.petitionWnd.addString(`${this.nwindow.getSysString(SysString_T.ContentsOfAPetition)} : ${text}`, 0xffdcdcdc);
         };
         this.petitionBeginWnd.onCancel = () => network.cancelPetition();
         this.petitionBeginWnd.onValidation = id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id);
@@ -1295,8 +1297,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 case "help": void this.toggleHelp(); break;
                 case "petition": this.petitionBeginWnd.setVisible(!this.petitionBeginWnd.isVisible()); if (this.petitionBeginWnd.isVisible()) this.petitionBeginWnd.focus(); break;
                 case "options": this.optionWnd.toggle(); break;
-                case "restart": this.dialogBox.show(this.nwindow.getSystemMessage(126), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.requestRestart(); }, true, 0, 126); break;
-                case "exit": this.dialogBox.show(this.nwindow.getSystemMessage(125), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.logout(); }, true, 0, 125); break;
+                case "restart": this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmRestartGame), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.requestRestart(); }, true, 0, SystemMessage_T.ConfirmRestartGame); break;
+                case "exit": this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmQuitGame), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.logout(); }, true, 0, SystemMessage_T.ConfirmQuitGame); break;
             }
         };
 
@@ -1361,25 +1363,25 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     public showConfirm(messageId: number, text: string, onAnswer: (isOk: boolean) => void) {
         if (messageId === 0) this.dialogBox.hide();
-        else this.dialogBox.show(text, DialogType_T.OK_CANCEL, onAnswer, messageId !== 1510, 0, messageId); // NCGaraDialogBox::SetDialog, NWindow RVA 0x8b90: replacement does not decline resurrection.
+        else this.dialogBox.show(text, DialogType_T.OK_CANCEL, onAnswer, messageId !== SystemMessage_T.ResurrectionInvitation, 0, messageId); // NCGaraDialogBox::SetDialog, NWindow RVA 0x8b90: replacement does not decline resurrection.
     }
 
     public showAllyDismiss() {
-        this.dialogBox.showText(this.nwindow.getSystemMessage(513), name => {
+        this.dialogBox.showText(this.nwindow.getSystemMessage(SystemMessage_T.EnterClanToExpel), name => {
             if (!name) return true;
 
             this.dialogBox.hide();
-            this.showConfirm(1251, this.formatSystemMessage(1251, name), isOk => { if (isOk) this.manNetwork.dismissAllyClan(name); });
+            this.showConfirm(1251, this.formatSystemMessage(SystemMessage_T.ConfirmDismissAlliance, name), isOk => { if (isOk) this.manNetwork.dismissAllyClan(name); });
             return false;
-        }, "", 0, 513);
+        }, "", 0, SystemMessage_T.EnterClanToExpel);
     }
 
-    public showPartyInvite(name: string, onAnswer: (isAccepted: boolean) => void, itemDistribution = 0) { this.yesNoDialogBox.show(this.formatSystemMessage([572, 573, 967, 968, 969][itemDistribution], name), DialogType_T.YES_NO, onAnswer, true, 10000, [572, 573, 967, 968, 969][itemDistribution]); }
-    public showTradeInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(100, name), DialogType_T.YES_NO, onAnswer, true, 10000, 100); }
-    public showAllyInvite(requestor: string, allyName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(527, requestor, allyName), DialogType_T.YES_NO, onAnswer, true, 10000, 527); }
-    public showPledgeInvite(requestor: string, pledgeName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(67, requestor, pledgeName), DialogType_T.YES_NO, onAnswer, true, 10000, 67); }
-    public showFriendInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(516, name), DialogType_T.YES_NO, onAnswer, true, 10000, 516); }
-    public showCommandChannelInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(1529, name), DialogType_T.YES_NO, onAnswer, true, 0, 1529); }
+    public showPartyInvite(name: string, onAnswer: (isAccepted: boolean) => void, itemDistribution = 0) { this.yesNoDialogBox.show(this.formatSystemMessage([SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution], name), DialogType_T.YES_NO, onAnswer, true, 10000, [SystemMessage_T.PartyInvitationFindersKeepers, SystemMessage_T.PartyInvitationRandom, SystemMessage_T.PartyInvitationRandomIncludingSpoil, SystemMessage_T.PartyInvitationByTurn, SystemMessage_T.PartyInvitationByTurnIncludingSpoil][itemDistribution]); }
+    public showTradeInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.TradeInvitation, name), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.TradeInvitation); }
+    public showAllyInvite(requestor: string, allyName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.AllianceInvitation, requestor, allyName), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.AllianceInvitation); }
+    public showPledgeInvite(requestor: string, pledgeName: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.ClanInvitation, requestor, pledgeName), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.ClanInvitation); }
+    public showFriendInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.FriendInvitation, name), DialogType_T.YES_NO, onAnswer, true, 10000, SystemMessage_T.FriendInvitation); }
+    public showCommandChannelInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.CommandChannelInvitation, name), DialogType_T.YES_NO, onAnswer, true, 0, SystemMessage_T.CommandChannelInvitation); }
 
     protected formatSystemMessage(id: number, ...params: string[]): string {
         return this.nwindow.getSystemMessage(id).replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? "");
@@ -1400,7 +1402,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.loginWnd.setBusy(false);
         this.dialogBox.hide();
         this.yesNoDialogBox.hide();
-        this.messageWnd.show(`${this.nwindow.getSystemMessage(94)} | Lineage2JS by Ratchet`, "https://github.com/realratchet/Lineage2JS");
+        this.messageWnd.show(`${this.nwindow.getSystemMessage(SystemMessage_T.Copyright)} | Lineage2JS by Ratchet`, "https://github.com/realratchet/Lineage2JS");
         this.show("login");
     }
 
@@ -1620,7 +1622,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             for (const wnd of [this.shopWnd, this.vipShopWnd, this.manorShopWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.selectDeliverWnd]) wnd.setVisible(false);
         }
         this.nwindow.playWindowSound();
-        if (type === 0) void this.npcHtmlViewer.showPacket(html, this.nwindow.getSysString(444));
+        if (type === 0) void this.npcHtmlViewer.showPacket(html, this.nwindow.getSysString(SysString_T.Chat));
         else if (type > 0) void this.npcItemHtmlViewer.showPacket(html, this.strings.itemNames[type]);
     }
 
@@ -2208,7 +2210,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public notifyOlympiadSkill(objectId: number, skillId: number) {
         if (skillId < 0 || skillId > 1999) return;
         const skill = this.strings.skillInfos[`${skillId}:1`];
-        const message = this.formatSystemMessage(46, skill ? skill.name : "");
+        const message = this.formatSystemMessage(SystemMessage_T.UseSkill, skill ? skill.name : "");
 
         for (const wnd of this.olympiadPlayerWnds)
             if (wnd.getObjectId() === objectId) wnd.appendMessage(message);
@@ -2217,8 +2219,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public notifyOlympiadAttack(attackerId: number, defenderId: number, attackerName: string, isMiss: boolean, isCritical: boolean) {
         for (const wnd of this.olympiadPlayerWnds) {
             if (wnd.getObjectId() === attackerId) {
-                if (isCritical) wnd.appendMessage(this.nwindow.getSystemMessage(44));
-            } else if (wnd.getObjectId() === defenderId && isMiss) wnd.appendMessage(this.formatSystemMessage(42, attackerName));
+                if (isCritical) wnd.appendMessage(this.nwindow.getSystemMessage(SystemMessage_T.CriticalHit));
+            } else if (wnd.getObjectId() === defenderId && isMiss) wnd.appendMessage(this.formatSystemMessage(SystemMessage_T.AttackAvoided, attackerName));
         }
     }
     public setGMPledgeInfo(info: GamePackets.GMViewPledgeInfo_T) { this.gmClanWnd.setInfo(info); }
@@ -2439,7 +2441,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const castleGuardType = 8;
         const isCastleGuard = item.info.templateClass === "etc" && item.info.etcType === castleGuardType;
         const isQuantity = !isCastleGuard && consumeType >= 1 && consumeType <= 3 && item.count > 1;
-        const messageId = isCastleGuard ? 651 : isQuantity ? 71 : 400;
+        const messageId = isCastleGuard ? SystemMessage_T.ConfirmPlaceItem : isQuantity ? SystemMessage_T.DiscardItemQuantity : SystemMessage_T.ConfirmDiscardItem;
         const text = this.formatSystemMessage(messageId, item.name);
 
         if (isQuantity) this.dialogBox.showQuantity(text, item.count, consumeType, count => this.manNetwork.dropItem(item.objectId, count, location), id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, messageId);
@@ -2451,7 +2453,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected destroyInventoryItem(item: InventoryEntry_T) { // NWindow 0x10097bb1 / 0x10009741.
         const consumeType = item.info.consumeType;
         const isQuantity = consumeType >= 1 && consumeType <= 3 && item.count > 1;
-        const messageId = isQuantity ? 73 : 74;
+        const messageId = isQuantity ? SystemMessage_T.DestroyItemQuantity : SystemMessage_T.ConfirmDestroyItem;
         const text = this.formatSystemMessage(messageId, this.getInventoryItemName(item));
         const destroy = (count: number) => {
             this.manNetwork.destroyItem(item.objectId, count);
@@ -2468,12 +2470,12 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected crystallizeInventoryItem(item: InventoryEntry_T) { // NWindow 0x10097d5c / 0x10009795.
         if (!this.statusInfo || !this.statusInfo.hasDwarvenCraft || !item.info.crystallizable) return;
 
-        this.dialogBox.show(this.formatSystemMessage(336, this.getInventoryItemName(item)), DialogType_T.OK_CANCEL, isOk => {
+        this.dialogBox.show(this.formatSystemMessage(SystemMessage_T.ConfirmCrystallizeItem, this.getInventoryItemName(item)), DialogType_T.OK_CANCEL, isOk => {
             if (!isOk) return;
 
             this.manNetwork.crystallizeItem(item.objectId, 1);
             this.nwindow.playTrashSound();
-        }, true, 0, 336);
+        }, true, 0, SystemMessage_T.ConfirmCrystallizeItem);
         this.dialogBox.owner = this.inventoryWnd.getItemOwner(item);
     }
 
@@ -2501,7 +2503,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (item.slot >= 0) {
             if (!this.unequipInventoryItem(item)) return;
         } else {
-            const messageId = item.info.isRecipe ? 798 : item.info.popup;
+            const messageId = item.info.isRecipe ? SystemMessage_T.ConfirmItemRegistration : item.info.popup;
 
             if (messageId > 0) {
                 this.dialogBox.show(this.formatSystemMessage(messageId, item.name), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.useItem(item.objectId); }, true, 0, messageId);
@@ -2720,13 +2722,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         };
 
         if (consumeType >= 1 && consumeType <= 3 && item.count > 1) {
-            this.dialogBox.showQuantity(this.formatSystemMessage(72, item.name), item.count, consumeType, transfer, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, 72);
+            this.dialogBox.showQuantity(this.formatSystemMessage(SystemMessage_T.MoveItemQuantity, item.name), item.count, consumeType, transfer, id => this.dialogBox.show(this.nwindow.getSystemMessage(id), DialogType_T.OK, null, true, 0, id), false, SystemMessage_T.MoveItemQuantity);
             this.dialogBox.owner = isGiving ? this.inventoryWnd.getItemOwner(item) : this.petWnd.getItemOwner();
         } else transfer(1);
     }
 
     protected showQuestAbort(id: number) {
-        this.dialogBox.show(this.nwindow.getSystemMessage(id > 0 ? 182 : 1201), DialogType_T.OK_CANCEL, isOk => {
+        this.dialogBox.show(this.nwindow.getSystemMessage(id > 0 ? SystemMessage_T.ConfirmQuitQuest : SystemMessage_T.SelectQuestToQuit), DialogType_T.OK_CANCEL, isOk => {
             if (!isOk || id <= 0) return;
 
             this.manNetwork.abortQuest(id);
@@ -2743,42 +2745,42 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 const target = network.getSelectedPlayer();
 
                 if (target) network.invitePledge(target.objectId);
-                else this.clanError(186);
+                else this.clanError(SystemMessage_T.SelectClanInviteTarget);
                 break;
             }
             case "title":
-                if (!network.getSelectedPlayer()) { this.clanError(50); break; }
+                if (!network.getSelectedPlayer()) { this.clanError(SystemMessage_T.TargetNotFound); break; }
 
-                dialog.showText(this.nwindow.getSystemMessage(256), title => {
+                dialog.showText(this.nwindow.getSystemMessage(SystemMessage_T.EnterTitle), title => {
                     const target = network.getSelectedPlayer();
 
                     if (!target) return true;
-                    const error = !this.isValidName(title) ? 204 : title.length > 16 ? 80 : 0;
+                    const error = !this.isValidName(title) ? SystemMessage_T.InvalidName : title.length > 16 ? SystemMessage_T.InvalidCharacterNameLength : 0;
 
                     if (error) {
                         this.clanError(error);
-                        if (error === 204) dialog.textEditor.setValue("");
+                        if (error === SystemMessage_T.InvalidName) dialog.textEditor.setValue("");
                         dialog.textEditor.focus();
                         return false;
                     }
                     network.giveNickName(target.name, title);
                     return true;
-                }, "", 0, 256);
+                }, "", 0, SystemMessage_T.EnterTitle);
                 break;
             case "deleteTitle":
-                if (!network.getSelectedPlayer()) { this.clanError(50); break; }
+                if (!network.getSelectedPlayer()) { this.clanError(SystemMessage_T.TargetNotFound); break; }
 
-                dialog.show(this.nwindow.getSystemMessage(1181), DialogType_T.OK_CANCEL, isOk => {
+                dialog.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmChangeTitle), DialogType_T.OK_CANCEL, isOk => {
                     const target = network.getSelectedPlayer();
 
                     if (isOk && target) network.giveNickName(target.name, "");
-                }, true, 0, 1181);
+                }, true, 0, SystemMessage_T.ConfirmChangeTitle);
                 break;
             case "dismiss":
-                if (!member) { this.clanError(263); break; }
+                if (!member) { this.clanError(SystemMessage_T.ClanDissolutionAlreadyRequested); break; }
                 if (!member.name) break;
 
-                dialog.show(this.formatSystemMessage(69, member.name), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.oustPledgeMember(member.name); }, true, 0, 69);
+                dialog.show(this.formatSystemMessage(SystemMessage_T.ConfirmExpelClanMember, member.name), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.oustPledgeMember(member.name); }, true, 0, SystemMessage_T.ConfirmExpelClanMember);
                 break;
             case "privileges":
                 if (!this.statusInfo) break;
@@ -2788,34 +2790,34 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 break;
             case "authorize":
                 if (!this.statusInfo || !(this.statusInfo.clanRelation & 0x40) || !member || !member.name) break;
-                if (!member.objectId) { dialog.show(this.nwindow.getSystemMessage(145), DialogType_T.OK_CANCEL, null, true, 0, 145); break; }
+                if (!member.objectId) { dialog.show(this.nwindow.getSystemMessage(SystemMessage_T.TargetNotInGame), DialogType_T.OK_CANCEL, null, true, 0, SystemMessage_T.TargetNotInGame); break; }
 
                 network.requestMemberPledgePower(member.objectId);
                 this.pledgePowerWnd.showFor(member.objectId, 2, member.name);
                 break;
             case "declareWar":
             case "endWar":
-                dialog.showText(this.nwindow.getSystemMessage(action === "declareWar" ? 1531 : 1532), name => {
+                dialog.showText(this.nwindow.getSystemMessage(action === "declareWar" ? SystemMessage_T.EnterClanToDeclareWar : SystemMessage_T.EnterClanToEndWar), name => {
                     if (action === "declareWar") network.startPledgeWar(name);
                     else network.stopPledgeWar(name);
                     return true;
                 }, "", 0, action === "declareWar" ? 1531 : 1532);
                 break;
             case "leave": {
-                if (!this.statusInfo || this.statusInfo.clanRelation & 0x40) { this.clanError(239); break; }
+                if (!this.statusInfo || this.statusInfo.clanRelation & 0x40) { this.clanError(SystemMessage_T.ClanLeaderCannotWithdraw); break; }
                 const clan = network.getClanInfo();
 
-                dialog.show(this.formatSystemMessage(68, clan ? clan.name : ""), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.withdrawPledge(); }, true, 0, 68);
+                dialog.show(this.formatSystemMessage(SystemMessage_T.ConfirmLeaveClan, clan ? clan.name : ""), DialogType_T.OK_CANCEL, isOk => { if (isOk) network.withdrawPledge(); }, true, 0, SystemMessage_T.ConfirmLeaveClan);
                 break;
             }
             case "deleteCrest":
             case "deleteInsignia":
-                dialog.show(this.nwindow.getSystemMessage(1182), DialogType_T.OK_CANCEL, isOk => {
+                dialog.show(this.nwindow.getSystemMessage(SystemMessage_T.ConfirmDeleteClanCrest), DialogType_T.OK_CANCEL, isOk => {
                     if (!isOk) return;
 
                     if (action === "deleteCrest") network.setPledgeCrest(new Uint8Array(0));
                     else network.setPledgeLargeCrest(new Uint8Array(0));
-                }, true, 0, 1182);
+                }, true, 0, SystemMessage_T.ConfirmDeleteClanCrest);
                 break;
             case "setCrest":
             case "setInsignia":
@@ -2835,7 +2837,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     protected pickCrest(isSmall: boolean, isAlly = false) { // NWindow 0x10080bf0 crest / 0x100809d0 insignia / 0x10080ec0 alliance read BMP paths; a file picker replaces filename entry.
         const input = document.createElement("input");
-        const width = isAlly ? ALLY_CREST_WIDTH : isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH, height = isAlly ? ALLY_CREST_HEIGHT : isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT, error = isAlly ? 529 : isSmall ? 211 : 1478;
+        const width = isAlly ? ALLY_CREST_WIDTH : isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH, height = isAlly ? ALLY_CREST_HEIGHT : isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT, error = isAlly ? SystemMessage_T.InvalidAllianceCrestFormat : isSmall ? SystemMessage_T.InvalidClanCrestFormat : SystemMessage_T.InvalidClanInsigniaFormat;
 
         input.type = "file";
         input.accept = "image/*";
@@ -2847,7 +2849,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             try {
                 bytes = new Uint8Array(await input.files[0].arrayBuffer());
             } catch {
-                this.clanError(528);
+                this.clanError(SystemMessage_T.FileNotFound);
                 return;
             }
 
@@ -2869,7 +2871,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     protected getCrestMessage(isSmall: boolean, isAlly = false) { return `Select a supported image measuring ${isAlly ? ALLY_CREST_WIDTH : isSmall ? PLEDGE_CREST_WIDTH : PLEDGE_LARGE_CREST_WIDTH}x${isAlly ? ALLY_CREST_HEIGHT : isSmall ? PLEDGE_CREST_HEIGHT : PLEDGE_LARGE_CREST_HEIGHT} pixels.`; }
-    protected clanError(id: number) { this.addSystemMessage(id === 211 || id === 1478 || id === 529 ? this.getCrestMessage(id !== 1478, id === 529) : this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); this.manNetwork.playSystemMessageSound(id); }
+    protected clanError(id: number) { this.addSystemMessage(id === SystemMessage_T.InvalidClanCrestFormat || id === SystemMessage_T.InvalidClanInsigniaFormat || id === SystemMessage_T.InvalidAllianceCrestFormat ? this.getCrestMessage(id !== SystemMessage_T.InvalidClanInsigniaFormat, id === SystemMessage_T.InvalidAllianceCrestFormat) : this.nwindow.getSystemMessage(id), this.strings.systemMessageColors[id]); this.manNetwork.playSystemMessageSound(id); }
 
     protected isValidName(name: string) {
         const lower = name.replace(/[A-Z]/g, char => String.fromCharCode(char.charCodeAt(0) + 32));
@@ -2878,23 +2880,23 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     protected renamePet() { // NWindow 0x1000a55c, configured ACP1252 and SmallFont BMP glyphs.
-        this.dialogBox.showText(this.nwindow.getSystemMessage(535), name => {
+        this.dialogBox.showText(this.nwindow.getSystemMessage(SystemMessage_T.EnterPetName), name => {
             let error = 0;
 
-            if (!this.isValidName(name)) error = 591;
-            else if (name.length > 16) error = 80;
+            if (!this.isValidName(name)) error = SystemMessage_T.InvalidPetNameCharacter;
+            else if (name.length > 16) error = SystemMessage_T.InvalidCharacterNameLength;
 
             if (error) {
                 this.addSystemMessage(this.nwindow.getSystemMessage(error), this.strings.systemMessageColors[error]);
                 this.manNetwork.playSystemMessageSound(error);
-                if (error === 591) this.dialogBox.textEditor.setValue("");
+                if (error === SystemMessage_T.InvalidPetNameCharacter) this.dialogBox.textEditor.setValue("");
                 this.dialogBox.textEditor.focus();
                 return false;
             }
 
             this.manNetwork.changePetName(name);
             return true;
-        }, "", 0, 535);
+        }, "", 0, SystemMessage_T.EnterPetName);
         this.dialogBox.owner = this.petWnd.element;
     }
 
@@ -2967,7 +2969,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
         const window = this.gmSnoopWnds.find(window => window.getConversationId() === snoop.conversationId) || this.gmSnoopWnds.find(window => window.getConversationId() === -1);
 
-        if (!window) { this.dialogBox.show(this.nwindow.getSystemMessage(802), DialogType_T.OK, null, true, 0, 802); return; }
+        if (!window) { this.dialogBox.show(this.nwindow.getSystemMessage(SystemMessage_T.PetitionsUnavailable), DialogType_T.OK, null, true, 0, SystemMessage_T.PetitionsUnavailable); return; }
 
         if (window.getConversationId() === -1) window.setConversation(snoop.conversationId, snoop.name);
         window.addChat(snoop);

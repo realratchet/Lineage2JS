@@ -106,8 +106,8 @@ export class SpecialView {
                 } else this.isMoving = false;
 
                 this.distanceSpeed = time > 0 ? Math.abs(this.targetDistance - this.distance) / time : 1000000;
-                this.rotationSpeed.set(time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.x - this.baseRotation.x)) / time) : 3276800, time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.y - this.baseRotation.y)) / time) : 3276800);
-                this.relativeSpeed.set(time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.x - this.relative.x)) / time) : 3276800, time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.y - this.relative.y)) / time) : 3276800);
+                this.rotationSpeed.set(time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.x - this.baseRotation.x)) / time) : 100 * 32768, time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.y - this.baseRotation.y)) / time) : 100 * 32768);
+                this.relativeSpeed.set(time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.x - this.relative.x)) / time) : 100 * 32768, time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.y - this.relative.y)) / time) : 100 * 32768);
                 this.duration = Math.fround(request.duration * Math.fround(0.001));
                 this.objectId = request.objectId;
                 this.isReturning = false;

@@ -2,6 +2,7 @@ import NCStatusWnd from "./nc-status-wnd";
 import type NDomLayer from "./ndom";
 import type { NDomButton_T } from "./ndom";
 import type { PetStatus_T, AbnormalStatus_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.SmallWnd.smallwindow_back";
 const arrBars = ["HPBAR", "MPBAR", "FATIGUEBAR"].map(name => `L2UI_CH3.SmallWnd.${name}`);
@@ -32,7 +33,7 @@ export class NCPetStatusWnd extends NCStatusWnd {
         this.effects = layer.createWindow(0, 0, 0, 0, this.element);
         this.effects.style.pointerEvents = "none";
         this.button = layer.button(this.element, 1, 6, 11, 13, TEX_BUTTON, `${TEX_BUTTON}_down`, null, null, () => { this.areEffectsVisible = !this.areEffectsVisible; this.update(); });
-        layer.tooltip(this.element, this.button, layer.getManager().getSysString(881), 0);
+        layer.tooltip(this.element, this.button, layer.getManager().getSysString(SysString_T.IndicatorOfTheAbnormalStateOfAPartyMember), 0);
         this.button.addEventListener("mousedown", event => { if (event.detail > 1) event.stopImmediatePropagation(); }, true);
         this.createSizeCtrl();
         this.element.addEventListener("mousedown", event => {

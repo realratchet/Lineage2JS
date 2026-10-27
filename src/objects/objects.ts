@@ -1,5 +1,18 @@
 import type * as RAPIER from "@dimforge/rapier3d";
 import type * as THREE from "three";
+import type { ScriptHost_T } from "../ue-script/vm";
+import type Terrain from "./terrain";
+
+export function getScriptActor(actor: ICollidable | null): ScriptHost_T | null {
+    if (!actor) return null;
+    if ((actor as any).isTerrain) {
+        const host = (actor as Terrain).terrainInfoActor;
+
+        if (!host) throw new Error(`Terrain '${actor.name}' has no TerrainInfo actor.`);
+        return host;
+    }
+    return actor as unknown as ScriptHost_T;
+}
 
 export type ICollidable = THREE.Object3D<THREE.Event> & {
     readonly isCollidable: boolean;

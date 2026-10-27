@@ -1,6 +1,8 @@
 import NDomLayer, { NDomButton_T, NDomEdit_T, NDOM_EDIT_TEXTURES } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const TEXT_X = 41;
@@ -138,19 +140,19 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
 
         switch (type) {
             case DialogType_T.OK:
-                this.okButton.setLabel(manager.getSysString(140));
+                this.okButton.setLabel(manager.getSysString(SysString_T.OK));
                 this.layer.place(this.okButton, 90, 75);
                 this.cancelButton.hidden = true;
                 break;
             case DialogType_T.OK_CANCEL:
-                this.okButton.setLabel(manager.getSysString(140));
-                this.cancelButton.setLabel(manager.getSysString(141));
+                this.okButton.setLabel(manager.getSysString(SysString_T.OK));
+                this.cancelButton.setLabel(manager.getSysString(SysString_T.Cancel));
                 this.layer.place(this.okButton, 51, 75);
                 this.cancelButton.hidden = false;
                 break;
             case DialogType_T.YES_NO:
-                this.okButton.setLabel(manager.getSysString(184));
-                this.cancelButton.setLabel(manager.getSysString(185));
+                this.okButton.setLabel(manager.getSysString(SysString_T.Yes));
+                this.cancelButton.setLabel(manager.getSysString(SysString_T.No));
                 this.layer.place(this.okButton, 51, 75);
                 this.cancelButton.hidden = false;
                 break;
@@ -187,8 +189,8 @@ export class NCDialogBox { // NCGaraDialogBox (vtable 0x101a11a0): OnCreate 0x10
 
             const count = value ? Number(value) : 1;
 
-            if ((isOverride || consumeType === 3) && count > 2000000000) { onError(1369); return; }
-            if (!isOverride && consumeType === 2 && count > 1000000) { onError(1338); return; }
+            if ((isOverride || consumeType === 3) && count > 2e9) { onError(SystemMessage_T.MaximumExceeded); return; }
+            if (!isOverride && consumeType === 2 && count > 1e6) { onError(SystemMessage_T.TransferQuantityExceeded); return; }
 
             onResult(count, value);
         }, true, 0, messageId);

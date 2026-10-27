@@ -1,12 +1,13 @@
 import type NDomLayer from "./ndom";
 import type { NDomButton_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.SystemMenuWnd.system2_back";
 const TEX_BUTTON = SKIN_SLOTS.bigButton;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.bigButtonDown;
 
-const BUTTON_LABELS = [0x174, 0x176, 0x177, 0x175, 0x1d1]; // village, hideaway, castle, siege HQ, fixed (0x100b7518..0x100b77f4); index is the restart type sent.
+const BUTTON_LABELS = [SysString_T.ToVillage, SysString_T.ToHideaway, SysString_T.ToCastle, SysString_T.ToSiegeHQ, SysString_T.Fixed]; // village, hideaway, castle, siege HQ, fixed (0x100b7518..0x100b77f4); index is the restart type sent.
 const BUTTON_Y = [6, 30, 54, 78, 102];
 
 export class NCRestartMenuWnd { // NCRestartMenuWnd: NCConsole 0x10064824 SetWindowPos(W/2 - 64, H/2 - 64, 128, 128); paint 0x100b6aa0.

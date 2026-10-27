@@ -3,6 +3,8 @@ import { NCComboBox } from "./nc-lobby-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { PartyMatchDetail_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.PartyMatchWnd.PartyMatch3_Back";
 const TEX_BUTTON = SKIN_SLOTS.button;
@@ -36,13 +38,13 @@ export class NCPartyRoomMakingWnd {
         this.members = new NCComboBox(layer, this.element, 103, 37, 40, 17);
         this.members.setItems(Array.from({ length: 19 }, (_, index) => String(index + 2)));
         this.members.onChange = index => { this.maxMembers = index + 2; };
-        [[413, 94, 20], [1042, 94, 40], [1030, 94, 60], [1043, 127, 60], [1044, 197, 60]].forEach(([id, x, y]) => {
+        [[SysString_T.RoomTitle, 94, 20], [SysString_T.MaxMembers, 94, 40], [SysString_T.LevelLimit, 94, 60], [SysString_T.Min, 127, 60], [SysString_T.Max, 197, 60]].forEach(([id, x, y]) => {
             const text = manager.getSysString(id);
 
             layer.text(this.element, text, 0xffdcdcdc, FontType_T.SMALL, x - layer.measureText(text), y);
         });
-        layer.button(this.element, 101, 110, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(140), () => this.submit());
-        layer.button(this.element, 181, 110, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => this.setVisible(false));
+        layer.button(this.element, 101, 110, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.OK), () => this.submit());
+        layer.button(this.element, 181, 110, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Cancel), () => this.setVisible(false));
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 178), Math.trunc(height * 0.5 - 70)); }
@@ -56,7 +58,7 @@ export class NCPartyRoomMakingWnd {
     }
 
     public showCreate(playerLevel: number, clientLootType: number) {
-        this.show({ roomId: 0, maxMembers: 10, minLevel: Math.max(1, playerLevel - 5), maxLevel: Math.min(78, playerLevel + 5), lootType: clientLootType, title: this.layer.getManager().getSystemMessage(1398) });
+        this.show({ roomId: 0, maxMembers: 10, minLevel: Math.max(1, playerLevel - 5), maxLevel: Math.min(78, playerLevel + 5), lootType: clientLootType, title: this.layer.getManager().getSystemMessage(SystemMessage_T.RecruitingPartyMembers) });
     }
 
     public showEdit(detail: PartyMatchDetail_T, clientLootType: number) { this.show({ ...detail, lootType: clientLootType }); }
@@ -78,7 +80,7 @@ export class NCPartyRoomMakingWnd {
         const minLevel = Math.max(1, Math.min(78, parseInt(this.minimum.getValue().replace(/,/g, ""), 10) || 0));
         const maxLevel = Math.max(minLevel, Math.max(1, Math.min(78, parseInt(this.maximum.getValue().replace(/,/g, ""), 10) || 0)));
         const value = this.title.getValue();
-        const title = value ? this.layer.getManager().filterText(value) : this.layer.getManager().getSystemMessage(1398);
+        const title = value ? this.layer.getManager().filterText(value) : this.layer.getManager().getSystemMessage(SystemMessage_T.RecruitingPartyMembers);
 
         if (this.onSubmit) this.onSubmit({ roomId: this.roomId, maxMembers: this.maxMembers, minLevel, maxLevel, lootType: this.getLootType ? this.getLootType() : this.lootType, title });
 

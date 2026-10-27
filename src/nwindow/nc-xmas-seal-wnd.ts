@@ -1,5 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import type NDomLayer from "./ndom";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI.MinimapWnd.MinimapBack";
 const WIDTH = 334;
@@ -17,7 +18,7 @@ export class NCXMasSealWnd { // NCXMasSealWnd: NConsole 0x10063654 (W*0.5-178, H
 
         this.element = layer.createWindow(0, 0, WIDTH, HEIGHT);
         this.element.hidden = true;
-        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(2), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(SysString_T.Item), false, () => this.setVisible(false));
         layer.tile(this.element, 0, 20, WIDTH, 333, 0, 0, WIDTH, 333, TEX_BACK);
         this.illustration = layer.createWindow(3, 21, 328, 329, this.element);
     }

@@ -1,4 +1,5 @@
 import NDomLayer from "./ndom";
+import SysString_T from "./sys-string";
 
 const TEX_ICON = "L2UI_CH3.PartyMatchWnd.PartyMatchIcon";
 const TEX_BACK = "NWindow.ChatBack";
@@ -16,7 +17,7 @@ export class NCMinimizedWnd {
     protected timer = 0;
     protected isHovered = false;
 
-    public constructor(protected readonly layer: NDomLayer, protected readonly parentElement: HTMLElement, protected readonly onRestore: () => void, texture = TEX_ICON, protected captionId = 389, protected readonly isCaptionAbove = true) {
+    public constructor(protected readonly layer: NDomLayer, protected readonly parentElement: HTMLElement, protected readonly onRestore: () => void, texture = TEX_ICON, protected captionId = SysString_T.PartyMatching, protected readonly isCaptionAbove = true) {
         this.element = layer.createWindow(0, 0, 32, 32);
         this.element.hidden = true;
         this.element.tabIndex = -1;

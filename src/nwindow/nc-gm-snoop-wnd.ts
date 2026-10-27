@@ -3,11 +3,12 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomCheckBox_T, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const ROW_HEIGHT = 17; // NCListBox::OnPaint 0x10020cf5.
 const VISIBLE_ROWS = 11; // The 195px Snoop viewport fits eleven rows.
 const TEX_BACK = "L2UI.etcwnd.Petitionback";
-const arrChannels = [[Say2_T.TRADE, 362, 15, 240, 0xffeaa5f5], [Say2_T.CLAN, 360, 84, 240, 0xff7d77ff], [Say2_T.PARTY, 361, 153, 240, 0xff00ff00], [Say2_T.SHOUT, 359, 222, 240, 0xffff7200], [Say2_T.TELL, 363, 15, 254, 0xffff00ff], [Say2_T.ALL, 383, 84, 254, 0xffdcdcdc], [Say2_T.ALLIANCE, 592, 153, 254, 0xff77ff99]];
+const arrChannels = [[Say2_T.TRADE, SysString_T.TradeChatFilter, 15, 240, 0xffeaa5f5], [Say2_T.CLAN, SysString_T.ClanChatFilter, 84, 240, 0xff7d77ff], [Say2_T.PARTY, SysString_T.PartyChatFilter, 153, 240, 0xff00ff00], [Say2_T.SHOUT, SysString_T.Shout, 222, 240, 0xffff7200], [Say2_T.TELL, SysString_T.Whisper, 15, 254, 0xffff00ff], [Say2_T.ALL, SysString_T.GeneralChatFilter, 84, 254, 0xffdcdcdc], [Say2_T.ALLIANCE, SysString_T.AllianceChatFilter, 153, 254, 0xff77ff99]];
 type SnoopLine_T = { text: string, color: number, indent: number };
 
 export class NCGMSnoopWnd {
@@ -27,7 +28,7 @@ export class NCGMSnoopWnd {
         this.element.hidden = true;
         this.element.addEventListener("mousedown", () => this.activate());
         layer.tile(this.element, 0, 21, 300, 280, 0, 0, 300, 280, TEX_BACK);
-        this.caption = NCFrameCtrl.createDOM(layer, this.element, 300, manager.getSysString(693), false, () => this.setVisible(false));
+        this.caption = NCFrameCtrl.createDOM(layer, this.element, 300, manager.getSysString(SysString_T.Surveillance), false, () => this.setVisible(false));
         this.chat = layer.scrollPane(this.element, 15, 38, 282, 195, ROW_HEIGHT, false, VISIBLE_ROWS);
         this.chat.content.setAttribute("role", "log");
         const setScroll = this.chat.setScroll;
@@ -49,7 +50,7 @@ export class NCGMSnoopWnd {
             });
             return control;
         });
-        layer.button(this.element, 110, 270, 64, 19, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(141), () => {
+        layer.button(this.element, 110, 270, 64, 19, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(SysString_T.Cancel), () => {
             this.setVisible(false);
             if (this.onQuit) this.onQuit(this.conversationId);
             this.reset();
@@ -65,7 +66,7 @@ export class NCGMSnoopWnd {
     }
     public setConversation(objectId: number, name: string) {
         this.conversationId = objectId;
-        const title = `${this.layer.getManager().getSysString(693)} - ${name}`;
+        const title = `${this.layer.getManager().getSysString(SysString_T.Surveillance)} - ${name}`;
 
         this.element.setAttribute("aria-label", title);
         this.layer.renderText(this.caption, title, 0xffc8d2dc);

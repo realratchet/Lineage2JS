@@ -676,7 +676,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
             const vertexCount = attributes.positions.length / 3;
             const arrStaticLights = mergedLights ? mergedLights.scene.filter(light => staticLights.has(light.light)) : [];
 
-            if (vertexCount >= 100000 && arrStaticLights.length >= 128) {
+            if (vertexCount >= 1e5 && arrStaticLights.length >= 128) {
                 const glow = new Float32Array(vertexCount);
 
                 for (const actor of perActorAmbient) glow.fill(actor.scaledGlow, actor.startVertex, actor.startVertex + actor.count);

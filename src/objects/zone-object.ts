@@ -433,6 +433,25 @@ export class SectorObject extends GameObject {
         this.arrLevelActors[index] = null;
     }
 
+    public getTerrainInfoActor(uuid: string): ScriptHost_T {
+        const index = this.cacheLevelActorIndices.get(uuid);
+
+        if (index === undefined) throw new Error(`Actor '${uuid}' is absent from '${this.name}'.`);
+        const info = this.arrLevelActorRecords[index];
+
+        if (!this.scriptVM.isClassChildOf(info.scriptClassId, "engine.TerrainInfo")) throw new Error(`Actor '${uuid}' is not a TerrainInfo.`);
+        let actor = this.arrLevelActors[index];
+
+        if (actor === undefined) {
+            const object = new Actor(info as any);
+
+            object.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.arrLevelActors[index] = actor = object;
+        }
+        if (!actor) throw new Error(`Actor '${uuid}' has been removed from '${this.name}'.`);
+        return actor;
+    }
+
     public getLevelActor(index: number): ScriptHost_T | null {
         if (!Number.isInteger(index) || index < 0 || index >= this.arrLevelActors.length) throw new Error(`Invalid actor slot '${index}' in '${this.name}'`);
         if (this.arrLevelActors[index] !== undefined) return this.arrLevelActors[index];
@@ -558,7 +577,7 @@ export class SectorObject extends GameObject {
         setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
         volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
         setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
-        setScriptObjectProperty(volume, "Priority", -1000000);
+        setScriptObjectProperty(volume, "Priority", -1e6);
         setScriptObjectProperty(volume, "bNoDelete", true);
         return volume;
     }

@@ -1,5 +1,6 @@
 import NDomLayer from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.etc.broadcast_back";
 const TEX_STRIP = "L2UI_CH3.FrameCtrl.smallbar";
@@ -25,7 +26,7 @@ export class NCObserverWnd {
             event.preventDefault();
             layer.dragWindow(this.element, event);
         });
-        const label = layer.getManager().getSysString(611);
+        const label = layer.getManager().getSysString(SysString_T.Return);
 
         layer.button(this.element, 19, 5, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, label, () => { if (this.onReturn) this.onReturn(); }).setAttribute("aria-label", label);
     }

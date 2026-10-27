@@ -3,6 +3,8 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { type NDomCheckBox_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.PetitionWnd.petition_fb_back";
 const arrRadioTextures = ["L2UI_CH3.RadioCtrl.RadioButton1", "L2UI_CH3.RadioCtrl.RadioButton2"];
@@ -22,11 +24,11 @@ export class NCPetitionFeedBackWnd {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(848), false, () => this.setVisible(false));
-        [[855, 22, 32], [856, 22, 151]].forEach(([id, x, y]) => layer.text(this.element, manager.getSysString(id), 0xffdcdcdc, FontType_T.SMALL, x, y));
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.EvaluationOfPetitions), false, () => this.setVisible(false));
+        [[SysString_T.CustomerSatisfactionRating, 22, 32], [SysString_T.OtherOpinions, 22, 151]].forEach(([id, x, y]) => layer.text(this.element, manager.getSysString(id), 0xffdcdcdc, FontType_T.SMALL, x, y));
         this.message = new CHtmlMultiEdit(layer, this.element, 8, 166, 240, 199);
         this.arrRatings = Array.from({ length: 5 }, (_, index) => {
-            const radio = layer.checkbox(this.element, 21, 52 + index * 19, 100, 12, manager.getSysString(850 + index), () => this.setRating(index));
+            const radio = layer.checkbox(this.element, 21, 52 + index * 19, 100, 12, manager.getSysString(SysString_T.VeryGood + index), () => this.setRating(index));
             const setChecked = radio.setChecked, icon = radio.firstElementChild as HTMLDivElement;
 
             radio.setAttribute("role", "radio");
@@ -49,7 +51,7 @@ export class NCPetitionFeedBackWnd {
             return radio;
         });
         this.setRating(2); // NCPetitionFeedBackWnd 0x100e2b2f and Hide -> 0x100e1160 select Fair.
-        layer.button(this.element, 90, 372, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(140), () => this.submit());
+        layer.button(this.element, 90, 372, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(SysString_T.OK), () => this.submit());
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 256, height - 401); }
@@ -71,7 +73,7 @@ export class NCPetitionFeedBackWnd {
         const text = this.message.getValue();
 
         if (text.length > 512) { // Native 0x100e12c2..0x100e1308: English character bound avoids its unchecked ACP buffer read.
-            if (this.onValidation) this.onValidation(327);
+            if (this.onValidation) this.onValidation(SystemMessage_T.TextLimit80Characters);
             return;
         }
         if (this.onSubmit) this.onSubmit(this.arrRatings.findIndex(radio => radio.getChecked()), text);

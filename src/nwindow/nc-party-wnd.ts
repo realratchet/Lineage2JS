@@ -3,6 +3,7 @@ import type NDomLayer from "./ndom";
 import type { NDomButton_T } from "./ndom";
 import type { TooltipInfo_T } from "./nc-tooltip";
 import type { PartyMember_T, AbnormalStatus_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const TEX_FRAME = "L2UI_CH3.FrameCtrl.smallbar";
 const TEX_BACK = "L2UI_CH3.SmallWnd.SmallWindow_back";
@@ -11,7 +12,7 @@ const TEX_LEADER = "L2UI_CH3.PartyWnd.party_leadericon";
 const TEX_DEBUFF = "L2UI_CH3.PlayerStatusWnd.debuff";
 const arrBars = ["cpBar", "HpBar", "MpBar"].map(name => `L2UI_CH3.SmallWnd.${name}`);
 const arrBarBacks = ["CpBar_back", "HpBar_back", "MpBar_back"].map(name => `L2UI_CH3.SmallWnd.${name}`);
-const arrLootNames = [487, 488, 798, 799, 800];
+const arrLootNames = [SysString_T.FindersKeepers, SysString_T.Random, SysString_T.RandomIncludingSpoil, SysString_T.ByTurn, SysString_T.ByTurnIncludingSpoil];
 const MEMBER_HEIGHT = 46;
 const MAX_MEMBERS = 8;
 
@@ -127,7 +128,7 @@ class NCPartyStatusWnd { // NCPartyStatusWnd: OnCreate 0x10114d80, paint 0x10115
 
         this.leader.hidden = member.objectId !== this.leaderId;
         if (!this.leader.hidden) layer.place(this.leader, Math.trunc(width * 0.5 - Math.trunc(layer.measureText(member.name) / 2) - 11), 8);
-        this.leaderTooltip.title = this.lootType >= 0 && this.lootType < arrLootNames.length ? `${manager.getSysString(489)} : ${manager.getSysString(arrLootNames[this.lootType])}` : "";
+        this.leaderTooltip.title = this.lootType >= 0 && this.lootType < arrLootNames.length ? `${manager.getSysString(SysString_T.LootDist)} : ${manager.getSysString(arrLootNames[this.lootType])}` : "";
 
         this.effects.replaceChildren();
         if (!areEffectsVisible) return;
@@ -171,7 +172,7 @@ export class NCPartyWnd extends NCStatusWnd { // NCPartyWnd: NCConsole 0x10060fd
             return member;
         });
         this.button = layer.button(this.element, 1, 7, 11, 13, TEX_BUFF_BUTTON, `${TEX_BUFF_BUTTON}_down`, null, null, () => { this.areEffectsVisible = !this.areEffectsVisible; this.update(); }); // 0x1010ded0
-        layer.tooltip(this.element, this.button, layer.getManager().getSysString(881), 0);
+        layer.tooltip(this.element, this.button, layer.getManager().getSysString(SysString_T.IndicatorOfTheAbnormalStateOfAPartyMember), 0);
         this.button.addEventListener("mousedown", event => { if (event.detail > 1) event.stopImmediatePropagation(); }, true);
         this.createSizeCtrl();
         this.update();

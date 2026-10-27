@@ -1,6 +1,8 @@
 import { DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type { NDomLayer, NDomButton_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 export type LobbyCharacter_T = { name: string, level: number, className: string, curHp: number, maxHp: number, curMp: number, maxMp: number, sp: number, exp: number, karma: number, deleteSeconds: number };
 export type LobbyPawnLabel_T = { x: number, y: number, name: string, karma: number, deleteSeconds: number };
@@ -49,9 +51,9 @@ function karmaColor(karma: number): number { // NCLobbyWnd paint 0x1009c8cd: whi
 
 function makeTimeStr(layer: NDomLayer, seconds: number): string { // NWndUtil::MakeTimeStr 0x10037bc0: "%d%s %d%s %d%s" with sysstring 1109/1110/1111.
     const manager = layer.getManager();
-    const days = Math.trunc(seconds / 86400), rest = seconds % 86400;
+    const days = Math.trunc(seconds / (24 * 60 * 60)), rest = seconds % (24 * 60 * 60);
 
-    return `${days}${manager.getSysString(1109)} ${Math.trunc(rest / 3600)}${manager.getSysString(1110)} ${Math.trunc((rest % 3600) / 60)}${manager.getSysString(1111)}`;
+    return `${days}${manager.getSysString(SysString_T.Days)} ${Math.trunc(rest / 3600)}${manager.getSysString(SysString_T.Hours)} ${Math.trunc((rest % 3600) / 60)}${manager.getSysString(SysString_T.Minutes)}`;
 }
 
 function isPendingDelete(character: LobbyCharacter_T) { return character.deleteSeconds > 0; }
@@ -167,9 +169,9 @@ export class NCPawnSelectWnd { // NCPawnSelectWnd OnCreate 0x1009ccc0, OnPaint 0
         this.element.style.pointerEvents = "auto";
 
         layer.tile(this.element, 0, 0, 256, 108, 0, 0, 256, 108, TEX_SELECT_BACK);
-        layer.text(this.element, manager.getSysString(50), LABEL_COLOR, FontType_T.SMALL, 15, 16);
-        layer.text(this.element, manager.getSysString(88), LABEL_COLOR, FontType_T.SMALL, 15, 39);
-        layer.text(this.element, manager.getSysString(101), TEXT_COLOR, FontType_T.SMALL, 131, 69);
+        layer.text(this.element, manager.getSysString(SysString_T.Name), LABEL_COLOR, FontType_T.SMALL, 15, 16);
+        layer.text(this.element, manager.getSysString(SysString_T.Level), LABEL_COLOR, FontType_T.SMALL, 15, 39);
+        layer.text(this.element, manager.getSysString(SysString_T.Karma), TEXT_COLOR, FontType_T.SMALL, 131, 69);
 
         this.values = layer.createWindow(0, 0, 256, 108, this.element);
         this.values.hidden = true;
@@ -241,7 +243,7 @@ export class NCLobbyStartWnd { // NCLobbyStartWnd OnCreate 0x1009b3a0, OnPaint 0
         this.element.style.pointerEvents = "auto";
 
         layer.tile(this.element, 0, 0, 140, 49, 0, 0, 140, 49, TEX_START_BACK);
-        this.startButton = layer.button(this.element, 13, 10, 116, 31, TEX_BIGBUTTON2, TEX_BIGBUTTON2_DOWN, null, layer.getManager().getSysString(160), onStart);
+        this.startButton = layer.button(this.element, 13, 10, 116, 31, TEX_BIGBUTTON2, TEX_BIGBUTTON2_DOWN, null, layer.getManager().getSysString(SysString_T.StartGame), onStart);
         this.startButton.setEnabled(false);
     }
 }
@@ -259,9 +261,9 @@ export class NCLobbyFunctionWnd { // NCLobbyFunctionWnd OnCreate 0x1009ada0, OnP
         this.element.style.pointerEvents = "auto";
 
         layer.tile(this.element, 0, 0, 120, 138, 0, 0, 120, 138, TEX_MENU_BACK);
-        this.createButton = layer.button(this.element, 13, 20, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(158), onCreate);
-        this.deleteButton = layer.button(this.element, 13, 45, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(159), onDelete);
-        this.reloginButton = layer.button(this.element, 13, 95, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(884), onRelogin);
+        this.createButton = layer.button(this.element, 13, 20, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(SysString_T.CreateCharacterButton), onCreate);
+        this.deleteButton = layer.button(this.element, 13, 45, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(SysString_T.DeleteCharacter), onDelete);
+        this.reloginButton = layer.button(this.element, 13, 95, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(SysString_T.ReLogin), onRelogin);
         this.deleteButton.setEnabled(false);
     }
 }
@@ -350,7 +352,7 @@ export class NCLobbyWnd { // NCLobbyWnd OnCreate 0x1009cff0, OnPaint 0x1009c7e0:
 
     protected newCharacter() { // slot78 0x1009ba10
         if (this.characters.length === MAX_CHARACTERS) {
-            if (this.onSystemMessage) this.onSystemMessage(77);
+            if (this.onSystemMessage) this.onSystemMessage(SystemMessage_T.CharacterLimitReached);
 
             return;
         }
@@ -389,7 +391,7 @@ export class NCLobbyWnd { // NCLobbyWnd OnCreate 0x1009cff0, OnPaint 0x1009c7e0:
 
             if (element.time.hidden) return;
 
-            const timeText = `${this.layer.getManager().getSysString(1108)} : ${makeTimeStr(this.layer, label.deleteSeconds)}`;
+            const timeText = `${this.layer.getManager().getSysString(SysString_T.DeletionTimeRemaining)} : ${makeTimeStr(this.layer, label.deleteSeconds)}`;
 
             if (element.timeText !== timeText) {
                 this.layer.renderText(element.time, timeText, TEXT_COLOR);

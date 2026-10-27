@@ -2,6 +2,7 @@ import NDomLayer from "./ndom";
 import NCHtmlViewer from "./nc-html-viewer";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const HEADER_COLOR = 0xffe6dcbe;
@@ -30,11 +31,11 @@ type Cell_T = { text: string, color: number };
 type Traffic_T = { id: number, color: number };
 
 const COLUMNS: Column_T[] = [ // NCServerSelectWnd::OnCreate 0x1010195d-0x10101e7a, GLanguageType != 2 widths.
-    { header: 416, x: 0, width: 32 },
-    { header: 451, x: 32, width: 111 },
-    { header: 452, x: 143, width: 59 },
-    { header: 601, x: 202, width: 49 },
-    { header: 602, x: 251, width: 49 }
+    { header: SysString_T.Number, x: 0, width: 32 },
+    { header: SysString_T.ServerName, x: 32, width: 111 },
+    { header: SysString_T.Traffic, x: 143, width: 59 },
+    { header: SysString_T.Ping, x: 202, width: 49 },
+    { header: SysString_T.ServerType, x: 251, width: 49 }
 ];
 
 
@@ -45,15 +46,15 @@ function getNumberText(row: ServerRow_T) { // AddServer 0x100ffe30.
 }
 
 function getTraffic(row: ServerRow_T): Traffic_T { // AddServer 0x10100753-0x10100893.
-    if (!row.isUp) return { id: 456, color: 0xffff0000 };
-    if (row.maxPlayers <= 0) return { id: 457, color: 0xffbfae64 };
+    if (!row.isUp) return { id: SysString_T.Down, color: 0xffff0000 };
+    if (row.maxPlayers <= 0) return { id: SysString_T.TrafficNormal, color: 0xffbfae64 };
 
     const ratio = row.currentPlayers / row.maxPlayers * 100;
 
-    if (ratio >= 80 || row.currentPlayers >= 3700) return { id: 458, color: 0xffff8080 };
-    if (ratio <= 50) return { id: 466, color: 0xff64a3d9 };
+    if (ratio >= 80 || row.currentPlayers >= 3700) return { id: SysString_T.TrafficHeavy, color: 0xffff8080 };
+    if (ratio <= 50) return { id: SysString_T.TrafficLight, color: 0xff64a3d9 };
 
-    return { id: 457, color: 0xffbfae64 };
+    return { id: SysString_T.TrafficNormal, color: 0xffbfae64 };
 }
 
 function getPingBucket(ping: number) { // Quality sort 0x10100df0: ping < 10, 10..50 and 51..9998 are each re-sorted by player count.
@@ -197,9 +198,9 @@ export class NCServerSelectWnd { // NCServerSelectWnd: 316x330, OnCreate 0x10101
         this.list = new NCServerSelectListCtrl(layer, this.element);
         this.list.onActivate = () => this.connect();
 
-        layer.button(this.element, 41, 297, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(603), () => this.sortByQuality());
-        layer.button(this.element, 121, 297, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(140), () => this.connect());
-        layer.button(this.element, 201, 297, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => { if (this.onCancel) this.onCancel(); });
+        layer.button(this.element, 41, 297, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Quality), () => this.sortByQuality());
+        layer.button(this.element, 121, 297, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.OK), () => this.connect());
+        layer.button(this.element, 201, 297, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Cancel), () => { if (this.onCancel) this.onCancel(); });
 
         this.element.addEventListener("keydown", event => {
             if (event.key !== "Enter") return;

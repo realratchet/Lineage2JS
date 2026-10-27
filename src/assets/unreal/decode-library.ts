@@ -113,6 +113,8 @@ export type IAudioDecodeInfo = {
     type: "MusicVolume" | "AmbientSoundObject"
 };
 
+type ScriptObject_T = { classId: string, classParents: Record<string, string | null> };
+
 export class DecodeLibrary {
     public name: string = "Untitled";
     public brightness: number = 1.0;
@@ -168,6 +170,7 @@ export class DecodeLibrary {
     public readonly scriptClasses: Record<string, IScriptClassDecodeInfo> = {};
     public readonly scriptFunctions: Record<string, IScriptFunctionDecodeInfo> = {};
     public readonly scriptStates: Record<string, IScriptStateDecodeInfo> = {};
+    public readonly scriptObjects: Record<string, ScriptObject_T> = {};
     public readonly effectTemplates: Record<string, IBaseObjectDecodeInfo> = {};
     public readonly actorTemplates: Record<string, ISkinnedMeshObjectDecodeInfo> = {};
     public readonly scriptMeshes: Record<string, ISkinnedMeshObjectDecodeInfo> = {};

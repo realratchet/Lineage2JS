@@ -3,6 +3,7 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { InventoryEntry_T } from "./nc-inventory-wnd";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.itemenchant_back";
 const TEX_OUTLINE = "L2UI_CH3.etc.iconbox";
@@ -29,20 +30,20 @@ export class NCItemEnchantWnd {
         this.element.hidden = true;
         this.element.tabIndex = -1;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(1220), false, () => this.setVisible(false));
+        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.ItemEnchant), false, () => this.setVisible(false));
         this.caption.parentElement.style.overflow = "hidden";
-        layer.text(this.element, manager.getSysString(1221), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
+        layer.text(this.element, manager.getSysString(SysString_T.ChooseEnchantTarget), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.list = layer.scrollPane(this.element, 9, 48, 240, 318, 35, false, 9);
         this.list.content.addEventListener("mousedown", event => {
             if (event.button !== 0 || event.target !== this.list.content) return;
 
             this.select(-1);
         });
-        layer.button(this.element, 51, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(140), () => {
+        layer.button(this.element, 51, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.OK), () => {
             const item = this.items[this.selected];
             if (item && this.onConfirm) this.onConfirm(item.objectId);
         });
-        layer.button(this.element, 131, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => {
+        layer.button(this.element, 131, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Cancel), () => {
             if (this.onConfirm) this.onConfirm(-1);
             this.setVisible(false);
         });
@@ -71,7 +72,7 @@ export class NCItemEnchantWnd {
         if (this.items !== items) return;
 
         const manager = this.layer.getManager();
-        const title = `${manager.strings.itemNames[itemId]}(${manager.getSysString(1220)})`;
+        const title = `${manager.strings.itemNames[itemId]}(${manager.getSysString(SysString_T.ItemEnchant)})`;
 
         this.layer.renderText(this.caption, title, 0xffc8d2dc);
         this.element.setAttribute("aria-label", title);

@@ -1,6 +1,7 @@
 import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import type { FriendEntry_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_PLUS = "L2UI_CH3.QUESTWND.QuestWndPlusBtn";
 const TEX_MINUS = "L2UI_CH3.QUESTWND.QuestWndMinusBtn";
@@ -21,7 +22,7 @@ export class L2FriendTree {
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement, x = 8, y = 45) {
         this.element = layer.scrollPane(parent, x, y, 240, 270, 15, true);
         this.element.setAttribute("role", "tree");
-        this.element.setAttribute("aria-label", layer.getManager().getSysString(997));
+        this.element.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.ChatWithFriends));
         const setScroll = this.element.setScroll;
 
         this.element.setScroll = (position, isClamped = true) => {
@@ -115,7 +116,7 @@ export class L2FriendTree {
         const layer = this.layer, content = this.element.content, x = friend ? 18 : 15;
         const selected = this.selected === (friend || group);
         const row = layer.createWindow(0, y, 225, 19, content);
-        const label = friend ? friend.name : `${layer.getManager().getSysString(1006 + group)} (${this.arrFriends[group].length})`;
+        const label = friend ? friend.name : `${layer.getManager().getSysString(SysString_T.Online + group)} (${this.arrFriends[group].length})`;
 
         row.setAttribute("role", "treeitem");
         row.setAttribute("aria-label", label);

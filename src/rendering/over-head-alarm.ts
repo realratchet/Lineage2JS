@@ -9,7 +9,7 @@ const tmpColorByte = new ColorByte().set(127, 127, 127);
 
 export class OverHeadAlarm {
     protected readonly scene = new Scene();
-    protected readonly camera = new OrthographicCamera(-1, 1, 1, -1, 1, 200000);
+    protected readonly camera = new OrthographicCamera(-1, 1, 1, -1, 1, 2e5);
     protected readonly actor = new Object3D();
     protected readonly arrMarkers: AlarmMarker_T[] = [];
     protected count = 0;
@@ -18,7 +18,7 @@ export class OverHeadAlarm {
 
     public constructor() {
         this.scene.add(this.actor);
-        this.camera.position.set(0, -100000, 0);
+        this.camera.position.set(0, -1e5, 0);
         this.camera.up.set(0, 0, 1);
         this.camera.lookAt(0, 0, 0);
     }

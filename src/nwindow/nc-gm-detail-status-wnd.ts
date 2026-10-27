@@ -2,6 +2,7 @@ import NCDetailStatusWnd from "./nc-detail-status-wnd";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import type NDomLayer from "./ndom";
 import type { UserInfo_T, GMViewCharacterInfo_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const cacheCrestUrls = new WeakMap<CanvasImageSource, string>();
 
@@ -40,7 +41,7 @@ class NCGMDetailStatusPage extends NCDetailStatusWnd {
 
         const layer = this.layer, info = this.status as UserInfo_T & GMViewCharacterInfo_T;
         const clan = this.gmClan && this.gmClan.clanId === info.clanId ? this.gmClan : null;
-        const x = layer.measureText(layer.getManager().getSysString(430)) + 20;
+        const x = layer.measureText(layer.getManager().getSysString(SysString_T.ClanNameLabel)) + 20;
 
         if (clan) {
             if (this.crest) {
@@ -49,7 +50,7 @@ class NCGMDetailStatusPage extends NCDetailStatusWnd {
                 crest.style.background = `url(${getCrestUrl(this.crest)}) 0 -4px no-repeat`;
             }
             if (clan.name) super.drawText(x + (clan.crestId > 0 ? 20 : 0), 25, clan.name);
-        } else super.drawText(x, 25, layer.getManager().getSysString(431), 0xffdcdcdc);
+        } else super.drawText(x, 25, layer.getManager().getSysString(SysString_T.NoClan), 0xffdcdcdc);
 
         const speeds = [info.swimRunSpd, info.swimWalkSpd, info.flyRunSpd, info.flyWalkSpd, info.runSpd, info.walkSpd].map(speed => Math.trunc(speed * info.moveMultiplier));
         const text = `${speeds[0]},${speeds[1]}/${speeds[2]},${speeds[3]}/${speeds[4]},${speeds[5]}`;

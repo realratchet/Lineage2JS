@@ -4,6 +4,7 @@ import { NCComboBox } from "./nc-lobby-wnd";
 import { NDOM_EDIT_TEXTURES, type default as NDomLayer, type NDomEdit_T } from "./ndom";
 import { createTextButton, getManorName, getRewardTooltip } from "./nc-manor-info-wnd";
 import type { ManorProcureCropDetail_T, ManorSellCropList_T, ProcureCropRequest_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 type SellEntry_T = { objectId: number, cropId: number, manorId: number, count: number };
 type ProcureEntry_T = { manorId: number, remaining: number, price: number, rewardType: number };
@@ -33,17 +34,17 @@ export class NCManorCropSellChangeWnd { // NCManorCropSellChangeWnd: NConsole 0x
 
         this.element = layer.createWindow(0, 0, CHANGE_WIDTH, CHANGE_HEIGHT);
         this.element.hidden = true;
-        NCFrameCtrl.createDOM(layer, this.element, CHANGE_WIDTH, manager.getSysString(1152), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, CHANGE_WIDTH, manager.getSysString(SysString_T.CropSale), false, () => this.setVisible(false));
         layer.tile(this.element, 0, 20, CHANGE_WIDTH, CHANGE_HEIGHT - 20, 0, 0, CHANGE_WIDTH, CHANGE_HEIGHT - 20, TEX_CHANGE_BACK);
         this.content = layer.createWindow(0, 0, CHANGE_WIDTH, CHANGE_HEIGHT, this.element);
         this.content.style.pointerEvents = "none";
-        layer.button(this.element, 196, 240, 66, 21, TEX_SMALL_BUTTON, TEX_SMALL_BUTTON_DOWN, null, manager.getSysString(1158), () => this.onMax());
-        createTextButton(layer, this.element, 91, 277, 140, () => this.onOk());
-        createTextButton(layer, this.element, 171, 277, 141, () => this.setVisible(false));
+        layer.button(this.element, 196, 240, 66, 21, TEX_SMALL_BUTTON, TEX_SMALL_BUTTON_DOWN, null, manager.getSysString(SysString_T.MaximumPrice), () => this.onMax());
+        createTextButton(layer, this.element, 91, 277, SysString_T.OK, () => this.onOk());
+        createTextButton(layer, this.element, 171, 277, SysString_T.Cancel, () => this.setVisible(false));
         this.countEdit = layer.edit(this.element, 123, 241, 68, 17, false, 10, true);
         this.element.focus = () => this.countEdit.focus();
         this.manorCombo = new NCComboBox(layer, this.element, 123, 216, 138, 17);
-        this.list = new NCListCtrl(layer, this.element, 7, 92, 322, 109, [{ width: 115, label: 1153, numeric: false }, { width: 70, label: 1154, numeric: true }, { width: 70, label: 1126, numeric: true }, { width: 67, label: 1127, numeric: false }]);
+        this.list = new NCListCtrl(layer, this.element, 7, 92, 322, 109, [{ width: 115, label: SysString_T.Territory, numeric: false }, { width: 70, label: SysString_T.Remaining, numeric: true }, { width: 70, label: SysString_T.BuyPrice, numeric: true }, { width: 67, label: SysString_T.Reward, numeric: false }]);
         this.paint();
     }
 
@@ -92,12 +93,12 @@ export class NCManorCropSellChangeWnd { // NCManorCropSellChangeWnd: NConsole 0x
         const layer = this.layer, manager = layer.getManager(), parent = this.content;
 
         parent.replaceChildren();
-        [1124, 1134, 1135].forEach((label, index) => {
+        [SysString_T.CropName, SysString_T.RewardType1, SysString_T.RewardType2].forEach((label, index) => {
             layer.text(parent, manager.getSysString(label), 0xffdcdcdc, undefined, 15, 38 + index * 16);
             layer.text(parent, this.arrInfo[index], 0xffb09b79, undefined, 76, 38 + index * 16);
         });
-        layer.text(parent, manager.getSysString(1153), 0xffdcdcdc, undefined, 75, 219);
-        layer.text(parent, manager.getSysString(1156), 0xffdcdcdc, undefined, 75, 244);
+        layer.text(parent, manager.getSysString(SysString_T.Territory), 0xffdcdcdc, undefined, 75, 219);
+        layer.text(parent, manager.getSysString(SysString_T.CropSalesAmount), 0xffdcdcdc, undefined, 75, 244);
     }
 }
 
@@ -116,12 +117,12 @@ export class NCManorCropSellWnd { // NCManorCropSellWnd: NConsole 0x10063dfb (W*
 
         this.element = layer.createWindow(0, 0, WIDTH, HEIGHT);
         this.element.hidden = true;
-        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(1152), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(SysString_T.CropSale), false, () => this.setVisible(false));
         layer.tile(this.element, 0, 20, WIDTH, HEIGHT - 20, 0, 0, WIDTH, HEIGHT - 20, TEX_SELL_BACK); // NCManorInfoSettingWnd 0x10136ce0, paint 0x10136be0
-        this.list = new NCListCtrl(layer, this.element, 7, 73, 586, 199, [{ width: 149, label: 1124, numeric: false }, { width: 70, label: 1153, numeric: false }, { width: 70, label: 1154, numeric: true }, { width: 70, label: 1126, numeric: true }, { width: 70, label: 1127, numeric: false }, { width: 70, label: 1155, numeric: true }, { width: 87, label: 1156, numeric: true }]);
-        createTextButton(layer, this.element, 8, 297, 1142, () => this.onChange());
-        createTextButton(layer, this.element, 438, 297, 1157, () => this.onSell());
-        createTextButton(layer, this.element, 518, 297, 141, () => this.setVisible(false));
+        this.list = new NCListCtrl(layer, this.element, 7, 73, 586, 199, [{ width: 149, label: SysString_T.CropName, numeric: false }, { width: 70, label: SysString_T.Territory, numeric: false }, { width: 70, label: SysString_T.Remaining, numeric: true }, { width: 70, label: SysString_T.BuyPrice, numeric: true }, { width: 70, label: SysString_T.Reward, numeric: false }, { width: 70, label: SysString_T.MyCrops, numeric: true }, { width: 87, label: SysString_T.CropSalesAmount, numeric: true }]);
+        createTextButton(layer, this.element, 8, 297, SysString_T.EditSales, () => this.onChange());
+        createTextButton(layer, this.element, 438, 297, SysString_T.Sale, () => this.onSell());
+        createTextButton(layer, this.element, 518, 297, SysString_T.Cancel, () => this.setVisible(false));
 
         this.changeWnd = new NCManorCropSellChangeWnd(layer);
         this.changeWnd.getMyCropCount = () => this.getMyCropCount();

@@ -4,6 +4,8 @@ import { NCComboBox } from "./nc-lobby-wnd";
 import { type default as NDomLayer, type NDomEdit_T, NDOM_EDIT_TEXTURES } from "./ndom";
 import { createTextButton, getManorName, getRewardTooltip } from "./nc-manor-info-wnd";
 import type { CropSettingRequest_T, ManorCropSetting_T, ManorCropSettings_T, ManorSeedSetting_T, ManorSeedSettings_T, SeedSettingRequest_T } from "../network/game-packets";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 type AlertHandler_T = (message: string) => void;
 type ConfirmHandler_T = (message: string, onOk: () => void) => void;
@@ -39,8 +41,8 @@ class NCManorInfoChangeWnd { // shared by NCManorSeedInfoChangeWnd / NCManorCrop
         layer.tile(this.element, 0, 20, CHANGE_WIDTH, CHANGE_HEIGHT - 20, 0, 0, CHANGE_WIDTH, CHANGE_HEIGHT - 20, TEX_CHANGE_BACK);
         this.content = layer.createWindow(0, 0, CHANGE_WIDTH, CHANGE_HEIGHT, this.element);
         this.content.style.pointerEvents = "none";
-        createTextButton(layer, this.element, 51, 172, 140, () => this.onOk());
-        createTextButton(layer, this.element, 131, 172, 141, () => this.setVisible(false));
+        createTextButton(layer, this.element, 51, 172, SysString_T.OK, () => this.onOk());
+        createTextButton(layer, this.element, 131, 172, SysString_T.Cancel, () => this.setVisible(false));
         this.amountEdit = layer.edit(this.element, 145, 68, 68, 17, false, 10, true);
         this.priceEdit = layer.edit(this.element, 145, 118, 68, 17, false, 10, true);
         this.element.focus = () => this.amountEdit.focus();
@@ -93,12 +95,12 @@ class NCManorInfoChangeWnd { // shared by NCManorSeedInfoChangeWnd / NCManorCrop
 class NCManorSeedInfoChangeWnd extends NCManorInfoChangeWnd { // NConsole 0x10063fa1 (W*0.5-128, H*0.5-100, 256x201, sys1136), OnCreate 0x10138730
     public onChange: (amount: number, price: number) => void = null;
 
-    public constructor(layer: NDomLayer) { super(layer, 1136, [1139, 1224, 1140]); }
+    public constructor(layer: NDomLayer) { super(layer, SysString_T.SeedOnSale, [SysString_T.NextSales, SysString_T.NextSaleLimit, SysString_T.NextSeedPrice]); }
 
     public show(seed: ManorSeedSetting_T, row: ListRow_T) { this.open(row.cells[0], seed.nextSaleLimit, row.cells[3], row.cells[4], seed.minPrice, seed.maxPrice); } // NCManorSeedInfoSettingWnd::OnChangeBtnClick 0x10138f60
 
     protected onOk() { // 0x10138050
-        const values = this.validate(1558, 1557);
+        const values = this.validate(SystemMessage_T.SeedQuantityOutOfRange, SystemMessage_T.SeedPriceOutOfRange);
 
         if (!values) return;
 
@@ -112,7 +114,7 @@ class NCManorCropInfoChangeWnd extends NCManorInfoChangeWnd { // NConsole 0x1006
     protected readonly rewardCombo: NCComboBox;
 
     public constructor(layer: NDomLayer) {
-        super(layer, 1145, [1225, 1226, 1149, 1150]);
+        super(layer, SysString_T.CropPurchase, [SysString_T.NextBuy, SysString_T.NextBuyLimit, SysString_T.NextCropPrice, SysString_T.NextReward]);
         this.rewardCombo = new NCComboBox(layer, this.element, 145, 143, 68, 17);
         this.rewardCombo.setItems(["1", "2"]);
         this.rewardCombo.setSelected(0);
@@ -124,7 +126,7 @@ class NCManorCropInfoChangeWnd extends NCManorInfoChangeWnd { // NConsole 0x1006
     }
 
     protected onOk() { // 0x1012ff00
-        const values = this.validate(1560, 1559);
+        const values = this.validate(SystemMessage_T.CropQuantityOutOfRange, SystemMessage_T.CropPriceOutOfRange);
 
         if (!values) return;
 
@@ -184,7 +186,7 @@ class NCManorInfoSettingWnd { // NCManorInfoSettingWnd: OnCreate 0x10136ce0, pai
         layer.tile(parent, 134, 276, 70, 17, 0, 0, 8, 17, arrTextBoxes[1]);
         layer.tile(parent, 204, 276, 8, 17, 0, 0, 8, 17, arrTextBoxes[2]);
         layer.text(parent, getManorName(manager, this.manorId), 0xffdcdcdc, undefined, 16, 47);
-        layer.text(parent, manager.getSysString(1141), 0xffdcdcdc, undefined, 16, 279);
+        layer.text(parent, manager.getSysString(SysString_T.NextPurchase), 0xffdcdcdc, undefined, 16, 279);
         layer.text(parent, this.total.toLocaleString("en-US"), 0xffdcdcdc, undefined, 130, 279);
     }
 }
@@ -197,8 +199,8 @@ export class NCManorSeedInfoSettingWnd extends NCManorInfoSettingWnd { // NConso
     protected arrSeeds: ManorSeedSetting_T[] = [];
 
     public constructor(layer: NDomLayer) {
-        super(layer, 1136, [{ width: 249, label: 1120, numeric: false }, { width: 80, label: 1137, numeric: true }, { width: 80, label: 1138, numeric: true }, { width: 80, label: 1139, numeric: true }, { width: 97, label: 1140, numeric: true }], [
-            [8, 1142, () => this.onChangeClick()], [88, 1143, () => this.confirm(1601, () => this.setNextCells([3, 4], (row, index) => row.cells[1 + index]))], [168, 1144, () => this.confirm(1600, () => this.setNextCells([3, 4], () => "0"))], [438, 140, () => this.submit()], [518, 141, () => this.setVisible(false)]
+        super(layer, SysString_T.SeedOnSale, [{ width: 249, label: SysString_T.SeedName, numeric: false }, { width: 80, label: SysString_T.TodaySales, numeric: true }, { width: 80, label: SysString_T.TodaySeedPrice, numeric: true }, { width: 80, label: SysString_T.NextSales, numeric: true }, { width: 97, label: SysString_T.NextSeedPrice, numeric: true }], [
+            [8, SysString_T.EditSales, () => this.onChangeClick()], [88, SysString_T.SetAsToday, () => this.confirm(SystemMessage_T.ConfirmCopyTodayManorItems, () => this.setNextCells([3, 4], (row, index) => row.cells[1 + index]))], [168, SysString_T.StopSales, () => this.confirm(SystemMessage_T.ConfirmClearTomorrowManorItems, () => this.setNextCells([3, 4], () => "0"))], [438, SysString_T.OK, () => this.submit()], [518, SysString_T.Cancel, () => this.setVisible(false)]
         ]);
         this.changeWnd = new NCManorSeedInfoChangeWnd(layer);
         this.changeWnd.onChange = (amount, price) => { // NotifyChangeTomValue 0x10139c80
@@ -261,8 +263,8 @@ export class NCManorCropInfoSettingWnd extends NCManorInfoSettingWnd { // NConso
     protected arrCrops: ManorCropSetting_T[] = [];
 
     public constructor(layer: NDomLayer) {
-        super(layer, 1145, [{ width: 149, label: 1124, numeric: false }, { width: 70, label: 1146, numeric: true }, { width: 70, label: 1147, numeric: true }, { width: 70, label: 1148, numeric: false }, { width: 70, label: 1225, numeric: true }, { width: 70, label: 1149, numeric: true }, { width: 87, label: 1150, numeric: false }], [
-            [8, 1142, () => this.onChangeClick()], [88, 1143, () => this.confirm(1601, () => this.setNextCells([4, 5, 6], (row, index) => row.cells[1 + index]))], [168, 1151, () => this.confirm(1600, () => this.setNextCells([4, 5, 6], () => "0"))], [438, 140, () => this.submit()], [518, 141, () => this.setVisible(false)]
+        super(layer, SysString_T.CropPurchase, [{ width: 149, label: SysString_T.CropName, numeric: false }, { width: 70, label: SysString_T.TodayBuy, numeric: true }, { width: 70, label: SysString_T.TodayCropPrice, numeric: true }, { width: 70, label: SysString_T.TodayReward, numeric: false }, { width: 70, label: SysString_T.NextBuy, numeric: true }, { width: 70, label: SysString_T.NextCropPrice, numeric: true }, { width: 87, label: SysString_T.NextReward, numeric: false }], [
+            [8, SysString_T.EditSales, () => this.onChangeClick()], [88, SysString_T.SetAsToday, () => this.confirm(SystemMessage_T.ConfirmCopyTodayManorItems, () => this.setNextCells([4, 5, 6], (row, index) => row.cells[1 + index]))], [168, SysString_T.StopPurchase, () => this.confirm(SystemMessage_T.ConfirmClearTomorrowManorItems, () => this.setNextCells([4, 5, 6], () => "0"))], [438, SysString_T.OK, () => this.submit()], [518, SysString_T.Cancel, () => this.setVisible(false)]
         ]);
         this.changeWnd = new NCManorCropInfoChangeWnd(layer);
         this.changeWnd.onChange = (amount, price, reward) => { // NotifyChangeTomValue 0x101319f0

@@ -2,6 +2,7 @@ import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomScrollPane_T 
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import { SKIN_SLOTS } from "./skin-textures";
 import NCTooltip, { TEX_TOOLTIP_SLICES, type TooltipInfo_T } from "./nc-tooltip";
+import SysString_T, { CLASS_NAME_OFFSET } from "./sys-string";
 
 const TEX_LIST = "L2UI_CH3.ListCtrl.";
 const arrClassGroups = [[2, 3, 8, 23, 36, 46, 48, 55, 57], [9, 24, 37], [5, 6, 20, 33], [21, 34], [12, 13, 27, 40], [16, 17, 30, 43, 52, 51], [14, 28, 41], [0, 1, 4, 7, 18, 19, 22, 31, 32, 35, 44, 45, 47, 53, 54, 56], [49, 50, 38, 39, 42, 25, 26, 29, 10, 11, 15], [88, 89, 93, 101, 108, 113, 114, 117, 118], [92, 102, 109], [90, 91, 99, 106], [100, 107], [94, 95, 103, 110], [97, 98, 105, 112, 116, 115], [96, 104, 111]];
@@ -40,7 +41,7 @@ export function createClassTooltip(layer: NDomLayer, classId: number, x: number,
     const width = 184, height = canvas.getLineHeight() + 16;
     const y = anchorY - height < 0 ? anchorY + 32 : anchorY - height;
     const tooltip = layer.createWindow(Math.max(0, Math.min(x, canvas.width - width)) - layer.toUI(root.left), y - layer.toUI(root.top), width, height, layer.root);
-    const strings = layer.getManager().strings.sysStrings, label = strings[391], value = strings[(classId < 88 ? 247 : 1071) + classId];
+    const strings = layer.getManager().strings.sysStrings, label = strings[SysString_T.ClassAbbreviation], value = strings[(classId < 88 ? SysString_T.HumanFighter : CLASS_NAME_OFFSET) + classId];
 
     tooltip.classList.add("ndom-opaque", "ndom-tooltip");
     tooltip.setAttribute("role", "tooltip");

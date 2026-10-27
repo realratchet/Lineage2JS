@@ -4,6 +4,7 @@ import type { InventoryEntry_T } from "./nc-inventory-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import { ItemType2_T, type MultiSellList_T, type MultiSellEntry_T, type MultiSellProduct_T, type MultiSellIngredient_T } from "../network/game-packets";
 import type { InventoryWndView_T } from "./skin";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.MultiSellWnd.multicell_back";
 const TEX_PLUS = "L2UI_CH3.MultiSellWnd.Multisell_plusicon";
@@ -34,9 +35,9 @@ export class NCVIPShopWnd {
         this.element.hidden = true;
         this.element.tabIndex = -1;
         layer.tile(this.element, 0, 20, 512, 381, 0, 0, 512, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 512, layer.getManager().getSysString(136), false, () => this.setVisible(false));
-        [[562, 11, 32], [564, 267, 32], [565, 267, 203]].forEach(([id, x, y]) => layer.text(this.element, layer.getManager().getSysString(id), 0xffdcdcdc, FontType_T.SMALL, x, y));
-        const quantityLabel = layer.getManager().getSysString(808);
+        NCFrameCtrl.createDOM(layer, this.element, 512, layer.getManager().getSysString(SysString_T.Store), false, () => this.setVisible(false));
+        [[SysString_T.ItemList, 11, 32], [SysString_T.ItemInformation, 267, 32], [SysString_T.ItemsRequired, 267, 203]].forEach(([id, x, y]) => layer.text(this.element, layer.getManager().getSysString(id), 0xffdcdcdc, FontType_T.SMALL, x, y));
+        const quantityLabel = layer.getManager().getSysString(SysString_T.QuantityPurchased);
 
         layer.text(this.element, quantityLabel, 0xffdcdcdc, FontType_T.SMALL, 164 - layer.measureText(quantityLabel), 378);
         this.catalog = layer.scrollPane(this.element, 9, 48, 240, 314, 35);
@@ -44,12 +45,12 @@ export class NCVIPShopWnd {
         this.ingredients = layer.scrollPane(this.element, 262, 217, 244, 150, 15, true);
         this.products.addEventListener("scroll", () => this.updateProductVisibility());
         this.quantity = layer.edit(this.element, 165, 374, 63, 17, false, 0, true);
-        layer.button(this.element, 307, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(140), () => {
+        layer.button(this.element, 307, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(SysString_T.OK), () => {
             const entry = this.entries[this.selectedIndex];
 
             if (entry && this.onConfirm) this.onConfirm(this.listId, entry.entryId, parseInt(this.quantity.getValue().replace(/,/g, ""), 10) | 0);
         });
-        layer.button(this.element, 387, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(141), () => this.setVisible(false));
+        layer.button(this.element, 387, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(SysString_T.Cancel), () => this.setVisible(false));
         [this.catalog, this.products, this.ingredients].forEach((pane, index) => {
             pane.addEventListener("wheel", event => {
                 event.stopImmediatePropagation();
@@ -258,7 +259,7 @@ export class NCVIPShopWnd {
             const label = `${line.label} : `;
 
             this.layer.text(parent, label, 0xffa3a3a3, FontType_T.SMALL, x, y);
-            this.layer.text(parent, line.value, [111, 404, 496].some(id => this.layer.getManager().getSysString(id) === line.label) ? 0xffb09b79 : 0xffdcdcdc, FontType_T.SMALL, x + this.layer.measureText(label), y);
+            this.layer.text(parent, line.value, [SysString_T.AttackSpeed, SysString_T.SoulshotUsed, SysString_T.SpiritshotUsed].some(id => this.layer.getManager().getSysString(id) === line.label) ? 0xffb09b79 : 0xffdcdcdc, FontType_T.SMALL, x + this.layer.measureText(label), y);
             if (index < lines.length - 1) y += height + 4;
             x = 10;
         });

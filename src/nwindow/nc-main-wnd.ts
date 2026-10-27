@@ -8,14 +8,15 @@ import NCClanWnd from "./nc-clan-wnd";
 import NCDetailStatusWnd from "./nc-detail-status-wnd";
 import type NCCoolTimeIcon from "./nc-cool-time-icon";
 import type { default as Skin, DetailStatusWndView_T, SkillWndView_T, ActionWndView_T, QuestWndView_T, ClanWndView_T } from "./skin";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.TabButton.MainWndTabBack";
 const arrTabs: { type: MainTab_T, title: number, tooltip: number, texture: string }[] = [
-    { type: "status", title: 433, tooltip: 194, texture: "L2UI_CH3.TabButton.MainWndTabBtn1" },
-    { type: "skills", title: 119, tooltip: 196, texture: "L2UI_CH3.TabButton.MainWndTabBtn2" },
-    { type: "actions", title: 127, tooltip: 197, texture: "L2UI_CH3.TabButton.MainWndTabBtn3" },
-    { type: "clan", title: 439, tooltip: 895, texture: "L2UI_CH3.TabButton.MainWndTabBtn4" },
-    { type: "quest", title: 118, tooltip: 198, texture: "L2UI_CH3.TabButton.MainWndTabBtn5" }
+    { type: "status", title: SysString_T.CharacterStatus, tooltip: SysString_T.StatusAltT, texture: "L2UI_CH3.TabButton.MainWndTabBtn1" },
+    { type: "skills", title: SysString_T.Skills, tooltip: SysString_T.SkillsMagicAltK, texture: "L2UI_CH3.TabButton.MainWndTabBtn2" },
+    { type: "actions", title: SysString_T.Actions, tooltip: SysString_T.ActionsAltC, texture: "L2UI_CH3.TabButton.MainWndTabBtn3" },
+    { type: "clan", title: SysString_T.Clan, tooltip: SysString_T.ClanActionAltN, texture: "L2UI_CH3.TabButton.MainWndTabBtn4" },
+    { type: "quest", title: SysString_T.Quest, tooltip: SysString_T.QuestsAltU, texture: "L2UI_CH3.TabButton.MainWndTabBtn5" }
 ];
 
 export type MainTab_T = "status" | "skills" | "actions" | "clan" | "quest";
@@ -41,7 +42,7 @@ export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 
         this.element.tabIndex = -1;
         this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true), arrTabs[0].texture.replace("Btn", "Icon"), arrTabs[0].tooltip, false);
         layer.tile(this.element, 0, 20, 256, 46, 0, 0, 256, 46, TEX_BACK);
-        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(433), true, () => this.setVisible(false), null, () => this.minimize());
+        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(SysString_T.CharacterStatus), true, () => this.setVisible(false), null, () => this.minimize());
         this.detailStatusWnd = skin.createDetailStatusWnd(layer, this.element);
         this.skillWnd = skin.createSkillWnd(layer, coolTimes, this.element);
         this.actionWnd = skin.createActionWnd(layer, this.element);

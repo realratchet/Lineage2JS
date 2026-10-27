@@ -3,6 +3,7 @@ import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { WarehouseType_T, type ShopItem_T, type WarehouseList_T } from "../network/game-packets";
 import type { StoreWndView_T, GMStoreWndView_T } from "./skin";
+import SysString_T from "./sys-string";
 
 export class NCStoreWnd extends NCShopWnd {
     public onDrop: (side: number, target: Element) => boolean = null;
@@ -41,7 +42,7 @@ export class NCStoreWnd extends NCShopWnd {
     }
     public async showWarehouse(isWithdraw: boolean, list: WarehouseList_T) {
         this.type = list.type;
-        const id = [0, 1216, 1217, 1218, 131][list.type], title = this.layer.getManager().getSysString(id);
+        const id = [0, SysString_T.PrivateWarehouse, SysString_T.ClanWarehouse, SysString_T.CastleWarehouse, SysString_T.Warehouse][list.type], title = this.layer.getManager().getSysString(id);
 
         this.layer.renderText(this.caption, title, 0xffc8d2dc);
         this.element.setAttribute("aria-label", title);

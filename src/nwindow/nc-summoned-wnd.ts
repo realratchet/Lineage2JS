@@ -5,6 +5,7 @@ import { FontType_T } from "./nwindow-canvas";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { PetStatus_T } from "../network/game-packets";
 import type { InventoryWndView_T } from "./skin";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.SummonWnd.summon_back";
 const TEX_TAB = "L2UI_CH3.SummonWnd.summon_tab2";
@@ -14,7 +15,7 @@ const TEX_CAPTION = "NWindow.Icon.chatback";
 const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
 const TEX_PRESSED = "L2UI_CH3.InventoryWnd.Inventory_OutLine_down";
 const arrBars = ["ps_HPbar", "ps_MPbar"].map(name => `L2UI_CH3.PlayerStatusWnd.${name}`);
-const arrLabels = [94, 95, 96, 113, 111, 404, 98, 99, 97, 432, 112, 496];
+const arrLabels = [SysString_T.PhysicalAttack, SysString_T.PhysicalDefense, SysString_T.Accuracy, SysString_T.Critical, SysString_T.AttackSpeed, SysString_T.SoulshotUsed, SysString_T.MagicAttack, SysString_T.MagicDefense, SysString_T.Evasion, SysString_T.Speed, SysString_T.CastingSpeed, SysString_T.SpiritshotUsed];
 
 export class NCSummonedWnd {
     public static getTextures(): string[] { return [`${TEX_BACK}1`, `${TEX_BACK}2`, `${TEX_BACK}31`, `${TEX_BACK}32`, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_FOLDED, TEX_CAPTION, TEX_OUTLINE, TEX_PRESSED, "L2UI.NWindow.Number", ...arrBars, ...NCFrameCtrl.getTextures(), ...new NCTooltip().getTextures()]; }
@@ -39,7 +40,7 @@ export class NCSummonedWnd {
         this.element = layer.createWindow(172, 76, 256, 201);
         this.element.hidden = true;
         this.element.tabIndex = -1;
-        const title = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(495), false, () => this.setVisible(false));
+        const title = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.SummonInterface), false, () => this.setVisible(false));
         const frame = title.parentElement;
         const minimize = layer.button(frame, 216, 3, 15, 15, "L2UI_CH3.FrameCtrl.FrameMiniBtn", "L2UI_CH3.FrameCtrl.FrameMiniOnBtn", null, null, () => this.minimize());
 
@@ -61,7 +62,7 @@ export class NCSummonedWnd {
 
             layer.tile(pane, 0, 0, 256, 91, 0, 0, 256, 91, `${TEX_BACK}${31 + index}`);
             this.panes.push(pane);
-            this.tabs.push(layer.tab(this.element, 12 + index * 74, 87, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(491 + index), null, () => this.selectTab(index)));
+            this.tabs.push(layer.tab(this.element, 12 + index * 74, 87, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(SysString_T.Information + index), null, () => this.selectTab(index)));
         }
         this.stats = this.createValues(this.panes[0], 256, 91);
         this.actionGrid = layer.createWindow(18, 9, 219, 69, this.panes[1]);
@@ -72,9 +73,9 @@ export class NCSummonedWnd {
         this.folded.hidden = true;
         this.folded.tabIndex = -1;
         this.folded.classList.add("ndom-opaque");
-        this.folded.setAttribute("aria-label", manager.getSysString(505));
+        this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.Servitors));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
-        const captionText = manager.getSysString(505), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
+        const captionText = manager.getSysString(SysString_T.Servitors), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
         this.caption.hidden = true;
@@ -196,7 +197,7 @@ export class NCSummonedWnd {
             this.layer.place(bar, 35, index === 0 ? 51 : 65, w, h);
             this.layer.setTile(bar, w, h, 0, 0, overflow ? 84 : 8, h, arrBars[index]);
         });
-        this.drawText(panel, 15, 35, this.layer.getManager().getSysString(88), 0xffa3a3a3);
+        this.drawText(panel, 15, 35, this.layer.getManager().getSysString(SysString_T.Level), 0xffa3a3a3);
         this.drawText(panel, 33, 35, `${info.level} ${info.name || "(null)"}`, 0xffb09b79);
         for (const [y, current, maximum] of [[53, info.curHp, info.maxHp], [67, info.curMp, info.maxMp]]) {
             this.drawText(panel, 67, y, String(current), 0xffdcdcdc, "right", true);

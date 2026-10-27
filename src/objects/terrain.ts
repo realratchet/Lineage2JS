@@ -8,6 +8,7 @@ import { ColorByte } from "../utils/color-byte";
 import buildTriangleIndex from "../physics/triangle-index";
 import { GameMesh } from "../game/components";
 import { ColliderComponent } from "../physics/components/physics-component";
+import type { ScriptHost_T } from "../ue-script/vm";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -80,6 +81,7 @@ export class Terrain extends GameMesh implements ICollidable {
     public heightmapY: number = 0;
     public terrainSegmentUuid: string;
     public terrainInfoUuid: string;
+    public terrainInfoActor: ScriptHost_T = null;
 
     public useShadowLerp: boolean = true;
     public lightingRevision: number = 0;

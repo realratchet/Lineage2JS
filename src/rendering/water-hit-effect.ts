@@ -9,7 +9,7 @@ import type { DecodeLibrary } from "@l2js/engine";
 const tmpRotator = new Rotator();
 
 export class WaterHitEffect {
-    protected static readonly SIZE_SCALE = 0.1111111119389534;
+    protected static readonly SIZE_SCALE = Math.fround(1 / 9);
 
     protected readonly owner: BaseActor;
     protected readonly renderManager: RenderManager;

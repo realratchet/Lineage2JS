@@ -92,7 +92,7 @@ export class GroundPickup extends Object3D {
         const type = library.pickup.dropType, index = item.meshIndex;
         const pitch = type === 1 ? -19114 : type === 2 ? -32768 : type === 3 ? 13653 : 0;
         const yaw = this.origin && this.dropAnimType >= 1 && this.dropAnimType <= 3 ? Math.trunc(Math.atan2(this.position.y - this.origin.y, this.position.x - this.origin.x) * vectorRotationScale) + (type === 2 ? 16384 : 32768) : 0;
-        const target = new Rotator(type ? pitch - Math.trunc(1310720 * index / 360) : 0, yaw, type ? 16384 : 0);
+        const target = new Rotator(type ? pitch - Math.trunc((20 * 65536) * index / 360) : 0, yaw, type ? 16384 : 0);
         const current = new Rotator(target.pitch, target.yaw, target.roll), rate = new Rotator(), base = mesh.quaternion.clone();
 
         // UGameEngine::OnDropItem 0x74d96e..0x74da30.

@@ -3,6 +3,7 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { TradeItem_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_ch3.TradeWnd.Trade_Back";
 const TEX_OUTLINE = "L2ui_ch3.etc.iconbox";
@@ -49,7 +50,7 @@ export class NCTradeWnd {
             event.stopImmediatePropagation();
         }, true);
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(445), false, () => {
+        NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(SysString_T.Exchange), false, () => {
             if (this.onConfirm) this.onConfirm(false);
             this.setVisible(false);
         });
@@ -129,11 +130,11 @@ export class NCTradeWnd {
             if (item && this.onOffer) this.onOffer(item, false);
         }).setAttribute("aria-label", "Offer selected item");
         [true, false].forEach((isConfirmed, index) => {
-            const button = layer.button(this.element, 51 + index * 80, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(140 + index), () => {
+            const button = layer.button(this.element, 51 + index * 80, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.OK + index), () => {
                 if (this.onConfirm) this.onConfirm(isConfirmed);
             });
 
-            button.setAttribute("aria-label", layer.getManager().getSysString(140 + index));
+            button.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.OK + index));
         });
         window.addEventListener("mousemove", event => {
             if (!(event.buttons & 1)) this.heldMode = -1;

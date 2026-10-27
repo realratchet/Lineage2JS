@@ -160,7 +160,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         if (this.activeTab === "statistics") {
             const info = render.renderer.info;
             const memory = (performance as any).memory;
-            const heap = memory ? memory.usedJSHeapSize / 1048576 : 0;
+            const heap = memory ? memory.usedJSHeapSize / (1024 * 1024) : 0;
             const gpuMemory = this.getGpuMemoryUsage(render);
             if (performance.now() - this.workerMemoryPolledAt > 1000) {
                 this.workerMemoryPolledAt = performance.now();
@@ -176,8 +176,8 @@ export class UIManager implements IEngineComponent<GameManager> {
             this.statisticsElement.textContent = [
                 `FPS:              ${this.frameRate.toFixed(1)}`,
                 `Frame:            ${this.frameTime.toFixed(2)} ms`,
-                `JS heap:          ${memory ? `${heap.toFixed(1)} / ${(memory.jsHeapSizeLimit / 1048576).toFixed(1)} MB` : "unavailable"}`,
-                `Package buffers:  ${this.workerMemory.map(stats => stats ? `${(stats.buffers / 1048576).toFixed(0)} MB (${stats.packages})` : "-").join(" / ")}`,
+                `JS heap:          ${memory ? `${heap.toFixed(1)} / ${(memory.jsHeapSizeLimit / (1024 * 1024)).toFixed(1)} MB` : "unavailable"}`,
+                `Package buffers:  ${this.workerMemory.map(stats => stats ? `${(stats.buffers / (1024 * 1024)).toFixed(0)} MB (${stats.packages})` : "-").join(" / ")}`,
                 `VRAM:             ${gpuMemory.total ? `${gpuMemory.used.toFixed(1)} / ${gpuMemory.total.toFixed(1)} MB` : "unavailable"}`,
                 `GPU vendor:       ${this.gpuVendor}`,
                 `GPU renderer:     ${this.gpuRenderer}`,

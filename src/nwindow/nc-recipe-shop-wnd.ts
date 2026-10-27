@@ -4,6 +4,7 @@ import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeShopManageList_T, RecipeShopListEntry_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe1_Back";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
@@ -38,9 +39,9 @@ export class NCRecipeShopWnd {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(663), false, () => this.setVisible(false), () => { if (this.onQuit) this.onQuit(); });
-        layer.text(this.element, manager.getSysString(643), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
-        layer.text(this.element, manager.getSysString(661), 0xffdcdcdc, FontType_T.SMALL, 11, 198);
+        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.ItemCreation), false, () => this.setVisible(false), () => { if (this.onQuit) this.onQuit(); });
+        layer.text(this.element, manager.getSysString(SysString_T.RecipeList), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
+        layer.text(this.element, manager.getSysString(SysString_T.ProductionList), 0xffdcdcdc, FontType_T.SMALL, 11, 198);
         this.counter = layer.text(this.element, "", 0xffb09b79, FontType_T.SMALL, 251, 198);
         [48, 215].forEach((y, side) => {
             const list = layer.scrollPane(this.element, 9, y, 239, 139, 35);
@@ -85,14 +86,14 @@ export class NCRecipeShopWnd {
 
             if (row && this.onPrice) this.onPrice(row);
         });
-        layer.button(this.element, 171, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(428), () => {
+        layer.button(this.element, 171, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Start), () => {
             const entries = this.items[1].map(row => ({ recipeId: row.recipe.id, cost: row.price }));
 
             if (this.onStart) this.onStart(entries);
             this.setVisible(false);
         });
-        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(384), () => { if (this.onMessage) this.onMessage(); });
-        layer.button(this.element, 11, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(385), () => {
+        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.StoreMessage), () => { if (this.onMessage) this.onMessage(); });
+        layer.button(this.element, 11, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Abort), () => {
             if (this.onQuit) this.onQuit();
             this.setVisible(false);
             manager.playWindowCloseSound();
@@ -146,7 +147,7 @@ export class NCRecipeShopWnd {
     }
     public async show(list: RecipeShopManageList_T) {
         this.setVisible(false);
-        const manager = this.layer.getManager(), title = manager.getSysString(list.isDwarven ? 1213 : 1212);
+        const manager = this.layer.getManager(), title = manager.getSysString(list.isDwarven ? SysString_T.DwarfManufacture : SysString_T.GeneralManufacture);
         const add = (side: number, recipeId: number, initialCount: number, price: number) => {
             const recipe = manager.strings.recipes.find(recipe => recipe.id === recipeId);
 

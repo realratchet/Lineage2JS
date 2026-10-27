@@ -2,6 +2,7 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { HennaEquipEntry_T, HennaEquipList_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.HennaWnd.henna1_back";
 const TEX_EMPTY = "NWindow.BlackTexture";
@@ -134,11 +135,11 @@ export class NCHennaListWnd {
         });
         this.scroll = 0;
         this.selected = -1;
-        const title = manager.getSysString(isRemove ? 652 : 651), adena = String(list.adena);
+        const title = manager.getSysString(isRemove ? SysString_T.DeletingASymbol : SysString_T.SymbolDrawing), adena = String(list.adena);
 
         this.element.setAttribute("aria-label", title);
         this.layer.renderText(this.caption, title, 0xffc8d2dc);
-        this.layer.renderText(this.heading, manager.getSysString(isRemove ? 660 : 659), 0xffdcdcdc);
+        this.layer.renderText(this.heading, manager.getSysString(isRemove ? SysString_T.ListOfSymbols : SysString_T.DyeList), 0xffdcdcdc);
         this.layer.renderText(this.adena, adena, 0xffdcdcdc);
         this.layer.place(this.adena, 230 - this.layer.measureText(adena), 374);
         this.content.replaceChildren();
@@ -174,7 +175,7 @@ export class NCHennaListWnd {
 
             lines.forEach((line, index) => layer.text(element, line, 0xffdcdcdc, FontType_T.SMALL, 47, 11 + index * manager.canvas.getLineHeight(FontType_T.SMALL)));
             layer.text(element, row.description, 0xffdcdcdc, FontType_T.SMALL, 47, 23);
-            layer.text(element, `${manager.getSysString(637)} ${row.price}`, 0xffdcdcdc, FontType_T.SMALL, 47, 36);
+            layer.text(element, `${manager.getSysString(SysString_T.SymbolFee)} ${row.price}`, 0xffdcdcdc, FontType_T.SMALL, 47, 36);
         });
     }
 }

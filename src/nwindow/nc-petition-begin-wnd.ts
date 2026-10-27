@@ -6,6 +6,8 @@ import { NCComboBox } from "./nc-lobby-wnd";
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_ch3.PetitionWnd.petition1_back";
 
@@ -27,20 +29,20 @@ export class NCPetitionBeginWnd {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(470), false, () => this.setVisible(false));
-        [[705, 22, 30], [412, 22, 53], [707, 22, 226]].forEach(([id, x, y]) => layer.text(this.element, manager.getSysString(id), 0xffdcdcdc, FontType_T.SMALL, x, y));
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.Petition), false, () => this.setVisible(false));
+        [[SysString_T.ViewingOfRelatedInformation, 22, 30], [SysString_T.PetitionType, 22, 53], [SysString_T.EnterAPetition, 22, 226]].forEach(([id, x, y]) => layer.text(this.element, manager.getSysString(id), 0xffdcdcdc, FontType_T.SMALL, x, y));
         this.help = new NCHtmlViewer(layer, this.element, 8, 79, 240, 141);
         this.help.onFile = path => { void this.showFile(path); };
         this.category = new NCComboBox(layer, this.element, 51, 50, 145, 17);
-        this.category.setItems([manager.getSysString(695), ...categories.map(category => manager.getSysString(category.titleId))]);
+        this.category.setItems([manager.getSysString(SysString_T.SelectAType), ...categories.map(category => manager.getSysString(category.titleId))]);
         this.category.setSelected(0);
         this.category.onChange = index => {
             if (index > 0) void this.showFile(categories[index - 1].link);
             else { this.generation++; void this.help.setHtml(""); }
         };
         this.message = new CHtmlMultiEdit(layer, this.element, 8, 241, 240, 124);
-        layer.button(this.element, 51, 372, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(694), () => this.submit());
-        layer.button(this.element, 131, 372, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(473), () => {
+        layer.button(this.element, 51, 372, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(SysString_T.Submit), () => this.submit());
+        layer.button(this.element, 131, 372, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(SysString_T.CancelPetition), () => {
             if (this.onCancel) this.onCancel();
             this.reset();
             this.setVisible(false);
@@ -76,7 +78,7 @@ export class NCPetitionBeginWnd {
 
     public submit() {
         const category = this.category.getSelected(), text = this.message.getValue();
-        const messageId = category <= 0 ? 804 : text.length < 5 ? 386 : text.length >= 255 ? 971 : 0; // NCPetitionBeginWnd 0x100e0c40..0x100e0d7f.
+        const messageId = category <= 0 ? SystemMessage_T.SelectPetitionType : text.length < 5 ? SystemMessage_T.PetitionTooShort : text.length >= 255 ? SystemMessage_T.PetitionTooLong : 0; // NCPetitionBeginWnd 0x100e0c40..0x100e0d7f.
 
         if (messageId) {
             if (this.onValidation) this.onValidation(messageId);

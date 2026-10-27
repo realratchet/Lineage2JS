@@ -13,7 +13,7 @@ import type PhysicsVolume from "../../objects/physics-volume";
 import type BaseActor from "../../base-actor";
 import type Vehicle from "../../objects/vehicle";
 import type RenderManager from "../../rendering/render-manager";
-import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../../objects/objects";
+import { getScriptActor, type ActorCollisionProfile_T, type CollisionPrimitive_T, type ICollidable } from "../../objects/objects";
 import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
 import { getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
@@ -825,7 +825,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (!actor) return;
 
         const parent = this.getParent(), script = this.getComponent<ScriptComponent>("script"), vm = script.getVM();
-        const target = actor as unknown as ScriptHost_T;
+        const target = getScriptActor(actor);
         if (target.scriptClassId && vm.invokeNative(parent, target, 303, "IsA", ["Pawn"])) return;
 
         let controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
@@ -1408,7 +1408,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.stopNMover();
         this.validateLocationPending = false;
         this.actorState.locomotion = true;
-        this.actorState.desired.position.copy(direction).normalize().multiplyScalar(100000).add(this.getPosition());
+        this.actorState.desired.position.copy(direction).normalize().multiplyScalar(1e5).add(this.getPosition());
         this.actorState.desired.actor = null;
         this.actorState.desired.offset = 0;
         this.actorState.desired.faceMovement = faceMovement;

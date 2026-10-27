@@ -3,6 +3,7 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane
 import { FontType_T } from "./nwindow-canvas";
 import type { ShopItem_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.StoreWnd.Store1_back";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
@@ -49,9 +50,9 @@ export class NCShopWnd {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(isPreview ? 847 : 136), false, () => this.setVisible(false), () => { if (this.onClose) this.onClose(); });
+        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(isPreview ? SysString_T.TryingOn : SysString_T.Store), false, () => this.setVisible(false), () => { if (this.onClose) this.onClose(); });
         this.labels.push(layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 32), layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 198), layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 0, 331));
-        const adena = layer.getManager().getSysString(134);
+        const adena = layer.getManager().getSysString(SysString_T.Adena);
 
         layer.text(this.element, adena, 0xffdcdcdc, FontType_T.SMALL, 156 - layer.measureText(adena), 350);
         this.total = layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 247, 331);
@@ -111,10 +112,10 @@ export class NCShopWnd {
         });
         layer.button(this.element, 112, 194, 15, 15, TEX_UP, TEX_UP, null, null, () => this.moveSelected(1));
         layer.button(this.element, 130, 194, 15, 15, TEX_DOWN, TEX_DOWN, null, null, () => this.moveSelected(0));
-        this.okButton = layer.button(this.element, 51, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(140), () => {
+        this.okButton = layer.button(this.element, 51, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.OK), () => {
             if (this.onConfirm) this.onConfirm(this.isSell, this.items[1]);
         });
-        this.cancelButton = layer.button(this.element, 131, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(141), () => this.setVisible(false));
+        this.cancelButton = layer.button(this.element, 131, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.Cancel), () => this.setVisible(false));
         window.addEventListener("mousemove", event => {
             if (!(event.buttons & 1)) this.heldSide = -1;
             if (this.heldSide >= 0 && document.activeElement === this.lists[this.heldSide]) this.hoveredIndices[this.heldSide] = this.getItemIndex(this.heldSide, event);

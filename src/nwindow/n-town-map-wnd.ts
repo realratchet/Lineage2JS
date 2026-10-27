@@ -1,6 +1,7 @@
 import type NDomLayer from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import type { TownMap_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI.MinimapWnd.MinimapBack";
 const TEX_MARKER = "town_map.icon_i00";
@@ -28,7 +29,7 @@ export class NTownMapWnd {
         const back = layer.tile(this.element, 0, 21, 334, 333, 0, 0, 334, 333, TEX_BACK);
 
         back.style.pointerEvents = "none";
-        NCFrameCtrl.createDOM(layer, this.element, 334, layer.getManager().getSysString(447));
+        NCFrameCtrl.createDOM(layer, this.element, 334, layer.getManager().getSysString(SysString_T.Map));
         this.viewport.addEventListener("mousedown", event => {
             if (event.button !== 0) return;
 

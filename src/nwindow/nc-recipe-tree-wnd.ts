@@ -4,6 +4,7 @@ import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import { ItemType2_T, type InventoryItem_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe5_Back";
 const TEX_NODE = "L2UI.RecipeWnd.RecipeTreeIconBack";
@@ -30,7 +31,7 @@ export class NCRecipeTreeWnd {
         this.element = layer.createWindow(0, 0, 256, 401);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(662), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(SysString_T.RecipeInformation), false, () => this.setVisible(false));
         this.header = layer.createWindow(0, 20, 256, 88, this.element);
         this.list = layer.scrollPane(this.element, 7, 108, 242, 254, 15, true);
         const viewport = layer.createWindow(0, 0, 226, 246, this.list);
@@ -44,7 +45,7 @@ export class NCRecipeTreeWnd {
 
             this.list.setScroll(this.list.getScroll() - delta * 45);
         }, true);
-        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(646), () => {
+        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.Close), () => {
             this.root = null;
             this.list.content.replaceChildren();
             this.list.setScroll(0, false);
@@ -85,7 +86,7 @@ export class NCRecipeTreeWnd {
         this.layer.tile(this.header, 16, 29, 32, 32, 0, 0, 32, 32, strings.itemIcons[recipe.productId]);
         this.layer.text(this.header, name, 0xffdcdcdc, FontType_T.SMALL, 58, 28);
         if (grade) this.layer.tile(this.header, 60 + this.layer.measureText(name), 28, 12, 12, 0, 0, 12, 12, strings.symbols[arrGrades[grade]]);
-        [[320, String(recipe.mpCost)], [642, `${recipe.successRate}%`]].forEach(([id, value], index) => {
+        [[SysString_T.MPCost, String(recipe.mpCost)], [SysString_T.SuccessRate, `${recipe.successRate}%`]].forEach(([id, value], index) => {
             const label = this.layer.getManager().getSysString(id as number), x = 58 + this.layer.measureText(label);
 
             this.layer.text(this.header, label, 0xffa3a3a3, FontType_T.SMALL, 58, 44 + index * 16);

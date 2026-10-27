@@ -3,6 +3,8 @@ import NCListCtrl, { type ListColumn_T, type ListRow_T } from "./nc-list-ctrl";
 import { NCComboBox } from "./nc-lobby-wnd";
 import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import type { ManorCropInfo_T, ManorDefaultInfo_T, ManorEntry_T, ManorRewards_T, ManorSeedInfo_T } from "../network/game-packets";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 type Manager_T = ReturnType<NDomLayer["getManager"]>;
 
@@ -12,7 +14,7 @@ const TEX_TAB = "L2UI_CH3.Manor.manor1_tab2";
 const TEX_TAB_SELECTED = "L2UI_CH3.Manor.manor1_tab1";
 const TEX_BUTTON = "L2UI_ch3.button.btn1_normal";
 const TEX_BUTTON_DOWN = "L2UI_ch3.button.btn1_normalon";
-const arrManorNames = [0, 1049, 1052, 1053, 1057, 1060, 1059, 1248];
+const arrManorNames = [0, SysString_T.Gludio, SysString_T.Dion, SysString_T.Giran, SysString_T.Oren, SysString_T.Aden, SysString_T.Innadril, SysString_T.Goddard];
 const WIDTH = 600;
 const HEIGHT = 326;
 const PAGE_HEIGHT = 278;
@@ -22,7 +24,7 @@ export function getManorName(manager: Manager_T, manorId: number) { return arrMa
 export function getRewardTooltip(manager: Manager_T, name: string, level: number, rewards: ManorRewards_T) { // NWindow 0x10031b10: name, Lv, Reward Type 1/2
     const strings = manager.strings;
 
-    return { title: name, lines: [{ label: manager.getSysString(537), value: String(level) }, { label: manager.getSysString(1134), value: strings.itemNames[rewards.reward1ItemId] }, { label: manager.getSysString(1135), value: strings.itemNames[rewards.reward2ItemId] }], description: "" };
+    return { title: name, lines: [{ label: manager.getSysString(SysString_T.ItemLevel), value: String(level) }, { label: manager.getSysString(SysString_T.RewardType1), value: strings.itemNames[rewards.reward1ItemId] }, { label: manager.getSysString(SysString_T.RewardType2), value: strings.itemNames[rewards.reward2ItemId] }], description: "" };
 }
 
 export function createTextButton(layer: NDomLayer, parent: HTMLElement, x: number, y: number, label: number, onPress: () => void) { return layer.button(parent, x, y, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(label), onPress); } // NCTextButton 0x100034e0 type 0: btn1 76x23
@@ -59,14 +61,14 @@ class NCManorSeedInfoWnd extends NCManorInfoDownWnd { // NCManorSeedInfoWnd: OnC
     protected readonly manorCombo: NCComboBox;
     protected arrManorIds: number[] = [];
 
-    public constructor(layer: NDomLayer, parent: HTMLElement, label = 1113, columns: ListColumn_T[] = [{ width: 329, label: 1120, numeric: false }, { width: 80, label: 1121, numeric: true }, { width: 80, label: 1122, numeric: true }, { width: 97, label: 1123, numeric: true }], buttonLabel = 1119, protected readonly ask = 3) {
+    public constructor(layer: NDomLayer, parent: HTMLElement, label = SysString_T.CurrentSeeds, columns: ListColumn_T[] = [{ width: 329, label: SysString_T.SeedName, numeric: false }, { width: 80, label: SysString_T.Residual, numeric: true }, { width: 80, label: SysString_T.SeedSales, numeric: true }, { width: 97, label: SysString_T.SalesPrice, numeric: true }], buttonLabel = SysString_T.SeedPurchase, protected readonly ask = 3) {
         super(layer, parent, label, columns);
 
         const manager = layer.getManager();
 
         this.button = createTextButton(layer, this.element, 518, 249, buttonLabel, () => this.onButton());
         this.timeCombo = new NCComboBox(layer, this.element, 164, 12, 70, 17);
-        this.timeCombo.setItems([manager.getSysString(1116), manager.getSysString(1117)]);
+        this.timeCombo.setItems([manager.getSysString(SysString_T.Current), manager.getSysString(SysString_T.NextPeriod)]);
         this.timeCombo.setSelected(0);
         this.manorCombo = new NCComboBox(layer, this.element, 354, 12, 130, 17);
         this.timeCombo.onChange = this.manorCombo.onChange = () => this.request();
@@ -94,13 +96,13 @@ class NCManorSeedInfoWnd extends NCManorInfoDownWnd { // NCManorSeedInfoWnd: OnC
 
         const manager = this.layer.getManager(), name = getManorName(manager, this.shownManorId);
 
-        if (!this.isButtonHidden && name) this.layer.text(this.content, manager.getSystemMessage(1605).replace("$s1", name), 0xffdcdcdc, undefined, 16, 250);
+        if (!this.isButtonHidden && name) this.layer.text(this.content, manager.getSystemMessage(SystemMessage_T.ManorSeedPurchaseRestriction).replace("$s1", name), 0xffdcdcdc, undefined, 16, 250);
     }
 }
 
 class NCManorCropInfoWnd extends NCManorSeedInfoWnd { // NCManorCropInfoWnd: OnCreate 0x10132e00, OnShowCropInfo 0x10132630, paint 0x10132c30
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, 1114, [{ width: 269, label: 1124, numeric: false }, { width: 80, label: 1154, numeric: true }, { width: 80, label: 1125, numeric: true }, { width: 80, label: 1126, numeric: true }, { width: 77, label: 1127, numeric: false }], 1130, 4);
+        super(layer, parent, SysString_T.CurrentCrops, [{ width: 269, label: SysString_T.CropName, numeric: false }, { width: 80, label: SysString_T.Remaining, numeric: true }, { width: 80, label: SysString_T.Buy, numeric: true }, { width: 80, label: SysString_T.BuyPrice, numeric: true }, { width: 77, label: SysString_T.Reward, numeric: false }], SysString_T.CropSales, 4);
     }
 
     protected onButton() { this.bypass("manor_menu_select?ask=2&state=-1&time=0"); } // 0x10132470
@@ -110,8 +112,8 @@ class NCManorDefaultInfoWnd extends NCManorInfoDownWnd { // NCManorDefaultInfoWn
     protected readonly arrButtons: NDomButton_T[];
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, 1131, [{ width: 169, label: 1124, numeric: false }, { width: 50, label: 537, numeric: true }, { width: 80, label: 1132, numeric: true }, { width: 80, label: 1133, numeric: true }, { width: 95, label: 1134, numeric: false }, { width: 112, label: 1135, numeric: false }]);
-        this.arrButtons = [createTextButton(layer, this.element, 438, 249, 1119, () => this.bypass("manor_menu_select?ask=1&state=-1&time=0")), createTextButton(layer, this.element, 518, 249, 1130, () => this.bypass("manor_menu_select?ask=2&state=-1&time=0"))];
+        super(layer, parent, SysString_T.CommonCropInfo, [{ width: 169, label: SysString_T.CropName, numeric: false }, { width: 50, label: SysString_T.ItemLevel, numeric: true }, { width: 80, label: SysString_T.SeedPrice, numeric: true }, { width: 80, label: SysString_T.CropPrice, numeric: true }, { width: 95, label: SysString_T.RewardType1, numeric: false }, { width: 112, label: SysString_T.RewardType2, numeric: false }]);
+        this.arrButtons = [createTextButton(layer, this.element, 438, 249, SysString_T.SeedPurchase, () => this.bypass("manor_menu_select?ask=1&state=-1&time=0")), createTextButton(layer, this.element, 518, 249, SysString_T.CropSales, () => this.bypass("manor_menu_select?ask=2&state=-1&time=0"))];
     }
 
     public show(isButtonHidden: boolean, rows: ListRow_T[]) {
@@ -139,10 +141,10 @@ export class NCManorInfoWnd { // NCManorInfoWnd: NConsole 0x10063b7f (W*0.5-300,
 
         this.element = layer.createWindow(0, 0, WIDTH, HEIGHT);
         this.element.hidden = true;
-        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(738), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(SysString_T.Manor), false, () => this.setVisible(false));
         this.element.appendChild(up);
         layer.tile(up, 0, 0, WIDTH, 28, 0, 0, WIDTH, 28, TEX_UP_BACK); // NCManorInfoUpWnd: OnCreate 0x101371f0, paint 0x10136fa0
-        [1113, 1114, 1115].forEach((label, index) => this.arrTabs.push(layer.tab(up, 12 + index * 94, 5, 94, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(label), null, () => this.onTabClick(index))));
+        [SysString_T.CurrentSeeds, SysString_T.CurrentCrops, SysString_T.BasicInfo].forEach((label, index) => this.arrTabs.push(layer.tab(up, 12 + index * 94, 5, 94, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(label), null, () => this.onTabClick(index))));
 
         this.seedWnd = new NCManorSeedInfoWnd(layer, this.element);
         this.cropWnd = new NCManorCropInfoWnd(layer, this.element);

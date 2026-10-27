@@ -3,6 +3,8 @@ import NCChatListBox from "./nc-chat-list-box";
 import type NDomLayer from "./ndom";
 import type { NDomButton_T, NDomEdit_T } from "./ndom";
 import { DEFAULT_CHAT_FILTERS, type ChatFilter_T } from "./nc-chat-filter-wnd";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK1 = "L2UI_CH3.ChatWnd.Chatting_Back1";
 const TEX_BACK2 = "L2UI_CH3.ChatWnd.Chatting_Back2";
@@ -24,7 +26,7 @@ const LABEL_COLOR = 0xffe6dcbe;
 const WIDTH = 348;
 const WINDOW_NAME = "ChatWnd";
 
-const TABS: [number, number, string][] = [[144, Say2_T.ALL, ""], [355, Say2_T.TRADE, "+"], [188, Say2_T.PARTY, "#"], [128, Say2_T.CLAN, "@"], [559, Say2_T.ALLIANCE, "$"]]; // 0x1005b245..0x1005b2f1 tab sysstring labels; send type per tab from jump table 0x1005a338.
+const TABS: [number, number, string][] = [[SysString_T.AllChat, Say2_T.ALL, ""], [SysString_T.TradeChat, Say2_T.TRADE, "+"], [SysString_T.PartyChat, Say2_T.PARTY, "#"], [SysString_T.ClanChat, Say2_T.CLAN, "@"], [SysString_T.AllianceChat, Say2_T.ALLIANCE, "$"]]; // 0x1005b245..0x1005b2f1 tab sysstring labels; send type per tab from jump table 0x1005a338.
 
 const CHAT_FILTER_TYPES: { [type: number]: keyof ChatFilter_T } = { [Say2_T.ALL]: "normal", [Say2_T.SHOUT]: "shout", [Say2_T.TELL]: "tell", [Say2_T.PARTY]: "party", [Say2_T.CLAN]: "pledge", [Say2_T.TRADE]: "market", [Say2_T.ALLIANCE]: "ally", [Say2_T.HERO_VOICE]: "hero" };
 
@@ -233,7 +235,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
         if (routed === Say2_T.PETITION_PLAYER || routed === Say2_T.PETITION_GM || routed === Say2_T.PARTYROOM_ALL || routed === Say2_T.PARTYROOM_COMMANDER || routed === Say2_T.CHANNEL_ALL) return; // 0x1005d5e9..0x1005d622: 6/7 go to the petition window, 14 to the party room, 15/16 to [+0x264].
 
-        const sender = routed === Say2_T.ANNOUNCEMENT ? this.layer.getManager().getSysString(328) : name;
+        const sender = routed === Say2_T.ANNOUNCEMENT ? this.layer.getManager().getSysString(SysString_T.Announcements) : name;
 
         this.addChat(routed === Say2_T.CRITICAL_ANNOUNCE ? text : `${sender}: ${text}`, color, routed);
     }
@@ -383,11 +385,11 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
             if (!this.isChatBlocked && (this.chatScore > 20000 || score > 20000)) {
                 this.isChatBlocked = true;
-                this.addChatWarning(964);
-                this.addChatWarning(1078);
+                this.addChatWarning(SystemMessage_T.ChatBannedOneMinute);
+                this.addChatWarning(SystemMessage_T.ChatSpamWarning);
             }
             if (this.isChatBlocked) {
-                this.addChatWarning(966);
+                this.addChatWarning(SystemMessage_T.ChatProhibited);
                 return;
             }
         }
@@ -417,7 +419,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         }
         if (this.isChatBlocked && !isBlocked) {
             this.isChatBlocked = false;
-            this.addChatWarning(965);
+            this.addChatWarning(SystemMessage_T.ChatBanRemoved);
         }
     }
 

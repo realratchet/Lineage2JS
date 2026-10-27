@@ -1,12 +1,14 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import type { default as NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 enum GMControl_T { TeleportTo = 0xf0f00d, InstantMove = 0xf0f03d, Recall = 0xf0f00e, CharacterInfo = 0xf0f007, PledgeInfo = 0xf0f006, QuestInfo = 0xf0f008, InventoryInfo = 0xf0f00a, Debug = 0xf0f05d, WarehouseInfo = 0xf0f00c, SkillInfo = 0xf0f00b, PetitionChat = 0xf0f03f, SendHome = 0xf0f03e, NpcLookup = 0xf0f01c, ItemLookup = 0xf0f02c, SkillLookup = 0xf0f03c, ForcePetition = 0xf0f016, ServerTransfer = 0xf0f123 }
 
 const TEX_BACK = "l2ui_ch3.siegewnd.siege_back31";
 const TEX_BUTTON = "sek.cbui91";
 const TEX_DOWN = "sek.cbui93";
-const arrButtons = [[GMControl_T.TeleportTo, 10, 75, 899], [GMControl_T.InstantMove, 74, 75, 900], [GMControl_T.Recall, 138, 75, 688], [GMControl_T.CharacterInfo, 10, 96, 433], [GMControl_T.PledgeInfo, 74, 96, 138], [GMControl_T.QuestInfo, 138, 96, 119], [GMControl_T.InventoryInfo, 10, 117, 118], [GMControl_T.Debug, 74, 117, 901], [GMControl_T.WarehouseInfo, 138, 117, 131], [GMControl_T.SkillInfo, 10, 138, 439], [GMControl_T.PetitionChat, 74, 138, 902], [GMControl_T.SendHome, 138, 138, 903], [GMControl_T.NpcLookup, 10, 159, 690], [GMControl_T.ItemLookup, 74, 159, 691], [GMControl_T.SkillLookup, 138, 159, 692], [GMControl_T.ForcePetition, 10, 180, 1274], [GMControl_T.ServerTransfer, 74, 180, 1275]];
+const arrButtons = [[GMControl_T.TeleportTo, 10, 75, SysString_T.Go], [GMControl_T.InstantMove, 74, 75, SysString_T.Move], [GMControl_T.Recall, 138, 75, SysString_T.CharacterSummon], [GMControl_T.CharacterInfo, 10, 96, SysString_T.CharacterStatus], [GMControl_T.PledgeInfo, 74, 96, SysString_T.Inventory], [GMControl_T.QuestInfo, 138, 96, SysString_T.Skills], [GMControl_T.InventoryInfo, 10, 117, SysString_T.Quest], [GMControl_T.Debug, 74, 117, SysString_T.GMInformation], [GMControl_T.WarehouseInfo, 138, 117, SysString_T.Warehouse], [GMControl_T.SkillInfo, 10, 138, SysString_T.Clan], [GMControl_T.PetitionChat, 74, 138, SysString_T.PetitionInvitation], [GMControl_T.SendHome, 138, 138, SysString_T.Escape], [GMControl_T.NpcLookup, 10, 159, SysString_T.NPCSearch], [GMControl_T.ItemLookup, 74, 159, SysString_T.ItemSearch], [GMControl_T.SkillLookup, 138, 159, SysString_T.SkillSearch], [GMControl_T.ForcePetition, 10, 180, SysString_T.ForcedPetition], [GMControl_T.ServerTransfer, 74, 180, SysString_T.ServerTransfer]];
 
 export class NCGMWnd {
     public static getTextures() { return [...NCFrameCtrl.getTextures(), TEX_BACK, TEX_BUTTON, TEX_DOWN, "NWindow.ChatBack"]; }
@@ -31,13 +33,13 @@ export class NCGMWnd {
         this.element.dataset.window = "gm";
         layer.tile(this.element, 0, 20, this.width, 256, 0, 0, 256, 256, TEX_BACK);
         NCFrameCtrl.createDOM(layer, this.element, this.width, "", false, () => this.setVisible(false));
-        layer.text(this.element, layer.getManager().getSysString(50), 0xffdcdcdc, undefined, 7, 55);
+        layer.text(this.element, layer.getManager().getSysString(SysString_T.Name), 0xffdcdcdc, undefined, 7, 55);
         this.target = layer.edit(this.element, 35, 55, 112, 14, false, 128);
         Array.from(this.target.children).slice(0, 3).forEach(child => child.remove());
         const background = layer.tile(this.target, 0, 0, 112, 14, 0, 0, 32, 32, "NWindow.ChatBack");
 
         this.target.prepend(background);
-        this.target.input.setAttribute("aria-label", layer.getManager().getSysString(50));
+        this.target.input.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.Name));
         for (const [id, x, y, text] of arrButtons) {
             const button = layer.button(this.element, 10 + (x - 10) / 64 * (buttonWidth + 10), y, buttonWidth, 18, TEX_BUTTON, TEX_DOWN, TEX_BUTTON, layer.getManager().getSysString(text), () => this.press(id), null, 54);
 
@@ -64,7 +66,7 @@ export class NCGMWnd {
         const index = views.indexOf(id);
 
         if (index >= 0) {
-            if (!target) { if (this.onMessage) this.onMessage(364); return; }
+            if (!target) { if (this.onMessage) this.onMessage(SystemMessage_T.EnterSearchName); return; }
 
             if (this.onView) this.onView(target, index + 1);
             return;
@@ -84,7 +86,7 @@ export class NCGMWnd {
             case GMControl_T.PetitionChat: this.command(`add_peti_chat ${target}`); break;
             case GMControl_T.ForcePetition: this.command(`force_peti ${target} ${this.playerName}`); break;
             case GMControl_T.Recall: case GMControl_T.SendHome:
-                if (this.onConfirm) this.onConfirm(id === GMControl_T.Recall ? 1220 : 1221, target, isOk => {
+                if (this.onConfirm) this.onConfirm(id === GMControl_T.Recall ? SystemMessage_T.ConfirmSummon : SystemMessage_T.ConfirmReturnSummon, target, isOk => {
                     if (isOk) this.command(`${id === GMControl_T.Recall ? "recall" : "sendhome"} ${target}`);
                 });
                 break;
@@ -98,7 +100,7 @@ export class NCGMWnd {
         const name = target.toLowerCase();
         let rows: [number, string][];
 
-        if (id === GMControl_T.NpcLookup) rows = Object.keys(strings.npcNames).map(key => [Number(key) + 1000000, strings.npcNames[key]]);
+        if (id === GMControl_T.NpcLookup) rows = Object.keys(strings.npcNames).map(key => [Number(key) + 1e6, strings.npcNames[key]]);
         else if (id === GMControl_T.ItemLookup) {
             const keys = Object.keys(strings.itemInfos);
 

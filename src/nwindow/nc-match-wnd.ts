@@ -5,6 +5,7 @@ import { NCComboBox } from "./nc-lobby-wnd";
 import NDomLayer, { type NDomButton_T } from "./ndom";
 import type { PartyMatchList_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.PartyMatchWnd.PartyMatch1_Back";
 const TEX_BUTTON = SKIN_SLOTS.button;
@@ -12,10 +13,10 @@ const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const TEX_SMALL = SKIN_SLOTS.smallButton;
 const TEX_SMALL_DOWN = SKIN_SLOTS.smallButtonDown;
 const arrLocations = [-2, -1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-const arrLocationLabels = [1047, 1046, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1247, 1248];
+const arrLocationLabels = [SysString_T.NearMe, SysString_T.AllLocations, SysString_T.TalkingIsland, SysString_T.Gludio, SysString_T.DarkElvenTer, SysString_T.ElvenTerritory, SysString_T.Dion, SysString_T.Giran, SysString_T.NeutralZone, SysString_T.Lyonn, SysString_T.Schuttgart, SysString_T.Oren, SysString_T.HuntersVillage, SysString_T.Innadril, SysString_T.Aden, SysString_T.Rune, SysString_T.Goddard];
 
 export function getPartyLocation(layer: NDomLayer, location: number) {
-    return location >= 1 && location <= 13 ? layer.getManager().getSysString(1047 + location) : location === 14 ? layer.getManager().getSysString(1247) : location === 15 ? layer.getManager().getSysString(1248) : "";
+    return location >= 1 && location <= 13 ? layer.getManager().getSysString(SysString_T.NearMe + location) : location === 14 ? layer.getManager().getSysString(SysString_T.Rune) : location === 15 ? layer.getManager().getSysString(SysString_T.Goddard) : "";
 }
 
 export class NCMatchWnd {
@@ -42,8 +43,8 @@ export class NCMatchWnd {
         this.element.dataset.window = "party-match";
         layer.tile(this.element, 0, 20, 600, 411, 0, 0, 600, 411, TEX_BACK);
         this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true));
-        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(389), true, () => this.setVisible(false), null, () => { this.table.hide(); this.minimized.minimize(); });
-        [[1034, 80, 54], [1035, 260, 54]].forEach(([id, x, y]) => {
+        NCFrameCtrl.createDOM(layer, this.element, 600, manager.getSysString(SysString_T.PartyMatching), true, () => this.setVisible(false), null, () => { this.table.hide(); this.minimized.minimize(); });
+        [[SysString_T.LocCondition, 80, 54], [SysString_T.LevelCondition, 260, 54]].forEach(([id, x, y]) => {
             const text = manager.getSysString(id);
 
             layer.text(this.element, text, 0xffdcdcdc, undefined, x - layer.measureText(text), y);
@@ -53,16 +54,16 @@ export class NCMatchWnd {
         this.location.setSelected(1);
         this.location.onChange = index => { this.locationIndex = index; };
         this.level = new NCComboBox(layer, this.element, 264, 52, 90, 17);
-        this.level.setItems([manager.getSysString(1045), manager.getSysString(1046)]);
+        this.level.setItems([manager.getSysString(SysString_T.MyLevelRange), manager.getSysString(SysString_T.AllLocations)]);
         this.level.setSelected(1);
         this.level.onChange = index => { this.levelIndex = index; };
-        this.table = new NCListCtrl(layer, this.element, 7, 83, 585, 273, [{ width: 34, label: 416, numeric: true }, { width: 240, label: 413, numeric: false }, { width: 100, label: 408, numeric: false }, { width: 98, label: 1029, numeric: false }, { width: 72, label: 1030, numeric: false }, { width: 41, label: 1036, numeric: true }]);
+        this.table = new NCListCtrl(layer, this.element, 7, 83, 585, 273, [{ width: 34, label: SysString_T.Number, numeric: true }, { width: 240, label: SysString_T.RoomTitle, numeric: false }, { width: 100, label: SysString_T.PartyLeader, numeric: false }, { width: 98, label: SysString_T.Location, numeric: false }, { width: 72, label: SysString_T.LevelLimit, numeric: false }, { width: 41, label: SysString_T.PartySize, numeric: true }]);
         this.table.onDoubleClick = row => { if (this.onJoin) this.onJoin(Number(row.id), 0); };
-        this.requestButtons.push(layer.button(this.element, 369, 50, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(1039), () => this.request(1)));
-        this.requestButtons.push(layer.button(this.element, 233, 366, 64, 21, TEX_SMALL, TEX_SMALL_DOWN, null, manager.getSysString(1037), () => this.request(Math.max(1, this.page - 1))));
-        this.requestButtons.push(layer.button(this.element, 303, 366, 64, 21, TEX_SMALL, TEX_SMALL_DOWN, null, manager.getSysString(1038), () => this.request(this.page + 1)));
-        layer.button(this.element, 448, 402, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(1040), () => { if (this.onCreate) this.onCreate(); });
-        this.requestButtons.push(layer.button(this.element, 523, 402, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(1041), () => {
+        this.requestButtons.push(layer.button(this.element, 369, 50, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.ListUpdate), () => this.request(1)));
+        this.requestButtons.push(layer.button(this.element, 233, 366, 64, 21, TEX_SMALL, TEX_SMALL_DOWN, null, manager.getSysString(SysString_T.PreviousPage), () => this.request(Math.max(1, this.page - 1))));
+        this.requestButtons.push(layer.button(this.element, 303, 366, 64, 21, TEX_SMALL, TEX_SMALL_DOWN, null, manager.getSysString(SysString_T.NextPage), () => this.request(this.page + 1)));
+        layer.button(this.element, 448, 402, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.CreateRoom), () => { if (this.onCreate) this.onCreate(); });
+        this.requestButtons.push(layer.button(this.element, 523, 402, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.AutoAccept), () => {
             if (this.onJoin) this.onJoin(0, arrLocations[this.locationIndex]);
             this.setRequestsEnabled(false);
         }));

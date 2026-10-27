@@ -2,6 +2,7 @@ import NCTooltip from "./nc-tooltip";
 import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import type { SkillEntry_T } from "../network/game-packets";
 import type NCCoolTimeIcon from "./nc-cool-time-icon";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.SkillWnd.Skill_Back";
 const TEX_TAB = "L2UI_CH3.SkillWnd.Skill_Tab2";
@@ -38,7 +39,7 @@ export class NCSkillWnd {
         this.list.tabIndex = -1;
         for (const type of ["wheel", "mousedown"]) this.list.addEventListener(type, () => this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove()));
 
-        [120, 121].forEach((id, index) => {
+        [SysString_T.Active, SysString_T.Passive].forEach((id, index) => {
             const label = layer.getManager().getSysString(id);
             const select = () => {
                 this.isPassive = index === 1;

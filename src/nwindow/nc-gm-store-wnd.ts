@@ -1,6 +1,7 @@
 import NCStoreWnd from "./nc-store-wnd";
 import { WarehouseType_T, type GMViewWarehouseWithdrawList_T, type ShopItem_T } from "../network/game-packets";
 import type { default as NDomLayer, NDomButton_T } from "./ndom";
+import SysString_T from "./sys-string";
 
 export class NCGMStoreWnd extends NCStoreWnd {
     public onRequest: (targetName: string, kind: number) => void = null;
@@ -13,7 +14,7 @@ export class NCGMStoreWnd extends NCStoreWnd {
         layer.renderText(this.caption, "", 0xffc8d2dc);
         this.element.setAttribute("aria-label", "");
         this.getLabelIds().forEach((id, index) => layer.renderText(this.labels[index], layer.getManager().getSysString(id), 0xffdcdcdc));
-        layer.place(this.labels[2], 156 - layer.measureText(layer.getManager().getSysString(135)), 331);
+        layer.place(this.labels[2], 156 - layer.measureText(layer.getManager().getSysString(SysString_T.WarehouseFee)), 331);
         this.drawAmount(this.money, "0", 350);
         this.drawTotal();
         this.okButton.setEnabled(false);

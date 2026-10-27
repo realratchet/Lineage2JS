@@ -4,6 +4,7 @@ import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
 import { ItemType2_T, type HennaStatus_T } from "../network/game-packets";
 import NCTooltip, { TEX_TOOLTIP_SLICES } from "./nc-tooltip";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.InventoryWnd.Inventory_Back";
 const TEX_TAB = "L2UI_CH3.InventoryWnd.Inventory_tab2";
@@ -109,7 +110,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.element.hidden = true;
         this.element.tabIndex = -1;
         this.element.setAttribute("role", "dialog");
-        this.element.setAttribute("aria-label", layer.getManager().getSysString(138));
+        this.element.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.Inventory));
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
 
         const frame = layer.createWindow(0, 0, 256, 20, this.element);
@@ -117,7 +118,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         layer.tile(frame, 0, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME_LEFT);
         layer.tile(frame, 16, 0, 224, 20, 0, 0, 32, 20, TEX_FRAME_MID);
         layer.tile(frame, 240, 0, 16, 20, 0, 0, 16, 20, TEX_FRAME_RIGHT);
-        layer.text(frame, layer.getManager().getSysString(138), 0xffc8d2dc, FontType_T.SMALL, 20, 6);
+        layer.text(frame, layer.getManager().getSysString(SysString_T.Inventory), 0xffc8d2dc, FontType_T.SMALL, 20, 6);
 
         const close = layer.button(frame, 233, 3, 15, 15, TEX_CLOSE, TEX_CLOSE_DOWN, null, null, () => { layer.getManager().playWindowCloseSound(); this.setVisible(false); });
         const minimize = layer.button(frame, 216, 3, 15, 15, TEX_MINIMIZE, TEX_MINIMIZE_DOWN, null, null, () => this.minimize());
@@ -128,10 +129,10 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.folded.classList.add("ndom-opaque");
         this.folded.hidden = true;
         this.folded.tabIndex = -1;
-        this.folded.setAttribute("aria-label", layer.getManager().getSysString(195));
+        this.folded.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.InventoryAltV));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
 
-        const captionText = layer.getManager().getSysString(195), canvas = layer.getManager().canvas;
+        const captionText = layer.getManager().getSysString(SysString_T.InventoryAltV), canvas = layer.getManager().canvas;
         const captionWidth = layer.measureText(captionText), captionHeight = canvas.getLineHeight();
         const texture = canvas.getTexture(TEX_CAPTION);
 
@@ -205,7 +206,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
             this.arrBags.push(bag);
         });
 
-        [2, 118].forEach((id, index) => {
+        [SysString_T.Item, SysString_T.Quest].forEach((id, index) => {
             const select = () => {
                 this.hideBags();
                 this.isQuest = index === 1;
@@ -229,11 +230,11 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         this.weightText = layer.digits(weight, "", 0xffdcdcdc, DigitFont_T.NORMAL, 0, 2);
 
         this.crystal = layer.tile(this.element, 14, 351, 34, 34, 0, 0, 34, 34, TEX_CRYSTAL);
-        this.crystal.title = layer.getManager().getSysString(891);
+        this.crystal.title = layer.getManager().getSysString(SysString_T.Crystallization);
         this.trash = layer.tile(this.element, 208, 351, 34, 34, 0, 0, 34, 34, TEX_TRASH); // OnCreate 0x1009a015: trash drop target at (208, 351), tooltip sysstring 890.
 
         this.trash.hidden = true;
-        this.trash.title = layer.getManager().getSysString(890);
+        this.trash.title = layer.getManager().getSysString(SysString_T.Destruction);
         [this.trash, this.crystal].forEach(button => button.addEventListener("mousedown", event => { // NWindow 0x10001200, control id0 has no inventory command handler.
             if (event.button === 0) layer.getManager().playButtonSound(true);
         }));
@@ -840,27 +841,27 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         const manager = this.layer.getManager(), bodyPart = item.bodyPart;
 
         switch (item.itemClass) {
-            case ItemType2_T.TYPE2_WEAPON: return bodyPart === SLOT_R_HAND || bodyPart === SLOT_L_HAND ? manager.getSysString(242) : bodyPart === SLOT_LR_HAND ? manager.getSysString(243) : "";
+            case ItemType2_T.TYPE2_WEAPON: return bodyPart === SLOT_R_HAND || bodyPart === SLOT_L_HAND ? manager.getSysString(SysString_T.OneHanded) : bodyPart === SLOT_LR_HAND ? manager.getSysString(SysString_T.TwoHanded) : "";
             case ItemType2_T.TYPE2_SHIELD_ARMOR: {
                 switch (bodyPart) {
-                    case SLOT_UNDERWEAR: return manager.getSysString(229);
-                    case SLOT_HEAD: return manager.getSysString(230);
-                    case SLOT_R_HAND: case SLOT_L_HAND: return manager.getSysString(231);
-                    case SLOT_GLOVES: return manager.getSysString(232);
-                    case SLOT_FEET: return manager.getSysString(233);
-                    case SLOT_BACK: return manager.getSysString(234);
-                    case SLOT_HAIR: return manager.getSysString(1024);
+                    case SLOT_UNDERWEAR: return manager.getSysString(SysString_T.Underwear);
+                    case SLOT_HEAD: return manager.getSysString(SysString_T.Headgear);
+                    case SLOT_R_HAND: case SLOT_L_HAND: return manager.getSysString(SysString_T.Shield);
+                    case SLOT_GLOVES: return manager.getSysString(SysString_T.Gloves);
+                    case SLOT_FEET: return manager.getSysString(SysString_T.Boots);
+                    case SLOT_BACK: return manager.getSysString(SysString_T.Cloak);
+                    case SLOT_HAIR: return manager.getSysString(SysString_T.HairAccessory);
                     case SLOT_CHEST: case SLOT_LEGS: case SLOT_FULL_ARMOR: {
-                        const armorType = [0, 245, 246, 244][item.info.armorType];
+                        const armorType = [0, SysString_T.LightArmor, SysString_T.HeavyArmor, SysString_T.Robe][item.info.armorType];
 
-                        return `${manager.getSysString(bodyPart === SLOT_CHEST ? 235 : bodyPart === SLOT_LEGS ? 236 : 542)} / ${armorType ? manager.getSysString(armorType) : ""}`;
+                        return `${manager.getSysString(bodyPart === SLOT_CHEST ? SysString_T.UpperBody : bodyPart === SLOT_LEGS ? SysString_T.LowerBody : SysString_T.UpperAndLowerBody)} / ${armorType ? manager.getSysString(armorType) : ""}`;
                     }
                     default: return "";
                 }
             }
-            case ItemType2_T.TYPE2_ACCESSORY: return bodyPart & SLOT_EARS ? manager.getSysString(237) : bodyPart & SLOT_NECK ? manager.getSysString(238) : bodyPart & SLOT_FINGERS ? manager.getSysString(239) : "";
-            case ItemType2_T.TYPE2_QUEST: return manager.getSysString(240);
-            case ItemType2_T.TYPE2_MONEY: return manager.getSysString(241);
+            case ItemType2_T.TYPE2_ACCESSORY: return bodyPart & SLOT_EARS ? manager.getSysString(SysString_T.Earring) : bodyPart & SLOT_NECK ? manager.getSysString(SysString_T.Necklace) : bodyPart & SLOT_FINGERS ? manager.getSysString(SysString_T.Ring) : "";
+            case ItemType2_T.TYPE2_QUEST: return manager.getSysString(SysString_T.QuestItem);
+            case ItemType2_T.TYPE2_MONEY: return manager.getSysString(SysString_T.Money);
             default: return "";
         }
     }
@@ -871,98 +872,98 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         const defence = (base: number) => Math.trunc(arrDefenceBonus[info.crystalType] * getArmorEnchant(item.enchant) + base);
 
         if (context & 0x40) {
-            line(736, item.maxCount);
-            line(737, item.count);
+            line(SysString_T.NumberOfNeededItems, item.maxCount);
+            line(SysString_T.NumberOfKeptItems, item.count);
             return lines;
         }
 
         if (context & 44) {
             const value = price.toLocaleString("en-US"), digits = value.replace(/,/g, "").length;
-            const text = `${value} ${manager.getSysString(469)}`, color = digits < 5 ? 0xffdcdcdc : [0xffff80ff, 0xffffff00, 0xff00ff00, 0xff00ffff][(digits - 2) % 4];
+            const text = `${value} ${manager.getSysString(SysString_T.AdenaUnit)}`, color = digits < 5 ? 0xffdcdcdc : [0xffff80ff, 0xffffff00, 0xff00ff00, 0xff00ffff][(digits - 2) % 4];
 
-            if (context & 4) lines.push({ label: manager.getSysString(322), value: text, color });
-            if (context & 8) lines.push({ label: manager.getSysString(322), value: `${manager.getSysString(468)} ${text}`, color });
-            if (context & 32) lines.push({ label: manager.getSysString(641), value, color });
+            if (context & 4) lines.push({ label: manager.getSysString(SysString_T.Price), value: text, color });
+            if (context & 8) lines.push({ label: manager.getSysString(SysString_T.Price), value: `${manager.getSysString(SysString_T.ForEach)} ${text}`, color });
+            if (context & 32) lines.push({ label: manager.getSysString(SysString_T.ManufacturingCost), value, color });
         }
 
         if (flags & 1) {
-            line(52, info.weight);
+            line(SysString_T.Weight, info.weight);
             return lines;
         }
 
-        if (context & 0x800 && info.consumeType >= 1 && info.consumeType <= 3 && item.maxCount > 0) line(808, item.maxCount.toLocaleString("en-US"));
+        if (context & 0x800 && info.consumeType >= 1 && info.consumeType <= 3 && item.maxCount > 0) line(SysString_T.QuantityPurchased, item.maxCount.toLocaleString("en-US"));
 
         switch (item.itemClass) {
             case ItemType2_T.TYPE2_WEAPON: {
-                const weaponTypes = [0, 43, 44, 45, 46, 47, 48, 49, 504], table = getWeaponTable(info.weaponType, item.bodyPart), enchant = getWeaponEnchant(item.enchant);
-                const speed = info.speed < 260 ? 310 : info.speed < 309 ? 309 : info.speed < 352 ? 308 : info.speed < 406 ? 307 : 306; // 0x1006afc0
+                const weaponTypes = [0, SysString_T.Sword, SysString_T.Blunt, SysString_T.Dagger, SysString_T.Pole, SysString_T.Fist, SysString_T.Bow, SysString_T.Etc, SysString_T.DoubleBlades], table = getWeaponTable(info.weaponType, item.bodyPart), enchant = getWeaponEnchant(item.enchant);
+                const speed = info.speed < 260 ? SysString_T.VerySlow : info.speed < 309 ? SysString_T.Slow : info.speed < 352 ? SysString_T.AttackSpeedNormal : info.speed < 406 ? SysString_T.Fast : SysString_T.VeryFast; // 0x1006afc0
 
                 if (weaponTypes[info.weaponType]) lines.push({ label: null, value: `${manager.getSysString(weaponTypes[info.weaponType])} / ${this.getSlotName(item)}` }); // 0x1006abe0
 
-                line(94, Math.trunc((table < 0 ? 0 : arrWeaponPAtk[table][info.crystalType]) * enchant + info.pAtk));
-                line(98, Math.trunc((table < 0 ? 0 : arrWeaponMAtk[info.crystalType]) * enchant + info.mAtk));
-                line(111, manager.getSysString(speed));
+                line(SysString_T.PhysicalAttack, Math.trunc((table < 0 ? 0 : arrWeaponPAtk[table][info.crystalType]) * enchant + info.pAtk));
+                line(SysString_T.MagicAttack, Math.trunc((table < 0 ? 0 : arrWeaponMAtk[info.crystalType]) * enchant + info.mAtk));
+                line(SysString_T.AttackSpeed, manager.getSysString(speed));
 
-                if (isMultiSell || info.soulshots > 0) line(404, `X ${info.soulshots}`);
-                if (isMultiSell || info.spiritshots > 0) line(496, `X ${info.spiritshots}`);
+                if (isMultiSell || info.soulshots > 0) line(SysString_T.SoulshotUsed, `X ${info.soulshots}`);
+                if (isMultiSell || info.spiritshots > 0) line(SysString_T.SpiritshotUsed, `X ${info.spiritshots}`);
 
-                line(52, info.weight);
+                line(SysString_T.Weight, info.weight);
 
-                if (!isMultiSell && info.mpConsume) line(320, info.mpConsume);
+                if (!isMultiSell && info.mpConsume) line(SysString_T.MPCost, info.mpConsume);
                 break;
             }
             case ItemType2_T.TYPE2_SHIELD_ARMOR:
                 if (item.bodyPart & (SLOT_R_HAND | SLOT_L_HAND)) {
                     if (isMultiSell) lines.push({ label: null, value: this.getSlotName(item) });
-                    line(95, defence(info.shieldPDef));
-                    line(317, info.shieldRate);
-                    line(97, info.avoidModify);
+                    line(SysString_T.PhysicalDefense, defence(info.shieldPDef));
+                    line(SysString_T.DEFRate, info.shieldRate);
+                    line(SysString_T.Evasion, info.avoidModify);
                 } else {
                     lines.push({ label: null, value: this.getSlotName(item) });
 
-                    if (info.armorType === 3) line(388, info.mpBonus); // 0x1007d730: armorgrp armor_type 3.
+                    if (info.armorType === 3) line(SysString_T.MPIncrease, info.mpBonus); // 0x1007d730: armorgrp armor_type 3.
 
-                    line(95, defence(info.pDef));
+                    line(SysString_T.PhysicalDefense, defence(info.pDef));
                 }
 
-                line(52, info.weight);
+                line(SysString_T.Weight, info.weight);
                 break;
             case ItemType2_T.TYPE2_ACCESSORY:
                 lines.push({ label: null, value: this.getSlotName(item) });
-                line(99, defence(info.mDef));
-                line(52, info.weight);
+                line(SysString_T.MagicDefense, defence(info.mDef));
+                line(SysString_T.Weight, info.weight);
                 break;
             case ItemType2_T.TYPE2_QUEST: lines.push({ label: null, value: this.getSlotName(item) }); break;
             case ItemType2_T.TYPE2_OTHER:
                 if (isMultiSell) {
-                    line(52, info.weight);
+                    line(SysString_T.Weight, info.weight);
                     break;
                 }
 
                 if (info.etcType === 7) { // 0x10031402..0x100314ab.
                     const status = item.customType2 || 0;
 
-                    line(969, status === 0 ? manager.getSysString(971) : status === 1 ? manager.getSysString(970) : "");
-                    line(88, item.enchant);
-                } else if (info.etcType === 15) line(972, item.enchant); // 0x100314ac..0x100314eb.
+                    line(SysString_T.PetName, status === 0 ? manager.getSysString(SysString_T.NoNameExists) : status === 1 ? manager.getSysString(SysString_T.NameExists) : "");
+                    line(SysString_T.Level, item.enchant);
+                } else if (info.etcType === 15) line(SysString_T.SevenSignsEventPeriod, item.enchant); // 0x100314ac..0x100314eb.
                 else if (info.etcType === 13) { // 0x100314ec..0x10031678.
                     const numbers: number[] = [];
 
                     for (let i = 0; i < 16; i++) if (item.enchant & 1 << i) numbers.push(i + 1);
                     for (let i = 0; i < 16; i++) if ((item.customType2 || 0) & 1 << i) numbers.push(i + 17);
 
-                    line(670, (item.customType1 || 0) & 0xffff);
-                    line(671, numbers.join(","));
+                    line(SysString_T.EventNumber, (item.customType1 || 0) & 0xffff);
+                    line(SysString_T.SelectedNumber, numbers.join(","));
                 } else if (info.etcType === 14) { // 0x1003167d..0x10031794.
                     const selectors = (item.customType1 || 0) & 0xffff;
                     const first = selectors & 15, second = selectors >>> 4;
 
-                    line(670, item.enchant);
-                    line(671, `${first > 0 ? first : ""}${second > 0 ? `,${second}` : ""}`);
-                    line(744, Math.imul(item.customType2 || 0, 100));
+                    line(SysString_T.EventNumber, item.enchant);
+                    line(SysString_T.SelectedNumber, `${first > 0 ? first : ""}${second > 0 ? `,${second}` : ""}`);
+                    line(SysString_T.PurchasePrice, Math.imul(item.customType2 || 0, 100));
                 }
 
-                line(52, info.weight);
+                line(SysString_T.Weight, info.weight);
                 break;
         }
 

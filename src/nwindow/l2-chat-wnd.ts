@@ -1,6 +1,7 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import type NDomLayer from "./ndom";
 import { NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
+import SysString_T from "./sys-string";
 
 type ChatLine_T = { text: string, color: number };
 const TEX_BACK = "L2UI_CH3.msn_back3";
@@ -23,7 +24,7 @@ export class L2ChatWnd {
         this.element.tabIndex = -1;
         this.element.style.overflow = "hidden";
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(997), true, () => { if (this.onClose) this.onClose(); }, null, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(SysString_T.ChatWithFriends), true, () => { if (this.onClose) this.onClose(); }, null, () => this.setVisible(false));
         this.peerLabel = layer.text(this.element, "", 0xffdcdcdc, undefined, 11, 54);
         this.history = layer.scrollPane(this.element, 9, 96, 238, 252, 18, false, 14);
         this.history.content.setAttribute("role", "log");
@@ -40,7 +41,7 @@ export class L2ChatWnd {
             this.history.setScroll(this.history.getScroll() + Math.trunc(event.deltaY / 120) * 18);
         }, true);
         this.edit = layer.edit(this.element, 8, 360, 239, 16);
-        this.edit.input.setAttribute("aria-label", layer.getManager().getSysString(997));
+        this.edit.input.setAttribute("aria-label", layer.getManager().getSysString(SysString_T.ChatWithFriends));
         this.edit.input.addEventListener("keydown", event => {
             if (event.key !== "Enter" || event.isComposing) return;
 

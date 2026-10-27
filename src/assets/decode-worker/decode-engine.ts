@@ -12,7 +12,7 @@ import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, serializeLibraryBlob, deserializeLibrary, openLibraryFile, hydrateLibraryFile, getLibraryChunkBlob, type SeekableLibrary_T } from "./library-serializer";
-import { dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
+import { dumpObjectClass, dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
 import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
@@ -45,7 +45,7 @@ import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/
 import fetchAsset from "../asset-source";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
-type SoundPath_T = { name: string, sound: { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } };
+type SoundPath_T = { name: string, scriptObject: DecodeLibrary["scriptObjects"][string], sound: { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } };
 type CharacterBundle_T = {
     name: string;
     animationSet: string;
@@ -61,15 +61,15 @@ type CharacterPartPaths_T = [string, string];
 type NpcBundleEntry_T = { meshIndex: number, materials: string, scriptClassId: string | null, effectSpawnBoneIndex: number | null, damageEffect: string | null };
 type NpcBundleManifest_T = { actors: Record<number, NpcBundleEntry_T> };
 type CachedBundle_T = { library: DecodeLibrary, seekable?: SeekableLibrary_T };
-type SkillTables_T = { skills: Record<string, any>[], names: Record<string, any>[], sounds: Record<string, any>[], skillRows: Map<string, Record<string, any>[]>, nameRows: Map<string, Record<string, any>>, soundRows: Map<string, Record<string, any>> };
+type SkillTables_T = { skills: Record<string, any>[], names: Record<string, any>[], sounds: Record<string, any>[], animations: Record<string, any>[], animationNames: Map<number, string>, skillRows: Map<string, Record<string, any>[]>, nameRows: Map<string, Record<string, any>>, soundRows: Map<string, Record<string, any>> };
 type StoredAssets_T = { entries: Record<string, any>, seekable: SeekableLibrary_T | null, settings: LoadSettings_T, dirty: boolean };
 
 const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
-const SCRIPT_KEYS = ["scriptClasses", "scriptFunctions", "scriptStates"] as const;
+const SCRIPT_KEYS = ["scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects"] as const;
 const SKILL_VOICE_GROUPS = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman"];
 
 function copyLibraryAssets(target: DecodeLibrary, source: DecodeLibrary): void {
-    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         for (const [id, value] of Object.entries(source[key])) {
             if (id in target[key]) continue;
 
@@ -146,6 +146,7 @@ async function copyAnimationSounds(target: DecodeLibrary, source: DecodeLibrary,
         if (!sound) throw new Error(`Asset bundle has no decoded sound '${name}'.`);
 
         target.soundBlobCache.set(name, sound);
+        target.scriptObjects[name.toLowerCase()] = source.scriptObjects[name.toLowerCase()];
     }
 
     const soundsToCopy = [
@@ -439,7 +440,7 @@ export class DecodeEngine {
     protected cacheCharacterHairPieces = new Map<number, CharacterHairPieces_T>();
     protected cacheCharacterHairTables = new Map<string, Record<string, any>[]>();
     protected cacheNpcBundles = new Map<string, CachedBundle_T>();
-    protected readonly sentScriptIds = { scriptClasses: new Set<string>(), scriptFunctions: new Set<string>(), scriptStates: new Set<string>() };
+    protected readonly sentScriptIds = { scriptClasses: new Set<string>(), scriptFunctions: new Set<string>(), scriptStates: new Set<string>(), scriptObjects: new Set<string>() };
     protected readonly sentSoundIds = new Set<string>();
     protected readonly cacheTextureBuffers = new Map<string, ArrayBuffer>();
     protected readonly sentTextureIds = new Set<string>();
@@ -861,11 +862,12 @@ export class DecodeEngine {
         });
     }
 
-    protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string, required: boolean = true): Promise<string> {
+    protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string, required: boolean = true, isMetadataOnly = false): Promise<string> {
         const key = path.toLowerCase(), cached = this.cacheSoundPaths.get(key);
 
         if (cached) {
-            if (!builder.library.soundBlobCache.has(cached.name)) builder.library.soundBlobCache.set(cached.name, Object.assign({}, cached.sound));
+            if (!isMetadataOnly && !builder.library.soundBlobCache.has(cached.name)) builder.library.soundBlobCache.set(cached.name, Object.assign({}, cached.sound));
+            builder.library.scriptObjects[key] = builder.library.scriptObjects[cached.name.toLowerCase()] = cached.scriptObject;
             return cached.name;
         }
 
@@ -882,15 +884,20 @@ export class DecodeEngine {
             throw new Error(`Sound '${objectName}' not found in '${packageName}'.`);
         }
 
-        const sound = pkg.fetchObject<USound>(entry.index + 1).loadSelf();
+        const sound = pkg.fetchObject<USound>(entry.index + 1);
         const soundName = sound.name;
 
+        if (isMetadataOnly) {
+            builder.library.scriptObjects[key] = builder.library.scriptObjects[soundName.toLowerCase()] = dumpObjectClass(sound);
+            return soundName;
+        }
         const decoded = builder.pullSound(sound);
 
         if (!decoded) throw new Error(`Sound '${path}' has no audio data.`);
 
         decoded.data = decoded.data.slice();
-        this.cacheSoundPaths.set(key, { name: soundName, sound: { uri: null, data: decoded.data, mimeType: decoded.mimeType, assetName: decoded.assetName } });
+        builder.library.scriptObjects[key] = builder.library.scriptObjects[soundName.toLowerCase()];
+        this.cacheSoundPaths.set(key, { name: soundName, scriptObject: builder.library.scriptObjects[key], sound: { uri: null, data: decoded.data, mimeType: decoded.mimeType, assetName: decoded.assetName } });
 
         return soundName;
     }
@@ -1037,15 +1044,24 @@ export class DecodeEngine {
             }
 
         for (const path of meshes)
-            if (!library.scriptMeshes[path.toLowerCase()]) library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), animations);
+            if (!library.scriptMeshes[path.toLowerCase()]) {
+                const mesh = await this.fetchSkeletalMesh(path);
+
+                library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(mesh, animations);
+                library.scriptObjects[path.toLowerCase()] = dumpObjectClass(mesh);
+            }
         for (const path of materials)
-            if (!library.scriptMaterials[path.toLowerCase()]) library.scriptMaterials[path.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
-        if (builder.getSettings().loadAudio !== false)
-            for (const path of sounds)
-                if (!(path in library.sounds)) {
-                    library.sounds[path] = await this.pullSoundPath(builder, path, false);
-                    if (library.sounds[path] === null) console.warn(`[decode] Script sound '${path}' does not exist.`);
-                }
+            if (!library.scriptMaterials[path.toLowerCase()]) {
+                const material = await this.fetchCharacterMaterial(path);
+
+                library.scriptMaterials[path.toLowerCase()] = builder.pullMaterial(material);
+                library.scriptObjects[path.toLowerCase()] = dumpObjectClass(material);
+            }
+        for (const path of sounds)
+            if (!(path in library.sounds)) {
+                library.sounds[path] = await this.pullSoundPath(builder, path, false, builder.getSettings().loadAudio === false);
+                if (library.sounds[path] === null) console.warn(`[decode] Script sound '${path}' does not exist.`);
+            }
     }
 
     protected async pullSectorScriptAssets(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
@@ -1425,10 +1441,12 @@ export class DecodeEngine {
             const mesh = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), false);
             const itemSkins = skins.filter((skin, j) => skin && skin.toLowerCase() !== "none" && (i === j || !meshes[i + 1] || meshes[i + 1].toLowerCase() === "none"));
 
-            if (row.drop_type !== 0) collisionRadius = 5;
-            if (mesh.sk_unkArr11.length) {
-                collisionHeight = 0;
-                for (const value of mesh.sk_unkArr11) collisionHeight = Math.fround(collisionHeight + value);
+            if (row.drop_type !== 0) {
+                collisionRadius = 5;
+                if (mesh.sk_unkArr11.length) {
+                    collisionHeight = 0;
+                    for (const value of mesh.sk_unkArr11) collisionHeight = Math.fround(collisionHeight + value);
+                }
             }
             if (row.drop_type === 1 || row.drop_type === 2) collisionHeight = Math.fround(collisionHeight * 0.25);
             else if (row.drop_type === 3 || row.drop_type === 4) collisionHeight = Math.fround(collisionHeight * 0.5);
@@ -1618,6 +1636,7 @@ export class DecodeEngine {
             const [, cls] = await this.fetchScriptClass(path);
 
             builder.pullScriptClasses([cls]);
+            await this.pullScriptAssets(library, builder, cls.name, {});
         }
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers());
@@ -1889,10 +1908,11 @@ export class DecodeEngine {
     }
 
     protected async loadSkillTables(): Promise<SkillTables_T> {
-        const [skills, names, sounds] = await Promise.all([
+        const [skills, names, sounds, animations] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_SKILLGRP_DAT, "assets/system/skillgrp.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SKILLNAME_E_DAT, "assets/system/skillname-e.dat").asReadable()).decode(),
-            (new UDataFile(SchemasC4.SCHEMA_SKILLSOUNDGRP_DAT, "assets/system/skillsoundgrp.dat").asReadable()).decode()
+            (new UDataFile(SchemasC4.SCHEMA_SKILLSOUNDGRP_DAT, "assets/system/skillsoundgrp.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_MOBSKILLANIMGRP_DAT, "assets/system/mobskillanimgrp.dat").asReadable()).decode()
         ]);
 
         const skillRows = new Map<string, Record<string, any>[]>();
@@ -1904,7 +1924,12 @@ export class DecodeEngine {
             skillRows.get(key).push(row);
         }
 
-        return { skills: skills.datarows, names: names.datarows, sounds: sounds.datarows, skillRows, nameRows: new Map(names.datarows.map(row => [`${row.id}:${row.level}`, row])), soundRows: new Map(sounds.datarows.map(row => [`${row.skill_id}:${row.skill_level}`, row])) };
+        const animationNames = new Map<number, string>();
+
+        for (const row of animations.datarows)
+            if (row.seq_name && row.seq_name.toLowerCase() !== "none" && !animationNames.has(row.skill_id)) animationNames.set(row.skill_id, row.seq_name);
+
+        return { skills: skills.datarows, names: names.datarows, sounds: sounds.datarows, animations: animations.datarows, animationNames, skillRows, nameRows: new Map(names.datarows.map(row => [`${row.id}:${row.level}`, row])), soundRows: new Map(sounds.datarows.map(row => [`${row.skill_id}:${row.skill_level}`, row])) };
     }
 
     protected getSkillRecord(tables: SkillTables_T, id: number, level: number): NpcSkillAttack_T {
@@ -1926,7 +1951,7 @@ export class DecodeEngine {
         const sounds = tables.soundRows.get(`${id}:${level}`) || tables.soundRows.get(`${id}:1`);
         // Server supplies cast duration; the offline preview uses skillgrp.hit_time.
         const serverSkill = mobSkillTable.get(id);
-        const attack: NpcSkillAttack_T = { id, level, name: name.name, animation: "", animationCategory: row.ani_char, castStyle: row.cast_style, isMagic: row.is_magic !== 0, castRange: row.cast_range, hitTime: row.hit_time, isMultiShot: [8, 9, 10].includes(row.cast_style), flyingTime: 0, visualEffect, visual: null, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, sounds: [] };
+        const attack: NpcSkillAttack_T = { id, level, name: name.name, animation: tables.animationNames.get(id) || "", animationCategory: row.ani_char, castStyle: row.cast_style, isMagic: row.is_magic !== 0, castRange: row.cast_range, hitTime: row.hit_time, isMultiShot: [8, 9, 10].includes(row.cast_style), flyingTime: 0, visualEffect, visual: null, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, sounds: [] };
 
         if (sounds) {
             const phases: [string, NpcSkillEffectPhase_T][] = [["spelleffect", "casting"], ["shoteffect", "shot"], ["expeffect", "explosion"]];
@@ -3030,11 +3055,10 @@ export class DecodeEngine {
 
     protected async loadNpcDefinitions(): Promise<INpcDefinition[]> {
 
-        const [groups, names, enterEvents, skillAnimations, tables] = await Promise.all([
+        const [groups, names, enterEvents, tables] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_NPCGRP_DAT, "assets/system/Npcgrp.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_NPCNAME_E_DAT, "assets/system/npcname-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_ENTEREVENTGRP_DAT, "assets/system/entereventgrp.dat").asReadable()).decode(),
-            (new UDataFile(SchemasC4.SCHEMA_MOBSKILLANIMGRP_DAT, "assets/system/mobskillanimgrp.dat").asReadable()).decode(),
             this.decodeSkillTables()
         ]);
         const soundsByIdAndLevel = tables.soundRows;
@@ -3062,7 +3086,7 @@ export class DecodeEngine {
                 skillVisualsById.set(id, { level, hitTime: row.hit_time as number, animationCategory: row.ani_char as string, castStyle: row.cast_style as number, isMagic: row.is_magic !== 0, visualEffect: (row.desc as string) || "None", isMultiShot: [8, 9, 10].includes(row.cast_style as number) });
         }
 
-        for (const row of skillAnimations.datarows) {
+        for (const row of tables.animations) {
             const npcId = row.npc_id as number;
             const attacks = skillAttacksByNpcId.get(npcId) || [];
             const id = row.skill_id as number;

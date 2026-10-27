@@ -3,6 +3,8 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane
 import { FontType_T } from "./nwindow-canvas";
 import { SSQPage_T, type SSQStatus_T, type SSQRecord_T, type SSQFestival_T, type SSQSealStatus_T, type SSQSealPrediction_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.SSQWnd.SSQ_back";
 const TEX_RECORD = "L2UI_CH3.SSQWnd.SSQ_back1";
@@ -67,7 +69,7 @@ export class NCSSQMainBoard {
         layer.tile(this.element, 0, 20, 256, 28, 0, 0, 256, 28, TEX_BACK);
         NCFrameCtrl.createDOM(layer, this.element, 256, manager.strings.itemNames[5707], false, () => this.setVisible(false));
         for (let index = 0; index < 3; index++) {
-            const label = manager.getSysString(824 + index);
+            const label = manager.getSysString(SysString_T.GeneralRecord + index);
             const tab = layer.tab(this.element, 12 + index * 74, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, label, null, () => this.select(index));
 
             tab.setAttribute("aria-selected", String(index === 0));
@@ -84,18 +86,18 @@ export class NCSSQMainBoard {
                 list.content.style.width = index === 1 ? "224px" : "222px";
                 list.content.style.overflow = "hidden";
                 this.lists.push(list);
-                this.button(page, 91, 324, manager.getSysString(938), () => this.request(arrStatusPages[index]));
+                this.button(page, 91, 324, manager.getSysString(SysString_T.Refresh), () => this.request(arrStatusPages[index]));
             }
         }
         this.select(0);
         this.recordBack = layer.tile(this.pages[0], 0, 0, 256, 353, 0, 0, 256, 353, TEX_RECORD);
         this.content = layer.createWindow(0, 0, 256, 324, this.pages[0]);
         this.content.style.overflow = "hidden";
-        this.button(this.pages[0], 51, 324, manager.getSysString(938), () => this.request(this.isProjection ? SSQPage_T.PREDICTION : SSQPage_T.RECORD));
-        this.projectionButton = this.button(this.pages[0], 131, 324, manager.getSysString(937), () => {
+        this.button(this.pages[0], 51, 324, manager.getSysString(SysString_T.Refresh), () => this.request(this.isProjection ? SSQPage_T.PREDICTION : SSQPage_T.RECORD));
+        this.projectionButton = this.button(this.pages[0], 131, 324, manager.getSysString(SysString_T.Projection), () => {
             this.isProjection = !this.isProjection;
-            this.projectionButton.setLabel(manager.getSysString(this.isProjection ? 939 : 937));
-            this.projectionButton.setAttribute("aria-label", manager.getSysString(this.isProjection ? 939 : 937));
+            this.projectionButton.setLabel(manager.getSysString(this.isProjection ? SysString_T.BackToRecord : SysString_T.Projection));
+            this.projectionButton.setAttribute("aria-label", manager.getSysString(this.isProjection ? SysString_T.BackToRecord : SysString_T.Projection));
             this.paintRecord();
             this.request(this.isProjection ? SSQPage_T.PREDICTION : SSQPage_T.RECORD);
         });
@@ -140,8 +142,8 @@ export class NCSSQMainBoard {
                 this.setVisible(false);
                 this.period = status.period;
                 this.record = status.record;
-                this.projectionButton.setLabel(this.layer.getManager().getSysString(937));
-                this.projectionButton.setAttribute("aria-label", this.layer.getManager().getSysString(937));
+                this.projectionButton.setLabel(this.layer.getManager().getSysString(SysString_T.Projection));
+                this.projectionButton.setAttribute("aria-label", this.layer.getManager().getSysString(SysString_T.Projection));
                 this.select(0);
                 this.paintRecord();
                 this.setVisible(true);
@@ -188,8 +190,8 @@ export class NCSSQMainBoard {
         this.requested.add(index);
         this.request(arrStatusPages[index]);
     }
-    protected cabal(cabal: number) { return this.layer.getManager().getSysString(cabal === 1 ? 814 : cabal === 2 ? 815 : 27); }
-    protected seal(seal: number) { return this.layer.getManager().getSysString(seal >= 1 && seal <= 3 ? 815 + seal : 27); }
+    protected cabal(cabal: number) { return this.layer.getManager().getSysString(cabal === 1 ? SysString_T.LordsOfDawn : cabal === 2 ? SysString_T.ArmyOfDusk : SysString_T.None); }
+    protected seal(seal: number) { return this.layer.getManager().getSysString(seal >= 1 && seal <= 3 ? SysString_T.ArmyOfDusk + seal : SysString_T.None); }
     protected text(parent: HTMLElement, text: string, x: number, y: number, color = WHITE) { return this.layer.text(parent, text, color, FontType_T.SMALL, x, y); }
     protected lines(parent: HTMLElement, text: string, x: number, y: number, width: number, color = GRAY, isSpaced = false) { // UCanvas::DrawNormalText / GetTextSize: each new line adds the 'A' height, plus 6 when spaced.
         const canvas = this.layer.getManager().canvas, lines = canvas.wrapText(text.replace(/\\n/g, "\n"), width), step = canvas.getLineHeight() + (isSpaced ? 6 : 0);
@@ -205,12 +207,12 @@ export class NCSSQMainBoard {
         layer.setTile(this.recordBack, 256, 353, 0, 0, 256, 353, this.isProjection ? TEX_PROJECTION : TEX_RECORD);
         layer.tile(content, 0, 0, 256, 324, 0, 0, 256, 324, this.isProjection ? TEX_PROJECTION : TEX_RECORD);
         if (this.isProjection) {
-            const label = manager.getSysString(937);
+            const label = manager.getSysString(SysString_T.Projection);
 
             this.text(content, label, 11, 13);
-            if (this.predictedWinner) this.text(content, `${this.cabal(this.predictedWinner)} ${manager.getSysString(828)}`, 16 + layer.measureText(label), 13, GOLD);
-            this.lines(content, manager.getSystemMessage(this.predictedWinner ? 1288 : 1293).replace(/\$s1/g, this.cabal(this.predictedWinner)), 14, 32, 226);
-            this.text(content, manager.getSysString(940), 11, 88);
+            if (this.predictedWinner) this.text(content, `${this.cabal(this.predictedWinner)} ${manager.getSysString(SysString_T.Victory)}`, 16 + layer.measureText(label), 13, GOLD);
+            this.lines(content, manager.getSystemMessage(this.predictedWinner ? SystemMessage_T.PredictedSealWinner : SystemMessage_T.PredictedSealTie).replace(/\$s1/g, this.cabal(this.predictedWinner)), 14, 32, 226);
+            this.text(content, manager.getSysString(SysString_T.ExpectedOwnershipOfASealStone), 11, 88);
             const list = layer.scrollPane(content, 8, 103, 240, 212, 16, true);
             let previousHeight = 0, contentHeight = 0, paintedHeight = 0;
 
@@ -218,7 +220,7 @@ export class NCSSQMainBoard {
                 const label = `${this.seal(entry.id)} : `, y = index * (previousHeight + height * 2 + 15) + 3;
 
                 this.text(list.content, label, 6, y, GRAY);
-                this.text(list.content, entry.cabal ? this.cabal(entry.cabal) : manager.getSysString(936), 6 + layer.measureText(label), y, GOLD);
+                this.text(list.content, entry.cabal ? this.cabal(entry.cabal) : manager.getSysString(SysString_T.NotInPossession), 6 + layer.measureText(label), y, GOLD);
                 const descriptionHeight = this.lines(list.content, manager.getSystemMessage(entry.messageId), 10, y + height + 6, 214, GRAY, true);
 
                 paintedHeight = Math.max(paintedHeight, y + height + 6 + descriptionHeight);
@@ -233,24 +235,24 @@ export class NCSSQMainBoard {
         }
         if (!record) return;
 
-        const title = `${manager.getSysString(833)} - `;
+        const title = `${manager.getSysString(SysString_T.QuestStatus)} - `;
 
         this.text(content, title, 11, 13);
-        this.text(content, `${record.cycle} ${manager.getSysString(934)}`, 11 + layer.measureText(title), 13, GOLD);
+        this.text(content, `${record.cycle} ${manager.getSysString(SysString_T.Cycle)}`, 11 + layer.measureText(title), 13, GOLD);
         if (record.periodMessageId) this.text(content, manager.getSystemMessage(record.periodMessageId), 14, 34, GRAY);
         if (record.periodEndMessageId) this.text(content, manager.getSystemMessage(record.periodEndMessageId), 14, 38 + height, GOLD);
-        this.text(content, manager.getSysString(834), 11, 73);
-        [[835, this.cabal(record.playerCabal)], [836, this.seal(record.playerSeal)], [931, `${record.stoneContribution}${manager.getSysString(932)}`]].forEach(([id, value], row) => {
+        this.text(content, manager.getSysString(SysString_T.MyCurrentStatus), 11, 73);
+        [[SysString_T.Cabal, this.cabal(record.playerCabal)], [SysString_T.Seal, this.seal(record.playerSeal)], [SysString_T.SealStones, `${record.stoneContribution}${manager.getSysString(SysString_T.TurnedIn)}`]].forEach(([id, value], row) => {
             const y = 94 + row * (height + 4);
 
             this.text(content, manager.getSysString(id as number), 14, y, GRAY);
             this.text(content, value as string, 100, y, GOLD);
         });
-        this.text(content, `(${record.ancientAdena}${manager.getSysString(933)})`, 100, 106 + height * 3, GOLD);
-        const total = manager.getSysString(824);
+        this.text(content, `(${record.ancientAdena}${manager.getSysString(SysString_T.AncientAdena)})`, 100, 106 + height * 3, GOLD);
+        const total = manager.getSysString(SysString_T.GeneralRecord);
 
         this.text(content, total, 11, 168);
-        this.text(content, ` - ${manager.getSysString(this.period === 3 ? 838 : 837)}`, 11 + layer.measureText(total), 168, GOLD);
+        this.text(content, ` - ${manager.getSysString(this.period === 3 ? SysString_T.LastWeekSTotal : SysString_T.CurrentTotal)}`, 11 + layer.measureText(total), 168, GOLD);
         [record.dusk, record.dawn].forEach((score, index) => {
             const y = 192 + index * 18;
 
@@ -259,7 +261,7 @@ export class NCSSQMainBoard {
             if (score.percent) layer.tile(content, 92, y, Math.trunc(score.percent * 1.5), 11, 0, 0, 8, 11, arrBars[index]);
             this.text(content, this.cabal(index === 0 ? 2 : 1), index === 0 ? 82 : 166, 237, GRAY);
         });
-        [839, 825, 840].forEach((id, row) => this.text(content, manager.getSysString(id), 14, 252 + row * (height + 8), GRAY));
+        [SysString_T.CollectedSealStones, SysString_T.Festival, SysString_T.TotalScore].forEach((id, row) => this.text(content, manager.getSysString(id), 14, 252 + row * (height + 8), GRAY));
         [record.dusk, record.dawn].forEach((score, column) => {
             [score.stoneScore, score.festivalScore, score.totalScore].forEach((value, row) => {
                 const x = column === 0 ? 78 : 166, y = 250 + row * 19;
@@ -279,7 +281,7 @@ export class NCSSQMainBoard {
         let y = 5;
 
         for (const groupId of this.festivalGroups) {
-            const groupLabel = groupId === 0 ? manager.getSysString(845) : "", groupExpanded = this.expandedFestivalGroups.has(groupId);
+            const groupLabel = groupId === 0 ? manager.getSysString(SysString_T.CompetitionResults) : "", groupExpanded = this.expandedFestivalGroups.has(groupId);
 
             this.treeButton(list.content, groupLabel || `Festival group ${groupId}`, 29, y, groupExpanded, (toggle = true) => {
                 this.selectedFestivalGroup = groupExpanded ? -1 : groupId;
@@ -301,7 +303,7 @@ export class NCSSQMainBoard {
                 if (festival.groupId !== groupId) continue;
 
                 const key = groupId * 256 + festival.id;
-                const label = manager.getSysString([819, 820, 821, 844, 822][festival.id - 1]), expanded = this.expandedFestivals.has(key);
+                const label = manager.getSysString([SysString_T.Level31AndBelow, SysString_T.Level42AndBelow, SysString_T.Level53AndBelow, SysString_T.Level64AndBelow, SysString_T.NoLevelLimit][festival.id - 1]), expanded = this.expandedFestivals.has(key);
 
                 this.treeButton(list.content, label, 36, y, expanded, (toggle = true) => {
                     this.selectedFestival = expanded ? -1 : key;
@@ -312,10 +314,10 @@ export class NCSSQMainBoard {
                     this.paintFestivals();
                 }, true, this.selectedFestival === key);
                 this.text(list.content, label, 41, y + 2, GRAY);
-                const result = this.festivalPeriod === 1 ? manager.getSysString(829) : festival.duskScore === festival.dawnScore ? `(${manager.getSysString(846)})` : `(${manager.getSysString(festival.duskScore > festival.dawnScore ? 924 : 923)} ${manager.getSysString(828)})`;
+                const result = this.festivalPeriod === 1 ? manager.getSysString(SysString_T.InProgress) : festival.duskScore === festival.dawnScore ? `(${manager.getSysString(SysString_T.Tie)})` : `(${manager.getSysString(festival.duskScore > festival.dawnScore ? SysString_T.Dusk : SysString_T.Dawn)} ${manager.getSysString(SysString_T.Victory)})`;
 
                 this.text(list.content, result, 46 + layer.measureText(label), y + 2, GOLD);
-                const scoreLabel = `${manager.getSysString(831)} : `;
+                const scoreLabel = `${manager.getSysString(SysString_T.Score)} : `;
 
                 this.text(list.content, scoreLabel, 41, y + height + 6, GRAY);
                 this.text(list.content, String(festival.levelScore), 41 + layer.measureText(scoreLabel), y + height + 6, GOLD);
@@ -335,9 +337,9 @@ export class NCSSQMainBoard {
 
                 for (const [cabal, score, members] of [[1, festival.dawnScore, dawnMembers], [2, festival.duskScore, duskMembers]] as [number, number, string[]][]) {
                     this.text(panel, this.cabal(cabal), 5, 3 + row * (height + 4), GRAY);
-                    this.text(panel, manager.getSysString(830), 5, 3 + (row + 1) * (height + 4), GRAY);
-                    this.text(panel, String(score), 9 + layer.measureText(manager.getSysString(830)), 3 + (row + 1) * (height + 4), GOLD);
-                    this.text(panel, manager.getSysString(832), 5, 3 + (row + 2) * (height + 4), GRAY);
+                    this.text(panel, manager.getSysString(SysString_T.HighestScore), 5, 3 + (row + 1) * (height + 4), GRAY);
+                    this.text(panel, String(score), 9 + layer.measureText(manager.getSysString(SysString_T.HighestScore)), 3 + (row + 1) * (height + 4), GOLD);
+                    this.text(panel, manager.getSysString(SysString_T.Participant), 5, 3 + (row + 2) * (height + 4), GRAY);
                     members.forEach((name, index) => this.text(panel, name, 5, 3 + (row + 3 + index) * (height + 4), GOLD));
                     row += members.length + 4;
                 }
@@ -370,7 +372,7 @@ export class NCSSQMainBoard {
             }
             this.text(list.content, this.seal(seal.id), 33, y + 2);
             y += height + 7;
-            const ownerLabel = manager.getSysString(823);
+            const ownerLabel = manager.getSysString(SysString_T.CurrentOwner);
 
             this.text(list.content, ownerLabel, 15, y, GRAY);
             this.text(list.content, this.cabal(seal.owner), 19 + layer.measureText(ownerLabel), y, GOLD);
@@ -392,8 +394,8 @@ export class NCSSQMainBoard {
                 y += index === 0 ? height + 7 : 25;
             });
             if (expanded) { // NCSSQSealStatusTree 0x100fed9d..0x100ff1f1.
-                const count = seal.id === 1 ? 8 : seal.id === 2 ? 6 : 0, first = seal.id === 1 ? 941 : 957;
-                const description = manager.getSystemMessage(1177 + seal.id), descriptionLines = manager.canvas.wrapText(description, 207).length, descriptionHeight = height + (descriptionLines - 1) * (height + 6);
+                const count = seal.id === 1 ? 8 : seal.id === 2 ? 6 : 0, first = seal.id === 1 ? SysString_T.NecropolisOfSacrificeLevel2030 : SysString_T.HereticsCatacombLevel3040;
+                const description = manager.getSystemMessage(SystemMessage_T.SealValidationPeriod + seal.id), descriptionLines = manager.canvas.wrapText(description, 207).length, descriptionHeight = height + (descriptionLines - 1) * (height + 6);
                 const panelHeight = descriptionHeight + 24 + count * 2 * (height + 6), panel = layer.createWindow(10, y - 3, 236, panelHeight, list.content);
 
                 layer.tile(panel, 0, 0, 236, 8, 0, 0, 222, 8, arrPanels[0]);

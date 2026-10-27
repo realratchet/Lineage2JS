@@ -1,6 +1,8 @@
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDomButton_T, NDomEdit_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const TEX_BACK = "L2UI_CH3.LoginWnd.logon_back";
@@ -25,7 +27,7 @@ export class NCAuthWnd { // NCAuthWnd: 256x108, OnCreate 0x1009f230, paint 0x100
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
         const manager = layer.getManager();
-        const id = manager.getSysString(150), pwd = manager.getSysString(151);
+        const id = manager.getSysString(SysString_T.AccountId), pwd = manager.getSysString(SysString_T.Password);
 
         this.layer = layer;
         this.element = layer.createWindow(0, 0, 256, 108, parent);
@@ -37,8 +39,8 @@ export class NCAuthWnd { // NCAuthWnd: 256x108, OnCreate 0x1009f230, paint 0x100
         this.accountEdit = layer.edit(this.element, 84, 20, 128, 17, false);
         this.passwordEdit = layer.edit(this.element, 84, 42, 128, 17, true);
 
-        this.loginButton = layer.button(this.element, 31, 72, 96, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(152), () => this.login());
-        layer.button(this.element, 131, 72, 96, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(153), () => { if (this.onExit) this.onExit(); });
+        this.loginButton = layer.button(this.element, 31, 72, 96, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.LogIn), () => this.login());
+        layer.button(this.element, 131, 72, 96, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Exit), () => { if (this.onExit) this.onExit(); });
 
         this.accountEdit.input.addEventListener("keydown", event => { // Tab links ID<->PW (0x1009f53b); only the password edit notifies Enter (0x100bf260).
             if (event.key !== "Tab") return;
@@ -89,12 +91,12 @@ export class NCAuthWnd { // NCAuthWnd: 256x108, OnCreate 0x1009f230, paint 0x100
         if (this.isBusy) return;
 
         if (!account) {
-            if (this.onError) this.onError(manager.getSystemMessage(86));
+            if (this.onError) this.onError(manager.getSystemMessage(SystemMessage_T.EnterAccountId));
             return;
         }
 
         if (!password) {
-            if (this.onError) this.onError(manager.getSystemMessage(87));
+            if (this.onError) this.onError(manager.getSystemMessage(SystemMessage_T.EnterPassword));
             return;
         }
 

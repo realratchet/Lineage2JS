@@ -2035,6 +2035,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 targetFogStart = zone.fog.near;
                 targetFogEnd = zone.fog.far;
                 targetFogColor.set(zone.fog.color.r * 255, zone.fog.color.g * 255, zone.fog.color.b * 255);
+            } else if (zone && !zone.isSunAffected) {
+                fogSource = zone;
+                targetFogStart = DEFAULT_FAR;
+                targetFogEnd = DEFAULT_FAR + 1;
             }
 
             let accSkyR = 0, accSkyG = 0, accSkyB = 0, totalSkyWeight = 0;
@@ -2361,7 +2365,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (timeScale !== 0) {
             const t = this.environment.getTimeOfDay();
-            const dt = deltaTime / 100000 * timeScale;
+            const dt = deltaTime / 1e5 * timeScale;
 
             const nt = (t + dt) % 24;
 

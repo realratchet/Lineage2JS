@@ -3,6 +3,7 @@ import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomScrollPane_T } from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { RecipeBook_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe2_Back";
 const TEX_SELECTED = "L2UI.NWindow.item_click";
@@ -42,7 +43,7 @@ export class NCRecipeBookWnd {
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
         this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, "", false, () => this.setVisible(false));
-        layer.text(this.element, layer.getManager().getSysString(649), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
+        layer.text(this.element, layer.getManager().getSysString(SysString_T.RecipeBook), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.counter = layer.text(this.element, "", 0xffb09b79, FontType_T.SMALL, 246, 33);
         this.list = layer.scrollPane(this.element, 9, 48, 239, 279, 35);
         this.list.tabIndex = -1;
@@ -51,7 +52,7 @@ export class NCRecipeBookWnd {
         this.trashNormal = layer.tile(this.trash, 0, 0, 32, 32, 0, 0, 32, 32, TEX_TRASH);
         this.trashDrag = layer.tile(this.trash, 0, 0, 32, 32, 0, 0, 32, 32, TEX_TRASH_DRAG);
         this.trashDrag.hidden = true;
-        layer.tooltip(this.element, this.trash, layer.getManager().getSysString(890));
+        layer.tooltip(this.element, this.trash, layer.getManager().getSysString(SysString_T.Destruction));
         this.list.addEventListener("wheel", event => {
             event.stopImmediatePropagation();
             const delta = typeof (event as any).wheelDelta === "number" ? Math.trunc((event as any).wheelDelta / 120) : -Math.sign(event.deltaY);
@@ -135,7 +136,7 @@ export class NCRecipeBookWnd {
 
             if (recipe && this.recipes.length < 160) this.recipes.push(recipe);
         }
-        const title = this.layer.getManager().getSysString(book.isDwarven ? 1215 : 1214);
+        const title = this.layer.getManager().getSysString(book.isDwarven ? SysString_T.DwarfRecipeBook : SysString_T.GeneralRecipeBook);
 
         this.layer.renderText(this.caption, title, 0xffc8d2dc);
         this.element.setAttribute("aria-label", title);

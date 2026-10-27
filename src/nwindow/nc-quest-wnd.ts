@@ -3,6 +3,7 @@ import NCTooltip from "./nc-tooltip";
 import { ItemType2_T, type QuestState_T, type InventoryItem_T } from "../network/game-packets";
 import type { GameStrings_T, QuestInfo_T } from "../assets/decode-worker/decode-protocol";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_PATH = "L2UI_CH3.QUESTWND.";
 const TEX_CHECK = SKIN_SLOTS.checkBox;
@@ -38,7 +39,7 @@ export function createQuestHelp(layer: NDomLayer, parent: HTMLElement, anchor: H
         const y = 5 + index * (canvas.getLineHeight() + 6);
 
         layer.tile(help, 5, y, image.width, image.height, 0, 0, image.width, image.height, texture);
-        layer.text(help, layer.getManager().strings.sysStrings[861 + index], 0xffdcdcdc, undefined, image.width + 10, y);
+        layer.text(help, layer.getManager().strings.sysStrings[SysString_T.RepeatableQuest + index], 0xffdcdcdc, undefined, image.width + 10, y);
     }
     return help;
 }
@@ -69,20 +70,20 @@ export class NCQuestWnd {
         this.element.hidden = true;
         this.element.dataset.window = "quest";
         layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, `${TEX_PATH}QuestWndBack`);
-        layer.text(this.element, this.strings.sysStrings[324], 0xffdcdcdc, undefined, 11, 12);
+        layer.text(this.element, this.strings.sysStrings[SysString_T.AcceptedQuest], 0xffdcdcdc, undefined, 11, 12);
         this.count = layer.text(this.element, "(0/15)", 0xffb09b79, undefined, 190, 12);
         this.list = layer.scrollPane(this.element, 7, 27, 242, 274, 16);
         this.list.content.style.width = "226px";
         this.list.content.style.overflow = "hidden";
         this.list.setAttribute("role", "tree");
         this.list.tabIndex = -1;
-        layer.button(this.element, 91, 306, 77, 23, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", "L2UI_CH3.BUTTON.Btn1_normal", this.strings.sysStrings[385], () => {
+        layer.button(this.element, 91, 306, 77, 23, "L2UI_CH3.BUTTON.Btn1_normal", "L2UI_CH3.BUTTON.Btn1_normalOn", "L2UI_CH3.BUTTON.Btn1_normal", this.strings.sysStrings[SysString_T.Abort], () => {
             const selected = this.nodes.find(node => node.selected);
 
             if (this.onAbort) this.onAbort(selected ? selected.info.id : -1);
         });
 
-        this.checkbox = layer.checkbox(this.element, 10, 310, 100, 12, this.strings.sysStrings[860], checked => {
+        this.checkbox = layer.checkbox(this.element, 10, 310, 100, 12, this.strings.sysStrings[SysString_T.QuestLocation], checked => {
             this.isLocationChecked = checked;
             this.updateLocation();
         }, true);
@@ -266,9 +267,9 @@ export class NCQuestWnd {
                 layer.tile(this.list.content, x + 191, y + 1, 32, 13, 0, 0, 32, 13, TEX_SELECT_END);
             }
             layer.text(this.list.content, title, 0xffdcdcdc, undefined, x + 19, y + 2);
-            const level = info.minLevel > 0 ? info.maxLevel > 0 ? `${info.minLevel}~${info.maxLevel}` : `${info.minLevel} ${this.strings.sysStrings[859]}` : this.strings.sysStrings[866];
+            const level = info.minLevel > 0 ? info.maxLevel > 0 ? `${info.minLevel}~${info.maxLevel}` : `${info.minLevel} ${this.strings.sysStrings[SysString_T.Abnormal]}` : this.strings.sysStrings[SysString_T.NoLimitExists];
 
-            layer.text(this.list.content, `(${this.strings.sysStrings[922]}:${level})`, 0xffb09b79, undefined, x + 19, y + lineHeight + 2);
+            layer.text(this.list.content, `(${this.strings.sysStrings[SysString_T.QuestLevel]}:${level})`, 0xffb09b79, undefined, x + 19, y + lineHeight + 2);
             if (info.classification >= 0 && info.classification <= 3) {
                 const icons = info.classification < 2 ? [4, info.classification + 1] : [3, info.classification - 1];
 
@@ -278,7 +279,7 @@ export class NCQuestWnd {
         } else {
             layer.text(this.list.content, title, 0xffdcdcdc, undefined, x + 19, y);
             if (info.entityName) layer.tile(this.list.content, x + 24 + width, y, 11, 11, 0, 0, 11, 11, `${TEX_PATH}QuestWndInfoIcon_5`);
-            if (node.completed && info.unk1) layer.text(this.list.content, this.strings.sysStrings[898], 0xffb09b79, undefined, x + width + (info.entityName ? 40 : 24), y);
+            if (node.completed && info.unk1) layer.text(this.list.content, this.strings.sysStrings[SysString_T.Complete], 0xffb09b79, undefined, x + width + (info.entityName ? 40 : 24), y);
             height = 19;
         }
         if (node.expanded) for (const child of node.children) height += this.paintNode(child, node.children, x + 7, y + height);
@@ -298,8 +299,8 @@ export class NCQuestWnd {
         info.itemIds.forEach((id, index) => {
             const itemY = y + textHeight + index * 37;
             const required = info.itemCounts[index] | 0;
-            const available = node.completed && info.unk2 ? this.strings.sysStrings[898] : String(node.available[index]);
-            const target = required > 0 ? String(required) : required === 0 ? this.strings.sysStrings[858] : `${-required | 0}${this.strings.sysStrings[859]}`;
+            const available = node.completed && info.unk2 ? this.strings.sysStrings[SysString_T.Complete] : String(node.available[index]);
+            const target = required > 0 ? String(required) : required === 0 ? this.strings.sysStrings[SysString_T.Unlimited] : `${-required | 0}${this.strings.sysStrings[SysString_T.Abnormal]}`;
 
             layer.tile(this.list.content, x, itemY + 5, 32, 32, 0, 0, 32, 32, this.strings.itemIcons[id]);
             layer.tile(this.list.content, x - 1, itemY + 4, 34, 34, 0, 0, 34, 34, TEX_OUTLINE);

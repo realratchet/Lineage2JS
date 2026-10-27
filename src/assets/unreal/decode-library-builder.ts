@@ -1,7 +1,7 @@
 import type { UClass } from "@l2js/core";
 import type { UObject } from "./un-object";
 import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
-import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
+import pullScriptDumps, { dumpObjectClass, dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
 import type { HeightMapInfo_T, UTerrainSector, ITerrainSegmentDecodeInfo } from "./un-terrain-sector";
 import type UPhysicsVolume from "./un-physics-volume";
 import type UVolume from "./un-volume";
@@ -129,6 +129,7 @@ export class DecodeLibraryBuilder {
         sound = sound.loadSelf();
 
         const soundKey = sound.name;
+        this.library.scriptObjects[soundKey.toLowerCase()] = dumpObjectClass(sound);
         let soundEntry = this.library.soundBlobCache.get(soundKey);
 
         if (soundEntry) return soundEntry;

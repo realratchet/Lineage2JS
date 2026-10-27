@@ -2,13 +2,14 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import type NDomLayer from "./ndom";
 import type { NDomEdit_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "l2ui_ch3.calculate.calculate2_back";
 const TEX_BUTTON = "L2UI_ch3.button.btn1_normal";
 const TEX_BUTTON_DOWN = "L2UI_ch3.button.btn1_normalon";
 const arrKeys = ["7", "8", "9", "add", "ce", "4", "5", "6", "sub", "c", "1", "2", "3", "mul", "bs", "0", "00", "div", "eq"];
 const arrChars = ["7", "8", "9", "+", "", "4", "5", "6", "-", "", "1", "2", "3", "*", "", "0", "00", "/", "="];
-const MAX_RESULT = 1.0000000200408773e20;
+const MAX_RESULT = Math.fround(1e20);
 const WIDTH = 256;
 const HEIGHT = 211;
 
@@ -43,7 +44,7 @@ export class NCCalcWnd { // NCCalcWnd: NCConsole 0x100604b5 centred SetWindowRec
         this.element = layer.createWindow(0, 0, WIDTH, HEIGHT);
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, WIDTH, HEIGHT - 20, 0, 0, WIDTH, HEIGHT - 20, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(669), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(SysString_T.Calculator), false, () => this.setVisible(false));
         this.display = layer.edit(this.element, 34, 40, 188, 17, false, 0, true);
         this.display.input.addEventListener("beforeinput", event => {
             if (event.inputType !== "insertText" || !event.data) return;
@@ -71,7 +72,7 @@ export class NCCalcWnd { // NCCalcWnd: NCConsole 0x100604b5 centred SetWindowRec
             layer.button(this.element, x, y, width, 24, `L2UI_CH3.Calculate.Calculate2_${arrKeys[i]}`, `L2UI_CH3.Calculate.Calculate2_${arrKeys[i]}_down`, null, null, () => this.press(i));
         }
 
-        layer.button(this.element, 91, 182, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(646), () => { // 0x1011f950
+        layer.button(this.element, 91, 182, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Close), () => { // 0x1011f950
             this.reset();
             this.setVisible(false);
         });

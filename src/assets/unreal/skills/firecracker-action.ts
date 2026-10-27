@@ -70,7 +70,7 @@ export class FireCrackerAction {
             if (!cracker.seed) {
                 if (cracker.delay >= this.elapsed) continue;
                 if (this.type === 2)
-                    for (let j = i + 1; j < this.crackers.length; j++) this.crackers[j].delay = 100000;
+                    for (let j = i + 1; j < this.crackers.length; j++) this.crackers[j].delay = 1e5;
 
                 const origin = this.getOrigin();
                 cracker.origin = [origin[0] + cracker.offset[0], origin[1] + cracker.offset[1], origin[2] + cracker.offset[2] + (this.type === 3 || this.type === 2 && i > 0 ? 0 : this.host.getCollisionHeight(this.caster))];

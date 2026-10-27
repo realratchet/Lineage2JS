@@ -85,7 +85,7 @@ export class NCPlayerStatusWnd extends NCStatusWnd { // NCPlayerStatusWnd: NCCon
         const now = performance.now() / 1000, elapsed = now - this.regenStamp;
 
         this.regenTime -= elapsed;
-        this.regenAmount -= this.regenTick / this.regenPeriod * elapsed * 1.5015015015015014;
+        this.regenAmount -= this.regenTick / this.regenPeriod * elapsed * (1 / 0.666);
         if (this.regenTime <= 0 || this.regenAmount < 0) this.regenTime = this.regenAmount = 0;
         this.regenStamp = now;
     }

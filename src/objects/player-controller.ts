@@ -81,15 +81,8 @@ export class PlayerController implements ScriptHost_T {
 
     public resolveUnrealObject(id: string): string { return id; }
 
-    public handlesUnrealNative(_index: number, name: string): boolean {
-        const lowerName = name.toLowerCase();
-
-        return lowerName === "dynamicloadobject";
-    }
-
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
         switch (call.name.toLowerCase()) {
-            case "dynamicloadobject": return call.args[0];
             case "setviewtarget":
                 this.scriptProperties.set("ViewTarget", call.args[0]);
                 return undefined;

@@ -8,7 +8,7 @@ import { refreshSoundBlobUris } from "./decode-cache";
 import getNpcBundleName from "./npc-bundle";
 import { getAssetFiles, getServedAssets } from "../asset-source";
 
-const cacheScript = { scriptClasses: new Map<string, any>(), scriptFunctions: new Map<string, any>(), scriptStates: new Map<string, any>() };
+const cacheScript = { scriptClasses: new Map<string, any>(), scriptFunctions: new Map<string, any>(), scriptStates: new Map<string, any>(), scriptObjects: new Map<string, any>() };
 const cacheSounds = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string }>();
 const cacheTextureBuffers = new Map<string, ArrayBuffer>();
 const cacheTextureIds = new WeakMap<ArrayBuffer, Set<string>>();

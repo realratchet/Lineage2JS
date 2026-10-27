@@ -5,6 +5,7 @@ import NCTooltip from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import type { QuestLocation_T } from "./nc-quest-wnd";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 export type MapPartyMember_T = { objectId: number, name: string, x: number, y: number, z: number };
 type MapPartyMarker_T = { element: HTMLDivElement, x: number, y: number, memberIndex: number, caption: HTMLDivElement };
@@ -16,23 +17,23 @@ type MapGrid_T = { line: HTMLDivElement, label: HTMLDivElement, text: string };
 type MapInfo_T = { scaleX: number, scaleY: number, originX: number, originY: number, width: number, height: number, x: number, y: number, texture: string };
 
 const arrMapInfo: MapInfo_T[] = [
-    { scaleX: 0.0050048828125, scaleY: 0.0050048828125, originX: 131072, originY: 262144, width: 1804, height: 2624, x: 0, y: 0, texture: "" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: -90624, originY: 236416, width: 653, height: 626, x: 242, y: 2536, texture: "L2Font-e.TownMap.map_talkin_island_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: -89344, originY: 145792, width: 768, height: 706, x: 269, y: 2079, texture: "L2Font-e.TownMap.map_gludin_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: -19968, originY: 117504, width: 606, height: 647, x: 592, y: 1932, texture: "L2Font-e.TownMap.map_gludio_castle_town" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 768, originY: 9344, width: 950, height: 740, x: 721, y: 1394, texture: "L2Font-e.TownMap.map_dark_elven_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 11840, originY: 138432, width: 657, height: 618, x: 763, y: 2042, texture: "L2Font-e.TownMap.map_dion_castle_town" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 11840, originY: 165120, width: 650, height: 510, x: 739, y: 2156, texture: "L2Font-e.TownMap.map_floran_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 75136, originY: 48768, width: 659, height: 623, x: 1086, y: 1595, texture: "L2Font-e.TownMap.map_town_of_oren" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 39168, originY: 42688, width: 633, height: 675, x: 907, y: 1568, texture: "L2Font-e.TownMap.map_elven_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 73536, originY: 140032, width: 950, height: 860, x: 1080, y: 2053, texture: "L2Font-e.TownMap.map_giran_castle_town" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 111104, originY: 70016, width: 740, height: 760, x: 1260, y: 1706, texture: "L2Font-e.TownMap.map_hunters_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 139264, originY: 16384, width: 821, height: 971, x: 1410, y: 1446, texture: "L2Font-e.TownMap.map_town_of_aden" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 101504, originY: 212608, width: 983, height: 839, x: 1227, y: 2436, texture: "L2Font-e.TownMap.map_heine" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: -52736, originY: -120832, width: 767, height: 701, x: 438, y: 743, texture: "L2Font-e.TownMap.map_orc_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 110144, originY: -187968, width: 557, height: 737, x: 1253, y: 401, texture: "L2Font-e.TownMap.map_dwarven_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 29760, originY: -55808, width: 993, height: 699, x: 851, y: 1063, texture: "L2Font-e.TownMap.map_rune_village" },
-    { scaleX: 0.05000000074505806, scaleY: 0.05000000074505806, originX: 140256, originY: -64320, width: 763, height: 663, x: 1412, y: 1037, texture: "L2Font-e.TownMap.map_godard_castle_town" },
+    { scaleX: 41 / 8192, scaleY: 41 / 8192, originX: 4096 * 32, originY: 8192 * 32, width: 1804, height: 2624, x: 0, y: 0, texture: "" },
+    { scaleX: 0.05, scaleY: 0.05, originX: -2832 * 32, originY: 7388 * 32, width: 653, height: 626, x: 242, y: 2536, texture: "L2Font-e.TownMap.map_talkin_island_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: -2792 * 32, originY: 4556 * 32, width: 768, height: 706, x: 269, y: 2079, texture: "L2Font-e.TownMap.map_gludin_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: -624 * 32, originY: 3672 * 32, width: 606, height: 647, x: 592, y: 1932, texture: "L2Font-e.TownMap.map_gludio_castle_town" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 24 * 32, originY: 292 * 32, width: 950, height: 740, x: 721, y: 1394, texture: "L2Font-e.TownMap.map_dark_elven_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 370 * 32, originY: 4326 * 32, width: 657, height: 618, x: 763, y: 2042, texture: "L2Font-e.TownMap.map_dion_castle_town" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 370 * 32, originY: 5160 * 32, width: 650, height: 510, x: 739, y: 2156, texture: "L2Font-e.TownMap.map_floran_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 2348 * 32, originY: 1524 * 32, width: 659, height: 623, x: 1086, y: 1595, texture: "L2Font-e.TownMap.map_town_of_oren" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 1224 * 32, originY: 1334 * 32, width: 633, height: 675, x: 907, y: 1568, texture: "L2Font-e.TownMap.map_elven_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 2298 * 32, originY: 4376 * 32, width: 950, height: 860, x: 1080, y: 2053, texture: "L2Font-e.TownMap.map_giran_castle_town" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 3472 * 32, originY: 2188 * 32, width: 740, height: 760, x: 1260, y: 1706, texture: "L2Font-e.TownMap.map_hunters_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 4352 * 32, originY: 512 * 32, width: 821, height: 971, x: 1410, y: 1446, texture: "L2Font-e.TownMap.map_town_of_aden" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 3172 * 32, originY: 6644 * 32, width: 983, height: 839, x: 1227, y: 2436, texture: "L2Font-e.TownMap.map_heine" },
+    { scaleX: 0.05, scaleY: 0.05, originX: -1648 * 32, originY: -3776 * 32, width: 767, height: 701, x: 438, y: 743, texture: "L2Font-e.TownMap.map_orc_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 3442 * 32, originY: -5874 * 32, width: 557, height: 737, x: 1253, y: 401, texture: "L2Font-e.TownMap.map_dwarven_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 930 * 32, originY: -1744 * 32, width: 993, height: 699, x: 851, y: 1063, texture: "L2Font-e.TownMap.map_rune_village" },
+    { scaleX: 0.05, scaleY: 0.05, originX: 4383 * 32, originY: -2010 * 32, width: 763, height: 663, x: 1412, y: 1037, texture: "L2Font-e.TownMap.map_godard_castle_town" },
 ];
 const cacheMapIds = new Map([[20, 3], [21, 2], [35, 1], [43, 9], [48, 5], [58, 6], [62, 13], [64, 14], [74, 10], [77, 11], [101, 7], [107, 4], [113, 8], [118, 12], [122, 12], [269, 16], [291, 15]]);
 const TEX_ZOOM_IN = "L2UI_CH3.Minimap.MapButton_ZoomIn1";
@@ -103,9 +104,9 @@ export class NCMapWnd {
         this.element = layer.createWindow(0, 0, 334, 383);
         this.element.hidden = true;
         this.element.tabIndex = -1;
-        this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true), TEX_FOLDED, 925, false);
+        this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true), TEX_FOLDED, SysString_T.MapAltM, false);
         layer.tile(this.element, 0, 20, 334, 363, 0, 0, 334, 363, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 334, layer.getManager().getSysString(447), true, () => this.setVisible(false), null, () => this.minimize()); // NWindow 0x10062182: minimap window title
+        NCFrameCtrl.createDOM(layer, this.element, 334, layer.getManager().getSysString(SysString_T.Map), true, () => this.setVisible(false), null, () => this.minimize()); // NWindow 0x10062182: minimap window title
         this.viewport = layer.createWindow(3, 21, 328, 328, this.element);
         this.viewport.style.overflow = "hidden";
         this.viewport.tabIndex = 0;
@@ -126,7 +127,7 @@ export class NCMapWnd {
         for (const arr of [this.arrGridColumns, this.arrGridRows]) for (let i = 0; i < 6; i++) {
             const line = layer.createWindow(0, 0, 1, 1, this.grid), label = layer.text(this.grid, "", 0xffdcdcdc, undefined, 0, 0);
 
-            line.style.background = "rgba(0,0,0,0.25098039215686274)";
+            line.style.background = "#00000040";
             arr.push({ line, label, text: "" });
         }
         for (let i = 1; i < arrMapInfo.length; i++) {
@@ -181,11 +182,11 @@ export class NCMapWnd {
         this.clock = layer.text(this.element, "", 0xffdcdcdc, FontType_T.LARGE, 32, 40);
         this.clockIcon.style.pointerEvents = this.clock.style.pointerEvents = "none";
 
-        const label = layer.getManager().getSysString(887);
+        const label = layer.getManager().getSysString(SysString_T.CurrentLocation);
         const center = () => this.centerPosition();
         const current = layer.button(this.element, 249, 355, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, label, center);
 
-        const partyLabel = layer.getManager().getSysString(1223);
+        const partyLabel = layer.getManager().getSysString(SysString_T.PartyMember);
         const party = layer.button(this.element, 89, 355, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, partyLabel, () => this.cyclePartyMember());
 
         party.tabIndex = 0;
@@ -198,7 +199,7 @@ export class NCMapWnd {
             layer.getManager().playButtonSound(true);
             this.cyclePartyMember();
         });
-        const targetLabel = layer.getManager().getSysString(886);
+        const targetLabel = layer.getManager().getSysString(SysString_T.TargetLocation);
         const target = layer.button(this.element, 169, 355, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, targetLabel, () => this.centerQuestLocation());
 
         target.tabIndex = 0;
@@ -376,7 +377,7 @@ export class NCMapWnd {
         this.grid.hidden = this.mapId !== 0;
         if (this.mapId) return;
 
-        const spacing = Math.trunc(arrMapInfo[0].scaleX * 12288), scrollX = Math.trunc(this.viewport.scrollLeft), scrollY = Math.trunc(this.viewport.scrollTop);
+        const spacing = Math.trunc(arrMapInfo[0].scaleX * (3 * 4096)), scrollX = Math.trunc(this.viewport.scrollLeft), scrollY = Math.trunc(this.viewport.scrollTop);
 
         this.layer.place(this.grid, scrollX, scrollY);
         for (let axis = 0; axis < 2; axis++) {
@@ -555,7 +556,7 @@ export class NCMapWnd {
 
         if (name !== this.zoneName) {
             this.zoneName = name;
-            const text = `${this.layer.getManager().getSysString(471)} : ${name}`;
+            const text = `${this.layer.getManager().getSysString(SysString_T.CurrentPosition)} : ${name}`;
 
             this.layer.renderText(this.zoneCaption, text, 0xffdcdcdc);
             this.zoneCaption.setAttribute("aria-label", text);

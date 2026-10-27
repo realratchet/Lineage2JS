@@ -1,6 +1,7 @@
 import NCShopWnd from "./nc-shop-wnd";
 import type { default as NDomLayer, NDomButton_T, NDomCheckBox_T } from "./ndom";
 import type { ShopItem_T, PrivateStoreSellList_T, PrivateStoreSellItem_T, PrivateStoreManageSell_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 export class NCPrivateShopWnd extends NCShopWnd {
     public onQuit: () => void = null;
@@ -23,12 +24,12 @@ export class NCPrivateShopWnd extends NCShopWnd {
         this.element.tabIndex = -1;
         layer.place(this.okButton, 164, 372);
         this.cancelButton.hidden = true;
-        this.quitButton = layer.button(this.element, 10, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(385), () => {
+        this.quitButton = layer.button(this.element, 10, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(SysString_T.Abort), () => {
             if (this.onQuit) this.onQuit();
             this.setVisible(false);
         });
-        this.messageButton = layer.button(this.element, 87, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(384), () => { if (this.onMessage) this.onMessage(); });
-        this.packageCheckbox = layer.checkbox(this.element, 11, 350, 100, 23, layer.getManager().getSysString(1198));
+        this.messageButton = layer.button(this.element, 87, 372, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, layer.getManager().getSysString(SysString_T.StoreMessage), () => { if (this.onMessage) this.onMessage(); });
+        this.packageCheckbox = layer.checkbox(this.element, 11, 350, 100, 23, layer.getManager().getSysString(SysString_T.PackageSale));
         this.counter = layer.text(this.element, "", 0xffb09b79, undefined, 251, 198);
         this.quitButton.hidden = this.messageButton.hidden = this.packageCheckbox.hidden = this.counter.hidden = true;
     }
@@ -57,7 +58,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
     public async showStore(list: PrivateStoreSellList_T) {
         this.setOwnMode(false);
         const pending = this.show(false, list.adena, list.items.map(item => ({ ...item, type1: item.type2 })));
-        const title = this.layer.getManager().getSysString(498) + (list.isPackage ? ` - ${this.layer.getManager().getSysString(1198)}` : "");
+        const title = this.layer.getManager().getSysString(SysString_T.PrivateStore) + (list.isPackage ? ` - ${this.layer.getManager().getSysString(SysString_T.PackageSale)}` : "");
 
         this.ownerId = list.storePlayerId;
         this.isPackage = list.isPackage;
@@ -99,7 +100,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
     protected setOwnMode(isOwn: boolean) {
         this.isOwn = isOwn;
         this.quitButton.hidden = this.messageButton.hidden = this.packageCheckbox.hidden = this.counter.hidden = !isOwn;
-        this.okButton.setLabel(this.layer.getManager().getSysString(isOwn ? 428 : 140));
+        this.okButton.setLabel(this.layer.getManager().getSysString(isOwn ? SysString_T.Start : SysString_T.OK));
     }
     protected canAdd(item: ShopItem_T, count: number, itemId = item.itemId) {
         const contribution = BigInt(count) * BigInt(item.price);
@@ -110,7 +111,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
         for (const entry of this.items[1]) existing = existing + Math.imul(entry.count | 0, entry.itemId === itemId ? item.price : entry.price) | 0;
         const total = Number(contribution) + existing | 0;
 
-        return total >= 0 && total <= 2000000000;
+        return total >= 0 && total <= 2e9;
     }
     protected getTransferCount(item: ShopItem_T, count: number) { return this.isOwn ? count : super.getTransferCount(item, count); }
     protected getLabelIds() { return this.isOwn ? [138, 137, 143] : [137, 139, 142]; }

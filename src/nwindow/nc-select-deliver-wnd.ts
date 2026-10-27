@@ -3,6 +3,8 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import { NCComboBox } from "./nc-lobby-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { PackageTarget_T } from "../network/game-packets";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_ch3.DeliverWnd.Warehouse_back";
 
@@ -21,17 +23,17 @@ export class NCSelectDeliverWnd {
         this.element.hidden = true;
         this.element.tabIndex = -1;
         layer.tile(this.element, 0, 20, 256, 181, 0, 0, 256, 181, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(558), false, () => this.setVisible(false));
-        layer.text(this.element, manager.getSystemMessage(664), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.To), false, () => this.setVisible(false));
+        layer.text(this.element, manager.getSystemMessage(SystemMessage_T.SelectPackageRecipient), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.combo = new NCComboBox(layer, this.element, 39, 61, 178, 17);
         this.combo.onChange = index => { this.selected = index; };
-        layer.button(this.element, 51, 172, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, manager.getSysString(140), () => {
+        layer.button(this.element, 51, 172, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, manager.getSysString(SysString_T.OK), () => {
             if (this.selected < 0) return;
 
             if (this.onConfirm) this.onConfirm(this.targets[this.selected].objectId);
             this.setVisible(false);
         });
-        layer.button(this.element, 131, 172, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, manager.getSysString(141), () => this.setVisible(false));
+        layer.button(this.element, 131, 172, 76, 23, "L2UI_CH3.Button.Btn1_Normal", "L2UI_CH3.Button.Btn1_NormalOn", null, manager.getSysString(SysString_T.Cancel), () => this.setVisible(false));
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }

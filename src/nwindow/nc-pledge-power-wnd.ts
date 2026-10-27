@@ -2,12 +2,13 @@ import type NDomLayer from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.BloodHoodWnd.empower_back";
 const TEX_BUTTON = SKIN_SLOTS.button;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrChecks = ["L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", "L2UI.Control.CheckBox_unable", "L2UI.ActionWnd.CheckBox_checked_unable"];
-const arrControls = [[673, 21, 87, 200, -1], [674, 32, 107, 100, 0], [1210, 142, 107, 200, 10], [675, 32, 126, 200, 1], [676, 32, 145, 200, 2], [677, 32, 164, 200, 3], [678, 21, 191, 200, -1], [679, 32, 210, 200, 4], [684, 32, 229, 200, 5], [685, 32, 248, 200, 6], [682, 21, 275, 200, -1], [683, 32, 294, 200, 7], [684, 32, 313, 200, 8], [685, 32, 332, 200, 9]];
+const arrControls = [[SysString_T.ClanRelatedPrivileges, 21, 87, 200, -1], [SysString_T.JoinAClan, 32, 107, 100, 0], [SysString_T.ClanWar, 142, 107, 200, 10], [SysString_T.GiveATitle, 32, 126, 200, 1], [SysString_T.ViewWarehouseContents, 32, 145, 200, 2], [SysString_T.ClanCrestManagement, 32, 164, 200, 3], [SysString_T.ClanHallRelatedPrivileges, 21, 191, 200, -1], [SysString_T.EntrancePrivileges, 32, 210, 200, 4], [SysString_T.OtherRights, 32, 229, 200, 5], [SysString_T.DismissPrivilege, 32, 248, 200, 6], [SysString_T.CastleRights, 21, 275, 200, -1], [SysString_T.OpeningADoor, 32, 294, 200, 7], [SysString_T.OtherRights, 32, 313, 200, 8], [SysString_T.DismissPrivilege, 32, 332, 200, 9]];
 const arrGroups = [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9], [10, 11, 12, 13]];
 
 export class NCPledgePowerWnd {
@@ -30,7 +31,7 @@ export class NCPledgePowerWnd {
         this.element.hidden = true;
         this.element.tabIndex = -1;
         this.element.dataset.window = "pledge-power";
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(668), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.PrivilegeSettings), false, () => this.setVisible(false));
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
         this.name = layer.createWindow(0, 0, 256, 78, this.element);
         this.name.style.pointerEvents = "none";
@@ -54,7 +55,7 @@ export class NCPledgePowerWnd {
                 this.paintChecks();
             });
         });
-        layer.button(this.element, 51, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(140), () => {
+        layer.button(this.element, 51, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.OK), () => {
             if (this.objectId > 0 && this.mode === 2) {
                 const power = new Uint8Array(32);
 
@@ -67,7 +68,7 @@ export class NCPledgePowerWnd {
             }
             this.setVisible(false);
         });
-        layer.button(this.element, 131, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(141), () => this.setVisible(false));
+        layer.button(this.element, 131, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Cancel), () => this.setVisible(false));
         this.paintChecks();
     }
 
@@ -91,7 +92,7 @@ export class NCPledgePowerWnd {
         this.mode = mode;
         if (memberName.length) {
             this.layer.text(this.name, memberName, 0xffffff00, FontType_T.SMALL, 23, 54);
-            this.layer.text(this.name, this.layer.getManager().getSysString(686), 0xffdcdcdc, FontType_T.SMALL, 23 + this.layer.measureText(memberName), 54);
+            this.layer.text(this.name, this.layer.getManager().getSysString(SysString_T.PrivilegesForMember), 0xffdcdcdc, FontType_T.SMALL, 23 + this.layer.measureText(memberName), 54);
         }
         this.setVisible(true);
         this.layer.activate(this.element);

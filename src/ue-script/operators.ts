@@ -1,11 +1,13 @@
 import { MathUtils } from "three";
 import FVector from "@l2js/engine/un-vector";
-import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
+import { getRotatorQuaternionElements, sinRotator } from "@l2js/engine/utils/rotator";
 import type { QuaternionArr, Vector3Arr } from "@l2js/engine";
+import type { ScriptSlot_T } from "./vm";
 
 const tmpRotation: QuaternionArr = [0, 0, 0, 1];
 
 type UNativeRegistry_T = typeof import("./native-registry").UNativeRegistry;
+type InterpCurve_T = { Points: { InVal: number, OutVal: number }[] };
 
 function pre_op_not_bool                /* !  */(a: boolean) { return !a; }
 function op_eq_bool_bool                /* == */(a: boolean, b: boolean) { return a === b; }
@@ -21,8 +23,6 @@ function op_add_num_num                 /* +  */(a: number, b: number) { return 
 function op_sub_num_num                 /* -  */(a: number, b: number) { return a - b; }
 function pre_op_sub_int(a: number) { return -a | 0; }
 function pre_op_sub_num                 /* -  */(a: number) { return -a; }
-function op_inc_num                     /* ++ */(a: number) { return a + 1; }
-function op_dec_num                     /* -- */(a: number) { return a - 1; }
 function op_inv_num                     /* ~  */(a: number) { return ~a; }
 function op_pow_num_num                 /* ** */(a: number, b: number) { return a ** b; }
 function op_mod_num_num                 /* % */(a: number, b: number) { return a % b; }
@@ -69,7 +69,46 @@ function FClamp(v: number, a: number, b: number) { return clamp_num(v, a, b); }
 function Lerp(alpha: number, a: number, b: number) { return (b - a) * alpha + a; }
 function Smerp(alpha: number, a: number, b: number) { return (-2 * (b - a) * alpha ** 3) + (3 * (b - a) * alpha ** 2) + a; }
 
-function op_div_int_int                 /* /  */(a: number, b: number) { return Math.round(op_div_num_num(a, b)); }
+function op_mul_byte_byte(a: number, b: number) { return (a * b) & 255; }
+function op_div_byte_byte(a: number, b: number) { return b === 0 ? 0 : Math.trunc(a / b); }
+function op_add_byte_byte(a: number, b: number) { return (a + b) & 255; }
+function op_sub_byte_byte(a: number, b: number) { return (a - b) & 255; }
+function op_inc_byte(a: number) { return (a + 1) & 255; }
+function op_dec_byte(a: number) { return (a - 1) & 255; }
+function op_mul_int_int(a: number, b: number) { return Math.imul(a, b); }
+function op_div_int_int(a: number, b: number) {
+    if (a === -2147483648 && b === -1) throw new Error(`UnrealScript integer division overflow.`);
+
+    return b === 0 ? a : Math.trunc(a / b) | 0;
+}
+function op_add_int_int(a: number, b: number) { return (a + b) | 0; }
+function op_sub_int_int(a: number, b: number) { return (a - b) | 0; }
+function op_inc_int(a: number) { return (a + 1) | 0; }
+function op_dec_int(a: number) { return (a - 1) | 0; }
+function op_mul_assign_int_float(a: number, b: number) { return multiplyRotatorComponent(a, Math.fround(b)); }
+function op_div_assign_int_float(a: number, b: number): number {
+    b = Math.fround(b);
+    const value = a / b;
+
+    if (!Number.isFinite(value) || Math.abs(value) >= 9223372036854775808) return 0;
+    if (Math.abs(value - Math.round(value)) > Math.abs(value) * Number.EPSILON * 2 || a === 0) return value | 0;
+
+    // Core 0x1013b848 divides in x87 before converting to a signed 64-bit integer.
+    const exponent = Math.floor(Math.log2(Math.abs(b))), significand = BigInt(Math.abs(b) * Math.pow(2, 23 - exponent)), shift = 23 - exponent;
+    let numerator = BigInt(Math.abs(a)), denominator = significand, power = Math.floor(Math.log2(Math.abs(value)));
+
+    if (shift >= 0) numerator <<= BigInt(shift);
+    else denominator <<= BigInt(-shift);
+    if (power >= 0 ? numerator < denominator << BigInt(power) : numerator << BigInt(-power) < denominator) power--;
+
+    const scale = power - 63;
+    let result = scale >= 0 ? roundRotatorQuotient(numerator, denominator << BigInt(scale)) : roundRotatorQuotient(numerator << BigInt(-scale), denominator);
+
+    result = scale >= 0 ? result << BigInt(scale) : result >> BigInt(-scale);
+    if ((a < 0) !== (b < 0)) result = -result;
+
+    return Number(BigInt.asIntN(32, result));
+}
 function rand_int(max: number) { return Math.floor(Math.random() * max); }
 
 
@@ -82,6 +121,69 @@ function op_add_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return
 function op_sub_vector_vector(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
 function op_add_rotator_rotator(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [(a[0] + b[0]) | 0, (a[1] + b[1]) | 0, (a[2] + b[2]) | 0]; }
 function op_sub_rotator_rotator(a: Vector3Arr, b: Vector3Arr): Vector3Arr { return [(a[0] - b[0]) | 0, (a[1] - b[1]) | 0, (a[2] - b[2]) | 0]; }
+function op_eq_rotator_rotator(a: Vector3Arr, b: Vector3Arr) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
+function op_neq_rotator_rotator(a: Vector3Arr, b: Vector3Arr) { return !op_eq_rotator_rotator(a, b); }
+
+function multiplyRotatorComponent(a: number, b: number): number {
+    if (Math.abs(a * b) >= 9223372036854775808) return 0;
+
+    return (Math.imul(a, b | 0) + Math.trunc(a * (b % 1))) | 0;
+}
+
+function op_mul_rotator_float(a: Vector3Arr, b: number): Vector3Arr {
+    b = Math.fround(b);
+
+    return [multiplyRotatorComponent(a[0], b), multiplyRotatorComponent(a[1], b), multiplyRotatorComponent(a[2], b)];
+}
+
+function op_mul_float_rotator(a: number, b: Vector3Arr): Vector3Arr { return op_mul_rotator_float(b, a); }
+
+function roundRotatorQuotient(a: bigint, b: bigint): bigint {
+    const quotient = a / b, remainder = (a % b) * 2n;
+
+    return quotient + (remainder > b || remainder === b && (quotient & 1n) !== 0n ? 1n : 0n);
+}
+
+function divideRotatorComponent(a: number, b: number): number {
+    const value = a * (1 / b);
+
+    if (!Number.isFinite(value) || Math.abs(value) >= 9223372036854775808) return 0;
+    if (Math.abs(value - Math.round(value)) > Math.abs(value) * Number.EPSILON * 2) return value | 0;
+    if (a === 0) return 0;
+
+    // Core 0x1013f7b3 retains the 64-bit x87 reciprocal through all three integer conversions.
+    const exponent = Math.floor(Math.log2(Math.abs(b))), significand = BigInt(Math.abs(b) * Math.pow(2, 23 - exponent)), power = Math.floor(Math.log2(1 / Math.abs(b))) - 63, shift = 23 - exponent - power;
+    const inverse = shift >= 0 ? roundRotatorQuotient(1n << BigInt(shift), significand) : roundRotatorQuotient(1n, significand << BigInt(-shift));
+    let result = BigInt(Math.abs(a)) * inverse, bits = result.toString(2).length - 64;
+
+    if (bits > 0) result = roundRotatorQuotient(result, 1n << BigInt(bits));
+    else bits = 0;
+
+    const scale = power + bits;
+
+    result = scale >= 0 ? result << BigInt(scale) : result >> BigInt(-scale);
+    if ((a < 0) !== (b < 0)) result = -result;
+
+    return Number(BigInt.asIntN(32, result));
+}
+
+function op_div_assign_rotator_float(a: Vector3Arr, b: number): Vector3Arr {
+    b = Math.fround(b);
+
+    return [divideRotatorComponent(a[0], b), divideRotatorComponent(a[1], b), divideRotatorComponent(a[2], b)];
+}
+
+function op_div_rotator_float(a: Vector3Arr, b: number): Vector3Arr {
+    return Math.fround(b) === 0 ? [a[0], a[1], a[2]] : op_div_assign_rotator_float(a, b);
+}
+
+function rot_Normalize(a: Vector3Arr): Vector3Arr { return [(a[0] << 16) >> 16, (a[1] << 16) >> 16, (a[2] << 16) >> 16]; }
+function op_clockwise_int_int(a: number, b: number): boolean {
+    a &= 65535;
+    b &= 65535;
+
+    return Math.abs(a - b) > 32768 ? a < b : a > b;
+}
 
 function op_vec_rot_lsh(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
     getRotatorQuaternionElements(b[0], b[1], b[2], tmpRotation);
@@ -113,7 +215,21 @@ function Normal(a: Vector3Arr): Vector3Arr {
 
     return [Math.fround(x * scale), Math.fround(y * scale), Math.fround(z * inverse)];
 }
-function VRand() { return FVector.make(Math.random(), Math.random(), Math.random()); }
+function VRand(): Vector3Arr {
+    // Core VRand 0x101384d0 rejects outside the unit sphere before UnsafeNormal.
+    let x: number, y: number, z: number, last: number;
+
+    do {
+        x = Math.fround(rand_int(32768) * 0.000030518509447574615 * 2 - 1);
+        y = Math.fround(rand_int(32768) * 0.000030518509447574615 * 2 - 1);
+        last = rand_int(32768) * 0.000030518509447574615 * 2 - 1;
+        z = Math.fround(last);
+    } while (x * x + y * y + last * z > 1);
+
+    const inverse = 1 / Math.sqrt(x * x + y * y + z * z), scale = Math.fround(inverse);
+
+    return [Math.fround(x * scale), Math.fround(y * scale), Math.fround(z * inverse)];
+}
 
 function Vector2Rotator(v: Vector3Arr): Vector3Arr {
     // Core FVector::Rotation 0x1014f310 uses 65535/(2*PI) and truncates.
@@ -130,6 +246,133 @@ function Rotator2Vector(r: Vector3Arr): Vector3Arr {
     const cosPitch = Math.cos(pitch);
 
     return [cosPitch * Math.cos(yaw), cosPitch * Math.sin(yaw), Math.sin(pitch)];
+}
+
+function getRotationAxes(a: Vector3Arr, isInverse = false): Vector3Arr[] {
+    const sp = sinRotator(a[0]), cp = sinRotator(a[0] + 16384), sy = sinRotator(a[1]), cy = sinRotator(a[1] + 16384), sr = sinRotator(a[2]), cr = sinRotator(a[2] + 16384), f = Math.fround;
+
+    // Core FCoords 0x10111b30/0x10111650 round after each rotation, in opposite orders.
+    if (isInverse) return [[f(cp * cy), f(sr * f(sp * cy) - cr * sy), f(-cr * f(sp * cy) - sr * sy)], [f(cp * sy), f(sr * f(sp * sy) + cr * cy), f(sr * cy - cr * f(sp * sy))], [sp, f(-sr * cp), f(cr * cp)]];
+
+    return [[f(cp * cy), f(cp * sy), sp], [f(f(sr * sp) * cy - cr * sy), f(f(sr * sp) * sy + cr * cy), f(-sr * cp)], [f(-f(cr * sp) * cy - sr * sy), f(sr * cy - f(cr * sp) * sy), f(cr * cp)]];
+}
+
+function GetAxes(a: Vector3Arr, x: ScriptSlot_T, y: ScriptSlot_T, z: ScriptSlot_T): void {
+    const axes = getRotationAxes(a);
+
+    x.set(axes[0]); y.set(axes[1]); z.set(axes[2]);
+}
+
+function GetUnAxes(a: Vector3Arr, x: ScriptSlot_T, y: ScriptSlot_T, z: ScriptSlot_T): void {
+    const axes = getRotationAxes(a, true);
+
+    x.set(axes[0]); y.set(axes[1]); z.set(axes[2]);
+}
+
+function vec_Invert(x: ScriptSlot_T, y: ScriptSlot_T, z: ScriptSlot_T): void {
+    const a = x.get() as Vector3Arr, b = y.get() as Vector3Arr, c = z.get() as Vector3Arr, f = Math.fround;
+    const determinant = (b[1] * c[2] - b[2] * c[1]) * a[0] + (b[2] * c[0] - b[0] * c[2]) * a[1] + (b[0] * c[1] - b[1] * c[0]) * a[2], scale = 1 / (determinant === 0 ? 1 : determinant);
+    const axes: Vector3Arr[] = [[f((b[1] * c[2] - b[2] * c[1]) * scale), f((a[2] * c[1] - a[1] * c[2]) * scale), f(f(a[1] * b[2] - a[2] * b[1]) * scale)], [f((b[2] * c[0] - b[0] * c[2]) * scale), f((a[0] * c[2] - a[2] * c[0]) * scale), f(f(a[2] * b[0] - a[0] * b[2]) * scale)], [f((b[0] * c[1] - b[1] * c[0]) * scale), f((a[1] * c[0] - a[0] * c[1]) * scale), f(f(a[0] * b[1] - a[1] * b[0]) * scale)]];
+
+    x.set(axes[0]); y.set(axes[1]); z.set(axes[2]);
+}
+
+function vec_MirrorByNormal(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
+    const n = Normal(b), f = Math.fround, dot = f(a[0] * n[0] + a[1] * n[1] + a[2] * n[2]);
+
+    return [f(a[0] - f(2 * n[0] * dot)), f(a[1] - 2 * n[1] * dot), f(a[2] - 2 * n[2] * dot)];
+}
+
+function rot_OrthoRotation(x: Vector3Arr, y: Vector3Arr, z: Vector3Arr): Vector3Arr {
+    // Core FCoords::OrthoRotation 0x1014f971 uses 65536 units, unlike FVector::Rotation.
+    const scale = 32768 / Math.PI, rotation: Vector3Arr = [Math.trunc(Math.atan2(x[2], Math.hypot(x[0], x[1])) * scale), Math.trunc(Math.atan2(x[1], x[0]) * scale), 0], axis = getRotationAxes(rotation)[1];
+
+    rotation[2] = Math.trunc(Math.atan2(axis[0] * z[0] + axis[1] * z[1] + axis[2] * z[2], axis[0] * y[0] + axis[1] * y[1] + axis[2] * y[2]) * scale);
+
+    return rotation;
+}
+
+function RotRand(hasRoll = false): Vector3Arr {
+    const yaw = rand_int(32768) * 2, pitch = rand_int(32768) * 2;
+
+    return [pitch, yaw, hasRoll ? rand_int(32768) * 2 : 0];
+}
+
+function QuatProduct(a: QuaternionArr, b: QuaternionArr): QuaternionArr {
+    const f = Math.fround;
+
+    return [f(a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1]), f(a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0]), f(a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3]), f(a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2])];
+}
+
+function QuatInvert(a: QuaternionArr): QuaternionArr { return [-a[0], -a[1], -a[2], a[3]]; }
+
+function QuatRotateVector(q: QuaternionArr, v: Vector3Arr): Vector3Arr {
+    const f = Math.fround, scale = f(q[3] * q[3] - (q[0] * q[0] + q[1] * q[1] + q[2] * q[2])), dot = 2 * (q[0] * v[0] + q[1] * v[1] + q[2] * v[2]), roundedDot = f(dot), w = f(q[3] * 2);
+
+    return [f(f(v[0] * scale + f((q[1] * v[2] - q[2] * v[1]) * w)) + f(dot * q[0])), f(f(v[1] * scale + (q[2] * v[0] - q[0] * v[2]) * w) + roundedDot * q[1]), f(f(f(v[2] * scale) + f(q[0] * v[1] - q[1] * v[0]) * w) + roundedDot * q[2])];
+}
+
+function QuatFindBetween(a: Vector3Arr, b: Vector3Arr): QuaternionArr {
+    const f = Math.fround, x = f(a[1] * b[2] - a[2] * b[1]), y = f(a[2] * b[0] - a[0] * b[2]), z = f(a[0] * b[1] - a[1] * b[0]), length = f(Math.sqrt(x * x + y * y + z * z));
+
+    if (length < 0.0001) return [0, 0, 0, 1];
+
+    let angle = Math.asin(length);
+
+    if (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] < 0) angle = Math.PI - angle;
+    angle *= 0.5;
+
+    const sine = Math.sin(angle), inverse = 1 / length;
+
+    return [f(x * inverse * sine), f(f(y * inverse) * sine), f(f(z * inverse) * sine), f(Math.cos(f(angle)))];
+}
+
+function QuatFromAxisAndAngle(axis: Vector3Arr, angle: number): QuaternionArr {
+    const n = Normal(axis), sine = Math.fround(Math.sin(angle * 0.5)), f = Math.fround;
+
+    return [f(n[0] * sine), f(n[1] * sine), f(n[2] * sine), f(Math.cos(angle * 0.5))];
+}
+
+function InterpCurveEval(curve: InterpCurve_T, input: number): number {
+    const points = curve.Points;
+
+    if (points.length < 2 || input < points[0].InVal || input > points[points.length - 1].InVal) return 0;
+
+    for (let i = 1; i < points.length; i++) {
+        if (points[i].InVal < input) continue;
+
+        const previous = points[i - 1], current = points[i], alpha = Math.fround((input - previous.InVal) / (current.InVal - previous.InVal));
+
+        if (!(alpha >= 0 && alpha <= 1)) throw new Error(`Invalid interpolation curve interval '${i}'.`);
+
+        return Math.fround((current.OutVal - previous.OutVal) * alpha + previous.OutVal);
+    }
+
+    return 0;
+}
+
+function InterpCurveGetInputDomain(curve: InterpCurve_T, min: ScriptSlot_T, max: ScriptSlot_T): void {
+    const points = curve.Points;
+
+    min.set(points.length < 2 ? 0 : points[0].InVal);
+    max.set(points.length < 2 ? 0 : points[0].InVal);
+
+    for (let i = 1; i < points.length; i++) {
+        min.set(Math.min(min.get() as number, points[i].InVal));
+        max.set(Math.max(max.get() as number, points[i].InVal));
+    }
+}
+
+function InterpCurveGetOutputRange(curve: InterpCurve_T, min: ScriptSlot_T, max: ScriptSlot_T): void {
+    const points = curve.Points;
+
+    min.set(points.length < 2 ? 0 : points[0].OutVal);
+    max.set(points.length < 2 ? 0 : points[0].OutVal);
+
+    for (let i = 1; i < points.length; i++) {
+        min.set(Math.min(min.get() as number, points[i].OutVal));
+        max.set(Math.max(max.get() as number, points[i].OutVal));
+    }
 }
 
 function Log(s: string, tag?: string) { console.log(`[UEScript] ${tag ? `{${tag}} ` : ""}${s}`); }
@@ -171,22 +414,22 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(132, op_or_bool_bool);
 
     // byte operators
-    native(133, op_mul_num_num);
-    native(134, op_div_int_int);
-    native(135, op_add_num_num);
-    native(136, op_sub_num_num);
-    native(137, op_inc_num);
-    native(138, op_dec_num);
-    native(139, op_inc_num);
-    native(140, op_dec_num);
+    native(133, op_mul_byte_byte);
+    native(134, op_div_byte_byte);
+    native(135, op_add_byte_byte);
+    native(136, op_sub_byte_byte);
+    native(137, op_inc_byte);
+    native(138, op_dec_byte);
+    native(139, op_inc_byte);
+    native(140, op_dec_byte);
     native(141, op_inv_num);
 
     // integer operators
     native(143, pre_op_sub_int);
-    native(144, op_mul_num_num);
+    native(144, op_mul_int_int);
     native(145, op_div_int_int);
-    native(146, op_add_num_num);
-    native(147, op_sub_num_num);
+    native(146, op_add_int_int);
+    native(147, op_sub_int_int);
     native(148, op_shl_num_num);
     native(149, op_shr_arithmetic_num_num);
     native(196, op_shr_num_num);
@@ -199,14 +442,14 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(156, op_and_bit_num_num);
     native(157, op_xor_bit_num_num);
     native(158, op_or_bit_num_num);
-    native(159, op_mul_num_num);
-    native(160, op_div_int_int);
-    native(161, op_add_num_num);
-    native(162, op_sub_num_num);
-    native(163, op_inc_num);
-    native(164, op_dec_num);
-    native(165, op_inc_num);
-    native(166, op_dec_num);
+    native(159, op_mul_assign_int_float);
+    native(160, op_div_assign_int_float);
+    native(161, op_add_int_int);
+    native(162, op_sub_int_int);
+    native(163, op_inc_int);
+    native(164, op_dec_int);
+    native(165, op_inc_int);
+    native(166, op_dec_int);
 
     // integer functions
     native(167, rand_int);
@@ -276,28 +519,28 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     // vector functions
     native(225, VSize);
     native(226, Normal);
-    native(227, function vec_Invert() { fn_not_implemented() }); // Invert
+    native(227, vec_Invert); // Invert
     native(252, VRand);
-    native(300, function vec_MirrorByNormal() { fn_not_implemented() }); // MirrorByNormal
+    native(300, vec_MirrorByNormal); // MirrorByNormal
 
     // Rotator operators and functions.
-    native(142, fn_not_implemented); // static final operator(24) bool ==     ( rotator A, rotator B );
-    native(203, fn_not_implemented); // static final operator(26) bool !=     ( rotator A, rotator B );
-    native(287, fn_not_implemented); // static final operator(16) rotator *   ( rotator A, float    B );
-    native(288, fn_not_implemented); // static final operator(16) rotator *   ( float    A, rotator B );
-    native(289, fn_not_implemented); // static final operator(16) rotator /   ( rotator A, float    B );
-    native(290, fn_not_implemented); // static final operator(34) rotator *=  ( out rotator A, float B  );
-    native(291, fn_not_implemented); // static final operator(34) rotator /=  ( out rotator A, float B  );
+    native(142, op_eq_rotator_rotator); // static final operator(24) bool ==     ( rotator A, rotator B );
+    native(203, op_neq_rotator_rotator); // static final operator(26) bool !=     ( rotator A, rotator B );
+    native(287, op_mul_rotator_float); // static final operator(16) rotator *   ( rotator A, float    B );
+    native(288, op_mul_float_rotator); // static final operator(16) rotator *   ( float    A, rotator B );
+    native(289, op_div_rotator_float); // static final operator(16) rotator /   ( rotator A, float    B );
+    native(290, op_mul_rotator_float); // static final operator(34) rotator *=  ( out rotator A, float B  );
+    native(291, op_div_assign_rotator_float); // static final operator(34) rotator /=  ( out rotator A, float B  );
     native(316, op_add_rotator_rotator); // static final operator(20) rotator +   ( rotator A, rotator B );
     native(317, op_sub_rotator_rotator); // static final operator(20) rotator -   ( rotator A, rotator B );
     native(318, op_add_rotator_rotator); // static final operator(34) rotator +=  ( out rotator A, rotator B );
     native(319, op_sub_rotator_rotator); // static final operator(34) rotator -=  ( out rotator A, rotator B );
-    native(229, fn_not_implemented); // static final function GetAxes         ( rotator A, out vector X, out vector Y, out vector Z );
-    native(230, fn_not_implemented); // static final function GetUnAxes       ( rotator A, out vector X, out vector Y, out vector Z );
-    native(320, fn_not_implemented); // static final function rotator RotRand ( optional bool bRoll );
-    native("OrthoRotation", function rot_OrthoRotation() { fn_not_implemented() }); //      static final function rotator OrthoRotation( vector X, vector Y, vector Z );
-    native("Normalize", function rot_Normalize() { fn_not_implemented() }); //      static final function rotator Normalize( rotator Rot );
-    native("op_ClockwiseFrom_int_int", fn_not_implemented); //static final operator(24) bool ClockwiseFrom( int A, int B );
+    native(229, GetAxes); // static final function GetAxes         ( rotator A, out vector X, out vector Y, out vector Z );
+    native(230, GetUnAxes); // static final function GetUnAxes       ( rotator A, out vector X, out vector Y, out vector Z );
+    native(320, RotRand); // static final function rotator RotRand ( optional bool bRoll );
+    native("OrthoRotation", rot_OrthoRotation); //      static final function rotator OrthoRotation( vector X, vector Y, vector Z );
+    native("Normalize", rot_Normalize); //      static final function rotator Normalize( rotator Rot );
+    native("ClockwiseFrom_IntInt", op_clockwise_int_int); //static final operator(24) bool ClockwiseFrom( int A, int B );
     native("Vector2Rotator", Vector2Rotator); //      static final function rotator Vector2Rotator( vector V );
     native("Rotator2Vector", Rotator2Vector); //      static final function vector Rotator2Vector( rotator R );
 
@@ -332,16 +575,16 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(255, op_neq_name_name); // static final operator(26) bool != ( name A, name B );
 
     // InterpCurve operator
-    native("InterpCurveEval", function InterpCurveEval() { fn_not_implemented() }); //   static final function float InterpCurveEval( InterpCurve curve, float input );
-    native("InterpCurveGetOutputRange", function InterpCurveGetOutputRange() { fn_not_implemented() }); // static final function InterpCurveGetOutputRange( InterpCurve curve, out float min, out float max );
-    native("InterpCurveGetInputDomain", function InterpCurveGetInputDomain() { fn_not_implemented() }); // static final function InterpCurveGetInputDomain( InterpCurve curve, out float min, out float max );
+    native("InterpCurveEval", InterpCurveEval); //   static final function float InterpCurveEval( InterpCurve curve, float input );
+    native("InterpCurveGetOutputRange", InterpCurveGetOutputRange); // static final function InterpCurveGetOutputRange( InterpCurve curve, out float min, out float max );
+    native("InterpCurveGetInputDomain", InterpCurveGetInputDomain); // static final function InterpCurveGetInputDomain( InterpCurve curve, out float min, out float max );
 
     // Quaternion functions
-    native("QuatProduct", function QuatProduct() { fn_not_implemented() }); //   static final function Quat QuatProduct( Quat A, Quat B );
-    native("QuatInvert", function QuatInvert() { fn_not_implemented() }); //    static final function Quat QuatInvert( Quat A );
-    native("QuatRotateVector", function QuatRotateVector() { fn_not_implemented() }); //  static final function vector QuatRotateVector( Quat A, vector B );
-    native("QuatFindBetween", function QuatFindBetween() { fn_not_implemented() }); //   static final function Quat QuatFindBetween( Vector A, Vector B );
-    native("QuatFromAxisAndAngle", function QuatFromAxisAndAngle() { fn_not_implemented() }); //  static final function Quat QuatFromAxisAndAngle( Vector Axis, Float Angle );
+    native("QuatProduct", QuatProduct); //   static final function Quat QuatProduct( Quat A, Quat B );
+    native("QuatInvert", QuatInvert); //    static final function Quat QuatInvert( Quat A );
+    native("QuatRotateVector", QuatRotateVector); //  static final function vector QuatRotateVector( Quat A, vector B );
+    native("QuatFindBetween", QuatFindBetween); //   static final function Quat QuatFindBetween( Vector A, Vector B );
+    native("QuatFromAxisAndAngle", QuatFromAxisAndAngle); //  static final function Quat QuatFromAxisAndAngle( Vector Axis, Float Angle );
 
     // Logging.
     native(231, Log); // final static function Log(coerce string S, optional name Tag);

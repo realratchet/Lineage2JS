@@ -7,6 +7,7 @@ import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import type { PetStatus_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
 import type { InventoryWndView_T } from "./skin";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.PetWnd.Petinterface_back";
 const TEX_TAB = "L2UI_CH3.PetWnd.petinterface_tab2";
@@ -21,7 +22,7 @@ const TEX_BUTTON = SKIN_SLOTS.button;
 const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrBars = ["ps_HPbar", "ps_MPbar", "ps_ExPbar", "ps_foodbar"].map(name => `L2UI_CH3.PlayerStatusWnd.${name}`);
 const arrWeight = [1, 2, 3, 4].map(index => `L2UI_CH3.PlayerStatusWnd.ps_weightbar${index}`);
-const arrLabels = [94, 95, 96, 113, 111, 404, 98, 99, 97, 432, 112, 496];
+const arrLabels = [SysString_T.PhysicalAttack, SysString_T.PhysicalDefense, SysString_T.Accuracy, SysString_T.Critical, SysString_T.AttackSpeed, SysString_T.SoulshotUsed, SysString_T.MagicAttack, SysString_T.MagicDefense, SysString_T.Evasion, SysString_T.Speed, SysString_T.CastingSpeed, SysString_T.SpiritshotUsed];
 const arrGrades = ["", "graded", "gradec", "gradeb", "gradea", "grades"];
 export type PetInventoryEntry_T = InventoryEntry_T & { isEquipped: boolean };
 type PetDrag_T = { item: InventoryEntry_T, isDragging: boolean };
@@ -68,7 +69,7 @@ export class NCPetWnd {
         this.element = layer.createWindow(172, 76, 256, 229);
         this.element.hidden = true;
         this.element.tabIndex = -1;
-        const title = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(494), false, () => this.setVisible(false));
+        const title = NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.PetInterface), false, () => this.setVisible(false));
         const frame = title.parentElement;
         const minimize = layer.button(frame, 216, 3, 15, 15, "L2UI_CH3.FrameCtrl.FrameMiniBtn", "L2UI_CH3.FrameCtrl.FrameMiniOnBtn", null, null, () => this.minimize());
 
@@ -84,15 +85,15 @@ export class NCPetWnd {
         layer.tile(this.element, 0, 115, 256, 23, 0, 0, 256, 23, `${TEX_BACK}2`);
         this.bars = [[35, 51], [35, 65], [35, 79], [35, 93], [156, 51]].map(([x, y], index) => layer.tile(this.element, x, y, 0, 12, 0, 0, 8, 12, index === 4 ? arrWeight[0] : arrBars[index]));
         this.values = this.createValues(this.element, 256, 115);
-        this.rename = layer.button(this.element, 167, 28, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(497), () => { if (this.onRename) this.onRename(); });
-        this.rename.setAttribute("aria-label", manager.getSysString(497));
+        this.rename = layer.button(this.element, 167, 28, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.RenamePet), () => { if (this.onRename) this.onRename(); });
+        this.rename.setAttribute("aria-label", manager.getSysString(SysString_T.RenamePet));
 
         for (let index = 0; index < 3; index++) {
             const pane = layer.createWindow(0, 138, 256, 91, this.element);
 
             layer.tile(pane, 0, 0, 256, 91, 0, 0, 256, 91, `${TEX_BACK}${31 + index}`);
             this.panes.push(pane);
-            this.tabs.push(layer.tab(this.element, 12 + index * 74, 115, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(491 + index), null, () => this.selectTab(index)));
+            this.tabs.push(layer.tab(this.element, 12 + index * 74, 115, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(SysString_T.Information + index), null, () => this.selectTab(index)));
         }
         this.stats = this.createValues(this.panes[0], 256, 91);
         this.actionGrid = layer.createWindow(18, 9, 219, 69, this.panes[1]);
@@ -105,9 +106,9 @@ export class NCPetWnd {
         this.folded.hidden = true;
         this.folded.tabIndex = -1;
         this.folded.classList.add("ndom-opaque");
-        this.folded.setAttribute("aria-label", manager.getSysString(506));
+        this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.Pets));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
-        const captionText = manager.getSysString(506), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
+        const captionText = manager.getSysString(SysString_T.Pets), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
         this.caption.hidden = true;
@@ -258,7 +259,7 @@ export class NCPetWnd {
             this.layer.place(bar, index === 4 ? 156 : 35, [51, 65, 79, 93, 51][index], w, h);
             this.layer.setTile(bar, w, h, 0, 0, sourceWidth, h, index === 4 ? arrWeight[weightIndex] : arrBars[index]);
         });
-        this.drawText(panel, 15, 35, this.layer.getManager().getSysString(88), 0xffa3a3a3);
+        this.drawText(panel, 15, 35, this.layer.getManager().getSysString(SysString_T.Level), 0xffa3a3a3);
         this.drawText(panel, 33, 35, `${info.level} ${info.name || "(null)"}`, 0xffb09b79);
         for (const [y, current, maximum] of [[53, info.curHp, info.maxHp], [67, info.curMp, info.maxMp]]) {
             this.drawText(panel, 67, y, String(current), 0xffdcdcdc, "right", true);

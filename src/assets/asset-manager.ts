@@ -161,7 +161,7 @@ function setPawnComponents(renderManager: RenderManager, library: DecodeLibrary,
 }
 
 function mergePawnLibrary(target: DecodeLibrary, source: DecodeLibrary): void {
-    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         for (const [id, value] of Object.entries(source[key]))
             if (!(id in target[key])) (target[key] as any)[id] = value;
 
@@ -196,7 +196,7 @@ async function loadCachedLibrary(cache: Map<string, CachedLibrary_T>, key: strin
 function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
     const library = Object.assign(Object.create(Object.getPrototypeOf(source)), source, { sourceLibrary: source, npcSkillAttacks: source.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })), soundBlobCache: new Map() });
 
-    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
+    for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         library[key] = Object.assign({}, source[key]);
 
     for (const [id, value] of Object.entries(source.materials)) {
@@ -1120,6 +1120,10 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected setSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): void {
         sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
         sector.traverse((object: any) => {
+            if (object.isTerrain) object.terrainInfoActor = sector.getTerrainInfoActor(object.terrainInfoUuid);
+            if (object.isTerrainBatch)
+                for (const terrain of object.sectors) terrain.terrainInfoActor = sector.getTerrainInfoActor(terrain.terrainInfoUuid);
+
             if (!object.isVolume && !object.isStaticMeshActor) return;
 
             object.setScriptRuntime(sector.scriptVM, classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));

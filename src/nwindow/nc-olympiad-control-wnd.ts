@@ -1,5 +1,6 @@
 import NDomLayer from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.Olympiad.olympiad_back";
 const TEX_BUTTON = SKIN_SLOTS.button;
@@ -29,8 +30,8 @@ export class NCOlympiadControlWnd {
             event.preventDefault();
             layer.dragWindow(this.element, event);
         });
-        layer.button(this.element, 19, 5, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(611), () => { if (this.onStopObserving) this.onStopObserving(); });
-        layer.button(this.element, 19, 29, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(1252), () => { if (this.onOtherGame) this.onOtherGame(); });
+        layer.button(this.element, 19, 5, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.Return), () => { if (this.onStopObserving) this.onStopObserving(); });
+        layer.button(this.element, 19, 29, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, layer.getManager().getSysString(SysString_T.MoveToArena), () => { if (this.onOtherGame) this.onOtherGame(); });
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 38), 0); }

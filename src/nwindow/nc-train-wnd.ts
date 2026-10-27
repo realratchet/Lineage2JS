@@ -4,6 +4,7 @@ import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
 import { FontType_T } from "./nwindow-canvas";
 import type { EnchantSkill_T, EnchantSkillInfo_T, AquireSkillEntry_T, AquireSkillInfo_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEX_LIST = "L2UI_CH3.SkillTrainWnd.SkillTrain1";
 const TEX_AQUIRE_INFO = "L2UI_CH3.SkillTrainWnd.SkillTrain2";
@@ -49,12 +50,12 @@ export class NCTrainWnd {
 
         this.element = layer.createWindow(0, 0, 256, 401, parent);
         this.element.hidden = true;
-        this.element.setAttribute("aria-label", manager.getSysString(477));
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(477), false, () => this.setVisible(false));
+        this.element.setAttribute("aria-label", manager.getSysString(SysString_T.SkillTrainer));
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.SkillTrainer), false, () => this.setVisible(false));
         this.listView = layer.createWindow(0, 20, 256, 381, this.element);
         layer.tile(this.listView, 0, 0, 256, 381, 0, 0, 256, 381, TEX_LIST);
-        layer.text(this.listView, manager.getSysString(364), 0xffdcdcdc, FontType_T.SMALL, 11, 12);
-        layer.text(this.listView, manager.getSysString(92), 0xffdcdcdc, FontType_T.SMALL, 130, 326);
+        layer.text(this.listView, manager.getSysString(SysString_T.SkillList), 0xffdcdcdc, FontType_T.SMALL, 11, 12);
+        layer.text(this.listView, manager.getSysString(SysString_T.SP), 0xffdcdcdc, FontType_T.SMALL, 130, 326);
         this.listSp = layer.text(this.listView, "", 0xffdcdcdc, FontType_T.SMALL, 224, 326);
         this.list = layer.scrollPane(this.listView, 20, 27, 230, 274, 40);
         this.list.addEventListener("mousedown", event => {
@@ -81,21 +82,21 @@ export class NCTrainWnd {
         this.infoView = layer.createWindow(0, 20, 256, 381, this.element);
         this.infoView.hidden = true;
         this.infoBack = layer.tile(this.infoView, 0, 0, 256, 381, 0, 0, 256, 381, TEX_INFO);
-        layer.text(this.infoView, manager.getSysString(366), 0xffdcdcdc, FontType_T.SMALL, 11, 12);
-        this.learningHeading = layer.text(this.infoView, manager.getSysString(367), 0xffdcdcdc, FontType_T.SMALL, 11, 155);
+        layer.text(this.infoView, manager.getSysString(SysString_T.SkillExplanation), 0xffdcdcdc, FontType_T.SMALL, 11, 12);
+        this.learningHeading = layer.text(this.infoView, manager.getSysString(SysString_T.LearningCondition), 0xffdcdcdc, FontType_T.SMALL, 11, 155);
         this.details = layer.createWindow(0, 0, 256, 349, this.infoView);
         this.infoExp = layer.text(this.infoView, "", 0xffdcdcdc, FontType_T.SMALL, 224, 306);
         this.infoSp = layer.text(this.infoView, "", 0xffdcdcdc, FontType_T.SMALL, 224, 326);
-        this.infoSpLabel = layer.text(this.infoView, manager.getSysString(92), 0xffdcdcdc, FontType_T.SMALL, 130, 326);
+        this.infoSpLabel = layer.text(this.infoView, manager.getSysString(SysString_T.SP), 0xffdcdcdc, FontType_T.SMALL, 130, 326);
         this.infoSpLabel.hidden = true;
-        layer.button(this.infoView, 51, 352, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(368), () => {
+        layer.button(this.infoView, 51, 352, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Learn), () => {
             if (!this.info) return;
 
             if (this.isEnchantInfo) {
                 if (this.onEnchant) this.onEnchant(this.info.id, this.info.level);
             } else if (this.onAquire) this.onAquire(this.info.id, this.info.level, (this.info as AquireSkillInfo_T).mode);
         });
-        layer.button(this.infoView, 131, 352, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(369), () => this.showList());
+        layer.button(this.infoView, 131, 352, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.SkillListButton), () => this.showList());
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
@@ -199,12 +200,12 @@ export class NCTrainWnd {
             layer.text(element, skill?.name || (this.isEnchantList ? strings.skillNames[row.id] : "") || "", 0xffdcdcdc, FontType_T.SMALL, 34, 3);
             if (this.isEnchantList) layer.text(element, skill?.enchantName || "", 0xffb09b79, FontType_T.SMALL, 34, 19);
             else {
-                const levelLabel = layer.getManager().getSysString(88);
-                const level = row.nextLevel > 0 ? String(row.nextLevel) : layer.getManager().getSysString(371);
+                const levelLabel = layer.getManager().getSysString(SysString_T.Level);
+                const level = row.nextLevel > 0 ? String(row.nextLevel) : layer.getManager().getSysString(SysString_T.UnacquiredState);
 
                 layer.text(element, levelLabel, 0xffa3a3a3, FontType_T.SMALL, 34, 19);
                 layer.text(element, level, 0xffb09b79, FontType_T.SMALL, 36 + layer.measureText(levelLabel), 19);
-                this.drawCost(element, 365, (row as AquireSkillEntry_T).spCost, 76, 19);
+                this.drawCost(element, SysString_T.RequiredSP, (row as AquireSkillEntry_T).spCost, 76, 19);
             }
         });
     }
@@ -222,24 +223,24 @@ export class NCTrainWnd {
         layer.text(this.details, skill?.name || (this.isEnchantInfo ? strings.skillNames[info.id] : "") || "", 0xffdcdcdc, FontType_T.SMALL, 51, 32);
         if (this.isEnchantInfo) {
             const enchantInfo = info as EnchantSkillInfo_T;
-            const rateLabel = manager.getSysString(642);
+            const rateLabel = manager.getSysString(SysString_T.SuccessRate);
 
             layer.text(this.details, skill?.enchantName || "", 0xffb09b79, FontType_T.SMALL, 51, 48);
             layer.text(this.details, rateLabel, 0xffa3a3a3, FontType_T.SMALL, 13, 68);
             layer.text(this.details, `${enchantInfo.rate}%`, 0xffb09b79, FontType_T.SMALL, 18 + layer.measureText(rateLabel), 68);
             this.drawWrapped(skill?.enchantDescription || "", 13, 91, 230, 0xffb2becf);
-            this.drawCost(this.details, 1219, enchantInfo.expCost, 13, 175);
-            this.drawCost(this.details, 365, info.spCost, 13, 191);
+            this.drawCost(this.details, SysString_T.RequiredEXP, enchantInfo.expCost, 13, 175);
+            this.drawCost(this.details, SysString_T.RequiredSP, info.spCost, 13, 191);
         } else {
-            const label = manager.getSysString(88), level = String(info.level), x = 53 + layer.measureText(label);
+            const label = manager.getSysString(SysString_T.Level), level = String(info.level), x = 53 + layer.measureText(label);
 
             layer.text(this.details, label, 0xffa3a3a3, FontType_T.SMALL, 51, 48);
             layer.text(this.details, level, 0xffb09b79, FontType_T.SMALL, x, 48);
             layer.text(this.details, skill ? manager.getSysString(skill.type) : "", 0xffb09b79, FontType_T.SMALL, x + layer.measureText(level) + 10, 48);
-            this.drawCost(this.details, 320, skill ? skill.mpConsume : 0, 13, 68);
-            if (skill && skill.hpConsume > 0) this.drawCost(this.details, 321, skill.hpConsume, 13, 80);
+            this.drawCost(this.details, SysString_T.MPCost, skill ? skill.mpConsume : 0, 13, 68);
+            if (skill && skill.hpConsume > 0) this.drawCost(this.details, SysString_T.Range, skill.hpConsume, 13, 80);
             this.drawWrapped(skill?.description || "", 13, 102, 230, 0xffb2becf);
-            this.drawCost(this.details, 365, info.spCost, 13, 220);
+            this.drawCost(this.details, SysString_T.RequiredSP, info.spCost, 13, 220);
         }
         this.getRequirements().forEach((row, index) => {
             const y = (this.isEnchantInfo ? 213 : 242) + index * 34, requested = strings.itemIcons[row.itemId], texture = requested && layer.hasTexture(requested) ? requested : TEX_DEFAULT_ICON;

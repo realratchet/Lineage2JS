@@ -1,9 +1,10 @@
 import type NDomLayer from "./ndom";
+import SysString_T from "./sys-string";
 
 const arrTextures = ["L2UI_CH3.MenuIcon.MenuButton1", "L2UI_CH3.MenuIcon.MenuButton2", "L2UI_CH3.MenuIcon.MenuButton3", "L2UI_CH3.MenuIcon.MenuButton4"];
 const arrBack = ["L2UI_CH3.SmallWnd.Smallwindow_back1", "L2UI_CH3.SmallWnd.Smallwindow_back2", "L2UI_CH3.SmallWnd.Smallwindow_back3"];
 const arrGrip = ["L2UI_CH3.FrameCtrl.smallbar1", "L2UI_CH3.FrameCtrl.smallbar2", "L2UI_CH3.FrameCtrl.smallbar3"];
-const arrLabels = [434, 195, 925, 193];
+const arrLabels = [SysString_T.CharacterStatusAltI, SysString_T.InventoryAltV, SysString_T.MapAltM, SysString_T.SystemAltX];
 export type MenuButton_T = "characterStatus" | "inventory" | "map" | "system";
 const arrButtons: MenuButton_T[] = ["characterStatus", "inventory", "map", "system"];
 

@@ -4,6 +4,8 @@ import { FontType_T } from "./nwindow-canvas";
 import type { RecipeInfo_T } from "../assets/decode-worker/decode-protocol";
 import type { InventoryItem_T, RecipeItemMakeInfo_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.RecipeWnd.Recipe4_Back";
 const TEX_MP = "L2UI_CH3.PlayerStatusWnd.ps_mpbar";
@@ -50,14 +52,14 @@ export class NCRecipeManufactureWnd {
         this.element.tabIndex = -1;
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
-        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(663), false, () => this.setVisible(false));
-        this.element.setAttribute("aria-label", manager.getSysString(663));
+        NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.ItemCreation), false, () => this.setVisible(false));
+        this.element.setAttribute("aria-label", manager.getSysString(SysString_T.ItemCreation));
         this.header = layer.createWindow(0, 20, 256, 90, this.element);
-        layer.text(this.element, manager.getSysString(742), 0xffdcdcdc, FontType_T.SMALL, 11, 124);
-        layer.text(this.element, manager.getSysString(743), 0xffdcdcdc, FontType_T.SMALL, 11, 290);
-        layer.text(this.element, manager.getSysString(644), 0xffdcdcdc, FontType_T.SMALL, 18, 261);
+        layer.text(this.element, manager.getSysString(SysString_T.IngredientS), 0xffdcdcdc, FontType_T.SMALL, 11, 124);
+        layer.text(this.element, manager.getSysString(SysString_T.ResultS), 0xffdcdcdc, FontType_T.SMALL, 11, 290);
+        layer.text(this.element, manager.getSysString(SysString_T.CreatorMP), 0xffdcdcdc, FontType_T.SMALL, 18, 261);
         this.mp = layer.tile(this.element, 75, 261, 165, 12, 0, 0, 8, 12, TEX_MP);
-        const countLabel = manager.getSysString(648), separatorX = 14 + layer.measureText(countLabel);
+        const countLabel = manager.getSysString(SysString_T.NumberOfRetainedItems), separatorX = 14 + layer.measureText(countLabel);
 
         layer.text(this.element, countLabel, 0xffa3a3a3, FontType_T.SMALL, 14, 313);
         layer.text(this.element, " : ", 0xffdcdcdc, FontType_T.SMALL, separatorX, 313);
@@ -114,14 +116,14 @@ export class NCRecipeManufactureWnd {
 
         treeButton.addEventListener("mouseenter", () => layer.setTile(outline, 36, 36, 0, 0, 34, 34, TEX_OUTLINE_DOWN));
         treeButton.addEventListener("mouseleave", () => layer.setTile(outline, 36, 36, 0, 0, 34, 34, TEX_OUTLINE));
-        layer.tooltip(this.element, treeButton, manager.getSysString(662));
-        layer.button(this.element, 11, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(645), () => { if (this.onCreate) this.onCreate(this.recipe.id); });
-        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(543), () => {
+        layer.tooltip(this.element, treeButton, manager.getSysString(SysString_T.RecipeInformation));
+        layer.button(this.element, 11, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.CreateItem), () => { if (this.onCreate) this.onCreate(this.recipe.id); });
+        layer.button(this.element, 91, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Back), () => {
             this.setVisible(false);
             if (this.onBack) this.onBack(this.isDwarven);
             manager.playWindowCloseSound();
         });
-        layer.button(this.element, 171, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(646), () => this.close());
+        layer.button(this.element, 171, 372, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Close), () => this.close());
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 558, Math.trunc(height * 0.5 - 252)); }
@@ -165,7 +167,7 @@ export class NCRecipeManufactureWnd {
             this.layer.setTile(this.mp, width, 12, 0, 0, 8, 12, TEX_MP);
         }
         if (state.status === 0 || state.status === 1) {
-            const text = manager.getSystemMessage(state.status === 0 ? 960 : 959).replace(/\$[sc](\d)/g, (match, index) => [strings.itemNames[recipe.productId], state.status === 0 ? "0" : String(recipe.count)][Number(index) - 1] ?? match);
+            const text = manager.getSystemMessage(state.status === 0 ? SystemMessage_T.ManufacturingFailure : SystemMessage_T.ManufacturingSuccess).replace(/\$[sc](\d)/g, (match, index) => [strings.itemNames[recipe.productId], state.status === 0 ? "0" : String(recipe.count)][Number(index) - 1] ?? match);
             const lines = manager.canvas.wrapText(text.replace(/\\n/g, "\n"), 226);
 
             lines.forEach((line, index) => this.layer.text(this.result, line, 0xffb2becf, FontType_T.SMALL, 0, index * manager.canvas.getLineHeight(FontType_T.SMALL)));
@@ -182,7 +184,7 @@ export class NCRecipeManufactureWnd {
 
         this.layer.text(this.header, name, 0xffdcdcdc, FontType_T.SMALL, 58, 28);
         if (gradeSymbol) this.layer.tile(this.header, 60 + this.layer.measureText(name), 28, 12, 12, 0, 0, 12, 12, strings.symbols[gradeSymbol]);
-        [[320, recipe.mpCost], [642, `${recipe.successRate}%`], [647, recipe.count]].forEach(([id, value], index) => {
+        [[SysString_T.MPCost, recipe.mpCost], [SysString_T.SuccessRate, `${recipe.successRate}%`], [SysString_T.NumberOfResultingItems, recipe.count]].forEach(([id, value], index) => {
             const label = manager.getSysString(Number(id)), y = 44 + index * 16, x = 58 + this.layer.measureText(label);
 
             this.layer.text(this.header, label, 0xffa3a3a3, FontType_T.SMALL, 58, y);

@@ -1,4 +1,5 @@
-import { selectAssetFiles, setServedAssets, type AssetFiles_T } from "./assets/asset-source";
+import fetchAsset, { selectAssetFiles, setServedAssets, type AssetFiles_T } from "./assets/asset-source";
+import decodeIcon from "./assets/decoders/icon-decoder";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
 
 function openHandleStore(mode: IDBTransactionMode) {
@@ -36,7 +37,7 @@ async function selectDirectory(handle: any) {
     await awaitRequest((await openHandleStore("readwrite")).put(handle, "directory"));
 }
 
-export async function pickAssetSource(): Promise<void> {
+async function selectAssetSource(): Promise<void> {
     const servedResponse = await fetch("served-assets.json", { cache: "no-store" });
 
     if (servedResponse.ok) setServedAssets(await servedResponse.json());
@@ -95,6 +96,20 @@ export async function pickAssetSource(): Promise<void> {
 
     viewport.classList.remove("asset-source");
     viewport.innerHTML = "";
+}
+
+export async function pickAssetSource(): Promise<void> {
+    await selectAssetSource();
+
+    const response = await fetchAsset("assets/system/Window.dll");
+
+    if (!response.ok) throw new Error(`Window.dll: ${response.statusText}`);
+
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const url = link.href;
+
+    link.href = URL.createObjectURL(new Blob([decodeIcon(await response.arrayBuffer(), 128)], { type: "image/x-icon" }));
+    if (url.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
 export default pickAssetSource;

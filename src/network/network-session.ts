@@ -384,7 +384,7 @@ export class NetworkSession {
         if (!this.network.actors.inWorld || this.game.isRecording()) return;
         const render = this.network.getParent().getComponent("render"), properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
         const file = new L2ReplayFile(), direction = render.camera.getWorldDirection(new Vector3());
-        const time = (render.environment.getTimeSeconds() % 86400 + 86400) % 86400;
+        const time = (render.environment.getTimeSeconds() % (24 * 60 * 60) + (24 * 60 * 60)) % (24 * 60 * 60);
         const zoom = properties.get("CurZoomingDist") as number;
         const fixedCamera = properties.get("CurFixedDefaultCameraNo") as number;
 

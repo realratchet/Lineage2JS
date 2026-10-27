@@ -2,6 +2,7 @@ import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
 import type { UserInfo_T, ClanInfo_T, HennaStatus_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.PlayerStatusWnd.myinfo_back";
 const TEX_HP = "L2UI_CH3.PlayerStatusWnd.ps_hpbar";
@@ -12,7 +13,7 @@ const arrWeight = [1, 2, 3, 4, 5].map(index => `L2UI_CH3.PlayerStatusWnd.ps_weig
 const TEX_HERO = "L2UI_CH3.PlayerStatusWnd.myinfo_heroicon";
 const TEX_NOBLE = "L2UI_CH3.PlayerStatusWnd.myinfo_nobleicon";
 const VALUE_COLOR = 0xffb09b79;
-const arrLabels = [[430, 15, 25], [88, 15, 46], [93, 22, 110], [94, 16, 132], [95, 16, 147], [96, 16, 162], [113, 16, 177], [111, 16, 192], [103, 22, 214], [98, 137, 132], [99, 137, 148], [97, 137, 163], [432, 137, 178], [112, 137, 193], [104, 16, 236], [105, 96, 236], [106, 177, 236], [107, 16, 252], [108, 96, 252], [109, 177, 252], [100, 22, 273], [101, 16, 294], [102, 137, 294], [709, 16, 310], [710, 137, 310]];
+const arrLabels = [[SysString_T.ClanNameLabel, 15, 25], [SysString_T.Level, 15, 46], [SysString_T.Combat, 22, 110], [SysString_T.PhysicalAttack, 16, 132], [SysString_T.PhysicalDefense, 16, 147], [SysString_T.Accuracy, 16, 162], [SysString_T.Critical, 16, 177], [SysString_T.AttackSpeed, 16, 192], [SysString_T.BasicStats, 22, 214], [SysString_T.MagicAttack, 137, 132], [SysString_T.MagicDefense, 137, 148], [SysString_T.Evasion, 137, 163], [SysString_T.Speed, 137, 178], [SysString_T.CastingSpeed, 137, 193], [SysString_T.Strength, 16, 236], [SysString_T.Dexterity, 96, 236], [SysString_T.Constitution, 177, 236], [SysString_T.Intelligence, 16, 252], [SysString_T.Wit, 96, 252], [SysString_T.Mentality, 177, 252], [SysString_T.SocialStats, 22, 273], [SysString_T.Karma, 16, 294], [SysString_T.PvPPK, 137, 294], [SysString_T.EvalScore, 16, 310], [SysString_T.RecRemaining, 137, 310]];
 
 export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (textures).
     public static getTextures() { return [TEX_BACK, TEX_HP, TEX_MP, TEX_CP, TEX_EXP, TEX_HERO, TEX_NOBLE, ...arrWeight, "L2UI.NWindow.Number"]; }
@@ -27,7 +28,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement) {
         this.element = layer.createWindow(0, 66, 256, 335, parent);
         layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, TEX_BACK);
-        for (const [id, x, y] of arrLabels) layer.text(this.element, layer.getManager().getSysString(id), [93, 103, 100].includes(id) ? 0xffdcdcdc : 0xffa3a3a3, FontType_T.SMALL, x, y);
+        for (const [id, x, y] of arrLabels) layer.text(this.element, layer.getManager().getSysString(id), [SysString_T.Combat, SysString_T.BasicStats, SysString_T.SocialStats].includes(id) ? 0xffdcdcdc : 0xffa3a3a3, FontType_T.SMALL, x, y);
 
         this.bars = [[35, 59, TEX_HP], [35, 73, TEX_MP], [156, 59, TEX_CP], [35, 87, TEX_EXP], [156, 73, arrWeight[0]]].map(([x, y, texture]) => layer.tile(this.element, x as number, y as number, 85, 12, 0, 0, 8, 12, texture as string));
         this.rank = layer.tile(this.element, 192, 40, 13, 15, 0, 0, 13, 15, TEX_HERO);
@@ -106,7 +107,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
         if (title) this.drawText(15, 9, title, 0xffa2f9ec);
         this.drawText(title ? layer.measureText(title) + 21 : 15, 9, name, (0xffff0000 | (255 - karmaColor) << 8 | (255 - karmaColor)) >>> 0);
-        this.drawText(layer.measureText(layer.getManager().getSysString(430)) + 20, 25, this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(431), 0xffdcdcdc);
+        this.drawText(layer.measureText(layer.getManager().getSysString(SysString_T.ClanNameLabel)) + 20, 25, this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(SysString_T.NoClan), 0xffdcdcdc);
         this.drawText(35, 46, `${info.level} ${layer.getManager().getClassName(info.classId)}`);
 
         [info.pAtk, info.pDef, info.accuracy, info.critical, info.atkSpd].forEach((value, index) => this.drawText(114, 132 + index * 15, String(value), VALUE_COLOR, "right"));

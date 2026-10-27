@@ -2,12 +2,13 @@ import type { default as NDomLayer, NDomButton_T, NDomScrollPane_T } from "./ndo
 import NCListCtrl, { getClassIcon, paintListColumn, paintListSelection, createClassTooltip } from "./nc-list-ctrl";
 import type { ClanInfo_T, ClanMember_T, UserInfo_T } from "../network/game-packets";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
+import SysString_T from "./sys-string";
 
 const TEX_PATH = "L2UI_CH3.BloodHoodWnd.";
 const arrActions = ["invite", "title", "deleteTitle", "dismiss", "privileges", "authorize", "declareWar", "endWar", "leave", "setCrest", "deleteCrest", "penalty", "setInsignia", "deleteInsignia", "community"];
-const arrLabels = [330, 331, 842, 338, 666, 667, 1205, 1206, 337, 332, 843, 1207, 1208, 1209, 387];
+const arrLabels = [SysString_T.InviteToClan, SysString_T.SetTitle, SysString_T.DeleteTitle, SysString_T.DismissClan, SysString_T.ClanPrivileges, SysString_T.Authorize, SysString_T.DeclareWar, SysString_T.EndWar, SysString_T.Leave, SysString_T.SetCrest, SysString_T.DeleteCrest, SysString_T.Penalty, SysString_T.SetInsignia, SysString_T.DeleteInsignia, SysString_T.Community];
 const arrColumns = [124, 32, 32, 52];
-const arrHeaderLabels = [50, 88, 391, 346];
+const arrHeaderLabels = [SysString_T.Name, SysString_T.Level, SysString_T.ClassAbbreviation, SysString_T.ClanStatus];
 
 type ClanRow_T = ClanMember_T & { dataObjectId: number, dataClassId: number, tooltipClassId: number };
 
@@ -276,14 +277,14 @@ export class NCClanWnd {
         const layer = this.layer, strings = this.strings.sysStrings, clan = this.clan, parent = this.header;
 
         parent.replaceChildren();
-        layer.text(parent, clan && clan.name ? clan.name : strings[431], 0xffb09b79, undefined, 19, 10);
-        layer.text(parent, strings[342], 0xffa3a3a3, undefined, 19, 26);
+        layer.text(parent, clan && clan.name ? clan.name : strings[SysString_T.NoClan], 0xffb09b79, undefined, 19, 10);
+        layer.text(parent, strings[SysString_T.ClanLeader], 0xffa3a3a3, undefined, 19, 26);
         layer.text(parent, clan ? clan.leaderName : "", 0xffb09b79, undefined, 61, 26);
-        layer.text(parent, strings[88], 0xffa3a3a3, undefined, 192, 26);
-        layer.text(parent, strings[343], 0xffa3a3a3, undefined, 19, 42);
+        layer.text(parent, strings[SysString_T.Level], 0xffa3a3a3, undefined, 192, 26);
+        layer.text(parent, strings[SysString_T.Base], 0xffa3a3a3, undefined, 19, 42);
         if (!clan || !clan.name) return;
 
-        layer.text(parent, strings[clan.dissolving === 3 ? 341 : clan.isAtWar ? 340 : 894], 0xffb09b79, undefined, 192, 10);
+        layer.text(parent, strings[clan.dissolving === 3 ? SysString_T.Dispersing : clan.isAtWar ? SysString_T.InWar : SysString_T.AtPeace], 0xffb09b79, undefined, 192, 10);
         layer.text(parent, String(clan.level), 0xffb09b79, undefined, 208, 26);
         if (clan.hasHideout > 0) {
             const name = this.strings.residences[clan.hasHideout];
@@ -295,7 +296,7 @@ export class NCClanWnd {
                 layer.text(parent, ",", 0xffb09b79, undefined, 61 + width, 42);
                 layer.text(parent, this.strings.residences[clan.hasCastle], 0xffb09b79, undefined, 65 + width, 42);
             }
-        } else layer.text(parent, clan.hasCastle > 0 ? this.strings.residences[clan.hasCastle] : strings[27], 0xffb09b79, undefined, 61, 42);
+        } else layer.text(parent, clan.hasCastle > 0 ? this.strings.residences[clan.hasCastle] : strings[SysString_T.None], 0xffb09b79, undefined, 61, 42);
     }
 
     protected updateEnabled() {

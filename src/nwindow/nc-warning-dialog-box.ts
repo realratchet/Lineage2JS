@@ -1,5 +1,6 @@
 import NCDialogBox, { DialogType_T } from "./nc-dialog-box";
 import type NDomLayer from "./ndom";
+import SysString_T from "./sys-string";
 
 export class NCWarningDialogBox extends NCDialogBox { // CWarningDialogBox 0x101a12e0: Show 0x100083f0, Hide 0x10008480, OK 0x10009050.
     public onExit: () => void = null;
@@ -9,7 +10,7 @@ export class NCWarningDialogBox extends NCDialogBox { // CWarningDialogBox 0x101
         super(layer);
 
         this.type = DialogType_T.OK;
-        this.okButton.setLabel(layer.getManager().getSysString(140));
+        this.okButton.setLabel(layer.getManager().getSysString(SysString_T.OK));
         layer.place(this.okButton, 90, 75);
         this.cancelButton.hidden = true;
     }

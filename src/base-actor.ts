@@ -2,7 +2,7 @@ import { ENetMode_T } from "@l2js/engine/un-level-info";
 import { AnimationAction, AnimationClip, Mesh, Object3D, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
 import { EDrawType_T, EPhysics_T } from "./assets/unreal/un-aactor";
-import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "./objects/objects";
+import { getScriptActor, type ActorCollisionProfile_T, type CollisionPrimitive_T, type ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T } from "./physics/collision-world";
 import UnScriptVM, { unregisterLevelActor, updateLevelActor, ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
@@ -100,7 +100,7 @@ export class BaseActor extends GameObject implements ICollidable {
         switch (name) {
             case "bpendingdelete": return this.isPendingDelete;
             case "bdeleteme": return this.isDeleted;
-            case "base": return (this.scriptBase || this.getBaseActor()) as unknown as ScriptValue_T;
+            case "base": return (this.scriptBase || getScriptActor(this.getBaseActor())) as ScriptValue_T;
             case "location":
                 this.getWorldPosition(tmpScriptLocation);
                 tmpScriptLocation.z += this.movementComponent.getCollisionHeight();

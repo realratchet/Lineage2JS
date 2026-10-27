@@ -1,10 +1,11 @@
 import NDomLayer from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCHtmlViewer from "./nc-html-viewer";
+import SysString_T from "./sys-string";
 
 const WIDTH = 310;
 const HEIGHT = 401;
-const TITLE_SYSSTRING = 448;
+const TITLE_SYSSTRING = SysString_T.Tutorial;
 const TEX_BACK_TOP = "l2ui_ch3.tutorialwnd.tutorial_back1";
 const TEX_BACK_MID = "l2ui_ch3.tutorialwnd.tutorial_back2";
 const TEX_BACK_BOTTOM = "l2ui_ch3.tutorialwnd.tutorial_back3";

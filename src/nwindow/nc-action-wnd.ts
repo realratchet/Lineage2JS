@@ -2,6 +2,7 @@ import NCTooltip from "./nc-tooltip";
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.ActionWnd.Action_Back";
 const TEX_OUTLINE = "L2UI_CH3.InventoryWnd.Inventory_OutLine";
@@ -20,7 +21,7 @@ export class NCActionWnd { // C4 NWindow RVA 0x506a0 (groups), 0x4d2a0 (labels).
     public constructor(protected readonly layer: NDomLayer, parent: HTMLElement) {
         this.element = layer.createWindow(0, 66, 256, 335, parent);
         layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, TEX_BACK);
-        [[129, 11, 25, 104], [130, 141, 155, 34], [204, 201, 215, 104]].forEach(([id, labelY, y, height]) => {
+        [[SysString_T.BasicActions, 11, 25, 104], [SysString_T.PartyActions, 141, 155, 34], [SysString_T.SocialActions, 201, 215, 104]].forEach(([id, labelY, y, height]) => {
             layer.text(this.element, layer.getManager().getSysString(id), 0xffdcdcdc, FontType_T.SMALL, 22, labelY);
             const list = layer.createWindow(18, y, 219, height, this.element);
 

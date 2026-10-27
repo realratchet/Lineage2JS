@@ -2,12 +2,13 @@ import NDomLayer from "./ndom";
 import NCHtmlViewer from "./nc-html-viewer";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TITLE_COLOR = 0xffc8d2dc;
 const WIDTH = 310;
 const HEIGHT = 401;
 const TITLE_HEIGHT = 20;
-const TITLE_SYSSTRING = 0x1bc;
+const TITLE_SYSSTRING = SysString_T.Chat;
 const TEX_BACK = "L2UI_ch3.NpcWnd.Npc1_back";
 const TEX_FRAME_LEFT = SKIN_SLOTS.frameLeft;
 const TEX_FRAME_MID = SKIN_SLOTS.frameMid;

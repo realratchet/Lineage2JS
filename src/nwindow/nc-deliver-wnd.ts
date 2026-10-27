@@ -1,6 +1,7 @@
 import NCShopWnd from "./nc-shop-wnd";
 import type NDomLayer from "./ndom";
 import type { PackageSendableList_T } from "../network/game-packets";
+import SysString_T from "./sys-string";
 
 export class NCDeliverWnd extends NCShopWnd {
     protected targetId = 0;
@@ -9,7 +10,7 @@ export class NCDeliverWnd extends NCShopWnd {
 
         this.isStore = true;
         this.element.tabIndex = -1;
-        const title = layer.getManager().getSysString(557);
+        const title = layer.getManager().getSysString(SysString_T.SendPackage);
 
         layer.renderText(this.caption, title, 0xffc8d2dc);
         this.element.setAttribute("aria-label", title);

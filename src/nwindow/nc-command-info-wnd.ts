@@ -4,6 +4,8 @@ import type { TooltipInfo_T } from "./nc-tooltip";
 import { FontType_T } from "./nwindow-canvas";
 import { Say2_T, type CommandChannelInfo_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 const TEX_BACK = "L2UI_CH3.PartyCommandWnd.Herochat_back";
 const TEX_TAB = "L2UI_CH3.PartyCommandWnd.herochat_tab2";
@@ -47,7 +49,7 @@ export class NCCommandInfoWnd {
         this.element = layer.createWindow(200, 200, 348, 187);
         this.element.hidden = true;
         this.element.setAttribute("role", "dialog");
-        this.element.setAttribute("aria-label", manager.getSysString(491));
+        this.element.setAttribute("aria-label", manager.getSysString(SysString_T.Information));
         layer.tile(this.element, 12, 0, 336, 187, 0, 0, 336, 187, TEX_BACK);
         const frame = layer.createWindow(0, 0, 12, 187, this.element);
 
@@ -65,14 +67,14 @@ export class NCCommandInfoWnd {
         this.channelView.hidden = true;
         this.header = layer.createWindow(0, 0, 336, 62, this.channelView);
         this.header.style.pointerEvents = "none";
-        this.table = new NCListCtrl(layer, this.channelView, 24, 25, 207, 101, [{ width: 160, label: 408, numeric: false }, { width: 47, label: 1036, numeric: true }], 17, 5);
-        this.updateButton = layer.button(this.channelView, 244, 62, 65, 20, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(938), () => this.update());
-        layer.button(this.channelView, 244, 86, 65, 20, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(681), () => {
+        this.table = new NCListCtrl(layer, this.channelView, 24, 25, 207, 101, [{ width: 160, label: SysString_T.PartyLeader, numeric: false }, { width: 47, label: SysString_T.PartySize, numeric: true }], 17, 5);
+        this.updateButton = layer.button(this.channelView, 244, 62, 65, 20, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Refresh), () => this.update());
+        layer.button(this.channelView, 244, 86, 65, 20, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.DismissChannelMember), () => {
             const row = this.table.getSelectedRow();
 
             if (row && this.onOust) this.onOust(row.cells[0]);
         });
-        layer.button(this.channelView, 244, 110, 65, 20, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(1268), () => { if (this.onLeave) this.onLeave(); });
+        layer.button(this.channelView, 244, 110, 65, 20, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Quit), () => { if (this.onLeave) this.onLeave(); });
         this.chat = layer.scrollPane(this.chatView, 6, 5, 327, 134, 15, false, 8);
         this.chat.content.setAttribute("role", "log");
         const setScroll = this.chat.setScroll;
@@ -97,7 +99,7 @@ export class NCCommandInfoWnd {
         });
         this.toggle.setAttribute("role", "checkbox");
         layer.tooltip(this.element, this.toggle, this.toggleTooltip);
-        [444, 491].forEach((id, index) => {
+        [SysString_T.Chat, SysString_T.Information].forEach((id, index) => {
             const texture = index === 0 ? TEX_TAB_SELECTED : TEX_TAB;
             const tab = layer.tab(this.element, 24 + index * 64, 141, 64, 23, texture, TEX_TAB_SELECTED, manager.getSysString(id), "", () => this.selectTab(index));
 
@@ -167,7 +169,7 @@ export class NCCommandInfoWnd {
     public submit() {
         const text = this.input.getValue();
 
-        if (text.length >= 255) this.appendChat(this.layer.getManager().getSystemMessage(971), 0xffdcdcdc);
+        if (text.length >= 255) this.appendChat(this.layer.getManager().getSystemMessage(SystemMessage_T.PetitionTooLong), 0xffdcdcdc);
         else if (this.onSay) this.onSay(text, this.isAllMembers ? Say2_T.PARTYROOM_COMMANDER : Say2_T.CHANNEL_ALL);
         this.input.setValue("");
     }
@@ -191,17 +193,17 @@ export class NCCommandInfoWnd {
         const texture = this.isAllMembers ? TEX_TOGGLE_SELECTED : TEX_TOGGLE;
 
         this.toggle.setTextures(texture, texture, texture);
-        this.toggleTooltip.title = this.layer.getManager().getSysString(this.isAllMembers ? 1227 : 1228);
+        this.toggleTooltip.title = this.layer.getManager().getSysString(this.isAllMembers ? SysString_T.AllMembers : SysString_T.LeaderChat);
         this.toggle.setAttribute("aria-label", this.toggleTooltip.title);
         this.toggle.setAttribute("aria-checked", String(this.isAllMembers));
     }
     protected paintHeader() {
         this.header.replaceChildren();
-        const layer = this.layer, manager = layer.getManager(), leader = manager.getSysString(1265);
+        const layer = this.layer, manager = layer.getManager(), leader = manager.getSysString(SysString_T.ChannelOwner);
 
         layer.text(this.header, leader, 0xffdcdcdc, FontType_T.SMALL, 22, 9);
         layer.text(this.header, this.info.leaderName, 0xffb09b79, FontType_T.SMALL, 27 + layer.measureText(leader), 9);
-        [[1266, 29, this.info.partyCount ?? this.info.parties.length], [1267, 44, this.info.memberCount]].forEach(([id, y, value]) => {
+        [[SysString_T.Parties, 29, this.info.partyCount ?? this.info.parties.length], [SysString_T.Members, 44, this.info.memberCount]].forEach(([id, y, value]) => {
             const label = manager.getSysString(id);
 
             layer.text(this.header, label, 0xffdcdcdc, FontType_T.SMALL, 243, y);

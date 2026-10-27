@@ -2,6 +2,7 @@ import type NWindowCanvas from "./nwindow-canvas";
 import type NDomLayer from "./ndom";
 import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 const TEXT_COLOR = 0xffdcdcdc;
 export const TEX_TOOLTIP_SLICES = [SKIN_SLOTS.tooltip1, SKIN_SLOTS.tooltip2, SKIN_SLOTS.tooltip3, SKIN_SLOTS.tooltip4, SKIN_SLOTS.tooltip5, SKIN_SLOTS.tooltip6, SKIN_SLOTS.tooltip7, SKIN_SLOTS.tooltip8, SKIN_SLOTS.tooltip9];
@@ -18,12 +19,12 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
 
         if (info) {
             lines.push({ label: "", value: strings.sysStrings[info.type] });
-            if (info.hpConsume) lines.push({ label: strings.sysStrings[1195], value: String(info.hpConsume) });
-            if (info.mpConsume) lines.push({ label: strings.sysStrings[320], value: String(info.mpConsume) });
-            if (info.range >= 0) lines.push({ label: strings.sysStrings[321], value: String(info.range) });
+            if (info.hpConsume) lines.push({ label: strings.sysStrings[SysString_T.HPCost], value: String(info.hpConsume) });
+            if (info.mpConsume) lines.push({ label: strings.sysStrings[SysString_T.MPCost], value: String(info.mpConsume) });
+            if (info.range >= 0) lines.push({ label: strings.sysStrings[SysString_T.Range], value: String(info.range) });
         }
 
-        const name = info ? info.name : strings.skillNames[id], label = ` ${strings.sysStrings[88]} `;
+        const name = info ? info.name : strings.skillNames[id], label = ` ${strings.sysStrings[SysString_T.Level]} `;
 
         return { title: `${name}${label}${level}`, titleRuns: [{ text: name, color: TEXT_COLOR }, { text: label, color: 0xffa3a3a3 }, { text: String(level), color: 0xffb09b79 }], lines, description: info ? info.description : "", minimumWidth: 144 };
     }
@@ -35,7 +36,7 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
         info.description = "";
         info.minimumWidth = 0;
         if (skill && skill.mpConsume > 0) {
-            const text = ` (${strings.sysStrings[91]}:${skill.mpConsume})`;
+            const text = ` (${strings.sysStrings[SysString_T.MP]}:${skill.mpConsume})`;
 
             info.title += text;
             info.titleRuns.push({ text, color: TEXT_COLOR });
@@ -61,19 +62,19 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
             titleRuns.push({ text: addName, color: 0xffffd969, gap: 5 });
         }
         if (shownLevel > 0) {
-            const label = ` ${strings.sysStrings[88]} `;
+            const label = ` ${strings.sysStrings[SysString_T.Level]} `;
 
             title += `${label}${shownLevel}`;
             titleRuns.push({ text: label, color: 0xffa3a3a3 }, { text: String(shownLevel), color: 0xffb09b79 });
         }
         if (remaining >= 0) {
-            const seconds = remaining % 86400, hours = Math.trunc(seconds / 3600), minutes = Math.trunc(seconds % 3600 / 60);
-            const value = hours > 0 ? `${hours}${strings.sysStrings[1110]}` : minutes > 0 ? `${minutes}${strings.sysStrings[1111]}` : `${seconds % 60}초`;
+            const seconds = remaining % (24 * 60 * 60), hours = Math.trunc(seconds / 3600), minutes = Math.trunc(seconds % 3600 / 60);
+            const value = hours > 0 ? `${hours}${strings.sysStrings[SysString_T.Hours]}` : minutes > 0 ? `${minutes}${strings.sysStrings[SysString_T.Minutes]}` : `${seconds % 60}초`;
 
-            lines.push({ label: strings.sysStrings[1199], value });
+            lines.push({ label: strings.sysStrings[SysString_T.RemainingTime], value });
         }
 
-        const extentTitle = `${name}${addName ? ` ${addName}` : ""}${level > 0 ? ` ${strings.sysStrings[88]} ${level}` : ""}`;
+        const extentTitle = `${name}${addName ? ` ${addName}` : ""}${level > 0 ? ` ${strings.sysStrings[SysString_T.Level]} ${level}` : ""}`;
 
         return { title, extentTitle, titleRuns, lines, description: skill ? skill.description : "", minimumWidth: 144 };
     }

@@ -56,8 +56,8 @@ export class L2Dice extends GroundPickup {
             const pitch = Math.trunc(Math.atan2(-hit.normal.x, Math.hypot(hit.normal.z, hit.normal.y)) * 32768 / Math.PI);
             const yaw = Math.trunc(Math.atan2(hit.normal.y, hit.normal.z) * 32768 / Math.PI);
             const heading = this.origin ? Math.trunc(Math.atan2(this.landingPosition.y - this.origin.y, this.landingPosition.x - this.origin.x) * 32768 / Math.PI) + 32768 : 0;
-            const facePitch = this.number === 2 ? 16384 : this.number === 4 ? 49152 : this.number === 6 ? 32768 : 0;
-            const faceRoll = this.number === 3 ? 16384 : this.number === 5 ? 49152 : 0;
+            const facePitch = this.number === 2 ? 16384 : this.number === 4 ? 3 * 16384 : this.number === 6 ? 32768 : 0;
+            const faceRoll = this.number === 3 ? 16384 : this.number === 5 ? 3 * 16384 : 0;
 
             for (let j = 0; j < this.arrRotations.length; j++) {
                 const { current, target, rate, base } = this.arrRotations[j];

@@ -1,6 +1,7 @@
 import { FontType_T } from "./nwindow-canvas";
 import { NDOM_EDIT_TEXTURES, NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
+import SysString_T from "./sys-string";
 
 export type PawnCreateStep_T = "race" | "class" | "sex" | "appearance";
 export type PawnCreateSelection_T = { race: number, isMystic: boolean, sex: number, hairStyle: number, hairColor: number, face: number, step: PawnCreateStep_T };
@@ -31,13 +32,13 @@ const TEX_ZOOMIN_DOWN = "l2ui.LobbyWnd.zoomin_click";
 const TEX_ZOOMOUT = "l2ui.LobbyWnd.zoomout";
 const TEX_ZOOMOUT_DOWN = "l2ui.LobbyWnd.zoomout_click";
 
-const RACE_OPTIONS = [170, 171, 172, 173, 174]; // NCPawnSetupWnd init 0x100ce9c0 / sex pick 0x100ceff0: sysstring ids per selector.
-const CLASS_OPTIONS = [175, 176];
-const SEX_OPTIONS = [177, 178];
-const HAIR_STYLE_MALE = [179, 180, 181, 182, 186];
-const HAIR_STYLE_FEMALE = [179, 180, 181, 182, 186, 187, 803];
-const HAIR_COLOR_OPTIONS = [179, 180, 181, 182];
-const FACE_OPTIONS = [179, 180, 181];
+const RACE_OPTIONS = [SysString_T.Human, SysString_T.Elf, SysString_T.DarkElf, SysString_T.Orc, SysString_T.Dwarf]; // NCPawnSetupWnd init 0x100ce9c0 / sex pick 0x100ceff0: sysstring ids per selector.
+const CLASS_OPTIONS = [SysString_T.Fighter, SysString_T.Mystic];
+const SEX_OPTIONS = [SysString_T.Male, SysString_T.Female];
+const HAIR_STYLE_MALE = [SysString_T.TypeA, SysString_T.TypeB, SysString_T.TypeC, SysString_T.TypeD, SysString_T.TypeE];
+const HAIR_STYLE_FEMALE = [SysString_T.TypeA, SysString_T.TypeB, SysString_T.TypeC, SysString_T.TypeD, SysString_T.TypeE, SysString_T.TypeF, SysString_T.TypeG];
+const HAIR_COLOR_OPTIONS = [SysString_T.TypeA, SysString_T.TypeB, SysString_T.TypeC, SysString_T.TypeD];
+const FACE_OPTIONS = [SysString_T.TypeA, SysString_T.TypeB, SysString_T.TypeC];
 
 const BASE_CLASS_IDS = [[0, 10], [18, 25], [31, 38], [44, 49], [53]]; // 0x100cc610: base class id per race, fighter / mystic.
 
@@ -122,7 +123,7 @@ export class NCPawnSetupWnd { // NCPawnSetupWnd OnCreate 0x100cf680, OnPaint 0x1
         this.element.style.pointerEvents = "auto";
 
         layer.tile(this.element, 0, 0, 256, 205, 0, 0, 256, 205, TEX_SETUP_BACK);
-        [[872, 20], [164, 55], [165, 79], [166, 103], [167, 127], [168, 151], [169, 175]].forEach(([id, y]) => layer.text(this.element, manager.getSysString(id), TEXT_COLOR, FontType_T.SMALL, 33, y));
+        [[SysString_T.CharacterNameLabel, 20], [SysString_T.Race, 55], [SysString_T.Class, 79], [SysString_T.Gender, 103], [SysString_T.Hairstyle, 127], [SysString_T.HairColor, 151], [SysString_T.Face, 175]].forEach(([id, y]) => layer.text(this.element, manager.getSysString(id), TEXT_COLOR, FontType_T.SMALL, 33, y));
 
         this.nameEdit = layer.edit(this.element, 66, 17, 128, 17);
         this.raceCtrl = new NCSelectCtrl(layer, this.element, 86, 52, 136, 17);
@@ -243,8 +244,8 @@ export class NCPawnCreateFunctionWnd { // NCPawnCreateFunctionWnd OnCreate 0x100
         this.element.style.pointerEvents = "auto";
 
         layer.tile(this.element, 0, 0, 120, 138, 0, 0, 120, 138, TEX_MENU_BACK);
-        layer.button(this.element, 13, 20, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(162), onCreate);
-        layer.button(this.element, 13, 45, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(161), onBack);
+        layer.button(this.element, 13, 20, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(SysString_T.CreateCharacter), onCreate);
+        layer.button(this.element, 13, 45, 96, 23, TEX_BIGBUTTON, TEX_BIGBUTTON_DOWN, null, manager.getSysString(SysString_T.Previous), onBack);
     }
 }
 

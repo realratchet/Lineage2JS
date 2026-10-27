@@ -1,4 +1,5 @@
 import NCHtmlViewer from "./nc-html-viewer";
+import SystemMessage_T from "./system-message";
 
 const arrBoardTokens = ["ROOT_BID", "THREAD_ORDER", "BID", "STEP", "PARENT_BID", "CHAR_ID", "CHAR_NAME", "ACCOUNT_ID", "ACCOUNT_NAME", "WORLD_ID", "WRITER", "TITLE", "CONTENT", "POST_DATE", "MODIFY_DATE", "READ_COUNT", "STATUS", "IP", "COMMENT", "THREAD"];
 
@@ -134,9 +135,9 @@ export class CBBSHtmlViewer extends NCHtmlViewer { // CBBSHtmlViewer 0x10190ee0,
         const value = variable.edit.getValue();
         let error = 0;
 
-        if (value && !variable.isMultiline && this.isInvalidVariableName && this.isInvalidVariableName(value)) error = 204;
-        else if (!value.length || value.length > 3000) error = variable.isMultiline ? 329 : 1207;
-        else if (/^ +$/.test(value)) error = 329;
+        if (value && !variable.isMultiline && this.isInvalidVariableName && this.isInvalidVariableName(value)) error = SystemMessage_T.InvalidName;
+        else if (!value.length || value.length > 3000) error = variable.isMultiline ? SystemMessage_T.CommunityTextTooLong : SystemMessage_T.EnterFieldValue;
+        else if (/^ +$/.test(value)) error = SystemMessage_T.CommunityTextTooLong;
         if (error) {
             if (this.onVariableError) this.onVariableError(error);
             return null;

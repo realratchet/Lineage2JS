@@ -2,6 +2,8 @@ import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl, { type ListRow_T } from "./nc-list-ctrl";
 import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import type { SiegeInfo_T, SiegeClan_T } from "../network/game-packets";
+import SystemMessage_T from "./system-message";
+import SysString_T from "./sys-string";
 
 type CrestGetter_T = (clanId: number, isAlly: boolean) => CanvasImageSource;
 
@@ -13,7 +15,7 @@ const TEX_TAB = "L2UI_ch3.SiegeWnd.siege_Tab3";
 const arrTabsSelected = ["L2UI_ch3.SiegeWnd.siege_Tab1", "L2UI_ch3.SiegeWnd.siege_Tab2", "L2UI_ch3.SiegeWnd.siege_Tab2"];
 const TEX_BUTTON = "L2UI_ch3.button.btn1_normal";
 const TEX_BUTTON_DOWN = "L2UI_ch3.button.btn1_normalon";
-const arrDefenderStatus = [0, 588, 568, 567, 579];
+const arrDefenderStatus = [0, SysString_T.Lord, SysString_T.Waiting, SysString_T.Approved, SysString_T.Refuse];
 const WIDTH = 256;
 const HEIGHT = 401;
 const PAGE_HEIGHT = 253;
@@ -40,7 +42,7 @@ function drawCrest(layer: NDomLayer, parent: HTMLElement, x: number, y: number, 
 function formatTime(manager: ReturnType<NDomLayer["getManager"]>, time: number) { // NWindow 0x10083a90: appConvertIntToTime into system message 713 with "%2d" fields
     const date = new Date(time * 1000), pad = (value: number) => String(value).padStart(2, " ");
 
-    return manager.getSystemMessage(713).replace(/\$s(\d)/g, (match, index) => [String(date.getFullYear()), pad(date.getMonth() + 1), pad(date.getDate()), pad(date.getHours()), pad(date.getMinutes())][Number(index) - 1] ?? match);
+    return manager.getSystemMessage(SystemMessage_T.SiegeDateFormat).replace(/\$s(\d)/g, (match, index) => [String(date.getFullYear()), pad(date.getMonth() + 1), pad(date.getDate()), pad(date.getHours()), pad(date.getMinutes())][Number(index) - 1] ?? match);
 }
 
 class SiegeListCtrl extends NCListCtrl { // vtable 0x101cc1f8, paint 0x1010a400
@@ -48,7 +50,7 @@ class SiegeListCtrl extends NCListCtrl { // vtable 0x101cc1f8, paint 0x1010a400
     public arrClans: SiegeClan_T[] = [];
 
     public constructor(layer: NDomLayer, parent: HTMLElement, protected readonly isDefender: boolean) {
-        super(layer, parent, 7, 18, 242, 200, [{ width: 130, label: 580, numeric: false }, { width: 112, label: isDefender ? 581 : 571, numeric: false }], 15, 12); // 0x1010a9c0
+        super(layer, parent, 7, 18, 242, 200, [{ width: 130, label: SysString_T.ClanName, numeric: false }, { width: 112, label: isDefender ? SysString_T.SiegeStatus : SysString_T.AllianceName, numeric: false }], 15, 12); // 0x1010a9c0
     }
 
     protected paintCell(cell: HTMLElement, row: ListRow_T, cellIndex: number) {
@@ -82,11 +84,11 @@ class NCSiegeDateInfoWnd { // NCSiegeDateInfoWnd: OnCreate 0x1010c160, paint 0x1
         const layer = this.layer, manager = layer.getManager();
 
         this.content.replaceChildren();
-        layer.text(this.content, manager.getSysString(582), 0xffdcdcdc, undefined, 10, 30);
+        layer.text(this.content, manager.getSysString(SysString_T.CurrentTime), 0xffdcdcdc, undefined, 10, 30);
         layer.text(this.content, formatTime(manager, serverTime), 0xffdcdcdc, undefined, 80, 30);
-        layer.text(this.content, manager.getSysString(583), 0xffdcdcdc, undefined, 10, 50);
+        layer.text(this.content, manager.getSysString(SysString_T.SiegeDate), 0xffdcdcdc, undefined, 10, 50);
         if (siegeTime > 0) layer.text(this.content, formatTime(manager, siegeTime), 0xffdcdcdc, undefined, 80, 50);
-        else if (siegeTime === 0 && !isOwner) layer.text(this.content, manager.getSysString(584), 0xffdcdcdc, undefined, 80, 50);
+        else if (siegeTime === 0 && !isOwner) layer.text(this.content, manager.getSysString(SysString_T.Undecided), 0xffdcdcdc, undefined, 80, 50);
         // TODO: owner siege-time choice control (80,60,126,15) has no Lisvus request to drive it.
     }
 }
@@ -113,7 +115,7 @@ class NCSiegePartInfoWnd { // NCSiegePartInfoWnd: OnCreate 0x1010c610, paint 0x1
         this.header = layer.createWindow(0, 0, WIDTH, 18, this.element);
         this.header.style.pointerEvents = "none";
         this.list = new SiegeListCtrl(layer, this.element, isDefender);
-        this.arrButtons = ([[158, 572, () => this.onParticipate && this.onParticipate()], [158, 573, () => this.onCancelApplication && this.onCancelApplication()], [80, 574, () => this.approve()], [158, 575, () => this.refuse()]] as [number, number, () => void][])
+        this.arrButtons = ([[158, SysString_T.Participate, () => this.onParticipate && this.onParticipate()], [158, SysString_T.CancelApplication, () => this.onCancelApplication && this.onCancelApplication()], [80, SysString_T.Approve, () => this.approve()], [158, SysString_T.CancelSiege, () => this.refuse()]] as [number, number, () => void][])
             .map(([x, label, onClick]) => layer.button(this.element, x, 224, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(label), onClick));
         this.reset();
     }
@@ -160,7 +162,7 @@ class NCSiegePartInfoWnd { // NCSiegePartInfoWnd: OnCreate 0x1010c610, paint 0x1
 
     protected paintHeader() {
         const manager = this.layer.getManager();
-        const text = this.isDefender ? `${manager.getSysString(577)}/${manager.getSysString(578)} : ${this.approvedCount}/${this.waitingCount}` : `${manager.getSysString(576)} : ${this.list.arrClans.length}`;
+        const text = this.isDefender ? `${manager.getSysString(SysString_T.ClansDefending)}/${manager.getSysString(SysString_T.ClansWaiting)} : ${this.approvedCount}/${this.waitingCount}` : `${manager.getSysString(SysString_T.ClansAttacking)} : ${this.list.arrClans.length}`;
 
         this.header.replaceChildren();
         this.layer.text(this.header, text, 0xffdcdcdc, undefined, 14, 2);
@@ -207,7 +209,7 @@ export class NCSiegeInfoMainWnd { // NCSiegeInfoMainWnd: NConsole 0x100635a0 (0,
 
         this.element = layer.createWindow(0, 0, WIDTH, HEIGHT);
         this.element.hidden = true;
-        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(593), false, () => this.setVisible(false));
+        NCFrameCtrl.createDOM(layer, this.element, WIDTH, manager.getSysString(SysString_T.SiegeInformation), false, () => this.setVisible(false));
         layer.tile(this.element, 0, 20, WIDTH, 105, 0, 0, WIDTH, 105, TEX_BACK1);
         layer.tile(this.element, 0, 125, WIDTH, 23, 0, 0, WIDTH, 23, TEX_BACK2);
         this.content = layer.createWindow(0, 0, WIDTH, 125, this.element);
@@ -225,7 +227,7 @@ export class NCSiegeInfoMainWnd { // NCSiegeInfoMainWnd: NConsole 0x100635a0 (0,
             return wnd;
         });
 
-        [583, 586, 587].forEach((label, index) => this.arrTabs.push(layer.tab(this.element, 12 + index * 74, 125, 74, 23, TEX_TAB, arrTabsSelected[index], manager.getSysString(label), null, () => this.selectTab(index))));
+        [SysString_T.SiegeDate, SysString_T.AttackInfo, SysString_T.DefenseInfo].forEach((label, index) => this.arrTabs.push(layer.tab(this.element, 12 + index * 74, 125, 74, 23, TEX_TAB, arrTabsSelected[index], manager.getSysString(label), null, () => this.selectTab(index))));
         this.selectTab(0);
     }
 
@@ -282,10 +284,10 @@ export class NCSiegeInfoMainWnd { // NCSiegeInfoMainWnd: NConsole 0x100635a0 (0,
 
         parent.replaceChildren();
         if (castleName) layer.text(parent, castleName, 0xffb09b79, undefined, 120 - Math.trunc(layer.measureText(castleName) / 2), 41);
-        [588, 589, 590].forEach((id, index) => layer.text(parent, manager.getSysString(id), 0xffa3a3a3, undefined, 20, 70 + index * 16));
+        [SysString_T.Lord, SysString_T.ClanRelation, SysString_T.AllianceRelation].forEach((id, index) => layer.text(parent, manager.getSysString(id), 0xffa3a3a3, undefined, 20, 70 + index * 16));
 
         if (!info || !info.ownerLeaderName) {
-            layer.text(parent, manager.getSysString(595), 0xffdcdcdc, undefined, 80, 70);
+            layer.text(parent, manager.getSysString(SysString_T.NoCastleOwner), 0xffdcdcdc, undefined, 80, 70);
             return;
         }
 
@@ -293,7 +295,7 @@ export class NCSiegeInfoMainWnd { // NCSiegeInfoMainWnd: NConsole 0x100635a0 (0,
 
         layer.text(parent, info.ownerLeaderName, 0xffdcdcdc, undefined, 80, 70);
         layer.text(parent, info.ownerName, 0xffdcdcdc, undefined, isCrest ? 100 : 80, 86);
-        if (!info.ownerAllyName) layer.text(parent, manager.getSysString(591), 0xffdcdcdc, undefined, 80, 102);
+        if (!info.ownerAllyName) layer.text(parent, manager.getSysString(SysString_T.NoAlliance), 0xffdcdcdc, undefined, 80, 102);
         else layer.text(parent, info.ownerAllyName, 0xffdcdcdc, undefined, drawCrest(layer, parent, 88, 102, 8, this.getCrest && this.getCrest(info.ownerId, true)) ? 100 : 80, 102);
     }
 }
