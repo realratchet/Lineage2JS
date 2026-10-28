@@ -88,6 +88,7 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     border: 0;
     background: transparent;
 
+    > .ndom-tile { pointer-events: none; }
     &:focus-visible { outline: 1px solid #c8d2dc; }
 }
 

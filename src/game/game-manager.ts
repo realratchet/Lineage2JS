@@ -74,6 +74,8 @@ export class GameManager implements IEngineComponent<GameManager> {
         // ladies and gentlement, start your engines
         this.tick(this.lastTick);
         document.addEventListener("visibilitychange", this.visibilityCallback);
+        window.addEventListener("focus", this.visibilityCallback);
+        window.addEventListener("blur", this.visibilityCallback);
         this.onVisibilityChange();
     }
 
@@ -134,7 +136,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleAnimationFrame(currentTime: number): void {
-        if (document.hidden) return;
+        if (document.hidden || !document.hasFocus()) return;
 
         this.tick(currentTime);
         this.animationFrameHandle = requestAnimationFrame(this.animationFrameCallback);
@@ -147,13 +149,13 @@ export class GameManager implements IEngineComponent<GameManager> {
             this.backgroundWorker = null;
         }
 
-        if (document.hidden) {
+        if (document.hidden || !document.hasFocus()) {
             const url = URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 1000 / 30);"], { type: "text/javascript" }));
             const worker = this.backgroundWorker = new Worker(url);
 
             URL.revokeObjectURL(url);
             worker.onmessage = () => {
-                if (document.hidden && this.backgroundWorker === worker) this.tick(performance.now());
+                if ((document.hidden || !document.hasFocus()) && this.backgroundWorker === worker) this.tick(performance.now());
             };
         } else this.animationFrameHandle = requestAnimationFrame(this.animationFrameCallback);
     }

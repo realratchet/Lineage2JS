@@ -365,7 +365,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.prevTime = this.lastTime;
         this.lastTime = currentTime;
 
-        if (this.requestedVoice) {
+        if (this.requestedVoice && !this.gameManager.getComponent("network").isWorldLoading()) {
             const request = this.requestedVoice;
 
             this.requestedVoice = null;
@@ -573,6 +573,11 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isSoundDay: boolean, isSoundNight: boolean, isSubmerged: boolean): void {
+        if (this.gameManager.getComponent("network").isWorldLoading()) {
+            for (const id of this.activeAmbientSounds.keys()) this.stopAmbientSound(id);
+            return;
+        }
+
         const candidates = this.ambientCandidates;
         let maxPriority = -Infinity;
 
@@ -833,7 +838,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         // SpawnNTransientEffect 0x104ca91e uses USound.Duration independently of playback.
         if (buffer && onStarted) onStarted(buffer.duration);
         await pendingUnlock;
-        if (!buffer) return;
+        if (!buffer || this.gameManager.getComponent("network").isWorldLoading()) return;
 
         const gain = this.audioContext.createGain();
         gain.gain.value = volume;

@@ -35,7 +35,7 @@ export class NCGMWnd {
         NCFrameCtrl.createDOM(layer, this.element, this.width, "", false, () => this.setVisible(false));
         layer.text(this.element, layer.getManager().getSysString(SysString_T.Name), 0xffdcdcdc, undefined, 7, 55);
         this.target = layer.edit(this.element, 35, 55, 112, 14, false, 128);
-        Array.from(this.target.children).slice(0, 3).forEach(child => child.remove());
+        this.target.firstElementChild.remove();
         const background = layer.tile(this.target, 0, 0, 112, 14, 0, 0, 32, 32, "NWindow.ChatBack");
 
         this.target.prepend(background);

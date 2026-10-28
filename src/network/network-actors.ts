@@ -285,6 +285,24 @@ export class NetworkActors {
         asset.playerController.setPawn(render.player);
         physics.setPawnZone(render.player, false, true);
         physics.setPawnVolumes(render.player);
+
+        const startTime = performance.now();
+
+        while (generation === this.teleportGeneration) {
+            const progress = asset.getAreaLoadProgress(render, render.player.position);
+
+            if (progress.ready === progress.total) break;
+
+            const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
+            const action = progress.building > 0 ? "Building" : "Loading";
+            const stage = progress.decoded < progress.total ? `${action} region packages (${progress.decoded}/${progress.total})` : progress.built < progress.total ? `${action} scenery (${progress.built}/${progress.total} regions)` : `${action} textures and lighting (${progress.ready}/${progress.total} regions)`;
+
+            setLoadingProgress(value || null, `${stage} · ${Math.round(value * 100)}% · ${Math.floor((performance.now() - startTime) / 1000)}s elapsed`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        if (generation !== this.teleportGeneration) return;
+
         this.userAppearanceLoad = null;
         if (this.network.session.game.isPlayingReplay()) this.network.items.skillListLoad = this.network.items.resolveSkillList = null;
         else this.network.items.skillListLoad = new Promise(resolve => this.network.items.resolveSkillList = resolve);
@@ -441,7 +459,7 @@ export class NetworkActors {
         while (this.inWorld && generation === this.teleportGeneration) {
             const isAreaLoaded = asset.isAreaLoaded(render, render.player.position);
 
-            if (isAreaLoaded && this.npcSpawnCount === 0) break;
+            if (isAreaLoaded && this.npcSpawnCount === 0 && this.npcSpawnWaiters.length === 0) break;
 
             setLoadingProgress(isAreaLoaded ? 0.9 : 0.5, isAreaLoaded ? `Loading nearby characters (${this.npcSpawnCount} remaining)…` : "Loading terrain, textures and lighting…");
             await new Promise(resolve => setTimeout(resolve, 100));
