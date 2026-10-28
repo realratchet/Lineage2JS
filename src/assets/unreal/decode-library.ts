@@ -113,7 +113,7 @@ export type IAudioDecodeInfo = {
     type: "MusicVolume" | "AmbientSoundObject"
 };
 
-type ScriptObject_T = { classId: string, classParents: Record<string, string | null> };
+type ScriptObject_T = { path: string, classId: string, classParents: Record<string, string | null>, outer: ScriptObject_T | null };
 
 export class DecodeLibrary {
     public name: string = "Untitled";

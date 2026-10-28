@@ -22,7 +22,7 @@ function formatClock(hours: number) {
 }
 
 export class UIManager implements IEngineComponent<GameManager> {
-    public moverPosition = 0;
+    public areDoorsOpen = false;
     public fogPreset = "4";
     protected fogPresetSelect: HTMLSelectElement = null;
     public showLevel = true;
@@ -471,7 +471,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.fogPresetSelect = this.addSelect(quality, "Fog Range", Object.fromEntries(environment.getEnv().fog.ranges.map((range, index) => [`${index + 1} (${range.x * 2048}-${range.y * 2048})`, String(index + 1)])), this.fogPreset, value => this.setFogPreset(value));
         this.addCheckbox(world, "Show Level", this.showLevel, value => { this.showLevel = value; render.setLevelVisible(value); });
         this.addCheckbox(world, "Show Colliders", this.showColliders, value => { this.showColliders = value; render.setCollidersVisible(value); });
-        this.addRange(world, "Door Position", this.moverPosition, 0, 1, 0.01, value => { this.moverPosition = value; render.needsUpdate = true; });
+        this.addCheckbox(world, "Open Doors", this.areDoorsOpen, value => { this.areDoorsOpen = value; render.needsUpdate = true; });
         this.addCheckbox(sky, "Celestials", render.skyRenderer.config.celestials, value => render.skyRenderer.config.celestials = value);
         this.addCheckbox(sky, "Haze", render.skyRenderer.config.haze1, value => render.skyRenderer.config.haze1 = value);
         this.addCheckbox(sky, "Stars/Clouds", render.skyRenderer.config.starsClouds, value => render.skyRenderer.config.starsClouds = value);

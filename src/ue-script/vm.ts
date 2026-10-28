@@ -1,4 +1,5 @@
 import UNativeRegistry from "./native-registry";
+import ConfigCache from "./config-cache";
 import { CastToken_T, ExprToken_T, EStateFlags_T, ObjectFlags_T, PropertyFlags_T } from "@l2js/core";
 import { EClassFlags_T } from "@l2js/core/unreal/un-class";
 import { ENetRole_T } from "../assets/unreal/un-aactor";
@@ -25,7 +26,8 @@ export type ScriptHost_T = {
     setUnrealScriptProperty?(id: string, value: ScriptValue_T): void,
     handlesUnrealScriptFunction?(fn: IScriptFunctionDecodeInfo): boolean,
     handlesUnrealNative?(index: number, name: string): boolean,
-    callUnrealNative?(call: ScriptNativeCall_T): ScriptValue_T
+    callUnrealNative?(call: ScriptNativeCall_T): ScriptValue_T,
+    postEditChange?(): void
 };
 
 export type ScriptSlot_T = {
@@ -35,6 +37,8 @@ export type ScriptSlot_T = {
 };
 
 export type ScriptArgument_T = ScriptValue_T | ScriptSlot_T;
+type ScriptDelegate_T = { object: ScriptValue_T, functionName: string };
+type ScriptDelegateCall_T = { context: ScriptHost_T, fn: IScriptFunctionDecodeInfo, vm: UnScriptVM };
 type PropertyTextToken_T = { value: string, offset: number };
 type PropertyTextImport_T = { value: ScriptValue_T, offset: number, isWritten: boolean };
 
@@ -57,12 +61,14 @@ const assignmentNatives = new Set([133, 134, 135, 136, 137, 138, 139, 140, 159, 
 const postAssignmentNatives = new Set([139, 140, 165, 166]);
 
 enum EPollSlowFuncs {
-    EPOLL_Sleep = 384
+    EPOLL_Sleep = 384,
+    EPOLL_FinishInterpolation = 302
 }
 
 type StateFrame_T = { node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
 type ObjectName_T = { names: Map<string, WeakRef<ScriptHost_T>>, name: string, object: WeakRef<ScriptHost_T> };
-type ScriptObjectClasses_T = { parents: Map<string, string | null>, aliases: Map<string, string> };
+type ScriptObjectClasses_T = { parents: Map<string, string | null>, aliases: Map<string, string>, vm?: WeakRef<UnScriptVM> };
+type ScriptResource_T = ScriptHost_T & { isScriptResource: true, scriptObjectPath: string };
 
 export type ScriptLevelActors_T = { getFirstDynamicActor(): number, getLevelActorCount(): number, getLevelActor(index: number): ScriptHost_T | null, addLevelActor(actor: ScriptHost_T): void, removeLevelActor(actor: ScriptHost_T): void };
 
@@ -149,10 +155,24 @@ type ClassDefault_T = { name: string, lowerName: string, fieldName: string, valu
 
 const cacheClassDefaults = new WeakMap<IScriptClassDecodeInfo, ClassDefault_T[]>();
 const cacheDefaultObjects = new WeakMap<IScriptClassDecodeInfo, ScriptHost_T>();
+const cacheDefaultConfig = new WeakMap<IScriptClassDecodeInfo, { config: ConfigCache, revision: number }>();
+const scriptVMs = new Set<WeakRef<UnScriptVM>>();
+const scriptVMFinalizer = new FinalizationRegistry<WeakRef<UnScriptVM>>(reference => scriptVMs.delete(reference));
 const registeredScriptObjects = new Set<WeakRef<ScriptHost_T>>();
 const cacheScriptObjects = new WeakMap<ScriptHost_T, WeakRef<ScriptHost_T>>();
 const cacheScriptObjectClasses = new WeakMap<ScriptHost_T, ScriptObjectClasses_T>();
-const scriptObjectFinalizer = new FinalizationRegistry<WeakRef<ScriptHost_T>>(reference => registeredScriptObjects.delete(reference));
+const cacheScriptResources = new Map<string, WeakRef<ScriptHost_T>>();
+const cacheScriptResourceAliases = new WeakMap<WeakRef<ScriptHost_T>, Set<string>>();
+const cacheLibraryScriptResources = new WeakMap<DecodeLibrary, Map<string, ScriptHost_T>>();
+let scriptLocalization: Map<string, Map<string, Map<string, string>>> = null;
+const scriptObjectFinalizer = new FinalizationRegistry<WeakRef<ScriptHost_T>>(reference => {
+    registeredScriptObjects.delete(reference);
+    const aliases = cacheScriptResourceAliases.get(reference);
+
+    if (aliases)
+        for (const id of aliases)
+            if (cacheScriptResources.get(id) === reference) cacheScriptResources.delete(id);
+});
 
 function registerScriptObject(object: ScriptHost_T, classes: ScriptObjectClasses_T): void {
     if (object !== transientPackage) cacheScriptObjectClasses.set(object, classes);
@@ -162,6 +182,18 @@ function registerScriptObject(object: ScriptHost_T, classes: ScriptObjectClasses
     cacheScriptObjects.set(object, reference);
     registeredScriptObjects.add(reference);
     scriptObjectFinalizer.register(object, reference);
+}
+
+function registerScriptResourceAlias(id: string, object: ScriptHost_T): void {
+    id = id.toLowerCase();
+    const reference = cacheScriptObjects.get(object);
+
+    if (!reference) throw new Error(`Script resource '${id}' has no registration.`);
+    let aliases = cacheScriptResourceAliases.get(reference);
+
+    if (!aliases) cacheScriptResourceAliases.set(reference, aliases = new Set());
+    aliases.add(id);
+    cacheScriptResources.set(id, reference);
 }
 
 type HostDefault_T = { key: string, value: ScriptValue_T, isEmptyArray: boolean };
@@ -219,12 +251,82 @@ function cloneScriptValue(value: ScriptValue_T): ScriptValue_T {
     if (!value || typeof value !== "object") return value;
     if ("scriptClassId" in value) return value;
     if (Array.isArray(value)) return value.map(cloneScriptValue) as ScriptPropertyValue_T[];
+    const prototype = Object.getPrototypeOf(value);
+
+    if (prototype !== Object.prototype && prototype !== null) return value;
 
     const clone: Record<string, ScriptPropertyValue_T> = {};
 
     for (const [key, entry] of Object.entries(value)) clone[key] = cloneScriptValue(entry) as ScriptPropertyValue_T;
 
     return clone;
+}
+
+function getSwitchValue(value: ScriptValue_T, size: number): ScriptValue_T {
+    if (typeof value === "string" && size !== 1) return value.split("\0", 1)[0].toLowerCase();
+    if (size !== 0) {
+        if (typeof value === "number") {
+            if (Number.isNaN(value)) { debugger; throw new Error(`Unimplemented NaN Switch storage.`); }
+            return size === 1 ? value & 255 : value;
+        }
+        if (typeof value === "boolean") return size === 1 ? Number(value) : value;
+        if (size === 4 && (value === null || typeof value === "object" && "scriptClassId" in value)) return value;
+    }
+    throw new Error(`Unsupported ${size}-byte UnrealScript Switch value.`);
+}
+
+function parseScriptInteger(text: string): number {
+    // MSVCR70 0x7c039472 includes NBSP in its wide whitespace table.
+    const match = /^[\t\n\v\f\r \u00a0]*([+-]?[0-9]+)/.exec(text);
+
+    return match ? Number(BigInt(match[1]) & 0xffffffffn) | 0 : 0;
+}
+
+function parseScriptFloat(text: string): number {
+    // Core.dll 0x10156346 bounds appToAnsi's temporary buffer to 1023 bytes.
+    const match = /^[\t\n\v\f\r ]*[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eEdD][+-]?[0-9]+)?/.exec(text.slice(0, 1023));
+
+    return Math.fround(match ? Number(match[0].replace(/[dD]/, "e")) : 0);
+}
+
+const tmpTextFloat = new Float32Array(1), tmpTextBits = new Uint32Array(tmpTextFloat.buffer);
+
+function formatScriptFloat(value: number): string {
+    const number = Math.fround(value);
+
+    if (Number.isNaN(number)) {
+        tmpTextFloat[0] = number;
+        const bits = tmpTextBits[0];
+
+        return bits === 0xffc00000 ? "-1.#J" : `${bits & 0x80000000 ? "-" : ""}1.#R`;
+    }
+    if (!Number.isFinite(number)) return number < 0 ? "-1.#J" : "1.#J";
+    if (Math.abs(number) >= 1e17) {
+        const [digits, exponent] = number.toExponential(16).split("e");
+
+        return `${digits.replace(".", "")}${"0".repeat(Number(exponent) - 16)}.00`;
+    }
+    return number.toFixed(2);
+}
+
+function getScriptPathName(value: ScriptValue_T, id: string): string {
+    if (value === null) return "None";
+    if (typeof value === "string") return value;
+    const names: string[] = [], seen = new Set<ScriptHost_T>();
+
+    while (value) {
+        if (typeof value === "string") { names.unshift(value); break; }
+        const object = asHost(value);
+
+        if (seen.has(object)) throw new Error(`Cyclic UnrealScript object path for '${id}'.`);
+        seen.add(object);
+        const name = getProperty(object, "Name");
+
+        if (typeof name !== "string") throw new Error(`UnrealScript object for '${id}' has no Name.`);
+        names.unshift(name);
+        value = getProperty(object, "Outer");
+    }
+    return names.join(".");
 }
 
 export function getProperty(host: ScriptHost_T, id: string): ScriptValue_T {
@@ -369,7 +471,13 @@ class ScriptExecutor {
                 return {
                     arrayElementDefault: field.arrayElementDefault,
                     get: () => {
-                        const value = this.frame.locals.has(name) ? this.frame.locals.get(name) : null;
+                        if (!this.frame.locals.has(name)) {
+                            const property = this.frame.fn.fields.find(field => field.name === name);
+
+                            if (!property || property.zeroValue === undefined) throw new Error(`Missing local zero storage '${id}'.`);
+                            this.frame.locals.set(name, cloneScriptValue(property.zeroValue) as ScriptValue_T);
+                        }
+                        const value = this.frame.locals.get(name);
 
                         return isScriptSlot(value) ? value.get() : value;
                     },
@@ -535,6 +643,21 @@ class ScriptExecutor {
         return vm.invoke(context, fn, args, script ? context : this.frame.self);
     }
 
+    protected evalDelegateCall(): ScriptValue_T {
+        const property = this.next().value as string, name = this.next().value as string;
+        const call = this.vm.resolveDelegate(this.frame.context, property, name);
+        const context = this.frame.context;
+        let args: ScriptArgument_T[];
+
+        this.frame.context = this.frame.self;
+        try {
+            args = this.readArguments(call.fn, call.context);
+        } finally {
+            this.frame.context = context;
+        }
+        return call.vm.invoke(call.context, call.fn, args);
+    }
+
     protected evalNative(entry: IScriptBytecodeEntryDecodeInfo): ScriptValue_T {
         const index = entry.value as number;
 
@@ -640,6 +763,7 @@ class ScriptExecutor {
         const args = new Array<ScriptArgument_T>();
         const fields = fn ? fn.fields.filter(field => field.flags & CPF_Parm && !(field.flags & CPF_ReturnParm)) : null;
         const isSpawn = nativeIndex === 278;
+        const isScript = fn && fn.nativeIndex === 0 && !(fn.flags & FUNC_Native);
 
         while (true) {
             const entry = this.entries[this.pc];
@@ -660,7 +784,16 @@ class ScriptExecutor {
             const isTransform = isSpawn && (args.length === 3 || args.length === 4);
             const fallback = isTransform ? cloneScriptValue(getProperty(context, args.length === 3 ? "Location" : "Rotation")) : undefined;
             const isOut = field ? field.flags & CPF_OutParm : nativeIndex === 227 || (nativeIndex === 229 || nativeIndex === 230) && args.length > 0;
-            const value = isOut ? this.evalLValue() : this.evalToken();
+            const isEmpty = isScript && entry.type === "token" && entry.value === ExprToken_T.Nothing;
+            let value: ScriptArgument_T = isOut && !isEmpty ? this.evalLValue() : this.evalToken();
+
+            if (isScript) {
+                if (isScriptSlot(value)) {
+                    const slot = value as ScriptSlot_T, copied = cloneScriptValue(slot.get());
+
+                    value = { get: () => copied, set: value => slot.set(value) };
+                } else value = cloneScriptValue(value as ScriptValue_T);
+            }
 
             args.push(value === undefined ? fallback : isTransform ? cloneScriptValue(value) : value);
         }
@@ -669,9 +802,10 @@ class ScriptExecutor {
     protected evalSwitch(): ScriptValue_T {
         const size = this.next().value as number;
 
-        if (size !== 1) throw new Error(`UnrealScript '${this.frame.fn.id}' does not implement ${size}-byte Switch values`);
+        if (size !== 0 && size !== 1 && size !== 4) throw new Error(`UnrealScript '${this.frame.fn.id}' does not implement ${size}-byte Switch values`);
 
-        const value = this.evalToken();
+        // Core.dll 0x10146b3e: nonzero size uses appMemcmp; zero uses appStricmp.
+        const value = getSwitchValue(this.evalToken(), size);
 
         while (true) {
             const entry = this.next();
@@ -683,7 +817,7 @@ class ScriptExecutor {
 
             if (target.value === 0xffff) return undefined;
             if (!isOffset(target.value)) throw new Error(`UnrealScript '${this.frame.fn.id}' expected a case offset at '${target.virtualOffset}'`);
-            if (this.evalToken() === value) return undefined;
+            if (Object.is(getSwitchValue(this.evalToken(), size), value)) return undefined;
 
             this.pc = target.value.entryIndex;
         }
@@ -696,29 +830,61 @@ class ScriptExecutor {
         switch (cast) {
             case CastToken_T.VectorToRotator: return UNativeRegistry.getNativeFunc("Vector2Rotator")(value);
             case CastToken_T.FloatToInt: return Math.fround(Number(value)) | 0;
+            case CastToken_T.FloatToByte: return (Math.fround(Number(value)) | 0) & 255;
             case CastToken_T.ByteToInt:
-            case CastToken_T.IntToByte: return Number(value) | 0;
-            case CastToken_T.ByteToBool:
-            case CastToken_T.IntToBool:
-            case CastToken_T.FloatToBool:
-            case CastToken_T.ObjectToBool:
-            case CastToken_T.NameToBool:
-            case CastToken_T.StringToBool:
-            case CastToken_T.VectorToBool:
-            case CastToken_T.RotatorToBool: return !!value;
             case CastToken_T.ByteToFloat:
-            case CastToken_T.IntToFloat:
-            case CastToken_T.StringToFloat: return Number(value);
-            case CastToken_T.StringToByte:
-            case CastToken_T.StringToInt: return parseInt(`${value}`, 10) || 0;
-            case CastToken_T.ByteToString:
-            case CastToken_T.IntToString:
-            case CastToken_T.BoolToString:
-            case CastToken_T.FloatToString:
-            case CastToken_T.ObjectToString:
-            case CastToken_T.NameToString:
-            case CastToken_T.VectorToString:
-            case CastToken_T.RotatorToString: return `${value ?? "None"}`;
+            case CastToken_T.IntToByte: return Number(value) & 255;
+            case CastToken_T.BoolToByte:
+            case CastToken_T.BoolToInt:
+            case CastToken_T.BoolToFloat: return Number(value) & 1;
+            case CastToken_T.IntToFloat: return Math.fround(Number(value) | 0);
+            case CastToken_T.ByteToBool: return !!(Number(value) & 255);
+            case CastToken_T.IntToBool: return !!(Number(value) | 0);
+            case CastToken_T.FloatToBool: return Math.fround(Number(value)) !== 0;
+            case CastToken_T.ObjectToBool: return !!value;
+            case CastToken_T.NameToBool: return (value as string).toLowerCase() !== "none";
+            case CastToken_T.StringToBool: {
+                const text = (value as string).split("\0", 1)[0];
+
+                return text.toLowerCase() === "true" || !!parseScriptInteger(text);
+            }
+            case CastToken_T.VectorToBool: {
+                const vector = value as number[];
+
+                return Math.fround(vector[0]) !== 0 || Math.fround(vector[1]) !== 0 || Math.fround(vector[2]) !== 0;
+            }
+            case CastToken_T.RotatorToBool: {
+                const rotator = value as number[];
+
+                return !!((rotator[0] | rotator[1] | rotator[2]) & 65535);
+            }
+            case CastToken_T.StringToFloat: return parseScriptFloat(value as string);
+            case CastToken_T.StringToByte: return parseScriptInteger(value as string) & 255;
+            case CastToken_T.StringToInt: return parseScriptInteger(value as string);
+            case CastToken_T.StringToVector:
+            case CastToken_T.StringToRotator: {
+                const parts = (value as string).split("\0", 1)[0].split(",", 3), result = [0, 0, 0];
+
+                for (let i = 0; i < parts.length; i++)
+                    result[i] = cast === CastToken_T.StringToVector ? parseScriptFloat(parts[i]) : parseScriptInteger(parts[i]);
+                return result;
+            }
+            case CastToken_T.ByteToString: return String(Number(value) & 255);
+            case CastToken_T.IntToString: return String(Number(value) | 0);
+            case CastToken_T.BoolToString: return value ? "True" : "False";
+            case CastToken_T.FloatToString: return formatScriptFloat(value as number);
+            case CastToken_T.ObjectToString: return getScriptPathName(value, this.frame.fn.id);
+            case CastToken_T.NameToString: return (value as string).split("\0", 1)[0];
+            case CastToken_T.VectorToString: {
+                const vector = value as number[];
+
+                return `${formatScriptFloat(vector[0])},${formatScriptFloat(vector[1])},${formatScriptFloat(vector[2])}`;
+            }
+            case CastToken_T.RotatorToString: {
+                const rotator = value as number[];
+
+                return `${rotator[0] & 65535},${rotator[1] & 65535},${rotator[2] & 65535}`;
+            }
             default: throw new Error(`UnrealScript '${this.frame.fn.id}' does not implement cast '0x${cast.toString(16)}'`);
         }
     }
@@ -746,6 +912,12 @@ class ScriptExecutor {
                 this.frame.returnValue = this.evalToken();
                 this.frame.didReturn = true;
                 return this.frame.returnValue;
+            case ExprToken_T.Assert: {
+                const line = this.next().value as number;
+
+                if (!this.evalToken()) throw new Error(`UnrealScript assertion failed in '${this.frame.fn.id}', line ${line}.`);
+                return undefined;
+            }
             case ExprToken_T.Jump:
                 this.pc = this.readOffset().entryIndex;
                 return undefined;
@@ -757,6 +929,9 @@ class ScriptExecutor {
                 return undefined;
             }
             case ExprToken_T.Switch: return this.evalSwitch();
+            case ExprToken_T.Case:
+                if (this.next().value !== 0xffff) this.evalToken();
+                return undefined;
             case ExprToken_T.Stop:
                 this.frame.stopped = true;
                 return undefined;
@@ -772,14 +947,26 @@ class ScriptExecutor {
                 this.evalToken();
                 return undefined;
             case ExprToken_T.Let:
-            case ExprToken_T.LetBool:
-            case ExprToken_T.LetDelegate: {
+            case ExprToken_T.LetBool: {
                 const slot = this.evalLValue();
                 const value = this.evalToken();
 
                 slot.set(value);
                 return value;
             }
+            case ExprToken_T.LetDelegate: {
+                const slot = this.evalLValue();
+                const value = this.evalToken() as ScriptDelegate_T;
+
+                slot.set(value ? { object: value.object, functionName: value.functionName } as ScriptValue_T : null);
+                return undefined;
+            }
+            case ExprToken_T.DelegateProperty: {
+                const name = this.next().value as string;
+
+                return name.toLowerCase() === "none" ? null : { object: this.frame.context, functionName: name } as ScriptValue_T;
+            }
+            case ExprToken_T.DelegateFunction: return this.evalDelegateCall();
             case ExprToken_T.ClassContext:
             case ExprToken_T.Context: return this.evalContext(opcode);
             case ExprToken_T.New: {
@@ -904,6 +1091,9 @@ class ScriptExecutor {
 }
 
 export class UnScriptVM {
+    protected static config: ConfigCache = null;
+    protected static configRevision = 0;
+    protected static readonly configChanges = new Map<string, number>();
     protected readonly library: DecodeLibrary;
     protected levelInfo: ScriptHost_T = null;
     protected level: ScriptHost_T & ScriptLevelActors_T = null;
@@ -915,14 +1105,25 @@ export class UnScriptVM {
     protected readonly classParents = new Map<string, string | null>();
     protected readonly classAliases = new Map<string, string>();
     protected readonly objectClasses = new Map<string, string>();
-    protected readonly scriptObjectClasses: ScriptObjectClasses_T = { parents: this.classParents, aliases: this.classAliases };
+    protected readonly scriptObjectClasses: ScriptObjectClasses_T = { parents: this.classParents, aliases: this.classAliases, vm: new WeakRef(this) };
+
+    public static setLocalization(localization: Map<string, Map<string, Map<string, string>>>): void { scriptLocalization = localization; }
+    public static setConfig(config: ConfigCache): void { this.config = config; }
 
     public constructor(library: DecodeLibrary) {
         this.library = library;
-        if (library.levelPackageName) this.levelPackage = { scriptClassId: "core.Package", isLevelActor: false, scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 } };
-        this.loadFunctions();
+        if (library.levelPackageName) this.levelPackage = cacheScriptResources.get(library.levelPackageName.toLowerCase())?.deref() || { scriptClassId: "core.Package", isLevelActor: false, scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 } };
         registerScriptObject(transientPackage, this.scriptObjectClasses);
-        if (this.levelPackage) registerScriptObject(this.levelPackage, this.scriptObjectClasses);
+        registerScriptResourceAlias("Transient", transientPackage);
+        if (this.levelPackage) {
+            registerScriptObject(this.levelPackage, this.scriptObjectClasses);
+            registerScriptResourceAlias(library.levelPackageName, this.levelPackage);
+        }
+        this.loadFunctions();
+        const reference = new WeakRef(this);
+
+        scriptVMs.add(reference);
+        scriptVMFinalizer.register(this, reference);
     }
 
     public getLibrary(): DecodeLibrary { return this.library; }
@@ -1066,7 +1267,8 @@ export class UnScriptVM {
 
         switch (field.type) {
             case "Object":
-            case "Class": return null;
+            case "Class":
+            case "Delegate": return null;
             case "Str":
             case "String": return "";
             case "Name": return "None";
@@ -1105,6 +1307,13 @@ export class UnScriptVM {
             return result as ScriptValue_T;
         }
 
+        if (field.type === "Delegate") {
+            if (value === null) return null;
+            const delegate = value as ScriptDelegate_T;
+            const cls = context ? this.metaCast(delegate.object, "core.Object") as string : null;
+
+            return { object: cls && this.dynamicCast(context, cls) ? context : delegate.object, functionName: delegate.functionName } as ScriptValue_T;
+        }
         if ((field.type === "Object" || field.type === "Class") && field.flags & PropertyFlags_T.CPF_NeedCtorLink && context) {
             if (value === null) return null;
             const template = value as ScriptHost_T;
@@ -1190,6 +1399,8 @@ export class UnScriptVM {
             for (const [cls, parent] of Object.entries(info.classParents)) this.classParents.set(cls.toLowerCase(), parent ? parent.toLowerCase() : null);
         }
         for (const cls of Object.values(this.library.scriptClasses)) this.classParents.set(cls.id.toLowerCase(), cls.superClassId ? cls.superClassId.toLowerCase() : null);
+        if (this.classParents.has("__native__.class")) this.classAliases.set("core.class", "__native__.class");
+        this.registerResources();
 
         for (const fn of Object.values(this.library.scriptFunctions)) {
             this.functionsById.set(fn.id.toLowerCase(), fn);
@@ -1199,6 +1410,47 @@ export class UnScriptVM {
             if (!functions) this.functionsByClass.set(fn.owner, functions = new Map());
 
             functions.set(fn.name.toLowerCase(), fn);
+        }
+    }
+
+    protected registerResources(): void {
+        let resources = cacheLibraryScriptResources.get(this.library);
+
+        if (!resources) cacheLibraryScriptResources.set(this.library, resources = new Map());
+        const seen = new Set<DecodeLibrary["scriptObjects"][string]>();
+        const active = new Set<DecodeLibrary["scriptObjects"][string]>(), objectClasses = this.objectClasses;
+
+        function pull(info: DecodeLibrary["scriptObjects"][string], classes: ScriptObjectClasses_T): ScriptHost_T {
+            if (!info.path) throw new Error(`Script resource has no canonical path.`);
+            for (const [id, parent] of Object.entries(info.classParents)) classes.parents.set(id.toLowerCase(), parent ? parent.toLowerCase() : null);
+            const key = info.path.toLowerCase();
+            let object = resources.get(key) || cacheScriptResources.get(key)?.deref();
+
+            if (seen.has(info)) {
+                if (!object) throw new Error(`Script resource '${info.path}' lost its registration.`);
+                return object;
+            }
+            if (active.has(info)) throw new Error(`Cyclic script resource Outer at '${info.path}'.`);
+            active.add(info);
+            const outer = info.outer ? pull(info.outer, classes) : null;
+
+            if (!object) {
+                object = { scriptClassId: info.classId, isLevelActor: false, isScriptResource: true, scriptObjectPath: info.path, scriptProperties: { Name: info.path.slice(info.path.lastIndexOf(".") + 1), Outer: outer, Class: info.classId, ObjectFlags: 0 } } as ScriptResource_T;
+                registerScriptObject(object, classes);
+            } else if (object.scriptClassId.toLowerCase() !== info.classId.toLowerCase()) throw new Error(`Script resource '${info.path}' changed class.`);
+            resources.set(key, object);
+            objectClasses.set(key, info.classId.toLowerCase());
+            registerScriptResourceAlias(info.path, object);
+            active.delete(info);
+            seen.add(info);
+            return object;
+        }
+
+        for (const [id, info] of Object.entries(this.library.scriptObjects || {})) {
+            const object = pull(info, this.scriptObjectClasses);
+
+            this.objectClasses.set(info.path.toLowerCase(), info.classId.toLowerCase());
+            registerScriptResourceAlias(id, object);
         }
     }
 
@@ -1224,6 +1476,17 @@ export class UnScriptVM {
             setProperty(object, "Class", cls.id);
             cacheDefaultObjects.set(cls, object);
             registerScriptObject(object, this.scriptObjectClasses);
+        }
+
+        if (UnScriptVM.config && cls.classFlags & EClassFlags_T.CLASS_Config) {
+            const loaded = cacheDefaultConfig.get(cls);
+            let reload = !loaded || loaded.config !== UnScriptVM.config;
+
+            if (!reload && loaded.revision !== UnScriptVM.configRevision)
+                for (const [classId, revision] of UnScriptVM.configChanges)
+                    if (revision > loaded.revision && this.classParents.has(classId) && this.isClassChildOf(cls.id, classId)) { reload = true; break; }
+            if (reload) this.loadConfig(object);
+            if (reload || loaded.revision !== UnScriptVM.configRevision) cacheDefaultConfig.set(cls, { config: UnScriptVM.config, revision: UnScriptVM.configRevision });
         }
 
         return object;
@@ -1270,7 +1533,7 @@ export class UnScriptVM {
         }
 
         const properties = getProperties(host);
-        const defaultObject = cacheDefaultObjects.get(classes[0]);
+        const defaultObject = !host.isClassDefaultObject && UnScriptVM.config && classes[0].classFlags & EClassFlags_T.CLASS_Config ? this.getDefaultObject(classes[0].id) : cacheDefaultObjects.get(classes[0]);
         let layout = "";
 
         if (properties instanceof Map) for (const [key, value] of properties) layout += value === null ? `${key}\0!` : `${key}\0`;
@@ -1394,16 +1657,83 @@ export class UnScriptVM {
         return !!fn && fn.nativeIndex === 0 && !(fn.flags & FUNC_Native);
     }
 
+    public resolveDelegate(context: ScriptHost_T, property: string, name: string): ScriptDelegateCall_T {
+        let value = getProperty(context, property) as ScriptDelegate_T;
+        let target = value && value.object;
+
+        if (typeof target === "string") {
+            const object = this.findRegisteredObject(target, null, null, false, false, true);
+
+            if (!object) throw new Error(`UnrealScript delegate object '${target}' is not loaded.`);
+            target = object;
+        }
+        let receiver = target ? asHost(target) : context;
+        let script = typeof (receiver as any).findComponent === "function" ? (receiver as any).findComponent("script") : null;
+        let vm = cacheStateFrames.get(receiver)?.vm || (script ? script.getVM() as UnScriptVM : null) || cacheScriptObjectClasses.get(receiver)?.vm?.deref() || this;
+
+        if (target && getProperty(receiver, "bDeleteMe") && vm.classParents.has("engine.actor") && vm.dynamicCast(receiver, "engine.Actor")) {
+            setProperty(context, property, null);
+            value = null;
+            receiver = context;
+            script = typeof (receiver as any).findComponent === "function" ? (receiver as any).findComponent("script") : null;
+            vm = cacheStateFrames.get(receiver)?.vm || (script ? script.getVM() as UnScriptVM : null) || cacheScriptObjectClasses.get(receiver)?.vm?.deref() || this;
+        }
+        return { context: receiver, vm, fn: vm.findFunction(receiver, value && value.object ? value.functionName : name) };
+    }
+
     public resolveObject(context: ScriptHost_T, id: string): ScriptValue_T {
         const resolver = (context as any).resolveUnrealObject;
+        const resource = cacheScriptResources.get(id.toLowerCase())?.deref();
+
+        if (resource) id = (resource as ScriptResource_T).isScriptResource ? (resource as ScriptResource_T).scriptObjectPath : id;
 
         return typeof resolver === "function" ? resolver.call(context, id) : id;
     }
 
-    protected findRegisteredObject(name: string, classId: string, outer: ScriptHost_T = null, isAnyPackage = false, isExactClass = false): ScriptHost_T | null {
+    public localize(section: string = "", key: string = "", packageName: string = ""): string {
+        section = section.split("\0", 1)[0];
+        key = key.split("\0", 1)[0];
+        packageName = packageName.split("\0", 1)[0];
+        if (!scriptLocalization) return key;
+        const value = scriptLocalization.get(packageName.toLowerCase())?.get(section.toLowerCase())?.get(key.toLowerCase());
+
+        if (value !== undefined) return value.split("\0", 1)[0].slice(0, 1023);
+        console.warn(`No localization: ${packageName}.${section}.${key} (int)`);
+        return `<?int?${packageName}.${section}.${key}?>`;
+    }
+
+    public findObject(name: string, classId: string): ScriptValue_T {
         name = name.split("\0", 1)[0];
+        const resource = cacheScriptResources.get(name.toLowerCase())?.deref();
+
+        if (resource && (resource as ScriptResource_T).isScriptResource) name = (resource as ScriptResource_T).scriptObjectPath;
+        const object = this.findRegisteredObject(name, classId);
+
+        return object && (object as ScriptResource_T).isScriptResource ? (object as ScriptResource_T).scriptObjectPath : object;
+    }
+
+    protected resolveConfigName(name: string): string | null {
+        name = name.split("\0", 1)[0];
+        if (/^(ini|usr):/i.test(name) && name.length < 1024) {
+            const index = name.lastIndexOf(".");
+
+            if (index >= 0) {
+                const config = UnScriptVM.config;
+
+                if (!config) throw new Error(`UnrealScript configuration is not initialized.`);
+                const value = config.getString(name.slice(4, index), name.slice(index + 1), name.slice(0, 3).toLowerCase() === "ini" ? "System" : "User", 1024);
+
+                if (value === null) return null;
+                return value;
+            }
+        }
+        return name;
+    }
+
+    protected findRegisteredObject(name: string, classId: string, outer: ScriptHost_T = null, isAnyPackage = false, isExactClass = false, isConfigResolved = false): ScriptHost_T | null {
+        if (!isConfigResolved) name = this.resolveConfigName(name);
+        if (name === null) return null;
         if (classId) classId = this.classAliases.get(classId.toLowerCase()) || classId;
-        if (/^(ini|int):/i.test(name)) throw new Error(`Localized/configuration object lookup is not implemented.`);
         const lookupClasses = this.scriptObjectClasses, objects = Array.from(registeredScriptObjects);
 
         function isIn(object: ScriptHost_T, parent: ScriptHost_T): boolean {
@@ -1458,6 +1788,163 @@ export class UnScriptVM {
         return lookup(parts[parts.length - 1], classId, outer, isAnyPackage, isExactClass);
     }
 
+    protected getConfigFilename(context: ScriptHost_T, source: IScriptClassDecodeInfo, filename: string): string {
+        if (filename !== null) return filename;
+        const isPerObject = !!(source.classFlags & EClassFlags_T.CLASS_PerObjectConfig) && !context.isClassDefaultObject;
+        const outer = isPerObject ? getProperty(context, "Outer") : null;
+        const name = isPerObject && outer && outer !== transientPackage && outer !== "Transient" ? typeof outer === "string" ? getFieldName(outer) : getProperty(asHost(outer), "Name") as string : source.configName;
+
+        if (typeof name !== "string") throw new Error(`Configuration object '${context.scriptClassId}' has no filename.`);
+        return name;
+    }
+
+    public saveConfig(context: ScriptHost_T, flags: number = PropertyFlags_T.CPF_Config, filename: string = null): void {
+        const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
+        const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this), source = vm.library.scriptClasses[context.scriptClassId], config = UnScriptVM.config;
+
+        if (!source) throw new Error(`Configuration class '${context.scriptClassId}' is not in the decode library.`);
+        if (!config) throw new Error(`UnrealScript configuration is not initialized.`);
+        filename = vm.getConfigFilename(context, source, filename);
+        const isPerObject = !!(source.classFlags & EClassFlags_T.CLASS_PerObjectConfig) && !context.isClassDefaultObject;
+
+        for (let cls = source; cls; cls = cls.superClassId ? vm.library.scriptClasses[cls.superClassId] : null) {
+            for (const field of cls.fields) {
+                if ((field.flags & flags) !== flags) continue;
+                const section = isPerObject ? getProperty(context, "Name") as string : field.flags & PropertyFlags_T.CPF_GlobalConfig ? field.id.slice(0, field.id.lastIndexOf(".")) : source.id;
+                const fields = cls.propertyFields, metadata = fields && fields[field.id];
+
+                if (!metadata) throw new Error(`Missing configuration property metadata '${field.id}'.`);
+                if (typeof section !== "string") throw new Error(`Configuration object '${context.scriptClassId}' has no section.`);
+                if ((field.type as string) === "Array" || (field.type as string) === "Map") {
+                    const entries = config.getSection(section, filename, true, false);
+
+                    for (let index = entries.length - 1; index >= 0; index--)
+                        if (entries[index][0].toLowerCase() === field.name.toLowerCase()) entries.splice(index, 1);
+                    if ((field.type as string) === "Array") {
+                        const array = getProperty(context, field.id);
+
+                        if (!Array.isArray(array)) throw new Error(`Invalid configuration array '${field.id}'.`);
+                        for (const value of array) entries.push([field.name, vm.exportPropertyText(fields, fields[metadata.innerId], value, false)]);
+                    }
+                    continue;
+                }
+                for (let index = 0; index < field.arrayDimensions; index++)
+                    config.setString(section, field.arrayDimensions > 1 ? `${field.name}[${index}]` : field.name, vm.exportPropertyText(fields, metadata, getProperty(context, field.id), false, index), filename);
+            }
+        }
+        config.flush();
+        let root = source;
+
+        while (root.superClassId && vm.library.scriptClasses[root.superClassId].classFlags & EClassFlags_T.CLASS_Config) root = vm.library.scriptClasses[root.superClassId];
+        vm.reloadConfigDefaults(root.id);
+    }
+
+    protected reloadConfigDefaults(classId: string): void {
+        classId = classId.toLowerCase();
+        UnScriptVM.configChanges.set(classId, ++UnScriptVM.configRevision);
+        for (const reference of scriptVMs) {
+            const machine = reference.deref();
+
+            if (!machine) { scriptVMs.delete(reference); continue; }
+            if (!machine.classParents.has(classId)) continue;
+            for (const cls of Object.values(machine.library.scriptClasses))
+                if (machine.isClassChildOf(cls.id, classId)) machine.getDefaultObject(cls.id);
+        }
+    }
+
+    public resetConfig(context: ScriptHost_T): void {
+        const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
+        const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this), cls = vm.library.scriptClasses[context.scriptClassId];
+
+        if (!cls) throw new Error(`Configuration class '${context.scriptClassId}' is not in the decode library.`);
+        const name = cls.configName.toLowerCase();
+
+        if (name !== "system" && name !== "user") return;
+        const config = UnScriptVM.config;
+
+        if (!config) throw new Error(`UnrealScript configuration is not initialized.`);
+        const entries = config.getSectionText(cls.id, name === "system" ? "Default.ini" : "DefUser.ini", 32000);
+
+        if (entries)
+            for (const entry of entries) {
+                const index = entry.indexOf("=");
+
+                if (index >= 0) config.setString(cls.id, entry.slice(0, index), entry.slice(index + 1), cls.configName);
+            }
+        vm.reloadConfigDefaults(cls.id);
+        for (const reference of registeredScriptObjects) {
+            const object = reference.deref();
+
+            if (!object || object.isClassDefaultObject || (object as ScriptResource_T).isScriptResource) continue;
+            const owner = cacheStateFrames.get(object)?.vm || cacheScriptObjectClasses.get(object)?.vm?.deref() || vm;
+
+            if (!owner.classParents.has(object.scriptClassId.toLowerCase()) || !owner.classParents.has(cls.id.toLowerCase()) || !owner.isClassChildOf(object.scriptClassId, cls.id)) continue;
+            owner.loadConfig(object);
+            if (object.postEditChange) object.postEditChange();
+        }
+    }
+
+    public loadConfig(context: ScriptHost_T, propagate: boolean = true, classId: string = null, filename: string = null): void {
+        const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
+        const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
+        const source = vm.library.scriptClasses[context.scriptClassId], cls = classId ? vm.library.scriptClasses[classId] : source;
+
+        if (!cls) {
+            const name = (classId || context.scriptClassId).toLowerCase();
+
+            // Retail UPackage ClassFlags at 0x102d5d14 are 0x12, without CLASS_Config.
+            if (name === "core.package" || name === "__native__.package") return;
+            throw new Error(`Configuration class '${classId || context.scriptClassId}' is not in the decode library.`);
+        }
+        if (!(cls.classFlags & EClassFlags_T.CLASS_Config)) return;
+        if (!source) throw new Error(`Configuration class '${context.scriptClassId}' is not in the decode library.`);
+        const config = UnScriptVM.config;
+
+        if (!config) throw new Error(`UnrealScript configuration is not initialized.`);
+        if (propagate && cls.superClassId) vm.loadConfig(context, true, cls.superClassId, filename);
+        const isPerObject = !!(source.classFlags & EClassFlags_T.CLASS_PerObjectConfig) && !context.isClassDefaultObject;
+
+        filename = vm.getConfigFilename(context, source, filename);
+
+        for (let owner = cls; owner; owner = owner.superClassId ? vm.library.scriptClasses[owner.superClassId] : null) {
+            for (const field of owner.fields) {
+                if (!(field.flags & PropertyFlags_T.CPF_Config)) continue;
+                const section = isPerObject ? getProperty(context, "Name") as string : field.flags & PropertyFlags_T.CPF_GlobalConfig ? field.id.slice(0, field.id.lastIndexOf(".")) : cls.id;
+                const fields = owner.propertyFields, metadata = fields && fields[field.id];
+
+                if (!metadata) throw new Error(`Missing configuration property metadata '${field.id}'.`);
+                if (typeof section !== "string") throw new Error(`Configuration object '${context.scriptClassId}' has no section.`);
+                if ((field.type as string) === "Array" || (field.type as string) === "Map") {
+                    const entries = config.getSection(section, filename);
+
+                    if (!entries) continue;
+                    if ((field.type as string) === "Map") continue;
+                    const inner = fields[metadata.innerId];
+
+                    if (!inner || metadata.arrayElementDefault === undefined) throw new Error(`Missing configuration array metadata '${field.id}'.`);
+                    const values = entries.filter(([key]) => key.toLowerCase() === field.name.toLowerCase());
+                    const array = values.map(() => vm.getConstructorZero(fields, inner, metadata.arrayElementDefault, field.id));
+
+                    setProperty(context, field.id, array as ScriptValue_T);
+                    for (let index = 0; index < values.length; index++)
+                        vm.importPropertyText(inner, values[index][1].split("\0", 1)[0], array[index], false, fields, next => { array[index] = next; setProperty(context, field.id, array as ScriptValue_T); });
+                    continue;
+                }
+                for (let index = 0; index < field.arrayDimensions; index++) {
+                    const text = config.getString(section, field.arrayDimensions > 1 ? `${field.name}[${index}]` : field.name, filename, 1024);
+
+                    if (text === null) continue;
+                    const current = getProperty(context, field.id), value = field.arrayDimensions > 1 ? (current as ScriptValue_T[])[index] : current;
+
+                    vm.importPropertyText(metadata, text, value, false, fields, next => {
+                        if (field.arrayDimensions > 1) { (current as ScriptValue_T[])[index] = next; setProperty(context, field.id, current); }
+                        else setProperty(context, field.id, next);
+                    });
+                }
+            }
+        }
+    }
+
     protected exportPropertyText(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], value: ScriptValue_T, isDelimited: boolean, index: number = 0): string {
         if (!field) throw new Error(`Missing property text metadata.`);
         if (field.arrayDimensions > 1) value = (value as ScriptValue_T[])[index];
@@ -1479,6 +1966,18 @@ export class UnScriptVM {
 
                 return isDelimited ? `"${text}"` : text;
             }
+            case "Delegate": {
+                const delegate = value as ScriptDelegate_T;
+
+                if (!delegate || !delegate.object) throw new Error(`Property text delegate '${field.id}' has no object.`);
+                const target = typeof delegate.object === "string" ? this.findRegisteredObject(delegate.object, null, null, false, false, true) : asHost(delegate.object);
+
+                if (!target) throw new Error(`Property text delegate object '${delegate.object}' is not loaded.`);
+                const name = getProperty(target, "Name");
+
+                if (typeof name !== "string") throw new Error(`Property text delegate '${field.id}' object has no Name.`);
+                return `${name}.${delegate.functionName}`;
+            }
             case "Object":
             case "Class": {
                 if (value === null) return "None";
@@ -1494,24 +1993,8 @@ export class UnScriptVM {
                         }
                     path = value;
                 } else {
-                    const host = asHost(value), names: string[] = [], seen = new Set<ScriptHost_T>();
-
-                    classId = host.scriptClassId;
-                    let outer: ScriptValue_T = host;
-
-                    while (outer) {
-                        if (typeof outer === "string") { names.unshift(outer); break; }
-                        const object = asHost(outer);
-
-                        if (seen.has(object)) throw new Error(`Cyclic property text object path for '${field.id}'.`);
-                        seen.add(object);
-                        const name = getProperty(object, "Name");
-
-                        if (typeof name !== "string") throw new Error(`Property text object for '${field.id}' has no Name.`);
-                        names.unshift(name);
-                        outer = getProperty(object, "Outer");
-                    }
-                    path = names.join(".");
+                    classId = asHost(value).scriptClassId;
+                    path = getScriptPathName(value, field.id);
                 }
                 if (!classId) throw new Error(`Property text object '${path}' has no class metadata.`);
                 return `${getFieldName(classId)}'${path}'`;
@@ -1600,10 +2083,83 @@ export class UnScriptVM {
         if (!field) throw new Error(`Missing property text metadata.`);
         if ((field.type as string) === "Array") return this.importArrayPropertyText(fields, field, text, value, onWrite);
         if ((field.type as string) === "Struct") return this.importStructPropertyText(fields, field, text, value, onWrite);
+        if ((field.type as string) === "Object" || (field.type as string) === "Class") return this.importObjectPropertyText(field, text, onWrite);
+        if ((field.type as string) === "Delegate") return this.importDelegatePropertyText(field, text, onWrite);
         const result = this.importPropertyScalarText(field, text, value, isDelimited);
 
         if (result && result.isWritten && onWrite) onWrite(result.value);
         return result;
+    }
+
+    protected importDelegatePropertyText(field: IScriptClassDecodeInfo["fields"][number], text: string, onWrite: (value: ScriptValue_T) => void): PropertyTextImport_T {
+        text = text.split("\0", 1)[0];
+        const dot = text.indexOf("."), name = dot < 0 ? text : text.slice(0, dot), functionName = dot < 0 ? "" : text.slice(dot + 1);
+
+        if (name.length >= NAME_SIZE || functionName.length >= NAME_SIZE) throw new Error(`Delegate property text for '${field.id}' exceeds native name storage.`);
+        const object = this.findRegisteredObject(name, null, null, true, false, true);
+        let fn: IScriptFunctionDecodeInfo = null;
+
+        if (object) {
+            const isResource = (object as ScriptResource_T).isScriptResource, script = typeof (object as any).findComponent === "function" ? (object as any).findComponent("script") : null;
+            let vm = isResource ? this : cacheStateFrames.get(object)?.vm || (script ? script.getVM() as UnScriptVM : null) || cacheScriptObjectClasses.get(object)?.vm?.deref() || this;
+            const classId = isResource && this.dynamicCast((object as ScriptResource_T).scriptObjectPath, "core.Class") ? (object as ScriptResource_T).scriptObjectPath : object.scriptClassId;
+
+            if (isResource && !vm.library.scriptClasses[classId]) vm = cacheScriptObjectClasses.get(object)?.vm?.deref() || vm;
+            if (!vm.library.scriptClasses[classId]) throw new Error(`Delegate object class '${classId}' is not in the decode library.`);
+            fn = vm.findFunctionOptional(classId, functionName);
+            if (fn) {
+                if (field.name.length <= 12) throw new Error(`Invalid delegate property name '${field.name}'.`);
+                // Core.dll 0x10176228..0x10176324 derives __Name__Delegate and checks property class/OutParm only.
+                const signatureName = field.name.slice(2, -10), signature = this.findFunction(field.id.slice(0, field.id.lastIndexOf(".")), signatureName);
+                const parameters = fn.fields.filter(field => field.flags & CPF_Parm), expected = signature.fields.filter(field => field.flags & CPF_Parm);
+
+                if (parameters.length !== expected.length || parameters.some((field, index) => field.type !== expected[index].type || (field.flags ^ expected[index].flags) & CPF_OutParm)) fn = null;
+            }
+        }
+        const value = fn ? { object: (object as ScriptResource_T).isScriptResource ? (object as ScriptResource_T).scriptObjectPath : object, functionName: fn.name } as ScriptValue_T : null;
+
+        if (onWrite) onWrite(value);
+        return { value, offset: text.length, isWritten: true };
+    }
+
+    protected importObjectPropertyText(field: IScriptClassDecodeInfo["fields"][number], text: string, onWrite: (value: ScriptValue_T) => void): PropertyTextImport_T | null {
+        const token = this.readPropertyTextToken(text, 1024, true);
+
+        if (!token) return null;
+        if (token.value.toLowerCase() === "none") {
+            if (onWrite) onWrite(null);
+            return { value: null, offset: token.offset, isWritten: true };
+        }
+        if (!field.propertyClassId) throw new Error(`Missing property text object class '${field.id}'.`);
+        let offset = token.offset, object: ScriptHost_T;
+
+        while (text.charAt(offset) === " ") offset++;
+        if (text.charAt(offset++) !== "'") object = this.findRegisteredObject(token.value, field.propertyClassId, null, true);
+        else {
+            const path = this.readPropertyTextToken(text.slice(offset), 1024, true);
+
+            if (!path) return null;
+            offset += path.offset;
+            if (text.charAt(offset++) !== "'") return null;
+            const cls = this.findRegisteredObject(token.value, "core.Class", null, true);
+
+            if (!cls) return null;
+            const classId = (cls as ScriptResource_T).scriptObjectPath;
+
+            if (!classId) throw new Error(`Property text class '${token.value}' has no canonical path.`);
+            object = this.findRegisteredObject(path.value, classId, null, true);
+            if (!object) throw new Error(`Property text dynamic loading for '${path.value}' is not implemented.`);
+        }
+        let value: ScriptValue_T = object && (object as ScriptResource_T).isScriptResource ? (object as ScriptResource_T).scriptObjectPath : object;
+
+        if ((field.type as string) === "Class" && object) {
+            if (!field.metaClassId) throw new Error(`Missing property text metaclass '${field.id}'.`);
+            const classId = this.classAliases.get("core.class") || "core.class";
+
+            if (object.scriptClassId.toLowerCase() !== classId || !this.isClassChildOf(value as string, field.metaClassId)) value = null;
+        }
+        if (onWrite) onWrite(value);
+        return object ? { value, offset, isWritten: true } : null;
     }
 
     protected importArrayPropertyText(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], text: string, value: ScriptValue_T, onWrite: (value: ScriptValue_T) => void): PropertyTextImport_T | null {
@@ -1776,18 +2332,22 @@ export class UnScriptVM {
         if (!cls || !target) return false;
         cls = cls.toLowerCase();
         cls = this.classAliases.get(cls) || cls;
+        const resource = cacheScriptResources.get(cls)?.deref(), classes = resource ? cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses : this.scriptObjectClasses;
+
+        cls = classes.aliases.get(cls) || cls;
         target = target.toLowerCase();
         target = this.classAliases.get(target) || target;
-        if (!this.classParents.has(target)) throw new Error(`UnrealScript class '${target}' is not in the decode library`);
+        target = classes.aliases.get(target) || target;
+        if (!classes.parents.has(target) && !this.classParents.has(target)) throw new Error(`UnrealScript class '${target}' is not in the decode library`);
 
-        return this.isChildOf(cls, target);
+        return this.isChildOf(cls, target, classes.parents);
     }
 
-    protected isChildOf(cls: string, target: string): boolean {
+    protected isChildOf(cls: string, target: string, parents = this.classParents): boolean {
         while (cls) {
-            if (!this.classParents.has(cls)) throw new Error(`UnrealScript class '${cls}' is not in the decode library`);
+            if (!parents.has(cls)) throw new Error(`UnrealScript class '${cls}' is not in the decode library`);
             if (cls === target) return true;
-            cls = this.classParents.get(cls);
+            cls = parents.get(cls);
         }
         return false;
     }
@@ -1795,8 +2355,9 @@ export class UnScriptVM {
     public metaCast(value: ScriptValue_T, target: string): ScriptValue_T {
         if (typeof value !== "string" || !target) return null;
         const cls = value.toLowerCase();
+        const resource = cacheScriptResources.get(cls)?.deref(), classes = resource ? cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses : this.scriptObjectClasses;
 
-        if (!this.classParents.has(this.classAliases.get(cls) || cls)) return null;
+        if (!classes.parents.has(classes.aliases.get(this.classAliases.get(cls) || cls) || cls)) return null;
         return this.isClassChildOf(cls, target) ? value : null;
     }
 
@@ -1807,6 +2368,17 @@ export class UnScriptVM {
 
         if (typeof value === "string") {
             cls = this.objectClasses.get(value.toLowerCase());
+            const resource = cacheScriptResources.get(value.toLowerCase())?.deref();
+
+            if (resource) {
+                const classes = cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses;
+
+                cls = resource.scriptClassId.toLowerCase();
+                target = this.classAliases.get(target.toLowerCase()) || target.toLowerCase();
+                target = classes.aliases.get(target) || target;
+                if (!classes.parents.has(target) && !this.classParents.has(target)) throw new Error(`UnrealScript class '${target}' is not in the decode library`);
+                return this.isChildOf(classes.aliases.get(cls) || cls, target, classes.parents) ? value : null;
+            }
 
             if (!cls) throw new Error(`UnrealScript object '${value}' has no class metadata.`);
         } else {
@@ -1946,11 +2518,19 @@ export class UnScriptVM {
         if (!frame || role == null || role < ENetRole_T.ROLE_Authority && !(frame.node.flags & EStateFlags_T.STATE_Simulated) || getProperty(context, "bDeleteMe")) return;
 
         if (frame.latentAction) {
-            if (frame.latentAction !== EPollSlowFuncs.EPOLL_Sleep) { debugger; throw new Error(`Unimplemented latent action '${frame.latentAction}' for '${context.scriptClassId}'`); }
-            const delta = Math.fround(deltaTime), remaining = Math.fround(getProperty(context, "LatentFloat") as number) - delta;
+            switch (frame.latentAction) {
+                case EPollSlowFuncs.EPOLL_Sleep: {
+                    const delta = Math.fround(deltaTime), remaining = Math.fround(getProperty(context, "LatentFloat") as number) - delta;
 
-            setProperty(context, "LatentFloat", Math.fround(remaining));
-            if (remaining < delta * 0.5) frame.latentAction = 0;
+                    setProperty(context, "LatentFloat", Math.fround(remaining));
+                    if (remaining < delta * 0.5) frame.latentAction = 0;
+                    break;
+                }
+                case EPollSlowFuncs.EPOLL_FinishInterpolation:
+                    if (!getProperty(context, "bInterpolating")) frame.latentAction = 0;
+                    break;
+                default: debugger; throw new Error(`Unimplemented latent action '${frame.latentAction}' for '${context.scriptClassId}'`);
+            }
         }
 
         let node = frame.node, changes = 0, steps = 0;
@@ -1974,6 +2554,16 @@ export class UnScriptVM {
 
         if (name.toLowerCase() === "getpropertytext") return this.getPropertyText(context, args[0] as string);
         if (name.toLowerCase() === "setpropertytext") return this.setPropertyText(context, args[0] as string, args[1] as string);
+        if (name.toLowerCase() === "findobject") return this.findObject(args[0] as string, args[1] as string);
+        if (name.toLowerCase() === "localize") return this.localize(args[0] as string, args[1] as string, args[2] as string);
+        if (name.toLowerCase() === "saveconfig" || index === 536) return this.saveConfig(context);
+        if (name.toLowerCase() === "resetconfig") return this.resetConfig(context);
+        if (name.toLowerCase() === "staticsaveconfig") {
+            const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
+            const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
+
+            return vm.saveConfig(vm.getDefaultObject(context.scriptClassId));
+        }
 
         if (name.toLowerCase() === "getenum") {
             const names = typeof args[0] === "string" ? this.enumsById.get(args[0].toLowerCase()) : null, index = args[1] as number;
@@ -2011,6 +2601,17 @@ export class UnScriptVM {
             return undefined;
         }
 
+        if (index === 301) {
+            const frame = cacheStateFrames.get(context);
+
+            if (!frame) throw new Error(`UnrealScript FinishInterpolation requires an initialized state frame for '${context.scriptClassId}'`);
+            frame.latentAction = EPollSlowFuncs.EPOLL_FinishInterpolation;
+            return undefined;
+        }
+
+        // Engine.dll execMakeNoise 0x105dcfe0 consumes its arguments without producing a noise event.
+        if (index === 512) return undefined;
+
         if (index === 117 || index === 118) {
             const probe = args[0] as string, mask = typeof probe === "string" ? cacheProbeMasks.get(probe.toLowerCase()) : undefined;
             const frame = cacheStateFrames.get(context);
@@ -2041,11 +2642,28 @@ export class UnScriptVM {
             return frame && frame.node ? frame.node.name : "None";
         }
 
-        if (name.toLowerCase() === "dynamicloadobject" && typeof args[1] === "string" && args[1].toLowerCase() === "engine.sound") {
-            const path = args[0] as string;
+        if (name.toLowerCase() === "dynamicloadobject") {
+            const path = this.resolveConfigName(args[0] as string);
 
-            if (!(path in this.library.sounds)) throw new Error(`Script sound '${path}' has not been decoded.`);
-            return this.library.sounds[path] === null ? null : path;
+            if (path === null) return null;
+            const resource = cacheScriptResources.get(path.toLowerCase())?.deref() as ScriptResource_T;
+            let object: ScriptHost_T = resource && resource.isScriptResource && this.dynamicCast(resource.scriptObjectPath, args[1] as string) !== null ? resource : null;
+            const isSound = typeof args[1] === "string" && (this.classAliases.get(args[1].toLowerCase()) || args[1].toLowerCase()) === (this.classAliases.get("engine.sound") || "engine.sound");
+
+            if (!object) object = this.findRegisteredObject(path, args[1] as string, null, false, false, true);
+            if (object) {
+                const value = (object as ScriptResource_T).isScriptResource ? (object as ScriptResource_T).scriptObjectPath : object;
+
+                if (!isSound) return value;
+            } else if (this.findRegisteredObject(path, null, null, false, false, true)) return null;
+            if (isSound) {
+                const key = path in this.library.sounds ? path : Object.keys(this.library.sounds).find(id => id.toLowerCase() === path.toLowerCase());
+
+                if (key === undefined) throw new Error(`Script sound '${path}' has not been decoded.`);
+                return this.library.sounds[key];
+            }
+            args = args.slice();
+            args[0] = path;
         }
 
         if (index === 280) {
@@ -2107,21 +2725,36 @@ export class UnScriptVM {
         if (context.handlesUnrealScriptFunction && context.handlesUnrealScriptFunction(fn)) return undefined;
 
         const locals = new Map<string, ScriptArgument_T>();
+        let outArgs: [string, ScriptSlot_T][];
         let argIndex = 0;
 
         for (const field of fn.fields) {
-            if (!(field.flags & CPF_Parm)) {
-                if ((field.type as string) === "Array") locals.set(field.name, []);
-                continue;
-            }
+            if (!(field.flags & CPF_Parm)) continue;
             if (field.flags & CPF_ReturnParm) continue;
 
-            locals.set(field.name, argIndex < args.length ? args[argIndex++] : null);
+            const value = args[argIndex++];
+
+            if (isScriptSlot(value)) {
+                locals.set(field.name, cloneScriptValue(value.get()));
+                if (field.flags & CPF_OutParm) {
+                    if (!outArgs) outArgs = [];
+                    outArgs.push([field.name, value]);
+                }
+            } else if (value !== undefined) locals.set(field.name, cloneScriptValue(value));
         }
 
         const frame: ScriptFrame_T = { fn, self, context, locals, returnValue: undefined, didReturn: false, stopped: false };
 
-        return new ScriptExecutor(this, frame).run();
+        const result = new ScriptExecutor(this, frame).run();
+
+        // UObject::CallFunction 0x10141aca copies out parameters in reverse order.
+        if (outArgs)
+            for (let i = outArgs.length - 1; i >= 0; i--) {
+                const [name, slot] = outArgs[i];
+
+                slot.set(cloneScriptValue(locals.get(name) as ScriptValue_T));
+            }
+        return result;
     }
 
     public isProbing(context: ScriptHost_T, name: string): boolean {

@@ -157,7 +157,7 @@ export type MusicInfoDecodedMessage_T = {
     music: Record<number, string[]>; // music id -> package paths
 };
 
-export type ClientConfig_T = { userConfig: UserConfig_T; warriorAnimations: Record<string, WarriorAnimations_T>; };
+export type ClientConfig_T = { userConfig: UserConfig_T; warriorAnimations: Record<string, WarriorAnimations_T>; scriptLocalization: Map<string, Map<string, Map<string, string>>>; scriptConfig: Map<string, Map<string, [string, string][]>>; };
 export type ClientConfigDecodedMessage_T = { type: "clientConfigDecoded"; requestId: number; config: ClientConfig_T; };
 export type ScriptLocalizationDecodedMessage_T = { type: "scriptLocalizationDecoded"; requestId: number; properties: LocalizationProperty_T[]; };
 export type L2TextDecodedMessage_T = { type: "l2TextDecoded"; requestId: number; text: string; };

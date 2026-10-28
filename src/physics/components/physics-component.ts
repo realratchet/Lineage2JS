@@ -89,18 +89,18 @@ export class ColliderComponent extends PhysicsComponent<ICollidable & IObject> {
 export class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
     public readonly componentName = "mover";
     protected uiManager: UIManager = null;
-    protected nextUpdate = -1;
-    protected uiPosition = NaN;
+    protected areDoorsOpen = false;
 
     public onPhysicsAdded(manager: PhysicsManager): void {
         super.onPhysicsAdded(manager);
 
         this.uiManager = manager.getParent().getComponent("ui");
-        this.uiPosition = this.uiManager.moverPosition;
+        this.areDoorsOpen = this.uiManager.areDoorsOpen;
+        this.getParent().initializeMover();
 
         const doorPosition = manager.getParent().getComponent("network").getDoorPosition(this.getParent());
 
-        if (doorPosition !== undefined) this.getParent().setPosition(doorPosition);
+        if (doorPosition !== undefined) this.getParent().setOpen(doorPosition === 1);
     }
 
     public onPhysicsRemoved(manager: PhysicsManager): void {
@@ -109,26 +109,15 @@ export class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
         super.onPhysicsRemoved(manager);
     }
 
-    public onTriggerPosition(currentTime: number, position: Vector3): void {
-        const nextUpdate = this.getParent().tryTrigger(currentTime, position);
-
-        if (nextUpdate !== null) this.nextUpdate = nextUpdate;
-    }
-
-    public onPhysicsTick(currentTime: number, _deltaTime: number, actors: BaseActor[]): boolean {
-        if (this.uiPosition !== this.uiManager.moverPosition) {
-            this.uiPosition = this.uiManager.moverPosition;
-            this.nextUpdate = -1;
-            this.getParent().setPosition(this.uiPosition);
-            return true;
+    public onPhysicsTick(_currentTime: number, deltaTime: number, actors: BaseActor[]): boolean {
+        if (this.areDoorsOpen !== this.uiManager.areDoorsOpen) {
+            this.areDoorsOpen = this.uiManager.areDoorsOpen;
+            this.getParent().setOpen(this.areDoorsOpen);
         }
 
-        if (this.nextUpdate < 0 || currentTime < this.nextUpdate) return false;
-
-        this.nextUpdate = this.getParent().updateMover(currentTime, actors);
-
-        return true;
+        return this.getParent().updateMover(deltaTime, actors);
     }
+
 }
 
 export class RotatingComponent extends PhysicsComponent<RotatingObject & IObject> {

@@ -1,4 +1,5 @@
 import BaseConfigFile from "./un-base-config";
+import { parseConfigFile } from "./conf-parser";
 
 export type LocalizationProperty_T = {
     name: string;
@@ -36,6 +37,18 @@ export class UConfigLocalization extends BaseConfigFile {
 
     public getProperties(className: string): LocalizationProperty_T[] {
         return this.sections.get(className.toLowerCase()) || [];
+    }
+
+    public getStrings(): Map<string, Map<string, string>> {
+        const sections = new Map<string, Map<string, string>>();
+
+        for (const [name, properties] of parseConfigFile(this.decodeConfig())) {
+            const strings = new Map<string, string>();
+
+            for (const [key, value] of properties) strings.set(key.toLowerCase(), value);
+            sections.set(name, strings);
+        }
+        return sections;
     }
 }
 

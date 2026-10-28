@@ -13,7 +13,7 @@ import prepareLibraryForTransfer from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, serializeLibraryBlob, deserializeLibrary, openLibraryFile, hydrateLibraryFile, getLibraryChunkBlob, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectClass, dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T } from "./decode-protocol";
+import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T, ClientConfig_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
@@ -24,10 +24,11 @@ import { WeaponType, type UPawn } from "@l2js/engine/un-pawn";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
+import UConfigIni from "@l2js/engine/conf-files/un-conf-ini";
 import UConfigTTFontInfo from "@l2js/engine/conf-files/un-conf-ttfont-info";
 import UL2Text from "@l2js/engine/conf-files/un-l2text";
 import { consumeTuple } from "@l2js/engine/conf-files/conf-parser";
-import { getUserConfig, UserConfig_T } from "@l2js/engine/conf-files/un-conf-system";
+import { getUserConfig } from "@l2js/engine/conf-files/un-conf-system";
 import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
@@ -451,7 +452,8 @@ export class DecodeEngine {
     protected cacheHairConfig: UConfigHair = null;
     protected cacheEnchantConfig: Record<string, string> = null;
     protected readonly localizationFiles = new Map<string, string>();
-    protected readonly scriptLocalizations = new Map<string, UConfigLocalization>();
+    protected readonly configFiles = new Map<string, string>();
+    protected readonly scriptLocalizations = new Map<string, Promise<UConfigLocalization>>();
 
     protected async sweepCache(settings: LoadSettings_T): Promise<void> {
         if (this.hasSweptCache) return;
@@ -463,8 +465,10 @@ export class DecodeEngine {
     public async initialize(): Promise<void> {
         const assetList = await (await fetchAsset("asset-list.json")).json();
 
-        for (const path of assetList.unsupported)
+        for (const path of assetList.unsupported) {
             if (path.toLowerCase().endsWith(".int")) this.localizationFiles.set(path.toLowerCase(), path);
+            if (/^system\/[^/]+\.ini$/i.test(path)) this.configFiles.set(path.slice(7).toLowerCase(), path);
+        }
 
         this.assetLoader = await AssetLoader.Instantiate(assetList.supported);
 
@@ -475,10 +479,12 @@ export class DecodeEngine {
         pkgCore.loadNativeClasses();
     }
 
-    public async decodeClientConfig(): Promise<{ userConfig: UserConfig_T, warriorAnimations: Record<string, WarriorAnimations_T> }> {
-        const [userConfig, warriorFile] = await Promise.all([
+    public async decodeClientConfig(): Promise<ClientConfig_T> {
+        const [userConfig, warriorFile, scriptLocalization, scriptConfig] = await Promise.all([
             getUserConfig(),
-            new UConfigWarrior("assets/system/lineagewarrior.int").decode()
+            new UConfigWarrior("assets/system/lineagewarrior.int").decode(),
+            this.decodeLocalizationStrings(),
+            this.decodeConfigFiles()
         ]);
         const warriorConfig = await warriorFile.load();
         const warriorAnimations: Record<string, WarriorAnimations_T> = {};
@@ -486,7 +492,17 @@ export class DecodeEngine {
         for (const className of warriorConfig.getClassNames())
             warriorAnimations[className] = warriorConfig.getAnimations(className);
 
-        return { userConfig, warriorAnimations };
+        return { userConfig, warriorAnimations, scriptLocalization, scriptConfig };
+    }
+
+    protected async decodeConfigFiles(): Promise<Map<string, Map<string, [string, string][]>>> {
+        const entries = await Promise.all(Array.from(this.configFiles, async ([name, path]): Promise<[string, Map<string, [string, string][]>]> => {
+            const file = await new UConfigIni(`assets/${path}`).decode();
+
+            return [name, file.getSections()];
+        }));
+
+        return new Map(entries);
     }
 
     public async decodeL2Text(name: string): Promise<string> {
@@ -502,19 +518,30 @@ export class DecodeEngine {
 
         const packageName = scriptClassPath.slice(0, separator).toLowerCase();
         const className = scriptClassPath.slice(separator + 1);
+        const config = await this.getLocalizationFile(packageName);
+
+        return config ? config.getProperties(className) : [];
+    }
+
+    protected async getLocalizationFile(packageName: string): Promise<UConfigLocalization> {
         const path = this.localizationFiles.get(`system/${packageName}.int`);
 
-        if (!path) return [];
+        if (!path) return null;
+        if (!this.scriptLocalizations.has(packageName)) this.scriptLocalizations.set(packageName, this.loadLocalizationFile(path));
+        return await this.scriptLocalizations.get(packageName);
+    }
 
-        let config = this.scriptLocalizations.get(packageName);
+    protected async loadLocalizationFile(path: string): Promise<UConfigLocalization> {
+        const config = await new UConfigLocalization(`assets/${path}`).decode();
 
-        if (!config) {
-            config = await new UConfigLocalization(`assets/${path}`).decode();
-            await config.load();
-            this.scriptLocalizations.set(packageName, config);
-        }
+        return await config.load();
+    }
 
-        return config.getProperties(className);
+    protected async decodeLocalizationStrings(): Promise<Map<string, Map<string, Map<string, string>>>> {
+        const packages = Array.from(this.localizationFiles.keys()).filter(path => path.startsWith("system/")).map(path => path.slice(7, -4));
+        const files = await Promise.all(packages.map(name => this.getLocalizationFile(name)));
+
+        return new Map(packages.map((name, index) => [name, files[index].getStrings()]));
     }
 
     protected collectPackageBuffers(): Set<ArrayBuffer> {
@@ -871,6 +898,7 @@ export class DecodeEngine {
 
         if (cached) {
             if (!isMetadataOnly && !builder.library.soundBlobCache.has(cached.name)) builder.library.soundBlobCache.set(cached.name, Object.assign({}, cached.sound));
+            builder.library.sounds[cached.name] = cached.name;
             builder.library.scriptObjects[key] = builder.library.scriptObjects[cached.name.toLowerCase()] = cached.scriptObject;
             return cached.name;
         }
@@ -892,6 +920,7 @@ export class DecodeEngine {
         const soundName = sound.name;
 
         if (isMetadataOnly) {
+            builder.library.sounds[soundName] = soundName;
             builder.library.scriptObjects[key] = builder.library.scriptObjects[soundName.toLowerCase()] = dumpObjectClass(sound);
             return soundName;
         }
@@ -1070,7 +1099,26 @@ export class DecodeEngine {
 
     protected async pullSectorScriptAssets(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
         const [, cls] = await this.fetchScriptClass("Engine.DefaultPhysicsVolume");
-        new DecodeLibraryBuilder(library, settings).pullScriptClasses([cls]);
+        const builder = new DecodeLibraryBuilder(library, settings);
+
+        builder.pullScriptClasses([cls]);
+        const sounds = new Set<string>();
+
+        for (const actor of library.levelActors) {
+            if (!actor) continue;
+            let cls = library.scriptClasses[actor.scriptClassId];
+
+            while (cls && cls.id !== "engine.Mover") cls = library.scriptClasses[cls.superClassId];
+            if (!cls) continue;
+            for (const field of ["OpeningSound", "OpenedSound", "ClosingSound", "ClosedSound"]) {
+                let sound = actor.scriptProperties[field];
+
+                if (sound === undefined)
+                    for (let cls = library.scriptClasses[actor.scriptClassId]; cls && sound === undefined; cls = library.scriptClasses[cls.superClassId]) sound = cls.defaults[field];
+                if (typeof sound === "string" && sound.toLowerCase() !== "none") sounds.add(sound);
+            }
+        }
+        for (const sound of sounds) library.sounds[sound] = await this.pullSoundPath(builder, sound, false, settings.loadAudio === false);
         await this.pullWaterVolumeEffects(library, settings);
     }
 

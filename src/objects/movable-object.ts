@@ -3,12 +3,13 @@ import { Object3D, Quaternion, Vector3 } from "three";
 import type BaseActor from "../base-actor";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
+import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
+import { EPhysics_T } from "../assets/unreal/un-aactor";
+import type { ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import { pointPrimitive } from "../physics/collision-primitive";
 import { MoverComponent } from "../physics/components/physics-component";
 import type { SectorObject } from "./zone-object";
 import type { IMoverDecodeInfo } from "@l2js/engine/contracts/mesh";
-
-type MoverState_T = "closed" | "delaying" | "opening" | "open" | "closing" | "stopped";
 
 const frozenUpdateMatrixWorld = function () { };
 const tmpOldPosition = new Vector3();
@@ -21,6 +22,10 @@ const tmpActorTargetPosition = new Vector3();
 const tmpEncroachMovement = new Vector3();
 const tmpEncroachBack = new Vector3();
 const tmpExtent = new Vector3();
+const tmpRotation = [0, 0, 0];
+const tmpPreviousRotation = [0, 0, 0];
+const tmpStartPosition = new Vector3();
+const tmpQuaternionElements: [number, number, number, number] = [0, 0, 0, 1];
 
 export class MovableObject extends CollidingMesh {
     public readonly isMovableObject: boolean = true;
@@ -28,12 +33,6 @@ export class MovableObject extends CollidingMesh {
     public readonly hitActorNormal: Vector3;
 
     protected readonly mover: IMoverDecodeInfo;
-    protected readonly keyPositions: Vector3[];
-    protected readonly keyQuaternions: Quaternion[];
-    protected state: MoverState_T = "closed";
-    protected keyNum: number;
-    protected stateStart: number = 0;
-    protected transformAlpha: number = 0;
 
     public constructor(props: { geometry: THREE.BufferGeometry, materials: THREE.Material | THREE.Material[], lightInfo: MeshLight_T, colliderIndices: Uint32Array, scaledGlow: number, isSunAffected?: boolean, isSpecialLit?: boolean, forcedRegionTag?: string, forcedRegion?: number, ambient?: { glow: number, vector: number[], isUnlit: boolean }, mover: IMoverDecodeInfo }) {
         super(props);
@@ -41,11 +40,6 @@ export class MovableObject extends CollidingMesh {
         this.mover = props.mover;
         this.damageGrade = props.mover.damageGrade;
         this.hitActorNormal = new Vector3().fromArray(props.mover.hitActorNormal);
-        this.keyPositions = props.mover.keyPositions.map(v => new Vector3().fromArray(v));
-        this.keyQuaternions = props.mover.keyQuaternions.map(v => new Quaternion().fromArray(v));
-        this.keyNum = props.mover.keyNum;
-
-        if (this.keyNum > 0) this.state = "open";
 
         this.addComponent(new MoverComponent());
     }
@@ -55,46 +49,45 @@ export class MovableObject extends CollidingMesh {
         this.rigidbodyDesc = RigidBodyDesc.kinematicPositionBased();
     }
 
-    protected isTriggered(position: Vector3): boolean {
-        const closed = this.keyPositions[0];
-        const dx = position.x - closed.x;
-        const dy = position.y - closed.y;
+    public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
+        if (call.context !== this) return super.callUnrealNative(call);
 
-        return dx * dx + dy * dy <= this.mover.collisionRadius * this.mover.collisionRadius
-            && Math.abs(position.z - closed.z) <= this.mover.collisionHeight;
-    }
+        switch (call.index) {
+            case 3970:
+                if (call.args[0] !== EPhysics_T.PHYS_MovingBrush) throw new Error(`Mover physics '${call.args[0]}' is not implemented.`);
+                this.setUnrealScriptProperty("Physics", call.args[0]);
+                return;
+            case 266: {
+                const delta = call.args[0] as number[];
 
-    protected beginMove(state: "opening" | "closing", keyNum: number, currentTime: number): void {
-        this.state = state;
-        this.keyNum = keyNum;
-        this.stateStart = currentTime;
-        this.transformAlpha = 0;
-        this.unfreezeMover();
-    }
+                this.unfreezeMover();
+                this.position.x += delta[0];
+                this.position.y += delta[1];
+                this.position.z += delta[2];
+                this.syncCollisionTransform();
+                this.freezeMover();
+                return true;
+            }
+            case 299: {
+                const rotation = call.args[0] as number[];
 
-    protected updateTransform(alpha: number, fromKey: number, toKey: number, actors?: BaseActor[], isGliding: boolean = this.mover.isGliding): boolean {
-        tmpOldPosition.copy(this.position);
-        tmpOldQuaternion.copy(this.quaternion);
-
-        const blendAlpha = isGliding ? 3 * alpha * alpha - 2 * alpha * alpha * alpha : alpha;
-
-        this.position.lerpVectors(this.keyPositions[fromKey], this.keyPositions[toKey], blendAlpha);
-        this.quaternion.slerpQuaternions(this.keyQuaternions[fromKey], this.keyQuaternions[toKey], blendAlpha);
-
-        this.syncCollisionTransform();
-
-        if (actors && this.checkEncroachment(actors, tmpOldPosition, tmpOldQuaternion)) {
-            this.position.copy(tmpOldPosition);
-            this.quaternion.copy(tmpOldQuaternion);
-
-            this.syncCollisionTransform();
-
-            return false;
+                this.unfreezeMover();
+                this.setRotation(rotation);
+                this.syncCollisionTransform();
+                this.freezeMover();
+                return true;
+            }
         }
 
-        this.transformAlpha = alpha;
+        return super.callUnrealNative(call);
+    }
 
-        return true;
+    protected setRotation(rotation: number[]): void {
+        const value = this.getUnrealScriptProperty("Rotation") as number[];
+
+        for (let i = 0; i < 3; i++) value[i] = rotation[i];
+        this.setUnrealScriptProperty("Rotation", value);
+        this.quaternion.fromArray(getRotatorQuaternionElements(rotation[0], rotation[1], rotation[2], tmpQuaternionElements));
     }
 
     protected checkEncroachment(actors: BaseActor[], oldPosition: Vector3, oldQuaternion: Quaternion): boolean {
@@ -140,7 +133,7 @@ export class MovableObject extends CollidingMesh {
             const stillEncroaching = pointPrimitive(primitive, movedPrimitive.center, tmpExtent);
 
             if (stillEncroaching) {
-                if (this.mover.moverEncroachType === "stop" || this.mover.moverEncroachType === "return") return true;
+                if (this.scriptComponent.call("EncroachingOn", [actor])) return true;
                 continue;
             }
 
@@ -163,134 +156,101 @@ export class MovableObject extends CollidingMesh {
         this.matrixAutoUpdate = false;
         this.updateMatrixWorld = frozenUpdateMatrixWorld;
 
+        this.invalidateDoorPortals();
+    }
+
+    protected invalidateDoorPortals(): void {
         let parent = this.parent;
+
         while (parent && !(parent as SectorObject).isSectorObject) parent = parent.parent;
         if (parent) (parent as SectorObject).invalidateDoorPortals();
     }
 
     public unfreezeMover(): void {
+        if (!this.matrixAutoUpdate) this.invalidateDoorPortals();
         this.matrixAutoUpdate = true;
         this.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
     }
 
-    public isServerControlled(): boolean { return (this as any).scriptProperties?.get("L2ServerObjectRealID") > 0; }
+    public isServerControlled(): boolean { return (this.getUnrealScriptProperty("L2ServerObjectRealID") as number) > 0; }
 
-    public setPosition(alpha: number): void {
-        if (this.keyPositions.length < 2) return;
-
-        alpha = Math.max(0, Math.min(alpha, 1));
-
-        const value = alpha * (this.keyPositions.length - 1);
-        const fromKey = Math.min(Math.floor(value), this.keyPositions.length - 2);
-
-        this.unfreezeMover();
-        this.updateTransform(value - fromKey, fromKey, fromKey + 1, null, false);
-        this.state = alpha === 1 ? "open" : "closed";
-        this.keyNum = alpha === 1 ? this.keyPositions.length - 1 : 0;
+    public initializeMover(): void {
+        this.scriptComponent.beginPlay(() => this.scriptComponent.call("BeginPlay"));
         this.freezeMover();
     }
 
-    public tryTrigger(currentTime: number, triggerPosition: Vector3): number | null {
-        if (this.isServerControlled()) return null;
-        if (this.mover.initialState !== "BumpOpenTimed" || this.keyPositions.length < 2 || this.state !== "closed") return null;
-        if (!this.isTriggered(triggerPosition)) return null;
+    public setOpen(isOpen: boolean): void {
+        if (!!this.getUnrealScriptProperty("bOpen") === isOpen) return;
 
-        if (this.mover.delayTime > 0) {
-            this.state = "delaying";
-            this.stateStart = currentTime;
-
-            return currentTime + this.mover.delayTime * 1000;
-        }
-
-        this.beginMove("opening", 1, currentTime);
-
-        return 0;
+        this.scriptComponent.call(isOpen ? "Trigger" : "UnTrigger", [null, null]);
+        this.setUnrealScriptProperty("bOpen", isOpen);
     }
 
-    public updateMover(currentTime: number, actors?: BaseActor[]): number {
-        if (this.isServerControlled()) return -1;
+    public updateMover(deltaTime: number, actors: BaseActor[]): boolean {
+        const seconds = Math.fround(deltaTime * 0.001);
 
-        const moveTime = Math.max(this.mover.moveTime * 1000, 5);
-        let transitions = 0;
+        this.scriptComponent.tick(seconds);
+        const velocity = this.getUnrealScriptProperty("Velocity") as number[];
 
-        while (transitions++ < this.keyPositions.length * 2 + 4) {
-            if (this.state === "closed" || this.state === "stopped") return -1;
+        if (!this.getUnrealScriptProperty("bInterpolating") || seconds <= 0) {
+            velocity[0] = velocity[1] = velocity[2] = 0;
+            return false;
+        }
 
-            if (this.state === "delaying") {
-                const wakeTime = this.stateStart + this.mover.delayTime * 1000;
+        let remaining = seconds, steps = 0;
+        tmpStartPosition.copy(this.position);
 
-                if (currentTime < wakeTime) return wakeTime;
+        while (this.getUnrealScriptProperty("bInterpolating") && remaining > 0) {
+            if (++steps > 64) throw new Error(`Mover '${this.name}' exceeded its interpolation limit.`);
+            const alpha = this.getUnrealScriptProperty("PhysAlpha") as number, rate = this.getUnrealScriptProperty("PhysRate") as number;
+            let nextAlpha = Math.fround(alpha + remaining * rate);
 
-                this.beginMove("opening", 1, wakeTime);
-                continue;
-            }
+            if (nextAlpha > 1) {
+                remaining *= (nextAlpha - 1) / (nextAlpha - alpha);
+                nextAlpha = 1;
+            } else remaining = 0;
 
-            if (this.state === "open") {
-                if (this.mover.triggerOnceOnly) return -1;
+            const blend = this.mover.isGliding ? Math.fround(3 * nextAlpha * nextAlpha - 2 * nextAlpha * nextAlpha * nextAlpha) : nextAlpha;
+            const key = this.getUnrealScriptProperty("KeyNum") as number, oldPos = this.getUnrealScriptProperty("OldPos") as number[], oldRot = this.getUnrealScriptProperty("OldRot") as number[];
+            const baseRot = this.getUnrealScriptProperty("BaseRot") as number[], keyRot = (this.getUnrealScriptProperty("KeyRot") as number[][])[key];
+            const basePos = this.getUnrealScriptProperty("BasePos") as number[], target = (this.getUnrealScriptProperty("KeyPos") as number[][])[key];
 
-                const wakeTime = this.stateStart + this.mover.stayOpenTime * 1000;
+            if (!target || !keyRot) throw new Error(`Mover '${this.name}' has no key '${key}'.`);
+            tmpOldPosition.copy(this.position);
+            tmpOldQuaternion.copy(this.quaternion);
+            const rotation = this.getUnrealScriptProperty("Rotation") as number[];
 
-                if (currentTime < wakeTime) return wakeTime;
+            for (let i = 0; i < 3; i++) tmpPreviousRotation[i] = rotation[i];
+            this.unfreezeMover();
+            this.position.set(Math.fround(oldPos[0] + Math.fround((Math.fround(basePos[0] + target[0]) - oldPos[0]) * blend)), Math.fround(oldPos[1] + Math.fround((Math.fround(basePos[1] + target[1]) - oldPos[1]) * blend)), Math.fround(oldPos[2] + Math.fround((Math.fround(basePos[2] + target[2]) - oldPos[2]) * blend)));
+            for (let i = 0; i < 3; i++) tmpRotation[i] = oldRot[i] + (Math.fround(((baseRot[i] + keyRot[i] - oldRot[i]) | 0) * blend) | 0) | 0;
+            this.setRotation(tmpRotation);
+            this.syncCollisionTransform();
 
-                this.beginMove("closing", this.keyPositions.length - 2, wakeTime);
-                continue;
-            }
-
-            const segmentEnd = this.stateStart + moveTime;
-            const alpha = Math.min((currentTime - this.stateStart) / moveTime, 1);
-            const fromKey = this.state === "opening" ? this.keyNum - 1 : this.keyNum + 1;
-
-            if (!this.updateTransform(alpha, fromKey, this.keyNum, actors)) {
-                if (this.mover.moverEncroachType === "stop") {
-                    this.state = "stopped";
-                    this.freezeMover();
-                    return -1;
-                }
-
-                const reverseAlpha = 1 - this.transformAlpha;
-
-                if (this.state === "opening") {
-                    this.state = "closing";
-                    this.keyNum = fromKey;
-                } else {
-                    this.state = "opening";
-                    this.keyNum = fromKey;
-                }
-
-                this.stateStart = currentTime - reverseAlpha * moveTime;
-                this.transformAlpha = reverseAlpha;
-
-                return 0;
-            }
-
-            if (alpha < 1) return 0;
-
-            if (this.state === "opening") {
-                if (this.keyNum < this.keyPositions.length - 1) {
-                    this.beginMove("opening", this.keyNum + 1, segmentEnd);
-                    continue;
-                }
-
-                this.state = "open";
-                this.stateStart = segmentEnd;
+            if (this.checkEncroachment(actors, tmpOldPosition, tmpOldQuaternion)) {
+                this.position.copy(tmpOldPosition);
+                this.setRotation(tmpPreviousRotation);
+                this.quaternion.copy(tmpOldQuaternion);
+                this.syncCollisionTransform();
                 this.freezeMover();
-                continue;
+                velocity[0] = velocity[1] = velocity[2] = 0;
+                return true;
             }
 
-            if (this.keyNum > 0) {
-                this.beginMove("closing", this.keyNum - 1, segmentEnd);
-                continue;
+            this.setUnrealScriptProperty("PhysAlpha", nextAlpha);
+            if (nextAlpha === 1) {
+                this.setUnrealScriptProperty("bInterpolating", false);
+                this.scriptComponent.call("KeyFrameReached");
             }
-
-            this.state = "closed";
-            this.stateStart = segmentEnd;
-            this.freezeMover();
-
-            return -1;
         }
 
-        return 0;
+        velocity[0] = Math.fround((this.position.x - tmpStartPosition.x) / seconds);
+        velocity[1] = Math.fround((this.position.y - tmpStartPosition.y) / seconds);
+        velocity[2] = Math.fround((this.position.z - tmpStartPosition.z) / seconds);
+        if (!this.getUnrealScriptProperty("bInterpolating")) this.freezeMover();
+        return true;
     }
+
 }
 
 export default MovableObject;

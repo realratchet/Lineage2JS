@@ -21,6 +21,8 @@ import { refreshSoundBlobUris, revokeSoundUri } from "./decode-worker/decode-cac
 import { AnimationClip, MathUtils, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "../objects/zone-object";
 import UnScriptVM, { getProperty, type ScriptHost_T } from "../ue-script/vm";
+import ConfigCache from "../ue-script/config-cache";
+import { getAssetSourceId } from "./asset-source";
 import PlayerController from "../objects/player-controller";
 import { IEngineComponent } from "../game/components";
 import type { GameManager } from "../game/game-manager"
@@ -337,9 +339,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (isLogin) setPawnComponents(manRender, new DecodeLibrary(), manRender.player);
 
-        const playerControllerLoad = this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [PLAYER_CONTROLLER_CLASS]).then(library => new PlayerController(library));
+        const clientConfigLoad = this.decodeWorker.getClientConfig();
+        const playerControllerLoad = (async () => {
+            const [library, config] = await Promise.all([this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [PLAYER_CONTROLLER_CLASS]), clientConfigLoad]);
+
+            UnScriptVM.setConfig(new ConfigCache(config.scriptConfig, "l2.ini", "user.ini", localStorage, `unrealConfig:${getAssetSourceId()}`));
+            return new PlayerController(library);
+        })();
         const [clientConfig, charGroups, envInfo, musicInfo, characterLibrary, playerController, effectLibrary, skyLibrary] = await Promise.all([
-            this.decodeWorker.getClientConfig(),
+            clientConfigLoad,
             this.decodeWorker.getCharGroups(),
             this.decodeWorker.decodeEnv(),
             this.decodeWorker.getMusicInfo(),
@@ -359,20 +367,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
         ]);
         const underwaterLoopSound = playerController.getUnderWaterLoopSound();
 
+        UnScriptVM.setLocalization(clientConfig.scriptLocalization);
         this.userConfig = clientConfig.userConfig;
         this.playerController = playerController;
-        for (const [key, value] of Object.entries(this.userConfig.fixedDefaultCamera)) {
-            if (Array.isArray(value)) {
-                const target = playerController.scriptProperties.get(key) as number[];
-
-                value.forEach((entry, index) => target[index] = entry);
-            } else playerController.scriptProperties.set(key, value);
-        }
-        playerController.scriptProperties.set("CameraViewHeightAdjust", this.userConfig.cameraViewHeightAdjust);
-        playerController.scriptProperties.set("bUseAutoTrackingPawn", this.userConfig.useAutoTrackingPawn);
-        playerController.scriptProperties.set("AutoTrackingPawnSpeed", this.userConfig.autoTrackingPawnSpeed);
-        if (this.userConfig.minZoomingDist !== null) playerController.scriptProperties.set("MinZoomingDist", this.userConfig.minZoomingDist);
-        if (this.userConfig.maxZoomingDist !== null) playerController.scriptProperties.set("MaxZoomingDist", this.userConfig.maxZoomingDist);
         if ((playerController.scriptProperties.get("MinZoomingDist") as number) > (playerController.scriptProperties.get("MaxZoomingDist") as number)) throw new Error(`Invalid camera zoom limits.`);
         // The comparison client's User.ini allows 10000; stock C4 CABs restrict it to 250.
         playerController.scriptProperties.set("MaxZoomingDist", Math.max(10000, playerController.scriptProperties.get("MaxZoomingDist") as number));
@@ -1127,6 +1124,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             if (!object.isVolume && !object.isStaticMeshActor) return;
 
             object.setScriptRuntime(sector.scriptVM, classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
+            if (object.isMovableObject && !object.findComponent("sound")) object.addComponent(new SoundComponent(renderManager.audioManager).setLibrary(library));
             if (object.isStaticMeshActor && object.scriptClassId && !object.getUnrealScriptProperty("bStatic") && object.getUnrealScriptProperty("bMovable") && !object.findComponent("transform"))
                 object.addComponent(new TransformComponent(renderManager, object.getBasedActors()));
         });

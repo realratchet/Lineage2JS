@@ -753,7 +753,9 @@ export class SectorObject extends GameObject {
 
         const doors: MovableObject[] = [];
         this.traverse(object => {
-            if ((object as MovableObject).isMovableObject && (object as MovableObject).isServerControlled()) doors.push(object as MovableObject);
+            const door = object as MovableObject;
+
+            if (door.isMovableObject && door.isServerControlled() && !door.getUnrealScriptProperty("bInterpolating")) doors.push(door);
         });
         this.blockedDoorPortals.clear();
         for (let i = 0; i < this.bspNodes.length; i++)

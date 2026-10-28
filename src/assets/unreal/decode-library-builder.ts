@@ -129,6 +129,7 @@ export class DecodeLibraryBuilder {
         sound = sound.loadSelf();
 
         const soundKey = sound.name;
+        this.library.sounds[soundKey] = soundKey;
         this.library.scriptObjects[soundKey.toLowerCase()] = dumpObjectClass(sound);
         let soundEntry = this.library.soundBlobCache.get(soundKey);
 

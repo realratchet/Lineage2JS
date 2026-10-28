@@ -321,7 +321,7 @@ export class NetworkActors {
         const mover = this.network.getParent().getComponent("render").findMovableByRealId(doorId);
 
         this.doorPositions.set(doorId, isOpen === 0 ? 1 : 0);
-        if (mover) mover.setPosition(isOpen === 0 ? 1 : 0);
+        if (mover) mover.setOpen(isOpen === 0);
     }
 
     public getDoorPosition(mover: MovableObject): number { return this.doorPositions.get((mover as any).scriptProperties?.get("L2ServerObjectRealID")); }

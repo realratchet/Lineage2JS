@@ -57,6 +57,7 @@ import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
 import UStaticMesh from "./static-mesh/un-static-mesh";
 import ULevelSummary from "./un-level-summary";
 import USound from "./un-sound";
+import UFont from "./un-font";
 import UAmbientSoundObject from "./un-ambient-sound";
 import UMover from "./un-mover";
 import * as NEnv from "./un-l2env";
@@ -433,6 +434,7 @@ export class UNativePackage extends ANativePackage {
             case "VertMesh": Constructor = UVertMesh; break;
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
+            case "Font": Constructor = UFont; break;
             case "Texture": Constructor = UTexture; break;
             case "WetTexture": Constructor = UWetTexture; break;
             case "Palette": Constructor = UPlatte; break;
