@@ -34,7 +34,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             ]);
 
         const dirAssets = path.resolve(__dirname, "../assets-c4") + path.sep;
-        const plugins = [new webpack.DefinePlugin({ DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""), PRELOAD_SECTORS: JSON.stringify(preloadSectors), CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces), LOGIN_EXIT_URL: JSON.stringify(loginExitUrl), CLIENT_DOWNLOAD_URL: JSON.stringify(clientDownloadUrl) })];
+        const plugins = [new webpack.DefinePlugin({ BITMAP_NAMEPLATES: JSON.stringify(process.env.BITMAP_NAMEPLATES !== "0"), DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""), PRELOAD_SECTORS: JSON.stringify(preloadSectors), CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces), LOGIN_EXIT_URL: JSON.stringify(loginExitUrl), CLIENT_DOWNLOAD_URL: JSON.stringify(clientDownloadUrl) })];
         const servedAssets = { files: Object.create(null), version: "" };
         const dirThreeWasm = path.resolve(__dirname, "../node_modules/three-wasm/src");
 

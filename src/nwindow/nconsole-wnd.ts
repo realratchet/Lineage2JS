@@ -6,7 +6,7 @@ import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un
 import { Vector3 } from "three";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import NWindowManager from "./nwindow-manager";
-import { FontType_T, type default as NWindowCanvas } from "./nwindow-canvas";
+import { NAMEPLATE_FONT, type default as NWindowCanvas } from "./nwindow-canvas";
 import type BaseActor from "../base-actor";
 import type RenderManager from "../rendering/render-manager";
 import Nameplate from "../rendering/nameplate";
@@ -1773,7 +1773,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                     tmpAlarmDelta.subVectors(tmpAlarmPosition, camera.position);
                     const hit = this.manRender.getPhysicsManager().singleLineCheck({ location: camera.position, delta: tmpAlarmDelta, extent: tmpAlarmExtent, sourceActor: player, sourceIsPlayer: true, sourceProfile: player.getCollisionProfile(), ignorePawns: true, traceWorld: true });
 
-                    if (!hit) this.manRender.overHeadAlarm.add(sx, sy - canvas.getLineHeight(FontType_T.LARGE) * (plate.title ? 2 : 1) - 34, tmpAlarmDelta.length());
+                    if (!hit) this.manRender.overHeadAlarm.add(sx, sy - canvas.getLineHeight(NAMEPLATE_FONT) * (plate.title ? 2 : 1) - 34, tmpAlarmDelta.length());
                 }
             }
 

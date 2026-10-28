@@ -1,5 +1,5 @@
 import { AlwaysDepth, CanvasTexture, DepthTexture, DoubleSide, LessEqualDepth, NearestFilter, NoColorSpace, Sprite, SpriteMaterial, Uniform, Vector2 } from "three";
-import { FontType_T, type default as NWindowCanvas } from "../nwindow/nwindow-canvas";
+import { FontType_T, NAMEPLATE_FONT, type default as NWindowCanvas } from "../nwindow/nwindow-canvas";
 
 export class Nameplate extends Sprite {
     protected readonly canvas = document.createElement("canvas");
@@ -72,31 +72,32 @@ if (opaqueDepthEnabled) {
         this.crest = crest;
         this.allyCrest = allyCrest;
 
-        const nameWidth = Math.ceil(canvas.measureText(name, FontType_T.LARGE)), lineHeight = canvas.getLineHeight(FontType_T.LARGE);
+        const padding = NAMEPLATE_FONT === FontType_T.BITMAP_LARGE ? 0 : 1;
+        const nameWidth = Math.ceil(canvas.measureText(name, NAMEPLATE_FONT)), lineHeight = canvas.getLineHeight(NAMEPLATE_FONT);
         const crestWidth = (crest ? 16 : 0) + (allyCrest ? 8 : 0);
         const top = title ? -lineHeight * 2 : -16;
         const bottom = Math.max(0, lineHeight - 15);
 
-        this.width = Math.ceil(Math.max(nameWidth + crestWidth + (bracket ? 38 + (crest ? 4 : 0) : 0), title ? canvas.measureText(title, FontType_T.LARGE) : 0)) + 2;
-        this.height = bottom - top + 2;
+        this.width = Math.ceil(Math.max(nameWidth + crestWidth + (bracket ? 38 + (crest ? 4 : 0) : 0), title ? canvas.measureText(title, NAMEPLATE_FONT) : 0)) + padding * 2;
+        this.height = bottom - top + padding * 2;
         const isResized = this.canvas.width !== this.width || this.canvas.height !== this.height;
 
         this.canvas.width = this.width;
         this.canvas.height = this.height;
-        this.center.set(this.width ? 1 - Math.trunc(this.width / 2) / this.width : 0.5, (bottom + 1) / this.height);
+        this.center.set(this.width ? 1 - Math.trunc(this.width / 2) / this.width : 0.5, (bottom + padding) / this.height);
 
         const context = this.canvas.getContext("2d"), crestX = Math.trunc(this.width / 2) - Math.trunc((nameWidth + crestWidth) / 2), nameX = crestX + crestWidth;
 
         context.imageSmoothingEnabled = false;
-        if (allyCrest) context.drawImage(allyCrest, 0, 4, 8, 12, crestX, -13 - top, 8, 12);
-        if (crest) context.drawImage(crest, 0, 4, 16, 12, crestX + (allyCrest ? 8 : 0), -13 - top, 16, 12);
-        canvas.renderText(context, nameX, -14 - top, nameColor, name, FontType_T.LARGE, true);
-        if (title) canvas.renderText(context, Math.trunc(this.width / 2) - Math.trunc(canvas.measureText(title, FontType_T.LARGE) / 2), -lineHeight * 2 - top + 1, titleColor, title, FontType_T.LARGE, true);
+        if (allyCrest) context.drawImage(allyCrest, 0, 4, 8, 12, crestX, -14 - top + padding, 8, 12);
+        if (crest) context.drawImage(crest, 0, 4, 16, 12, crestX + (allyCrest ? 8 : 0), -14 - top + padding, 16, 12);
+        canvas.renderText(context, nameX, -15 - top + padding, nameColor, name, NAMEPLATE_FONT, true);
+        if (title) canvas.renderText(context, Math.trunc(this.width / 2) - Math.trunc(canvas.measureText(title, NAMEPLATE_FONT) / 2), -lineHeight * 2 - top + padding, titleColor, title, NAMEPLATE_FONT, true);
         if (bracket) {
             const texture = canvas.getTexture(bracket);
 
-            context.drawImage(texture, 0, 0, 19, 16, crestX - 19 - (crest ? 2 : 0), -15 - top, 19, 16);
-            context.drawImage(texture, 0, 0, 19, 16, nameX + nameWidth, -15 - top, 19, 16);
+            context.drawImage(texture, 0, 0, 19, 16, crestX - 19 - (crest ? 2 : 0), -16 - top + padding, 19, 16);
+            context.drawImage(texture, 0, 0, 19, 16, nameX + nameWidth, -16 - top + padding, 19, 16);
         }
         if (isResized) {
             this.material.map.dispose();

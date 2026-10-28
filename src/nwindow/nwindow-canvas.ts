@@ -3,14 +3,38 @@ import fetchAsset from "../assets/asset-source";
 import { isSkinImageUrl, type SkinTextures } from "./skin-textures";
 
 type UIImage_T = { frames: ImageBitmap[], frameTime: number };
-type Font_T = { css: string, lineHeight: number, baseline: number };
+type Glyph_T = { u: number, v: number, w: number, h: number };
+type Font_T = { css: string, lineHeight: number, baseline: number, texture?: string, glyphs?: Map<number, Glyph_T> };
 
-export enum FontType_T { SMALL, LARGE }
+declare const BITMAP_NAMEPLATES: boolean;
+
+export enum FontType_T { SMALL, LARGE, BITMAP_LARGE }
+export const NAMEPLATE_FONT = BITMAP_NAMEPLATES ? FontType_T.BITMAP_LARGE : FontType_T.LARGE;
 
 export enum DigitFont_T { SMALL, NORMAL, LARGE } // NWindow 0x10013570 canvas digit strips for UCanvas::DrawSpecialDigit (Engine 0x105284e0): texture, cell width, cell height.
 
 export const DIGIT_FONTS: [string, number, number][] = [["SEK.cbui13", 5, 5], ["L2UI.NWindow.Number", 8, 8], ["L2UI_CH3.Etc.XLargeNumber", 11, 14]];
 export const DIGIT_CELLS = "0123456789HMP/%.C:";
+
+function parseGlyphs(buffer: ArrayBuffer): Map<number, Glyph_T> { // NL2Font::Load 0x10088a50 legacy layout; GetGlyph 0x10088400 takes the first range holding a non-empty rect.
+    const view = new DataView(buffer);
+    const glyphs = new Map<number, Glyph_T>();
+    const rangeCount = view.getUint32(8, true);
+
+    for (let range = 0, offset = 12; range < rangeCount; range++) {
+        const first = view.getInt32(offset, true), count = view.getInt32(offset + 4, true);
+
+        offset += 8;
+
+        for (let i = 0; i < count; i++, offset += 16) {
+            const u = view.getInt32(offset, true), w = view.getInt32(offset + 4, true), v = view.getInt32(offset + 8, true), h = view.getInt32(offset + 12, true);
+
+            if (w > 0 && h > 0 && !glyphs.has(first + i)) glyphs.set(first + i, { u, v, w, h });
+        }
+    }
+
+    return glyphs;
+}
 
 export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x10012d90 (texture tile) and 0x10012aa0 (text).
     public readonly element = document.createElement("canvas");
@@ -203,6 +227,19 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         }
 
         await this.loadTextures(DIGIT_FONTS.map(([texture]) => texture));
+
+        if (BITMAP_NAMEPLATES) {
+            const { bitmapFonts } = await this.asset.getGameStrings();
+            const { texture, glyph } = bitmapFonts.large;
+            const response = await fetchAsset(`assets/system/${glyph.toLowerCase()}`);
+
+            if (!response.ok) throw new Error(`Bitmap font '${glyph}' failed to load.`);
+
+            const glyphs = parseGlyphs(await response.arrayBuffer());
+
+            await this.loadTextures([texture]);
+            this.fonts.set(FontType_T.BITMAP_LARGE, { css: "", baseline: 0, texture, glyphs, lineHeight: glyphs.get(0x41).h });
+        }
     }
 
     public getLineHeight(type: FontType_T = FontType_T.SMALL): number { return this.fonts.get(type).lineHeight; }
@@ -213,7 +250,20 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     }
 
     public measureText(text: string, type: FontType_T = FontType_T.SMALL): number {
-        this.textContext.font = this.fonts.get(type).css;
+        const font = this.fonts.get(type);
+
+        if (font.glyphs) {
+            let width = 0, lineWidth = 0;
+
+            for (const char of text) {
+                if (char === "\n") { width = Math.max(width, lineWidth); lineWidth = 0; }
+                else lineWidth += font.glyphs.get(char.codePointAt(0))?.w || 0;
+            }
+
+            return Math.max(width, lineWidth);
+        }
+
+        this.textContext.font = font.css;
 
         return Math.max(...text.split("\n").map(line => this.textContext.measureText(line).width));
     }
@@ -382,6 +432,30 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
 
     public renderText(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: FontType_T = FontType_T.SMALL, isOutlined = false) {
         const font = this.fonts.get(type), transform = context.getTransform();
+
+        if (font.glyphs) {
+            const atlas = this.getTintedImage(font.texture, color);
+            const startX = Math.trunc(x);
+            let penX = startX, penY = Math.trunc(y);
+
+            context.save();
+            context.imageSmoothingEnabled = false;
+            context.globalAlpha = ((color >>> 24) & 0xff) / 255;
+
+            for (const char of text) {
+                if (char === "\n") { penX = startX; penY += font.lineHeight; continue; }
+
+                const glyph = font.glyphs.get(char.codePointAt(0));
+
+                if (!glyph) continue;
+
+                context.drawImage(atlas, glyph.u, glyph.v, glyph.w, glyph.h, penX, penY, glyph.w, glyph.h);
+                penX += glyph.w;
+            }
+
+            context.restore();
+            return;
+        }
 
         if (!transform.b && !transform.c && transform.a && transform.d) {
             x = (Math.round(x * transform.a + transform.e) - transform.e) / transform.a;
