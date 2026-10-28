@@ -1,3 +1,4 @@
+import { characterCreationRaces } from "../build-settings";
 import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 import type NetworkManager from "./network-manager";
 import { Vector3 } from "three";
@@ -247,7 +248,11 @@ export class NetworkSession {
 
     public requestNewCharacter() { this.game.newCharacter(); }
 
-    public createCharacter(info: CharacterCreate_T) { this.game.characterCreate(info); }
+    public createCharacter(info: CharacterCreate_T) {
+        if (!characterCreationRaces.includes(info.race)) throw new Error(`Character creation is disabled for race ${info.race}.`);
+
+        this.game.characterCreate(info);
+    }
 
     public deleteCharacter(slot: number) { this.game.characterDelete(slot); }
 

@@ -1,3 +1,4 @@
+import { characterCreationRaces } from "../build-settings";
 import { FontType_T } from "./nwindow-canvas";
 import { NDOM_EDIT_TEXTURES, NDomLayer, NDomButton_T, NDomEdit_T } from "./ndom";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -133,7 +134,7 @@ export class NCPawnSetupWnd { // NCPawnSetupWnd OnCreate 0x100cf680, OnPaint 0x1
         this.hairColorCtrl = new NCSelectCtrl(layer, this.element, 86, 148, 136, 17);
         this.faceCtrl = new NCSelectCtrl(layer, this.element, 86, 172, 136, 17);
 
-        this.raceCtrl.setOptions(RACE_OPTIONS);
+        this.raceCtrl.setOptions(characterCreationRaces.map(race => RACE_OPTIONS[race]));
         this.classCtrl.setOptions(CLASS_OPTIONS);
         this.sexCtrl.setOptions(SEX_OPTIONS);
         this.hairStyleCtrl.setOptions(HAIR_STYLE_FEMALE);
@@ -141,7 +142,7 @@ export class NCPawnSetupWnd { // NCPawnSetupWnd OnCreate 0x100cf680, OnPaint 0x1
         this.faceCtrl.setOptions(FACE_OPTIONS);
         this.setEnabled(1);
 
-        this.raceCtrl.onChange = index => this.pickRace(index);
+        this.raceCtrl.onChange = index => this.pickRace(characterCreationRaces[index]);
         this.classCtrl.onChange = index => this.pickClass(index);
         this.sexCtrl.onChange = index => this.pickSex(index);
         this.hairStyleCtrl.onChange = index => { this.hairStyle = index; this.pick("appearance"); };
@@ -154,7 +155,7 @@ export class NCPawnSetupWnd { // NCPawnSetupWnd OnCreate 0x100cf680, OnPaint 0x1
     }
 
     protected syncIndices() { // 0x100cec35: each selector shows its value, or nothing when the value is past its list.
-        const pairs: [NCSelectCtrl, number][] = [[this.raceCtrl, this.race], [this.classCtrl, this.classType], [this.sexCtrl, this.sex], [this.hairStyleCtrl, this.hairStyle], [this.hairColorCtrl, this.hairColor], [this.faceCtrl, this.face]];
+        const pairs: [NCSelectCtrl, number][] = [[this.raceCtrl, characterCreationRaces.indexOf(this.race)], [this.classCtrl, this.classType], [this.sexCtrl, this.sex], [this.hairStyleCtrl, this.hairStyle], [this.hairColorCtrl, this.hairColor], [this.faceCtrl, this.face]];
 
         for (const [ctrl, value] of pairs)
             ctrl.setIndex(value < ctrl.getCount() ? value : -1);

@@ -559,7 +559,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         const target = event.target as HTMLElement;
 
         if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
-        if (this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
+        if (this.followPlayer && this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
         if (event.code === "PageUp" || event.code === "PageDown" || event.code === "Home") {

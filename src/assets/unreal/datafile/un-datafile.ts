@@ -30,7 +30,8 @@ export class UDataFile extends UEncodedFile {
         const readable = this.asReadable();
         const signature = this.signature;
 
-        if (signature !== 0x69004c)
+        if (this.version === "111" || this.version === "121") readable.seek(0, "set");
+        else if (signature !== 0x69004c)
             throw new Error(`Invalid signature: '0x${signature.toString(16).toUpperCase()}' expected '0x9E2A83C1'`);
 
         const rowCount = this.recordCount === null ? readable.read("uint32") : this.recordCount;

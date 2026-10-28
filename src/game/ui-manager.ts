@@ -74,6 +74,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         header.append(title, hint);
         this.stats.dom.classList.add("debug-stats");
         this.stats.showPanel(0);
+        this.statsWindow.style.display = localStorage.getItem("showFPS:*") === "true" ? "block" : "none";
         document.body.appendChild(this.stats.dom);
 
         const tabs = document.createElement("nav");
@@ -304,7 +305,10 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.statisticsElement = document.createElement("pre");
         this.statisticsElement.className = "debug-info";
         panel.append(this.statisticsCanvas, this.statisticsElement);
-        this.addCheckbox(panel, "Show FPS overlay", true, value => this.statsWindow.style.display = value ? "block" : "none");
+        this.addCheckbox(panel, "Show FPS overlay", this.statsWindow.style.display !== "none", value => {
+            this.statsWindow.style.display = value ? "block" : "none";
+            localStorage.setItem("showFPS:*", String(value));
+        });
     }
 
     protected async pollWorkerMemory(): Promise<void> {

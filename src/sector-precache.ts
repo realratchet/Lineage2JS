@@ -1,3 +1,5 @@
+import { preloadSectors } from "./build-settings";
+import { setLoadingProgress, hideLoadingProgress } from "./loading-progress";
 import DecodeWorkerClient from "./assets/decode-worker/decode-worker-client";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
@@ -145,6 +147,33 @@ export async function runSectorPrecache(loadSettings: LoadSettings_T): Promise<v
         document.title = "Sector cache failed";
         console.error("[decode-cache] sector precache failed:", e);
     }
+}
+
+export async function preloadStartupSectors(loadSettings: LoadSettings_T): Promise<void> {
+    if (!preloadSectors.length) return;
+
+    const assetList = await (await fetchAsset("asset-list.json")).json();
+    const sectors = preloadSectors.filter(sector => `maps/${sector.toLowerCase()}.unr` in assetList.supported);
+    const startTime = performance.now();
+    const missing = preloadSectors.filter(sector => !sectors.includes(sector));
+
+    if (missing.length) console.log(`[preload] Maps absent from selected client: ${missing.join(", ")}`);
+
+    for (let i = 0; i < sectors.length; i++) {
+        const worker = new DecodeWorkerClient(1);
+
+        try {
+            setLoadingProgress(i / sectors.length, `Preparing ${sectors[i]} · ${i} / ${sectors.length} · ${formatDuration(performance.now() - startTime)}`, true);
+            await worker.ready;
+            const result = await worker.precacheSector(sectors[i], loadSettings);
+
+            setLoadingProgress((i + 1) / sectors.length, `${result.cached ? "Loaded" : "Built"} ${sectors[i]} · ${i + 1} / ${sectors.length} · ${formatDuration(performance.now() - startTime)}`, true);
+        } finally {
+            worker.terminate();
+        }
+    }
+
+    hideLoadingProgress();
 }
 
 export default runSectorPrecache;

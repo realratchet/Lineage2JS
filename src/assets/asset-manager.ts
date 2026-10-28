@@ -1,4 +1,5 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
+import loginServer from "../network/login-server";
 import decodeCursors from "./decoders/cursor-decoder";
 import UConfigBigHead from "./unreal/conf-files/un-conf-bighead";
 import fetchAssetHandle from "./unreal/asset-handle";
@@ -273,7 +274,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
     public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
-        this.decodeWorkerPoolSize = Math.min(loadSettings.decodeWorkerPoolSize ?? 3, new URLSearchParams(location.search).has("login") ? 2 : Infinity);
+        this.decodeWorkerPoolSize = Math.min(loadSettings.decodeWorkerPoolSize ?? 3, loginServer ? 2 : Infinity);
         this.maxConcurrentDecodes = 2;
 
         for (const path of Object.keys(assetList.supported)) {
@@ -335,7 +336,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
-        const isLogin = new URLSearchParams(location.search).has("login");
+        const isLogin = !!loginServer;
 
         if (isLogin) setPawnComponents(manRender, new DecodeLibrary(), manRender.player);
 
@@ -1059,7 +1060,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected async precacheCharacterAssets(): Promise<void> {
         await this.decodeWorker.precacheCharacters(this.loadSettings);
 
-        if (new URLSearchParams(location.search).has("login")) return;
+        if (loginServer) return;
 
         for (const group of this.charGroups) {
             const library = await this.getCharacterLibrary(group.index);

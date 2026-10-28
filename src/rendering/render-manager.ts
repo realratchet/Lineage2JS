@@ -1,5 +1,9 @@
 import NameplateDepth from "./nameplate-depth";
 import TranslucentRenderList from "./translucent-render-list";
+import PortalVisibility from "./portal-visibility";
+import MeshBounds from "./mesh-bounds";
+import BatchAngleVisibility from "./batch-angle-visibility";
+import SectorOcclusion from "./sector-occlusion";
 import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
@@ -379,6 +383,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.scene.add(this.getWaterEffects().underWaterEffect);
     }
     protected readonly shadowProjector = new ShadowProjector();
+    protected readonly meshBounds = new MeshBounds(this.shadowProjector);
+    protected readonly portalVisibility = new PortalVisibility(this.meshBounds);
+    protected readonly batchAngleVisibility = new BatchAngleVisibility(this.meshBounds);
+    protected readonly sectorOcclusion: SectorOcclusion;
     protected readonly colliderOverlay = new ColliderOverlay();
     protected showColliders = false;
 
@@ -420,17 +428,22 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         this.nameplateDepth = new NameplateDepth(this.renderer);
+        this.sectorOcclusion = new SectorOcclusion(this.renderer, this.meshBounds);
+        this.setBatchAngleCulling(5);
+        this.setPortalCulling(true);
         const renderBufferDirect = this.renderer.renderBufferDirect;
         this.renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
             if (group && group.count === 0) return;
 
             this.nameplateDepth.beforeRender(material, object);
             renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
+            this.sectorOcclusion.afterRender(camera, scene, geometry, material, object, group);
         };
 
         const dispose = this.renderer.dispose;
         this.renderer.dispose = () => {
             this.nameplateDepth.dispose();
+            this.sectorOcclusion.dispose();
             dispose.call(this.renderer);
         };
 
@@ -459,6 +472,21 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
             worldList.transparent.length = count;
             if (this.sortTransparent) this.translucentRenderList.sort(worldList.transparent, this.worldCamera, this.arrSceneSectors);
+            if (this.portalVisibility.enabled || this.batchAngleVisibility.angle > 0) {
+                const camera = this.worldCamera === this.camera && this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.worldCamera;
+                const sector = this.getSector(camera.position);
+                if (this.portalVisibility.prepare(camera, sector)) {
+                    this.portalVisibility.filter(worldList.opaque, sector);
+                    this.portalVisibility.filter(worldList.transmissive, sector);
+                    this.portalVisibility.filter(worldList.transparent, sector);
+                }
+                if (this.batchAngleVisibility.prepare(camera)) {
+                    this.batchAngleVisibility.filter(worldList.opaque, camera);
+                    this.batchAngleVisibility.filter(worldList.transmissive, camera);
+                    this.batchAngleVisibility.filter(worldList.transparent, camera);
+                }
+            }
+            this.sectorOcclusion.sort(worldList.opaque);
         };
         this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
@@ -1878,7 +1906,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (this.bspHelperCamera) {
             if (!this.bspHelperActive) {
                 this.bspHelperCamera.position.copy(this.camera.position);
-                this.bspHelperCamera.rotation.copy(this.camera.rotation);
+                this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
                 this.bspHelperCamera.updateMatrixWorld(true);
                 if (this.bspHelperCameraHelper) {
                     this.bspHelperCameraHelper.visible = false;
@@ -1890,6 +1918,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
             if (this.bspHelperCameraHelper) {
                 this.bspHelperCameraHelper.update();
+                this.bspHelperCameraHelper.updateMatrixWorld(true);
             }
         }
 
@@ -2720,14 +2749,33 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (viewShakeActive) this.restoreViewShake();
     }
 
+    public setPortalCulling(enabled: boolean): void {
+        this.portalVisibility.enabled = enabled;
+        this.needsUpdate = true;
+    }
+
+    public setSectorOcclusionCulling(enabled: boolean): void {
+        this.sectorOcclusion.enabled = enabled;
+        this.sectorOcclusion.invalidate();
+        this.needsUpdate = true;
+    }
+
+    public setBatchAngleCulling(degrees: number): void {
+        this.batchAngleVisibility.setAngle(degrees);
+        this.needsUpdate = true;
+    }
+
     protected drawWorld() {
         const frame = LocalSpaceSkeleton.renderFrame;
         LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
         this.nameplateDepth.begin(this.scene);
         try {
             this.worldCamera = this.camera;
+            const camera = this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.camera;
+            this.sectorOcclusion.begin(this.camera, camera, this.getSector(camera.position));
             this.renderer.render(this.scene, this.camera);
         } finally {
+            this.sectorOcclusion.end();
             this.nameplateDepth.end();
             LocalSpaceSkeleton.renderFrame = frame;
         }
@@ -2846,6 +2894,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         sector.updateMatrixWorld(true);
         freezeStaticSubtree(sector);
+        this.sectorOcclusion.add(sector);
 
         const currentSector = this.getSector(this.camera.position);
         if (currentSector && this.visualizer.isEnabled()) {
@@ -2947,6 +2996,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.getPhysicsManager().setEmitterWarmupGate(job.sector, true);
 
         job.sector.invalidateDoorPortals();
+        this.sectorOcclusion.add(job.sector);
     }
 
     protected queueSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean) {
@@ -3017,12 +3067,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.getPhysicsManager().registerSimulationObjects(sector.staticMeshGroup);
         this.updateColliderOverlay();
         if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
+        this.sectorOcclusion.add(sector);
 
         setLightingGate(sector.staticMeshGroup, false);
         this.queueSectorWarmup(sector, sector.staticMeshGroup, true);
     }
 
     public removeSector(sector: SectorObject) {
+        this.sectorOcclusion.remove(sector);
         this.pawnLightingStates = new WeakMap();
 
         for (let i = this.arrL2EventActors.length - 1; i >= 0; i--)
@@ -3091,11 +3143,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!this.bspHelperCamera) {
             this.bspHelperCamera = new PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.1, DEFAULT_FAR);
             this.bspHelperCamera.position.copy(this.camera.position);
-            this.bspHelperCamera.rotation.copy(this.camera.rotation);
+            this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
             this.bspHelperCamera.updateMatrixWorld(true);
 
             this.bspHelperCameraHelper = new CameraHelper(this.bspHelperCamera);
             this.bspHelperCameraHelper.name = "BSPHelperCameraHelper";
+            this.bspHelperCameraHelper.raycast = () => {};
             this.bspHelperCameraHelper.visible = false;
             this.scene.add(this.bspHelperCameraHelper);
 
@@ -3110,7 +3163,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             } else {
                 // Resume following main camera and hide helper
                 this.bspHelperCamera.position.copy(this.camera.position);
-                this.bspHelperCamera.rotation.copy(this.camera.rotation);
+                this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
                 this.bspHelperCamera.updateMatrixWorld(true);
                 if (this.bspHelperCameraHelper) {
                     this.bspHelperCameraHelper.visible = false;
@@ -3147,6 +3200,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
         for (const terrain of result.modified) this.getPhysicsManager().refreshCollider(terrain);
+
+        if (result.modified.length)
+            for (const sector of this.arrSceneSectors) this.sectorOcclusion.add(sector);
 
         this.updateColliderOverlay();
     }

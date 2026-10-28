@@ -1,3 +1,4 @@
+import { clientDownloadUrl } from "./build-settings";
 import fetchAsset, { selectAssetFiles, setServedAssets, type AssetFiles_T } from "./assets/asset-source";
 import decodeIcon from "./assets/decoders/icon-decoder";
 import type { HTMLViewportElement_T } from "./rendering/render-manager";
@@ -65,6 +66,13 @@ async function selectAssetSource(): Promise<void> {
     viewport.innerHTML = `<main><h1>Game files</h1><p>Select an installed Lineage II folder, or an InstallShield installer folder (data1.hdr, data1.cab, data2.cab, ...).</p>${stored ? `<button class="continue">Continue with ${stored.name}</button> ` : ""}${hasDirectoryPicker ? `<button class="choose">Choose folder</button>` : `<p>This browser can't remember the folder between launches. On Brave enable <code>brave://flags/#file-system-access-api</code>, otherwise use Chrome, Edge, Opera or Vivaldi.</p><input type="file" webkitdirectory>`}<pre></pre></main>`;
 
     const errors = viewport.querySelector("pre");
+
+    if (clientDownloadUrl) {
+        const template = document.querySelector<HTMLTemplateElement>("#asset-source-download");
+
+        errors.before(template.content.cloneNode(true));
+        viewport.querySelector<HTMLAnchorElement>("a.client-download").href = clientDownloadUrl;
+    }
 
     errors.textContent = storedError;
 

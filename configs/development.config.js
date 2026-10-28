@@ -10,6 +10,7 @@ const bundleConfigs = {
     devtool: "source-map",
     minimize: false,
     httpAssets: process.env.HTTP_ASSETS === "1",
+    defaultLoginServer: process.env.LOGIN_SERVER ?? "",
     dirOutput
 };
 

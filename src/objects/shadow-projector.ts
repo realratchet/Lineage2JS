@@ -248,7 +248,7 @@ export class ShadowProjector {
         }
     }
 
-    protected getReceiverBounds(geometry: THREE.BufferGeometry, group: THREE.BufferGeometry["groups"][number]): Box3 {
+    public getReceiverBounds(geometry: THREE.BufferGeometry, group: THREE.BufferGeometry["groups"][number]): Box3 {
         const position = geometry.getAttribute("position"), index = geometry.index;
         const buffer = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data : position as THREE.BufferAttribute;
         const positionVersion = buffer.version, indexVersion = index ? index.version : -1;

@@ -1,3 +1,4 @@
+import { loginExitUrl } from "../build-settings";
 import { setLoadingProgress, hideLoadingProgress } from "../loading-progress";
 import * as GamePackets from "../network/game-packets";
 import { EDrawType_T } from "../assets/unreal/un-aactor";
@@ -284,6 +285,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         window.addEventListener("keydown", replayInput, true);
         window.addEventListener("keyup", replayInput, true);
         window.addEventListener("keydown", event => { // UL2Console 0x100760c4..0x100760e1.
+            if (!this.manGame.getComponent("input").isFollowingPlayer() && !event.altKey && !event.ctrlKey && !event.metaKey && /^F[12]$/.test(event.code || event.key)) return;
             if (this.screen === "world") this.shortCutWnd.onKeyDown(event);
         }, true);
         window.addEventListener("keydown", event => { // UL2Console 0x100760e7..0x10076126.
@@ -619,6 +621,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const consoleWindows = new Set(this.layer.root.children);
 
         this.loginWnd = this.skin.createLoginWnd(this.layer);
+        this.loginWnd.onExit = () => { if (loginExitUrl) location.assign(loginExitUrl); };
         this.loginWnd.onLogin = (account, password) => void network.connectLogin(account, password);
         this.loginWnd.auth.onError = text => this.showMessage(text);
         this.loginWnd.loginFunction.onOption = index => { if (index === 2) this.optionWnd.toggle(); else if (index === 4) void this.showReplayList(); };

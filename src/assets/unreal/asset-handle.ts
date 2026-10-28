@@ -160,7 +160,15 @@ class LazyFileSystemHandle implements ILazyAssetHandle {
     public async getSource(): Promise<FileAssetSource> {
         if (!this.fh.createSyncAccessHandle) return null;
 
-        return new FileAssetSource(await this.fh.createSyncAccessHandle({ mode: "read-only" }));
+        return navigator.locks.request(`asset-cache:${this.path}`, async () => {
+            let isReadOnly = false;
+            const access = await this.fh.createSyncAccessHandle({ get mode() { isReadOnly = true; return "read-only" as const; } });
+
+            if (isReadOnly) return new FileAssetSource(access);
+
+            access.close();
+            return null;
+        });
     }
 
 }

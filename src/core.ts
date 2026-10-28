@@ -2,12 +2,13 @@ import RenderManager, { type HTMLViewportElement_T } from "./rendering/render-ma
 import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
 import AssetManager from "./assets/asset-manager";
-import runSectorPrecache from "./sector-precache";
+import runSectorPrecache, { preloadStartupSectors } from "./sector-precache";
 import GameManager from "./game/game-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import fetchAsset from "./assets/asset-source";
 import pickAssetSource from "./asset-source-picker";
 import { setLoadingProgress } from "./loading-progress";
+import loginServer from "./network/login-server";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
@@ -99,9 +100,11 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         return null;
     }
 
+    await preloadStartupSectors(loadSettings);
+
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
-    if (new URLSearchParams(location.search).has("login")) setLoadingProgress(0, "Loading game data…", true);
+    if (loginServer) setLoadingProgress(0, "Loading game data…", true);
     const assetList = await (await fetchAsset("asset-list.json")).json();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
     const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");
@@ -112,9 +115,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
 
     // await _decodeDatFile("assets/system/Npcgrp.dat");
 
-    const params = new URLSearchParams(location.search);
-
-    if (params.has("login")) void engine.getComponent("network").showLogin(params.get("login") || `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:3106/`);
+    if (loginServer) void engine.getComponent("network").showLogin(loginServer);
 
     if (interactive) {
         uiManager.addClippingRangeControls();
@@ -122,7 +123,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         uiManager.addNpcControls();
         await uiManager.addCharacterControls();
 
-        if (!params.has("login")) void precacheCharacters(assetManager);
+        if (!loginServer) void precacheCharacters(assetManager);
     }
 
     // await _decodeCharacter(renderManager, assetLoader, "Fighter", "FFighter");
