@@ -708,46 +708,8 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.isPrimaryMouseDown = true;
         this.hasMouseDragged = false;
         this.mouseDownPosition.set(event.clientX, event.clientY);
-    }
 
-    protected onHandleMouseMove(event: MouseEvent): void {
-        this.mousePosition.set(event.clientX, event.clientY);
-        this.isMouseInViewport = true;
-
-        if (!this.isPrimaryMouseDown || this.hasMouseDragged) return;
-
-        const dx = event.clientX - this.mouseDownPosition.x;
-        const dy = event.clientY - this.mouseDownPosition.y;
-
-        if (dx * dx + dy * dy > CLICK_MAX_MOVEMENT_SQ) this.hasMouseDragged = true;
-    }
-
-    protected onHandleMouseUp(event: MouseEvent): void {
-        if (event.button === 2) {
-            this.rightMouseDownTime = -Infinity;
-            return;
-        }
-        if (event.button !== 0) return;
-
-        const dx = event.clientX - this.mouseDownPosition.x;
-        const dy = event.clientY - this.mouseDownPosition.y;
-        const isClick = this.isPrimaryMouseDown && !this.hasMouseDragged && dx * dx + dy * dy <= CLICK_MAX_MOVEMENT_SQ;
-
-        this.isPrimaryMouseDown = false;
-
-        if (isClick && this.isCameraLocked) {
-            const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
-
-            tmpScreenPosition.set((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2);
-            this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
-
-            const hit = this.traceMouse();
-
-            if (hit && (hit.actor as any)?.isActor) this.manGame.getComponent("network").pickLobbyPawn(hit.actor as any as BaseActor);
-            return;
-        }
-
-        if (!isClick || !this.isOrbitControls || this.isCameraLocked) return;
+        if (this.isCameraLocked) return;
 
         const renderManager = this.renderManager;
         const bounds = renderManager.renderer.domElement.getBoundingClientRect();
@@ -808,6 +770,43 @@ export class InputManager implements IEngineComponent<GameManager> {
         }
 
         renderManager.pickBSPNode(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance);
+    }
+
+    protected onHandleMouseMove(event: MouseEvent): void {
+        this.mousePosition.set(event.clientX, event.clientY);
+        this.isMouseInViewport = true;
+
+        if (!this.isPrimaryMouseDown || this.hasMouseDragged) return;
+
+        const dx = event.clientX - this.mouseDownPosition.x;
+        const dy = event.clientY - this.mouseDownPosition.y;
+
+        if (dx * dx + dy * dy > CLICK_MAX_MOVEMENT_SQ) this.hasMouseDragged = true;
+    }
+
+    protected onHandleMouseUp(event: MouseEvent): void {
+        if (event.button === 2) {
+            this.rightMouseDownTime = -Infinity;
+            return;
+        }
+        if (event.button !== 0) return;
+
+        const dx = event.clientX - this.mouseDownPosition.x;
+        const dy = event.clientY - this.mouseDownPosition.y;
+        const isClick = this.isPrimaryMouseDown && !this.hasMouseDragged && dx * dx + dy * dy <= CLICK_MAX_MOVEMENT_SQ;
+
+        this.isPrimaryMouseDown = false;
+
+        if (isClick && this.isCameraLocked) {
+            const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+
+            tmpScreenPosition.set((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2);
+            this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
+
+            const hit = this.traceMouse();
+
+            if (hit && (hit.actor as any)?.isActor) this.manGame.getComponent("network").pickLobbyPawn(hit.actor as any as BaseActor);
+        }
     }
 
     protected traceMouse(): ReturnType<PhysicsManager["rayCheck"]> {

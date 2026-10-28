@@ -19,7 +19,7 @@ export class ChatBalloon extends Nameplate {
         const lines = text.split("\n"), textWidth = Math.max(...lines.map(line => canvas.measureText(line))), textHeight = lines.length * canvas.getLineHeight();
         const half = Math.trunc(textWidth / 2);
 
-        this.width = textWidth + 10;
+        this.width = Math.ceil(textWidth) + 10;
         this.height = tailHeight;
         const isResized = this.canvas.width !== this.width || this.canvas.height !== this.height;
 

@@ -39,6 +39,13 @@ export class NCAuthWnd { // NCAuthWnd: 256x108, OnCreate 0x1009f230, paint 0x100
         this.accountEdit = layer.edit(this.element, 84, 20, 128, 17, false);
         this.passwordEdit = layer.edit(this.element, 84, 42, 128, 17, true);
 
+        this.accountEdit.input.name = "username";
+        this.accountEdit.input.autocomplete = "username";
+        this.accountEdit.input.setAttribute("aria-label", id);
+        this.passwordEdit.input.name = "password";
+        this.passwordEdit.input.autocomplete = "current-password";
+        this.passwordEdit.input.setAttribute("aria-label", pwd);
+
         this.loginButton = layer.button(this.element, 31, 72, 96, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.LogIn), () => this.login());
         layer.button(this.element, 131, 72, 96, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Exit), () => { if (this.onExit) this.onExit(); });
 

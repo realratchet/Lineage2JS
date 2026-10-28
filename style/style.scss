@@ -1,3 +1,11 @@
+@font-face {
+    font-family: L2Tahoma;
+    src: url("fonts/tahoma.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 body {
     padding: 0;
     margin: 0;
@@ -19,7 +27,7 @@ body {
         inset: 0;
         z-index: 10000;
         color: #ddd;
-        font: 13px/1.6 "Noto Sans", Arial, sans-serif;
+        font: 13px/1.6 L2Tahoma, Tahoma, sans-serif;
         text-align: center;
 
         &[hidden] { display: none; }
@@ -82,7 +90,7 @@ body {
         place-items: center;
         background: #0c0c0c;
         color: #ddd;
-        font: 14px/1.6 "Noto Sans", Arial, sans-serif;
+        font: 14px/1.6 L2Tahoma, Tahoma, sans-serif;
 
         main {
             width: min(720px, calc(100% - 48px));
@@ -90,7 +98,7 @@ body {
 
         h1 {
             margin: 0 0 24px;
-            font-family: "Noto Serif KR", Georgia, serif;
+            font-family: L2Tahoma, Tahoma, sans-serif;
             font-size: 24px;
             font-weight: normal;
         }

@@ -6,7 +6,7 @@ export class GroundItemLabel extends Nameplate {
         if (text === this.nameText) return;
 
         this.nameText = text;
-        this.width = canvas.measureText(text);
+        this.width = Math.ceil(canvas.measureText(text));
         this.height = canvas.getLineHeight();
         const isResized = this.canvas.width !== this.width || this.canvas.height !== this.height;
 

@@ -1699,7 +1699,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             if (tmpNameplateAnchor.z >= -1 && tmpNameplateAnchor.z < 1 && Math.abs(tmpNameplateAnchor.x) <= 1 && Math.abs(tmpNameplateAnchor.y) <= 1) {
                 if (!this.pickupLabel) {
                     this.pickupLabel = new GroundItemLabel();
-                    this.manRender.scene.add(this.pickupLabel);
+                    this.manRender.nameplateScene.add(this.pickupLabel);
                 }
                 const label = this.pickupLabel;
 
@@ -1757,7 +1757,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                     nameplate.material.depthWrite = true; // L2.elf_hair.trace 6001532/7000816: alpha > 0, ZWrite on.
                     nameplate.material.alphaTest = 1 / 255;
                     this.nameplates.set(plate.actor, nameplate);
-                    this.manRender.scene.add(nameplate);
+                    this.manRender.nameplateScene.add(nameplate);
                 }
                 const bracket = plate.isTarget ? TEX_TARGET_BRACKET : plate.isMouseTarget ? TEX_MOUSE_TARGET_BRACKET : null;
 
@@ -1792,7 +1792,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
             if (!balloon) {
                 balloon = new ChatBalloon();
                 this.balloons.set(plate.actor, balloon);
-                this.manRender.scene.add(balloon);
+                this.manRender.nameplateScene.add(balloon);
             }
 
             const matchColors = !isChat && plate.matchedStoreType === plate.privateStoreType ? storeMatchColors[plate.privateStoreType] : null;

@@ -1,39 +1,16 @@
 import type AssetManager from "../assets/asset-manager";
-import type { BitmapFontSource_T } from "../assets/decode-worker/decode-protocol";
 import fetchAsset from "../assets/asset-source";
 import { isSkinImageUrl, type SkinTextures } from "./skin-textures";
 
 type UIImage_T = { frames: ImageBitmap[], frameTime: number };
-type Glyph_T = { u: number, v: number, w: number, h: number };
-type BitmapFont_T = { texture: string, glyphs: Map<number, Glyph_T>, lineHeight: number };
-type RasterFont_T = { atlas: HTMLCanvasElement, glyphs: Map<number, Glyph_T> };
+type Font_T = { css: string, lineHeight: number, baseline: number };
 
-export enum FontType_T { SMALL, LARGE } // Engine.dll FontType: 0 SmallFont-r (all regular UI text), 1 LargeFont-r (nameplates).
+export enum FontType_T { SMALL, LARGE }
 
 export enum DigitFont_T { SMALL, NORMAL, LARGE } // NWindow 0x10013570 canvas digit strips for UCanvas::DrawSpecialDigit (Engine 0x105284e0): texture, cell width, cell height.
 
 export const DIGIT_FONTS: [string, number, number][] = [["SEK.cbui13", 5, 5], ["L2UI.NWindow.Number", 8, 8], ["L2UI_CH3.Etc.XLargeNumber", 11, 14]];
 export const DIGIT_CELLS = "0123456789HMP/%.C:";
-
-function parseGlyphs(buffer: ArrayBuffer): Map<number, Glyph_T> { // NL2Font::Load 0x10088a50 legacy layout; GetGlyph 0x10088400 takes the first range holding a non-empty rect.
-    const view = new DataView(buffer);
-    const glyphs = new Map<number, Glyph_T>();
-    const rangeCount = view.getUint32(8, true);
-
-    for (let range = 0, offset = 12; range < rangeCount; range++) {
-        const first = view.getInt32(offset, true), count = view.getInt32(offset + 4, true);
-
-        offset += 8;
-
-        for (let i = 0; i < count; i++, offset += 16) {
-            const u = view.getInt32(offset, true), w = view.getInt32(offset + 4, true), v = view.getInt32(offset + 8, true), h = view.getInt32(offset + 12, true);
-
-            if (w > 0 && h > 0 && !glyphs.has(first + i)) glyphs.set(first + i, { u, v, w, h });
-        }
-    }
-
-    return glyphs;
-}
 
 export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x10012d90 (texture tile) and 0x10012aa0 (text).
     public readonly element = document.createElement("canvas");
@@ -42,9 +19,9 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     protected readonly skin: SkinTextures;
     protected readonly textures = new Map<string, UIImage_T>();
     protected readonly pending = new Map<string, Promise<void>>();
-    protected readonly fonts = new Map<FontType_T, BitmapFont_T>();
+    protected readonly fonts = new Map<FontType_T, Font_T>();
+    protected readonly textContext = document.createElement("canvas").getContext("2d");
     protected readonly tinted = new Map<string, HTMLCanvasElement>();
-    protected readonly cacheRasterFonts = new Map<string, RasterFont_T>();
     public scale = 1;
     public uiScale = 1;
     public cssScale = 1;
@@ -62,7 +39,6 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         const ratio = window.devicePixelRatio || 1;
 
         this.scale = ratio * this.uiScale;
-        this.cacheRasterFonts.clear();
         this.cssScale = this.uiScale;
         this.width = Math.floor(width / this.cssScale);
         this.height = Math.floor(height / this.cssScale);
@@ -210,42 +186,36 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     }
 
     public async loadFonts() {
-        const { bitmapFonts } = await this.asset.getGameStrings();
-        const sources: [FontType_T, BitmapFontSource_T][] = [[FontType_T.SMALL, bitmapFonts.small], [FontType_T.LARGE, bitmapFonts.large]];
+        const fonts = await document.fonts.load("11px L2Tahoma");
 
-        await this.loadTextures([...sources.map(([, { texture }]) => texture), ...DIGIT_FONTS.map(([texture]) => texture)]);
+        if (!fonts.length) throw new Error(`Tahoma font face was not registered.`);
 
-        for (const [type, { texture, glyph }] of sources) {
-            const glyphs = parseGlyphs(await (await fetchAsset(`assets/system/${glyph.toLowerCase()}`)).arrayBuffer());
+        for (const [type, size, lineHeight] of [[FontType_T.SMALL, 11, 13], [FontType_T.LARGE, 12, 14]]) {
+            const css = `${size}px L2Tahoma, Tahoma, sans-serif`;
 
-            this.fonts.set(type, { texture, glyphs, lineHeight: glyphs.get(0x41).h });
+            this.textContext.font = css;
+            this.textContext.fontKerning = "none";
+
+            const metrics = this.textContext.measureText("Ag");
+            const baseline = (lineHeight - metrics.fontBoundingBoxAscent - metrics.fontBoundingBoxDescent) / 2 + metrics.fontBoundingBoxAscent;
+
+            this.fonts.set(type, { css, lineHeight, baseline });
         }
+
+        await this.loadTextures(DIGIT_FONTS.map(([texture]) => texture));
     }
 
     public getLineHeight(type: FontType_T = FontType_T.SMALL): number { return this.fonts.get(type).lineHeight; }
     public getFont(type: FontType_T = FontType_T.SMALL) { return this.fonts.get(type); }
 
     public hasGlyphs(text: string, type: FontType_T = FontType_T.SMALL): boolean {
-        const font = this.fonts.get(type);
-
-        if (!text) return false;
-        for (let i = 0; i < text.length; i++)
-            if (!font.glyphs.has(text.charCodeAt(i))) return false;
-
-        return true;
+        return !!text && !/[\x00-\x1f\x7f-\x9f\uD800-\uDFFF]/u.test(text);
     }
 
     public measureText(text: string, type: FontType_T = FontType_T.SMALL): number {
-        const font = this.fonts.get(type);
-        let width = 0;
+        this.textContext.font = this.fonts.get(type).css;
 
-        for (let i = 0; i < text.length; i++) {
-            const glyph = font.glyphs.get(text.charCodeAt(i));
-
-            if (glyph) width += glyph.w;
-        }
-
-        return width;
+        return Math.max(...text.split("\n").map(line => this.textContext.measureText(line).width));
     }
 
     public wrapText(text: string, width: number, continuationWidth = width): string[] {
@@ -379,15 +349,15 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
                 lineWidth = nextWidth;
                 tokenIndex++;
             } else if (!line) {
-                let count = 0, partWidth = 0;
+                let count = 0;
 
                 while (count < token.length) {
-                    const nextWidth = partWidth + this.measureText(token[count], type);
+                    const nextCount = count + (token.codePointAt(count) > 0xffff ? 2 : 1);
+                    const nextWidth = this.measureText(token.slice(0, nextCount), type);
 
                     if (nextWidth >= width) break;
 
-                    partWidth = nextWidth;
-                    count++;
+                    count = nextCount;
                 }
 
                 if (!count) return;
@@ -410,95 +380,38 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
         if (line) drawLine();
     }
 
-    protected getRasterFont(font: BitmapFont_T, color: number, scale: number): RasterFont_T {
-        const key = `${font.texture}:${color & 0xffffff}:${scale}`;
-        const cached = this.cacheRasterFonts.get(key);
+    public renderText(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: FontType_T = FontType_T.SMALL, isOutlined = false) {
+        const font = this.fonts.get(type), transform = context.getTransform();
 
-        if (cached) return cached;
-
-        const source = this.getTintedImage(font.texture, color);
-        const glyphs = new Map<number, Glyph_T>();
-        const arrGlyphs = [...font.glyphs];
-        const cellW = Math.max(...arrGlyphs.map(([, glyph]) => Math.round(glyph.w * scale))) + 2;
-        const cellH = Math.max(...arrGlyphs.map(([, glyph]) => Math.round(glyph.h * scale))) + 2;
-        const atlas = document.createElement("canvas");
-
-        atlas.width = cellW * 32;
-        atlas.height = cellH * Math.ceil(arrGlyphs.length / 32);
-
-        const context = atlas.getContext("2d", { willReadFrequently: true });
-
-        context.imageSmoothingQuality = "high";
-        arrGlyphs.forEach(([code, glyph], index) => {
-            const u = index % 32 * cellW + 1, v = Math.floor(index / 32) * cellH + 1;
-            const w = Math.max(1, Math.round(glyph.w * scale)), h = Math.max(1, Math.round(glyph.h * scale));
-
-            context.drawImage(source, glyph.u, glyph.v, glyph.w, glyph.h, u, v, w, h);
-            glyphs.set(code, { u, v, w, h });
-        });
-
-        if (scale < 1) {
-            const pixels = context.getImageData(0, 0, atlas.width, atlas.height);
-
-            for (let i = 3; i < pixels.data.length; i += 4)
-                pixels.data[i] = 255 * Math.pow(pixels.data[i] / 255, 0.75);
-
-            context.putImageData(pixels, 0, 0);
+        if (!transform.b && !transform.c && transform.a && transform.d) {
+            x = (Math.round(x * transform.a + transform.e) - transform.e) / transform.a;
+            y = (Math.round(y * transform.d + transform.f) - transform.f) / transform.d;
         }
 
-        const raster = { atlas, glyphs };
-
-        this.cacheRasterFonts.set(key, raster);
-        return raster;
-    }
-
-    public renderText(context: CanvasRenderingContext2D, x: number, y: number, color: number, text: string, type: FontType_T = FontType_T.SMALL) { // Engine.dll DrawNormalText 0x10527880: one 1:1 quad per glyph, pen advances by the glyph width.
-        const font = this.fonts.get(type);
-        const transform = this.uiScale < 1 ? context.getTransform() : null;
-        const raster = transform && Math.abs(transform.a - this.scale) < 1e-6 && transform.a === transform.d && !transform.b && !transform.c ? this.getRasterFont(font, color, this.scale) : null;
-        const atlas = raster ? raster.atlas : this.getTintedImage(font.texture, color);
-        const startX = Math.trunc(x), startY = Math.trunc(y);
-        const originX = raster ? Math.round(startX * transform.a + transform.e) : 0;
-        const originY = raster ? Math.round(startY * transform.d + transform.f) : 0;
-        let penX = startX, penY = startY;
-
-        if (context.canvas.style.imageRendering !== "auto") context.canvas.style.imageRendering = "auto";
-        if (raster && context.canvas !== this.element && context.canvas.style.width) {
-            context.canvas.style.width = `${context.canvas.width / this.scale}px`;
-            context.canvas.style.height = `${context.canvas.height / this.scale}px`;
-        }
-        context.imageSmoothingEnabled = !raster;
+        context.save();
+        context.font = font.css;
+        context.fontKerning = "none";
+        context.textAlign = "left";
+        context.textBaseline = "alphabetic";
+        context.fillStyle = `#${(color & 0xffffff).toString(16).padStart(6, "0")}`;
         context.globalAlpha = ((color >>> 24) & 0xff) / 255;
-        if (raster) context.resetTransform();
 
-        for (let i = 0; i < text.length; i++) {
-            const code = text.charCodeAt(i);
+        if (isOutlined) context.lineJoin = "round";
 
-            if (code === 0x0a) {
-                penX = startX;
-                penY += font.lineHeight;
-                continue;
+        text.split("\n").forEach((line, index) => {
+            const baseline = y + font.baseline + index * font.lineHeight;
+
+            if (isOutlined) {
+                context.strokeStyle = "#000";
+                context.lineWidth = 2;
+                context.strokeText(line, x, baseline);
+                context.strokeStyle = context.fillStyle;
+                context.lineWidth = 0.3;
+                context.strokeText(line, x, baseline);
             }
-
-            if (code < 0x20) continue;
-
-            const glyph = font.glyphs.get(code);
-
-            if (!glyph) continue;
-
-            if (raster) {
-                const scaled = raster.glyphs.get(code);
-
-                context.drawImage(atlas, scaled.u, scaled.v, scaled.w, scaled.h, originX + Math.round((penX - startX) * transform.a), originY + Math.round((penY - startY) * transform.d), scaled.w, scaled.h);
-            } else context.drawImage(atlas, glyph.u, glyph.v, glyph.w, glyph.h, penX, penY, glyph.w, glyph.h);
-            penX += glyph.w;
-        }
-
-        context.globalAlpha = 1;
-        if (raster) {
-            context.setTransform(transform);
-            context.imageSmoothingEnabled = true;
-        }
+            context.fillText(line, x, baseline);
+        });
+        context.restore();
     }
 }
 

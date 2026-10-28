@@ -1,4 +1,4 @@
-import { DepthFormat, DepthStencilFormat, DepthTexture, FloatType, Scene, UnsignedInt248Type, UnsignedIntType, UnsignedShortType, WebGLRenderer, Material, Object3D } from "three";
+import { DepthFormat, DepthStencilFormat, DepthTexture, FloatType, Scene, UnsignedInt248Type, UnsignedIntType, UnsignedShortType, WebGLRenderer, Material, Object3D, Camera } from "three";
 import Nameplate from "./nameplate";
 
 export class NameplateDepth {
@@ -89,6 +89,27 @@ export class NameplateDepth {
         } finally {
             gl.bindFramebuffer(gl.READ_FRAMEBUFFER, read);
             gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, source);
+        }
+    }
+
+    public finishWorld() {
+        if (!this.active || this.copied) return;
+
+        this.capture();
+        this.copied = true;
+    }
+
+    public render(scene: Scene, camera: Camera) {
+        if (!this.active) return;
+
+        const autoClear = this.renderer.autoClear;
+
+        try {
+            this.renderer.autoClear = false;
+            this.renderer.render(scene, camera);
+        } finally {
+            this.renderer.autoClear = autoClear;
+            this.end();
         }
     }
 

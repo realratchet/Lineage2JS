@@ -277,6 +277,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected fovMaxAspect = Infinity;
     public readonly cameraTarget = new Vector3(-87086.51708877791, 239936.94718888338, -3685.930229617832);
     public readonly scene = new Scene();
+    public readonly nameplateScene = new Scene();
     protected readonly translucentRenderList = new TranslucentRenderList();
     protected worldCamera: Camera = null;
     public readonly objectGroup = new Object3D();
@@ -2598,7 +2599,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // this.renderer.setRenderTarget(this.mainRenderTarget);
 
         const worldRenderTarget = this.displayGammaPass.getTarget();
-        const renderToTarget = this.displayGammaEnabled || worldRenderTarget.samples > 0 || this.scene.children.some(object => (object as any).isNameplate && object.visible && (object as Sprite).material.visible);
+        const renderToTarget = this.displayGammaEnabled || worldRenderTarget.samples > 0 || this.nameplateScene.children.some(object => object.visible && (object as Sprite).material.visible);
         this.renderer.setRenderTarget(renderToTarget ? worldRenderTarget : null);
 
         // Render Sky (Background)
@@ -2745,6 +2746,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // this.renderer.setRenderTarget(null);
 
         if (renderToTarget) this.displayGammaPass.render(this.renderer, undefined, this.displayGammaEnabled);
+        this.nameplateDepth.render(this.nameplateScene, this.camera);
 
         if (viewShakeActive) this.restoreViewShake();
     }
@@ -2768,15 +2770,18 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected drawWorld() {
         const frame = LocalSpaceSkeleton.renderFrame;
         LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
-        this.nameplateDepth.begin(this.scene);
+        this.nameplateDepth.begin(this.nameplateScene);
         try {
             this.worldCamera = this.camera;
             const camera = this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.camera;
             this.sectorOcclusion.begin(this.camera, camera, this.getSector(camera.position));
             this.renderer.render(this.scene, this.camera);
+            this.nameplateDepth.finishWorld();
+        } catch (error) {
+            this.nameplateDepth.end();
+            throw error;
         } finally {
             this.sectorOcclusion.end();
-            this.nameplateDepth.end();
             LocalSpaceSkeleton.renderFrame = frame;
         }
     }

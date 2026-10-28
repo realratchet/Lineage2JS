@@ -69,7 +69,7 @@ export class CHtmlMultiEdit {
         this.input = document.createElement("textarea");
         this.input.spellcheck = false;
         this.input.wrap = "off";
-        this.input.style.cssText = `position:absolute;box-sizing:border-box;resize:none;background:transparent;color:transparent;caret-color:transparent;border:0;outline:none;font:12px Arial;line-height:${this.rowHeight}px;padding:2px;overflow:hidden;`;
+        this.input.style.cssText = `position:absolute;box-sizing:border-box;resize:none;background:transparent;color:transparent;caret-color:transparent;border:0;outline:none;font:${layer.getManager().canvas.getFont().css};font-kerning:none;line-height:${this.rowHeight}px;padding:2px;overflow:hidden;`;
         layer.place(this.input, 0, 0, width - 15, height);
         this.element.append(this.text, this.input);
 

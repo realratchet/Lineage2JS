@@ -271,9 +271,7 @@ export class NWindowManager {
         const replacement = this.getSysString(SysString_T.ObsceneNameReplacement);
         let text = "";
 
-        for (let i = 0; i < value.length; i++) {
-            const character = value[i];
-
+        for (const character of value) {
             if (character === "\r" || character === "\n" || this.canvas.hasGlyphs(character)) text += character;
         }
 

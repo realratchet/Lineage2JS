@@ -481,33 +481,18 @@ export class NDomLayer {
         element.innerHTML = html;
     }
 
-    public renderText(element: HTMLElement, text: string, color: number, font: FontType_T = FontType_T.SMALL, isUnderlined: boolean = false) { // Engine.dll DrawNormalText 0x10527880: one 1:1 quad per glyph, pen advances by the glyph width.
-        const nwindow = this.manager.canvas, { texture, glyphs, lineHeight } = nwindow.getFont(font);
-        const width = Math.max(1, nwindow.measureText(text, font));
-        let html = "", penX = 0, penY = 0;
+    public renderText(element: HTMLElement, text: string, color: number, font: FontType_T = FontType_T.SMALL, isUnderlined: boolean = false) {
+        const nwindow = this.manager.canvas, { css, lineHeight } = nwindow.getFont(font);
+        const alpha = (color >>> 24) & 0xff;
 
-        for (let i = 0; i < text.length; i++) {
-            const code = text.charCodeAt(i);
-
-            if (code === 0x0a) {
-                penX = 0;
-                penY += lineHeight;
-                continue;
-            }
-
-            if (code < 0x20) continue;
-
-            const glyph = glyphs.get(code);
-
-            if (!glyph) continue;
-
-            html += glyphHtml(penX, penY, glyph.w, glyph.h, glyph.u, glyph.v);
-            penX += glyph.w;
-        }
-
-        if (isUnderlined) html += `<b style="left:0;top:${lineHeight - 1}px;width:${width}px;height:1px;background:#${(color & 0xffffff).toString(16).padStart(6, "0")}"></b>`; // LINK underline occupies the last font row, L2.4_20 capture.
-
-        this.setGlyphs(element, html, width, lineHeight, texture, color);
+        element.style.font = css;
+        element.style.lineHeight = `${lineHeight}px`;
+        element.style.width = `${Math.max(1, Math.ceil(nwindow.measureText(text, font)))}px`;
+        element.style.height = `${lineHeight * text.split("\n").length}px`;
+        element.style.color = `#${(color & 0xffffff).toString(16).padStart(6, "0")}`;
+        element.style.opacity = alpha === 0xff ? "" : String(alpha / 255);
+        element.style.textDecoration = isUnderlined ? "underline" : "";
+        element.textContent = text;
     }
 
     public text(parent: HTMLElement, text: string, color: number = TEXT_COLOR, font: FontType_T = FontType_T.SMALL, x: number = null, y: number = null, isUnderlined: boolean = false): HTMLDivElement {
@@ -809,6 +794,7 @@ export class NDomLayer {
         let isCaretVisible = true;
         let isNumericInputEnabled = true;
         let widthLimit = 0;
+        let drawnValue = "";
 
         function getCaret() { return (input.selectionDirection === "backward" ? input.selectionEnd : input.selectionStart) || 0; }
 
@@ -834,9 +820,9 @@ export class NDomLayer {
             let moved = 0;
 
             if (mouseX < x) {
-                while (caret > 0 && moved < distance) moved += nwindow.measureText(input.value[--caret]);
+                while (caret > 0 && moved < distance) moved += nwindow.measureText(shown[--caret]);
             } else {
-                while (caret < input.value.length && moved < distance) moved += nwindow.measureText(input.value[caret++]);
+                while (caret < input.value.length && moved < distance) moved += nwindow.measureText(shown[caret++]);
             }
 
             return caret;
@@ -877,12 +863,12 @@ export class NDomLayer {
                 let x = nwindow.measureText(shown.slice(start, anchor));
 
                 if (anchor === selectionEnd) {
-                    const width = nwindow.measureText(input.value.slice(selectionStart, selectionEnd));
+                    const width = nwindow.measureText(shown.slice(selectionStart, selectionEnd));
 
                     html = selectionHtml(2 + x - width, width);
                 } else {
                     for (let i = Math.max(start, selectionStart); i < selectionEnd; i++) {
-                        const width = nwindow.measureText(input.value[i]);
+                        const width = nwindow.measureText(shown[i]);
 
                         html += selectionHtml(1 + x, width);
                         x += width;
@@ -891,6 +877,7 @@ export class NDomLayer {
             }
 
             selection.innerHTML = html;
+            drawnValue = input.value;
         };
 
         element.className = "ndom-edit";
@@ -988,7 +975,7 @@ export class NDomLayer {
         overlay.append(selection);
         element.append(input, overlay);
 
-        for (const type of ["input", "keyup", "click", "select"]) input.addEventListener(type, draw);
+        for (const type of ["input", "change", "keyup", "click", "select"]) input.addEventListener(type, draw);
 
         input.addEventListener("mousedown", event => {
             if (input.disabled || event.button !== 0) return;
@@ -1068,6 +1055,8 @@ export class NDomLayer {
         this.root.addEventListener("resize", draw);
         timer = window.setInterval(() => {
             if (!element.isConnected) { window.clearInterval(timer); this.root.removeEventListener("resize", draw); return; }
+
+            if (input.value !== drawnValue) draw();
 
             isCaretVisible = !isCaretVisible;
 

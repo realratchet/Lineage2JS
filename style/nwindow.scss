@@ -48,7 +48,7 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     bottom: 100%;
     margin-bottom: 8px;
     color: rgba(202, 163, 68, 0.75);
-    font: 13px/1.6 "Noto Sans", Arial, sans-serif;
+    font: 13px/1.6 L2Tahoma, Tahoma, sans-serif;
     white-space: nowrap;
     pointer-events: none;
     text-shadow: 0 1px 3px #000;
@@ -64,6 +64,8 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 .ndom-tile { opacity: var(--alpha, 1); }
 
 .ndom-text {
+    white-space: pre;
+    font-kerning: none;
     display: inline-block;
     vertical-align: top;
     image-rendering: auto;
@@ -104,9 +106,11 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     background: transparent;
     color: transparent;
     caret-color: transparent;
-    font: 11px Tahoma, sans-serif;
+    font: 11px L2Tahoma, Tahoma, sans-serif;
+    font-kerning: none;
 
     &::selection { background: transparent; color: transparent; }
+    &:autofill { opacity: 0; } // The edit overlay paints the visible field.
 }
 
 .ndom-edit-overlay {

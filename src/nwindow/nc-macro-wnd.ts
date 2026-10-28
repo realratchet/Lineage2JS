@@ -105,7 +105,7 @@ export class NCMacroWnd {
         this.description.maxLength = 32;
         this.description.spellcheck = false;
         this.description.setAttribute("aria-label", manager.getSysString(SysString_T.Description));
-        this.description.style.cssText = "position:absolute;box-sizing:border-box;resize:none;background:transparent;color:transparent;caret-color:#dcdcdc;border:0;outline:none;font:12px Arial;padding:2px;";
+        this.description.style.cssText = `position:absolute;box-sizing:border-box;resize:none;background:transparent;color:transparent;caret-color:#dcdcdc;border:0;outline:none;font:${manager.canvas.getFont().css};font-kerning:none;line-height:${manager.canvas.getLineHeight()}px;padding:2px;`;
         const descriptionText = layer.createWindow(9, 48, 238, 77, this.info);
 
         descriptionText.style.overflow = "hidden";
