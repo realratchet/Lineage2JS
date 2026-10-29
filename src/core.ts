@@ -7,7 +7,7 @@ import GameManager from "./game/game-manager";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import fetchAsset from "./assets/asset-source";
 import pickAssetSource from "./asset-source-picker";
-import { setLoadingProgress } from "./loading-progress";
+import { setLoadingProgress, hideLoadingProgress } from "./loading-progress";
 import loginServer from "./network/login-server";
 // import { ensureWasmInitialized } from "@l2js/core";
 
@@ -17,8 +17,11 @@ import loginServer from "./network/login-server";
 export async function startCore(interactive: boolean = true): Promise<RenderManager | null> {
     // await ensureWasmInitialized();
 
-    if (globalThis.isSecureContext && "storage" in navigator)
-        await navigator.storage.persist();
+    if (globalThis.isSecureContext && "storage" in navigator && !await navigator.storage.persisted()) {
+        setLoadingProgress(null, "Allow persistent storage to keep cached game files. You can continue without it.", true);
+        document.querySelector<HTMLElement>(".storage-warning").hidden = await navigator.storage.persist();
+        hideLoadingProgress();
+    }
 
     const startTime = performance.now();
 

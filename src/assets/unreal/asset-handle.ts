@@ -74,15 +74,17 @@ export async function fetchPackageSource(path: string): Promise<FileAssetSource>
 
 class FileAssetSource {
     public readonly size: number;
-    protected readonly file: FileSystemSyncAccessHandle_T;
+    protected file: FileSystemSyncAccessHandle_T | File;
+    protected reader: { readAsArrayBuffer(blob: Blob): ArrayBuffer };
     protected buffer = new ArrayBuffer(0);
     protected offset = 0;
     protected key: number = undefined;
     protected contentOffset = 0;
 
-    public constructor(file: FileSystemSyncAccessHandle_T) {
+    public constructor(file: FileSystemSyncAccessHandle_T | File) {
         this.file = file;
-        this.size = file.getSize();
+        this.size = file instanceof File ? file.size : file.getSize();
+        if (file instanceof File) this.reader = new (globalThis as any).FileReaderSync();
     }
 
     public read(offset: number, length: number): DataView {
@@ -90,10 +92,11 @@ class FileAssetSource {
 
         if (offset < this.offset || offset + length > this.offset + this.buffer.byteLength) {
             this.offset = offset;
-            this.buffer = new ArrayBuffer(Math.min(this.size - offset, Math.max(262144, length)));
+            const size = Math.min(this.size - offset, Math.max(262144, length));
+            this.buffer = this.file instanceof File ? this.reader.readAsArrayBuffer(this.file.slice(offset, offset + size)) : new ArrayBuffer(size);
             const bytes = new Uint8Array(this.buffer);
 
-            if (this.file.read(bytes, { at: offset }) !== bytes.length) throw new Error(`Short asset read at ${offset}.`);
+            if (this.file instanceof File ? bytes.length !== size : this.file.read(bytes, { at: offset }) !== bytes.length) throw new Error(`Short asset read at ${offset}.`);
 
             if (this.key !== undefined)
                 for (let i = Math.max(0, this.contentOffset - offset); i < bytes.length; i++) bytes[i] ^= this.key;
@@ -109,7 +112,9 @@ class FileAssetSource {
     }
 
     public close(): void {
-        this.file.close();
+        if (!(this.file instanceof File)) this.file.close();
+        this.file = null;
+        this.reader = null;
         this.buffer = new ArrayBuffer(0);
     }
 }
@@ -158,6 +163,9 @@ class LazyFileSystemHandle implements ILazyAssetHandle {
     }
 
     public async getSource(): Promise<FileAssetSource> {
+        // Firefox has exclusive sync handles; file slices keep package reads bounded across workers.
+        if (/Firefox\//.test(navigator.userAgent)) return new FileAssetSource(await this.fh.getFile());
+
         if (!this.fh.createSyncAccessHandle) return null;
 
         return navigator.locks.request(`asset-cache:${this.path}`, async () => {

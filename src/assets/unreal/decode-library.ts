@@ -181,6 +181,7 @@ export class DecodeLibrary {
     public pickup: IPickupDecodeInfo = null;
     public effectSpawnBoneIndex: number = null;
     public damageEffect: string = null;
+    public heroAuraMesh: string = null;
     public npcScriptClassId: string = null;
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public isSkyLevel = false;

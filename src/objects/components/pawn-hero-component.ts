@@ -36,7 +36,7 @@ export class PawnHeroComponent extends ObjectComponent<BaseActor> {
 
             const mesh = this.mesh = new HeroMesh();
 
-            mesh.scriptProperties.set("Mesh", this.library.name);
+            mesh.scriptProperties.set("Mesh", this.library.heroAuraMesh);
             mesh.scriptProperties.set("Skins", []);
             mesh.scriptProperties.set("bUnlit", true);
             mesh.scriptProperties.set("bActorShadows", false);

@@ -196,16 +196,6 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
-        case "decodeHeroEffects": {
-            try {
-                const buffer = await engine.decodeHeroEffectsBinary(msg.settings);
-
-                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
-            } catch (e) {
-                post({ type: "decodeError", requestId: msg.requestId, message: (e as Error).message, stack: (e as Error).stack });
-            }
-            break;
-        }
         case "decodeEffectTemplates": {
             try {
                 const buffer = await engine.decodeEffectTemplatesBinary(msg.settings, msg.classPaths, msg.soundPaths, msg.scriptClassPaths, msg.requiredSounds);

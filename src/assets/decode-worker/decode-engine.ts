@@ -624,7 +624,14 @@ export class DecodeEngine {
             const textures = material.materialType === "texture" ? [material as ITextureDecodeInfo] : material.materialType === "sprite" ? (material as IAnimatedSpriteDecodeInfo).sprites : [];
 
             textures.forEach((texture, index) => {
-                const key = `${texture.name ? texture.name.toLowerCase() : `${id}:${index}`}:${texture.textureType}:${texture.buffer.byteLength}`;
+                const key = (texture as any).sharedTextureKey || `${texture.name ? texture.name.toLowerCase() : `${id}:${index}`}:${texture.textureType}:${texture.buffer.byteLength}`;
+
+                if (this.confirmedTextureIds.has(key)) {
+                    (texture as any).sharedTextureKey = key;
+                    texture.buffer = null;
+                    return;
+                }
+
                 const buffer = this.cacheTextureBuffers.get(key);
 
                 if (buffer) texture.buffer = buffer;
@@ -1554,9 +1561,9 @@ export class DecodeEngine {
             transfer.materials[id] = material.materialType === "texture" ? copies[0] : Object.assign({}, material, { sprites: copies });
 
             copies.forEach((texture, index) => {
-                const key = `${texture.name ? texture.name.toLowerCase() : `${id}:${index}`}:${texture.textureType}:${texture.buffer.byteLength}`;
+                const key = (texture as any).sharedTextureKey || `${texture.name ? texture.name.toLowerCase() : `${id}:${index}`}:${texture.textureType}:${texture.buffer.byteLength}`;
 
-                texture.buffer = this.getTextureBuffer(key, texture.buffer);
+                if (!this.confirmedTextureIds.has(key)) texture.buffer = this.getTextureBuffer(key, texture.buffer);
 
                 transfer.sharedTextures.push([id, index, key]);
 
@@ -1602,10 +1609,15 @@ export class DecodeEngine {
     }
 
     public confirmSharedTextures(keys: readonly string[]): void {
-        for (const key of keys) this.confirmedTextureIds.add(key);
+        for (const key of keys) {
+            this.confirmedTextureIds.add(key);
+            this.cacheTextureBuffers.delete(key);
+        }
     }
 
     protected getTextureBuffer(key: string, buffer: ArrayBuffer): ArrayBuffer {
+        if (this.confirmedTextureIds.has(key)) return buffer;
+
         const cached = this.cacheTextureBuffers.get(key);
 
         if (cached === buffer) return cached;
@@ -1683,6 +1695,7 @@ export class DecodeEngine {
         library.name = "EffectTemplates";
 
         for (const path of classPaths) await this.pullEffectTemplate(library, builder, path, scriptClassPaths.includes(path));
+        if (classPaths.some(path => path.toLowerCase() === "lineageeffect.e_u091_aura")) await this.pullHeroMesh(library, builder);
         for (const path of soundPaths) library.sounds[path] = await this.pullSoundPath(builder, path, requiredSounds);
         for (const path of scriptClassPaths) {
             const [, cls] = await this.fetchScriptClass(path);
@@ -2166,6 +2179,7 @@ export class DecodeEngine {
         }
 
         this.cacheNpcBundles.clear();
+        if (/Firefox\//.test(navigator.userAgent)) this.cacheCharacterBundles.clear();
     }
 
     protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number, equipment: ICharacterEquipment, hairVariant: number): Promise<DecodeLibrary> {
@@ -2663,25 +2677,12 @@ export class DecodeEngine {
         for (const group of groups) {
             const name = characterBundleCacheName(group.index, group.name);
 
-            let cached = this.cacheCharacterBundles.get(group.index);
+            if (!this.cacheCharacterBundles.has(group.index) && !await DecodeCache.hasCachedLibrary(name, settings))
+                await DecodeCache.storeCachedLibraryDurable(name, settings, await this.buildCharacterBundle(settings, group.index));
 
-            if (!cached) {
-                const seekable = await DecodeCache.openCachedLibrary(name, settings);
+            const classPath = `LineageWarrior.${group.name}`;
 
-                if (seekable) cached = { library: seekable.library as DecodeLibrary, seekable };
-                else {
-                    const library = await this.buildCharacterBundle(settings, group.index);
-
-                    await DecodeCache.storeCachedLibraryDurable(name, settings, library);
-                    const stored = await DecodeCache.openCachedLibrary(name, settings);
-
-                    cached = stored ? { library: stored.library as DecodeLibrary, seekable: stored } : { library };
-                }
-
-                this.cacheCharacterBundles.set(group.index, cached);
-            }
-
-            await this.getCharacterPawnEffects(settings, `LineageWarrior.${group.name}`);
+            await this.getStoredAssets("character_effects", classPath.toLowerCase(), settings, () => this.decodeCharacterPawnEffects(settings, classPath));
         }
     }
 
@@ -2934,14 +2935,12 @@ export class DecodeEngine {
         return this.cacheEnchantConfig;
     }
 
-    public async decodeHeroEffects(settings: LoadSettings_T): Promise<DecodeLibrary> {
+    protected async pullHeroMesh(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> {
         const config = await this.getEnchantConfig();
         const path = config.heroauramesh ?? "LineageWeapons.rangesample";
         const skin = config.heroauratex ?? "LineageEffectsTextures.Hero.Hero_Aura000_Shader00";
-        const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
 
-        library.name = path;
+        library.heroAuraMesh = path;
         await this.pullScriptAssets(library, builder, null, { Mesh: path, Skins: [skin] });
         const mesh = library.scriptMeshes[path.toLowerCase()] as ISkinnedMeshObjectDecodeInfo;
         const material = library.materials[mesh.materials] as IMaterialGroupDecodeInfo;
@@ -2949,14 +2948,6 @@ export class DecodeEngine {
         if (material.materialType !== "group") throw new Error(`Hero mesh '${path}' has no material group.`);
         material.materials.fill(library.scriptMaterials[skin.toLowerCase()]);
         library.pawnActors.push(mesh);
-        await this.pullEffectTemplate(library, builder, "LineageEffect.e_u091_aura", true);
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
-        if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
-        return library;
-    }
-
-    public async decodeHeroEffectsBinary(settings: LoadSettings_T): Promise<ArrayBuffer> {
-        return this.serializeTransfer(await this.decodeHeroEffects(settings));
     }
 
     protected async pullWeaponEnchant(library: DecodeLibrary, builder: DecodeLibraryBuilder, weapon: Record<string, any>, level: number, index: number, item: IPawnEquipmentDecodeInfo["items"][number]): Promise<void> {

@@ -60,7 +60,9 @@ const NPC_SPAWN_FLOOR_DISTANCE = 2000;
 const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
 const UNDERWATER_EFFECTS = ["LineageEffect.e_u061_cam", "LineageEffect.e_u061_beam"];
 const SOCIAL_EFFECTS = ["LineageEffect.e_u004_a", "LineageEffect.e_u091_a"];
+const APPENDIX_EFFECTS = ["LineageEffect.e_u520_identifier_r", "LineageEffect.e_u520_identifier_b"];
 export const RACE_WINNER_EFFECT = "LineageEffect.s_u007_b";
+const CUBIC_EFFECTS = ["a", "b", "c", "d", "e"].map(name => `LineageEffect.s_u013_${name}`);
 const ABNORMAL_EFFECTS = ["000", "001", "002", "004", "005", "006", "007", "008"].map(id => `LineageEffect.a_u${id}_a`);
 const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
 
@@ -238,16 +240,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected charGroups: ICharacterGroup[] = null;
     protected characterPrecache: Promise<void> = null;
     protected effectLibrary: DecodeLibrary = null;
-    protected cubicLibrary: Promise<DecodeLibrary> = null;
     protected arrCursors: string[] = [];
     protected cursorLoad: Promise<void> = null;
-    protected questEffectLibrary: Promise<DecodeLibrary> = null;
-    protected socialEffectLibrary: Promise<DecodeLibrary> = null;
-    protected raceEffectLibrary: Promise<DecodeLibrary> = null;
     protected bigHeadScales: Promise<Record<string, number>> = null;
-    protected heroEffectLibrary: Promise<DecodeLibrary> = null;
-    protected appendixEffectLibrary: Promise<DecodeLibrary> = null;
-    protected abnormalEffectLibrary: Promise<DecodeLibrary> = null;
     protected fishingLibrary: Promise<DecodeLibrary> = null;
     protected readonly pawnLibraries = new WeakMap<BaseActor, DecodeLibrary>();
     protected readonly cacheSounds = new Map<string, Promise<string>>();
@@ -354,7 +349,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.decodeWorker.getMusicInfo(),
             isLogin ? null : this.decodeWorker.decodeCharacter(this.loadSettings),
             playerControllerLoad,
-            playerControllerLoad.then(controller => this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b"], [controller.getUnderWaterLoopSound()])),
+            playerControllerLoad.then(controller => this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"], [controller.getUnderWaterLoopSound()], [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"])),
             this.decodeWorker.decodeSector("skylevel", {
                 ...this.loadSettings, isSkyLevel: true,
                 loadTerrain: true,
@@ -409,47 +404,19 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public getMemoryStats() { return this.decodeWorker.getMemoryStats(); }
 
     public async loadCubicEffects(): Promise<DecodeLibrary> {
-        if (!this.cubicLibrary) {
-            const paths = ["a", "b", "c", "d", "e"].map(name => `LineageEffect.s_u013_${name}`);
-
-            this.cubicLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, paths, [], paths);
-        }
-
-        const library = await this.cubicLibrary;
-
-        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (library as any).preferCompressedTextures = this.preferCompressedTextures;
-        return library;
+        return this.effectLibrary;
     }
 
     public async loadQuestEffects(): Promise<DecodeLibrary> {
-        if (!this.questEffectLibrary) this.questEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, ["LineageEffect.e_u088_a", "LineageEffect.e_u088_b"]);
-
-        const library = await this.questEffectLibrary;
-
-        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (library as any).preferCompressedTextures = this.preferCompressedTextures;
-        return library;
+        return this.effectLibrary;
     }
 
     public async loadRaceEffects(): Promise<DecodeLibrary> {
-        if (!this.raceEffectLibrary) this.raceEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, [RACE_WINNER_EFFECT], [], [RACE_WINNER_EFFECT]);
-
-        const library = await this.raceEffectLibrary;
-
-        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (library as any).preferCompressedTextures = this.preferCompressedTextures;
-        return library;
+        return this.effectLibrary;
     }
 
     public async loadSocialEffects(): Promise<DecodeLibrary> {
-        if (!this.socialEffectLibrary) this.socialEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, SOCIAL_EFFECTS, [], SOCIAL_EFFECTS);
-
-        const library = await this.socialEffectLibrary;
-
-        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (library as any).preferCompressedTextures = this.preferCompressedTextures;
-        return library;
+        return this.effectLibrary;
     }
 
     public loadBigHeadScales(): Promise<Record<string, number>> {
@@ -465,35 +432,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public async loadHeroEffects(): Promise<DecodeLibrary> {
-        if (!this.heroEffectLibrary) this.heroEffectLibrary = this.decodeWorker.decodeHeroEffects(this.loadSettings);
-        const library = await this.heroEffectLibrary;
-
-        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (library as any).preferCompressedTextures = this.preferCompressedTextures;
-        return library;
+        return this.effectLibrary;
     }
 
     public async loadAppendixEffects(): Promise<DecodeLibrary> {
-        if (!this.appendixEffectLibrary) {
-            const paths = ["LineageEffect.e_u520_identifier_r", "LineageEffect.e_u520_identifier_b"];
-
-            this.appendixEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, paths, [], paths);
-        }
-        const library = await this.appendixEffectLibrary;
-
-        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (library as any).preferCompressedTextures = this.preferCompressedTextures;
-        return library;
+        return this.effectLibrary;
     }
 
     public async loadAbnormalEffects(): Promise<DecodeLibrary> {
-        if (!this.abnormalEffectLibrary) this.abnormalEffectLibrary = this.decodeWorker.decodeEffectTemplates(this.loadSettings, ABNORMAL_EFFECTS, [], ABNORMAL_EFFECTS);
-
-        const library = await this.abnormalEffectLibrary;
-
-        library.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (library as any).preferCompressedTextures = this.preferCompressedTextures;
-        return library;
+        return this.effectLibrary;
     }
 
     public loadFishingLibrary(): Promise<DecodeLibrary> {
