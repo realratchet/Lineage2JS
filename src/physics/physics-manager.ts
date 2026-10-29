@@ -2,7 +2,7 @@ import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
-import CollisionWorld, { CheckResult_T, CollisionBackend_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T } from "./collision-world";
+import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T } from "./collision-world";
 import Player from "../player";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
@@ -59,20 +59,12 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     protected simCharGroups: ICharacterGroup[] = null;
 
     protected readonly physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
-    protected readonly collisionWorld = new CollisionWorld(this.physicsWorld, PhysicsManager.getCollisionBackend());
+    protected readonly collisionWorld = new CollisionWorld();
     protected readonly physicsComponents = new Set<IPhysicsComponent<any>>();
     protected readonly physicsComponentsByName = new Map<string, Set<IPhysicsComponent<any>>>();
     protected readonly triggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected nextPhysicsTick: number;
-
-    protected static getCollisionBackend(): CollisionBackend_T {
-        const backend = new URLSearchParams(location.search).get("collisionBackend") || "ue";
-
-        if (backend !== "ue" && backend !== "rapier" && backend !== "compare") throw new Error(`Unknown collision backend '${backend}'.`);
-
-        return backend;
-    }
 
     public setParent(parent: GameManager): this {
         this.manGame = parent;
@@ -93,13 +85,10 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         const updatedPhysicsComponent = this.updatePhysicsComponents(currentTime, deltaTime);
 
-        // nothing reads the rapier world under the analytical backend
-        const stepsRapier = this.collisionWorld.usesRapier();
         let physicsTicks = 0;
 
         while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
             this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), manRender);
-            if (stepsRapier) this.physicsWorld.step();
             this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
         }
 
@@ -303,7 +292,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             this.setActorRotation(pawn, oldRotation);
             if (profile.collideActors) this.collisionWorld.updatePawnCollision(pawn);
             transform.rollbackBasedActors([0, 0, 0]);
-            if (this.collisionWorld.usesRapier()) this.physicsWorld.queryPipeline.update(this.physicsWorld.islands, this.physicsWorld.bodies, this.physicsWorld.colliders);
             return false;
         }
         if (!pawn.getUnrealScriptProperty("bOnlyDrawIfAttached")) {
@@ -311,7 +299,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             transform.updateRelativeRotation();
         }
         if (profile.collideActors) this.collisionWorld.updatePawnCollision(pawn);
-        if (this.collisionWorld.usesRapier()) this.physicsWorld.queryPipeline.update(this.physicsWorld.islands, this.physicsWorld.bodies, this.physicsWorld.colliders);
         if (profile.collideActors || profile.collideWorld) {
             this.collisionWorld.notifyMove(pawn, [], null, false);
             this.setPawnZone(pawn);
@@ -374,7 +361,6 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
                 }
         }
         this.collisionWorld.updatePawnCollision(pawn);
-        if (result && this.collisionWorld.usesRapier()) this.physicsWorld.queryPipeline.update(this.physicsWorld.islands, this.physicsWorld.bodies, this.physicsWorld.colliders);
         if (result) this.setPawnZone(pawn, test);
         if (!test) this.manGame.getComponent("render").needsUpdate = true;
         return result;
@@ -636,7 +622,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (actor.scriptVM && actor.scriptActor === null) actor.setScriptRuntime(actor.scriptVM, actor.scriptObjectFactory);
 
         const primitive = object.getCollisionPrimitive ? object.getCollisionPrimitive() : null;
-        const needsCollider = this.collisionWorld.usesRapier() || !primitive || primitive.kind === "cylinder" || (object as any).isMovableObject || (object as any).isRotatingObject || (object as any).isVehicle;
+        const needsCollider = !primitive || primitive.kind === "cylinder" || (object as any).isMovableObject || (object as any).isRotatingObject || (object as any).isVehicle;
         const collider = needsCollider ? object.createCollider(this.physicsWorld) : null;
         const colliders = needsCollider ? object.getColliders ? object.getColliders() : [collider] : [];
 

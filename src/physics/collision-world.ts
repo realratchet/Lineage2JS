@@ -1,5 +1,5 @@
-import RAPIER from "@dimforge/rapier3d";
-import { Box3, Quaternion, Vector3 } from "three";
+import type RAPIER from "@dimforge/rapier3d";
+import { Box3, Vector3 } from "three";
 import type { ActorCollisionProfile_T, CollisionPrimitive_T, ICollidable } from "../objects/objects";
 import { pointPrimitive, queryPrimitive, sweptBounds, sweptIntersectsBox, type PrimitiveHit_T } from "./collision-primitive";
 import buildCollisionModel from "./collision-model";
@@ -20,9 +20,7 @@ import VolumeCollisionComponent from "./components/volume-collision-component";
 const tmpVolumeBounds = new Box3();
 const tmpBodyPosition = new Vector3();
 const tmpTestDelta = new Vector3();
-const tmpNormal = new Vector3();
 const tmpRayDelta = new Vector3();
-const identityRotation = new Quaternion();
 const tmpEnd = new Vector3();
 const tmpSweepBounds = new Box3();
 const tmpRecordBounds = new Box3();
@@ -46,12 +44,9 @@ const ACTORBOX_EPSILON = Math.fround(4.2);
 const DYNAMIC_CELL_MARGIN = 256; // Non-pawn movers retain a margin between dynamic re-grids.
 // ULevel::MoveActor (0x85b3b0) extends the test by 2 units and subtracts them back off the result
 const MOVE_ACTOR_EXTENSION = 2;
-const COMPARISON_TIME_EPSILON = 0.001;
-const COMPARISON_NORMAL_EPSILON = 0.001;
 const CHECK_RESULT_POOL_SIZE = 128;
 const RAY_RESULT_POOL_SIZE = 2;
 
-export type CollisionBackend_T = "ue" | "rapier" | "compare";
 export type CollisionActor_T = BaseActor | CollidingMesh | StaticMeshActor | Volume;
 type CollisionSource_T = CollisionActor_T | PhysicsVolume | MusicVolume;
 
@@ -109,21 +104,13 @@ type VolumeEntry_T = VolumeCollisionComponent;
 type PhysicsVolumeTree_T = { tree: CollisionOctree, entries: Map<string, PhysicsVolumeEntry_T> };
 
 export type CollisionStats_T = {
-    backend: CollisionBackend_T;
     queries: number;
     analyticalQueries: number;
-    rapierQueries: number;
     analyticalCandidates: number;
     analyticalPrimitiveTests: number;
     unsupportedQueries: number;
     unsupportedCandidates: number;
-    comparisons: number;
-    comparisonMisses: number;
-    comparisonActorDifferences: number;
-    comparisonTimeDifferences: number;
-    comparisonNormalDifferences: number;
     analyticalTime: number;
-    rapierTime: number;
     registeredAnalytical: number;
     registeredUnsupported: number;
     registeredUnsupportedZeroExtent: number;
@@ -162,8 +149,6 @@ const defaultProfile: ActorCollisionProfile_T = {
 };
 
 export class CollisionWorld {
-    protected readonly world: RAPIER.World;
-    protected backend: CollisionBackend_T;
     protected readonly colliderOwners = new Map<number, ICollidable>();
     protected readonly physicsVolumes = new Map<PhysicsVolume[], PhysicsVolumeEntry_T[]>();
     protected readonly volumeActors = new Map<PhysicsVolume[], VolumeEntry_T[]>();
@@ -177,12 +162,9 @@ export class CollisionWorld {
     protected readonly largeEntries: AnalyticalEntry_T[] = [];
     protected readonly cells: CollisionCells_T = new Map();
     protected readonly pawnCells: CollisionCells_T = new Map();
-    protected readonly arrShapes: { x: number, y: number, z: number, shape: RAPIER.Shape }[] = [];
     protected readonly arrCheckResults: CheckResult_T[] = [];
     protected readonly arrRayResults: RayCheckResult_T[] = [];
-    protected readonly zeroShape = new RAPIER.Ball(0.001);
     protected readonly analyticalBestNormal = new Vector3();
-    protected readonly ray = new RAPIER.Ray(zeroExtentVector, zeroExtentVector);
     protected readonly rayQuery: CollisionQuery_T = { location: zeroExtentVector, delta: zeroExtentVector, extent: zeroExtentVector, sourceIsPlayer: true, zeroExtent: true };
     protected readonly overlapQuery: CollisionQuery_T = { location: zeroExtentVector, delta: zeroExtentVector, extent: zeroExtentVector, sourceIsPlayer: true };
     protected readonly placementQuery: CollisionQuery_T = { location: zeroExtentVector, delta: tmpPlacementDelta, extent: zeroExtentVector, sourceIsPlayer: false, traceWorld: true };
@@ -203,88 +185,38 @@ export class CollisionWorld {
     protected analyticalZeroExtent = false;
     protected analyticalUnsupported = false;
     protected analyticalMoveHits: ActorLineHit_T[] = null;
-    protected rapierQuery: CollisionQuery_T = null;
-    protected rapierZeroExtent = false;
-    protected rapierQueryError: Error = null;
     protected checkResultIndex = 0;
     protected rayResultIndex = 0;
     protected readonly stats: CollisionStats_T = {
-        backend: "ue",
         queries: 0,
         analyticalQueries: 0,
-        rapierQueries: 0,
         analyticalCandidates: 0,
         analyticalPrimitiveTests: 0,
         unsupportedQueries: 0,
         unsupportedCandidates: 0,
-        comparisons: 0,
-        comparisonMisses: 0,
-        comparisonActorDifferences: 0,
-        comparisonTimeDifferences: 0,
-        comparisonNormalDifferences: 0,
         analyticalTime: 0,
-        rapierTime: 0,
         registeredAnalytical: 0,
         registeredUnsupported: 0,
         registeredUnsupportedZeroExtent: 0,
         registeredUnsupportedNonZeroExtent: 0,
         registeredUnsupportedPointCheck: 0
     };
-    protected readonly rapierFilter: (collider: RAPIER.Collider) => boolean;
-
-    protected filterRapierCollider(collider: RAPIER.Collider): boolean {
-        if (this.rapierQueryError) return false;
-
-        try {
-            const actor = this.colliderOwners.get(collider.handle);
-
-            if (actor && this.shouldIgnoreActor(actor, this.rapierQuery)) return false;
-
-            return !actor || this.shouldBlockActor(actor, this.rapierQuery, this.rapierZeroExtent);
-        } catch (error) {
-            // Rapier swallows exceptions raised by query predicates.
-            this.rapierQueryError = error;
-            return false;
-        }
-    }
-
-    protected checkRapierQueryError(): void {
-        if (!this.rapierQueryError) return;
-
-        const error = this.rapierQueryError;
-        this.rapierQueryError = null;
-        throw error;
-    }
-
-    public constructor(world: RAPIER.World, backend: CollisionBackend_T = "ue") {
-        this.world = world;
-        this.rapierFilter = this.filterRapierCollider.bind(this);
+    public constructor() {
 
         for (let i = 0; i < CHECK_RESULT_POOL_SIZE; i++)
             this.arrCheckResults.push({ item: -1, time: 0, location: new Vector3(), normal: new Vector3(), collider: null, actor: null });
 
         for (let i = 0; i < RAY_RESULT_POOL_SIZE; i++)
             this.arrRayResults.push({ item: -1, distance: 0, location: new Vector3(), normal: new Vector3(), collider: null, actor: null });
-
-        this.setBackend(backend);
     }
 
-    public setBackend(backend: CollisionBackend_T) {
-        if (backend !== "ue" && backend !== "rapier" && backend !== "compare") throw new Error(`Unknown collision backend '${backend}'.`);
-
-        this.backend = backend;
-        this.stats.backend = backend;
-    }
-
-    public getBackend(): CollisionBackend_T { return this.backend; }
-    public usesRapier(): boolean { return this.backend !== "ue"; }
     public getStats(): CollisionStats_T {
-        return { ...this.stats, backend: this.backend, registeredAnalytical: this.entriesByActor.size };
+        return { ...this.stats, registeredAnalytical: this.entriesByActor.size };
     }
 
     public resetStats() {
         for (const key in this.stats)
-            if (key !== "backend" && !key.startsWith("registered")) (this.stats as any)[key] = 0;
+            if (!key.startsWith("registered")) (this.stats as any)[key] = 0;
     }
 
     public register(object: ICollidable, colliders: RAPIER.Collider[]) {
@@ -422,10 +354,6 @@ export class CollisionWorld {
         try {
             if (!query.ignoreCollision && !nearlyZero && (!query.sourceProfile || query.sourceProfile.collideActors || query.sourceProfile.collideWorld)) {
                 hit = this.sweepQuery(query, MOVE_ACTOR_EXTENSION);
-                if (contacts && this.backend === "rapier") {
-                    const distance = delta.length(), testDistance = distance + MOVE_ACTOR_EXTENSION;
-                    this.timedAnalyticalLineCheck(query, tmpTestDelta.copy(delta).multiplyScalar(testDistance / distance), testDistance, distance, false);
-                }
             }
         } finally { this.analyticalMoveHits = null; }
         if (contacts) contacts.sort((a, b) => a.time - b.time);
@@ -666,9 +594,6 @@ export class CollisionWorld {
     }
 
     public setCollision(pawn: CollisionSource_T, collideActors: boolean = pawn.getUnrealScriptProperty("bCollideActors") as boolean, blockActors: boolean = pawn.getUnrealScriptProperty("bBlockActors") as boolean, blockPlayers: boolean = pawn.getUnrealScriptProperty("bBlockPlayers") as boolean): void {
-        if (this.backend === "rapier" && (pawn as StaticMeshActor).isStaticMeshActor && (pawn as StaticMeshActor).collisionOwner)
-            throw new Error(`SetCollision for batched actor '${pawn.name}' requires per-triangle Rapier filtering.`);
-
         const previous = pawn.getUnrealScriptProperty("bCollideActors");
         const level = this.pawnLevels.get(pawn as CollisionActor_T);
         const volume = pawn.findComponent<VolumeCollisionComponent>("volumeCollision");
@@ -978,15 +903,7 @@ export class CollisionWorld {
 
         const zeroExtent = query.zeroExtent || query.extent.lengthSq() === 0;
 
-        if (this.backend === "ue") return this.timedAnalyticalLineCheck(query, tmpTestDelta, testDistance, distance, zeroExtent);
-        if (this.backend === "rapier") return this.timedRapierLineCheck(query, tmpTestDelta, testDistance, distance, zeroExtent);
-
-        const analyticalHit = this.timedAnalyticalLineCheck(query, tmpTestDelta, testDistance, distance, zeroExtent);
-        const rapierHit = this.timedRapierLineCheck(query, tmpTestDelta, testDistance, distance, zeroExtent);
-
-        this.recordComparison(analyticalHit, rapierHit);
-
-        return analyticalHit;
+        return this.timedAnalyticalLineCheck(query, tmpTestDelta, testDistance, distance, zeroExtent);
     }
 
     public rayCheck(origin: Vector3, direction: Vector3, maxDistance: number, sourceCollider?: RAPIER.Collider, sourceBody?: RAPIER.RigidBody, sourceIsPlayer: boolean = true, sourceActor?: CollisionQuery_T["sourceActor"]): RayCheckResult_T | null {
@@ -1000,15 +917,7 @@ export class CollisionWorld {
         this.rayQuery.ignoredActors = null;
         this.rayQuery.ignoreBases = false;
 
-        if (this.backend === "ue") return this.analyticalRayCheck(this.rayQuery, maxDistance);
-        if (this.backend === "rapier") return this.rapierRayCheck(this.rayQuery, direction, maxDistance);
-
-        const analyticalHit = this.analyticalRayCheck(this.rayQuery, maxDistance);
-        const rapierHit = this.rapierRayCheck(this.rayQuery, direction, maxDistance);
-
-        this.recordComparison(this.rayAsCheckResult(analyticalHit, maxDistance), this.rayAsCheckResult(rapierHit, maxDistance));
-
-        return analyticalHit;
+        return this.analyticalRayCheck(this.rayQuery, maxDistance);
     }
 
     public overlapCheck(query: CollisionOverlapQuery_T): ICollidable | null {
@@ -1022,18 +931,7 @@ export class CollisionWorld {
         this.overlapQuery.onlyWorldGeometry = query.onlyWorldGeometry;
         this.overlapQuery.traceWorld = query.traceWorld;
 
-        if (this.backend === "ue") return this.timedAnalyticalOverlapCheck(this.overlapQuery);
-        if (this.backend === "rapier") return this.timedRapierOverlapCheck(this.overlapQuery);
-
-        const analyticalActor = this.timedAnalyticalOverlapCheck(this.overlapQuery);
-        const rapierActor = this.timedRapierOverlapCheck(this.overlapQuery);
-
-        this.stats.comparisons++;
-
-        if (!!analyticalActor !== !!rapierActor) this.stats.comparisonMisses++;
-        else if (analyticalActor !== rapierActor && (analyticalActor as any)?.collisionOwner !== rapierActor && (rapierActor as any)?.collisionOwner !== analyticalActor) this.stats.comparisonActorDifferences++;
-
-        return analyticalActor;
+        return this.timedAnalyticalOverlapCheck(this.overlapQuery);
     }
 
     protected analyticalRayCheck(query: CollisionQuery_T, maxDistance: number): RayCheckResult_T | null {
@@ -1048,42 +946,12 @@ export class CollisionWorld {
         return this.makeRayResult(hit.time * maxDistance, hit.location, hit.normal, hit.collider, hit.actor, hit.item);
     }
 
-    protected rapierRayCheck(query: CollisionQuery_T, direction: Vector3, maxDistance: number): RayCheckResult_T | null {
-        const start = performance.now();
-
-        this.rapierQuery = query;
-        this.rapierZeroExtent = true;
-        this.rapierQueryError = null;
-        this.ray.origin = query.location;
-        this.ray.dir = direction;
-
-        const hit = this.world.castRayAndGetNormal(this.ray, maxDistance, false, undefined, undefined, query.sourceCollider, query.sourceBody, this.rapierFilter);
-        this.checkRapierQueryError();
-
-        this.stats.rapierQueries++;
-        this.stats.rapierTime += performance.now() - start;
-
-        if (!hit) return null;
-
-        return this.makeRayResult(hit.toi, tmpBodyPosition.copy(direction).multiplyScalar(hit.toi).add(query.location), tmpNormal.copy(hit.normal as Vector3), hit.collider, this.colliderOwners.get(hit.collider.handle) || null);
-    }
-
     protected timedAnalyticalLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
         const start = performance.now();
         const result = this.analyticalLineCheck(query, testDelta, testDistance, requestedDistance, zeroExtent);
 
         this.stats.analyticalQueries++;
         this.stats.analyticalTime += performance.now() - start;
-
-        return result;
-    }
-
-    protected timedRapierLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
-        const start = performance.now();
-        const result = this.rapierLineCheck(query, testDelta, testDistance, requestedDistance, zeroExtent);
-
-        this.stats.rapierQueries++;
-        this.stats.rapierTime += performance.now() - start;
 
         return result;
     }
@@ -1096,22 +964,6 @@ export class CollisionWorld {
         this.stats.analyticalTime += performance.now() - start;
 
         return result;
-    }
-
-    protected timedRapierOverlapCheck(query: CollisionQuery_T): ICollidable | null {
-        const start = performance.now();
-
-        this.rapierQuery = query;
-        this.rapierZeroExtent = false;
-        this.rapierQueryError = null;
-
-        const collider = this.world.intersectionWithShape(query.location, identityRotation, this.getShape(query.extent, false), undefined, undefined, query.sourceCollider, query.sourceBody, this.rapierFilter);
-        this.checkRapierQueryError();
-
-        this.stats.rapierQueries++;
-        this.stats.rapierTime += performance.now() - start;
-
-        return collider ? this.colliderOwners.get(collider.handle) || null : null;
     }
 
     protected analyticalOverlapCheck(query: CollisionQuery_T): ICollidable | null {
@@ -1167,29 +1019,6 @@ export class CollisionWorld {
         if (unsupported) this.stats.unsupportedQueries++;
 
         return null;
-    }
-
-    protected rapierLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
-        this.rapierQuery = query;
-        this.rapierZeroExtent = zeroExtent;
-        this.rapierQueryError = null;
-
-        const hit = this.world.castShape(query.location, identityRotation, testDelta, this.getShape(query.extent, zeroExtent), 1, undefined, undefined, query.sourceCollider, query.sourceBody, this.rapierFilter);
-        this.checkRapierQueryError();
-
-        if (!hit) return null;
-
-        const actor = this.colliderOwners.get(hit.collider.handle) || null;
-        const primitive = actor && actor.getCollisionPrimitive ? actor.getCollisionPrimitive() : null;
-        const travelled = Math.max(0, hit.toi * testDistance - getTraceBackoff(primitive, testDistance, zeroExtent));
-        const extension = testDistance - requestedDistance;
-        const time = travelled > extension ? (travelled - extension) / requestedDistance : 0;
-
-        if (time > 1) return null;
-
-        tmpNormal.copy(hit.normal1 as Vector3).normalize();
-
-        return this.makeCheckResult(time, tmpBodyPosition.copy(query.location).addScaledVector(query.delta, time), tmpNormal, hit.collider, actor);
     }
 
     protected analyticalLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {
@@ -1433,19 +1262,6 @@ export class CollisionWorld {
         }
     }
 
-    protected getShape(extent: Vector3, zeroExtent: boolean): RAPIER.Shape {
-        if (zeroExtent) return this.zeroShape;
-
-        for (const info of this.arrShapes)
-            if (info.x === extent.x && info.y === extent.y && info.z === extent.z) return info.shape;
-
-        const shape = new RAPIER.Cuboid(extent.x, extent.y, extent.z);
-
-        this.arrShapes.push({ x: extent.x, y: extent.y, z: extent.z, shape });
-
-        return shape;
-    }
-
     protected makeCheckResult(time: number, location: Vector3, normal: Vector3, collider: RAPIER.Collider, actor: ICollidable | null, item = -1): CheckResult_T {
         const result = this.arrCheckResults[this.checkResultIndex++];
 
@@ -1474,26 +1290,6 @@ export class CollisionWorld {
         result.actor = actor;
 
         return result;
-    }
-
-    protected rayAsCheckResult(hit: RayCheckResult_T | null, maxDistance: number): CheckResult_T | null {
-        if (!hit) return null;
-
-        return this.makeCheckResult(hit.distance / maxDistance, hit.location, hit.normal, hit.collider, hit.actor, hit.item);
-    }
-
-    protected recordComparison(a: CheckResult_T | null, b: CheckResult_T | null) {
-        this.stats.comparisons++;
-
-        if (!!a !== !!b) {
-            this.stats.comparisonMisses++;
-            return;
-        }
-
-        if (!a) return;
-        if (a.actor !== b.actor && (a.actor as any)?.collisionOwner !== b.actor && (b.actor as any)?.collisionOwner !== a.actor) this.stats.comparisonActorDifferences++;
-        if (Math.abs(a.time - b.time) > COMPARISON_TIME_EPSILON) this.stats.comparisonTimeDifferences++;
-        if (a.normal.dot(b.normal) < 1 - COMPARISON_NORMAL_EPSILON) this.stats.comparisonNormalDifferences++;
     }
 
     protected shouldTraceActor(actor: ICollidable, query: CollisionQuery_T, zeroExtent: boolean): boolean {
