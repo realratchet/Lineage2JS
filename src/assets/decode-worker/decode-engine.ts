@@ -606,7 +606,7 @@ export class DecodeEngine {
             for (const value of cached.values.values())
                 buffers.add(ArrayBuffer.isView(value) ? value.buffer as ArrayBuffer : value);
         } else {
-            for (const buffer of this.collectTransferables(transfer)) buffers.add(buffer);
+            for (const buffer of prepareLibraryForTransfer(transfer, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => transfer[key]))) buffers.add(buffer);
         }
 
         for (const [sent, id] of fresh) sent.add(id);
@@ -656,7 +656,7 @@ export class DecodeEngine {
 
             await this.pullSectorScriptAssets(library, settings);
             buildStaticMeshBatchData(library);
-            prepareLibraryForTransfer(library, this.collectPackageBuffers());
+            prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
             if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
             return { cached: false, bytes: await DecodeCache.storeCachedLibraryDurable(sectorName, settings, library) };
@@ -686,14 +686,14 @@ export class DecodeEngine {
         await this.pullSectorScriptAssets(library, settings);
         buildStaticMeshBatchData(library);
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if (convertToRGBA) convertDDSMaterialsToRGBA(library);
+        this.freeSector(sectorName);
         if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, library);
 
         // Main-thread decode owns these blob URLs.
         if (withSoundUris) DecodeCache.refreshSoundBlobUris(library);
-        this.freeSector(sectorName);
 
         return { library, fromCache: false };
     }
@@ -716,7 +716,7 @@ export class DecodeEngine {
 
         await this.pullSectorScriptAssets(library, settings);
         buildStaticMeshBatchData(library);
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
         if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, library);
@@ -867,7 +867,7 @@ export class DecodeEngine {
             const sounds = new DecodeLibrary();
 
             await this.decodeCharacterSounds(sounds, new DecodeLibraryBuilder(sounds, builder.getSettings()), row, chestId, leftHandId, bootsId);
-            prepareLibraryForTransfer(sounds, this.collectPackageBuffers());
+            prepareLibraryForTransfer(sounds, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => sounds[key]));
 
             return sounds;
         });
@@ -1064,8 +1064,10 @@ export class DecodeEngine {
         for (const skin of properties.Skins || [])
             if (skin && skin.toLowerCase() !== "none") materials.add(skin);
 
+        const functions = Object.values(library.scriptFunctions);
+
         for (let cls = library.scriptClasses[classId]; cls; cls = library.scriptClasses[cls.superClassId])
-            for (const fn of Object.values(library.scriptFunctions)) {
+            for (const fn of functions) {
                 if (fn.owner !== cls.id) continue;
 
                 const entries = fn.program.entries;
@@ -1255,7 +1257,7 @@ export class DecodeEngine {
 
         (library as any).npcBundle = manifest;
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
         return library;
@@ -1327,7 +1329,7 @@ export class DecodeEngine {
             if (!material) throw new Error(`Engine.Material has no DefaultMaterial.`);
 
             library.scriptMaterials.defaultMaterial = builder.pullMaterial(material);
-            prepareLibraryForTransfer(library, this.collectPackageBuffers());
+            prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
             if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
             return library;
         });
@@ -1399,7 +1401,7 @@ export class DecodeEngine {
 
         if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -1427,7 +1429,7 @@ export class DecodeEngine {
         if (npc.enterEvent?.sound && npc.enterEvent.sound.toLowerCase() !== "none")
             library.sounds[npc.enterEvent.sound] = await this.pullSoundPath(builder, npc.enterEvent.sound);
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -1468,7 +1470,7 @@ export class DecodeEngine {
             await this.pullScriptActorTemplates(library, builder);
         }
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -1519,7 +1521,7 @@ export class DecodeEngine {
 
         if (!library.pickup.items.length) throw new Error(`Item '${id}' has no drop mesh.`);
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -1600,6 +1602,14 @@ export class DecodeEngine {
         return buffer;
     }
 
+    public forgetSharedSounds(keys: readonly string[]): void {
+        const forgotten = new Set(keys);
+
+        for (const key of keys) this.sentSoundIds.delete(key);
+        for (const [key, cached] of this.cacheSoundPaths)
+            if (forgotten.has(cached.sound.assetName.toLowerCase())) this.cacheSoundPaths.delete(key);
+    }
+
     public forgetSharedTextures(keys: readonly string[]): void {
         for (const key of keys) {
             this.sentTextureIds.delete(key);
@@ -1671,7 +1681,7 @@ export class DecodeEngine {
             library.leafActors.push([{ ...mesh, name }]);
         }
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -1704,7 +1714,7 @@ export class DecodeEngine {
             await this.pullScriptAssets(library, builder, cls.name, {});
         }
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -2103,7 +2113,7 @@ export class DecodeEngine {
         const library = new DecodeLibrary();
 
         await this.pullSkillVisuals(library, new DecodeLibraryBuilder(library, settings), [attack]);
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
         for (const [id, material] of Object.entries(library.materials)) {
@@ -2225,7 +2235,7 @@ export class DecodeEngine {
             await this.pullAnimationNotifyEffects(builder, library.pawnActors[0].animationNotifies);
         }
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if ((settings as any).rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -2324,7 +2334,7 @@ export class DecodeEngine {
             const effects = new DecodeLibrary();
 
             await this.pullAnimationNotifyEffects(new DecodeLibraryBuilder(effects, settings), manifest.animationNotifies);
-            prepareLibraryForTransfer(effects, this.collectPackageBuffers());
+            prepareLibraryForTransfer(effects, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => effects[key]));
             if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(effects);
 
             return effects;
@@ -2349,7 +2359,7 @@ export class DecodeEngine {
         const library = new DecodeLibrary();
 
         await this.pullPawnEffects(library, new DecodeLibraryBuilder(library, settings), classPath);
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
         return library;
@@ -2504,7 +2514,7 @@ export class DecodeEngine {
 
         (library as any).characterBundle = manifest;
 
-        prepareLibraryForTransfer(library, this.collectPackageBuffers());
+        prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
         return library;
@@ -2821,7 +2831,7 @@ export class DecodeEngine {
                 }
 
                 await this.decodeCharacterEquipmentAssets(assets, new DecodeLibraryBuilder(assets, builder.getSettings()), row, part as ICharacterEquipment, hairVariant);
-                prepareLibraryForTransfer(assets, this.collectPackageBuffers());
+                prepareLibraryForTransfer(assets, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => assets[key]));
                 if (builder.getSettings().rgbaTextures !== false) convertDDSMaterialsToRGBA(assets);
 
                 return assets;

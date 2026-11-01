@@ -6,6 +6,11 @@ import { resolveShaderIncludes } from "../materials/shader-chunks/register-chunk
 const VERTEX_SHADER = resolveShaderIncludes(VERTEX_SOURCE);
 const FRAGMENT_SHADER = "#version 300 es\nprecision highp float;out vec4 color;void main(){color=vec4(0.0);}";
 
+type StaticLightingJob_T = { gl: WebGL2RenderingContext, output: WebGLBuffer, sync: WebGLSync, values: Uint32Array, count: number, matrix: Matrix4, table: Float32Array, release(): void, dispose(): void };
+const cacheJobs = new WeakMap<Uint8ClampedArray, StaticLightingJob_T>();
+const cachePrograms = new WeakMap<WebGL2RenderingContext, WebGLProgram>();
+const pendingJobs = new Set<StaticLightingJob_T>();
+
 type LightEntry_T = { flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
 
 function checkError(gl: WebGL2RenderingContext, phase: string): void {
@@ -14,10 +19,102 @@ function checkError(gl: WebGL2RenderingContext, phase: string): void {
     if (error !== gl.NO_ERROR && !gl.isContextLost()) throw new Error(`Static lighting GL error ${error} (${phase}).`);
 }
 
-export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferGeometry, matrix: Matrix4, lights: LightEntry_T[], glow: Float32Array, target: Uint8ClampedArray, prepared: { offsets: Uint32Array, indices: Uint16Array | Uint32Array }): boolean {
+export function cancelStaticLighting(target: Uint8ClampedArray): void {
+    cacheJobs.get(target)?.dispose();
+}
+
+export function disposeStaticLighting(renderer: WebGLRenderer): void {
     const gl = renderer.getContext() as WebGL2RenderingContext;
-    if (gl.isContextLost()) return false;
-    checkError(gl, "before setup");
+    for (const job of pendingJobs) if (job.gl === gl) job.dispose();
+    const program = cachePrograms.get(gl);
+    if (program) gl.deleteProgram(program);
+    cachePrograms.delete(gl);
+}
+
+function getProgram(renderer: WebGLRenderer): WebGLProgram {
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    let program = cachePrograms.get(gl);
+    if (program) return program;
+
+    program = gl.createProgram();
+    const shaders: WebGLShader[] = [];
+
+    try {
+        for (const [type, source] of [[gl.VERTEX_SHADER, VERTEX_SHADER], [gl.FRAGMENT_SHADER, FRAGMENT_SHADER]] as const) {
+            const shader = gl.createShader(type);
+            shaders.push(shader);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+            gl.attachShader(program, shader);
+        }
+        gl.transformFeedbackVaryings(program, ["packedLighting"], gl.INTERLEAVED_ATTRIBS);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+        cachePrograms.set(gl, program);
+        renderer.domElement.addEventListener("webglcontextlost", () => cachePrograms.delete(gl), { once: true });
+        return program;
+    } catch (error) {
+        gl.deleteProgram(program);
+        throw error;
+    } finally {
+        for (const shader of shaders) gl.deleteShader(shader);
+    }
+}
+
+function storeJob(renderer: WebGLRenderer, geometry: BufferGeometry, target: Uint8ClampedArray, output: WebGLBuffer, sync: WebGLSync, matrix: Matrix4, table: Float32Array): void {
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    const job: StaticLightingJob_T = { gl, output, sync, values: null, count: geometry.getAttribute("position").count, matrix: matrix.clone(), table, release, dispose };
+
+    function release(): void {
+        if (!pendingJobs.delete(job)) return;
+        gl.deleteSync(sync);
+        gl.deleteBuffer(output);
+    }
+
+    function dispose(): void {
+        if (cacheJobs.get(target) !== job) return;
+        cacheJobs.delete(target);
+        release();
+        geometry.removeEventListener("dispose", dispose);
+        renderer.domElement.removeEventListener("webglcontextlost", dispose);
+    }
+
+    cacheJobs.set(target, job);
+    pendingJobs.add(job);
+    geometry.addEventListener("dispose", dispose);
+    renderer.domElement.addEventListener("webglcontextlost", dispose);
+}
+
+export function pollStaticLighting(): void {
+    for (const job of pendingJobs) {
+        const gl = job.gl;
+        if (gl.isContextLost()) { job.dispose(); continue; }
+        const status = gl.clientWaitSync(job.sync, 0, 0);
+        if (status === gl.TIMEOUT_EXPIRED) continue;
+
+        try {
+            if (status === gl.WAIT_FAILED) throw new Error(`Static lighting fence wait failed.`);
+            const values = new Uint32Array(job.count);
+
+            gl.bindBuffer(gl.COPY_READ_BUFFER, job.output);
+            gl.getBufferSubData(gl.COPY_READ_BUFFER, 0, values);
+            if (gl.isContextLost()) { job.dispose(); continue; }
+            checkError(gl, "readback");
+            job.values = values;
+            job.release();
+        } catch (error) {
+            job.dispose();
+            throw error;
+        } finally {
+            gl.bindBuffer(gl.COPY_READ_BUFFER, null);
+        }
+    }
+}
+
+export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferGeometry, matrix: Matrix4, lights: LightEntry_T[], glow: Float32Array, target: Uint8ClampedArray, prepared: { offsets: Uint32Array, indices: Uint16Array | Uint32Array }): boolean | null {
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    if (gl.isContextLost()) return null;
 
     const count = geometry.getAttribute("position").count;
     const { offsets, indices } = prepared;
@@ -37,21 +134,28 @@ export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferG
         table[i * 12 + 11] = light.lightEffect;
     }
 
+    const job = cacheJobs.get(target);
+
+    if (job && (!job.matrix.equals(matrix) || job.table.length !== table.length || job.table.some((value, index) => value !== table[index]))) job.dispose();
+    else if (job) {
+        if (!job.values) return null;
+        for (let i = 0; i < count; i++) {
+            target[i * 3] = job.values[i] & 255;
+            target[i * 3 + 1] = (job.values[i] >>> 8) & 255;
+            target[i * 3 + 2] = (job.values[i] >>> 16) & 255;
+        }
+        job.dispose();
+        return true;
+    }
+
+    if (pendingJobs.size >= 4) return null;
+    checkError(gl, "before setup");
     const maxSize = gl.getParameter(gl.MAX_TEXTURE_SIZE), width = Math.min(4096, maxSize);
     if (Math.max(offsets.length, indices.length, table.length / 4) > width * maxSize) return false;
 
-    const buffers: WebGLBuffer[] = [], textures: WebGLTexture[] = [], shaders: WebGLShader[] = [];
+    const buffers: WebGLBuffer[] = [], textures: WebGLTexture[] = [];
     const renderTarget = renderer.getRenderTarget(), cubeFace = renderer.getActiveCubeFace(), mipLevel = renderer.getActiveMipmapLevel();
     let program: WebGLProgram, vao: WebGLVertexArrayObject, feedback: WebGLTransformFeedback;
-
-    function shader(type: number, source: string): WebGLShader {
-        const shader = gl.createShader(type);
-        shaders.push(shader);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
-        return shader;
-    }
 
     function attribute(data: ArrayBufferView, index: number, size: number, type: number): void {
         const buffer = gl.createBuffer();
@@ -78,12 +182,7 @@ export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferG
 
     try {
         renderer.resetState();
-        program = gl.createProgram();
-        gl.attachShader(program, shader(gl.VERTEX_SHADER, VERTEX_SHADER));
-        gl.attachShader(program, shader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER));
-        gl.transformFeedbackVaryings(program, ["packedLighting"], gl.INTERLEAVED_ATTRIBS);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+        program = getProgram(renderer);
         gl.useProgram(program);
         vao = gl.createVertexArray();
         gl.bindVertexArray(vao);
@@ -108,30 +207,30 @@ export function computeStaticLighting(renderer: WebGLRenderer, geometry: BufferG
         gl.beginTransformFeedback(gl.POINTS);
         gl.drawArrays(gl.POINTS, 0, count);
         gl.endTransformFeedback();
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+        gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
         gl.disable(gl.RASTERIZER_DISCARD);
         checkError(gl, "transform feedback");
-        const values = new Uint32Array(count);
-        // shortcut: retain bake readback until ambient and hardware terms leave the CPU cache.
-        gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, values);
-        if (gl.isContextLost()) return false;
-        checkError(gl, "readback");
-        for (let i = 0; i < count; i++) {
-            target[i * 3] = values[i] & 255;
-            target[i * 3 + 1] = (values[i] >>> 8) & 255;
-            target[i * 3 + 2] = (values[i] >>> 16) & 255;
+        const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (!sync) {
+            if (gl.isContextLost()) return null;
+            throw new Error(`Static lighting fence creation failed.`);
         }
-        return true;
+        storeJob(renderer, geometry, target, output, sync, matrix, table);
+        buffers.pop();
+        gl.flush();
+        return null;
     } finally {
         gl.disable(gl.RASTERIZER_DISCARD);
-        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+        gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
         gl.bindVertexArray(null);
         for (const buffer of buffers) gl.deleteBuffer(buffer);
         for (const texture of textures) gl.deleteTexture(texture);
-        for (const shader of shaders) gl.deleteShader(shader);
         if (feedback) gl.deleteTransformFeedback(feedback);
         if (vao) gl.deleteVertexArray(vao);
-        if (program) gl.deleteProgram(program);
         renderer.resetState();
         renderer.setRenderTarget(renderTarget, cubeFace, mipLevel);
     }

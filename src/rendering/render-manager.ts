@@ -1,3 +1,4 @@
+import { disposeStaticLighting, pollStaticLighting } from "./static-lighting";
 import NameplateDepth from "./nameplate-depth";
 import TranslucentRenderList from "./translucent-render-list";
 import PortalVisibility from "./portal-visibility";
@@ -443,6 +444,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const dispose = this.renderer.dispose;
         this.renderer.dispose = () => {
+            disposeStaticLighting(this.renderer);
             this.nameplateDepth.dispose();
             this.sectorOcclusion.dispose();
             dispose.call(this.renderer);
@@ -2926,6 +2928,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     protected processSectorWarmups() {
+        pollStaticLighting();
         let jobIndex = -1;
         let jobDistance = Infinity;
         const cacheVisibleMaterials = new WeakMap<THREE.Mesh, Set<number>>();
@@ -2957,7 +2960,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const job = jobIndex < 0 ? null : this.pendingSectorWarmups[jobIndex];
         if (!job) return;
 
-        const deadline = performance.now() + RenderManager.TEXTURE_WARMUP_FRAME_MS;
+        const deadline = performance.now() + (this.manGame.getComponent("network").isWorldLoading() ? 8 : RenderManager.TEXTURE_WARMUP_FRAME_MS);
         while (job.materialQueue.length > 0) {
             const bindingIndex = visibleOnly ? findVisibleMaterialBinding(job.materialQueue, cacheVisibleMaterials) : job.materialQueue.length - 1;
             if (bindingIndex < 0) return;
@@ -2984,13 +2987,16 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (job.materialQueue.length > 0) return;
 
-        while (job.lightingQueue.length > 0) {
-            const object = job.lightingQueue.pop();
+        for (let i = job.lightingQueue.length - 1; i >= 0; i--) {
+            const object = job.lightingQueue[i];
 
             object.lightingGate = true;
             if (object.needsInitialLighting()) object.update(job.sector, this.environment, this.renderer);
+            if (!object.needsInitialLighting()) job.lightingQueue.splice(i, 1);
             if (performance.now() >= deadline) return;
         }
+
+        if (job.lightingQueue.length > 0) return;
 
         this.pendingSectorWarmups.splice(jobIndex, 1);
         job.fallbackMaterials.forEach(material => material.dispose());
@@ -3079,6 +3085,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public removeSector(sector: SectorObject) {
+        sector.traverse(object => {
+            if ("cancelPendingLighting" in object) (object as any).cancelPendingLighting();
+        });
         this.sectorOcclusion.remove(sector);
         this.pawnLightingStates = new WeakMap();
 
@@ -3196,8 +3205,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
             }
         });
-
-        if (terrains.length < 2) return;
 
         const result = Terrain.stitchAll(terrains);
 

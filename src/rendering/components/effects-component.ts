@@ -35,7 +35,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
 
     public setLibrary(library: DecodeLibrary): void {
         this.library = library;
-        this.vm = new UnScriptVM(library);
+        this.vm = null;
     }
 
     public createDamageEffect(): Object3D {
@@ -44,6 +44,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
 
         if (classId === null) return null;
         if (typeof classId !== "string") throw new Error(`Pawn '${parent.name}' has invalid DamageEffect '${classId}'.`);
+        if (!this.vm) this.vm = new UnScriptVM(this.library);
 
         const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, classId, this.vm);
 
@@ -83,6 +84,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             debugger;
             throw new Error(`Animation effect '${info.objectName}' requires TrailCamera.`);
         }
+        if (!this.vm) this.vm = new UnScriptVM(this.library);
 
         const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, info.effectClass, this.vm);
 

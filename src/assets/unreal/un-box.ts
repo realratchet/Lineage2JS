@@ -19,8 +19,10 @@ export abstract class FBox extends UObject {
     public getCenter() { return !this.isValid ? FVector.make() : this.max.add(this.min).multiplyScalar(0.5); }
     public getExtents() { return !this.isValid ? FVector.make() : this.max.sub(this.min).multiplyScalar(0.5); }
 
-    public constructor(min?: FVector, max?: FVector, isValid?: 0 | 1) {
+    public constructor(min?: FVector, max?: FVector, isValid?: 0 | 1, initialize = true) {
         super();
+
+        if (!initialize) return;
 
         this.min = min ?? this.min ?? FVector.make();
         this.max = max ?? this.max ?? FVector.make();

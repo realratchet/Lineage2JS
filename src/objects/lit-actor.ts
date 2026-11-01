@@ -2,7 +2,7 @@
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
 import { Box3, BufferAttribute, Color, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
-import { computeStaticLighting } from "../rendering/static-lighting";
+import { cancelStaticLighting, computeStaticLighting } from "../rendering/static-lighting";
 import SortedIndexBuffer from "../rendering/sorted-index-buffer";
 import VertexLighting, { getAffectedVertices } from "../rendering/vertex-lighting";
 import type { L2Environment } from "../rendering/l2-env";
@@ -37,6 +37,7 @@ export class LitActorMesh extends GameMesh {
     protected readonly forcedRegionTag: string;
     protected readonly forcedRegion: number;
     protected staticLightingCache?: Uint8ClampedArray;
+    protected staticLightingPending = false;
     protected lightingRenderer?: WebGLRenderer;
     protected vertexLighting?: VertexLighting;
     protected lightingAttribute?: BufferAttribute;
@@ -313,7 +314,15 @@ export class LitActorMesh extends GameMesh {
     public needsInitialLighting(): boolean {
         if (this.ambient?.hardwareLighting) return this.lastEnvVersion < 0;
 
-        return !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
+        return this.staticLightingPending || !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
+    }
+
+    public cancelPendingLighting(): void {
+        if (!this.staticLightingPending) return;
+        cancelStaticLighting(this.staticLightingCache);
+        this.staticLightingPending = false;
+        this.staticLightingCache = undefined;
+        this.lastEnvVersion = -1;
     }
 
     public lightingGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
@@ -412,6 +421,18 @@ export class LitActorMesh extends GameMesh {
             } else if (light.needsUpdate) staticCacheDirty = true;
         }
 
+        let staticLightingComplete = false;
+
+        if (this.staticLightingPending) {
+            const prepared = this.lightInfo.staticLighting;
+            if (prepared.lights.length !== staticScene.length || prepared.lights.some((name, index) => name !== staticScene[index].light)) throw new Error(`Static light order changed for '${this.name}'.`);
+            const computed = computeStaticLighting(this.lightingRenderer, this.geometry, this.lightInfo.matrix, staticScene, this.lightInfo.staticLighting.glow, this.staticLightingCache, this.lightInfo.staticLighting);
+            if (computed === null) return;
+            this.staticLightingPending = false;
+            staticLightingComplete = computed;
+            staticCacheDirty = true;
+        }
+
         if (!staticCacheDirty && !anyDynamicLightNeedsUpdate && !this.needsRelightPass) return;
 
         const perActorAmbientForFilter = this.perActorAmbient as { startVertex: number, count: number }[] | undefined;
@@ -420,7 +441,7 @@ export class LitActorMesh extends GameMesh {
         const relight = canFilterByVisibility && !staticCacheDirty && !anyDynamicLightNeedsUpdate ? this.elemRelight : undefined;
         const filterVisibility = relight ?? (canFilterByVisibility ? this.elemVisibility : undefined);
 
-        if (staticCacheDirty) {
+        if (staticCacheDirty && !staticLightingComplete) {
             if (!this.staticLightingCache || this.staticLightingCache.length !== colorArray.length)
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
 
@@ -485,11 +506,17 @@ export class LitActorMesh extends GameMesh {
                 const useGPU = this.isBatch && this.lightingRenderer && prepared;
 
                 if (useGPU && (prepared.lights.length !== staticScene.length || prepared.lights.some((name, index) => name !== staticScene[index].light))) throw new Error(`Static light order changed for '${this.name}'.`);
-                const computed = useGPU && computeStaticLighting(this.lightingRenderer, this.geometry, this.lightInfo.matrix, staticScene, prepared.glow, this.staticLightingCache, prepared);
+                const computed = useGPU ? computeStaticLighting(this.lightingRenderer, this.geometry, this.lightInfo.matrix, staticScene, prepared.glow, this.staticLightingCache, prepared) : false;
 
+                if (computed === null) {
+                    this.staticLightingPending = true;
+                    return;
+                }
                 if (!computed) this.computeLighting(sector, staticScene, this.staticLightingCache, 1.0);
             }
+        }
 
+        if (staticCacheDirty) {
             // if (staticEnv.length > 0)
             //     debugger;
 

@@ -65,13 +65,12 @@ export class WaterEffectsComponent extends PhysicsComponent<Player & IObject> {
 
     protected updateWaterHitEffect(deltaTime: number): void {
         const owner = this.getParent();
-        const ownerLevel = owner.getUnrealScriptProperty("Level");
-        if (!ownerLevel) return;
-        const sector = this.renderManager.getLoadedSectors().find(sector => sector.levelInfoActor === ownerLevel);
-        if (!sector) throw new Error(`Pawn '${owner.name}' has no registered level for water effects.`);
-
         const foot = owner.getUnrealScriptProperty("FootVolume") as unknown as PhysicsVolume;
         if (!owner.getComponent<PawnRenderableComponent>("pawnRenderable").isRendered || !foot || !foot.getUnrealScriptProperty("bL2WaterVolume")) return;
+        const volumeLevel = foot.getUnrealScriptProperty("Level");
+        const sector = this.renderManager.getLoadedSectors().find(sector => sector.levelInfoActor === volumeLevel);
+        if (!sector) throw new Error(`Water volume '${foot.name}' has no registered level for water effects.`);
+
         tmpWaterHitPosition.fromArray(owner.getUnrealScriptProperty("HitLocation") as number[]);
         if (tmpWaterHitPosition.lengthSq() === 0) {
             owner.setUnrealScriptProperty("HitWaterEffectTimer", 0);

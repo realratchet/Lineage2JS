@@ -558,10 +558,12 @@ export class Terrain extends GameMesh implements ICollidable {
     }
 
     public static stitchAll(terrains: Terrain[]) {
-        if (terrains.length < 2) return { processed: terrains.length, stitches: 0, modified: [] as Terrain[] };
-
         const terrainMap = new Map<string, Terrain>();
         for (const t of terrains) {
+            t.stitchEastNeighbor = null;
+            t.stitchSouthNeighbor = null;
+            t.stitchCornerNeighbor = null;
+
             const key = `${t.mapX}_${t.mapY}_${t.offsetX}_${t.offsetY}`;
             terrainMap.set(key, t);
         }

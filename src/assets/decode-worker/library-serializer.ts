@@ -1,5 +1,5 @@
 const MAGIC = 0x4c324443; // "L2DC"
-const FORMAT_VERSION = 5;
+export const FORMAT_VERSION = 6;
 const HEADER_SIZE = 13;
 const CHUNK_ENTRY_SIZE = 12;
 const ARRAY_BUFFER_KIND = 0xff;
@@ -58,6 +58,7 @@ const TYPED_ARRAY_KINDS: (new (buffer: ArrayBuffer, byteOffset?: number, length?
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const fileReader = typeof (globalThis as any).FileReaderSync === "function" ? new (globalThis as any).FileReaderSync() : null;
 
 class ByteWriter {
     protected cacheStrings = new Map<string, number>();
@@ -86,6 +87,7 @@ class ByteWriter {
     }
 
     public u32(value: number) {
+        if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) throw new Error(`Invalid decode-cache integer '${value}'`);
         this.ensure(4);
         this.view.setUint32(this.length, value, true);
         this.length += 4;
@@ -95,15 +97,6 @@ class ByteWriter {
         this.ensure(8);
         this.view.setFloat64(this.length, value, true);
         this.length += 8;
-    }
-
-    public varint(value: number) { // unsigned LEB128
-        this.ensure(10);
-        while (value > 0x7f) {
-            this.bytes[this.length++] = (value & 0x7f) | 0x80;
-            value = Math.floor(value / 128);
-        }
-        this.bytes[this.length++] = value;
     }
 
     public blob(src: Uint8Array) {
@@ -122,11 +115,11 @@ class ByteWriter {
     public string(value: string) {
         const index = this.cacheStrings.get(value);
 
-        if (index !== undefined) return this.varint(index * 2);
+        if (index !== undefined) return this.u32(index * 2);
 
         this.cacheStrings.set(value, this.cacheStrings.size);
         const encoded = textEncoder.encode(value);
-        this.varint(encoded.length * 2 + 1);
+        this.u32(encoded.length * 2 + 1);
         this.blob(encoded);
     }
 
@@ -162,18 +155,6 @@ class ByteReader {
         return value;
     }
 
-    public varint(): number {
-        let value = 0, shift = 1, byte: number;
-
-        do {
-            byte = this.bytes[this.offset++];
-            value += (byte & 0x7f) * shift;
-            shift *= 128;
-        } while (byte & 0x80);
-
-        return value;
-    }
-
     public take(length: number): Uint8Array {
         const view = this.bytes.subarray(this.offset, this.offset + length);
         this.offset += length;
@@ -185,7 +166,7 @@ class ByteReader {
     }
 
     public string(): string {
-        const code = this.varint();
+        const code = this.u32();
 
         if (code % 2 === 0) {
             const index = code / 2;
@@ -236,7 +217,7 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
         const ref = memo.get(value);
         if (ref !== undefined) {
             writer.u8(Tag.BackRef);
-            return writer.varint(ref);
+            return writer.u32(ref);
         }
         memo.set(value, nextRef++);
 
@@ -249,8 +230,8 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
 
             writer.u8(Tag.Chunk);
             writer.u8(value.kind);
-            writer.varint(chunks.length);
-            writer.varint(value.byteLength);
+            writer.u32(chunks.length);
+            writer.u32(value.byteLength);
             chunks.push({ kind: value.kind, bytes: seekable.file, offset: entry.offset, length: entry.length });
             return;
         }
@@ -262,8 +243,8 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
 
             writer.u8(Tag.Chunk);
             writer.u8(ARRAY_BUFFER_KIND);
-            writer.varint(chunks.length);
-            writer.varint(byteLength);
+            writer.u32(chunks.length);
+            writer.u32(byteLength);
             chunks.push({ kind: ARRAY_BUFFER_KIND, bytes: value instanceof Blob ? value : new Uint8Array(value) });
             return;
         }
@@ -273,15 +254,15 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
             if (kind < 0) throw new Error(`Cannot serialize a '${value.constructor.name}' view`);
             writer.u8(Tag.Chunk);
             writer.u8(kind);
-            writer.varint(chunks.length);
-            writer.varint(value.byteLength);
+            writer.u32(chunks.length);
+            writer.u32(value.byteLength);
             chunks.push({ kind, bytes: new Uint8Array(value.buffer, value.byteOffset, value.byteLength) });
             return;
         }
 
         if (value instanceof Map) {
             writer.u8(Tag.Map);
-            writer.varint(value.size);
+            writer.u32(value.size);
             for (const [key, entry] of value) {
                 write(key);
                 write(entry);
@@ -291,14 +272,14 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
 
         if (value instanceof Set) {
             writer.u8(Tag.Set);
-            writer.varint(value.size);
+            writer.u32(value.size);
             for (const entry of value) write(entry);
             return;
         }
 
         if (Array.isArray(value)) {
             writer.u8(Tag.Array);
-            writer.varint(value.length);
+            writer.u32(value.length);
             for (let i = 0; i < value.length; i++) write(value[i]);
             return;
         }
@@ -310,7 +291,7 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
         const keys = Object.keys(value);
 
         writer.u8(Tag.Object);
-        writer.varint(keys.length);
+        writer.u32(keys.length);
         for (const key of keys) {
             writer.string(key);
             write(value[key]);
@@ -424,18 +405,18 @@ class LibraryDecoder {
             case Tag.Number: return this.reader.f64();
             case Tag.String: return this.reader.string();
             case Tag.BigInt: return BigInt(this.reader.string());
-            case Tag.BackRef: return this.refs[this.reader.varint()];
+            case Tag.BackRef: return this.refs[this.reader.u32()];
             case Tag.Chunk: {
                 const kind = this.reader.u8();
-                const index = this.reader.varint();
-                const byteLength = this.reader.varint();
+                const index = this.reader.u32();
+                const byteLength = this.reader.u32();
                 const value = this.chunks(index, kind, byteLength);
 
                 this.refs.push(value);
                 return value;
             }
             case Tag.ArrayBuffer: {
-                const count = this.reader.varint();
+                const count = this.reader.u32();
                 const sourceOffset = this.reader.offset;
                 const value = new ArrayBuffer(count);
 
@@ -446,7 +427,7 @@ class LibraryDecoder {
             }
             case Tag.TypedArray: {
                 const kind = this.reader.u8();
-                const byteLength = this.reader.varint();
+                const byteLength = this.reader.u32();
                 const Constructor = TYPED_ARRAY_KINDS[kind] as any;
                 const bytesPerElement = Constructor.BYTES_PER_ELEMENT ?? 1;
 
@@ -462,11 +443,11 @@ class LibraryDecoder {
                 const value: Record<string, any> = {};
 
                 this.refs.push(value);
-                this.nextFrame = { type: "object", value, index: 0, count: this.reader.varint() };
+                this.nextFrame = { type: "object", value, index: 0, count: this.reader.u32() };
                 return value;
             }
             case Tag.Array: {
-                const count = this.reader.varint();
+                const count = this.reader.u32();
                 const value = new Array(count);
 
                 this.refs.push(value);
@@ -477,14 +458,14 @@ class LibraryDecoder {
                 const value = new Map();
 
                 this.refs.push(value);
-                this.nextFrame = { type: "map", value, index: 0, count: this.reader.varint(), key: undefined, hasKey: false };
+                this.nextFrame = { type: "map", value, index: 0, count: this.reader.u32(), key: undefined, hasKey: false };
                 return value;
             }
             case Tag.Set: {
                 const value = new Set();
 
                 this.refs.push(value);
-                this.nextFrame = { type: "set", value, index: 0, count: this.reader.varint() };
+                this.nextFrame = { type: "set", value, index: 0, count: this.reader.u32() };
                 return value;
             }
             default: throw new Error(`Corrupt decode-cache file (unknown tag ${tag})`);
@@ -654,13 +635,17 @@ export async function deserializeLibraryAsync(buffer: ArrayBuffer, copyChunks: b
     }
 }
 
+function readBlob(blob: Blob): ArrayBuffer | Promise<ArrayBuffer> {
+    return fileReader ? fileReader.readAsArrayBuffer(blob) : blob.arrayBuffer();
+}
+
 export async function openLibraryFile(file: Blob): Promise<SeekableLibrary_T> {
-    const header = readHeader(await file.slice(0, HEADER_SIZE).arrayBuffer());
+    const header = readHeader(await readBlob(file.slice(0, HEADER_SIZE)));
     const metadataOffset = HEADER_SIZE + header.chunkCount * CHUNK_ENTRY_SIZE;
 
     if (metadataOffset + header.metadataLength > file.size) throw new Error(`Corrupt decode-cache metadata length '${header.metadataLength}'`);
 
-    const prefix = await file.slice(0, metadataOffset + header.metadataLength).arrayBuffer();
+    const prefix = await readBlob(file.slice(0, metadataOffset + header.metadataLength));
     const entries = readEntries(prefix, header.chunkCount);
 
     for (let i = 0; i < entries.length; i++)
@@ -777,7 +762,7 @@ export async function getLibraryChunkBlob(seekable: SeekableLibrary_T, ref: any,
     if (!entry || entry.length !== ref.byteLength || entry.offset < 0 || entry.offset + entry.length > seekable.file.size) throw new Error(`Invalid stored sound chunk '${ref.index}'.`);
 
     // OPFS catalog rewrites invalidate File slices retained by sound libraries.
-    return new Blob([await seekable.file.slice(entry.offset, entry.offset + entry.length).arrayBuffer()], { type: mimeType });
+    return new Blob([await readBlob(seekable.file.slice(entry.offset, entry.offset + entry.length))], { type: mimeType });
 }
 
 export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seekable.library): Promise<any> {
@@ -786,9 +771,24 @@ export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any 
     const ranges = buildChunkRanges(seekable, refs);
 
     for (const range of ranges) {
-        const buffer = await seekable.file.slice(range.offset, range.end).arrayBuffer();
-        const length = range.refs.reduce((length, ref) => ref.kind === ARRAY_BUFFER_KIND ? length : length + (CHUNK_ALIGNMENT - length % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT + ref.byteLength, 0);
-        const chunks = new Uint8Array(length);
+        const buffer = await readBlob(seekable.file.slice(range.offset, range.end));
+        const bytes = new Uint8Array(buffer);
+        let length = 0, contiguous = true;
+
+        for (const ref of range.refs) {
+            if (ref.kind === ARRAY_BUFFER_KIND) continue;
+
+            const aligned = length + (CHUNK_ALIGNMENT - length % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
+
+            for (let i = length; i < aligned; i++)
+                if (bytes[i] !== 0) contiguous = false;
+
+            length = aligned;
+            if (seekable.entries[ref.index].offset - range.offset !== length) contiguous = false;
+            length += ref.byteLength;
+        }
+
+        const chunks = contiguous && length === buffer.byteLength ? bytes : new Uint8Array(length);
         let offset = 0;
 
         for (const ref of range.refs) {
@@ -800,7 +800,8 @@ export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any 
             }
 
             offset += (CHUNK_ALIGNMENT - offset % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
-            chunks.set(new Uint8Array(buffer, entry.offset - range.offset, ref.byteLength), offset);
+            if (chunks.buffer !== buffer)
+                chunks.set(new Uint8Array(buffer, entry.offset - range.offset, ref.byteLength), offset);
             seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, chunks.buffer, offset));
             offset += ref.byteLength;
         }

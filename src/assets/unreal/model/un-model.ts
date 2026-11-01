@@ -642,7 +642,7 @@ export abstract class UModel extends UPrimitive {
                 isOutdoor: sectionData.isOutdoor,
                 skyZone: sectionData.skyZone,
                 isUnlit: !!(sectionData.polyFlags & PF_Unlit),
-                sectionName: sectionKey,
+                sectionName: library.isSkyLevel ? `${nodes[0].surf.material.name}/${sectionData.polyFlags}/${sectionData.lightmapTextureIndex}` : sectionKey,
                 depthWrite: this.isSky ? false : undefined,
                 depthTest: this.isSky ? false : undefined,
                 fog: this.isSky ? true : undefined,

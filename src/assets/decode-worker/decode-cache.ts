@@ -1,7 +1,8 @@
-import { serializeLibrary, serializeLibraryBlob, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
+import { FORMAT_VERSION, serializeLibrary, serializeLibraryBlob, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import { getAssetSourceId } from "../asset-source";
 import { openAssetCatalog, storeAssetCatalog } from "./asset-catalog";
+import requestWebLock from "../web-lock";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
@@ -16,7 +17,7 @@ function getCacheVersion(settings: LoadSettings_T): number {
 }
 
 function hashSettings(settings: LoadSettings_T): string {
-    const json = JSON.stringify({ ...settings, scriptVersion: 14, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
+    const json = JSON.stringify({ ...settings, formatVersion: FORMAT_VERSION, scriptVersion: 14, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)
@@ -88,7 +89,7 @@ export async function loadCachedLibrary(sectorName: string, settings: LoadSettin
 export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
     if (!isCacheEnabled(settings)) return null;
 
-    return navigator.locks.request(cacheFileName(sectorName, settings), async () => {
+    return requestWebLock(cacheFileName(sectorName, settings), async () => {
         const file = await getCachedFile(sectorName, settings);
 
         if (!file) return null;
@@ -114,13 +115,13 @@ export async function loadCachedLibraryBuffer(sectorName: string, settings: Load
 }
 
 export async function readCachedLibrary<T>(sectorName: string, settings: LoadSettings_T, read: (file: File) => Promise<T>): Promise<T> {
-    return navigator.locks.request(cacheFileName(sectorName, settings), { mode: "shared" }, async () => {
+    return requestWebLock(cacheFileName(sectorName, settings), async () => {
         const file = await getCachedFile(sectorName, settings);
 
         if (!file) throw new Error(`Missing cached library '${sectorName}'.`);
 
         return read(file);
-    });
+    }, { mode: "shared" });
 }
 
 export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T, library: any): void {
@@ -145,10 +146,10 @@ export async function storeCachedLibraryDurable(sectorName: string, settings: Lo
         const dir = await getCacheDir(true);
         const handle = await dir.getFileHandle(cacheFileName(sectorName, settings), { create: true });
 
-        return navigator.locks.request(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
+        return requestWebLock(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
     }
 
-    return navigator.locks.request(cacheFileName(sectorName, settings), async () => {
+    return requestWebLock(cacheFileName(sectorName, settings), async () => {
         if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
 
         const bytes = serializeLibraryBlob(library, seekable);

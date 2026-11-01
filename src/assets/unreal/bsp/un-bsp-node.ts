@@ -49,7 +49,7 @@ export class FBSPNode implements Constructable_T {
     public readonly iZone: number[] = new Array(2); // 2  byte visibility zone in 1=front, 0=back.
     public numVertices: number;                     // 1  byte number of vertices in node.
     public flags: number;                           // 1  byte node flags.
-    public bspNodeFlags: FlagDict_T<keyof typeof BspNodeFlags_T>;
+    public get bspNodeFlags(): FlagDict_T<keyof typeof BspNodeFlags_T> { return flagBitsToDict(this.flags, BspNodeFlags_T); }
     public readonly iLeaf: number[] = new Array(2); // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
 
     public iVertexIndex: number;
@@ -74,7 +74,6 @@ export class FBSPNode implements Constructable_T {
 
         this.zoneMask = pkg.read("uint64");
         this.flags = pkg.read("uint8");
-        this.bspNodeFlags = flagBitsToDict(this.flags, BspNodeFlags_T);
         this.iVertPool = pkg.read("compat32");
         this.iSurf = pkg.read("compat32");
 

@@ -187,7 +187,9 @@ function registerScriptObject(object: ScriptHost_T, classes: ScriptObjectClasses
 function registerScriptResourceAlias(id: string, object: ScriptHost_T): void {
     id = id.toLowerCase();
     const reference = cacheScriptObjects.get(object);
+    const existing = cacheScriptResources.get(id)?.deref() as ScriptResource_T;
 
+    if (existing && existing !== object && existing.isScriptResource && existing.scriptObjectPath.toLowerCase() === id) return;
     if (!reference) throw new Error(`Script resource '${id}' has no registration.`);
     let aliases = cacheScriptResourceAliases.get(reference);
 
@@ -1426,6 +1428,7 @@ export class UnScriptVM {
             const key = info.path.toLowerCase();
             let object = resources.get(key) || cacheScriptResources.get(key)?.deref();
 
+            if (object && (object as ScriptResource_T).scriptObjectPath?.toLowerCase() !== key) object = null;
             if (seen.has(info)) {
                 if (!object) throw new Error(`Script resource '${info.path}' lost its registration.`);
                 return object;

@@ -4,7 +4,7 @@ import AInfo from "./un-info";
 
 import FBox from "./un-box";
 import FCoords from "./un-coords";
-import FColor from "./un-color";
+// import FColor from "./un-color";
 import UTexture, { type ITextureDecodeInfo } from "./un-texture";
 import ETextureFormat from "./un-tex-format";
 import GMath from "./un-gmath";
@@ -30,16 +30,17 @@ type TerrainInfoDecodeResult_T = { object: IBaseObjectDecodeInfo & { children: I
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
 const cacheTextureRgba = new WeakMap<UTexture, Uint8Array>();
+const cacheTextureData = new WeakMap<UTexture, Uint8Array>();
 
 function normalizeTerrainFace(normal: FVector): FVector {
     const lengthSq = normal.x * normal.x + normal.y * normal.y + normal.z * normal.z;
 
-    if (lengthSq < 1e-8) return FVector.make();
+    if (lengthSq < 1e-8) return normal.set(0, 0, 0);
 
     // Core FVector::SafeNormal 0x1014FC9C retains the inverse for Z; X/Y reload its float32 store.
     const inverse = 1 / Math.sqrt(lengthSq);
     const scale = Math.fround(inverse);
-    return FVector.make(Math.fround(normal.x * scale), Math.fround(normal.y * scale), Math.fround(normal.z * inverse));
+    return normal.set(Math.fround(normal.x * scale), Math.fround(normal.y * scale), Math.fround(normal.z * inverse));
 }
 
 function getTerrainFaceNormal(a: FVector, b: FVector, c: FVector): FVector {
@@ -65,6 +66,32 @@ function getTextureRgba(texture: UTexture): Uint8Array {
     cacheTextureRgba.set(texture, rgba);
 
     return rgba;
+}
+
+function getTextureRed(texture: UTexture, offset: number): number {
+    if (!(offset >= 0 && offset < texture.width * texture.height)) return undefined;
+
+    const isDxt1 = texture.format === ETextureFormat.TEXF_DXT1;
+    let data = cacheTextureData.get(texture);
+
+    if (!data) {
+        data = texture.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array;
+        if (data.length < ((texture.width + 3) >> 2) * ((texture.height + 3) >> 2) * (isDxt1 ? 8 : 16)) throw new Error(`Truncated DXT terrain map '${texture.name}'.`);
+        cacheTextureData.set(texture, data);
+    }
+
+    const x = offset % texture.width, y = Math.floor(offset / texture.width);
+    const block = ((x >> 2) + (y >> 2) * ((texture.width + 3) >> 2)) * (isDxt1 ? 8 : 16) + (isDxt1 ? 0 : 8);
+    const index = (data[block + 4 + (y & 3)] >> ((x & 3) * 2)) & 3;
+    const c0 = data[block] | (data[block + 1] << 8), c1 = data[block + 2] | (data[block + 3] << 8);
+    const r0 = (c0 >> 11) & 0x1f, r1 = (c1 >> 11) & 0x1f;
+    const red0 = (r0 << 3) | (r0 >> 2), red1 = (r1 << 3) | (r1 >> 2);
+
+    if (index === 0) return red0;
+    if (index === 1) return red1;
+    if (isDxt1 && c0 <= c1) return index === 2 ? Math.floor((red0 + red1) / 2) : 0;
+
+    return index === 2 ? Math.floor((2 * red0 + red1) / 3) : Math.floor((red0 + 2 * red1) / 3);
 }
 
 export enum ETerrainRenderMethod_T {
@@ -142,7 +169,8 @@ export abstract class ATerrainInfo extends AInfo {
 
     declare public vertices: Array<FVector>;
     declare public faceNormals: Array<FTerrainNormalPair>;
-    declare public vertexColors: FArray<FColor>;
+    declare protected faceNormalData: Float32Array;
+    // declare public vertexColors: FArray<FColor>;
 
     // protected _terrainSectorSize: any;
     // protected _decoLayerOffset: any;
@@ -323,7 +351,7 @@ export abstract class ATerrainInfo extends AInfo {
             case ETextureFormat.TEXF_RGBA8: return data.getElem(offset * 4 + 3);
             case ETextureFormat.TEXF_DXT1:
             case ETextureFormat.TEXF_DXT3:
-            case ETextureFormat.TEXF_DXT5: return getTextureRgba(texture)[offset * 4];
+            case ETextureFormat.TEXF_DXT5: return getTextureRed(texture, offset);
             default: debugger; throw new Error("invalid");
         }
     }
@@ -389,7 +417,7 @@ export abstract class ATerrainInfo extends AInfo {
         this.boundingBox = FBox.make();
         this.toWorld = FCoords.make();
         this.toHeightMap = FCoords.make();
-        this.vertexColors = new FArray(FColor.class());
+        // this.vertexColors = new FArray(FColor.class());
 
         {
             this.sectors = new FObjectArray<UTerrainSector>().load(pkg).loadSelf();
@@ -457,7 +485,8 @@ export abstract class ATerrainInfo extends AInfo {
             debugger;
         }
 
-        if (verArchive >= 117) this.vertexColors.load(pkg);
+        // if (verArchive >= 117) this.vertexColors.load(pkg);
+        if (verArchive >= 117) pkg.seek(pkg.read("compat32") * 4);
 
         this.readHead = pkg.tell();
         // debugger;
@@ -502,7 +531,7 @@ export abstract class ATerrainInfo extends AInfo {
         for (let i = 0, lcount = this.layers.length; i < lcount; i++) {
             const layer = this.layers[i]?.loadSelf();
 
-            if (!layer) continue;
+            if (!layer || !layer.map && !layer.alphaMap) continue;
 
             if (layer.alphaMap && layer.alphaMap.loadSelf().format === ETextureFormat.TEXF_P8) {
                 const palette = layer.alphaMap.palette.loadSelf();
@@ -591,31 +620,36 @@ export abstract class ATerrainInfo extends AInfo {
     }
 
     public getVertexNormal(x: number, y: number) {
-        const v = this.getGlobalVertex(x, y);
-        const fn = this.faceNormals[v];
+        const v = this.getGlobalVertex(x, y) * 6;
+        const normals = this.faceNormalData;
 
-        let n = fn.normal1.add(fn.normal2);
+        let nx = normals[v] + normals[v + 3], ny = normals[v + 1] + normals[v + 4], nz = normals[v + 2] + normals[v + 5];
 
         if (x > 0) {
-            const fn = this.faceNormals[v - 1];
+            const n = v - 6;
 
-            n = n.add(fn.normal1).add(fn.normal2);
+            nx = (nx + normals[n]) + normals[n + 3];
+            ny = (ny + normals[n + 1]) + normals[n + 4];
+            nz = (nz + normals[n + 2]) + normals[n + 5];
         }
 
         if (y > 0) {
-            const v = this.getGlobalVertex(x, y - 1);
-            const fn = this.faceNormals[v];
+            const v = this.getGlobalVertex(x, y - 1) * 6;
 
-            n = n.add(fn.normal1).add(fn.normal2);
+            nx = (nx + normals[v]) + normals[v + 3];
+            ny = (ny + normals[v + 1]) + normals[v + 4];
+            nz = (nz + normals[v + 2]) + normals[v + 5];
 
             if (x > 0) {
-                const fn = this.faceNormals[v - 1];
+                const n = v - 6;
 
-                n = n.add(fn.normal1).add(fn.normal2);
+                nx = (nx + normals[n]) + normals[n + 3];
+                ny = (ny + normals[n + 1]) + normals[n + 4];
+                nz = (nz + normals[n + 2]) + normals[n + 5];
             }
         }
 
-        n = n.normalized();
+        let n = FVector.make(nx, ny, nz).normalized();
 
         if (this.inverted)
             n = n.negate();
@@ -630,12 +664,9 @@ export abstract class ATerrainInfo extends AInfo {
 
         const vCount = this.heightmapX * this.heightmapY;
         const vertices = new Array<FVector>(vCount);
-        const faceNormals = new Array<FTerrainNormalPair>(vCount);
+        const faceNormals = new Float32Array(vCount * 6);
 
         const terrain = this.terrainMap.loadSelf();
-
-        for (let i = 0; i < vCount; i++)
-            faceNormals[i] = new FTerrainNormalPair();
 
         // debugger;
 
@@ -648,22 +679,28 @@ export abstract class ATerrainInfo extends AInfo {
                 vertices[this.getGlobalVertex(x, y)] = vertex;
 
                 if (x > 0 && y > 0) {
-                    const normIdx = this.getGlobalVertex(x - 1, y - 1);
-                    const faceNormal = faceNormals[normIdx] = new FTerrainNormalPair();
+                    const normIdx = this.getGlobalVertex(x - 1, y - 1) * 6;
+                    let normal1: FVector, normal2: FVector;
                     if (this.getEdgeTurnBitmap(x - 1, y - 1)) {
                         // 124, 423
-                        faceNormal.normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x - 1, y)]);
-                        faceNormal.normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
+                        normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x - 1, y)]);
+                        normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
                     } else {
                         // 123, 134
-                        faceNormal.normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
-                        faceNormal.normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y)], vertices[this.getGlobalVertex(x - 1, y)]);
+                        normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
+                        normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y)], vertices[this.getGlobalVertex(x - 1, y)]);
                     }
+                    faceNormals[normIdx] = normal1.x;
+                    faceNormals[normIdx + 1] = normal1.y;
+                    faceNormals[normIdx + 2] = normal1.z;
+                    faceNormals[normIdx + 3] = normal2.x;
+                    faceNormals[normIdx + 4] = normal2.y;
+                    faceNormals[normIdx + 5] = normal2.z;
                 }
             }
         }
 
-        this.faceNormals = faceNormals;
+        this.faceNormalData = faceNormals;
         this.vertices = vertices;
     }
 

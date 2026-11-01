@@ -70,6 +70,7 @@ export type ScriptPropertyValue_T = number | boolean | string | null | ScriptPro
 
 const cacheFunctions = new WeakMap<UFunction, IScriptFunctionDecodeInfo>();
 const cacheScriptObjects = new WeakMap<UObject, DecodeLibrary["scriptObjects"][string]>();
+const cacheScriptClasses = new WeakMap<DecodeLibrary, WeakSet<IScriptClassDecodeInfo>>();
 
 function getOwnerId(id: string): string {
     const index = id.lastIndexOf(".");
@@ -149,15 +150,35 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
     throw new Error(`Cannot transfer UnrealScript default '${value.constructor?.name ?? typeof value}'.`);
 }
 
-export function dumpObjectScriptProperties(object: UObject): Record<string, ScriptPropertyValue_T> {
+export function dumpObjectScriptProperties(object: UObject, cacheDefaults?: WeakMap<Function, Map<string, ScriptPropertyValue_T>>): Record<string, ScriptPropertyValue_T> {
     const properties: Record<string, ScriptPropertyValue_T> = {};
+    const dict = object.propertyDict;
+    const ctor = object.constructor as any;
+    let defaults = cacheDefaults ? cacheDefaults.get(ctor) : null;
+    let defaultDict: Map<string, any> = null;
 
-    for (const name of object.propertyDict.keys()) {
-        const value = object.propertyDict.get(name);
+    for (const name of dict.keys()) {
+        const isDefault = cacheDefaults && !Map.prototype.has.call(dict, name);
+
+        if (isDefault && defaults?.has(name)) {
+            properties[name] = defaults.get(name);
+            continue;
+        }
+
+        if (isDefault && !defaultDict) {
+            if (!ctor._classLayout) throw new Error(`Script class '${ctor.name}' has no property layout.`);
+            defaultDict = Object.create(ctor.prototype).propertyDict;
+        }
+        const value = (isDefault ? defaultDict : dict).get(name);
 
         properties[name] = Array.isArray(value) && (value.includes(null) || value.includes(undefined))
             ? dumpFieldValue((object as any).findValidProperty(name).loadSelf(), value)
             : dumpPropertyValue(value);
+
+        if (isDefault) {
+            if (!defaults) cacheDefaults.set(ctor, defaults = new Map());
+            defaults.set(name, properties[name]);
+        }
     }
 
     return properties;
@@ -304,7 +325,7 @@ function dumpProgram(script: UStruct): IScriptProgramDecodeInfo {
 
 function dumpField(field: UProperty): IScriptFieldDecodeInfo {
     field = field.loadSelf();
-    const info: IScriptFieldDecodeInfo = { id: getObjectId(field), name: field.propertyName, type: field.getTypeName(), arrayDimensions: field.arrayDimensions, flags: field.getPropertyFlags(), isPublic: !!field.objectFlags.RF_Public, categoryName: (field as any).categoryName };
+    const info: IScriptFieldDecodeInfo = { id: getObjectId(field), name: field.propertyName, type: field.getTypeName(), arrayDimensions: field.arrayDimensions, flags: field.getPropertyFlags(), isPublic: field.exp ? field.exp.anyFlags(ObjectFlags_T.RF_Public) : false, categoryName: (field as any).categoryName };
 
     if (info.type === "Byte") {
         const enumeration = (field as UByteProperty).value;
@@ -525,6 +546,9 @@ function dumpScriptReferences(script: UStruct, library: DecodeLibrary) {
 
 export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): void {
     const seenClasses = new Set<string>();
+    let cacheClasses = cacheScriptClasses.get(library);
+
+    if (!cacheClasses) cacheScriptClasses.set(library, cacheClasses = new WeakSet());
 
     function pullFunction(fn: UFunction) {
         const id = getObjectId(fn);
@@ -560,7 +584,7 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
 
         const id = getObjectId(cls);
 
-        if (seenClasses.has(id)) return;
+        if (seenClasses.has(id) || cacheClasses.has(library.scriptClasses[id])) return;
 
         seenClasses.add(id);
 
@@ -574,7 +598,7 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
 
         const stateInfo = dumpState(cls);
 
-        library.scriptClasses[id] = {
+        const info = library.scriptClasses[id] = {
             ...stateInfo,
             superClassId: superClass ? getObjectId(superClass) : null,
             withinClassId: getObjectId(getClassWithin(cls)),
@@ -588,6 +612,7 @@ export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UCla
         };
         pullClass(getClassWithin(cls));
         for (const constructed of getConstructedClasses(cls)) pullClass(constructed);
+        cacheClasses.add(info);
     }
 
     for (const cls of classes)

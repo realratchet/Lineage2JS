@@ -11,6 +11,12 @@ export function dxt1ToRgba(width: number, height: number, input: Uint8Array): Ui
     const rgba = new Uint8Array(width * height * 4);
     const blockCountX = (width + 3) >> 2;
     const blockCountY = (height + 3) >> 2;
+    const colors = [
+        { r: 0, g: 0, b: 0, a: 255 },
+        { r: 0, g: 0, b: 0, a: 255 },
+        { r: 0, g: 0, b: 0, a: 255 },
+        { r: 0, g: 0, b: 0, a: 255 }
+    ];
 
     let offset = 0;
 
@@ -39,12 +45,9 @@ export function dxt1ToRgba(width: number, height: number, input: Uint8Array): Ui
             const gb1 = (g1 << 2) | (g1 >> 4);
             const bb1 = (b1 << 3) | (b1 >> 2);
 
-            const colors = [
-                { r: rb0, g: gb0, b: bb0, a: 255 },
-                { r: rb1, g: gb1, b: bb1, a: 255 },
-                { r: 0, g: 0, b: 0, a: 255 },
-                { r: 0, g: 0, b: 0, a: 255 }
-            ];
+            colors[0].r = rb0; colors[0].g = gb0; colors[0].b = bb0;
+            colors[1].r = rb1; colors[1].g = gb1; colors[1].b = bb1;
+            colors[3].a = 255;
 
             if (c0 > c1) {
                 colors[2].r = Math.floor((2 * rb0 + rb1) / 3);

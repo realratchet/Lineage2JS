@@ -194,6 +194,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         if (this.underwaterSource) {
             try { this.underwaterSource.stop(); } catch { }
             this.underwaterSource.disconnect();
+            this.underwaterSource.buffer = null;
             this.underwaterSource = null;
         }
 
@@ -882,6 +883,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             entry.source.onended = null;
             try { entry.source.stop(); } catch { }
             entry.source.disconnect();
+            entry.source.buffer = null;
             entry.source = undefined;
         }
         if (entry.gain) entry.gain.disconnect();

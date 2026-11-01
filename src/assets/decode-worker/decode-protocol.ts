@@ -5,6 +5,7 @@ import type { TrueFont_T } from "../unreal/conf-files/un-conf-ttfont-info";
 import type { AssetFiles_T, ServedAssets_T } from "../asset-source";
 
 export type ForgetSharedTexturesMessage_T = { type: "forgetSharedTextures"; keys: string[] };
+export type ForgetSharedSoundsMessage_T = { type: "forgetSharedSounds"; keys: string[] };
 export type ConfirmSharedTexturesMessage_T = { type: "confirmSharedTextures"; keys: string[] };
 
 export type InitMessage_T = { type: "init"; assetFiles: AssetFiles_T; servedAssets: ServedAssets_T; };
@@ -102,6 +103,7 @@ export type WorkerMemoryStats_T = { buffers: number; packages: number; };
 export type MainToWorkerMessage_T =
     | { type: "promoteSkill"; requestId: number; }
     | ForgetSharedTexturesMessage_T
+    | ForgetSharedSoundsMessage_T
     | ConfirmSharedTexturesMessage_T
     | InitMessage_T
     | DecodeMessage_T

@@ -274,6 +274,19 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
 
 const arrMessages: MainToWorkerMessage_T[] = [];
 let isProcessingMessages = false;
+let lastMessageDrain = -Infinity;
+let lastMaintenance = performance.now();
+
+function isUrgentMessage(message: MainToWorkerMessage_T): boolean {
+    return message.type === "decodeCharacterEquipment" || message.type === "decodeCharacter" || message.type === "decodeSkill" && message.urgent;
+}
+
+function queueMessage(message: MainToWorkerMessage_T): void {
+    const index = isUrgentMessage(message) ? arrMessages.findIndex(entry => !isUrgentMessage(entry)) : -1;
+
+    if (index < 0) arrMessages.push(message);
+    else arrMessages.splice(index, 0, message);
+}
 
 function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
     const message = event.data;
@@ -284,7 +297,7 @@ function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
         if (index >= 0) {
             const skill = arrMessages.splice(index, 1)[0] as Extract<MainToWorkerMessage_T, { type: "decodeSkill" }>;
             skill.urgent = true;
-            arrMessages.unshift(skill);
+            queueMessage(skill);
         }
         return;
     }
@@ -292,23 +305,27 @@ function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
         engine.forgetSharedTextures(message.keys);
         return;
     }
+    if (message.type === "forgetSharedSounds") {
+        engine.forgetSharedSounds(message.keys);
+        return;
+    }
     if (message.type === "confirmSharedTextures") {
         engine.confirmSharedTextures(message.keys);
         return;
     }
-    if (message.type === "decodeCharacterEquipment" || message.type === "decodeCharacter" || message.type === "decodeSkill" && message.urgent) arrMessages.unshift(message);
-    else arrMessages.push(message);
+    queueMessage(message);
     void processMessages();
 }
 
 async function processMessages(): Promise<void> {
-    if (isProcessingMessages) return;
+    if (isProcessingMessages || arrMessages.length === 0) return;
 
     isProcessingMessages = true;
 
     while (arrMessages.length > 0)
         await handleMessage(arrMessages.shift()!);
 
+    lastMessageDrain = performance.now();
     isProcessingMessages = false;
 }
 
@@ -317,10 +334,15 @@ ctx.onmessage = onMessage;
 setInterval(async () => {
     if (isProcessingMessages) return;
 
+    const now = performance.now();
+
+    if (now - lastMessageDrain < 500 && now - lastMaintenance < 3 * DECODE_PACKAGE_SWEEP_MS) return;
+
     isProcessingMessages = true;
     try {
         await engine.flushStoredAssets();
         engine.releaseDecodePackages(0);
+        lastMaintenance = performance.now();
     } finally {
         isProcessingMessages = false;
         void processMessages();

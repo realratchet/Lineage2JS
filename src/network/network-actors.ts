@@ -102,7 +102,7 @@ const tmpNpcSpawnQuery: CollisionQuery_T = { location: new Vector3(), delta: new
 
 export class NetworkActors {
     public readonly objects = new Map<number, NetObject_T>();
-    public readonly doors = new Map<number, MovableObject>();
+    public readonly doors = new Map<number, number>();
     public readonly doorPositions = new Map<number, number>();
     public readonly staticObjects = new Map<number, number>();
     public readonly appearances = new Map<number, GamePackets.Appearance_T>();
@@ -266,7 +266,9 @@ export class NetworkActors {
         const [x, y] = render.getSectorId(render.player.position);
 
         asset.setStreaming(render, false);
-        const level = await asset.setAlwaysLoaded(render, `${x}_${y}`);
+        const loading = asset.setAlwaysLoaded(render, `${x}_${y}`);
+        asset.setStreaming(render, true);
+        const level = await loading;
 
         if (generation !== this.teleportGeneration) {
             asset.unloadAlwaysLoaded(render, `${x}_${y}`, level);
@@ -275,7 +277,6 @@ export class NetworkActors {
 
         this.worldLevel = level;
         render.setLevel(level);
-        asset.setStreaming(render, true);
 
         await this.loadAppearance(entry, render.player);
 
@@ -326,8 +327,7 @@ export class NetworkActors {
 
         if (objectId <= 0 || doorId <= 0 || packet.getRemaining()) throw new Error("Invalid DoorInfo payload.");
 
-        const mover = this.network.getParent().getComponent("render").findMovableByRealId(doorId);
-        if (mover) this.doors.set(objectId, mover);
+        this.doors.set(objectId, doorId);
     }
 
     public onDoorStatusUpdate(packet: PacketReader) {

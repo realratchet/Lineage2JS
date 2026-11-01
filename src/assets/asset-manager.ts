@@ -229,7 +229,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected isWorkerReady = false;
     protected failedSectors = new Map<string, number>();
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>();
-    protected inFlightSectors = new Set<string>();
+    protected inFlightSectors = new Map<string, number>();
+    protected nextSectorRequest = 0;
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
     protected readonly levelSectors = new Set<string>();
@@ -260,7 +261,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected lastCameraSampleTime = 0;
 
     protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
-    protected readonly unloadDistance = SECTOR_WORLD_SIZE;
+    protected readonly unloadDistance = this.renderDistance + SECTOR_WORLD_SIZE / 16;
 
     protected gameManager: GameManager;
     public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
@@ -269,7 +270,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
     public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
-        this.decodeWorkerPoolSize = Math.min(loadSettings.decodeWorkerPoolSize ?? 3, loginServer ? 2 : Infinity);
+        this.decodeWorkerPoolSize = loadSettings.decodeWorkerPoolSize ?? 3;
         this.maxConcurrentDecodes = 2;
 
         for (const path of Object.keys(assetList.supported)) {
@@ -1034,6 +1035,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (isStreaming) return;
 
+        this.decodeWorker?.setActiveSector(null);
+        this.decodeWorker?.cancelQueuedSectors();
+
         for (const sector of renderManager.getLoadedSectors().slice())
             if (!sector.neverUnload && sector.index) this.retireSector(renderManager, sector);
     }
@@ -1045,21 +1049,28 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public async setAlwaysLoaded(renderManager: RenderManager, sectorName: string, gridIndex: [number, number] = null): Promise<SectorObject> {
-        const decodeLibrary = await this.decodeWorker.decodeSector(sectorName, this.loadSettings);
+        const request = ++this.nextSectorRequest;
+        this.inFlightSectors.set(sectorName, request);
 
-        decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
-        (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
+        try {
+            const decodeLibrary = await this.decodeWorker.decodeSector(sectorName, this.loadSettings, this.gameManager.getComponent("network").isWorldLoading());
 
-        if (gridIndex) decodeLibrary.sector = gridIndex;
+            decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
+            (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-        const sector = decodePackage(decodeLibrary);
-        this.setSectorScriptRuntime(renderManager, decodeLibrary, sector);
+            if (gridIndex) decodeLibrary.sector = gridIndex;
 
-        sector.neverUnload = true;
+            const sector = decodePackage(decodeLibrary);
+            this.setSectorScriptRuntime(renderManager, decodeLibrary, sector);
 
-        renderManager.addSector(sector);
+            sector.neverUnload = true;
 
-        return sector;
+            renderManager.addSector(sector);
+
+            return sector;
+        } finally {
+            if (this.inFlightSectors.get(sectorName) === request) this.inFlightSectors.delete(sectorName);
+        }
     }
 
     protected setSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): void {
@@ -1079,7 +1090,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         sector.rearrangeLevelActors();
     }
 
-    protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes): boolean {
+    protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes, isActive: boolean = false): boolean {
         const retired = this.retiredSectors.get(sectorIdx);
 
         if (retired) {
@@ -1095,15 +1106,16 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (retryAt !== undefined && performance.now() < retryAt) return false;
 
         if (!this.isWorkerReady || this.decodeWorker.isDead()) return false;
-        if (this.inFlightSectors.size >= maxInFlight) return false;
+        if (this.inFlightSectors.size >= maxInFlight && !isActive) return false;
 
-        this.inFlightSectors.add(sectorIdx);
+        const request = ++this.nextSectorRequest;
+        this.inFlightSectors.set(sectorIdx, request);
         const generation = this.streamingGeneration;
 
-        this.decodeWorker.decodeSector(sectorIdx, this.loadSettings)
+        this.decodeWorker.decodeSector(sectorIdx, this.loadSettings, this.gameManager.getComponent("network").isWorldLoading(), true)
             .then(decodeLibrary => {
-                if (generation !== this.streamingGeneration) {
-                    this.decodeWorker.freeSector(sectorIdx);
+                if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request) {
+                    if (this.inFlightSectors.get(sectorIdx) === request) this.decodeWorker.freeSector(sectorIdx);
                     return;
                 }
 
@@ -1119,11 +1131,14 @@ export class AssetManager implements IEngineComponent<GameManager> {
                 this.failedSectors.delete(sectorIdx);
             })
             .catch(e => {
+                if (e.name === "AbortError") return;
+
                 console.error(`Failed to decode sector '${sectorIdx}':`, e);
-                this.failedSectors.set(sectorIdx, performance.now() + FAILED_SECTOR_RETRY_MS);
+                if (generation === this.streamingGeneration && this.inFlightSectors.get(sectorIdx) === request)
+                    this.failedSectors.set(sectorIdx, performance.now() + FAILED_SECTOR_RETRY_MS);
             })
             .finally(() => {
-                this.inFlightSectors.delete(sectorIdx);
+                if (this.inFlightSectors.get(sectorIdx) === request) this.inFlightSectors.delete(sectorIdx);
             });
 
         return true;
@@ -1185,7 +1200,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         try {
             if (!job.decodeJob) job.decodeJob = createSectorStaticMeshDecodeJob(job.library, job.sector);
 
-            const deadline = performance.now() + STATIC_MESH_BUILD_FRAME_MS;
+            const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : STATIC_MESH_BUILD_FRAME_MS);
             let complete = false;
 
             do complete = stepSectorStaticMeshDecodeJob(job.decodeJob);
@@ -1214,9 +1229,12 @@ export class AssetManager implements IEngineComponent<GameManager> {
             }
 
             const input = this.gameManager.getComponent("input");
-            const cameraPosition = input.isFollowingPlayer() || this.gameManager.getComponent("network").isWorldLoading() ? tmpCameraPosition.copy(renderManager.player.position) : renderManager.camera.getWorldPosition(tmpCameraPosition); // orbiting the player must not read as movement, it prefetched the whole 3x3 ring
+            const isWorldLoading = this.gameManager.getComponent("network").isWorldLoading();
+            const maxConcurrentDecodes = isWorldLoading ? Math.max(this.maxConcurrentDecodes, this.decodeWorkerPoolSize) : this.maxConcurrentDecodes;
+            const cameraPosition = input.isFollowingPlayer() || isWorldLoading ? tmpCameraPosition.copy(renderManager.player.position) : renderManager.camera.getWorldPosition(tmpCameraPosition); // orbiting the player must not read as movement, it prefetched the whole 3x3 ring
             const [sx, sy] = renderManager.getSectorId(cameraPosition);
             const originIdx = `${sx}_${sy}`;
+            this.decodeWorker?.setActiveSector(isWorldLoading ? null : originIdx);
             const sectorsLoaded = renderManager.getLoadedSectors();
             const sectorsLoadedIds = sectorsLoaded.map(({ index }) => `${index.x}_${index.y}`)
             const isValidOrigin = this.hasSector(originIdx);
@@ -1226,7 +1244,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             tmpPrefetchPosition.copy(cameraPosition);
             tmpCameraMovement.set(0, 0, 0);
 
-            if (this.lastCameraSampleTime > 0 && sampleDelta > 0 && sampleDelta < 250) {
+            if (!isWorldLoading && this.lastCameraSampleTime > 0 && sampleDelta > 0 && sampleDelta < 250) {
                 tmpCameraMovement.subVectors(cameraPosition, this.lastCameraPosition).setZ(0).multiplyScalar(SECTOR_PREFETCH_LOOKAHEAD_MS / sampleDelta);
 
                 if (tmpCameraMovement.lengthSq() > SECTOR_PREFETCH_MAX_DISTANCE * SECTOR_PREFETCH_MAX_DISTANCE)
@@ -1241,6 +1259,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
             for (const sector of sectorsLoaded) {
                 if (sector.neverUnload || !sector.index) continue;
                 if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= this.unloadDistance) continue;
+                if (sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= this.renderDistance) continue;
 
                 this.retireSector(renderManager, sector);
             }
@@ -1249,11 +1268,6 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.processPendingBuilds(renderManager, cameraPosition);
 
             const sectorsToLoad: string[] = [];
-
-            if (isValidOrigin && !sectorsLoadedIds.includes(originIdx)) {
-                this.requestSector(renderManager, originIdx);
-                return;
-            }
 
             const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
             const [psx, psy] = renderManager.getSectorId(tmpPrefetchPosition);
@@ -1279,9 +1293,17 @@ export class AssetManager implements IEngineComponent<GameManager> {
             neighbours.sort((a, b) => a.prefetchDist - b.prefetchDist || a.dist - b.dist);
             sectorsToLoad.push(...neighbours.map(n => n.idx));
 
+            this.decodeWorker?.cancelQueuedSectors(sectorsToLoad, originIdx);
+
+            if (isValidOrigin && !sectorsLoadedIds.includes(originIdx)) {
+                this.requestSector(renderManager, originIdx, maxConcurrentDecodes, !isWorldLoading);
+
+                if (!isWorldLoading) return;
+            }
+
             const backgroundLimit = tmpCameraMovement.lengthSq() > 0
-                ? Math.max(this.maxConcurrentDecodes - 1, 1)
-                : this.maxConcurrentDecodes;
+                ? Math.max(maxConcurrentDecodes - 1, 1)
+                : maxConcurrentDecodes;
 
             for (let i = 0; i < sectorsToLoad.length; i++) {
                 this.requestSector(renderManager, sectorsToLoad[i], backgroundLimit);

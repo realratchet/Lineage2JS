@@ -57,7 +57,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public getParent(): GameManager { return this.manGame; }
     public getGameClient() { return this.session.game; }
     public isInWorld() { return this.actors.inWorld; }
-    public isWorldLoading() { return this.ui.getScreen() === "loading"; }
+    public isWorldLoading() { return this.ui?.getScreen() === "loading"; }
     public isPlayingReplay() { return !!this.session.game?.isPlayingReplay(); }
 
     public getReplayDeltaTime(deltaTime: number): number | null {
@@ -326,10 +326,15 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         const object = this.actors.findObjectByActor(actor);
         if (object) return object.objectId;
 
-        for (const [objectId, mover] of this.actors.doors) if (mover === actor) return objectId;
-
         const properties = (actor as any).scriptProperties;
-        return properties instanceof Map ? this.actors.staticObjects.get(getProperty(actor as any, "L2ServerObjectRealID") as number) ?? 0 : 0;
+        if (!(properties instanceof Map)) return 0;
+
+        const realId = getProperty(actor as any, "L2ServerObjectRealID") as number;
+
+        if ((actor as any).isMovableObject)
+            for (const [objectId, doorId] of this.actors.doors) if (doorId === realId) return objectId;
+
+        return this.actors.staticObjects.get(realId) ?? 0;
     }
 
     public requestAction(actor: Object3D | null, isShift: boolean = false, isCtrl: boolean = false) {

@@ -541,9 +541,11 @@ export function shareBatchScriptProperties(manifest: StaticMeshBatchManifest_T):
         if (!Object.keys(shared).length) continue;
 
         for (const actor of actors) {
-            const properties = { ...actor.scriptProperties };
+            const properties: typeof actor.scriptProperties = {};
 
-            for (const key of Object.keys(shared)) delete properties[key];
+            for (const key of Object.keys(actor.scriptProperties))
+                if (!Object.prototype.hasOwnProperty.call(shared, key)) properties[key] = actor.scriptProperties[key];
+
             actor.sharedScriptProperties = shared;
             actor.scriptProperties = properties;
         }

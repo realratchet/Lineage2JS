@@ -144,7 +144,7 @@ export default class SkyRenderer {
 
         const { skybox, hazering, clouds } = envInfo.setup;
         const bspSections = skyLevel.getObjectByName("BSP_Sections");
-        if (!bspSections) return;
+        if (!bspSections) throw new Error(`Sky level has no BSP sections.`);
 
         let meshCount = 0;
         const children = bspSections.children as Mesh[];
@@ -161,7 +161,7 @@ export default class SkyRenderer {
             // console.log(`[SkyRenderer] Using USkyZoneInfo as canonical origin: ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
         } else {
             const skyboxPattern = envInfo.setup.skybox;
-            let skyboxMesh = skyboxPattern ? children.find(m => m.name.includes(skyboxPattern)) : null;
+            let skyboxMesh = skyboxPattern ? children.find(m => m.name.startsWith(`BSPSection_${skyboxPattern}/`)) : null;
 
             if (!skyboxMesh && children.length > 0) skyboxMesh = children[0];
 
@@ -216,14 +216,18 @@ export default class SkyRenderer {
             }
         }
 
-        children.filter(o => skybox && o.name.includes(skybox)).forEach(m => processMesh(m, "skybox"));
-        children.filter(o => hazering && o.name.includes(hazering)).forEach(m => processMesh(m, "haze"));
+        children.filter(o => skybox && o.name.startsWith(`BSPSection_${skybox}/`)).forEach(m => processMesh(m, "skybox"));
+        children.filter(o => hazering && o.name.startsWith(`BSPSection_${hazering}/`)).forEach(m => processMesh(m, "haze"));
 
         clouds.forEach((pattern, i) => {
             if (pattern) {
-                children.filter(o => o.name.includes(pattern)).forEach(m => processMesh(m, "cloud", i));
+                children.filter(o => o.name.startsWith(`BSPSection_${pattern}/`)).forEach(m => processMesh(m, "cloud", i));
+                if (!this.skyLayers.clouds.some(layer => layer.index === i)) throw new Error(`Sky material '${pattern}' has no BSP sections.`);
             }
         });
+
+        if (skybox && !this.skyLayers.skybox.length) throw new Error(`Sky material '${skybox}' has no BSP sections.`);
+        if (hazering && !this.skyLayers.haze.length) throw new Error(`Sky material '${hazering}' has no BSP sections.`);
 
         // console.log(`[SkyRenderer] layers: skybox=${this.skyLayers.skybox.length}, haze=${this.skyLayers.haze.length}, clouds=${this.skyLayers.clouds.length} (of ${children.length} bsp meshes; patterns: skybox='${skybox}', haze='${hazering}', clouds=[${clouds.join(", ")}])`);
     }

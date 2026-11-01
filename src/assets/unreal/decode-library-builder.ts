@@ -59,6 +59,7 @@ export class DecodeLibraryBuilder {
 
     protected readonly materialsLoading = new Set<string>();
     protected readonly skeletalMeshes = new Map<string, ISkinnedMeshObjectDecodeInfo>();
+    protected readonly cacheScriptDefaults = new WeakMap<Function, Map<string, any>>();
     protected readonly settings: LoadSettings_T;
 
     public constructor(library: DecodeLibrary, settings: LoadSettings_T) {
@@ -514,7 +515,7 @@ export class DecodeLibraryBuilder {
         const owner = actor.propertyDict.get("Owner") as UAActor;
 
         info.scriptClassId = cls.name;
-        info.scriptProperties = dumpObjectScriptProperties(actor);
+        info.scriptProperties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults);
         if (this.library.levelPackageName) info.scriptProperties.Outer = (actor as any).pkg.getObjectPath(actor.exp.idPackage);
         info.ownerUuid = owner ? owner.uuid : null;
     }

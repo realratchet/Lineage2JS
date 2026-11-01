@@ -370,12 +370,8 @@ export class SectorObject extends GameObject {
 
         const entries = Array.from(this.arrLevelActors, (actor, index) => {
             const info = this.arrLevelActorRecords[index];
-            let host = actor;
+            const host = actor === undefined && info ? info : actor;
 
-            if (host === undefined && info) {
-                host = { scriptClassId: info.scriptClassId, scriptProperties: { ...info.scriptProperties } };
-                this.scriptVM.initializeHost(host);
-            }
             return { actor, info, exists: !!host, isStatic: host && !!getProperty(host, "bStatic"), isAlwaysRelevant: host && !!getProperty(host, "bAlwaysRelevant") };
         });
         const ordered = entries.slice(0, 2);

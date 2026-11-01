@@ -9,11 +9,36 @@ import getNpcBundleName from "./npc-bundle";
 import { getAssetFiles, getServedAssets } from "../asset-source";
 
 const cacheScript = { scriptClasses: new Map<string, any>(), scriptFunctions: new Map<string, any>(), scriptStates: new Map<string, any>(), scriptObjects: new Map<string, any>() };
-const cacheSounds = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string }>();
+type SharedSound_T = { key: string, data: Uint8Array | Blob, mimeType: string, refs: number };
+const cacheSounds = new Map<string, SharedSound_T>();
 const cacheTextureBuffers = new Map<string, ArrayBuffer>();
 const cacheTextureIds = new WeakMap<ArrayBuffer, Set<string>>();
 const clients = new Set<DecodeWorkerClient>();
 const pendingTextureDisposals = new Set<ArrayBuffer>();
+const pendingSoundDisposals = new Set<SharedSound_T>();
+const soundFinalizer = new FinalizationRegistry<SharedSound_T>(sound => {
+    if (--sound.refs < 0) throw new Error(`Invalid sound reference count for '${sound.key}'.`);
+    if (sound.refs) return;
+
+    pendingSoundDisposals.add(sound);
+    releaseDisposedSounds();
+});
+
+function releaseDisposedSounds(): void {
+    if ([...clients].some(client => client.hasPendingAssets())) return;
+
+    const forgotten: string[] = [];
+
+    for (const sound of pendingSoundDisposals) {
+        if (sound.refs || cacheSounds.get(sound.key) !== sound) continue;
+
+        cacheSounds.delete(sound.key);
+        forgotten.push(sound.key);
+    }
+    pendingSoundDisposals.clear();
+
+    for (const client of clients) client.forgetSharedSounds(forgotten);
+}
 
 function releaseDisposedTextures(): void {
     if ([...clients].some(client => client.hasPendingAssets())) return;
@@ -83,13 +108,18 @@ function shareSounds(library: any): void {
     for (const [name, sound] of library.soundBlobCache) {
         const id = library.sharedSounds[name];
 
-        if (!cacheSounds.has(id)) cacheSounds.set(id, { uri: null, data: sound.data.slice(), mimeType: sound.mimeType });
+        if (!cacheSounds.has(id)) cacheSounds.set(id, { key: id, data: sound.data.slice(), mimeType: sound.mimeType, refs: 0 });
     }
 
     for (const [name, id] of Object.entries(library.sharedSounds) as [string, string][]) {
         if (!cacheSounds.has(id)) throw new Error(`Shared sound '${name}' (${id}) never reached the main thread.`);
 
-        library.soundBlobCache.set(name, Object.assign({}, cacheSounds.get(id)));
+        const cached = cacheSounds.get(id);
+        const sound = { uri: null, data: cached.data, mimeType: cached.mimeType };
+
+        cached.refs++;
+        soundFinalizer.register(sound, cached);
+        library.soundBlobCache.set(name, sound);
     }
 
     delete library.sharedSounds;
@@ -133,12 +163,14 @@ type PendingRequest_T = {
 type WorkerSlot_T = {
     worker: Worker;
     isDead: boolean;
+    isReady: boolean;
     inFlight: number;
     readyResolve(): void;
     readyReject(error: Error): void;
 };
 
 type BinaryDecodeRequest_T = { buffer?: ArrayBuffer, library?: DecodeLibrary, request: PendingRequest_T };
+type SectorRequest_T = { message: any, reserveScriptWorker: boolean, isStreaming: boolean, resolve(value: any): void, reject(error: Error): void };
 
 async function waitForWorkers(promises: Promise<void>[]): Promise<void> {
     await Promise.all(promises);
@@ -147,6 +179,10 @@ async function waitForWorkers(promises: Promise<void>[]): Promise<void> {
 export class DecodeWorkerClient {
     protected slots: WorkerSlot_T[] = [];
     protected pending = new Map<number, PendingRequest_T>();
+    protected readonly sectorQueue: SectorRequest_T[] = [];
+    protected activeSector: string = null;
+    protected isSectorQueueScheduled = false;
+    protected isTerminated = false;
     protected readonly pendingSkillRequests = new Map<string, { requestId: number, request: PendingRequest_T }>();
     protected readonly cacheSkillLibraries = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheScriptLibraries = new Map<string, Promise<DecodeLibrary>>();
@@ -173,7 +209,7 @@ export class DecodeWorkerClient {
         const readyPromises: Promise<void>[] = [];
 
         for (let i = 0; i < poolSize; i++) {
-            const slot = { isDead: false, inFlight: 0 } as WorkerSlot_T;
+            const slot = { isDead: false, isReady: false, inFlight: 0 } as WorkerSlot_T;
 
             readyPromises.push(new Promise<void>((resolve, reject) => {
                 slot.readyResolve = resolve;
@@ -208,25 +244,31 @@ export class DecodeWorkerClient {
         return this.slots.every(slot => slot.isDead);
     }
 
-    protected pickWorker(stickyIndex?: number, isSector: boolean = false): number {
-        const count = isSector && this.slots.length > 1 ? this.slots.length - 1 : this.slots.length;
+    protected pickWorker(stickyIndex?: number, reserveScriptWorker: boolean = false, idleOnly: boolean = false): number {
+        const count = reserveScriptWorker && this.slots.length > 1 ? this.slots.length - 1 : this.slots.length;
         // reuse the worker that last decoded this sector if it's sitting idle - it likely
         // still has shared dependency packages warm in memory, which isn't shared across
         // workers. Only when idle though: forcing a busy worker would reintroduce the
         // head-of-line blocking a boundary crossing needs the pool to avoid
         if (stickyIndex !== undefined && stickyIndex < count) {
             const slot = this.slots[stickyIndex];
-            if (slot && !slot.isDead && slot.inFlight === 0) return stickyIndex;
+            if (slot && !slot.isDead && slot.inFlight === 0 && (!idleOnly || slot.isReady)) return stickyIndex;
         }
 
         let best = -1, bestLoad = Infinity;
 
         for (let i = 0; i < count; i++) {
             if (this.slots[i].isDead) continue;
+            if (idleOnly && (!this.slots[i].isReady || this.slots[i].inFlight > 0)) continue;
             if (this.slots[i].inFlight < bestLoad) { best = i; bestLoad = this.slots[i].inFlight; }
         }
 
-        return best < 0 && isSector ? this.pickScriptWorker() : best;
+        if (best >= 0 || !reserveScriptWorker) return best;
+        if (idleOnly && this.slots.some((slot, index) => index < count && !slot.isDead)) return -1;
+
+        const fallback = this.pickScriptWorker();
+
+        return fallback >= 0 && (!idleOnly || this.slots[fallback].isReady && this.slots[fallback].inFlight === 0) ? fallback : -1;
     }
 
     protected pickScriptWorker(): number { // LineageWarrior/LineageEffect script classes drag in a ~1.4GB import closure per worker, keep it to one.
@@ -238,7 +280,100 @@ export class DecodeWorkerClient {
 
     protected pickCharacterWorker(): number { return this.pickScriptWorker(); }
 
-    public async decodeSector(sectorName: string, settings: LoadSettings_T): Promise<DecodeLibrary> {
+    public setActiveSector(sectorName: string): void {
+        if (this.activeSector === sectorName) return;
+
+        this.activeSector = sectorName;
+        this.scheduleSectorQueue();
+    }
+
+    public cancelQueuedSectors(requiredSectors: readonly string[] = [], origin: string = null): void {
+        let cancelled = false;
+
+        for (let i = this.sectorQueue.length - 1; i >= 0; i--) {
+            const request = this.sectorQueue[i];
+            const name = request.message.sectorName;
+
+            if (!request.isStreaming || name === origin || requiredSectors.includes(name)) continue;
+
+            this.sectorQueue.splice(i, 1);
+            request.reject(new DOMException(`Sector '${name}' is no longer needed.`, "AbortError"));
+            cancelled = true;
+        }
+
+        if (!cancelled) return;
+
+        releaseDisposedTextures();
+        releaseDisposedSounds();
+        this.scheduleSectorQueue();
+    }
+
+    protected queueSector(message: any, reserveScriptWorker: boolean, isStreaming: boolean = false): Promise<any> {
+        return new Promise((resolve, reject) => {
+            if (this.isTerminated || this.isDead()) {
+                reject(new Error(`Decode worker is dead.`));
+                return;
+            }
+
+            this.sectorQueue.push({ message, reserveScriptWorker, isStreaming, resolve, reject });
+            this.scheduleSectorQueue();
+        });
+    }
+
+    protected scheduleSectorQueue(): void {
+        if (!this.sectorQueue.length || this.isSectorQueueScheduled || this.isTerminated) return;
+
+        this.isSectorQueueScheduled = true;
+        queueMicrotask(() => {
+            this.isSectorQueueScheduled = false;
+            this.processSectorQueue();
+        });
+    }
+
+    protected processSectorQueue(): void {
+        if (this.isTerminated) return;
+
+        if (this.isDead()) {
+            for (const request of this.sectorQueue.splice(0)) request.reject(new Error(`Decode worker is dead.`));
+            return;
+        }
+
+        while (this.sectorQueue.length) {
+            let requestIndex = -1, workerIndex = -1, priority = -1;
+
+            for (let i = 0; i < this.sectorQueue.length; i++) {
+                const request = this.sectorQueue[i];
+                const requestPriority = request.message.sectorName === this.activeSector ? 2 : request.reserveScriptWorker ? 0 : 1;
+
+                if (requestPriority <= priority) continue;
+
+                const index = this.pickWorker(this.sectorWorker.get(request.message.sectorName), request.reserveScriptWorker || this.activeSector !== null, true);
+
+                if (index < 0) continue;
+
+                requestIndex = i;
+                workerIndex = index;
+                priority = requestPriority;
+            }
+
+            if (requestIndex < 0) return;
+
+            const request = this.sectorQueue.splice(requestIndex, 1)[0];
+
+            if (request.message.type === "decode") this.sectorWorker.set(request.message.sectorName, workerIndex);
+            void this.dispatchSector(request, workerIndex);
+        }
+    }
+
+    protected async dispatchSector(request: SectorRequest_T, workerIndex: number): Promise<void> {
+        try {
+            request.resolve(await this.dispatch(workerIndex, request.message));
+        } catch (error) {
+            request.reject(error as Error);
+        }
+    }
+
+    public async decodeSector(sectorName: string, settings: LoadSettings_T, isWorldLoading: boolean = false, isStreaming: boolean = false): Promise<DecodeLibrary> {
         this.cacheSectorHits.delete(sectorName);
         if (this.mainThreadEngine) {
             const { library } = await this.mainThreadEngine.decodeSector(sectorName, settings, fromCache => this.cacheSectorHits.set(sectorName, fromCache));
@@ -246,24 +381,14 @@ export class DecodeWorkerClient {
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
-        const workerIndex = this.pickWorker(this.sectorWorker.get(sectorName), true);
-
-        if (workerIndex < 0) throw new Error("Decode worker is dead");
-
-        this.sectorWorker.set(sectorName, workerIndex);
-
-        return this.dispatch(workerIndex, { type: "decode", sectorName, settings });
+        return this.queueSector({ type: "decode", sectorName, settings }, !isWorldLoading, isStreaming);
     }
 
     public precacheSector(sectorName: string, settings: LoadSettings_T): Promise<PrecacheResult_T> {
         if (this.mainThreadEngine)
             return this.mainThreadEngine.precacheSector(sectorName, settings);
 
-        const workerIndex = this.pickWorker(undefined, true);
-
-        if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
-
-        return this.dispatch(workerIndex, { type: "precache", sectorName, settings });
+        return this.queueSector({ type: "precache", sectorName, settings }, true);
     }
 
     public isBuildingSector(sectorName: string): boolean { return this.cacheSectorHits.get(sectorName) === false; }
@@ -292,8 +417,6 @@ export class DecodeWorkerClient {
         const workerIndex = this.pickWorker();
 
         if (workerIndex < 0) return Promise.reject(new Error("decode worker is dead"));
-
-        this.sectorWorker.set("skylevel", workerIndex); // env layer names carry skylevel's session uuids, both decode in one worker
 
         return this.dispatch(workerIndex, { type: "decodeEnv" });
     }
@@ -430,7 +553,9 @@ export class DecodeWorkerClient {
 
         const requestId = this.nextRequestId;
         const promise = this.dispatch(workerIndex, { type: "decodeSkill", settings, id, level, urgent, record });
-        this.pendingSkillRequests.set(key, { requestId, request: this.pending.get(requestId) });
+        const request = this.pending.get(requestId);
+
+        if (request) this.pendingSkillRequests.set(key, { requestId, request });
 
         try { return await promise; }
         finally { this.pendingSkillRequests.delete(key); }
@@ -580,13 +705,22 @@ export class DecodeWorkerClient {
     }
 
     protected dispatch(workerIndex: number, message: any, isRaw: boolean = false): Promise<any> {
+        if (this.isTerminated || this.slots[workerIndex].isDead) return Promise.reject(new Error(`Decode worker is dead.`));
+
         const requestId = this.nextRequestId++;
 
         this.slots[workerIndex].inFlight++;
 
         return new Promise((resolve, reject) => {
             this.pending.set(requestId, { resolve, reject, workerIndex, isRaw, copyChunks: true, urgent: message.type === "decodeCharacterEquipment" || message.type === "decodeSkill" && message.urgent });
-            this.slots[workerIndex].worker.postMessage({ ...message, requestId });
+
+            try {
+                this.slots[workerIndex].worker.postMessage({ ...message, requestId });
+            } catch (error) {
+                this.settlePending(requestId);
+                reject(error as Error);
+                this.scheduleSectorQueue();
+            }
         });
     }
 
@@ -604,12 +738,12 @@ export class DecodeWorkerClient {
     protected onMessage(workerIndex: number, msg: WorkerToMainMessage_T) {
         switch (msg.type) {
             case "ready": {
+                this.slots[workerIndex].isReady = true;
                 this.slots[workerIndex].readyResolve();
                 break;
             }
             case "initError": {
-                this.slots[workerIndex].isDead = true;
-                this.slots[workerIndex].readyReject(new Error(msg.message));
+                this.onWorkerDead(workerIndex, new Error(msg.message));
                 break;
             }
             case "sectorCache": {
@@ -744,6 +878,8 @@ export class DecodeWorkerClient {
         }
 
         releaseDisposedTextures();
+        releaseDisposedSounds();
+        this.scheduleSectorQueue();
     }
 
     protected async processBinaryDecodeQueue(): Promise<void> {
@@ -776,6 +912,7 @@ export class DecodeWorkerClient {
 
         this.isDecodingBinary = false;
         releaseDisposedTextures();
+        releaseDisposedSounds();
     }
 
     protected async processUrgentLibraries(): Promise<void> {
@@ -803,6 +940,7 @@ export class DecodeWorkerClient {
         const slot = this.slots[workerIndex];
 
         slot.isDead = true;
+        slot.inFlight = 0;
         slot.readyReject(error); // no-op if already resolved
 
         for (const [requestId, request] of this.pending) {
@@ -813,10 +951,19 @@ export class DecodeWorkerClient {
         }
 
         slot.worker.terminate();
+        this.scheduleSectorQueue();
     }
 
-    public getPendingAssetCount(): number { return this.pending.size + this.binaryDecodeQueue.length + this.decodingBinaryCount; }
+    public getPendingAssetCount(): number { return this.pending.size + this.sectorQueue.length + this.binaryDecodeQueue.length + this.decodingBinaryCount; }
     public hasPendingAssets(): boolean { return this.getPendingAssetCount() > 0; }
+
+    public forgetSharedSounds(keys: string[]): void {
+        if (!keys.length) return;
+
+        if (this.mainThreadEngine) this.mainThreadEngine.forgetSharedSounds(keys);
+        for (const slot of this.slots)
+            if (!slot.isDead) slot.worker.postMessage({ type: "forgetSharedSounds", keys });
+    }
 
     public forgetSharedTextures(keys: string[]): void {
         if (!keys.length) return;
@@ -835,8 +982,13 @@ export class DecodeWorkerClient {
     }
 
     public terminate() {
+        this.isTerminated = true;
         clients.delete(this);
-        this.slots.forEach(slot => slot.worker.terminate());
+        const error = new Error(`Decode worker terminated.`);
+
+        for (const request of this.sectorQueue.splice(0)) request.reject(error);
+        for (const entry of this.binaryDecodeQueue.splice(0)) entry.request.reject(error);
+        this.slots.forEach((slot, index) => this.onWorkerDead(index, error));
     }
 }
 
