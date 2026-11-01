@@ -45,6 +45,14 @@ function readUint64(view: DataView, offset: number) {
     return view.getUint32(offset, true) + view.getUint32(offset + 4, true) * 0x100000000;
 }
 
+async function readCabinetBytes(blob: Blob, name: string): Promise<ArrayBuffer> {
+    try {
+        return await blob.arrayBuffer();
+    } catch (e) {
+        throw new Error(`Cannot read '${name}'. Select the installer folder again. ${(e as Error).message}`);
+    }
+}
+
 function deobfuscate(bytes: Uint8Array, seed: number) {
     for (let i = 0; i < bytes.length; i++, seed++) {
         const x = bytes[i] ^ 0xd5;
@@ -67,15 +75,31 @@ export class InstallShieldCabinet {
     public static async open(header: Blob, volumes: Map<number, Blob>) {
         const cabinet = new InstallShieldCabinet(volumes);
 
-        cabinet.readFileTable(new Uint8Array(await header.arrayBuffer()));
+        cabinet.readFileTable(new Uint8Array(await readCabinetBytes(header, "data1.hdr")));
+
+        const required = new Set(cabinet.files.map(file => file.volume));
+        const missing = [...required].filter(volume => !volumes.has(volume));
+
+        if (missing.length) throw new Error(`Missing installer files: ${missing.map(volume => `data${volume}.cab`).join(", ")}. Select the folder containing data1.hdr and all CAB volumes.`);
+
+        for (const volume of required) await cabinet.getVolumeHeader(volume);
+
+        for (const file of cabinet.files) {
+            const size = file.flags & FILE_COMPRESSED ? file.compressedSize : file.expandedSize;
+
+            if (!(file.flags & FILE_SPLIT) && file.dataOffset + size > volumes.get(file.volume).size)
+                throw new Error(`Installer file 'data${file.volume}.cab' is incomplete: missing data for '${file.path}'.`);
+        }
 
         return cabinet;
     }
 
     protected readFileTable(bytes: Uint8Array) {
+        if (bytes.byteLength < COMMON_HEADER_SIZE) throw new Error(`Installer file 'data1.hdr' is incomplete.`);
+
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-        if (view.getUint32(0, true) !== 0x28635349) throw new Error(`Not an InstallShield cabinet header.`);
+        if (view.getUint32(0, true) !== 0x28635349) throw new Error(`'data1.hdr' is not an InstallShield cabinet header.`);
 
         const version = view.getUint32(4, true);
         const majorVersion = version >>> 24 === 1 ? (version >>> 12) & 0xf : (version & 0xffff) / 100;
@@ -120,7 +144,12 @@ export class InstallShieldCabinet {
 
         if (!blob) throw new Error(`Missing cabinet volume data${volume}.cab`);
 
-        const view = new DataView(await blob.slice(COMMON_HEADER_SIZE, COMMON_HEADER_SIZE + 0x40).arrayBuffer());
+        const bytes = await readCabinetBytes(blob.slice(0, COMMON_HEADER_SIZE + 0x40), `data${volume}.cab`);
+
+        if (bytes.byteLength < COMMON_HEADER_SIZE + 0x40) throw new Error(`Installer file 'data${volume}.cab' is incomplete.`);
+        if (new DataView(bytes).getUint32(0, true) !== 0x28635349) throw new Error(`'data${volume}.cab' is not an InstallShield cabinet.`);
+
+        const view = new DataView(bytes, COMMON_HEADER_SIZE);
         const header: VolumeHeader_T = {
             dataOffset: view.getUint32(0x00, true),
             firstFileIndex: view.getUint32(0x08, true),
@@ -140,7 +169,7 @@ export class InstallShieldCabinet {
         const size = file.flags & FILE_COMPRESSED ? file.compressedSize : file.expandedSize;
 
         if (!(file.flags & FILE_SPLIT))
-            return new Uint8Array(await this.volumes.get(file.volume).slice(file.dataOffset, file.dataOffset + size).arrayBuffer());
+            return new Uint8Array(await readCabinetBytes(this.volumes.get(file.volume).slice(file.dataOffset, file.dataOffset + size), `data${file.volume}.cab`));
 
         const stored = new Uint8Array(size);
         let volume = file.volume, offset = file.dataOffset, written = 0;
@@ -157,7 +186,7 @@ export class InstallShieldCabinet {
 
             const length = Math.min(available, size - written);
 
-            stored.set(new Uint8Array(await this.volumes.get(volume).slice(offset, offset + length).arrayBuffer()), written);
+            stored.set(new Uint8Array(await readCabinetBytes(this.volumes.get(volume).slice(offset, offset + length), `data${volume}.cab`)), written);
             written += length;
             volume++;
         }

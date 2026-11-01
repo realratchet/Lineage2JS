@@ -80,7 +80,12 @@ export function setServedAssets(assets: ServedAssets_T) {
 export function isServedAsset(path: string) { return !!servedAssets.files[path.replace(/^\/?assets\//, "").toLowerCase()]; }
 
 export async function selectAssetFiles(files: AssetFiles_T): Promise<void> {
-    assetIndex = await buildIndex(files);
+    const index = await buildIndex(files);
+    const missing = ["system/core.u", "system/engine.u"].filter(path => !index.has(path) && !servedAssets.files[path]);
+
+    if (missing.length) throw new Error(`Missing required client files: ${missing.join(", ")}. Select a complete Lineage II client or installer folder.`);
+
+    assetIndex = index;
     assetFiles = files;
     const sources = files.map(([path, file]) => ({ path, size: file.size, modified: file.lastModified })).sort((a, b) => a.path.localeCompare(b.path));
 
