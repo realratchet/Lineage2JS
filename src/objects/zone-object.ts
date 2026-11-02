@@ -280,6 +280,7 @@ export class SectorObject extends GameObject {
     public readonly scriptProperties = new Map<string, ScriptValue_T>();
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
+    public isRetired = false;
     public scriptVM: UnScriptVM;
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();

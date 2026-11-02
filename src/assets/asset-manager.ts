@@ -50,7 +50,6 @@ const npcSpawnOffset = new Vector3(-600, -600, 0);
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
-const MAX_RETIRED_SECTORS = 3; // Caps grace-period libraries during rapid boundary crossings.
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
@@ -260,9 +259,6 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly lastCameraPosition = new Vector3();
     protected lastCameraSampleTime = 0;
 
-    protected readonly renderDistance = SECTOR_WORLD_SIZE / 2;
-    protected readonly unloadDistance = this.renderDistance + SECTOR_WORLD_SIZE / 16;
-
     protected gameManager: GameManager;
     public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
     public getParent(): GameManager { return this.gameManager; }
@@ -291,15 +287,21 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return progress.ready === progress.total;
     }
 
+    protected getRenderDistance(renderManager: RenderManager): number {
+        const preset = Number(this.gameManager.getComponent("ui").fogPreset);
+        return renderManager.getEnvironment().getEnv().fog.ranges[preset - 1].y * 2048;
+    }
+
     public getAreaLoadProgress(renderManager: RenderManager, position: THREE.Vector3) {
         const progress = { total: 0, decoded: 0, built: 0, ready: 0, building: 0 };
-        const [sx, sy] = renderManager.getSectorId(position), ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
+        const renderDistance = this.getRenderDistance(renderManager);
+        const [sx, sy] = renderManager.getSectorId(position), ring = Math.ceil(renderDistance / SECTOR_WORLD_SIZE);
 
         for (let x = sx - ring; x <= sx + ring; x++) {
             for (let y = sy - ring; y <= sy + ring; y++) {
                 const isCenter = x === sx && y === sy;
 
-                if (!isCenter && (!this.hasSector(`${x}_${y}`) || sectorDistance(position, x, y) > this.renderDistance)) continue;
+                if (!isCenter && (!this.hasSector(`${x}_${y}`) || sectorDistance(position, x, y) > renderDistance)) continue;
 
                 progress.total++;
                 const sector = isCenter ? renderManager.getSector(position) : renderManager.getSectorByCoords(x, y);
@@ -1040,6 +1042,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         for (const sector of renderManager.getLoadedSectors().slice())
             if (!sector.neverUnload && sector.index) this.retireSector(renderManager, sector);
+
+        this.destroyExpiredSectors(renderManager, true);
+        this.lastCameraSampleTime = 0;
     }
 
     public unloadAlwaysLoaded(renderManager: RenderManager, sectorName: string, sector: SectorObject) {
@@ -1095,7 +1100,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (retired) {
             this.retiredSectors.delete(sectorIdx);
-            renderManager.addSector(retired.sector);
+            retired.sector.isRetired = false;
+            renderManager.needsUpdate = true;
             return true;
         }
 
@@ -1145,25 +1151,27 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected retireSector(renderManager: RenderManager, sector: SectorObject) {
+        if (sector.isRetired) return;
         const sectorIdx = `${sector.index.x}_${sector.index.y}`;
 
-        console.log(`Retiring sector '${sectorIdx}'.`);
+        // console.log(`Retiring sector '${sectorIdx}'.`);
 
-        renderManager.removeSector(sector);
+        sector.isRetired = true;
+        sector.visible = false;
         this.retiredSectors.set(sectorIdx, { sector, retiredAt: performance.now() });
     }
 
-    protected destroyExpiredSectors(renderManager: RenderManager) {
+    protected destroyExpiredSectors(renderManager: RenderManager, immediate = false) {
         const now = performance.now();
 
         for (const [sectorIdx, { sector, retiredAt }] of this.retiredSectors) {
-            // Map insertion order makes capped entries the oldest.
-            if (now - retiredAt < RETIRED_SECTOR_DISPOSE_MS && this.retiredSectors.size <= MAX_RETIRED_SECTORS) continue;
+            if (!immediate && now - retiredAt < RETIRED_SECTOR_DISPOSE_MS) continue;
 
             console.log(`Disposing sector '${sectorIdx}'.`);
 
             this.retiredSectors.delete(sectorIdx);
             this.dropPendingBuild(sector);
+            renderManager.removeSector(sector);
             renderManager.disposeSector(sector);
 
             this.decodeWorker?.freeSector(sectorIdx);
@@ -1183,7 +1191,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         for (let i = 0; i < this.pendingStaticMeshBuilds.length; i++) {
             const sector = this.pendingStaticMeshBuilds[i].sector;
 
-            if (!sector.parent) continue;
+            if (!sector.parent || sector.isRetired) continue;
 
             const distance = sectorDistance(cameraPosition, sector.index.x, sector.index.y);
 
@@ -1240,36 +1248,40 @@ export class AssetManager implements IEngineComponent<GameManager> {
             const isValidOrigin = this.hasSector(originIdx);
             const now = performance.now();
             const sampleDelta = now - this.lastCameraSampleTime;
+            const renderDistance = this.getRenderDistance(renderManager);
 
             tmpPrefetchPosition.copy(cameraPosition);
-            tmpCameraMovement.set(0, 0, 0);
+            tmpCameraMovement.subVectors(cameraPosition, this.lastCameraPosition).setZ(0);
+            const teleported = this.lastCameraSampleTime > 0 && tmpCameraMovement.lengthSq() > renderDistance * renderDistance;
 
-            if (!isWorldLoading && this.lastCameraSampleTime > 0 && sampleDelta > 0 && sampleDelta < 250) {
-                tmpCameraMovement.subVectors(cameraPosition, this.lastCameraPosition).setZ(0).multiplyScalar(SECTOR_PREFETCH_LOOKAHEAD_MS / sampleDelta);
+            if (!isWorldLoading && !teleported && this.lastCameraSampleTime > 0 && sampleDelta > 0 && sampleDelta < 250) {
+                tmpCameraMovement.multiplyScalar(SECTOR_PREFETCH_LOOKAHEAD_MS / sampleDelta);
 
                 if (tmpCameraMovement.lengthSq() > SECTOR_PREFETCH_MAX_DISTANCE * SECTOR_PREFETCH_MAX_DISTANCE)
                     tmpCameraMovement.setLength(SECTOR_PREFETCH_MAX_DISTANCE);
 
                 tmpPrefetchPosition.add(tmpCameraMovement);
-            }
+            } else tmpCameraMovement.set(0, 0, 0);
 
             this.lastCameraPosition.copy(cameraPosition);
             this.lastCameraSampleTime = now;
 
             for (const sector of sectorsLoaded) {
                 if (sector.neverUnload || !sector.index) continue;
-                if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= this.unloadDistance) continue;
-                if (sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= this.renderDistance) continue;
+                if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= renderDistance || sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= renderDistance) {
+                    if (sector.isRetired) this.requestSector(renderManager, `${sector.index.x}_${sector.index.y}`);
+                    continue;
+                }
 
                 this.retireSector(renderManager, sector);
             }
 
-            this.destroyExpiredSectors(renderManager);
+            this.destroyExpiredSectors(renderManager, teleported);
             this.processPendingBuilds(renderManager, cameraPosition);
 
             const sectorsToLoad: string[] = [];
 
-            const ring = Math.ceil(this.renderDistance / SECTOR_WORLD_SIZE);
+            const ring = Math.ceil(renderDistance / SECTOR_WORLD_SIZE);
             const [psx, psy] = renderManager.getSectorId(tmpPrefetchPosition);
             const neighbours: { idx: string, dist: number, prefetchDist: number }[] = [];
 
@@ -1285,7 +1297,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
                     const dist = sectorDistance(cameraPosition, x, y);
                     const prefetchDist = sectorDistance(tmpPrefetchPosition, x, y);
 
-                    if (dist <= this.renderDistance || prefetchDist <= this.renderDistance)
+                    if (dist <= renderDistance || prefetchDist <= renderDistance)
                         neighbours.push({ idx: levelIdx, dist, prefetchDist });
                 }
             }

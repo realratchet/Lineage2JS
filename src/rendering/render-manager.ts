@@ -1842,6 +1842,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         for (const sector of this.arrSceneSectors) {
+            if (sector.isRetired) { sector.visible = false; continue; }
             const isCameraInSector = activeSector === sector;
             const wasVisible = sector.visible;
 
@@ -2934,6 +2935,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const cacheVisibleMaterials = new WeakMap<THREE.Mesh, Set<number>>();
 
         for (let i = 0; i < this.pendingSectorWarmups.length; i++) {
+            if (this.pendingSectorWarmups[i].sector.isRetired) continue;
             if (findVisibleMaterialBinding(this.pendingSectorWarmups[i].materialQueue, cacheVisibleMaterials) < 0) continue;
 
             const distance = this.pendingSectorWarmups[i].sector.worldBounds.distanceToPoint(this.camera.position);
@@ -2948,6 +2950,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (!visibleOnly) {
             for (let i = 0; i < this.pendingSectorWarmups.length; i++) {
+                if (this.pendingSectorWarmups[i].sector.isRetired) continue;
                 const distance = this.pendingSectorWarmups[i].sector.worldBounds.distanceToPoint(this.camera.position);
 
                 if (distance >= jobDistance) continue;
