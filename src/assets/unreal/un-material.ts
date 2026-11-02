@@ -193,7 +193,7 @@ abstract class UBaseMaterial extends UObject {
     public abstract getTextureSize(): { width: number, height: number } | null;
 }
 
-abstract class UBaseModifier extends UBaseMaterial {
+export abstract class UBaseModifier extends UBaseMaterial {
     declare protected texCoordSource: number;
     // protected texCoordCount: number;
     // protected texCoordProjected: number;

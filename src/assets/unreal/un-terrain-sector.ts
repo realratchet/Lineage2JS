@@ -38,6 +38,8 @@ export type IMaterialTerrainSegmentDecodeInfo = IBaseMaterialDecodeInfo & {
 
 type TerrainSegmentDecodeResult_T = { object: ITerrainSegmentDecodeInfo, geometry: IGeometryDecodeInfo, material: IMaterialTerrainSegmentDecodeInfo };
 
+const tmpVertexNormal: Vector3Arr = [0, 0, 0];
+
 class FTerrainLightInfo implements Constructable_T {
     public lightIndex: number;
     public light: ULight;
@@ -483,12 +485,12 @@ export abstract class UTerrainSector extends UObject {
         return vertices[offset];
     }
 
-    protected getVertexNormal(x: number, y: number): FVector {
+    protected getVertexNormal(x: number, y: number): Vector3Arr {
         const info = this.info;
         const ox = this.offsetX, oy = this.offsetY;
         const tx = (ox === 240 && x === 16) ? 15 : x;
         const ty = (oy === 240 && y === 16) ? 15 : y;
-        const normal = info.getVertexNormal(ox + tx, oy + ty);
+        const normal = info.getVertexNormalElements(ox + tx, oy + ty, tmpVertexNormal);
 
         return normal;
     }
@@ -506,9 +508,9 @@ export abstract class UTerrainSector extends UObject {
             for (let x = 0; x <= 16; x++, i += 3) {
                 const normal = this.getVertexNormal(x, y);
 
-                normals[i] = normal.x;
-                normals[i + 1] = normal.y;
-                normals[i + 2] = normal.z;
+                normals[i] = normal[0];
+                normals[i + 1] = normal[1];
+                normals[i + 2] = normal[2];
             }
         }
 

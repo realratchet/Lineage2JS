@@ -9,7 +9,7 @@ const LOAD_SUB_OBJECTS = true;
 const LOAD_SOUNDS = false;
 const NUM_LEVEL_TEXT_BLOCKS = 16;
 
-abstract class ULevelBase extends UObject {
+export abstract class ULevelBase extends UObject {
     public readonly url: FURL = new FURL();
 
     protected ambientActors: FObjectArray<UAActor>;

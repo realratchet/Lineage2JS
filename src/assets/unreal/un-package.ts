@@ -1,8 +1,22 @@
 import "./un-object-mixin";
+import getPrebuiltClass from "@generated/classes";
 import { ANativePackage, APackage, type AAssetLoader, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UClass, type UExport, type UImport, type UName, type UObject as CoreUObject, type UStruct, addClassDependency, addPackageDependendency } from "@l2js/core";
 import UObject from "./un-object";
+import UAActor from "./un-aactor";
+import AInfo from "./un-info";
+import UPrimitive from "./un-primitive";
+import UMesh from "./un-mesh";
+import ULodMesh from "./un-lod-mesh";
+import UMeshInstance from "./un-mesh-instance";
+import UClient from "./un-client";
+import UPlayer from "./un-player";
+import UViewport from "./un-viewport";
+import UController from "./un-controller";
+import UInventory from "./un-inventory";
+import UWeapon from "./un-weapon";
+import UVolume from "./un-volume";
 import UModel from "./model/un-model";
-import ULevel from "./un-level";
+import ULevel, { ULevelBase } from "./un-level";
 import FScale from "./un-scale";
 import FVector from "./un-vector";
 import UBrush from "./un-brush";
@@ -76,6 +90,9 @@ import USceneManager, { UMatAction, UActionMoveCamera, UInterpolationPoint } fro
 
 export type NativeClientTypes_T =
     | NativeTypes_T
+    | "Controller"
+    | "Volume"
+    | "ParticleEmitter"
     | "VertMesh"
     | "WaterHitEmitter"
     | "VertMeshEmitter"
@@ -309,6 +326,8 @@ export class UEnginePackage extends UPackage implements EnginePackage_T {
 
 export class UNativePackage extends ANativePackage {
 
+    public getPrebuiltClass(struct: UStruct) { return getPrebuiltClass(struct, this); }
+
     public getStructConstructor<T extends typeof CoreUObject = typeof CoreUObject>(constructorName: string): new () => T {
         let Constructor: any;
 
@@ -373,6 +392,8 @@ export class UNativePackage extends ANativePackage {
             case "ParticleTimeScale": Constructor = PEmitter.UParticleTimeScale; break;
             case "ParticleVelocityScale": Constructor = PEmitter.UParticleVelocityScale; break;
             case "ParticleRevolutionScale": Constructor = PEmitter.UParticleRevolutionScale; break;
+            case "ParticleSound": Constructor = PEmitter.UParticleSound; break;
+            case "Particle": Constructor = PEmitter.UParticle; break;
 
             default:
                 debugger;
@@ -386,6 +407,19 @@ export class UNativePackage extends ANativePackage {
         let Constructor: any;
 
         switch (constructorName) {
+            case "Actor": Constructor = UAActor; break;
+            case "Info": Constructor = AInfo; break;
+            case "Primitive": Constructor = UPrimitive; break;
+            case "Mesh": Constructor = UMesh; break;
+            case "LodMesh": Constructor = ULodMesh; break;
+            case "MeshInstance": Constructor = UMeshInstance; break;
+            case "Client": Constructor = UClient; break;
+            case "Player": Constructor = UPlayer; break;
+            case "Viewport": Constructor = UViewport; break;
+            case "Controller": Constructor = UController; break;
+            case "Inventory": Constructor = UInventory; break;
+            case "Weapon": Constructor = UWeapon; break;
+            case "LevelBase": Constructor = ULevelBase; break;
             case "Level": Constructor = ULevel; break;
             case "L2Float": Constructor = UL2Float; break;
             case "Model": Constructor = UModel; break;
@@ -411,6 +445,7 @@ export class UNativePackage extends ANativePackage {
             case "Camera": Constructor = UCamera; break;
             case "Pawn": Constructor = UPawn; break;
 
+            case "Volume": Constructor = UVolume; break;
             case "PhysicsVolume": Constructor = UPhysicsVolume; break;
             case "DefaultPhysicsVolume": Constructor = UDefaultPhysicsVolume; break;
             case "BlockingVolume": Constructor = UBlockingVolume; break;
@@ -439,6 +474,7 @@ export class UNativePackage extends ANativePackage {
             case "WetTexture": Constructor = UWetTexture; break;
             case "Palette": Constructor = UPlatte; break;
 
+            case "ParticleEmitter": Constructor = PEmitter.UParticleEmitter; break;
             case "Emitter": Constructor = UEmitter; break;
             case "NCubics": Constructor = UEmitter; break;
             case "NProjectile": Constructor = UEmitter; break;
@@ -455,6 +491,8 @@ export class UNativePackage extends ANativePackage {
             case "LevelSummary": Constructor = ULevelSummary; break;
 
 
+            case "Material": Constructor = UnMaterials.UMaterial; break;
+            case "Modifier": Constructor = UnMaterials.UBaseModifier; break;
             case "TexRotator": Constructor = UnMaterials.UTexRotator; break;
             case "TexPanner": Constructor = UnMaterials.UTexPanner; break;
             case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;

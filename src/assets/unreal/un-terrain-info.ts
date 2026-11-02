@@ -32,21 +32,25 @@ const MAP_SIZE_Y = 128 * 256;
 const cacheTextureRgba = new WeakMap<UTexture, Uint8Array>();
 const cacheTextureData = new WeakMap<UTexture, Uint8Array>();
 
-function normalizeTerrainFace(normal: FVector): FVector {
-    const lengthSq = normal.x * normal.x + normal.y * normal.y + normal.z * normal.z;
+const tmpFaceNormal1: Vector3Arr = [0, 0, 0];
+const tmpFaceNormal2: Vector3Arr = [0, 0, 0];
+const tmpVertexNormal: Vector3Arr = [0, 0, 0];
 
-    if (lengthSq < 1e-8) return normal.set(0, 0, 0);
+function normalizeTerrainFace(normal: Vector3Arr): Vector3Arr {
+    const lengthSq = normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2];
+
+    if (lengthSq < 1e-8) return FVector.setElements(normal, 0, 0, 0);
 
     // Core FVector::SafeNormal 0x1014FC9C retains the inverse for Z; X/Y reload its float32 store.
     const inverse = 1 / Math.sqrt(lengthSq);
     const scale = Math.fround(inverse);
-    return normal.set(Math.fround(normal.x * scale), Math.fround(normal.y * scale), Math.fround(normal.z * inverse));
+    return FVector.setElements(normal, Math.fround(normal[0] * scale), Math.fround(normal[1] * scale), Math.fround(normal[2] * inverse));
 }
 
-function getTerrainFaceNormal(a: FVector, b: FVector, c: FVector): FVector {
+function getTerrainFaceNormal(a: FVector, b: FVector, c: FVector, normal: Vector3Arr): Vector3Arr {
     const bx = Math.fround(b.x - a.x), by = Math.fround(b.y - a.y), bz = b.z - a.z;
     const cx = c.x - a.x, cy = c.y - a.y, cz = c.z - a.z;
-    const normal = FVector.make(Math.fround(by * cz - bz * cy), Math.fround(bz * cx - bx * cz), Math.fround(bx * cy - by * cx));
+    FVector.setElements(normal, Math.fround(by * cz - bz * cy), Math.fround(bz * cx - bx * cz), Math.fround(bx * cy - by * cx));
     return normalizeTerrainFace(normalizeTerrainFace(normal));
 }
 
@@ -620,6 +624,11 @@ export abstract class ATerrainInfo extends AInfo {
     }
 
     public getVertexNormal(x: number, y: number) {
+        const normal = this.getVertexNormalElements(x, y, tmpVertexNormal);
+        return FVector.make(normal[0], normal[1], normal[2]);
+    }
+
+    public getVertexNormalElements(x: number, y: number, normal: Vector3Arr) {
         const v = this.getGlobalVertex(x, y) * 6;
         const normals = this.faceNormalData;
 
@@ -649,12 +658,13 @@ export abstract class ATerrainInfo extends AInfo {
             }
         }
 
-        let n = FVector.make(nx, ny, nz).normalized();
+        FVector.setElements(normal, nx, ny, nz);
+        FVector.safeNormalElements(normal, normal);
 
         if (this.inverted)
-            n = n.negate();
+            FVector.scaleElements(normal, -1, normal);
 
-        return n;
+        return normal;
     }
 
     protected updateVertices(startX: number, startY: number, endX: number, endY: number) {
@@ -680,22 +690,22 @@ export abstract class ATerrainInfo extends AInfo {
 
                 if (x > 0 && y > 0) {
                     const normIdx = this.getGlobalVertex(x - 1, y - 1) * 6;
-                    let normal1: FVector, normal2: FVector;
+                    let normal1: Vector3Arr, normal2: Vector3Arr;
                     if (this.getEdgeTurnBitmap(x - 1, y - 1)) {
                         // 124, 423
-                        normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x - 1, y)]);
-                        normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
+                        normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x - 1, y)], tmpFaceNormal1);
+                        normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)], tmpFaceNormal2);
                     } else {
                         // 123, 134
-                        normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)]);
-                        normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y)], vertices[this.getGlobalVertex(x - 1, y)]);
+                        normal1 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y - 1)], vertices[this.getGlobalVertex(x, y)], tmpFaceNormal1);
+                        normal2 = getTerrainFaceNormal(vertices[this.getGlobalVertex(x - 1, y - 1)], vertices[this.getGlobalVertex(x, y)], vertices[this.getGlobalVertex(x - 1, y)], tmpFaceNormal2);
                     }
-                    faceNormals[normIdx] = normal1.x;
-                    faceNormals[normIdx + 1] = normal1.y;
-                    faceNormals[normIdx + 2] = normal1.z;
-                    faceNormals[normIdx + 3] = normal2.x;
-                    faceNormals[normIdx + 4] = normal2.y;
-                    faceNormals[normIdx + 5] = normal2.z;
+                    faceNormals[normIdx] = normal1[0];
+                    faceNormals[normIdx + 1] = normal1[1];
+                    faceNormals[normIdx + 2] = normal1[2];
+                    faceNormals[normIdx + 3] = normal2[0];
+                    faceNormals[normIdx + 4] = normal2[1];
+                    faceNormals[normIdx + 5] = normal2[2];
                 }
             }
         }
