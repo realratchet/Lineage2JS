@@ -1,4 +1,4 @@
-import { Matrix4, NormalBlending, Quaternion, Vector3 } from "three";
+import { Box3, Matrix4, NormalBlending, Quaternion, Vector3 } from "three";
 import TranslucentDrawList from "./translucent-draw-list";
 import { PolyFlags_T } from "../assets/unreal/un-polys";
 import type { SectorObject } from "../objects/zone-object";
@@ -7,16 +7,22 @@ const tmpMatrix = new Matrix4();
 const tmpPosition = new Vector3();
 const tmpScale = new Vector3();
 const tmpQuaternion = new Quaternion();
+const tmpBounds = new Box3();
+const tmpEmitterBounds = new Box3();
+const tmpExtent = new Vector3();
+const arrNodes: number[] = [];
 
-type Part_T = { item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number };
+type Part_T = { item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split: boolean };
 type Owner_T = { center: Vector3, radius: number, path: number, leaves: number[], parts: Part_T[], count: number, ordinals: Map<number, number> };
-type State_T = { nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], cursor: number, cullBackfaces: boolean };
+type State_T = { sector: SectorObject, nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], actorCount: number, leaves: number[][], leafCounts: number[], dynamicLeaves: Set<number>, meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], cursor: number, cullBackfaces: boolean };
 type BatchRange_T = { starts: Uint32Array, stamp: number };
+type EmitterOwner_T = { owner: Owner_T, state: State_T, stamp: number };
 
 export class TranslucentRenderList {
     protected readonly cacheStates = new WeakMap<SectorObject, State_T>();
     protected readonly cacheObjects = new WeakMap<THREE.Object3D, State_T>();
     protected readonly cacheBatchRanges = new WeakMap<THREE.Object3D, BatchRange_T>();
+    protected readonly cacheEmitters = new WeakMap<THREE.Object3D, EmitterOwner_T>();
     protected readonly arrStates: State_T[] = [];
     protected readonly arrParts: Part_T[] = [];
     protected readonly arrOutput: any[] = [];
@@ -81,19 +87,82 @@ export class TranslucentRenderList {
             leaves[leaf].push(indices.get(entry.owner));
         }
         for (const section of sector.getTranslucentBSP()) surfaces.set(section.mesh, section);
-        const state: State_T = { nodes: sector.bspNodes, list: new TranslucentDrawList(sector.bspNodes, actors, leaves), actors, meshes, surfaces, visibleNodes: new Uint8Array(sector.bspNodes.length), visibleActors: new Uint8Array(actors.length), nodeParts: [], nodeCounts: new Uint32Array(sector.bspNodes.length), sorted: [], cursor: 0, cullBackfaces: false };
+        const state: State_T = { sector, nodes: sector.bspNodes, list: new TranslucentDrawList(sector.bspNodes, actors, leaves), actors, actorCount: actors.length, leaves, leafCounts: leaves.map(leaf => leaf.length), dynamicLeaves: new Set(), meshes, surfaces, visibleNodes: new Uint8Array(sector.bspNodes.length), visibleActors: new Uint8Array(actors.length), nodeParts: [], nodeCounts: new Uint32Array(sector.bspNodes.length), sorted: [], cursor: 0, cullBackfaces: false };
         for (const mesh of meshes.keys()) this.cacheObjects.set(mesh, state);
         for (const mesh of surfaces.keys()) this.cacheObjects.set(mesh, state);
         this.cacheStates.set(sector, state);
         return state;
     }
 
-    protected add(item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number) {
+    protected getEmitter(object: any): EmitterOwner_T {
+        let emitter = object.emitterActor || object;
+        while (emitter && !emitter.isEmitterActor) emitter = emitter.parent;
+        if (!emitter) return null;
+
+        let entry = this.cacheEmitters.get(emitter);
+        if (entry && entry.stamp === this.stamp) return entry.state ? entry : null;
+        if (!entry) {
+            entry = { owner: { center: new Vector3(), radius: 0, path: 1, leaves: [], parts: [], count: 0, ordinals: new Map() }, state: null, stamp: 0 };
+            this.cacheEmitters.set(emitter, entry);
+        }
+        entry.stamp = this.stamp; entry.state = null;
+        const owner = entry.owner;
+        owner.count = 0; owner.leaves.length = 0;
+        owner.path = emitter.getUnrealScriptProperty("bStatic") ? 0 : 1;
+        tmpBounds.makeEmpty();
+        for (const child of emitter.scriptProperties.get("Emitters")) {
+            if (child.isDisabled) continue;
+            tmpBounds.union(child.getRenderBounds(tmpEmitterBounds));
+        }
+        if (tmpBounds.isEmpty()) return null;
+
+        // FDynamicActor::Update 0x8e7c08 builds the emitter sphere from its world box.
+        tmpBounds.getCenter(owner.center);
+        tmpBounds.getSize(tmpExtent).multiplyScalar(0.5);
+        owner.center.set(Math.fround(owner.center.x), Math.fround(owner.center.y), Math.fround(owner.center.z));
+        const radiusSquared = Math.fround(Math.max(owner.center.distanceToSquared(tmpBounds.min), owner.center.distanceToSquared(tmpBounds.max)));
+        owner.radius = Math.fround(Math.fround(Math.sqrt(radiusSquared)) * Math.fround(1.001)); // Core 0x1015079b..0x101507b5.
+        emitter.getWorldPosition(tmpPosition);
+        const sectorX = Math.trunc(Math.trunc(Math.fround(tmpPosition.x)) / 32768 + 20), sectorY = Math.trunc(Math.trunc(Math.fround(tmpPosition.y)) / 32768 + 18);
+        for (const state of this.arrStates) {
+            if (state.sector.index.x !== sectorX || state.sector.index.y !== sectorY || !state.nodes.length) continue;
+
+            arrNodes.length = 0; arrNodes.push(0);
+            while (arrNodes.length) {
+                const node = state.nodes[arrNodes.pop()], plane = node.plane;
+                const distance = (owner.center.y * plane.y + owner.center.z * plane.z) + owner.center.x * plane.x - plane.w;
+                const extent = Math.abs(plane.x * tmpExtent.x) + Math.abs(plane.y * tmpExtent.y) + Math.abs(plane.z * tmpExtent.z);
+                if (distance < extent) {
+                    if (node.back >= 0) arrNodes.push(node.back);
+                    else if (node.leaves[0] >= 0) owner.leaves.push(node.leaves[0]);
+                }
+                if (-distance < extent) {
+                    if (node.front >= 0) arrNodes.push(node.front);
+                    else if (node.leaves[1] >= 0) owner.leaves.push(node.leaves[1]);
+                }
+            }
+            if (!owner.leaves.length) return null;
+
+            const index = state.actors.length;
+            state.actors.push(owner);
+            for (const leaf of owner.leaves) {
+                if (!state.leaves[leaf]) state.leaves[leaf] = [];
+                state.leaves[leaf].push(index);
+                state.dynamicLeaves.add(leaf);
+            }
+            entry.state = state;
+            return entry;
+        }
+        return null;
+    }
+
+    protected add(item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split = !!state) {
         let part = this.arrParts[this.partCount];
-        if (!part) part = this.arrParts[this.partCount] = { item: null, state: null, actor: null, node: -1, start: 0, count: 0, materialIndex: 0, ordinal: 0 };
+        if (!part) part = this.arrParts[this.partCount] = { item: null, state: null, actor: null, node: -1, start: 0, count: 0, materialIndex: 0, ordinal: 0, split: false };
         this.partCount++;
         part.item = item; part.state = state; part.actor = actor; part.node = node;
         part.start = start; part.count = count; part.materialIndex = materialIndex; part.ordinal = ordinal;
+        part.split = split;
 
         if (actor) {
             let index = actor.count++;
@@ -114,6 +183,9 @@ export class TranslucentRenderList {
             if (!sector.visible || !sector.bspGroup || !sector.staticMeshGroup || !(sector as any).decodeLibrary?.staticMeshBatches) continue;
 
             const state = this.cacheStates.get(sector) || this.makeState(sector);
+            for (const leaf of state.dynamicLeaves) state.leaves[leaf].length = state.leafCounts[leaf] || 0;
+            state.dynamicLeaves.clear();
+            state.actors.length = state.actorCount;
             state.visibleNodes.fill(0); state.visibleActors.fill(0); state.nodeCounts.fill(0);
             state.sorted.length = 0; state.cursor = 0;
             state.cullBackfaces = sector.findPositionZone(camera.position) !== 0;
@@ -156,10 +228,12 @@ export class TranslucentRenderList {
                 const start = item.group ? item.group.start : 0, count = item.group ? item.group.count : item.geometry.index.count;
                 this.add(item, state, owners[0], -1, start, count, item.group ? item.group.materialIndex : 0, owners[0].ordinals.get(start) || 0);
             } else {
-                this.add(item, null, null, -1, item.group ? item.group.start : 0, item.group ? item.group.count : 0, item.group ? item.group.materialIndex : 0, 0);
+                const emitter = this.getEmitter(object);
+                this.add(item, emitter ? emitter.state : null, emitter ? emitter.owner : null, -1, item.group ? item.group.start : 0, item.group ? item.group.count : 0, item.group ? item.group.materialIndex : 0, item.renderOrder, false);
             }
         }
         for (const state of this.arrStates) {
+            if (state.visibleActors.length < state.actors.length) state.visibleActors = new Uint8Array(Math.max(state.actors.length, state.visibleActors.length * 2));
             for (let i = 0; i < state.actors.length; i++) state.visibleActors[i] = Number(state.actors[i].count > 0);
             state.list.sort(camera.position, state.visibleNodes, state.visibleActors);
             for (let i = 0; i < state.list.count; i++) {
@@ -173,7 +247,7 @@ export class TranslucentRenderList {
             if (!part) throw new Error(`Incomplete translucent source-owner list.`);
 
             const item = part.item, previous = count ? this.arrOutput[count - 1] : null;
-            if (previous && previous.group && (part.state || item.group) && previous.object === item.object && previous.material === item.material && previous.groupOrder === item.groupOrder && previous.renderOrder === item.renderOrder && previous.group.start + previous.group.count === part.start) {
+            if (previous && previous.group && (part.split || item.group) && previous.object === item.object && previous.material === item.material && previous.groupOrder === item.groupOrder && previous.renderOrder === item.renderOrder && previous.group.start + previous.group.count === part.start) {
                 previous.group.count += part.count;
                 continue;
             }
@@ -181,7 +255,7 @@ export class TranslucentRenderList {
             if (!output) output = this.arrOutput[count] = { group: null, range: { start: 0, count: 0, materialIndex: 0 } };
             output.id = item.id; output.object = item.object; output.geometry = item.geometry; output.material = item.material; output.materialVariant = item.materialVariant;
             output.groupOrder = item.groupOrder; output.renderOrder = item.renderOrder; output.z = item.z;
-            output.group = part.state || item.group ? output.range : null;
+            output.group = part.split || item.group ? output.range : null;
             output.range.start = part.start; output.range.count = part.count; output.range.materialIndex = part.materialIndex;
             items[count++] = output;
         }

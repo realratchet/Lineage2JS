@@ -1548,6 +1548,8 @@ export abstract class BaseEmitter extends Object3D {
 
     public onRender(): void { if (!this.isDisabled) this.inactive = false; }
 
+    public getRenderBounds(target: Box3): Box3 { return target.copy(this.boundingBox).applyMatrix4(this.matrixWorld); }
+
     public setRenderVisible(visible: boolean): void { this.visible = visible && !this.isDisabled; }
 
     protected updateReset(deltaTime: number): void {

@@ -8,11 +8,11 @@ function planeDot(plane: Plane_T, x: number, y: number, z: number) {
 }
 
 export class TranslucentDrawList {
-    public readonly order: Int32Array;
+    public order: Int32Array;
     public count = 0;
-    protected readonly next: Int32Array;
-    protected readonly stamps: Uint32Array;
-    protected readonly distances: Float64Array;
+    protected next: Int32Array;
+    protected stamps: Uint32Array;
+    protected distances: Float64Array;
     protected readonly stack: Int32Array;
     protected stamp = 0;
 
@@ -28,6 +28,14 @@ export class TranslucentDrawList {
     public sort(camera: Point_T, visibleNodes: Uint8Array, visibleActors: Uint8Array): void {
         this.count = 0;
         if (!this.nodes.length) return;
+
+        if (this.stamps.length < this.actors.length) {
+            const capacity = Math.max(this.actors.length, this.stamps.length * 2);
+            this.order = new Int32Array(this.nodes.length + capacity);
+            this.next = new Int32Array(this.order.length);
+            this.stamps = new Uint32Array(capacity);
+            this.distances = new Float64Array(capacity);
+        }
 
         this.stamp = (this.stamp + 1) >>> 0;
         if (!this.stamp) { this.stamps.fill(0); this.stamp = 1; }

@@ -1,11 +1,11 @@
-import { Camera, CustomBlending, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ShaderMaterial, Vector3, ZeroFactor } from "three";
+import { Camera, CustomBlending, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, Object3D, OneFactor, PlaneGeometry, ShaderMaterial, Vector3, ZeroFactor } from "three";
 import { copyShaderMaterial } from "../../materials/global-uniforms";
 
 const baseGeometry = new PlaneGeometry(2, 2);
 const DEPTH_BUCKET_SIZE = 2048;
 const BATCH_IDLE_MS = 5000;
 
-type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; emitters: any[]; lastUsed: number };
+type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; actor: Object3D; emitters: any[]; lastUsed: number };
 
 const tmpAnchor = new Vector3();
 const tmpViewPosition = new Vector3();
@@ -52,8 +52,12 @@ function materialKey(material: ShaderMaterial): string {
     return key;
 }
 
+class SpriteParticleBatchMesh extends Mesh<InstancedBufferGeometry, ShaderMaterial> {
+    public emitterActor: Object3D;
+}
+
 class SpriteParticleBatch {
-    public readonly mesh: Mesh<InstancedBufferGeometry, ShaderMaterial>;
+    public readonly mesh: SpriteParticleBatchMesh;
     protected capacity = 0;
     protected readonly fixedNormal: boolean;
     protected positionAttr: InstancedBufferAttribute;
@@ -91,7 +95,7 @@ class SpriteParticleBatch {
         material.needsUpdate = true;
         material.name = `${sourceMaterial.name}_world_batch`;
 
-        this.mesh = new Mesh(geometry, material);
+        this.mesh = new SpriteParticleBatchMesh(geometry, material);
         this.mesh.name = `ParticleBatch_${sourceMaterial.name}`;
         this.mesh.frustumCulled = false;
         this.mesh.visible = false;
@@ -322,10 +326,11 @@ export class InstancedSpriteBatcher {
             tmpAnchor.setFromMatrixPosition(mesh.matrixWorld);
             tmpViewPosition.copy(tmpAnchor).applyMatrix4(camera.matrixWorldInverse);
             const depthBucket = Math.max(0, Math.floor(-tmpViewPosition.z / DEPTH_BUCKET_SIZE));
-            const key = `${materialKey(material)}|order:${mesh.renderOrder}|depth:${depthBucket}`;
+            const actor = emitter.parent;
+            const key = `${materialKey(material)}|actor:${actor.uuid}|order:${mesh.renderOrder}|depth:${depthBucket}`;
             let group = this.groups.get(key);
             if (!group) {
-                group = { material, renderOrder: mesh.renderOrder, emitters: [], lastUsed: currentTime };
+                group = { material, renderOrder: mesh.renderOrder, actor, emitters: [], lastUsed: currentTime };
                 this.groups.set(key, group);
             }
             group.material = material;
@@ -356,6 +361,7 @@ export class InstancedSpriteBatcher {
             let batch = this.batches.get(key);
             if (!batch) {
                 batch = new SpriteParticleBatch(group.material, group.renderOrder);
+                batch.mesh.emitterActor = group.actor;
                 this.batches.set(key, batch);
                 this.root.add(batch.mesh);
             }

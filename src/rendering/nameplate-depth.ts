@@ -1,4 +1,5 @@
-import { DepthFormat, DepthStencilFormat, DepthTexture, FloatType, Scene, UnsignedInt248Type, UnsignedIntType, UnsignedShortType, WebGLRenderer, Material, Object3D, Camera } from "three";
+import { DepthFormat, DepthStencilFormat, DepthTexture, FloatType, NormalBlending, Scene, UnsignedInt248Type, UnsignedIntType, UnsignedShortType, WebGLRenderer, Material, Object3D, Camera } from "three";
+import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import Nameplate from "./nameplate";
 
 export class NameplateDepth {
@@ -38,6 +39,9 @@ export class NameplateDepth {
 
         if ((object as any).isNameplate) (object as Nameplate).setOpaqueDepth(this.copied ? this.texture : null, this.width, this.height);
         else if (material.transparent && material.depthWrite && !this.copied) {
+            const actor = (object as LitSkinnedMesh).actorRenderable;
+            if (actor && actor.isOpaque() && material.blending === NormalBlending) return;
+
             this.capture();
             this.copied = true;
         }
