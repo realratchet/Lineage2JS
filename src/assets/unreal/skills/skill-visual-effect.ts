@@ -430,6 +430,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
                         frame.projectileExplosion = true;
                     }
                     this.host.addEffect(actor, effect.owner === "none" ? null : effect.owner === "target" ? effectTarget : effect.owner === "source" ? effectSource : effect.owner === "impactActor" ? frame.impactActor : caster);
+                    if (phase === "casting" && cast.shotTime > 0) this.castingEffects.push(actor);
                 }, effectSource, cast.locList, frame.hitActor, frame.impactActor);
 
                 if (!continuePhase) return false;
