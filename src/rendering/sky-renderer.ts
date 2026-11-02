@@ -1,7 +1,7 @@
 import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor, PlaneGeometry, Group, BufferAttribute, Fog, Color, OneMinusSrcAlphaFactor } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "../utils/color-byte";
-import { SectorObject } from "../objects/zone-object";
+import { SectorObject, ZoneObject } from "../objects/zone-object";
 import EnvInfo from "./env-info";
 import { EEnvCycle } from "@l2js/engine/env-consts";
 
@@ -31,7 +31,8 @@ class CelestialMaterial extends MeshBasicMaterial {
             blendDst: OneFactor,      // Trace: D3DBLEND_ONE (2) -> Additive Alpha
             depthWrite: false,
             depthTest: false,
-            side: DoubleSide
+            side: DoubleSide,
+            forceSinglePass: true
         });
     }
 }
@@ -39,10 +40,10 @@ class CelestialMaterial extends MeshBasicMaterial {
 
 
 class Celestial extends Mesh {
-    public static readonly _geometry = new PlaneGeometry(-1, -1);
+    public static readonly planeGeometry =new PlaneGeometry(-1, -1);
 
     public constructor() {
-        super(Celestial._geometry, new CelestialMaterial());
+        super(Celestial.planeGeometry, new CelestialMaterial());
 
         this.frustumCulled = false;
         this.visible = false;
@@ -55,6 +56,8 @@ export default class SkyRenderer {
     protected celestialScene = new Scene();
     public sun: Celestial = new Celestial();
     protected camera: PerspectiveCamera | null = null;
+    protected skyZone: ZoneObject = null;
+    protected readonly skyCamera = new PerspectiveCamera();
 
     protected sunData: any = null;
     public config = {
@@ -127,7 +130,7 @@ export default class SkyRenderer {
                 material.defines.USE_MASKING = "";
                 material.needsUpdate = true;
 
-                const mesh = new Mesh(Celestial._geometry, material);
+                const mesh = new Mesh(Celestial.planeGeometry, material);
                 mesh.frustumCulled = false;
                 mesh.visible = false;
                 this.celestialScene.add(mesh);
@@ -141,7 +144,7 @@ export default class SkyRenderer {
 
         const { skybox, hazering, clouds } = envInfo.setup;
         const bspSections = skyLevel.getObjectByName("BSP_Sections");
-        if (!bspSections) return;
+        if (!bspSections) throw new Error(`Sky level has no BSP sections.`);
 
         let meshCount = 0;
         const children = bspSections.children as Mesh[];
@@ -158,7 +161,7 @@ export default class SkyRenderer {
             // console.log(`[SkyRenderer] Using USkyZoneInfo as canonical origin: ${skyOrigin.toArray().map(v => v.toFixed(1))}`);
         } else {
             const skyboxPattern = envInfo.setup.skybox;
-            let skyboxMesh = skyboxPattern ? children.find(m => m.name.includes(skyboxPattern)) : null;
+            let skyboxMesh = skyboxPattern ? children.find(m => m.name.startsWith(`BSPSection_${skyboxPattern}/`)) : null;
 
             if (!skyboxMesh && children.length > 0) skyboxMesh = children[0];
 
@@ -213,14 +216,18 @@ export default class SkyRenderer {
             }
         }
 
-        children.filter(o => skybox && o.name.includes(skybox)).forEach(m => processMesh(m, "skybox"));
-        children.filter(o => hazering && o.name.includes(hazering)).forEach(m => processMesh(m, "haze"));
+        children.filter(o => skybox && o.name.startsWith(`BSPSection_${skybox}/`)).forEach(m => processMesh(m, "skybox"));
+        children.filter(o => hazering && o.name.startsWith(`BSPSection_${hazering}/`)).forEach(m => processMesh(m, "haze"));
 
         clouds.forEach((pattern, i) => {
             if (pattern) {
-                children.filter(o => o.name.includes(pattern)).forEach(m => processMesh(m, "cloud", i));
+                children.filter(o => o.name.startsWith(`BSPSection_${pattern}/`)).forEach(m => processMesh(m, "cloud", i));
+                if (!this.skyLayers.clouds.some(layer => layer.index === i)) throw new Error(`Sky material '${pattern}' has no BSP sections.`);
             }
         });
+
+        if (skybox && !this.skyLayers.skybox.length) throw new Error(`Sky material '${skybox}' has no BSP sections.`);
+        if (hazering && !this.skyLayers.haze.length) throw new Error(`Sky material '${hazering}' has no BSP sections.`);
 
         // console.log(`[SkyRenderer] layers: skybox=${this.skyLayers.skybox.length}, haze=${this.skyLayers.haze.length}, clouds=${this.skyLayers.clouds.length} (of ${children.length} bsp meshes; patterns: skybox='${skybox}', haze='${hazering}', clouds=[${clouds.join(", ")}])`);
     }
@@ -286,10 +293,13 @@ export default class SkyRenderer {
 
             if (isLayer2) {
                 mesh.visible = this.config.haze1 && this.config.haze2;
-                material.fog = false;
             } else {
                 mesh.visible = this.config.haze1;
+            }
+
+            if (material.fog !== false) {
                 material.fog = false;
+                material.needsUpdate = true;
             }
 
             if (!mesh.visible) return;
@@ -300,7 +310,6 @@ export default class SkyRenderer {
             const modulator = tmpModifierColorByte.set(targetColor.r, targetColor.g, targetColor.b, 255);
 
             applyModifierColor(material, modulator);
-            material.needsUpdate = true;
         });
 
         this.skyLayers.clouds.forEach(({ mesh, index }) => {
@@ -414,6 +423,18 @@ export default class SkyRenderer {
     public render(renderer: WebGLRenderer) {
         if (!this.camera) return;
 
+        if (this.skyZone) {
+            this.skyCamera.copy(this.camera, false);
+            this.skyCamera.layers.set(1);
+            // FSkySceneNode::FSkySceneNode (Engine.dll 0x8ea050): recenter the view at SkyZoneInfo.
+            this.skyCamera.position.copy(this.skyZone.skyOrigin);
+            this.skyCamera.updateMatrixWorld(true);
+            renderer.render(this.skyZone, this.skyCamera);
+            return;
+        }
+
         renderer.render(this.celestialScene, this.camera);
     }
+
+    public setSkyZone(zone: ZoneObject) { this.skyZone = zone; }
 }

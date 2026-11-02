@@ -248,17 +248,17 @@ export abstract class FVector extends UObject implements IDecodableStruct<Vector
     }
 
 
-    public applyMatrix4(m: FMatrix) {
+    public applyMatrix4(m: FMatrix, target = FVector.make()) {
         const x = this.x, y = this.y, z = this.z;
-        const e = m.getElements4x4();
+        const { planeX, planeY, planeZ, planeW } = m;
 
-        const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+        const w = 1 / (planeX.w * x + planeY.w * y + planeZ.w * z + planeW.w);
 
-        const nx = (e[0] * x + e[4] * y + e[8] * z + e[12]) * w;
-        const ny = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w;
-        const nz = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w;
+        const nx = (planeX.x * x + planeY.x * y + planeZ.x * z + planeW.x) * w;
+        const ny = (planeX.y * x + planeY.y * y + planeZ.y * z + planeW.y) * w;
+        const nz = (planeX.z * x + planeY.z * y + planeZ.z * z + planeW.z) * w;
 
-        return FVector.make(nx, ny, nz);
+        return target.set(nx, ny, nz);
     }
 
     public transformPointBy(coord: FCoords): FVector {
@@ -271,9 +271,8 @@ export abstract class FVector extends UObject implements IDecodableStruct<Vector
         return FVector.make(this.dot(coord.xAxis), this.dot(coord.yAxis), this.dot(coord.zAxis));
     }
 
-    public transformBy(coord: FCoords) {
+    public transformBy(coord: FCoords, outVector = FVector.make()) {
         const inVector = this;
-        const outVector = FVector.make();
 
         let fVar1: number;
         let fVar2: number;

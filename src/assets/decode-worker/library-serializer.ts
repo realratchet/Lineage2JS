@@ -1,7 +1,7 @@
 const MAGIC = 0x4c324443; // "L2DC"
-const FORMAT_VERSION = 3;
+export const FORMAT_VERSION = 6;
 const HEADER_SIZE = 13;
-const CHUNK_ENTRY_SIZE = 8;
+const CHUNK_ENTRY_SIZE = 12;
 const ARRAY_BUFFER_KIND = 0xff;
 const CHUNK_ALIGNMENT = 8;
 const RANGE_GAP = 4096;
@@ -42,9 +42,10 @@ const enum Tag {
 
 type LibraryChunkEntry_T = { offset: number, length: number };
 type LibraryChunkRef_T = { isLibraryChunk: true, index: number, kind: number, byteLength: number };
-type LibraryChunkSource_T = { kind: number, bytes: Uint8Array };
+type LibraryChunkSource_T = { kind: number, bytes: Uint8Array | Blob, offset?: number, length?: number };
+type LibraryBlobRange_T = { file: Blob, offset: number, end: number, padding: number };
 type LibraryChunkRange_T = { offset: number, end: number, refs: LibraryChunkRef_T[] };
-export type SeekableLibrary_T = { file: File, library: any, entries: LibraryChunkEntry_T[], values: Map<number, any> };
+export type SeekableLibrary_T = { file: Blob, library: any, entries: LibraryChunkEntry_T[], values: Map<number, any> };
 
 const TYPED_ARRAY_KINDS: (new (buffer: ArrayBuffer, byteOffset?: number, length?: number) => ArrayBufferView)[] = [
     Int8Array, Uint8Array, Uint8ClampedArray,
@@ -57,8 +58,10 @@ const TYPED_ARRAY_KINDS: (new (buffer: ArrayBuffer, byteOffset?: number, length?
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const fileReader = typeof (globalThis as any).FileReaderSync === "function" ? new (globalThis as any).FileReaderSync() : null;
 
 class ByteWriter {
+    protected cacheStrings = new Map<string, number>();
     protected buffer = new ArrayBuffer(1 << 20);
     protected view = new DataView(this.buffer);
     protected bytes = new Uint8Array(this.buffer);
@@ -84,6 +87,7 @@ class ByteWriter {
     }
 
     public u32(value: number) {
+        if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) throw new Error(`Invalid decode-cache integer '${value}'`);
         this.ensure(4);
         this.view.setUint32(this.length, value, true);
         this.length += 4;
@@ -93,15 +97,6 @@ class ByteWriter {
         this.ensure(8);
         this.view.setFloat64(this.length, value, true);
         this.length += 8;
-    }
-
-    public varint(value: number) { // unsigned LEB128
-        this.ensure(10);
-        while (value > 0x7f) {
-            this.bytes[this.length++] = (value & 0x7f) | 0x80;
-            value = Math.floor(value / 128);
-        }
-        this.bytes[this.length++] = value;
     }
 
     public blob(src: Uint8Array) {
@@ -118,8 +113,13 @@ class ByteWriter {
     }
 
     public string(value: string) {
+        const index = this.cacheStrings.get(value);
+
+        if (index !== undefined) return this.u32(index * 2);
+
+        this.cacheStrings.set(value, this.cacheStrings.size);
         const encoded = textEncoder.encode(value);
-        this.varint(encoded.length);
+        this.u32(encoded.length * 2 + 1);
         this.blob(encoded);
     }
 
@@ -129,6 +129,7 @@ class ByteWriter {
 }
 
 class ByteReader {
+    protected arrStrings: string[] = [];
     protected view: DataView;
     protected bytes: Uint8Array;
     public offset = 0;
@@ -154,18 +155,6 @@ class ByteReader {
         return value;
     }
 
-    public varint(): number {
-        let value = 0, shift = 1, byte: number;
-
-        do {
-            byte = this.bytes[this.offset++];
-            value += (byte & 0x7f) * shift;
-            shift *= 128;
-        } while (byte & 0x80);
-
-        return value;
-    }
-
     public take(length: number): Uint8Array {
         const view = this.bytes.subarray(this.offset, this.offset + length);
         this.offset += length;
@@ -177,11 +166,36 @@ class ByteReader {
     }
 
     public string(): string {
-        return textDecoder.decode(this.take(this.varint()));
+        const code = this.u32();
+
+        if (code % 2 === 0) {
+            const index = code / 2;
+
+            if (index >= this.arrStrings.length) throw new Error(`Invalid string reference '${index}'`);
+
+            return this.arrStrings[index];
+        }
+
+        const length = (code - 1) / 2;
+
+        if (length > this.bytes.length - this.offset) throw new Error(`Truncated decode-cache string`);
+
+        const value = textDecoder.decode(this.take(length));
+
+        this.arrStrings.push(value);
+        return value;
     }
 }
 
 export function serializeLibrary(root: any): Uint8Array {
+    return encodeLibrary(root, null, false) as Uint8Array;
+}
+
+export function serializeLibraryBlob(root: any, seekable: SeekableLibrary_T = null): Blob {
+    return encodeLibrary(root, seekable, true) as Blob;
+}
+
+function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean): Uint8Array | Blob {
     const writer = new ByteWriter();
     const memo = new Map<any, number>();
     const chunks: LibraryChunkSource_T[] = [];
@@ -203,16 +217,35 @@ export function serializeLibrary(root: any): Uint8Array {
         const ref = memo.get(value);
         if (ref !== undefined) {
             writer.u8(Tag.BackRef);
-            return writer.varint(ref);
+            return writer.u32(ref);
         }
         memo.set(value, nextRef++);
 
-        if (value instanceof ArrayBuffer) {
+        if (value.isLibraryChunk === true) {
+            if (!seekable) throw new Error(`Cannot store an unresolved library chunk.`);
+
+            const entry = seekable.entries[value.index];
+
+            if (!entry || entry.length !== value.byteLength) throw new Error(`Corrupt decode-cache chunk '${value.index}'`);
+
+            writer.u8(Tag.Chunk);
+            writer.u8(value.kind);
+            writer.u32(chunks.length);
+            writer.u32(value.byteLength);
+            chunks.push({ kind: value.kind, bytes: seekable.file, offset: entry.offset, length: entry.length });
+            return;
+        }
+
+        if (value instanceof ArrayBuffer || value instanceof Blob) {
+            if (value instanceof Blob && !asBlob) throw new Error(`File-backed chunks require blob serialization.`);
+
+            const byteLength = value instanceof Blob ? value.size : value.byteLength;
+
             writer.u8(Tag.Chunk);
             writer.u8(ARRAY_BUFFER_KIND);
-            writer.varint(chunks.length);
-            writer.varint(value.byteLength);
-            chunks.push({ kind: ARRAY_BUFFER_KIND, bytes: new Uint8Array(value) });
+            writer.u32(chunks.length);
+            writer.u32(byteLength);
+            chunks.push({ kind: ARRAY_BUFFER_KIND, bytes: value instanceof Blob ? value : new Uint8Array(value) });
             return;
         }
 
@@ -221,15 +254,15 @@ export function serializeLibrary(root: any): Uint8Array {
             if (kind < 0) throw new Error(`Cannot serialize a '${value.constructor.name}' view`);
             writer.u8(Tag.Chunk);
             writer.u8(kind);
-            writer.varint(chunks.length);
-            writer.varint(value.byteLength);
+            writer.u32(chunks.length);
+            writer.u32(value.byteLength);
             chunks.push({ kind, bytes: new Uint8Array(value.buffer, value.byteOffset, value.byteLength) });
             return;
         }
 
         if (value instanceof Map) {
             writer.u8(Tag.Map);
-            writer.varint(value.size);
+            writer.u32(value.size);
             for (const [key, entry] of value) {
                 write(key);
                 write(entry);
@@ -239,14 +272,14 @@ export function serializeLibrary(root: any): Uint8Array {
 
         if (value instanceof Set) {
             writer.u8(Tag.Set);
-            writer.varint(value.size);
+            writer.u32(value.size);
             for (const entry of value) write(entry);
             return;
         }
 
         if (Array.isArray(value)) {
             writer.u8(Tag.Array);
-            writer.varint(value.length);
+            writer.u32(value.length);
             for (let i = 0; i < value.length; i++) write(value[i]);
             return;
         }
@@ -258,7 +291,7 @@ export function serializeLibrary(root: any): Uint8Array {
         const keys = Object.keys(value);
 
         writer.u8(Tag.Object);
-        writer.varint(keys.length);
+        writer.u32(keys.length);
         for (const key of keys) {
             writer.string(key);
             write(value[key]);
@@ -273,14 +306,28 @@ export function serializeLibrary(root: any): Uint8Array {
 
     length += (CHUNK_ALIGNMENT - length % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
     for (const chunk of chunks) {
-        length += chunk.bytes.length;
+        const byteLength = chunk.length ?? (chunk.bytes instanceof Blob ? chunk.bytes.size : chunk.bytes.length);
+
+        if (byteLength > 0xffffffff) throw new Error(`Decode-cache chunk exceeds 4 GiB.`);
+
+        length += byteLength;
         length += (CHUNK_ALIGNMENT - length % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
     }
 
-    const result = new Uint8Array(length);
+    const result = new Uint8Array(asBlob ? HEADER_SIZE + directorySize + metadata.length + (CHUNK_ALIGNMENT - (HEADER_SIZE + directorySize + metadata.length) % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT : length);
+    const parts: BlobPart[] = [result];
     const view = new DataView(result.buffer);
     let offset = HEADER_SIZE + directorySize;
     let directoryOffset = HEADER_SIZE;
+    let range: LibraryBlobRange_T = null;
+
+    function flushRange() {
+        if (!range) return;
+
+        parts.push(range.file.slice(range.offset, range.end));
+        if (range.padding) parts.push(new Uint8Array(range.padding));
+        range = null;
+    }
 
     view.setUint32(0, MAGIC, true);
     view.setUint8(4, FORMAT_VERSION);
@@ -291,15 +338,35 @@ export function serializeLibrary(root: any): Uint8Array {
     offset += (CHUNK_ALIGNMENT - offset % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
 
     for (const chunk of chunks) {
-        view.setUint32(directoryOffset, offset, true);
-        view.setUint32(directoryOffset + 4, chunk.bytes.length, true);
+        view.setFloat64(directoryOffset, offset, true);
+        const byteLength = chunk.length ?? (chunk.bytes instanceof Blob ? chunk.bytes.size : chunk.bytes.length);
+
+        view.setUint32(directoryOffset + 8, byteLength, true);
         directoryOffset += CHUNK_ENTRY_SIZE;
-        result.set(chunk.bytes, offset);
-        offset += chunk.bytes.length;
-        offset += (CHUNK_ALIGNMENT - offset % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
+        offset += byteLength;
+        const padding = (CHUNK_ALIGNMENT - offset % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
+
+        if (asBlob && chunk.offset !== undefined) {
+            if (range && range.file === chunk.bytes && chunk.offset === range.end + range.padding) {
+                range.end = chunk.offset + byteLength;
+                range.padding = padding;
+            } else {
+                flushRange();
+                range = { file: chunk.bytes as Blob, offset: chunk.offset, end: chunk.offset + byteLength, padding };
+            }
+        } else {
+            flushRange();
+            if (asBlob) {
+                parts.push(chunk.bytes);
+                if (padding) parts.push(new Uint8Array(padding));
+            } else result.set(chunk.bytes as Uint8Array, offset - byteLength);
+        }
+        offset += padding;
     }
 
-    return result;
+    flushRange();
+
+    return asBlob ? new Blob(parts) : result;
 }
 
 type ObjectFrame_T = { type: "object", value: Record<string, any>, index: number, count: number };
@@ -338,18 +405,18 @@ class LibraryDecoder {
             case Tag.Number: return this.reader.f64();
             case Tag.String: return this.reader.string();
             case Tag.BigInt: return BigInt(this.reader.string());
-            case Tag.BackRef: return this.refs[this.reader.varint()];
+            case Tag.BackRef: return this.refs[this.reader.u32()];
             case Tag.Chunk: {
                 const kind = this.reader.u8();
-                const index = this.reader.varint();
-                const byteLength = this.reader.varint();
+                const index = this.reader.u32();
+                const byteLength = this.reader.u32();
                 const value = this.chunks(index, kind, byteLength);
 
                 this.refs.push(value);
                 return value;
             }
             case Tag.ArrayBuffer: {
-                const count = this.reader.varint();
+                const count = this.reader.u32();
                 const sourceOffset = this.reader.offset;
                 const value = new ArrayBuffer(count);
 
@@ -360,7 +427,7 @@ class LibraryDecoder {
             }
             case Tag.TypedArray: {
                 const kind = this.reader.u8();
-                const byteLength = this.reader.varint();
+                const byteLength = this.reader.u32();
                 const Constructor = TYPED_ARRAY_KINDS[kind] as any;
                 const bytesPerElement = Constructor.BYTES_PER_ELEMENT ?? 1;
 
@@ -376,11 +443,11 @@ class LibraryDecoder {
                 const value: Record<string, any> = {};
 
                 this.refs.push(value);
-                this.nextFrame = { type: "object", value, index: 0, count: this.reader.varint() };
+                this.nextFrame = { type: "object", value, index: 0, count: this.reader.u32() };
                 return value;
             }
             case Tag.Array: {
-                const count = this.reader.varint();
+                const count = this.reader.u32();
                 const value = new Array(count);
 
                 this.refs.push(value);
@@ -391,14 +458,14 @@ class LibraryDecoder {
                 const value = new Map();
 
                 this.refs.push(value);
-                this.nextFrame = { type: "map", value, index: 0, count: this.reader.varint(), key: undefined, hasKey: false };
+                this.nextFrame = { type: "map", value, index: 0, count: this.reader.u32(), key: undefined, hasKey: false };
                 return value;
             }
             case Tag.Set: {
                 const value = new Set();
 
                 this.refs.push(value);
-                this.nextFrame = { type: "set", value, index: 0, count: this.reader.varint() };
+                this.nextFrame = { type: "set", value, index: 0, count: this.reader.u32() };
                 return value;
             }
             default: throw new Error(`Corrupt decode-cache file (unknown tag ${tag})`);
@@ -494,8 +561,13 @@ function readEntries(buffer: ArrayBuffer, chunkCount: number): LibraryChunkEntry
     const view = new DataView(buffer);
     const entries = new Array<LibraryChunkEntry_T>(chunkCount);
 
-    for (let i = 0, offset = HEADER_SIZE; i < chunkCount; i++, offset += CHUNK_ENTRY_SIZE)
-        entries[i] = { offset: view.getUint32(offset, true), length: view.getUint32(offset + 4, true) };
+    for (let i = 0, offset = HEADER_SIZE; i < chunkCount; i++, offset += CHUNK_ENTRY_SIZE) {
+        const position = view.getFloat64(offset, true);
+
+        if (!Number.isSafeInteger(position) || position < 0) throw new Error(`Corrupt decode-cache chunk offset '${position}'`);
+
+        entries[i] = { offset: position, length: view.getUint32(offset + 8, true) };
+    }
 
     return entries;
 }
@@ -514,12 +586,14 @@ function decodeChunk(kind: number, byteLength: number, buffer: ArrayBuffer, offs
     return new Constructor(buffer, offset, byteLength / bytesPerElement);
 }
 
-function createDecoder(buffer: ArrayBuffer, metadataOffset: number, entries: LibraryChunkEntry_T[]): LibraryDecoder {
+function createDecoder(buffer: ArrayBuffer, metadataOffset: number, entries: LibraryChunkEntry_T[], copyChunks: boolean = false): LibraryDecoder {
     return new LibraryDecoder(buffer, metadataOffset, (index, kind, byteLength) => {
         const entry = entries[index];
 
-        if (!entry || entry.length !== byteLength || entry.offset + entry.length > buffer.byteLength)
+        if (!entry || entry.length !== byteLength || entry.offset < metadataOffset || entry.offset + entry.length > buffer.byteLength)
             throw new Error(`Corrupt decode-cache chunk '${index}'`);
+
+        if (copyChunks && kind !== ARRAY_BUFFER_KIND) return decodeChunk(kind, byteLength, buffer.slice(entry.offset, entry.offset + entry.length), 0);
 
         return decodeChunk(kind, byteLength, buffer, entry.offset);
     });
@@ -543,10 +617,10 @@ export function deserializeLibrary(buffer: ArrayBuffer): any {
     return decoder.result();
 }
 
-export async function deserializeLibraryAsync(buffer: ArrayBuffer): Promise<any> {
+export async function deserializeLibraryAsync(buffer: ArrayBuffer, copyChunks: boolean = false, yieldWork: () => Promise<void> = null): Promise<any> {
     const { chunkCount } = readHeader(buffer);
     const entries = readEntries(buffer, chunkCount);
-    const decoder = createDecoder(buffer, HEADER_SIZE + chunkCount * CHUNK_ENTRY_SIZE, entries);
+    const decoder = createDecoder(buffer, HEADER_SIZE + chunkCount * CHUNK_ENTRY_SIZE, entries, copyChunks);
 
     while (true) {
         const deadline = performance.now() + DECODE_FRAME_MS;
@@ -556,18 +630,26 @@ export async function deserializeLibraryAsync(buffer: ArrayBuffer): Promise<any>
                 if (!decoder.step()) return decoder.result();
         } while (performance.now() < deadline);
 
+        if (yieldWork) await yieldWork();
         await yieldDecode();
     }
 }
 
-export async function openLibraryFile(file: File): Promise<SeekableLibrary_T> {
-    const header = readHeader(await file.slice(0, HEADER_SIZE).arrayBuffer());
+function readBlob(blob: Blob): ArrayBuffer | Promise<ArrayBuffer> {
+    return fileReader ? fileReader.readAsArrayBuffer(blob) : blob.arrayBuffer();
+}
+
+export async function openLibraryFile(file: Blob): Promise<SeekableLibrary_T> {
+    const header = readHeader(await readBlob(file.slice(0, HEADER_SIZE)));
     const metadataOffset = HEADER_SIZE + header.chunkCount * CHUNK_ENTRY_SIZE;
-    const prefix = await file.slice(0, metadataOffset + header.metadataLength).arrayBuffer();
+
+    if (metadataOffset + header.metadataLength > file.size) throw new Error(`Corrupt decode-cache metadata length '${header.metadataLength}'`);
+
+    const prefix = await readBlob(file.slice(0, metadataOffset + header.metadataLength));
     const entries = readEntries(prefix, header.chunkCount);
 
     for (let i = 0; i < entries.length; i++)
-        if (entries[i].offset + entries[i].length > file.size) throw new Error(`Corrupt decode-cache chunk '${i}'`);
+        if (entries[i].offset < metadataOffset + header.metadataLength || entries[i].offset + entries[i].length > file.size) throw new Error(`Corrupt decode-cache chunk '${i}'`);
 
     const decoder = new LibraryDecoder(prefix, metadataOffset, (index, kind, byteLength) => {
         const entry = entries[index];
@@ -582,34 +664,44 @@ export async function openLibraryFile(file: File): Promise<SeekableLibrary_T> {
     return { file, library: decoder.result(), entries, values: new Map() };
 }
 
-function collectChunkRefs(root: any, values: Map<number, any>): LibraryChunkRef_T[] {
+function collectChunkRefs(root: any, values: Map<number, any>, containers: any[]): LibraryChunkRef_T[] {
     const refs = new Map<number, LibraryChunkRef_T>();
     const seen = new Set<any>();
-    const stack = [root];
+    const stack = [];
 
-    while (stack.length > 0) {
-        const value = stack.pop();
-
-        if (!value || typeof value !== "object" || seen.has(value) || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) continue;
+    function visit(value: any): boolean {
+        if (!value || typeof value !== "object" || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return false;
         if ((value as LibraryChunkRef_T).isLibraryChunk === true) {
             const ref = value as LibraryChunkRef_T;
 
             if (!values.has(ref.index)) refs.set(ref.index, ref);
-            continue;
+            return true;
         }
 
+        if (seen.has(value)) return false;
         seen.add(value);
+        stack.push(value);
+        return false;
+    }
+
+    visit(root);
+
+    while (stack.length > 0) {
+        const value = stack.pop();
+        let hasChunks = false;
 
         if (value instanceof Map) {
             for (const [key, entry] of value) {
-                stack.push(key);
-                stack.push(entry);
+                hasChunks = visit(key) || hasChunks;
+                hasChunks = visit(entry) || hasChunks;
             }
         } else if (value instanceof Set) {
-            for (const entry of value) stack.push(entry);
+            for (const entry of value) hasChunks = visit(entry) || hasChunks;
         } else {
-            for (const entry of Object.values(value)) stack.push(entry);
+            for (const entry of Object.values(value)) hasChunks = visit(entry) || hasChunks;
         }
+
+        if (hasChunks) containers.push(value);
     }
 
     return Array.from(refs.values());
@@ -626,7 +718,7 @@ function buildChunkRanges(seekable: SeekableLibrary_T, refs: LibraryChunkRef_T[]
         const end = entry.offset + entry.length;
 
         if (range && entry.offset - range.end <= RANGE_GAP && end - range.offset <= RANGE_SIZE) {
-            range.end = end;
+            range.end = Math.max(range.end, end);
             range.refs.push(ref);
         } else {
             ranges.push({ offset: entry.offset, end, refs: [ref] });
@@ -636,16 +728,12 @@ function buildChunkRanges(seekable: SeekableLibrary_T, refs: LibraryChunkRef_T[]
     return ranges;
 }
 
-function replaceChunkRefs(root: any, values: Map<number, any>): any {
-    const seen = new Set<any>();
-
+function replaceChunkRefs(root: any, values: Map<number, any>, containers: any[]): any {
     function replace(value: any): any {
-        if (!value || typeof value !== "object" || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return value;
-        if ((value as LibraryChunkRef_T).isLibraryChunk === true) return values.get((value as LibraryChunkRef_T).index);
-        if (seen.has(value)) return value;
+        return value && value.isLibraryChunk === true ? values.get(value.index) : value;
+    }
 
-        seen.add(value);
-
+    for (const value of containers) {
         if (Array.isArray(value)) {
             for (let i = 0; i < value.length; i++) value[i] = replace(value[i]);
         } else if (value instanceof Map) {
@@ -661,26 +749,63 @@ function replaceChunkRefs(root: any, values: Map<number, any>): any {
         } else {
             for (const key of Object.keys(value)) value[key] = replace(value[key]);
         }
-
-        return value;
     }
 
     return replace(root);
 }
 
+export async function getLibraryChunkBlob(seekable: SeekableLibrary_T, ref: any, mimeType: string): Promise<Blob> {
+    if (!ref || ref.isLibraryChunk !== true || ref.kind !== 1) throw new Error(`Expected a stored Uint8Array chunk.`);
+
+    const entry = seekable.entries[ref.index];
+
+    if (!entry || entry.length !== ref.byteLength || entry.offset < 0 || entry.offset + entry.length > seekable.file.size) throw new Error(`Invalid stored sound chunk '${ref.index}'.`);
+
+    // OPFS catalog rewrites invalidate File slices retained by sound libraries.
+    return new Blob([await readBlob(seekable.file.slice(entry.offset, entry.offset + entry.length))], { type: mimeType });
+}
+
 export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seekable.library): Promise<any> {
-    const refs = collectChunkRefs(root, seekable.values);
+    const containers = [];
+    const refs = collectChunkRefs(root, seekable.values, containers);
     const ranges = buildChunkRanges(seekable, refs);
 
     for (const range of ranges) {
-        const buffer = await seekable.file.slice(range.offset, range.end).arrayBuffer();
+        const buffer = await readBlob(seekable.file.slice(range.offset, range.end));
+        const bytes = new Uint8Array(buffer);
+        let length = 0, contiguous = true;
+
+        for (const ref of range.refs) {
+            if (ref.kind === ARRAY_BUFFER_KIND) continue;
+
+            const aligned = length + (CHUNK_ALIGNMENT - length % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
+
+            for (let i = length; i < aligned; i++)
+                if (bytes[i] !== 0) contiguous = false;
+
+            length = aligned;
+            if (seekable.entries[ref.index].offset - range.offset !== length) contiguous = false;
+            length += ref.byteLength;
+        }
+
+        const chunks = contiguous && length === buffer.byteLength ? bytes : new Uint8Array(length);
+        let offset = 0;
 
         for (const ref of range.refs) {
             const entry = seekable.entries[ref.index];
 
-            seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, buffer, entry.offset - range.offset));
+            if (ref.kind === ARRAY_BUFFER_KIND) {
+                seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, buffer, entry.offset - range.offset));
+                continue;
+            }
+
+            offset += (CHUNK_ALIGNMENT - offset % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
+            if (chunks.buffer !== buffer)
+                chunks.set(new Uint8Array(buffer, entry.offset - range.offset, ref.byteLength), offset);
+            seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, chunks.buffer, offset));
+            offset += ref.byteLength;
         }
     }
 
-    return replaceChunkRefs(root, seekable.values);
+    return replaceChunkRefs(root, seekable.values, containers);
 }

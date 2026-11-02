@@ -1,0 +1,130 @@
+html { cursor: var(--game-cursor, default); }
+html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !important; }
+
+.nwindow-canvas {
+    position: fixed;
+    image-rendering: auto;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.ndom-layer {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+    pointer-events: none;
+    z-index: 11;
+    overflow: hidden;
+
+    > * { pointer-events: auto; }
+
+    > .ndom-console {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+
+        > * { pointer-events: auto; }
+
+        &[hidden]:has(> [aria-modal="true"]:not([hidden])) {
+            display: block;
+            > * { opacity: 0; }
+        }
+    }
+
+    [hidden] { display: none; }
+}
+
+.ndom-window, .ndom-tile, .ndom-button, .ndom-edit, .ndom-absolute {
+    position: absolute;
+}
+
+.chat-loading-status {
+    position: absolute;
+    left: 5px;
+    bottom: 100%;
+    margin-bottom: 8px;
+    color: rgba(202, 163, 68, 0.75);
+    font: 13px/1.6 L2Tahoma, Tahoma, sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 1px 3px #000;
+}
+
+.has-system-messages > .chat-loading-status { bottom: calc(100% + 130px); }
+
+.ndom-tile, .ndom-button {
+    background-repeat: repeat;
+    image-rendering: auto;
+}
+
+.ndom-tile { opacity: var(--alpha, 1); }
+
+.ndom-text {
+    white-space: pre;
+    font-kerning: none;
+    display: inline-block;
+    vertical-align: top;
+    image-rendering: auto;
+
+    &:not(.ndom-absolute) { position: relative; }
+
+    > i, > b { position: absolute; }
+    > i { background-image: var(--glyphs); }
+}
+
+.ndom-button, .ndom-inventory-item { cursor: inherit; }
+
+.ndom-layer > .ndom-tooltip { pointer-events: none; }
+
+.ndom-item-drag *, .nwindow-cursor * { cursor: inherit !important; }
+
+.ndom-inactive .ndom-tile { opacity: calc(var(--alpha, 1) * 0.502); } // NWindow 0x10012dbd: the +0x70 flag swaps texture alpha 0xff for 0x80; text keeps its alpha.
+
+.ndom-inventory-item {
+    position: absolute;
+    padding: 0;
+    border: 0;
+    background: transparent;
+
+    > .ndom-tile { pointer-events: none; }
+    &:focus-visible { outline: 1px solid #c8d2dc; }
+}
+
+.ndom-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0 2px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: transparent;
+    caret-color: transparent;
+    font: 11px L2Tahoma, Tahoma, sans-serif;
+    font-kerning: none;
+
+    &::selection { background: transparent; color: transparent; }
+    &:autofill { opacity: 0; } // The edit overlay paints the visible field.
+}
+
+.ndom-edit-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    pointer-events: none;
+    image-rendering: auto;
+
+    > div:not(.ndom-text) > b { position: absolute; background: rgba(255, 255, 255, 0.502); }
+}
+
+@keyframes l2-task-notification {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}

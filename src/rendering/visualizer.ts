@@ -13,7 +13,7 @@ export enum VisualizerMode {
     Emitters = "emitters",
 }
 
-export interface EmitterDebugInfo {
+export type EmitterDebugInfo_T = {
     uuid: string;
     name: string;
     type: string;
@@ -26,7 +26,7 @@ export interface EmitterDebugInfo {
     isManuallyHidden: boolean;
     parentUuid: string; // wrapping "Emitter" actor - the HUD groups sub-emitters by this
     parentName: string;
-}
+};
 
 export enum LeafVisualizerDetail {
     Auto = "auto", // decluttered view once leafAutoAggregateThreshold is exceeded
@@ -34,14 +34,14 @@ export enum LeafVisualizerDetail {
     PerZone = "perZone",
 }
 
-export interface FogSourceColors {
+export type FogSourceColors_T = {
     fog: ColorByte;
     sky: ColorByte;
     cloud: ColorByte;
     haze: ColorByte;
-}
+};
 
-export interface GlobalEnvColors {
+export type GlobalEnvColors_T = {
     fog: ColorByte;
     sky: ColorByte;
     cloud1: ColorByte;
@@ -49,14 +49,14 @@ export interface GlobalEnvColors {
     cloud3: ColorByte;
     sun: ColorByte;
     haze: ColorByte;
-}
+};
 
-export interface ZoneFogData {
+export type ZoneFogData_T = {
     isFogZone: boolean;
     color: ColorByte;
     start: number;
     end: number;
-}
+};
 
 class Visualizer {
     private readonly HUD_NAME_WIDTH = 8;
@@ -373,12 +373,12 @@ class Visualizer {
     }
 
     // emitters should already be sorted nearest-first and pre-filtered - this redraws a canvas texture per label
-    public updateEmitters(emitters: EmitterDebugInfo[]): void {
+    public updateEmitters(emitters: EmitterDebugInfo_T[]): void {
         if (!this.enabled || this.mode !== VisualizerMode.Emitters) return;
 
         if (this.emitterListElement) {
             // one "Emitter" actor can carry several sub-emitters - group the flat feed back by parent
-            const groups = new Map<string, EmitterDebugInfo[]>();
+            const groups = new Map<string, EmitterDebugInfo_T[]>();
             for (const e of emitters) {
                 let members = groups.get(e.parentUuid);
                 if (!members) groups.set(e.parentUuid, members = []);
@@ -596,7 +596,7 @@ class Visualizer {
         }
     }
 
-    public updateHUD(activeFogColors?: FogSourceColors, globalEnvColors?: GlobalEnvColors, zoneFogData?: ZoneFogData): void {
+    public updateHUD(activeFogColors?: FogSourceColors_T, globalEnvColors?: GlobalEnvColors_T, zoneFogData?: ZoneFogData_T): void {
         if (!this.enabled || this.mode !== VisualizerMode.Fogs) return;
 
         const updateEntry = (prefix: string, name: string, color?: ColorByte) => {

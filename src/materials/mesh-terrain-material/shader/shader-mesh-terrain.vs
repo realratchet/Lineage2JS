@@ -1,4 +1,7 @@
 #include <common>
+#ifdef USE_PROJECTOR_RECEIVER
+    varying vec3 vProjectorNormal;
+#endif
 #include <envmap_pars_vertex>
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
@@ -7,8 +10,10 @@
 #include <logdepthbuf_pars_vertex>
 #include <clipping_planes_pars_vertex>
 
+#ifdef USE_PROJECTOR_RECEIVER
 uniform mat4 shadowMatrix;
 varying vec4 vShadowCoord;
+#endif
 
 // gl_VertexID (vertex index)
 
@@ -63,12 +68,8 @@ varying vec4 vShadowCoord;
 // #endif
 
 #ifdef USE_UV_TEXTURE
-    struct TextureData {
-        sampler2D texture;
-        vec2 size;
-    };
-
-    uniform TextureData uvs;
+    uniform vec2 uvsSize;
+    uniform sampler2D uvsMap;
     uniform mat3 uvTransform;
     uniform sampler2D tex;
     
@@ -124,7 +125,10 @@ void main() {
     #include <begin_vertex>
     #include <morphtarget_vertex>
     #include <skinning_vertex>
-    vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
+    #ifdef USE_PROJECTOR_RECEIVER
+        vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
+        vProjectorNormal = normalize(normalMatrix * normal);
+    #endif
     #include <project_vertex>
     #include <logdepthbuf_vertex>
     #include <clipping_planes_vertex>
@@ -133,13 +137,13 @@ void main() {
     #include <fog_vertex>
 
     #ifdef USE_UV_TEXTURE
-        float u = (terrainIndex + 0.5) / uvs.size.x;
+        float u = (terrainIndex + 0.5) / uvsSize.x;
 
         #pragma unroll_loop_start
         for(int i = 0; i < UV_COUNT; i++) {
-            float v = (float(i) + 0.5) / float(uvs.size.y);
+            float v = (float(i) + 0.5) / float(uvsSize.y);
 
-            vUv[i] = (uvTransform * vec3(texture2D(uvs.texture, vec2(u, v)).xy, 1.0)).xy;
+            vUv[i] = (uvTransform * vec3(texture2D(uvsMap, vec2(u, v)).xy, 1.0)).xy;
         }
         #pragma unroll_loop_end
     #endif

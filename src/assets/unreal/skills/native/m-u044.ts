@@ -8,4 +8,8 @@ const effects: NativeSkillEffect_T[] = [
     { phase: "shot", effectClass: "LineageEffect.m_u044_b", host: "target", owner: "target", targetIsNpc: false, boneProperty: "LeftArmBone", bonePropertyRequired: true, relativeRotation: [0, 16384, 0], relativeLocation: [0, -7, 0], rotation: "zero" }
 ];
 
+// Engine.dll SpawnNTransientEffect 0x104ca274..0x104ca3c3: LeftArmBone, AttachToBone(false), yaw16384, offset(0,-7,0).
+export const transientEffects: NativeSkillEffect_T[] = [{ ...effects[1], targetIsNpc: undefined }];
+export const npcExcludedTransientEffects: NativeSkillEffect_T[] = [{ ...effects[1], scale: "casterRadius" }];
+
 export default effects;

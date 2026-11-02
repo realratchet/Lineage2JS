@@ -1,5 +1,9 @@
 import { Bone, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from "three";
 import type { IDynamicHairDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
+import { evaluateDeferredPose } from "./skeletal-animation-mixer";
+import { requireBonePose } from "./local-space-skeleton";
+import Rotator from "../utils/rotator";
+import { NActionList_T } from "../assets/unreal/un-pawn";
 
 const tmpMatrix = new Matrix4();
 const tmpParentMatrix = new Matrix4();
@@ -12,16 +16,18 @@ const tmpPoint = new Vector3();
 const tmpBoneQuaternion = new Quaternion();
 const tmpParentQuaternion = new Quaternion();
 const tmpScale = new Vector3();
+const tmpRotation = new Rotator();
+const tmpHairYaw = new Quaternion(0, 0, 1, 0);
 const arrParents: Object3D[] = [];
 
 const BEND_STIFFNESS = 2.4; // NCBoneSimul::Init2 0x77e8da.
 const BEND_DAMPING = 0.8; // NCBoneSimul::Init2 0x77e8e4.
 const INTEGRATION_SCALE = 4; // NCBoneSimul::EulerIntegrate 0x76b380.
-const SIMULATION_STEP = 0.1; // NCBoneSimul::NCBoneSimul 0x76d048.
+const SIMULATION_STEP = Math.fround(0.1); // NCBoneSimul::NCBoneSimul 0x76d048.
 const SIMULATION_TIME_SCALE = 15; // NCBoneSimul::Simulate caller 0x1068bde5.
 const STABILITY_LENGTH_SCALE = 6; // NCBoneSimul::CheckBalsan 0x76bf10.
 const COLLISION_RESOLVE_LIMIT = 100; // NCBoneSimul::Simulate 0x7745a0.
-const USER_FORCE_DELTA_MIN = 0.005; // NCBoneSimul::CalcForces 0x76d34d.
+const USER_FORCE_DELTA_MIN = Math.fround(0.005); // NCBoneSimul::CalcForces 0x76d34d.
 const USER_FORCE_FRAME_SCALE = 40; // NCBoneSimul::CalcForces 0x76d35d.
 const USER_FORCE_FRAME_LIMIT = 5; // NCBoneSimul::CalcForces 0x76d371.
 const USER_FORCE_IDLE_SCALE = 0.04; // NCBoneSimul::CalcForces 0x76d310.
@@ -76,6 +82,8 @@ type CollisionSphere_T = {
     radius: number;
 };
 
+type WorldMatrixCache_T = { frame: number, entries: WeakMap<Object3D, { frame: number, matrix: Matrix4 }> };
+
 const topologies = new Map<number, Topology_T>([
     [2, { prefix: "hair", first: 2, count: 12, rows: 3, columns: 4, pinned: [0, 4, 8], endpoints: [3, 7, 11], shearSprings: false, bendSprings: false, fixedYaw: true }],
     [5, { prefix: "hair", first: 14, count: 3, rows: 1, columns: 3, pinned: [0], endpoints: [2], shearSprings: false, bendSprings: false, fixedYaw: true }],
@@ -86,21 +94,37 @@ const topologies = new Map<number, Topology_T>([
 
 function normalizeBoneName(name: string): string { return name.replaceAll(" ", "_").toLowerCase(); }
 
-function getObjectWorldMatrix(object: Object3D, target: Matrix4): Matrix4 {
-    arrParents.length = 0;
+function getObjectWorldMatrix(object: Object3D, target: Matrix4, cache: WorldMatrixCache_T = null): Matrix4 {
+    let count = 0;
+    target.identity();
 
     while (object) {
-        arrParents.push(object);
+        const cached = cache?.entries.get(object);
+
+        if (cached && cached.frame === cache.frame) {
+            target.copy(cached.matrix);
+            break;
+        }
+
+        arrParents[count++] = object;
         object = object.parent;
     }
 
-    target.identity();
-
-    for (let i = arrParents.length - 1; i >= 0; i--) {
+    for (let i = count - 1; i >= 0; i--) {
         const parent = arrParents[i];
+
+        arrParents[i] = null;
 
         parent.updateMatrix();
         target.multiply(parent.matrix);
+
+        if (cache) {
+            let cached = cache.entries.get(parent);
+
+            if (!cached) cache.entries.set(parent, cached = { frame: -1, matrix: new Matrix4() });
+            cached.matrix.copy(target);
+            cached.frame = cache.frame;
+        }
     }
 
     return target;
@@ -129,6 +153,7 @@ function makeParticles(count: number): Particle_T[] {
 export class DynamicHairSimulation {
     public readonly mesh: SkinnedMesh;
     public readonly info: IDynamicHairDecodeInfo;
+    protected readonly cacheWorldMatrices: WorldMatrixCache_T = { frame: 0, entries: new WeakMap() };
 
     protected topology: Topology_T = null;
     protected bones: Bone[] = null;
@@ -144,6 +169,9 @@ export class DynamicHairSimulation {
     protected actions: Map<string, { initial: boolean, spheres: CollisionSphere_T[] }> = null;
     protected actionSpheres: CollisionSphere_T[] = null;
     protected headBone: Bone = null;
+    protected frameMesh: Object3D = null;
+    protected readonly meshToWorldInverse = new Matrix4();
+    protected parts: SkinnedMesh[] = null;
     protected readonly previousSimulationMatrix = new Matrix4();
     protected readonly previousSimulationPosition = new Vector3();
     protected readonly previousHeadPosition = new Vector3();
@@ -151,7 +179,7 @@ export class DynamicHairSimulation {
     protected userForceScale = 0;
     protected animationName: string = null;
     protected animationFrame = 0;
-    protected attackState = 0;
+    protected attackState = NActionList_T.NACT_NONE;
     protected attackEffectFrame = 0;
     protected attackEndEffectFrame = 0;
     protected attackForceCount = 0;
@@ -172,6 +200,8 @@ export class DynamicHairSimulation {
     }
 
     public initialize(parts: SkinnedMesh[]): void {
+        this.cacheWorldMatrices.frame++;
+        this.parts = parts;
         const topology = topologies.get(this.info.type);
 
         if (!topology) throw new Error(`Skeletal mesh '${this.mesh.name}' uses unsupported bone simulation '${this.info.type}'.`);
@@ -211,6 +241,9 @@ export class DynamicHairSimulation {
         this.actions = new Map(this.info.config.actions.map(info => [info.name.toLowerCase(), { initial: info.initial, spheres: info.sphereIndices.map(index => this.spheres[index]) }]));
         this.actionSpheres = [];
         this.headBone = this.spheres.length > 0 ? this.spheres[0].bone : findBone(parts, "Bip01 head");
+        this.frameMesh = this.headBone;
+        while ((this.frameMesh as Bone).isBone) this.frameMesh = this.frameMesh.parent;
+        for (const bone of [...this.bones, this.headBone, ...this.planes.map(plane => plane.bone), ...this.spheres.map(sphere => sphere.bone)]) requireBonePose(bone);
 
         this.updateBonePose();
         this.resetParticles();
@@ -232,12 +265,15 @@ export class DynamicHairSimulation {
 
     public reset(): void { this.needsReset = true; }
 
-    public update(deltaTime: number, animationName: string, animationFrame: number, attackState: number, attackEffectFrame: number, attackEndEffectFrame: number, isMoving: boolean, isRunning: boolean, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
+    public update(deltaTime: number, animationName: string, animationFrame: number, attackState: NActionList_T, attackEffectFrame: number, attackEndEffectFrame: number, isMoving: boolean, isRunning: boolean, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
         if (!this.bones || deltaTime < 0 || !Number.isFinite(deltaTime)) throw new Error(`Invalid dynamic hair delta '${deltaTime}'.`);
 
+        deltaTime = Math.fround(deltaTime);
+        this.cacheWorldMatrices.frame++;
+        for (let i = 0, len = this.parts.length; i < len; i++) evaluateDeferredPose(this.parts[i]);
         this.updateAction(animationName, animationFrame, attackState, attackEffectFrame, attackEndEffectFrame, isDying, isBowRunning, isSpecialAttack);
         this.attackForceCount = 0;
-        this.frameDelta = deltaTime;
+        this.frameDelta = Math.max(deltaTime, USER_FORCE_DELTA_MIN);
 
         for (let i = 0, len = this.bones.length; i < len; i++) {
             this.basePositions[i].copy(this.bones[i].position);
@@ -263,19 +299,19 @@ export class DynamicHairSimulation {
         this.updateCollisionObjects(isRunning);
 
         if (deltaTime > 0 && !skipSimulation) {
-            const simulationTime = deltaTime * this.info.config.safeFactor * SIMULATION_TIME_SCALE;
+            const simulationTime = this.frameDelta * this.info.config.safeFactor * SIMULATION_TIME_SCALE;
             let currentTime = SIMULATION_STEP;
 
             do {
                 this.simulate(SIMULATION_STEP);
-                currentTime += SIMULATION_STEP;
+                currentTime = Math.fround(currentTime + SIMULATION_STEP);
             } while (simulationTime > currentTime);
         }
 
         this.applyPose();
     }
 
-    protected updateAction(animationName: string, animationFrame: number, attackState: number, attackEffectFrame: number, attackEndEffectFrame: number, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
+    protected updateAction(animationName: string, animationFrame: number, attackState: NActionList_T, attackEffectFrame: number, attackEndEffectFrame: number, isDying: boolean, isBowRunning: boolean, isSpecialAttack: boolean): void {
         const changed = animationName !== this.animationName;
         const action = animationName === null ? null : this.actions.get(animationName.toLowerCase());
 
@@ -294,8 +330,10 @@ export class DynamicHairSimulation {
     }
 
     protected updateBonePose(): void {
+        getObjectWorldMatrix(this.frameMesh, this.meshToWorldInverse).invert();
+
         for (let i = 0, len = this.bones.length; i < len; i++) {
-            getObjectWorldMatrix(this.bones[i], tmpMatrix).decompose(this.bonePositions[i], this.boneQuaternions[i], tmpScale);
+            getObjectWorldMatrix(this.bones[i], tmpMatrix, this.cacheWorldMatrices).premultiply(this.meshToWorldInverse).decompose(this.bonePositions[i], this.boneQuaternions[i], tmpScale);
         }
     }
 
@@ -334,16 +372,16 @@ export class DynamicHairSimulation {
     }
 
     protected resetMotion(): void {
-        getObjectWorldMatrix(this.bones[0].parent, this.previousSimulationMatrix);
+        getObjectWorldMatrix(this.bones[0].parent, this.previousSimulationMatrix, this.cacheWorldMatrices).premultiply(this.meshToWorldInverse);
         this.previousSimulationPosition.setFromMatrixPosition(this.previousSimulationMatrix);
-        getObjectWorldMatrix(this.headBone, tmpMatrix);
+        getObjectWorldMatrix(this.headBone, tmpMatrix, this.cacheWorldMatrices).premultiply(this.meshToWorldInverse);
         this.previousHeadPosition.setFromMatrixPosition(tmpMatrix);
         this.headMovement.set(0, 0, 0);
         this.userForceScale = 0;
     }
 
     protected updateMotion(deltaTime: number, isMoving: boolean): void {
-        getObjectWorldMatrix(this.bones[0].parent, tmpMatrix);
+        getObjectWorldMatrix(this.bones[0].parent, tmpMatrix, this.cacheWorldMatrices).premultiply(this.meshToWorldInverse);
         tmpPoint.setFromMatrixPosition(tmpMatrix);
         tmpDeltaMatrix.multiplyMatrices(tmpMatrix, tmpParentMatrix.copy(this.previousSimulationMatrix).invert());
 
@@ -358,7 +396,7 @@ export class DynamicHairSimulation {
         this.previousSimulationMatrix.copy(tmpMatrix);
         this.previousSimulationPosition.copy(tmpPoint);
 
-        getObjectWorldMatrix(this.headBone, tmpMatrix);
+        getObjectWorldMatrix(this.headBone, tmpMatrix, this.cacheWorldMatrices).premultiply(this.meshToWorldInverse);
         tmpPoint.setFromMatrixPosition(tmpMatrix);
         this.headMovement.subVectors(tmpPoint, this.previousHeadPosition);
         this.previousHeadPosition.copy(tmpPoint);
@@ -460,10 +498,10 @@ export class DynamicHairSimulation {
 
         let scale = 0;
 
-        if (this.attackState === 1) {
+        if (this.attackState === NActionList_T.NACT_MELLEATTACK) {
             if (this.animationFrame > 0 && this.attackForceCount < 4) scale = this.frameDelta * 20;
             else if (this.animationFrame > this.attackEffectFrame - 0.1 && this.animationFrame < this.attackEffectFrame + 0.2 && this.attackForceCount < 9) scale = this.frameDelta * 20;
-        } else if (this.attackState === 2 && this.animationFrame > this.attackEndEffectFrame && this.attackForceCount < 4) scale = 1;
+        } else if (this.attackState === NActionList_T.NACT_BOWATTACK && this.animationFrame > this.attackEndEffectFrame && this.attackForceCount < 4) scale = 1;
 
         if (scale === 0) return;
 
@@ -501,7 +539,7 @@ export class DynamicHairSimulation {
 
     protected updateCollisionObjects(isRunning: boolean = false): void {
         for (const plane of this.planes) {
-            getObjectWorldMatrix(plane.bone, tmpMatrix);
+            getObjectWorldMatrix(plane.bone, tmpMatrix, this.cacheWorldMatrices).premultiply(this.meshToWorldInverse);
             tmpNormal.set(0, 1, 0).transformDirection(tmpMatrix);
             const distance = this.info.type === 2 && isRunning ? SELECTOR2_RUN_PLANE_DISTANCE : plane.distance;
 
@@ -512,7 +550,7 @@ export class DynamicHairSimulation {
         }
 
         for (const sphere of this.spheres) {
-            getObjectWorldMatrix(sphere.bone, tmpMatrix);
+            getObjectWorldMatrix(sphere.bone, tmpMatrix, this.cacheWorldMatrices).premultiply(this.meshToWorldInverse);
             sphere.center.copy(sphere.offset).applyMatrix4(tmpMatrix);
         }
     }
@@ -520,7 +558,7 @@ export class DynamicHairSimulation {
     protected checkCollisions(): number {
         if (this.info.type === 9) return this.checkCollisions9();
         if (this.isDying) return 0;
-        if (this.attackState === 1 && this.animationFrame > 0.1 && this.animationFrame < 0.9) return 0;
+        if (this.attackState === NActionList_T.NACT_MELLEATTACK && this.animationFrame > 0.1 && this.animationFrame < 0.9) return 0;
         if ((this.info.type === 2 || this.info.type === 7) && this.isSpecialAttack) return 0;
 
         let result = 0;
@@ -668,25 +706,19 @@ export class DynamicHairSimulation {
         for (let i = 0, len = this.bones.length; i < len; i++) {
             if (this.topology.endpoints.includes(i)) continue;
 
-            getObjectWorldMatrix(this.bones[i].parent, tmpParentMatrix).decompose(tmpPoint, tmpParentQuaternion, tmpScale);
+            getObjectWorldMatrix(this.bones[i].parent, tmpParentMatrix).premultiply(this.meshToWorldInverse).decompose(tmpPoint, tmpParentQuaternion, tmpScale);
             const outputBase = this.topology.pinned.includes(i) ? tmpParentQuaternion : this.boneQuaternions[i];
 
             tmpDirection.subVectors(this.current[i + 1].position, this.current[i].position).applyQuaternion(tmpBoneQuaternion.copy(outputBase).invert());
 
             if (tmpDirection.lengthSq() === 0) continue;
 
-            tmpDirection.normalize();
+            const unit = 65535 / (2 * Math.PI);
 
-            const yaw = Math.atan2(tmpDirection.y, tmpDirection.x) * 0.5;
-            const pitch = Math.atan2(tmpDirection.z, Math.hypot(tmpDirection.x, tmpDirection.y)) * 0.5;
-            const sinYaw = Math.sin(yaw);
-            const cosYaw = Math.cos(yaw);
-            const sinPitch = Math.sin(pitch);
-            const cosPitch = Math.cos(pitch);
+            tmpRotation.set(Math.trunc(Math.atan2(tmpDirection.z, Math.sqrt(tmpDirection.x * tmpDirection.x + tmpDirection.y * tmpDirection.y)) * unit), Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * unit), 0).toQuaternion(tmpBoneQuaternion);
 
             if (this.topology.fixedYaw)
-                tmpBoneQuaternion.set(-cosYaw * sinPitch, -sinYaw * sinPitch, cosYaw * cosPitch, -sinYaw * cosPitch);
-            else tmpBoneQuaternion.set(sinYaw * sinPitch, -cosYaw * sinPitch, sinYaw * cosPitch, cosYaw * cosPitch);
+                tmpBoneQuaternion.multiply(tmpHairYaw);
 
             tmpBoneQuaternion.premultiply(outputBase);
             this.bones[i].position.copy(this.current[i].position).applyMatrix4(tmpParentMatrix.invert());

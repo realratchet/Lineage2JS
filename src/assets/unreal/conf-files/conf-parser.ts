@@ -1,4 +1,30 @@
 
+export function parseConfigFile(fileContents: string): Map<string, [string, string][]> {
+    const sections = new Map<string, [string, string][]>();
+    let entries: [string, string][] = null;
+
+    // L2.exe FConfigFile::Read 0x10910a00 preserves whitespace and repeated sections/keys.
+    for (const line of fileContents.split("\0", 1)[0].split(/[\r\n]/)) {
+        if (line[0] === "[" && line.endsWith("]")) {
+            const section = line.slice(1, -1).toLowerCase();
+
+            entries = sections.get(section);
+            if (!entries) sections.set(section, entries = []);
+            continue;
+        }
+        if (!entries) continue;
+        const separator = line.indexOf("=");
+
+        if (separator < 0) continue;
+        const key = line.slice(0, separator);
+        let value = line.slice(separator + 1);
+
+        if (value[0] === '"' && value.endsWith('"')) value = value.slice(1, -1);
+        entries.push([key, value]);
+    }
+    return sections;
+}
+
 export function findSection(fileContents: string, sectionName: string): number {
     const sectionHeader = `[${sectionName}]\r\n`;
     const indexOf = fileContents.indexOf(sectionHeader);
@@ -7,6 +33,23 @@ export function findSection(fileContents: string, sectionName: string): number {
         throw new Error(`Section '${sectionName}' was not found in file contents!`);
 
     return indexOf + sectionHeader.length;
+}
+
+export function skipToNextToken(fileContents: string, offset: number): number {
+    while (offset < fileContents.length) {
+        if (fileContents[offset] === ';') {
+            const eol = fileContents.indexOf('\r\n', offset);
+            if (eol === -1) return fileContents.length;
+            offset = eol + 2;
+            continue;
+        }
+        if (/\s/.test(fileContents[offset])) {
+            offset++;
+            continue;
+        }
+        break;
+    }
+    return offset;
 }
 
 export function consumeNextValue(fileContents: string, startOffset: number): [string, string, number] {

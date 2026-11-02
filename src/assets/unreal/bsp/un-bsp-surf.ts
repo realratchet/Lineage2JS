@@ -8,7 +8,7 @@ export class FBSPSurf implements Constructable_T {
     public material: UShader;
 
     public flags: number;       // 4 bytes polygon flags.
-    public polyFlags: FlagDict_T<keyof typeof PolyFlags_T>;
+    public get polyFlags(): FlagDict_T<keyof typeof PolyFlags_T> { return flagBitsToDict(this.flags, PolyFlags_T); }
     public pBase: number;            // 4 bytes polygon & texture base poINT index (where U,V==0,0).
     public vNormal: number;          // 4 bytes index to polygon normal.
     public vTextureU: number;        // 4 bytes texture U-vector index.
@@ -29,7 +29,6 @@ export class FBSPSurf implements Constructable_T {
         const materialId = pkg.read("compat32");
 
         this.flags = pkg.read("uint32");
-        this.polyFlags = flagBitsToDict(this.flags, PolyFlags_T);
 
         this.pBase = pkg.read("compat32");
         this.vNormal = pkg.read("compat32");

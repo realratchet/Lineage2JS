@@ -1,7 +1,6 @@
 import { Material, Mesh } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent } from "../../game/components";
-import { MESHES_CHANGED_EVENT } from "./animation-component";
-import type AnimationComponent from "./animation-component";
+import { MESHES_CHANGED_EVENT, type default as AnimationComponent } from "./animation-component";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type { ISkinNotifyDecodeInfo, IGroupedSkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IRandomSkinNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";

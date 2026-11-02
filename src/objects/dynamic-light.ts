@@ -1,16 +1,18 @@
 import { SectorObject } from "./zone-object";
 import type { L2Environment } from "../rendering/l2-env";
-import { Color, Object3D, Vector3 } from "three";
+import { Color, Object3D, Vector2, Vector3 } from "three";
 import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
 import ColorByte from "../utils/color-byte";
 
 const tmpVec3_1 = new Vector3();
 const tmpColorByte_1 = new ColorByte();
 
+type HardwareLight_T = { color: Color, attenuation: Vector2, cone: number };
+
 // ~0.1 degree of rotation on a unit direction vector, squared
 const DIRECTION_CHANGE_EPSILON_SQ = 3e-6;
 
-const DEG2RAD = 0.017453292519943295;
+const DEG2RAD = Math.PI / 180;
 const HALF_PI = Math.PI / 2;  // 1.5707963267948966
 const NEG_PI = -Math.PI;      // -3.1415927
 
@@ -21,9 +23,9 @@ export function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 1
     let pitch: number;
 
     if (timeOfDay >= 5.0 && timeOfDay < 24.0) {
-        pitch = (timeOfDay - 6.0) * 0.17453292519943295 - HALF_PI;
+        pitch = (timeOfDay - 6.0) * (Math.PI / 18) - HALF_PI;
     } else if (timeOfDay >= 1.0 && timeOfDay < 5.0) {
-        pitch = (timeOfDay + 24.0 - 6.0) * 0.17453292519943295 - HALF_PI;
+        pitch = (timeOfDay + 24.0 - 6.0) * (Math.PI / 18) - HALF_PI;
     } else {
         pitch = NEG_PI;
     }
@@ -40,22 +42,23 @@ export function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 
     if (timeOfDay >= 7.0 && timeOfDay < 23.0)
         polar = NEG_PI;
     else
-        polar = timeOfDay * 0.5235987755982988 - HALF_PI;
+        polar = timeOfDay * (Math.PI / 6) - HALF_PI;
 
     return [polar, yaw, brightness];
 }
 
 const SUN_TILT = 30 * DEG2RAD; // ANMovableSunLight::Tick 0x869af0 applies envManager+0x174 about X.
 
-export function sunModifierToDirection(polar: number, yaw: number, target: Vector3): Vector3 {
+export function sunModifierToDirection(polar: number, yaw: number, target: Vector3, entryMap = false): Vector3 {
     const sinPolar = Math.sin(polar);
     const x = sinPolar * Math.cos(yaw);
     const y = sinPolar * Math.sin(yaw);
     const z = Math.cos(polar);
 
     const cosTilt = Math.cos(SUN_TILT);
-    const sinTilt = Math.sin(SUN_TILT);
+    const sinTilt = Math.sin(entryMap ? -SUN_TILT : SUN_TILT);
 
+    // ANMovableSunLight::Tick 0x869c43..0x869ca2 keeps positive tilt in normal mode.
     return target.set(-x, -(y * cosTilt - z * sinTilt), -(y * sinTilt + z * cosTilt));
 }
 
@@ -78,6 +81,30 @@ const LE_CYLINDER = 17;
 const LE_SUNLIGHT = 19;
 const LE_QUADRATIC_NON_INCIDENCE = 20;
 
+export function hsvToColorPlane(hue: number, saturationByte: number, target: Color): Color {
+    const h = hue & 0xff, saturation = (saturationByte & 0xff) / 255;
+    let r: number, g: number, b: number;
+
+    if (h < 86) {
+        r = (85 - h) / 85;
+        g = h / 85;
+        b = 0;
+    } else if (h < 171) {
+        r = 0;
+        g = (170 - h) / 85;
+        b = (h - 85) / 85;
+    } else {
+        r = (h - 170) / 85;
+        g = 0;
+        b = (255 - h) / 84;
+    }
+
+    // FGetHSV 0x106f3c00 returns an FPlane; FDynamicLight::Update supplies brightness255.
+    const lightness = 1.4 / (Math.sqrt(1.4) + 0.01) * 0.7;
+
+    return target.setRGB(((1 - r) * saturation + r) * lightness, ((1 - g) * saturation + g) * lightness, ((1 - b) * saturation + b) * lightness);
+}
+
 export class ColorHSV {
     public readonly hue: number;
     public readonly saturation: number;
@@ -93,11 +120,16 @@ export class ColorHSV {
         const [r, g, b] = hsvToRgb(this.hue, this.saturation, 255);
         return target.set(r, g, b);
     }
+
+    public toColorPlane(target: Color): Color {
+        return hsvToColorPlane(this.hue, this.saturation, target);
+    }
 }
 
 type DynamicLightConstructor_T = {
     lightMethod: "Light" | "Sunlight";
     isDynamic: boolean;
+    isSpecialLit?: boolean;
     colorHSV: ColorHSV;
     cone: number;
     isDirectional: boolean;
@@ -112,6 +144,7 @@ type DynamicLightConstructor_T = {
 export class DynamicLight extends Object3D {
     public readonly lightMethod: "Light" | "Sunlight";
     public readonly isDynamic: boolean;
+    public readonly isSpecialLit: boolean;
     public readonly colorHSV: ColorHSV;
     public readonly cone: number;
     public readonly isDirectional: boolean;
@@ -135,6 +168,8 @@ export class DynamicLight extends Object3D {
 
     public alpha: number = 1;
     public color: ColorByte = new ColorByte(255, 255, 255);
+    public readonly bakedColor = new Color(0, 0, 0);
+    protected readonly hardwareColor = new Color(0, 0, 0);
     public lightDirection: Vector3 = new Vector3(0, 0, 0);
     public lightPosition: Vector3 = new Vector3(0, 0, 0);
     public lightRadius: number = 0;
@@ -149,6 +184,7 @@ export class DynamicLight extends Object3D {
         this.colorHSV = props.colorHSV;
         this.cone = props.cone;
         this.isDirectional = props.isDirectional;
+        this.isSpecialLit = props.isSpecialLit ?? false;
         this.lightEffect = props.lightEffect;
         this.lightType = props.lightType;
         this.radius = props.radius;
@@ -158,6 +194,36 @@ export class DynamicLight extends Object3D {
         this.isSunlight = props.lightEffect === LE_SUNLIGHT;
 
         this.isTimeBased = props.isSunlightColor || props.lightMethod === "Sunlight";
+    }
+
+    public getHardwareLight(center: Vector3, radius: number, target: HardwareLight_T, isColorHalved: boolean = true) {
+        target.color.copy(this.hardwareColor);
+        if (!isColorHalved) target.color.multiplyScalar(2); // D3DDrv SetLight 0x1001b8eb halves GetLightColor only for color type 1; pawns pass 0
+        target.cone = this.lightEffect === LE_SPOTLIGHT || this.lightEffect === LE_STATIC_SPOT ? Math.cos(Math.fround(Math.PI / 2) / 2) : -1;
+
+        if (this.isSunlight) return;
+
+        // D3DDrv RVA 0x1c51e-0x1c5d0; reciprocal falloff at RVA 0x18f60.
+        const distance = center.distanceTo(this.lightPosition);
+        const near = Math.max(0, distance - radius) + 1;
+        const far = Math.min(this.lightRadius, distance + radius) - 1;
+        const nearAlpha = near / this.lightRadius, farAlpha = far / this.lightRadius;
+        const nearIntensity = 1 / (2 * (2 * nearAlpha * nearAlpha * nearAlpha - 3 * nearAlpha * nearAlpha + 1));
+        const farIntensity = 1 / (2 * (2 * farAlpha * farAlpha * farAlpha - 3 * farAlpha * farAlpha + 1));
+        const constant = Math.max(0, nearIntensity - (farIntensity - nearIntensity) / (far - near) * near);
+
+        target.attenuation.set(constant, (nearIntensity - constant) / near);
+        if (!Number.isFinite(target.attenuation.x) || !Number.isFinite(target.attenuation.y)) throw new Error(`Invalid hardware light attenuation for '${this.name}'.`);
+    }
+
+    public sampleHardwareIntensity(hardware: HardwareLight_T, samplePosition: Vector3, sampleNormal: Vector3): number { // CPU twin of actorLightIntensity's isHardwareLight branch (actor_light.glsl)
+        const delta = tmpVec3_1.subVectors(this.lightPosition, samplePosition);
+        const distance = delta.length();
+
+        if (distance >= this.lightRadius || distance === 0) return 0;
+        if (hardware.cone >= 0 && -delta.dot(this.lightDirection) <= hardware.cone * distance) return 0;
+
+        return 2 * Math.max(delta.dot(sampleNormal) / distance, 0) / (hardware.attenuation.x + hardware.attenuation.y * distance);
     }
 
     public update(envManager: L2Environment, levelBrightness: number) {
@@ -223,11 +289,23 @@ export class DynamicLight extends Object3D {
             this.isDynamicLight = true;
         }
 
+        // FDynamicLight::Update 0x907554/0x907571 uses the actor base plane and brightness; FGetHSV 0x9c3c13 uses 1.4/255.
+        if (this.isSunlightColor) {
+            envManager.getBaseColorPlaneActorSunLight(this.hardwareColor);
+        } else this.colorHSV.toColorPlane(this.hardwareColor);
+
+        const hardwareBrightness = this.isSunlightColor ? envManager.getBrightnessActorSunLight() : this.colorHSV.value;
+        // D3DDrv SetLight RVA 0x1c381 divides color by 2; 0x1c40e/0x1c5e8 then apply 7/8 or 1/2.
+        this.hardwareColor.multiplyScalar(hardwareBrightness / 255 * intensity * levelBrightness * (this.isSunlight ? 7 / 16 : 1 / 4));
+
         this.color.copy(baseColor);
 
         if (brightness !== 255) this.color.multiplyByte(brightness);
 
         this.color.multiplyScalar(Math.min(1, Math.max(0, intensity * levelBrightness)));
+
+        if (this.isSunlightColor) this.bakedColor.setRGB(this.color.r, this.color.g, this.color.b);
+        else this.colorHSV.toColorPlane(this.bakedColor).multiplyScalar(brightness * intensity * levelBrightness);
 
 
         if (this.lightEffect === LE_SUNLIGHT) {
@@ -240,7 +318,7 @@ export class DynamicLight extends Object3D {
                 } else {
                     [pitch, yaw] = getSunModifierInfo(timeOfDay);
                 }
-                sunModifierToDirection(pitch, yaw, this.lightDirection);
+                sunModifierToDirection(pitch, yaw, this.lightDirection, envManager.isEntryMap());
             } else {
                 tmpVec3_1.set(1, 0, 0).applyQuaternion(this.quaternion);
                 this.lightDirection.copy(tmpVec3_1);

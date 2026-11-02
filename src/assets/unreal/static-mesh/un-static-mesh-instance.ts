@@ -73,13 +73,15 @@ export abstract class UStaticMeshInstance extends UObject {
         const len = this.colorStream.getElemCount();
         const color: Uint8Array | null = len > 0 ? new Uint8Array(len * 3) : null;
 
-        for (let i = 0; i < len; i++) {
-            const [r, g, b] = this.colorStream.getColor(i);
-            const offset = i * 3;
+        const rawColors = len > 0 ? this.colorStream.toTypedArray() : null;
 
-            color[offset + 0] = r;
-            color[offset + 1] = g;
-            color[offset + 2] = b;
+        for (let i = 0; i < len; i++) {
+            const offset = i * 3;
+            const sourceOffset = i * 4;
+
+            color[offset + 0] = rawColors[sourceOffset];
+            color[offset + 1] = rawColors[sourceOffset + 1];
+            color[offset + 2] = rawColors[sourceOffset + 2];
         }
 
         // let validEnvironment: FStaticMeshLightInfo = null;

@@ -1,22 +1,34 @@
+import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
 import type { StaticMeshBatchManifest_T } from "./static-mesh-batch";
 import type { IBSPNodeDecodeInfo_T } from "./bsp/un-bsp-node";
 import type { IBoxDecodeInfo } from "./un-box";
 import type { IBSPLeafDecodeInfo_T } from "./un-leaf";
 import type { IBSPZoneDecodeInfo_T } from "./un-zone-properties";
+import type { IBaseZoneDecodeInfo } from "./un-zone-info";
 import type { IBSPSectionDecodeInfo_T } from "./model/un-model";
 import type { IBaseMaterialDecodeInfo, IMaterialModifier } from "./un-material";
 import type { ISkinnedMeshObjectDecodeInfo } from "./skeletal-mesh/un-skeletal-mesh";
 import type { ILightDecodeInfo } from "./un-light";
 import type { ISunLightDecodeInfo } from "./un-movable-sunlight";
 import type { IMusicVolumeDecodeInfo } from "./un-music-volume";
-import type { IWaterVolumeDecodeInfo } from "./un-physics-volume";
+import type { IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "./un-physics-volume";
+import type { IBlockingVolumeDecodeInfo } from "./un-blocking-volume";
 import type { IAmbientSoundObjectDecodeInfo } from "./un-ambient-sound";
 import type { IScriptClassDecodeInfo, IScriptFunctionDecodeInfo, IScriptStateDecodeInfo, ScriptPropertyValue_T } from "./script-dump-loader";
 import type { QuaternionArr, Vector3Arr, EulerArr, ArrGeometryGroup, IndexLikeArray } from "./library-types";
 import type { EmitterConfig_T } from "./emitters/un-particle-emitter";
 import type { IStaticMeshCollisionDecodeInfo } from "./static-mesh/un-static-mesh";
 import type { IBoundsDecodeInfo } from "./un-primitive";
-import type { NpcSkillAttack_T } from "./un-pawn";
+import type { NpcSkillAttack_T, IPawnSoundsDecodeInfo, INpcBowDecodeInfo, IPawnEquipmentDecodeInfo } from "./un-pawn";
+
+export type IPickupDecodeInfo = {
+    items: { mesh: string; skins: string[]; meshIndex: number; collisionRadius: number; collisionHeight: number }[];
+    dropType: number;
+    dropAnimType: number;
+    dropSound: string;
+    collisionRadius: number;
+    collisionHeight: number;
+};
 
 export type DecodableObject_T =
     | "Group"
@@ -41,6 +53,8 @@ export type DecodableObject_T =
     | "Sky"
     | "SkyZoneInfo"
     | "WaterVolume"
+    | "PhysicsVolume"
+    | "BlockingVolume"
     | "L2FogInfo";
 
 export type IBaseObjectOrInstanceDecodeInfo = {
@@ -53,6 +67,8 @@ export type IBaseObjectDecodeInfo = IBaseObjectOrInstanceDecodeInfo & {
     name?: string,
     scriptClassId?: string,
     scriptProperties?: Record<string, ScriptPropertyValue_T>,
+    sharedScriptProperties?: Record<string, ScriptPropertyValue_T>,
+    ownerUuid?: string,
     position?: Vector3Arr,
     rotation?: EulerArr,
     quaternion?: QuaternionArr,
@@ -98,13 +114,20 @@ export type IAudioDecodeInfo = {
     type: "MusicVolume" | "AmbientSoundObject"
 };
 
+type ScriptObject_T = { path: string, classId: string, classParents: Record<string, string | null>, outer: ScriptObject_T | null };
+
 export class DecodeLibrary {
     public name: string = "Untitled";
     public brightness: number = 1.0;
     public loadMipmaps = true;                                                              // should mipmaps be loaded into decode library
     public anisotropy = -1;                                                                 // which anisotropy level to set when decoding
     public sector: [number, number];
+    public levelInfo: IBaseZoneDecodeInfo;
+    public levelPackageName: string = null;
+    public levelObjectName: string = null;
+    public levelObjectOuter: string = null;
     public levelInfoCollisionRadius: number;
+    public bspRootOutside: boolean;
     public helpersZoneBounds = false;
     public readonly bspNodes: IBSPNodeDecodeInfo_T[] = [];
     public readonly bspColliders: IBoxDecodeInfo[] = [];
@@ -125,6 +148,10 @@ export class DecodeLibrary {
     // flat (not leaf-indexed like leafActors) - emitters register at a single origin point
     // (un-emitter.ts), so gating on leaf membership on top of the zone mask double-gates them
     public readonly allEmitterActors: IBaseObjectOrInstanceDecodeInfo[] = [];
+    public readonly levelActorUuids: (string | null)[] = [];
+    public readonly levelActors: (Pick<IBaseObjectDecodeInfo, "uuid" | "name" | "scriptClassId" | "scriptProperties" | "sharedScriptProperties" | "ownerUuid"> | null)[] = [];
+    public readonly staticMeshCollisionActors: Pick<IStaticMeshActorDecodeInfo, "uuid" | "name" | "position" | "collisionBounds" | "collision">[] = [];
+    public readonly volumeCollisionActors: Pick<IStaticMeshActorDecodeInfo, "uuid" | "name" | "position" | "collisionBounds" | "collision">[] = [];
     // pawns (players, mobs/NPCs) move freely across sector boundaries, unlike StaticMeshActor
     // (leaf-baked at decode time) - no decode-time leaf/zone export, see RenderManager.updatePawnVisibility
     public readonly pawnActors: ISkinnedMeshObjectDecodeInfo[] = [];
@@ -134,21 +161,29 @@ export class DecodeLibrary {
     public readonly celestials: any[] = []; // Stores Sun and Moon actors
     public readonly musicVolumes: IMusicVolumeDecodeInfo[] = []; // Stores runtime Music Volume tests
     public readonly waterVolumes: IWaterVolumeDecodeInfo[] = [];
+    public readonly physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
+    public readonly blockingVolumes: IBlockingVolumeDecodeInfo[] = [];
     public readonly ambientSounds: IAmbientSoundObjectDecodeInfo[] = []; // Stores ambient sound emitters
-    public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array, mimeType: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
+    public sourceLibrary: DecodeLibrary = null;
+    public readonly soundBlobCache = new Map<string, { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string }>(); // USound name → blob URL + raw bytes (dedup; bytes kept so the decode cache can re-mint session-scoped URLs)
     public readonly sounds: Record<string, string> = {};
-    public pawnSounds: L2JS.Engine.IPawnSoundsDecodeInfo = null;
+    public pawnSounds: IPawnSoundsDecodeInfo = null;
     public readonly scriptClasses: Record<string, IScriptClassDecodeInfo> = {};
     public readonly scriptFunctions: Record<string, IScriptFunctionDecodeInfo> = {};
     public readonly scriptStates: Record<string, IScriptStateDecodeInfo> = {};
+    public readonly scriptObjects: Record<string, ScriptObject_T> = {};
     public readonly effectTemplates: Record<string, IBaseObjectDecodeInfo> = {};
     public readonly actorTemplates: Record<string, ISkinnedMeshObjectDecodeInfo> = {};
     public readonly scriptMeshes: Record<string, ISkinnedMeshObjectDecodeInfo> = {};
     public readonly scriptMaterials: Record<string, string> = {};
     public readonly npcSkillAttacks: NpcSkillAttack_T[] = [];
-    public npcBow: L2JS.Engine.INpcBowDecodeInfo = null;
+    public npcBow: INpcBowDecodeInfo = null;
+    public pawnEquipment: IPawnEquipmentDecodeInfo = null;
+    public pickup: IPickupDecodeInfo = null;
     public effectSpawnBoneIndex: number = null;
     public damageEffect: string = null;
+    public heroAuraMesh: string = null;
+    public npcScriptClassId: string = null;
     public readonly skyZoneInfos: any[] = []; // Stores SkyZoneInfo actors
     public isSkyLevel = false;
     public readonly skyLevel: {

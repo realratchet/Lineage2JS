@@ -1,30 +1,31 @@
-import { Mesh } from "three";
+import { Material, Texture } from "three";
 import { GameObject, ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type { DecodeLibrary } from "@l2js/engine";
 import ActorMeshComponent from "../../rendering/components/actor-mesh-component";
+import decodeObject3D from "../../assets/decoders/object3d-decoder";
+import type { IEmitterActorDecodeInfo, IEmitterDecodeInfo } from "@l2js/engine/contracts/emitter";
 import type RenderManager from "../../rendering/render-manager";
+import { AnimationComponent, ExtraMeshAnimationComponent } from "./animation-component";
+import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type { IWeaponEnchantEffect, IWeaponEnchantMesh } from "@l2js/engine/contracts/pawn";
+import { EQUIPMENT_MESHES_CHANGED_EVENT } from "../../rendering/components/pawn-renderable-component";
 
 class EquippedItem extends GameObject {
     public readonly scriptProperties = new Map<string, any>();
 }
 
-function disposeMaterials(item: EquippedItem): void {
-    item.traverse(object => {
-        if (!(object as any).isMesh) return;
-
-        const mesh = object as Mesh;
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-
-        for (const material of materials) material.dispose();
-    });
+class EquipmentMeshComponent extends ActorMeshComponent {
+    public getMesh(): LitSkinnedMesh { return this.mesh; }
 }
 
 export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnEquipment";
-    protected readonly library: DecodeLibrary;
+    protected library: DecodeLibrary;
     protected readonly renderManager: RenderManager;
-    protected item: EquippedItem = null;
+    protected readonly items: { object: GameObject; bone: string | number; mesh?: LitSkinnedMesh; animation?: ExtraMeshAnimationComponent }[] = [];
+    protected hiddenAnimation: string = null;
+    protected weaponScale: number = null;
 
     public constructor(library: DecodeLibrary, renderManager: RenderManager) {
         super();
@@ -34,37 +35,190 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     }
 
     public onAttach(): void {
-        const parent = this.getParent();
         const bow = this.library.npcBow;
+        const equipment = this.library.pawnEquipment;
 
-        if (!bow) return;
+        if (equipment) {
+            for (const item of equipment.items) {
+                if (!this.attachItem(item.mesh, item.skins, item.bone, item.extraMesh)) continue;
+                if (item.enchantMesh) this.attachEnchantMesh(item.enchantMesh, item.bone);
+                if (item.enchantEffect) this.attachEnchantEffect(item.enchantEffect, typeof item.bone === "string" && item.bone.startsWith("Left") ? "LeftHandBone" : "RightHandBone");
+            }
+        } else if (bow) this.attachItem(bow.weaponMesh, bow.weaponSkins, "LeftHandBone");
+
+        this.weaponScale = null;
+        this.updateWeaponScale();
+        this.dispatchEvent(EQUIPMENT_MESHES_CHANGED_EVENT, this.items.filter(item => item.mesh).map(item => item.mesh));
+    }
+
+    public setLibrary(library: DecodeLibrary): void {
+        const meshes = this.items.filter(item => item.mesh).map(item => item.mesh);
+        const resources = new Set<Material | Texture>();
+
+        for (const mesh of meshes) this.renderManager.retainGeometry(mesh.geometry);
+        this.renderManager.retainMeshResources(meshes, resources);
+        try {
+            this.onDetach();
+            this.library = library;
+            this.hiddenAnimation = null;
+            this.onAttach();
+        } catch (error) {
+            this.onDetach();
+            throw error;
+        } finally {
+            for (const mesh of meshes) this.renderManager.releaseGeometry(mesh.geometry);
+            this.renderManager.releaseMeshResources(resources);
+        }
+    }
+
+    protected attachItem(mesh: string, skins: string[], bone: string | number, extraMesh = false): EquippedItem {
+        const parent = this.getParent();
+        const boneName = typeof bone === "number" ? bone : parent.getUnrealScriptProperty(bone) as string;
+
+        // USubSkeletalMeshInstance::AttachedMeshRender 0x95ee0a..0x95ee1d skips absent direct-slot bones.
+        if (!extraMesh && ["RightHandBone", "LeftHandBone", "RightArmBone", "LeftArmBone"].includes(bone as string)) {
+            const meshes = this.getComponent<AnimationComponent>("animation").getMeshes();
+            if (meshes.length && meshes.every(mesh => (mesh as any).skeleton.matchRefBone(boneName) < 0)) return null;
+        }
 
         const item = new EquippedItem();
 
-        item.scriptProperties.set("Mesh", bow.weaponMesh);
-        item.scriptProperties.set("Skins", bow.weaponSkins);
+        (item as any).isAttachedMesh = ["RightHandBone", "LeftHandBone", "RightArmBone", "LeftArmBone"].includes(bone as string);
+
+        item.scriptProperties.set("Mesh", mesh);
+        item.scriptProperties.set("Skins", skins);
         item.scriptProperties.set("bUnlit", false);
         item.scriptProperties.set("AmbientGlow", parent.getUnrealScriptProperty("AmbientGlow"));
         item.scriptProperties.set("ScaleGlow", parent.getUnrealScriptProperty("ScaleGlow"));
-        item.addComponent(new ActorMeshComponent(this.library, this.renderManager));
-        item.getComponent<ActorMeshComponent>("actorMesh").onUpdate();
+        const meshComponent = item.addComponent(new EquipmentMeshComponent(this.library, this.renderManager));
+        meshComponent.onUpdate();
+        const animation = extraMesh ? item.addComponent(new ExtraMeshAnimationComponent(this.renderManager, meshComponent.getMesh())) : null;
 
-        if (!parent.attachObjectToBone(item, parent.getUnrealScriptProperty("LeftHandBone") as string, false)) {
-            disposeMaterials(item);
+        if (!parent.attachObjectToBone(item, boneName, false)) {
             item.detachComponents();
-            throw new Error(`Pawn '${parent.scriptClassId}' cannot attach its bow to LeftHandBone.`);
+            throw new Error(`Pawn '${parent.scriptClassId}' cannot attach '${mesh}' to ${bone}.`);
         }
 
-        this.item = item;
+        this.items.push({ object: item, bone, mesh: meshComponent.getMesh(), animation });
+        return item;
     }
 
-    public onDetach(): void {
-        const item = this.item;
+    protected attachEnchantMesh(info: IWeaponEnchantMesh, bone: string): void {
+        const item = this.attachItem(info.mesh, [info.skin], bone);
 
         if (!item) return;
 
-        if (item.parent) this.renderManager.removeTransientEffect(item);
-        this.item = null;
+        item.scriptProperties.set("bActorShadows", false);
+        item.scale.fromArray(info.scale);
+        item.position.fromArray(info.offset).multiply(item.scale);
+        item.traverse((object: any) => {
+            if (!object.isMesh) return;
+
+            object.isUnlit = true; // retail draws the enchant shell with D3DRS_LIGHTING off, TFACTOR fade x cube only
+
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+
+            for (const material of materials) {
+                const fade = material.uniforms.shDiffuse.value?.fadeColors;
+
+                if (!fade || !info.colors) continue;
+
+                fade.color1.fromArray(info.colors[0]);
+                fade.color2.fromArray(info.colors[1]);
+            }
+        });
+    }
+
+    protected attachEnchantEffect(info: IWeaponEnchantEffect, bone: string): void {
+        const parent = this.getParent();
+        const template = this.library.effectTemplates[info.path];
+        // FNWeaponEffect::Init 0x763551 / 0x763796..0x763917.
+        const scale = Math.sqrt(parent.getCollisionRadius() * parent.getCollisionHeight() / 207);
+        const children = template.children.map(source => {
+            const child = structuredClone(source) as IEmitterDecodeInfo;
+
+            for (const side of ["min", "max"] as const) {
+                child.initial.scale[side] = child.initial.scale[side].map(value => value * info.scale * scale) as [number, number, number];
+                child.initial.velocity[side] = child.initial.velocity[side].map(value => value * info.velocityScale * scale) as [number, number, number];
+            }
+
+            child.initial.offset = child.initial.offset.map(value => value * scale) as [number, number, number];
+            child.opacity *= info.opacity > 0 ? info.opacity : 0.001;
+
+            // AEmitter::SetMaxParticles 0x8a3960 only scales nonzero initial spawning rates.
+            if (info.num > 0 && child.initial.particlesPerSecond !== 0 && child.maxParticles !== 0) {
+                child.settings.maxParticles = child.maxParticles = Math.trunc(child.maxParticles * info.num);
+                child.settings.initialParticlesPerSecond = child.initial.particlesPerSecond *= info.num;
+            }
+
+            return child;
+        });
+        const effect = decodeObject3D(this.library, { ...template, children } as IEmitterActorDecodeInfo) as GameObject;
+
+        this.renderManager.addTransientEffect(effect, parent);
+
+        if (!parent.attachObjectToBone(effect, parent.getUnrealScriptProperty(bone) as string, false)) {
+            this.renderManager.removeTransientEffect(effect);
+            throw new Error(`Pawn '${parent.scriptClassId}' cannot attach '${info.path}' to ${bone}.`);
+        }
+
+        effect.position.fromArray(info.offset).multiplyScalar(scale);
+        this.items.push({ object: effect, bone });
+    }
+
+    public hideForAnimation(animation: string, right: boolean, left: boolean): void {
+        this.hiddenAnimation = animation;
+
+        for (const { object, bone } of this.items)
+            object.visible = !(typeof bone === "string" && (bone.startsWith("Right") && right || bone.startsWith("Left") && left));
+    }
+
+    public getWeaponMesh(kind: number): LitSkinnedMesh {
+        const bone = ["RightHandBone", "LeftHandBone", "RightArmBone", "LeftArmBone"][kind - 8];
+        const item = this.items.find(item => item.bone === bone && item.mesh);
+        return item ? item.mesh : null;
+    }
+
+    public playWeaponAnimation(kind: number, name: string, tween: number, rate: number, loop: boolean): void {
+        const mesh = this.getWeaponMesh(kind);
+        const item = this.items.find(item => item.mesh === mesh);
+        if (item && item.animation) item.animation.play(name, tween, rate, loop, true);
+    }
+
+    public playExtraAnimation(name: string, tween: number, rate: number, loop: boolean, restart: boolean): void {
+        for (const item of this.items)
+            if (item.animation) item.animation.playOwnerAnimation(name, tween, rate, loop, restart);
+    }
+
+    public onUpdate(_currentTime: number, deltaTime: number): void {
+        this.updateWeaponScale();
+        const action = this.getParent().getAnimationAction();
+        for (const item of this.items)
+            if (item.animation) item.animation.copyOwnerAnimation(action, deltaTime);
+
+        if (!this.hiddenAnimation || this.getParent().isPlayingOneShotAnimation(this.hiddenAnimation)) return;
+
+        for (const item of this.items) item.object.visible = true;
+        this.hiddenAnimation = null;
+    }
+
+    protected updateWeaponScale(): void {
+        const parent = this.getParent();
+        const weaponScale = Math.fround(parent.getUnrealScriptProperty("WeaponScale") as number);
+        const scale = weaponScale === 0 ? Math.fround(Math.fround(Math.sqrt(Math.fround(parent.getCollisionRadius()) * Math.fround(parent.getCollisionHeight()))) / Math.fround(Math.sqrt(207))) : weaponScale;
+
+        if (scale === this.weaponScale) return;
+
+        for (const item of this.items)
+            if ((item.object as any).isAttachedMesh) item.mesh.scale.setScalar(scale);
+        this.weaponScale = scale;
+    }
+
+    public onDetach(): void {
+        for (const item of this.items)
+            if (item.object.parent) this.renderManager.removeTransientEffect(item.object);
+        this.items.length = 0;
+        this.dispatchEvent(EQUIPMENT_MESHES_CHANGED_EVENT, []);
     }
 }
 

@@ -47,6 +47,7 @@ import mU016 from "./native/m-u016";
 import mU006, { shotEffects as mU006Shot, explosionEffects as mU006Explosion } from "./native/m-u006";
 import sRecharge from "./native/s-recharge";
 import sHealQueenAnt from "./native/s-heal-queen-ant";
+import sNpcBaiumHeal from "./native/s-npc-baium-heal";
 import sGreaterHeal from "./native/s-greater-heal";
 import sTeleportPc from "./native/s-teleport-pc";
 import mU021 from "./native/m-u021";
@@ -54,7 +55,7 @@ import mU024 from "./native/m-u024";
 import mU034 from "./native/m-u034";
 import mU023 from "./native/m-u023";
 import mU030 from "./native/m-u030";
-import mU044 from "./native/m-u044";
+import mU044, { transientEffects as mU044Transient, npcExcludedTransientEffects as mU044NpcExcludedTransient } from "./native/m-u044";
 import mU038 from "./native/m-u038";
 import mU026 from "./native/m-u026";
 import eU802 from "./native/e-u802";
@@ -93,6 +94,8 @@ import { blasterShot, stormShot, blasterExplosion, stormExplosion } from "./nati
 import sSonicBuster from "./native/s-sonic-buster";
 import sForceBuster from "./native/s-force-buster";
 import sEvadeShot from "./native/s-evade-shot";
+import sBoomAttack from "./native/s-boom-attack";
+import sNpcSpitAttack from "./native/s-npc-spit-attack";
 import type { NpcSkillEffectPhase_T } from "../un-pawn";
 
 export type NativeSkillEffect_T = {
@@ -106,6 +109,7 @@ export type NativeSkillEffect_T = {
     soundWithoutEffect?: boolean;
     targetIsCaster?: boolean;
     targetIsNpc?: boolean;
+    targetClass?: string;
     targetRequired?: "phase" | "position";
     hitActor?: boolean;
     hitActorIsMover?: boolean;
@@ -113,8 +117,8 @@ export type NativeSkillEffect_T = {
     sourceTarget?: boolean;
     owner?: "target" | "none" | "source" | "impactActor";
     attach?: "trail";
+    weaponTrail?: boolean;
     bone?: number | string;
-    boneOptional?: boolean;
     boneFallback?: number;
     positionBone?: string;
     missingBoneStopsPhase?: boolean | "beforeTarget";
@@ -152,19 +156,26 @@ export type NativeSkillEffect_T = {
     useSkillSpeed?: boolean | "sourceOwner" | "sourceTarget" | "target";
     speedRate?: number;
     adjustParticleLife?: boolean | "shotTime";
-    scale?: number | "casterRadius" | "cancelCasterRadius" | "targetRadius";
+    scale?: number | "casterRadius" | "cancelCasterRadius" | "casterCollisionRadius" | "targetRadius";
     delay?: number;
     hitDelay?: number;
+    hitDelayScale?: number;
     offset?: [number, number, number];
     pawnLight?: { color: [number, number, number], radius: number, lifeTime?: number, spot?: boolean, target?: "caster", position?: "center" | "lastTarget", rotation?: "hit" | "targetDisplacement", radiusOffset?: number };
     pawnLightOnly?: boolean;
     attackSounds?: boolean | "critical";
     viewShake?: { type?: "damage" | "upDown", duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, direction: "random" | "y" | "fixedY", rotationAmplitude: number, rotationVelocity: number, positionAmplitude: [number, number, number], strength: number, range: number, ownerRequired?: boolean, event?: { name: string, radius: number } };
-    trailerPrePivot?: "casterMeshOrigin" | { meshOriginScale: number, radiusOffset?: number };
+    trailerPrePivot?: "casterMeshOrigin" | "casterFeet" | { meshOriginScale: number, radiusOffset?: number };
     projectile?: { target: "caster" | "target", speed?: number, acceleration?: number, path?: [number, number, number][], interpolation?: number, hermite?: { duration: number, tangentScale: number, finalDirectionZ: number } };
 };
 
 const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
+    "lineageeffect.ribbonset": [{ phase: "casting", effectClass: "LineageEffect.RibbonSet", host: "caster", weaponTrail: true }],
+    "lineageeffect.e_u001_a": [{ phase: "shot", effectClass: "LineageEffect.e_u001_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
+    "lineageeffect.e_u002_a": [{ phase: "shot", effectClass: "LineageEffect.e_u002_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
+    "lineageeffect.e_u003_a": [{ phase: "shot", effectClass: "LineageEffect.e_u003_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero" }],
+    "lineageeffect.e_u004_a": [{ phase: "shot", effectClass: "LineageEffect.e_u004_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero", trailerPrePivot: { meshOriginScale: -1 } }],
+    "lineageeffect.e_u032_a": [{ phase: "shot", effectClass: "LineageEffect.e_u032_a", host: "caster", owner: "caster", location: [0, 0, 0], rotation: "zero", trailerPrePivot: { meshOriginScale: 1 } }],
     "lineageeffect.m_u030_a": mU030.filter(effect => effect.effectClass === "LineageEffect.m_u030_a"),
     "lineageeffect.m_u030_b": mU030.filter(effect => effect.effectClass === "LineageEffect.m_u030_b"),
     "lineageeffect.s_u020_a": sU020.filter(effect => effect.effectClass === "LineageEffect.s_u020_a"),
@@ -274,6 +285,7 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
     "lineageeffect.m_u022_a": sRecharge.filter(effect => effect.effectClass === "LineageEffect.m_u022_a"),
     "lineageeffect.m_u001_a": sHealQueenAnt.filter(effect => effect.effectClass === "LineageEffect.m_u001_a"),
     "lineageeffect.m_u001_b": sHealQueenAnt.filter(effect => effect.effectClass === "LineageEffect.m_u001_b"),
+    "lineageeffect.m_u037_d": [{ phase: "shot", effectClass: "LineageEffect.m_u037_d", host: "target", owner: "target", position: "center" }],
     "lineageeffect.m_u032_a": sGreaterHeal.filter(effect => effect.effectClass === "LineageEffect.m_u032_a"),
     "lineageeffect.m_u032_b": sGreaterHeal.filter(effect => effect.effectClass === "LineageEffect.m_u032_b"),
     "lineageeffect.e_u031_a": sTeleportPc.filter(effect => effect.effectClass === "LineageEffect.e_u031_a"),
@@ -318,6 +330,25 @@ const nativeEffects: Record<string, NativeSkillEffect_T[]> = {
 };
 
 const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> = {
+    baiumHealTransient: {
+        "lineageeffect.m_u001_a": sNpcBaiumHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_a"),
+        "lineageeffect.m_u001_b": sNpcBaiumHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_b")
+    },
+    blessShieldTransient: {
+        "lineageeffect.m_u044_b": mU044Transient
+    },
+    blessShieldNpcExcludedTransient: {
+        "lineageeffect.m_u044_b": mU044NpcExcludedTransient
+    },
+    boomAttack: {
+        "lineageeffect.e_u060_a": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.e_u060_a"),
+        "lineageeffect.m_u006_d": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.m_u006_d"),
+        "lineageeffect.e_u060_b": sBoomAttack.filter(effect => effect.effectClass === "LineageEffect.e_u060_b")
+    },
+    npcSpitAttack: {
+        "lineageeffect.e_u072_a": sNpcSpitAttack.filter(effect => effect.effectClass === "LineageEffect.e_u072_a"),
+        "lineageeffect.e_u072_b": sNpcSpitAttack.filter(effect => effect.effectClass === "LineageEffect.e_u072_b")
+    },
     drainHealth: {
         "lineageeffect.s_u019_a": drainEffects.filter(effect => effect.effectClass === "LineageEffect.s_u019_a"),
         "lineageeffect.s_u019_b": drainEffects.filter(effect => effect.effectClass === "LineageEffect.s_u019_b"),
@@ -334,6 +365,10 @@ const nativeEffectGroups: Record<string, Record<string, NativeSkillEffect_T[]>> 
     seedWind: {
         "lineageeffect.m_u038_a": mU038,
         "lineageeffect.m_u022_b": nativeEffects["lineageeffect.m_u022_b"]
+    },
+    darkHeal: {
+        "lineageeffect.m_u003_a": nativeEffects["lineageeffect.m_u003_a"],
+        "lineageeffect.e_u001_a": [{ ...nativeEffects["lineageeffect.e_u001_a"][0], host: "target", owner: "target", targetClass: "Engine.Pawn" }]
     },
     heal: {
         "lineageeffect.m_u001_a": sHeal.filter(effect => effect.effectClass === "LineageEffect.m_u001_a"),

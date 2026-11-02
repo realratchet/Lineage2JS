@@ -1,6 +1,7 @@
 import { Box3, Matrix3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
+import type InstancedMeshParticles from "./instanced-mesh-particles";
 import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
 import Rotator from "../../utils/rotator";
 import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
@@ -60,7 +61,7 @@ class Particle_T {
     public boneIndex: number = 0;
 }
 
-enum EParticleFlags_T {
+export enum EParticleFlags_T {
     PTF_None = 0,
     PTF_Active = 1,
     PTF_NoTick = 2,
@@ -106,9 +107,14 @@ export abstract class BaseEmitter extends Object3D {
     protected ignoreParticleColor: boolean = false;
     protected spinParticles: boolean;
     protected secondsBeforeInactive: number;
+    protected inactive: boolean = false;
+    protected childrenNeedMatrixUpdate: boolean = false;
+    protected inactiveTime: number = 0;
+    protected needsParticleSync: boolean = false;
+    protected syncTime: number = 0;
 
     protected isInstancedRendering: boolean = false;
-    protected instancedMesh: InstancedSpriteMesh | null = null;
+    protected instancedMesh: InstancedSpriteMesh | InstancedMeshParticles | null = null;
     protected material: ParticleMaterialInitSettings_T;
 
     protected warmedUp: boolean;
@@ -151,7 +157,7 @@ export abstract class BaseEmitter extends Object3D {
     protected spawnOnTriggerPPS: number;
     protected spawnOnTriggerRange: Range_T;
     protected autoResetTimeRange: Range_T;
-    protected timeTillReset: number;
+    protected timeTillReset: number = 0;
     protected isAutoDestroyed: boolean;
     protected isAutoReset: boolean;
     protected isTriggerDisabled: boolean;
@@ -261,7 +267,8 @@ export abstract class BaseEmitter extends Object3D {
     protected isFadingIn: boolean;
     protected fadeInEndTime: number;
     protected fadeInFactor: THREE.Vector4;
-    protected fadeFactor: number;
+    protected fadeFactor: number = 1;
+    protected fadeOutDuration: number = 0;
     protected opacity: number;
     protected minSquaredVelocity: number;
     protected allParticlesDead: boolean;
@@ -284,7 +291,17 @@ export abstract class BaseEmitter extends Object3D {
 
     public getCurrentTime() { return this.currentTime; }
     public isFinished() { return this.isDisabled || this.allParticlesDead; }
-    public kill() { this.killPending = true; }
+    public kill() {
+        this.isRespawningDeadParticles = false;
+        this.initialParticlesPerSecond = 0;
+        this.generalSettings.particlesPerSecond = 0;
+        this.isAutoReset = this.isAutoDestroyed = false;
+        this.killPending = true;
+    }
+    public fadeOut(duration: number): void {
+        this.kill();
+        this.fadeOutDuration = duration;
+    }
     public handlesUnrealNative(_index: number, name: string): boolean { return name.toLowerCase() === "trigger"; }
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
         if (call.context === this && call.name.toLowerCase() === "trigger") { this.trigger(); return undefined; }
@@ -302,8 +319,7 @@ export abstract class BaseEmitter extends Object3D {
         this.currentSpawnOnTrigger = Math.trunc(this.currentSpawnOnTrigger + randRange(this.spawnOnTriggerRange.min, this.spawnOnTriggerRange.max));
         if (this.currentSpawnOnTrigger) this.allParticlesDead = false;
     }
-    protected reset(): void {
-        if (this.isMeshEmitter) throw new Error(`Emitter '${this.name}' has an unimplemented MeshEmitter Reset override.`);
+    public reset(): void {
         if (!this.autoResetTimeRange || !Number.isFinite(this.autoResetTimeRange.min) || !Number.isFinite(this.autoResetTimeRange.max)) throw new Error(`Emitter '${this.name}' has invalid AutoResetTimeRange.`);
 
         // UParticleEmitter::Reset 0x89dfd0..0x89e060; visual flags mirror native ActiveParticles=0.
@@ -313,8 +329,8 @@ export abstract class BaseEmitter extends Object3D {
         this.activeCount = 0;
         this.allParticlesDead = false;
         this.warmedUp = false;
-        this.initialDelay = randRange(this.initialDelayRange.min, this.initialDelayRange.max);
-        this.timeTillReset = randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max);
+        this.initialDelay = Math.fround(randRange(this.initialDelayRange.min, this.initialDelayRange.max));
+        this.timeTillReset = Math.fround(randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max));
         if (this.parent) this.oldOwnerLocation.copy(this.parent.position);
         for (const particle of this.particles) particle.flags = 0;
         for (const particle of this.particlePool) particle.visible = false;
@@ -349,29 +365,29 @@ export abstract class BaseEmitter extends Object3D {
         if (this.currentTime !== undefined) return;
 
         this.maxActiveParticles = count;
-        if (count <= this.particlePool.length) return;
+        if (count <= this.particles.length) return;
 
         if (this.instancedMesh) {
             const previous = this.instancedMesh;
-            this.instancedMesh = new InstancedSpriteMesh(previous.material, count);
+            this.instancedMesh = previous.withCapacity(count);
             this.instancedMesh.renderOrder = previous.renderOrder;
             previous.removeFromParent();
             previous.geometry.dispose();
             this.particleSpace.add(this.instancedMesh);
         }
 
-        for (let i = this.particlePool.length; i < count; i++) {
+        for (let i = this.particles.length; i < count; i++) {
             this.particles[i] = new Particle_T();
-            const particle = this.particlePool[i] = Particle.init(this, this.instancedMesh ? null : this.initParticleMesh());
+            if (this.instancedMesh) continue;
 
-            if (!this.instancedMesh) {
-                particle.name = this.name + "_" + i;
-                if (particle.children[0]) {
-                    particle.children[0].name = this.name + "_" + i + "_vis";
-                    particle.children[0].renderOrder = this.renderOrder;
-                }
-                this.particleSpace.add(particle);
+            const particle = this.particlePool[i] = Particle.init(this, this.initParticleMesh());
+
+            particle.name = this.name + "_" + i;
+            if (particle.children[0]) {
+                particle.children[0].name = this.name + "_" + i + "_vis";
+                particle.children[0].renderOrder = this.renderOrder;
             }
+            this.particleSpace.add(particle);
         }
     }
 
@@ -390,9 +406,36 @@ export abstract class BaseEmitter extends Object3D {
         this.initialSettings.velocity.min.multiplyScalar(scale);
         this.initialSettings.velocity.max.multiplyScalar(scale);
     }
+
+    public setSpeedScale(scale: number): void {
+        if (!Number.isFinite(scale)) throw new Error(`Invalid emitter speed scale '${scale}'.`);
+        if (scale <= 0) scale = Math.fround(0.001);
+
+        const inverse = Math.fround(1 / scale);
+        this.lifetimeRange.min = Math.fround(this.lifetimeRange.min * inverse);
+        this.lifetimeRange.max = Math.fround(this.lifetimeRange.max * inverse);
+        this.initialParticlesPerSecond = Math.fround(this.initialParticlesPerSecond * scale);
+        this.fadeInEndTime = Math.fround(this.fadeInEndTime * inverse);
+        this.fadeOutStartTime = Math.fround(this.fadeOutStartTime * inverse);
+        this.minSquaredVelocity = Math.fround(this.minSquaredVelocity * scale);
+
+        this.acceleration.set(Math.fround(this.acceleration.x * scale * scale), Math.fround(this.acceleration.y * scale * scale), Math.fround(this.acceleration.z * scale * scale));
+        for (const range of [this.spinsPerSecondRange, this.initialSettings.velocity, this.velocityLossRange]) {
+            range.min.set(Math.fround(range.min.x * scale), Math.fround(range.min.y * scale), Math.fround(range.min.z * scale));
+            range.max.set(Math.fround(range.max.x * scale), Math.fround(range.max.y * scale), Math.fround(range.max.z * scale));
+        }
+
+        // Engine 105D3278/105D3290 both scale MaxAbsVelocity.X; Y is untouched.
+        this.maxAbsVelocity.x = Math.fround(Math.fround(this.maxAbsVelocity.x * scale) * scale);
+        this.maxAbsVelocity.z = Math.fround(this.maxAbsVelocity.z * scale);
+    }
     public setStartLocationRangeXZ(x: number, z: number): void {
         this.initialSettings.position.min.x = this.initialSettings.position.max.x = x;
         this.initialSettings.position.min.z = this.initialSettings.position.max.z = z;
+    }
+
+    public setStartVelocityRangeX(velocity: number): void {
+        this.initialSettings.velocity.min.x = this.initialSettings.velocity.max.x = velocity;
     }
 
     public constructor(config: EmitterConfig_T) {
@@ -561,26 +604,22 @@ export abstract class BaseEmitter extends Object3D {
     protected finishConstruction(config: EmitterConfig_T): void {
         this.initSettings(config);
 
-        if (this.coordinateSystem === "spray") {
-            // Engine.dll 0x8a18f4: Spray draws stored world positions, not the attachment's latest pose.
+        if (this.coordinateSystem === "spray" || this.coordinateSystem === "independent") {
+            // Engine.dll RenderParticles 0x106ac0e8 keeps non-relative particles in world space.
             this.particleSpace = new ParticleSpace(this.oldSprayMatrix);
             this.add(this.particleSpace);
         }
 
         const poolSize = this.forcedMaxParticles ? this.maxParticles : this.maxParticles * 2;
 
-        this.particlePool = new Array(poolSize);
+        this.particlePool = [];
 
         if (this.isInstancedRendering) {
             this.instancedMesh = this.createInstancedMesh(poolSize);
         }
 
         if (this.instancedMesh) {
-            this.particleSpace.add(this.instancedMesh);
-
-            for (let i = 0; i < poolSize; i++) {
-                this.particlePool[i] = Particle.init(this, null);
-            }
+            this.particleSpace.add(this.instancedMesh); // instances are written straight from this.particles, the pool stays empty
         } else {
             for (let i = 0; i < poolSize; i++) {
                 const particle = this.particlePool[i] = Particle.init(this, this.initParticleMesh());
@@ -823,8 +862,8 @@ export abstract class BaseEmitter extends Object3D {
         particle.scale.copy(particle.startSize);
         const currentAccel = tmpCurrentAcceleration.copy(this.coordinateSystem === "spray" ? particle.acceleration : this.acceleration);
         if (this.coordinateSystem === "independent") {
-            this.parent.updateMatrixWorld();
-            tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
+            this.updateWorldMatrix(true, false);
+            tmpWorldToLocal.copy(this.matrixWorld).invert();
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAccel.applyMatrix4(tmpWorldRotation);
         }
@@ -1159,8 +1198,8 @@ export abstract class BaseEmitter extends Object3D {
 
         if (coordinateSystem === "independent") {
             // Independent acceleration is emitter-wide, not per-particle.
-            this.parent.updateMatrixWorld();
-            tmpWorldToLocal.copy(this.parent.matrixWorld).invert();
+            this.updateWorldMatrix(true, false);
+            tmpWorldToLocal.copy(this.matrixWorld).invert();
             tmpWorldRotation.extractRotation(tmpWorldToLocal);
             currentAcceleration.applyMatrix4(tmpWorldRotation);
         }
@@ -1440,6 +1479,11 @@ export abstract class BaseEmitter extends Object3D {
                 }
             }
 
+            if (this.fadeFactor < 1) {
+                if (this.drawStyle === "alpha" || this.drawStyle === "modulate" || this.drawStyle === "alphaModulate") color.w *= this.fadeFactor;
+                else color.multiplyScalar(this.fadeFactor);
+            }
+
             const particleExtent = Math.max(particle.scale.x, particle.scale.y, particle.scale.z) * this.particleGeometryRadius;
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(particleExtent));
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(-particleExtent));
@@ -1492,11 +1536,41 @@ export abstract class BaseEmitter extends Object3D {
         return this.activeCount;
     }
 
-    public update(currentTime: number) {
-        if (currentTime === 0) return;
+    public updateMatrixWorld(force?: boolean): void {
+        if (!this.visible && (this as any).emitterActorUuid && !(this as any).isActorAttachedEmitter) {
+            this.updateWorldMatrix(false, false, force);
+            this.childrenNeedMatrixUpdate = true;
+            return;
+        }
+        super.updateMatrixWorld(force || this.childrenNeedMatrixUpdate);
+        this.childrenNeedMatrixUpdate = false;
+    }
+
+    public onRender(): void { if (!this.isDisabled) this.inactive = false; }
+
+    public setRenderVisible(visible: boolean): void { this.visible = visible && !this.isDisabled; }
+
+    protected updateReset(deltaTime: number): void {
+        const properties = (this.parent as any).scriptProperties as Map<string, boolean>;
+        if (this.isAutoReset && properties?.get("AutoReset") !== true) {
+            const timeTillReset = Math.fround(this.timeTillReset - deltaTime);
+            if (timeTillReset > 0) { this.timeTillReset = timeTillReset; return; }
+
+            if (!this.autoResetTimeRange || !Number.isFinite(this.autoResetTimeRange.min) || !Number.isFinite(this.autoResetTimeRange.max)) throw new Error(`Emitter '${this.name}' has invalid AutoResetTimeRange.`);
+            // AEmitter::Tick 105D54C4 then UParticleEmitter::Reset 105CE03D sample the reset range twice.
+            this.timeTillReset = Math.fround(randRange(this.autoResetTimeRange.min, this.autoResetTimeRange.max));
+            this.reset();
+        } else if (this.isAutoDestroyed && properties?.get("AutoDestroy") !== true) this.isDisabled = true;
+    }
+
+    public update(currentTime: number, deltaTime?: number): "disabled" | "delayed" | "dead" | "normal" {
+        if (currentTime === 0) return "disabled";
 
         const owner = this.parent as any;
         if (owner && owner.updateEmitterRotation) owner.updateEmitterRotation(currentTime);
+
+        // USpriteEmitter::RenderParticles 0x106ac0e8 uses the identity transform outside PTCS_Relative.
+        if (this.coordinateSystem === "independent" && owner) owner.getWorldQuaternion(this.quaternion).invert();
 
         // Engine.dll 0x8a3630 / 0x97a438..0x97a491: Relative particles draw with the emitter's current rotation.
         if (this.coordinateSystem === "relative" && owner?.emitterRotation) this.quaternion.copy(owner.emitterRotation);
@@ -1504,27 +1578,32 @@ export abstract class BaseEmitter extends Object3D {
         // if (this.name !== "SpriteEmitter3" || this.parent.name !== "Emitter7") return;
 
         if (this.isDisabled)
-            return;
+            return "disabled";
 
         if (this.currentTime === undefined) {
             this.currentTime = currentTime;
-            this.initialDelay = randRange(this.initialDelayRange.min, this.initialDelayRange.max);
+            this.initialDelay = Math.fround(randRange(this.initialDelayRange.min, this.initialDelayRange.max));
 
-            return;
+            if (deltaTime === undefined) return "delayed";
         }
 
         // Engine.dll AEmitter::Tick 0x8a4f88 scales emitter delta after the ordinary actor tick.
-        const dt = clamp((currentTime - this.currentTime) / 1000, 0, 0.15) * (owner && owner.getSpeedRate ? owner.getSpeedRate() : 1);
+        const delta = deltaTime === undefined ? clamp((currentTime - this.currentTime) / 1000, 0, 0.15) : deltaTime;
+        const dt = Math.fround(delta * (owner && owner.getSpeedRate ? owner.getSpeedRate() : 1));
+
+        if (this.fadeOutDuration > 0) this.fadeFactor = Math.max(0, this.fadeFactor - delta / this.fadeOutDuration);
 
         if (this.initialDelay > 0) {
-            this.initialDelay -= dt;
+            this.initialDelay = Math.fround(this.initialDelay - dt);
             this.currentTime = currentTime;
 
-            if (this.initialDelay > 0) return;
+            if (this.initialDelay > 0) return "delayed";
 
             this.initialDelay = 0;
         }
 
+
+        if (owner?.isEmitterActor) this.globalOffset.copy(owner.globalOffset);
 
         if (!this.warmedUp && this.parent && this.warmupGate) {
             this.oldOwnerLocation.copy(this.parent.position);
@@ -1535,18 +1614,36 @@ export abstract class BaseEmitter extends Object3D {
         }
 
         this.lastDeltaTime = dt;
-        this.updateParticles(dt);
-
-        // AEmitter::Tick 0x8a547c..0x8a5530: child AutoReset takes precedence; child AutoDestroy then disables only if parent AutoDestroy is clear.
-        if (this.allParticlesDead && this.isAutoDestroyed) {
-            const parentProperties = (owner as any)?.scriptProperties as Map<string, boolean>;
-            const parentAutoReset = parentProperties?.get("AutoReset") === true;
-            const parentAutoDestroy = parentProperties?.get("AutoDestroy") === true;
-
-            if (!parentAutoDestroy && !(this.isAutoReset && !parentAutoReset)) this.isDisabled = true;
+        if (this.allParticlesDead) {
+            this.updateReset(dt);
+            this.currentTime = currentTime;
+            return "dead";
         }
 
-        // freezeEmitterParticles only touches p.visible, not instancedMesh - every update() call implies "visible now"
+        this.inactiveTime = this.inactive ? Math.fround(this.inactiveTime + dt) : 0;
+        this.inactive = true;
+        if (this.secondsBeforeInactive > 0 && this.inactiveTime > this.secondsBeforeInactive) {
+            this.currentTime = currentTime;
+            return "normal";
+        }
+
+        this.updateParticles(dt);
+        if (this.coordinateSystem === "independent") this.oldSprayMatrix.copy(this.matrixWorld);
+
+        this.needsParticleSync = true; // several fixed ticks can run per frame, only the last state gets drawn
+        this.syncTime = currentTime;
+        this.currentTime = currentTime;
+        return "normal";
+    }
+
+    public syncParticles(): void {
+        if (!this.needsParticleSync) return;
+
+        const currentTime = this.syncTime;
+
+        this.needsParticleSync = false;
+        if (!this.visible && (this as any).emitterActorUuid && !(this as any).isActorAttachedEmitter) return;
+
         if (this.instancedMesh) this.instancedMesh.visible = true;
 
         // mirrors instanced-sprite-batcher's grouping test - whatever it rejects still has to fill its own mesh below
@@ -1554,7 +1651,11 @@ export abstract class BaseEmitter extends Object3D {
             // Batched emitters write directly from simulation state.
             this.instancedMesh.clearInstances();
             if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);
-            this.currentTime = currentTime;
+            return;
+        }
+
+        if (this.instancedMesh) {
+            this.syncInstances(currentTime);
             return;
         }
 
@@ -1573,17 +1674,13 @@ export abstract class BaseEmitter extends Object3D {
             // beam meshes) exactly as before.
             p.updateMatrixWorld = p.visible ? Object3D.prototype.updateMatrixWorld : frozenUpdateMatrixWorld;
 
-            if (this.instancedMesh) {
-                if (!p.visible) { this.instancedMesh.setInactive(i); return; }
-            } else if (!p.visible) {
-                return;
-            }
+            if (!p.visible) return;
 
             p.position.copy(settings.position);
             p.oldLocation.copy(settings.oldLocation);
             if (this.isSpriteEmitter) p.scale.set(1, 1, 1);
             else p.scale.copy(settings.scale);
-            p.setVelocity(settings.velocity);
+            p.velocity.copy(settings.velocity);
 
             let spin = 0;
 
@@ -1607,11 +1704,6 @@ export abstract class BaseEmitter extends Object3D {
             this.computeSubdivUV(subdivision, tmpSubdivUV);
             if (this.isSpriteEmitter && this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv)
                 this.computeSubdivBlend(settings, subdivision, tmpSubdivBlend);
-
-            if (this.instancedMesh) {
-                this.instancedMesh.setInstance(i, settings.position, settings.scale.x, settings.scale.y, spin, settings.color, tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3], tmpSubdivBlend);
-                return;
-            }
 
             const visualizer = p.children[0] as THREE.Mesh;
             if (!visualizer) return;
@@ -1649,14 +1741,44 @@ export abstract class BaseEmitter extends Object3D {
             if (i > 0) return;
 
         })
+    }
 
-        if (this.instancedMesh) {
-            // shared material for the whole pool - driven off the emitter's own clock, no per-particle Time
-            if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);
-            this.instancedMesh.commit();
+    protected syncInstances(currentTime: number): void {
+        const isSpinning = this.isSpinning || this.spinParticles;
+
+        for (let i = 0; i < this.particles.length; i++) {
+            const settings = this.particles[i];
+
+            if ((settings.flags & EParticleFlags_T.PTF_Active) === 0) {
+                this.instancedMesh.setInactive(i);
+                continue;
+            }
+
+            if (this.isMeshEmitter) {
+                tmpParticleQuaternion.identity();
+
+                // Engine.dll 0x880c37 / 0x9da422: particle X/Y/Z -> FRotator Yaw/Pitch/Roll.
+                if (isSpinning) tmpParticleRotator.set(Math.trunc(settings.startSpin.y + settings.time * settings.spinsPerSecond.y), Math.trunc(settings.startSpin.x + settings.time * settings.spinsPerSecond.x), Math.trunc(settings.startSpin.z + settings.time * settings.spinsPerSecond.z)).toQuaternion(tmpParticleQuaternion);
+
+                (this.instancedMesh as InstancedMeshParticles).setInstance(i, settings.position, tmpParticleQuaternion, settings.scale, settings.color);
+                continue;
+            }
+
+            const sprites = this.instancedMesh as InstancedSpriteMesh;
+            const spin = isSpinning ? (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (Math.PI * 2 / 65536) : 0;
+            const subdivision = this.resolveSubdivision(settings);
+
+            this.computeSubdivUV(subdivision, tmpSubdivUV);
+            if (this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv)
+                this.computeSubdivBlend(settings, subdivision, tmpSubdivBlend);
+
+            sprites.setInstance(i, settings.position, settings.scale.x, settings.scale.y, spin, settings.color, tmpSubdivUV[0], tmpSubdivUV[1], tmpSubdivUV[2], tmpSubdivUV[3], tmpSubdivBlend);
+            if (sprites.getUsesDirection()) sprites.setInstanceDirection(i, settings.position, settings.oldLocation);
         }
 
-        this.currentTime = currentTime;
+        // shared material for the whole pool - driven off the emitter's own clock, no per-particle Time
+        if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);
+        this.instancedMesh.commit();
     }
 
     // public update(currentTime: number) {
@@ -1762,7 +1884,7 @@ export abstract class BaseEmitter extends Object3D {
 
     // Default: no instanced path. Subclasses that set isInstancedRendering=true
     // (from initSettings) must override this to build their own instanced mesh.
-    protected createInstancedMesh(_capacity: number): InstancedSpriteMesh | null { return null; }
+    protected createInstancedMesh(_capacity: number): InstancedSpriteMesh | InstancedMeshParticles | null { return null; }
 }
 
 export default BaseEmitter;
@@ -1806,12 +1928,8 @@ class Particle extends Object3D {
 
     protected lastUpdate: number;
 
-    protected _velocity = new Vector3();
-    public get velocity(): Readonly<THREE.Vector3> { return this._velocity; }
-    public setVelocity(velocity: THREE.Vector3) { this._velocity.copy(velocity); }
-
-    protected _oldLocation = new Vector3();
-    public get oldLocation(): Readonly<THREE.Vector3> { return this._oldLocation; }
+    public velocity = new Vector3();
+    public oldLocation = new Vector3();
 
     protected acceleration = new Vector3();
     protected changesOverLifetime: ChangesOverTime_T;
@@ -1854,12 +1972,12 @@ class Particle extends Object3D {
         const dtSeconds = (currentTime - this.lastUpdate) / 1000;
         const tmp = new Vector3();
 
-        this._oldLocation.copy(this.position);
+        this.oldLocation.copy(this.position);
 
         tmp.copy(this.acceleration).multiplyScalar(0.5).multiplyScalar(dtSeconds ** 2);
         this.position.add(tmp);
 
-        tmp.copy(this._velocity).multiplyScalar(dtSeconds);
+        tmp.copy(this.velocity).multiplyScalar(dtSeconds);
         this.position.add(tmp);
 
         const timeAlive = currentTime - this.bornTime;
@@ -1956,7 +2074,7 @@ class Particle extends Object3D {
         this.initial.scale.copy(this.scale);
         this.initial.color.w = opacity;
 
-        this._oldLocation.copy(this.position);
+        this.oldLocation.copy(this.position);
 
         this.lastUpdate = now;
         this.isAlive = true;
@@ -1967,7 +2085,7 @@ class Particle extends Object3D {
     }
 }
 
-function randRange(min: number, max: number) { return Math.random() * (max - min) + min; }
+function randRange(min: number, max: number) { return max + Math.random() * (min - max); }
 
 function randVector(dst: THREE.Vector3, min: THREE.Vector3, max: THREE.Vector3) {
     dst.x = randRange(min.x, max.x);

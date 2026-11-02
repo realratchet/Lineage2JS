@@ -2,12 +2,12 @@ import { v5 as seededUuid } from "uuid";
 import UPrimitive from "../un-primitive";
 import FStaticMeshSection from "./un-static-mesh-section";
 import FStaticMeshVertexStream from "./un-static-vertex-stream";
-import FRawColorStream from "../un-raw-color-stream";
+// import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import { BufferValue, type APackage, type UExport, type UnserializedProperty_T, FArray, FArrayLazy } from "@l2js/core";
 import UObject from "../un-object";
-import { FStaticMeshCollisionTriangle, FStaticMeshCollisionNode } from "./un-static-mesh-collision";
+import { FStaticMeshCollisionData } from "./un-static-mesh-collision";
 import { generateUUID } from "three/src/math/MathUtils";
 import FStaticMeshTriangle from "./un-static-mesh-triangle";
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
@@ -38,11 +38,11 @@ export abstract class UStaticMesh extends UPrimitive {
 
     declare protected sections: FArray<FStaticMeshSection>;
     declare protected vertexStream: FStaticMeshVertexStream;
-    declare protected colorStream: FRawColorStream;
-    declare protected alphaStream: FRawColorStream;
+    // declare protected colorStream: FRawColorStream;
+    // declare protected alphaStream: FRawColorStream;
     declare protected uvStream: FArray<FStaticMeshUVStream>;
     declare protected indexStream: FRawIndexBuffer; // triangle indices
-    declare protected wireframeIndexBuffer: FRawIndexBuffer; // triangle edge indices
+    // declare protected wireframeIndexBuffer: FRawIndexBuffer; // triangle edge indices
     declare protected staticMeshLod2: UStaticMesh;
     declare protected staticMeshLod1: UStaticMesh;
     declare protected lodRange1: number;
@@ -56,8 +56,7 @@ export abstract class UStaticMesh extends UPrimitive {
     declare protected swayObject: boolean;
     declare protected maxSwayAngle: number;
 
-    declare protected collisionFaces: FArray<FStaticMeshCollisionTriangle>;
-    declare protected collisionNodes: FArray<FStaticMeshCollisionNode>;
+    declare protected collisionData: FStaticMeshCollisionData;
     declare protected staticMeshTris: FArrayLazy<FStaticMeshTriangle>;
 
     declare protected collisionModelId: number;
@@ -70,7 +69,7 @@ export abstract class UStaticMesh extends UPrimitive {
     declare protected authenticationKey: number;
 
     protected useSimpleLineCollision: boolean = false;
-    protected UseSimpleBoxCollision: boolean = false;
+    protected UseSimpleBoxCollision: boolean = true;
     public useVertexColor: boolean = false;
 
     public static getUnserializedProperties(): UnserializedProperty_T[] {
@@ -123,11 +122,11 @@ export abstract class UStaticMesh extends UPrimitive {
 
         this.sections = new FArray(FStaticMeshSection);
         this.vertexStream = new FStaticMeshVertexStream();
-        this.colorStream = new FRawColorStream();
-        this.alphaStream = new FRawColorStream();
+        // this.colorStream = new FRawColorStream();
+        // this.alphaStream = new FRawColorStream();
         this.uvStream = new FArray(FStaticMeshUVStream);
         this.indexStream = new FRawIndexBuffer(); // triangle indices
-        this.wireframeIndexBuffer = new FRawIndexBuffer(); // triangle edge indices
+        // this.wireframeIndexBuffer = new FRawIndexBuffer(); // triangle edge indices
         this.staticMeshTris = new FArrayLazy(FStaticMeshTriangle);
 
         // debugger;
@@ -135,11 +134,14 @@ export abstract class UStaticMesh extends UPrimitive {
         this.sections.load(pkg);
         this.boundingBox.load(pkg);
         this.vertexStream.load(pkg);
-        this.colorStream.load(pkg);
-        this.alphaStream.load(pkg);
+        // this.colorStream.load(pkg);
+        pkg.seek(pkg.read("compat32") * 4 + 4);
+        // this.alphaStream.load(pkg);
+        pkg.seek(pkg.read("compat32") * 4 + 4);
         this.uvStream.load(pkg);
         this.indexStream.load(pkg);
-        this.wireframeIndexBuffer.load(pkg);
+        // this.wireframeIndexBuffer.load(pkg);
+        pkg.seek(pkg.read("compat32") * 2 + 4);
 
         this.collisionModelId = pkg.read("compat32");
         this.collisionModel = pkg.fetchObject<UModel>(this.collisionModelId);
@@ -166,8 +168,7 @@ export abstract class UStaticMesh extends UPrimitive {
             //     debugger;
             // }
 
-            this.collisionFaces = new FArray(FStaticMeshCollisionTriangle).load(pkg);
-            this.collisionNodes = new FArray(FStaticMeshCollisionNode).load(pkg);
+            this.collisionData = new FStaticMeshCollisionData().load(pkg);
         } else {
             if (verArchive < 62) {
                 console.warn("Not supported yet");
@@ -177,8 +178,7 @@ export abstract class UStaticMesh extends UPrimitive {
             } else {
                 // debugger;
 
-                this.collisionFaces = new FArrayLazy(FStaticMeshCollisionTriangle).load(pkg);
-                this.collisionNodes = new FArrayLazy(FStaticMeshCollisionNode).load(pkg);
+                this.collisionData = new FStaticMeshCollisionData().load(pkg, true);
 
                 // debugger;
             }
@@ -365,47 +365,18 @@ export abstract class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
-        const collisionFaces = this.collisionFaces.length;
-        const collision = new Uint32Array(this.collisionFaces.length * 3);
+        const { indices: collision, nodes: collisionNodes, bounds: collisionBounds } = this.collisionData.getDecodeInfo();
 
-        for (let i = 0; i < collisionFaces; i++) {
-            const face = this.collisionFaces.getElem(i);
-            const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
-            const offset = i * 3;
-
-            // winding is (v2,v1,v0): only that order reproduces the triangle's own stored plane
-            collision[offset + 0] = verts[2];
-            collision[offset + 1] = verts[1];
-            collision[offset + 2] = verts[0];
-
-            // collision[offset + 0] = verts[0][0];
-            // collision[offset + 1] = verts[0][1];
-            // collision[offset + 2] = verts[0][2];
-
-            // collision[offset + 3] = verts[1][0];
-            // collision[offset + 4] = verts[1][1];
-            // collision[offset + 5] = verts[1][2];
-
-            // collision[offset + 6] = verts[2][0];
-            // collision[offset + 7] = verts[2][1];
-            // collision[offset + 8] = verts[2][2];
-        }
-
-        const collisionNodes = new Int32Array(this.collisionNodes.length * 4);
-        const collisionBounds = new Float32Array(this.collisionNodes.length * 6);
-
-        for (let i = 0, len = this.collisionNodes.length; i < len; i++) {
-            const node = this.collisionNodes.getElem(i);
-            const offset = i * 4;
-            const bounds = node.bounds.getDecodeInfo();
-
-            collisionNodes[offset] = node.vertices[2];
-            collisionNodes[offset + 1] = node.vertices[3];
-            collisionNodes[offset + 2] = node.vertices[1];
-            collisionNodes[offset + 3] = node.vertices[0];
-            collisionBounds.set(bounds.min, i * 6);
-            collisionBounds.set(bounds.max, i * 6 + 3);
-        }
+        // const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
+        // collision[offset + 0] = verts[0][0];
+        // collision[offset + 1] = verts[0][1];
+        // collision[offset + 2] = verts[0][2];
+        // collision[offset + 3] = verts[1][0];
+        // collision[offset + 4] = verts[1][1];
+        // collision[offset + 5] = verts[1][2];
+        // collision[offset + 6] = verts[2][0];
+        // collision[offset + 7] = verts[2][1];
+        // collision[offset + 8] = verts[2][2];
 
         const geometryInfo = {
             attributes: {
@@ -479,6 +450,14 @@ export abstract class UStaticMesh extends UPrimitive {
             uuid: trisGeometryUuid,
             geometry: geometryInfo
         };
+    }
+
+    public getCollisionBoundingBox(owner: UAActor): FBox {
+        if (owner.isUsingCylinderCollision) return super.getCollisionBoundingBox(owner);
+
+        const bounds = this.boundingBox.transformBy(owner.localToWorld());
+
+        return this.collisionModel ? bounds.addBox(this.collisionModel.loadSelf().getCollisionBoundingBox(owner)) : bounds;
     }
 
     public getRenderBoundingBox(owner?: UAActor): FBox {

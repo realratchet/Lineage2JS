@@ -1,21 +1,51 @@
-import { Box3, Raycaster, Vector2, Vector3 } from "three";
+import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
+import { Box3, Camera, Raycaster, Vector2, Vector3 } from "three";
 import { IEngineComponent } from "./components";
+import { getProperty, setProperty } from "../ue-script/vm";
 import { ZUpOrbitControls } from "../rendering/camera/controllers/zup-orbit-controls";
 import { ZUpPointerLockControls } from "../rendering/camera/controllers/zup-pointer-lock-controls";
 import type GameManager from "./game-manager";
 import type RenderManager from "../rendering/render-manager";
 import type PhysicsManager from "../physics/physics-manager";
 import type { ICollidable } from "../objects/objects";
+import type BaseActor from "../base-actor";
+import type GroundPickup from "../objects/ground-pickup";
+import type CollidingMesh from "../objects/colliding-mesh";
+import type StaticMeshActor from "../objects/static-mesh-actor";
+import { EActorViewType_T } from "../assets/unreal/un-aactor";
+import type { CollisionQuery_T } from "../physics/collision-world";
+import SpecialView from "../rendering/camera/special-view";
+import VolumeCamera from "../rendering/camera/volume-camera";
+import BehindViewCamera from "../rendering/camera/behind-view-camera";
+import { sinRotator } from "../assets/unreal/utils/rotator";
+import type { ReplayScene_T, ReplayCameraInstruction_T } from "../network/l2-replay-file";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
+const MOUSE_TARGET_INTERVAL_MS = 50;
 const tmpScreenPosition = new Vector2();
 const tmpMouseIntersection = new Vector3();
 const tmpPickBounds = new Box3();
 const dirForward = new Vector3();
 const dirRight = new Vector3();
 const cameraVelocity = new Vector3();
+const tmpCameraView = new Vector3();
+const tmpCameraTraceStart = new Vector3();
+const tmpCameraTraceDelta = new Vector3();
+const tmpVolumeOffset = new Vector3();
+const tmpVolumeRotation: Vector3Arr = [0, 0, 0];
+const hitCheckCameraExtent = new Vector3(0.1, 0.1, 0.1);
+const tmpCameraUp = new Vector3();
 const arrMouseIntersections: THREE.Intersection[] = [];
+type ReplayCameraState_T = { height: number, adjusted: boolean, rotating: boolean, yaw: number, pitch: number, rightMouseDownTime: number, preset: [string, any][], hidden: boolean, enableRotate: boolean };
 
+function lookAtCameraRotation(camera: Camera, pitch: number, yaw: number): void {
+    const sinPitch = sinRotator(pitch);
+
+    tmpCameraUp.copy(camera.up);
+    camera.up.set(-sinPitch * sinRotator(yaw + 16384), -sinPitch * sinRotator(yaw), sinRotator(pitch + 16384));
+    camera.lookAt(tmpCameraView.copy(camera.position).add(dirForward));
+    camera.up.copy(tmpCameraUp);
+}
 function getBatchIntersectionActor(intersection: THREE.Intersection): { actorIndex: number, actorName: string, actorUuid: string } | null {
     const object = intersection.object as any;
 
@@ -39,12 +69,15 @@ function getBatchIntersectionActor(intersection: THREE.Intersection): { actorInd
 
 function isLandmarkSurface(actor: ICollidable | null): boolean {
     if (!actor) return false;
-    if ((actor as any).isTerrain || (actor as any).isStaticMeshActor) return true;
+    if ((actor as any).isTerrain || (actor as any).isStaticMeshActor || (actor as any).isVehicle) return true;
 
     const primitive = actor.getCollisionPrimitive ? actor.getCollisionPrimitive() : null;
 
     return !!primitive && primitive.kind === "bsp";
 }
+
+const FOLLOW_CAMERA_DISTANCE = 300;
+const FOLLOW_CAMERA_HEIGHT = 120;
 
 export class InputManager implements IEngineComponent<GameManager> {
     public speedCameraFPS = 5;
@@ -54,13 +87,28 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected manGame: GameManager;
     protected renderManager: RenderManager;
     protected physicsManager: PhysicsManager;
+    protected readonly hitCheckCameraQuery: CollisionQuery_T = { location: tmpCameraTraceStart, delta: tmpCameraTraceDelta, extent: hitCheckCameraExtent, sourceIsPlayer: false, ignorePawns: true }; // TRACE_World 0x86
     protected readonly dirKeys = { left: false, right: false, up: false, down: false, shift: false };
     protected readonly mouseDownPosition = new Vector2();
+    protected readonly mousePosition = new Vector2();
+    protected isMouseInViewport = false;
+    protected mousePickDistance = 0;
+    protected mouseTarget: ICollidable = null;
+    protected mouseCursor = 0;
+    protected mousePickup: GroundPickup = null;
+    protected lastMouseTargetTime = -Infinity;
     protected isOrbitControls = true;
     protected isPrimaryMouseDown = false;
     protected hasMouseDragged = false;
     protected followPlayer = false;
+    protected isCameraLocked = false;
+    protected isCameraHeightAdjusted = false;
+    protected replayCameraState: ReplayCameraState_T = null;
+    protected readonly specialView = new SpecialView(this);
+    protected volumeCamera: VolumeCamera;
+    protected behindViewCamera: BehindViewCamera;
     protected shiftTimeDown = 0;
+    protected rightMouseDownTime = -Infinity;
     protected activeSector = 0;
     protected readonly keyDownHandler: (event: KeyboardEvent) => void;
     protected readonly keyUpHandler: (event: KeyboardEvent) => void;
@@ -84,19 +132,64 @@ export class InputManager implements IEngineComponent<GameManager> {
         const viewport = renderManager.viewport;
 
         this.physicsManager = this.manGame.getComponent("physics");
+        this.volumeCamera = new VolumeCamera(this.physicsManager);
+        this.behindViewCamera = new BehindViewCamera(this.physicsManager);
         this.controls.orbit = new ZUpOrbitControls(renderManager.camera, renderManager.renderer.domElement);
         this.controls.fps = new ZUpPointerLockControls(renderManager.camera, renderManager.renderer.domElement);
         this.controls.orbit.target.copy(renderManager.cameraTarget);
         this.controls.orbit.update();
+        this.controls.orbit.onCameraInput = (action, yaw, pitch) => {
+            if (action === "axis" && (yaw !== 0 || pitch !== 0)) this.rightMouseDownTime = -Infinity;
+            const network = this.manGame.getComponent("network");
+
+            if (network.isInWorld() && (action === "release" || this.followPlayer && !this.isCameraLocked && (action === "wheel" || !this.manGame.getComponent("asset").playerController.scriptProperties.get("bCameraWalking")))) {
+                if (action === "axis") network.getGameClient().recordCameraInput("press", 0, 0);
+                network.getGameClient().recordCameraInput(action, yaw, pitch);
+            }
+        };
+        this.controls.orbit.onCameraZoom = (direction, distance) => {
+            if (!this.manGame.getComponent("network").isInWorld() || !this.followPlayer) return null;
+
+            const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+
+            if (this.isCameraLocked || properties.get("bDisableZoom") || properties.get("bCameraSpecialMove") || properties.get("bCameraMovingToSpecial")) return distance;
+
+            const replay = this.replayCameraState !== null;
+            const minimum = properties.get("MinZoomingDist") as number, maximum = properties.get("MaxZoomingDist") as number, zoom = Math.fround(replay ? properties.get("CurZoomingDist") as number : distance - 250);
+            // UInput::Exec ZoomInPress/ZoomOutPress 0x84adfc..0x84b066.
+            const step = minimum + this.renderManager.player.getCollisionHeight() * 2 > zoom ? 2.5 : 20;
+            const next = Math.fround(zoom + (direction > 0 ? -step : step));
+
+            if (direction > 0 ? next < minimum && !this.isCameraHeightAdjusted : this.isCameraHeightAdjusted) {
+                const height = this.renderManager.player.getCollisionHeight() * Math.fround(0.8);
+
+                properties.set("CameraViewHeightAdjust", Math.fround((properties.get("CameraViewHeightAdjust") as number) + (direction > 0 ? height : -height)));
+                this.isCameraHeightAdjusted = direction > 0;
+            }
+
+            const value = direction > 0 ? Math.max(minimum, next) : Math.min(maximum, next);
+
+            properties.set("CurZoomingDist", value);
+            properties.set("DesiredZoomingDist", value);
+            return replay ? Math.max(1e-6, Math.abs(value + 250)) : value + 250;
+        };
         this.controls.orbit.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("change", () => renderManager.needsUpdate = true);
         this.controls.fps.addEventListener("lock", this.onPointerControlsLocked.bind(this));
         this.controls.fps.addEventListener("unlock", this.onPointerControlsUnlocked.bind(this));
 
         viewport.addEventListener("mousedown", this.mouseDownHandler);
-        viewport.addEventListener("mousemove", this.mouseMoveHandler);
+        window.addEventListener("mousemove", this.mouseMoveHandler, true);
+        window.addEventListener("mouseout", event => { if (!event.relatedTarget) this.isMouseInViewport = false; });
         viewport.addEventListener("mouseup", this.mouseUpHandler);
         window.addEventListener("keydown", this.keyDownHandler);
+        window.addEventListener("keydown", event => {
+            if (event.code !== "Backquote" || !event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            this.manGame.getComponent("ui").toggleDebugView();
+        }, true);
         window.addEventListener("keyup", this.keyUpHandler);
 
         return this;
@@ -104,6 +197,33 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     public getOrbitTarget(): Vector3 { return this.controls.orbit.target; }
     public isUsingOrbitControls(): boolean { return this.isOrbitControls; }
+    public isFollowingPlayer(): boolean { return this.followPlayer; }
+
+    public setCameraLocked(isLocked: boolean): void {
+        if (isLocked) this.specialView.reset();
+
+        this.isCameraLocked = isLocked;
+        this.controls.orbit.enabled = !isLocked;
+
+        if (isLocked) this.setFollowPlayer(false);
+    }
+
+    public resetFollowCamera(): void {
+        const renderManager = this.renderManager;
+        const yaw = renderManager.player.getRotationYaw() * Math.PI / 32768;
+
+        renderManager.player.getCameraTargetPosition(this.controls.orbit.target);
+        renderManager.camera.position.set(-Math.cos(yaw) * FOLLOW_CAMERA_DISTANCE, -Math.sin(yaw) * FOLLOW_CAMERA_DISTANCE, FOLLOW_CAMERA_HEIGHT).add(this.controls.orbit.target);
+        this.controls.orbit.unclippedDistance = 0;
+        this.controls.orbit.update();
+        const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+        const zoom = Math.fround(renderManager.camera.position.distanceTo(this.controls.orbit.target) - 250);
+
+        properties.set("CurZoomingDist", zoom);
+        properties.set("DesiredZoomingDist", zoom);
+        this.setFollowPlayer(true);
+        renderManager.updateCameraMatrices();
+    }
 
     public setFollowPlayer(follow: boolean): void {
         this.followPlayer = follow;
@@ -111,8 +231,111 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.renderManager.onFollowPlayerChanged(follow);
     }
 
+    public startReplayCamera(scene: ReplayScene_T): void {
+        const render = this.renderManager, asset = this.manGame.getComponent("asset"), properties = asset.playerController.scriptProperties;
+
+        if (this.replayCameraState) throw new Error(`Replay camera is already active.`);
+        const preset: [string, any][] = ["CurFixedDefaultCameraNo", "bDisableZoom", "DefaultCameraYaw", "DefaultCameraPitch", "DefaultCameraDist", "bCameraMovingToDefault", "bUseDefaultCameraYaw", "bUseDefaultCameraPitch", "bUseDefaultCameraDist", "SavedViewTargetYaw", "SavedViewTargetPitch", "CurZoomingDist", "DesiredZoomingDist", "OldZoomingDist", "OldCameraRotation", "OldCameraLocation", "OldViewTargetLocation", "Location", "Rotation", "CurVolumeCameraRadius"].map(name => {
+            const value = properties.get(name);
+
+            return [name, Array.isArray(value) ? value.slice() : value];
+        });
+        this.replayCameraState = { height: properties.get("CameraViewHeightAdjust") as number, adjusted: this.isCameraHeightAdjusted, rotating: properties.get("bCameraManuallyRotating") as boolean, yaw: properties.get("ManuallyCameraYaw") as number, pitch: properties.get("ManuallyCameraPitch") as number, rightMouseDownTime: this.rightMouseDownTime, preset, hidden: render.player.getUnrealScriptProperty("bHidden") as boolean, enableRotate: this.controls.orbit.enableRotate };
+        this.rightMouseDownTime = -Infinity;
+        properties.set("bCameraManuallyRotating", false);
+        properties.set("ManuallyCameraYaw", 1);
+        properties.set("ManuallyCameraPitch", 0);
+        properties.set("CurFixedDefaultCameraNo", scene.fixedCamera);
+        properties.set("bCameraMovingToDefault", false);
+        properties.set("CurZoomingDist", scene.zoom);
+        properties.set("DesiredZoomingDist", scene.desiredZoom);
+        properties.set("OldZoomingDist", scene.zoom);
+        if (scene.firstPerson) render.player.setUnrealScriptProperty("bHidden", true);
+        render.player.getCameraTargetPosition(this.controls.orbit.target);
+        this.controls.orbit.unclippedDistance = 0;
+        const location = render.player.getUnrealScriptProperty("Location") as number[], pitch = Math.trunc(scene.pitch), yaw = Math.trunc(scene.yaw), cosPitch = sinRotator(pitch + 16384), distance = Math.fround(scene.zoom + 250);
+
+        dirForward.set(Math.fround(cosPitch * sinRotator(yaw + 16384)), Math.fround(cosPitch * sinRotator(yaw)), sinRotator(pitch));
+
+        properties.set("OldCameraLocation", [Math.fround(location[0] - dirForward.x * distance), Math.fround(location[1] - dirForward.y * distance), Math.fround(location[2] - Math.fround(dirForward.z * distance))]);
+        properties.set("Location", (properties.get("OldCameraLocation") as number[]).slice());
+        properties.set("Rotation", [pitch, yaw, (properties.get("Rotation") as number[])[2]]);
+        properties.set("OldViewTargetLocation", location.slice());
+        properties.set("OldCameraRotation", [pitch, yaw, 0]);
+        const orbitPitch = Math.min(pitch * Math.PI / 32768, Math.PI / 2 - 1e-6);
+
+        tmpVolumeOffset.set(Math.cos(orbitPitch) * Math.cos(yaw * Math.PI / 32768), Math.cos(orbitPitch) * Math.sin(yaw * Math.PI / 32768), Math.sin(orbitPitch));
+        this.controls.orbit.unclippedOffset = tmpVolumeOffset.multiplyScalar(-Math.max(1e-6, Math.abs(distance)));
+        this.controls.orbit.update();
+        render.camera.position.copy(this.controls.orbit.target).addScaledVector(dirForward, -distance);
+        lookAtCameraRotation(render.camera, pitch, yaw);
+        this.setFollowPlayer(true);
+        render.updateCameraMatrices();
+    }
+
+    public endReplayCamera(): void {
+        const state = this.replayCameraState;
+
+        if (!state) return;
+        const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+
+        properties.set("CameraViewHeightAdjust", state.height);
+        properties.set("bCameraManuallyRotating", state.rotating);
+        properties.set("ManuallyCameraYaw", state.yaw);
+        properties.set("ManuallyCameraPitch", state.pitch);
+        for (const [name, value] of state.preset) properties.set(name, value);
+        const player = this.renderManager.player;
+
+        player.setUnrealScriptProperty("bHidden", state.hidden);
+        if (player.ridePawn) player.ridePawn.setUnrealScriptProperty("bHidden", state.hidden);
+        this.controls.orbit.enableRotate = state.enableRotate;
+        this.controls.orbit.unclippedOffset = null;
+        this.isCameraHeightAdjusted = state.adjusted;
+        this.rightMouseDownTime = state.rightMouseDownTime;
+        this.replayCameraState = null;
+    }
+
+    public applyReplayCamera(instruction: ReplayCameraInstruction_T): void {
+        const { key, action, amount } = instruction, properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+
+        switch (key) {
+            case EInputKey_T.IK_PageUp:
+            case EInputKey_T.IK_PageDown:
+            case EInputKey_T.IK_Home:
+                if (action === EInputAction_T.IST_Press) this.setFixedDefaultCamera(key === EInputKey_T.IK_PageUp ? -1 : key === EInputKey_T.IK_PageDown ? 1 : 0);
+                break;
+            case EInputKey_T.IK_RightMouse:
+                if (action === EInputAction_T.IST_Press) this.rightMouseDownTime = performance.now();
+                else if (action === EInputAction_T.IST_Release) {
+                    if (Math.fround(performance.now() - this.rightMouseDownTime) <= 200) this.setFixedDefaultCamera(0);
+                    this.rightMouseDownTime = -Infinity;
+                }
+                if (action === EInputAction_T.IST_Release || !properties.get("bDisableCameraManuallyRotating")) properties.set("bCameraManuallyRotating", action === EInputAction_T.IST_Press);
+                break;
+            case EInputKey_T.IK_MouseX:
+            case EInputKey_T.IK_MouseY:
+                if (!properties.get("bCameraManuallyRotating") || properties.get("bCameraWalking") && properties.get("CameraModeTarget")) return;
+                if (amount !== 0) this.rightMouseDownTime = -Infinity;
+                const name = key === EInputKey_T.IK_MouseX ? "ManuallyCameraYaw" : "ManuallyCameraPitch";
+
+                properties.set(name, Math.fround((properties.get(name) as number) + Math.trunc(amount * 3600 * Math.fround(0.01))));
+                break;
+            case EInputKey_T.IK_MouseWheelUp:
+            case EInputKey_T.IK_MouseWheelDown:
+                if (action !== EInputAction_T.IST_Press) return;
+                const orbit = this.controls.orbit;
+
+                orbit.unclippedDistance = orbit.onCameraZoom(key === EInputKey_T.IK_MouseWheelUp ? -1 : 1, orbit.unclippedDistance || this.renderManager.camera.position.distanceTo(orbit.target));
+                orbit.update();
+                break;
+            default: throw new Error(`Replay camera key '${key}' is not implemented.`);
+        }
+    }
+
+    public isRenderingWide() { return this.specialView.isWide(); }
+
     public updateCamera(): void {
-        if (this.isOrbitControls) return;
+        if (this.isOrbitControls || this.specialView.isActive()) return;
 
         let forwardVelocity = 0, sidewaysVelocity = 0;
         const camSpeed = this.speedCameraFPS * (this.dirKeys.shift ? Math.min(500, Math.max(Math.pow(2, Math.log10((Date.now() - this.shiftTimeDown) * 0.25)), 2)) : 1);
@@ -131,17 +354,182 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.renderManager.camera.position.add(cameraVelocity);
     }
 
-    public updateFollowPlayer(): void {
+    public updateFollowPlayer(deltaTime: number): void {
+        const controller = this.manGame.getComponent("asset").playerController;
+
+        if (controller && getProperty(controller, "bUseHoldCamera")) {
+            const yaw = getProperty(controller, "CompensateYaw") as number, pitch = getProperty(controller, "CopmensatePitch") as number;
+
+            if (this.isOrbitControls && this.followPlayer && !this.isCameraLocked)
+                this.controls.orbit.rotate(yaw * Math.PI / 32768, pitch * Math.PI / 32768);
+            setProperty(controller, "CompensateYaw", 0);
+            setProperty(controller, "CopmensatePitch", 0);
+            setProperty(controller, "bUseHoldCamera", false);
+        }
+
+        if (this.manGame.getComponent("network").getGameClient()?.isPlayingReplay()) {
+            const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
+            const yaw = properties.get("ManuallyCameraYaw") as number, pitch = properties.get("ManuallyCameraPitch") as number;
+
+            // PlayerCalcView 0x1053cde0 copies desired zoom before the non-volume view.
+            if (!properties.get("bUseVolumeCamera") && properties.get("CurZoomingDist") !== properties.get("DesiredZoomingDist")) {
+                const zoom = properties.get("DesiredZoomingDist") as number;
+
+                properties.set("CurZoomingDist", zoom);
+                this.controls.orbit.unclippedDistance = Math.max(1e-6, Math.abs(zoom + 250));
+            }
+
+            if (yaw !== 0 || pitch !== 0) {
+                const orbit = this.controls.orbit;
+                const cameraYaw = ((Math.round((orbit.getAzimuthalAngle() + Math.PI / 2) * 32768 / Math.PI) + 32767) & 65535) - 32767, cameraPitch = Math.round((orbit.getPolarAngle() - Math.PI / 2) * 32768 / Math.PI);
+                // Engine.dll 105381bb: signed rotator normalization, pitch limits -15000/16384.
+                const nextYaw = ((Math.trunc(cameraYaw + yaw) + 32767) & 65535) - 32767;
+                const nextPitch = Math.max(-15000, Math.min(16384, ((Math.trunc(cameraPitch + pitch) + 32767) & 65535) - 32767));
+
+                orbit.rotate((nextYaw - cameraYaw) * Math.PI / 32768, (nextPitch - cameraPitch) * Math.PI / 32768);
+                properties.set("ManuallyCameraYaw", 0);
+                properties.set("ManuallyCameraPitch", 0);
+            }
+        }
+        const manualYaw = this.controls.orbit.manualYaw;
+
+        this.controls.orbit.manualYaw = 0;
+        if (this.isCameraLocked) return;
+
+        if (this.specialView.update(this.manGame.getComponent("network"), deltaTime / 1000)) {
+            this.renderManager.updateCameraMatrices();
+            return;
+        }
+
         if (!this.isOrbitControls || !this.followPlayer) return;
 
         const renderManager = this.renderManager;
 
+        if (this.controls.orbit.unclippedOffset) renderManager.camera.position.copy(this.controls.orbit.target).add(this.controls.orbit.unclippedOffset);
         renderManager.player.getCameraTargetPosition(tmpMouseIntersection);
         cameraVelocity.copy(tmpMouseIntersection).sub(this.controls.orbit.target);
-        renderManager.camera.position.add(cameraVelocity);
+        if (!this.updateDefaultCamera(deltaTime / 1000, tmpMouseIntersection)) {
+            this.updateAutoTrackingPawn(tmpMouseIntersection, manualYaw);
+            renderManager.camera.position.add(cameraVelocity);
+        }
+        if (this.controls.orbit.unclippedOffset) this.controls.orbit.unclippedOffset.subVectors(renderManager.camera.position, tmpMouseIntersection);
         this.controls.orbit.target.copy(tmpMouseIntersection);
         this.controls.orbit.update();
+        if (this.replayCameraState) {
+            const properties = controller.scriptProperties, oldRotation = properties.get("OldCameraRotation") as number[], oldLocation = properties.get("OldCameraLocation") as number[];
+
+            renderManager.camera.getWorldDirection(dirForward);
+            tmpVolumeRotation[0] = Math.round(Math.atan2(dirForward.z, Math.hypot(dirForward.x, dirForward.y)) * 32768 / Math.PI);
+            tmpVolumeRotation[1] = Math.round(Math.atan2(dirForward.y, dirForward.x) * 32768 / Math.PI);
+            tmpVolumeRotation[2] = 0;
+            if (properties.get("bUseVolumeCamera")) this.volumeCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
+            else this.behindViewCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
+            const cosPitch = sinRotator(tmpVolumeRotation[0] + 16384), distance = Math.max(1e-6, Math.abs((properties.get("CurZoomingDist") as number) + 250));
+
+            dirForward.set(cosPitch * sinRotator(tmpVolumeRotation[1] + 16384), cosPitch * sinRotator(tmpVolumeRotation[1]), sinRotator(tmpVolumeRotation[0]));
+            const orbitPitch = Math.min(tmpVolumeRotation[0] * Math.PI / 32768, Math.PI / 2 - 1e-6);
+
+            tmpVolumeOffset.set(Math.cos(orbitPitch) * Math.cos(tmpVolumeRotation[1] * Math.PI / 32768), Math.cos(orbitPitch) * Math.sin(tmpVolumeRotation[1] * Math.PI / 32768), Math.sin(orbitPitch)).multiplyScalar(-distance);
+            lookAtCameraRotation(renderManager.camera, tmpVolumeRotation[0], tmpVolumeRotation[1]);
+            for (let i = 0; i < 3; i++) { oldRotation[i] = tmpVolumeRotation[i]; oldLocation[i] = Math.fround(renderManager.camera.position.getComponent(i)); }
+        } else this.hitCheckCamera();
         renderManager.updateCameraMatrices();
+    }
+
+    protected setFixedDefaultCamera(direction: number): void { // UInput::Exec 0x10579555..0x105796c2.
+        const network = this.manGame.getComponent("network"), controller = this.manGame.getComponent("asset").playerController;
+
+        if (!network.isInWorld() || !this.followPlayer || !this.isOrbitControls || this.isCameraLocked) return;
+        const properties = controller.scriptProperties, count = properties.get("FixedDefaultViewNum") as number;
+
+        if (count === 0 || properties.get("bCameraWalking") || properties.get("bCameraSpecialMove") || properties.get("bCameraMovingToSpecial")) return;
+        const orbit = this.controls.orbit, player = this.renderManager.player, rotation = player.getUnrealScriptProperty("Rotation") as number[];
+        const current = (properties.get("CurFixedDefaultCameraNo") as number) + direction;
+        const index = current < 0 ? count - 1 : current >= count ? 0 : current;
+        const yaw = ((Math.round((orbit.getAzimuthalAngle() + Math.PI / 2) * 32768 / Math.PI) + 32767) & 65535) - 32767;
+        const pitch = Math.round((orbit.getPolarAngle() - Math.PI / 2) * 32768 / Math.PI);
+        const distance = Math.fround((orbit.unclippedDistance || this.renderManager.camera.position.distanceTo(orbit.target)) - 250);
+
+        properties.set("OldCameraRotation", [pitch, yaw, 0]);
+        properties.set("CurZoomingDist", distance);
+        properties.set("DesiredZoomingDist", distance);
+        properties.set("CurFixedDefaultCameraNo", index);
+        for (const field of ["Yaw", "Pitch", "Dist"]) {
+            properties.set(`DefaultCamera${field}`, (properties.get(`FixedDefaultCamera${field}`) as number[])[index]);
+            properties.set(`bUseDefaultCamera${field}`, true);
+        }
+        properties.set("CameraViewHeightAdjust", (properties.get("FixedDefaultCameraViewHeight") as number[])[index]);
+        properties.set("bDisableZoom", !!((properties.get("FixedDefaultCameraDisableZoom") as number[])[index] & 1));
+        const hidden = !!((properties.get("FixedDefaultCameraHidePlayer") as number[])[index] & 1);
+
+        player.setUnrealScriptProperty("bHidden", hidden);
+        if (player.ridePawn) player.ridePawn.setUnrealScriptProperty("bHidden", hidden);
+        properties.set("SavedViewTargetYaw", rotation[1]);
+        properties.set("SavedViewTargetPitch", rotation[0]);
+        properties.set("bCameraManuallyRotating", false);
+        properties.set("bCameraMovingToDefault", true);
+        orbit.enableRotate = false;
+    }
+
+    protected updateDefaultCamera(deltaTime: number, target: Vector3): boolean {
+        const controller = this.manGame.getComponent("asset").playerController, properties = controller.scriptProperties;
+
+        if (!properties.get("bCameraMovingToDefault")) return false;
+        deltaTime = Math.fround(deltaTime);
+        if (properties.get("bUseDefaultCameraYaw")) properties.set("bUseDefaultCameraYaw", controller.call("CalcCameraMovingToDefaultYaw", [deltaTime, properties.get("SavedViewTargetYaw")]));
+        if (properties.get("bUseDefaultCameraPitch")) properties.set("bUseDefaultCameraPitch", controller.call("CalcCameraMovingToDefaultPitch", [deltaTime, properties.get("SavedViewTargetPitch")]));
+        if (properties.get("bUseDefaultCameraDist")) properties.set("bUseDefaultCameraDist", controller.call("CalcCameraMovingToDefaultDistance", [deltaTime]));
+        properties.set("bCameraMovingToDefault", !!(properties.get("bUseDefaultCameraYaw") || properties.get("bUseDefaultCameraPitch") || properties.get("bUseDefaultCameraDist")));
+        const rotation = properties.get("OldCameraRotation") as number[], yaw = rotation[1] * Math.PI / 32768, pitch = rotation[0] * Math.PI / 32768, distance = (properties.get("CurZoomingDist") as number) + 250;
+
+        this.renderManager.camera.position.set(-Math.cos(pitch) * Math.cos(yaw), -Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch)).multiplyScalar(distance).add(target);
+        this.controls.orbit.unclippedDistance = 0;
+        this.controls.orbit.enableRotate = !properties.get("bCameraMovingToDefault") && !properties.get("bDisableCameraManuallyRotating");
+        return true;
+    }
+
+    protected updateAutoTrackingPawn(target: Vector3, manualYaw: number): void {
+        if (cameraVelocity.lengthSq() === 0 || manualYaw !== 0 || !this.manGame.getComponent("network").ui.isAutoTrackingPawnEnabled()) return;
+
+        const controller = this.manGame.getComponent("asset").playerController.scriptProperties;
+        const speed = controller.get("AutoTrackingPawnSpeed") as number;
+
+        if (!controller.get("bUseAutoTrackingPawn") || speed === 0 || controller.get("bUseHoldCamera") || controller.get("bCameraMovingToDefault") || controller.get("bFixView") || controller.get("ManuallyCameraYaw")) return;
+
+        const camera = this.renderManager.camera, previousTarget = this.controls.orbit.target;
+        // OldCameraRotation.Yaw is integral; recover it from the floating camera basis.
+        const previousYaw = Math.round(Math.atan2(previousTarget.y - camera.position.y, previousTarget.x - camera.position.x) * 32768 / Math.PI) & 65535;
+        const desiredYaw = Math.trunc(Math.atan2(target.y - camera.position.y, target.x - camera.position.x) * 32768 / Math.PI) & 65535;
+        const difference = (desiredYaw - previousYaw) & 65535;
+        // Engine.dll CalcBehindView 0x10537f2e..0x1053807b: per-update shortest yaw arc, negative half-turn.
+        const yaw = (previousYaw + (difference < 32768 ? Math.trunc(difference * Math.min(1, speed)) : -Math.trunc(((previousYaw - desiredYaw) & 65535) * Math.min(1, speed)))) * Math.PI / 32768;
+        const distance = Math.hypot(previousTarget.x - camera.position.x, previousTarget.y - camera.position.y);
+
+        camera.position.x = previousTarget.x - Math.cos(yaw) * distance;
+        camera.position.y = previousTarget.y - Math.sin(yaw) * distance;
+    }
+
+    protected hitCheckCamera(): void { // ALineagePlayerController::CalcBehindView 0x807ce0, bUseHitCheckCamera branch
+        const camera = this.renderManager.camera;
+        const target = this.controls.orbit.target;
+        const distance = camera.position.distanceTo(target);
+        const viewDist = distance + 30;
+
+        tmpCameraView.subVectors(target, camera.position).divideScalar(distance);
+        tmpCameraTraceStart.copy(target);
+        tmpCameraTraceDelta.copy(tmpCameraView).multiplyScalar(-(viewDist + 30));
+        tmpCameraTraceDelta.z -= 10;
+
+        const hit = this.physicsManager.singleLineCheck(this.hitCheckCameraQuery);
+
+        if (!hit) return;
+
+        const hitDist = Math.min(tmpCameraTraceDelta.subVectors(target, hit.location).dot(tmpCameraView), viewDist);
+
+        if (hitDist >= viewDist) return;
+
+        this.controls.orbit.unclippedDistance = distance;
+        camera.position.copy(tmpCameraView).multiplyScalar(30 - hitDist).add(target);
     }
 
     protected clearDirectionKeys(): void {
@@ -168,15 +556,27 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onHandleKeyDown(event: KeyboardEvent): void {
         const renderManager = this.renderManager;
+        const target = event.target as HTMLElement;
 
-        if (event.key === "F4" || event.code === "F4") {
+        if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+        if (this.followPlayer && this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+        if (event.code === "PageUp" || event.code === "PageDown" || event.code === "Home") {
+            if (this.manGame.getComponent("network").isInWorld() && this.followPlayer) {
+                event.preventDefault();
+                if (this.isOrbitControls && !this.isCameraLocked) this.manGame.getComponent("network").getGameClient().recordCameraKey(event.code === "PageUp" ? EInputKey_T.IK_PageUp : event.code === "PageDown" ? EInputKey_T.IK_PageDown : EInputKey_T.IK_Home, event.repeat ? EInputAction_T.IST_Hold : EInputAction_T.IST_Press);
+                if (!event.repeat) this.setFixedDefaultCamera(event.code === "PageUp" ? -1 : event.code === "PageDown" ? 1 : 0);
+            }
+            return;
+        }
+
+        if (event.code === "Backquote") {
             event.preventDefault();
             event.stopPropagation();
             this.manGame.getComponent("ui").toggleDebugView();
             return;
         }
-
-        if (document.activeElement?.tagName === "INPUT") return;
 
         if (event.key === "F1" || event.code === "F1") {
             event.preventDefault();
@@ -278,8 +678,18 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleKeyUp(event: KeyboardEvent): void {
+        if (event.code === "PageUp" || event.code === "PageDown" || event.code === "Home") {
+            const target = event.target as HTMLElement, network = this.manGame.getComponent("network");
+
+            if (!event.defaultPrevented && !event.altKey && !event.ctrlKey && !event.metaKey && target.tagName !== "INPUT" && target.tagName !== "TEXTAREA" && !target.isContentEditable && network.isInWorld() && this.followPlayer && this.isOrbitControls && !this.isCameraLocked)
+                network.getGameClient().recordCameraKey(event.code === "PageUp" ? EInputKey_T.IK_PageUp : event.code === "PageDown" ? EInputKey_T.IK_PageDown : EInputKey_T.IK_Home, EInputAction_T.IST_Release);
+            return;
+        }
         switch (event.key.toLowerCase()) {
             case "c":
+                const target = event.target as HTMLElement;
+
+                if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
                 if (this.isOrbitControls) this.controls.fps.lock();
                 else this.controls.fps.unlock();
                 break;
@@ -292,32 +702,14 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onHandleMouseDown(event: MouseEvent): void {
+        if (event.button === 2) { this.rightMouseDownTime = event.timeStamp; return; }
         if (event.button !== 0 || !this.isOrbitControls) return;
 
         this.isPrimaryMouseDown = true;
         this.hasMouseDragged = false;
         this.mouseDownPosition.set(event.clientX, event.clientY);
-    }
 
-    protected onHandleMouseMove(event: MouseEvent): void {
-        if (!this.isPrimaryMouseDown || this.hasMouseDragged) return;
-
-        const dx = event.clientX - this.mouseDownPosition.x;
-        const dy = event.clientY - this.mouseDownPosition.y;
-
-        if (dx * dx + dy * dy > CLICK_MAX_MOVEMENT_SQ) this.hasMouseDragged = true;
-    }
-
-    protected onHandleMouseUp(event: MouseEvent): void {
-        if (event.button !== 0) return;
-
-        const dx = event.clientX - this.mouseDownPosition.x;
-        const dy = event.clientY - this.mouseDownPosition.y;
-        const isClick = this.isPrimaryMouseDown && !this.hasMouseDragged && dx * dx + dy * dy <= CLICK_MAX_MOVEMENT_SQ;
-
-        this.isPrimaryMouseDown = false;
-
-        if (!isClick || !this.isOrbitControls) return;
+        if (this.isCameraLocked) return;
 
         const renderManager = this.renderManager;
         const bounds = renderManager.renderer.domElement.getBoundingClientRect();
@@ -346,15 +738,32 @@ export class InputManager implements IEngineComponent<GameManager> {
             } else console.log(intersection.object.name, intersection);
         }
 
-        const pickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
-        const physicsIntersection = pickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, pickDistance, renderManager.player.getCollider(), renderManager.player.getRigidbody()) : null;
+        const physicsIntersection = this.traceMouse();
+        const pickDistance = this.mousePickDistance;
 
         renderManager.player.deleteLandmark(true);
+
+        const network = this.manGame.getComponent("network");
+
+        if (network.isInWorld()) {
+            if (network.requestPickup(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance, event.shiftKey)) return;
+            if (physicsIntersection && network.requestAction(physicsIntersection.actor, event.shiftKey, event.ctrlKey)) return;
+            if (physicsIntersection) {
+                tmpMouseIntersection.copy(physicsIntersection.location);
+                network.requestMoveTo(tmpMouseIntersection, physicsIntersection.actor);
+                if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal, (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null);
+            } else if (pickDistance > 0 && (renderManager.player.isSwimmingMovement() || renderManager.player.isFlyingMovement())) {
+                tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
+                network.requestMoveTo(tmpMouseIntersection);
+            }
+
+            return;
+        }
 
         if (physicsIntersection) {
             tmpMouseIntersection.copy(physicsIntersection.location);
             renderManager.player.goTo(tmpMouseIntersection);
-            if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal);
+            if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal, (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null);
         } else if (pickDistance > 0) {
             tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
             renderManager.player.goTo(tmpMouseIntersection);
@@ -363,7 +772,114 @@ export class InputManager implements IEngineComponent<GameManager> {
         renderManager.pickBSPNode(this.raycaster, physicsIntersection ? physicsIntersection.distance : pickDistance);
     }
 
+    protected onHandleMouseMove(event: MouseEvent): void {
+        this.mousePosition.set(event.clientX, event.clientY);
+        this.isMouseInViewport = true;
+
+        if (!this.isPrimaryMouseDown || this.hasMouseDragged) return;
+
+        const dx = event.clientX - this.mouseDownPosition.x;
+        const dy = event.clientY - this.mouseDownPosition.y;
+
+        if (dx * dx + dy * dy > CLICK_MAX_MOVEMENT_SQ) this.hasMouseDragged = true;
+    }
+
+    protected onHandleMouseUp(event: MouseEvent): void {
+        if (event.button === 2) {
+            this.rightMouseDownTime = -Infinity;
+            return;
+        }
+        if (event.button !== 0) return;
+
+        const dx = event.clientX - this.mouseDownPosition.x;
+        const dy = event.clientY - this.mouseDownPosition.y;
+        const isClick = this.isPrimaryMouseDown && !this.hasMouseDragged && dx * dx + dy * dy <= CLICK_MAX_MOVEMENT_SQ;
+
+        this.isPrimaryMouseDown = false;
+
+        if (isClick && this.isCameraLocked) {
+            const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+
+            tmpScreenPosition.set((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2);
+            this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
+
+            const hit = this.traceMouse();
+
+            if (hit && (hit.actor as any)?.isActor) this.manGame.getComponent("network").pickLobbyPawn(hit.actor as any as BaseActor);
+        }
+    }
+
+    protected traceMouse(): ReturnType<PhysicsManager["rayCheck"]> {
+        const player = this.renderManager.player;
+
+        this.mousePickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
+
+        // UGameEngine::FindMouseTargetObject 0x829c88/0x829dfd uses UViewport.Actor (PlayerController), not its Pawn.
+        return this.mousePickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, this.mousePickDistance, player.getCollider(), player.getRigidbody(), true, this.manGame.getComponent("asset").playerController) : null;
+    }
+
+    public getMouseTarget(): ICollidable { return this.mouseTarget; }
+    public getMousePickup(): GroundPickup { return this.mousePickup; }
+
+    public traceScreenPoint(clientX: number, clientY: number, target: Vector3): boolean {
+        const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+
+        tmpScreenPosition.set((clientX - bounds.left) / bounds.width * 2 - 1, 1 - (clientY - bounds.top) / bounds.height * 2);
+        this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
+
+        const hit = this.traceMouse();
+
+        if (!hit) return false;
+
+        target.copy(hit.location);
+        return true;
+    }
+
+    public updateMouseTarget(): void { // UGameEngine::FindMouseTargetObject 0x829bc0 retraces every frame, a full-length ray here costs ~0.5ms so it runs at 20Hz
+        const now = performance.now();
+
+        if (now - this.lastMouseTargetTime < MOUSE_TARGET_INTERVAL_MS) return;
+
+        this.lastMouseTargetTime = now;
+
+        let actor: ICollidable = null;
+        let pickup: GroundPickup = null;
+        let cursor = 0;
+
+        const network = this.manGame.getComponent("network");
+        const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
+
+        if (this.isMouseInViewport && this.isOrbitControls && !this.isCameraLocked && this.mousePosition.x >= bounds.left && this.mousePosition.x < bounds.right && this.mousePosition.y >= bounds.top && this.mousePosition.y < bounds.bottom && !network.isMouseOverUI(this.mousePosition.x, this.mousePosition.y)) {
+            tmpScreenPosition.set((this.mousePosition.x - bounds.left) / bounds.width * 2 - 1, 1 - (this.mousePosition.y - bounds.top) / bounds.height * 2);
+            this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
+
+            const hit = this.traceMouse();
+
+            pickup = network.getPickup(this.raycaster, hit ? hit.distance : this.mousePickDistance);
+            if (!pickup && hit && hit.actor !== this.renderManager.player as ICollidable && network.getActorObjectId(hit.actor)) actor = hit.actor;
+            cursor = pickup ? 3 : network.getMouseCursor(actor);
+        }
+
+        if (actor === this.mouseTarget && pickup === this.mousePickup && cursor === this.mouseCursor) return;
+
+        if (actor !== this.mouseTarget) {
+            if ((this.mouseTarget as CollidingMesh)?.isStaticMeshActor) (this.mouseTarget as CollidingMesh | StaticMeshActor).setUnrealScriptProperty("L2ActorViewtype", EActorViewType_T.EAVT_InSight);
+            if ((actor as CollidingMesh)?.isStaticMeshActor) (actor as CollidingMesh | StaticMeshActor).setUnrealScriptProperty("L2ActorViewtype", EActorViewType_T.EAVT_HighLight);
+        }
+
+        this.mouseTarget = actor;
+        this.mousePickup = pickup;
+        this.mouseCursor = cursor;
+        this.renderManager.renderer.domElement.style.cursor = cursor ? this.manGame.getComponent("asset").getCursor(cursor) : "";
+        this.renderManager.needsUpdate = true;
+    }
+
     protected getPickDistance(origin: Vector3, direction: Vector3): number {
+        const player = this.renderManager.player;
+
+        // UGameEngine::FindMouseTargetObject 0x10559f0b..0x10559fd7: normalized view ray * 10000.
+        if (player.isSwimmingMovement() || player.isFlyingMovement()) return 10000;
+
         const sectorBounds = this.renderManager.getSectorBounds();
 
         if (sectorBounds.length === 0) return this.renderManager.camera.far;

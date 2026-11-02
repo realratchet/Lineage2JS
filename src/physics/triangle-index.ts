@@ -3,11 +3,13 @@ import type { CollisionTriangleIndex_T } from "../objects/objects";
 export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array): CollisionTriangleIndex_T {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    for (let i = 0, len = vertices.length; i < len; i += 3) {
-        minX = Math.min(minX, vertices[i]);
-        minY = Math.min(minY, vertices[i + 1]);
-        maxX = Math.max(maxX, vertices[i]);
-        maxY = Math.max(maxY, vertices[i + 1]);
+    for (let i = 0, len = indices.length; i < len; i++) {
+        const offset = indices[i] * 3;
+
+        minX = Math.min(minX, vertices[offset]);
+        minY = Math.min(minY, vertices[offset + 1]);
+        maxX = Math.max(maxX, vertices[offset]);
+        maxY = Math.max(maxY, vertices[offset + 1]);
     }
 
     const size = Math.max(1, Math.round(Math.sqrt(indices.length / 6)));

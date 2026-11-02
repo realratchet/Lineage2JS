@@ -1,11 +1,21 @@
+import { disposeStaticLighting, pollStaticLighting } from "./static-lighting";
+import NameplateDepth from "./nameplate-depth";
+import TranslucentRenderList from "./translucent-render-list";
+import PortalVisibility from "./portal-visibility";
+import MeshBounds from "./mesh-bounds";
+import BatchAngleVisibility from "./batch-angle-visibility";
+import SectorOcclusion from "./sector-occlusion";
+import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
+import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
-import { WebGLRenderer, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, AdditiveBlending, PlaneGeometry, AnimationMixer, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, NormalBlending, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
-import GLOBAL_UNIFORMS from "../materials/global-uniforms";
+import GLOBAL_UNIFORMS, { getLocalUniforms } from "../materials/global-uniforms";
 import Player from "../player";
 import type BaseActor from "../base-actor";
-import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo } from "./visualizer";
+import type CollidingMesh from "../objects/colliding-mesh";
+import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo_T } from "./visualizer";
 import EnvColor from "./env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
 import SkyRenderer from "./sky-renderer";
@@ -14,16 +24,22 @@ import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
 import AudioManager from "../audio/audio-manager";
 import type AssetManager from "../assets/asset-manager";
+import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
+import { retainSharedTextureBuffer, setUseTrilinear, setTextureDetail } from "../assets/decoders/texture-decoder";
 import InstancedSpriteBatcher from "../objects/emitters/instanced-sprite-batcher";
 import type MovableObject from "../objects/movable-object";
+import type AgitStaticMeshActor from "../objects/agit-static-mesh-actor";
 import DisplayGammaPass from "./display-gamma";
 import ColliderOverlay from "./collider-overlay";
 import type PhysicsManager from "../physics/physics-manager";
 import LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import SkeletalAnimationMixer from "../objects/skeletal-animation-mixer";
+import LocalSpaceSkeleton from "../objects/local-space-skeleton";
+import type GroundPickup from "../objects/ground-pickup";
 import ShadowProjector from "../objects/shadow-projector";
 import type DynamicLight from "../objects/dynamic-light";
 import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
-import type { ZoneObject, SectorObject } from "../objects/zone-object";
+import type { ZoneObject, SectorObject, FogInfoObject } from "../objects/zone-object";
 import { IEngineComponent, IObject } from "../game/components";
 import type GameManager from "../game/game-manager";
 import type UIManager from "../game/ui-manager";
@@ -33,27 +49,40 @@ import EffectLifetimeComponent from "./components/effect-lifetime-component";
 import PawnRenderableComponent from "./components/pawn-renderable-component";
 import type ActorMeshComponent from "./components/actor-mesh-component";
 import type { ScriptComponent } from "../game/script-component";
-import type { ScriptHost_T } from "../ue-script/vm";
-import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
+import type AnimationComponent from "../objects/components/animation-component";
+import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
+import { getProperty, setProperty, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
+import ActorOwnershipComponent, { setScriptObjectProperty } from "../objects/components/actor-ownership-component";
+import type PawnAttackComponent from "../objects/components/pawn-attack-component";
+import type SkillVisualEffect from "@l2js/engine/skills/skill-visual-effect";
 import NPawnLightComponent from "./components/pawn-light-component";
 import AmbientSoundComponent from "../audio/components/ambient-sound-component";
 import type HairSimulationComponent from "../objects/components/hair-simulation-component";
-import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type { IAnimationViewShakeNotifyDecodeInfo, IAnimationScreenFadeNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import Radar from "./radar";
+import OverHeadAlarm from "./over-head-alarm";
+import WideScreenBars from "./wide-screen-bars";
+import QuestArrow from "./quest-arrow";
+import ViewportWindow from "./viewport-window";
+import type PawnFishingComponent from "../objects/components/pawn-fishing-component";
 
 export type HTMLViewportElement_T = HTMLDivElement;
 
 const tmpBox = new Box3();
+const tmpShaderCompileGroup = new Scene();
 const tmpCamDir = new Vector3();
+const tmpSize = new Vector2();
 const tmpFarPoint = new Vector3();
 const tmpPawnWorldPos = new Vector3();
+const tmpPawnViewOrigin = new Vector3();
 const tmpPawnSunAmbient = new ColorByte();
+const arrSectorIndex: [number, number] = [0, 0];
 const arrPawnLights: DynamicLight[] = [];
 const arrLightingObjects: THREE.Object3D[] = [];
 const arrPawnEffects: Object3D[] = [];
 const tmpShadowDirection = new Vector3(0, 0, -1);
 const arrShadowCasters: THREE.Object3D[] = [];
-const PAWN_LIGHTING_RADIUS = 24; // FDynamicActor::BoundingSphere stand-in, sized to the pawn collision cylinder
 const tmpViewShakePosition = new Vector3();
 const tmpViewShakeQuaternion = new Quaternion();
 const tmpViewShakeDirection = new Vector3();
@@ -61,17 +90,21 @@ const tmpL2EventPosition = new Vector3();
 const tmpBillboardUp = new Vector3();
 const tmpBillboardFront = new Vector3();
 const tmpBillboardRight = new Vector3();
+const tmpEmitterOrigin = new Vector3();
+const tmpViewMatrix = new Matrix4();
+const tmpViewSphere = new Sphere();
 const arrBSPGroups: Object3D[] = [];
 const arrBSPIntersections: THREE.Intersection[] = [];
 // AEmitter::Render (0x8a2ae0): GL2ActorCR * 32768.0 * 0.0625.
 const CLIPPING_RANGE_SCALE = 2048;
 const tmpColorByte = new ColorByte();
+const tmpHardwareSun = { color: new Color(), attenuation: new Vector2(), cone: 0 };
 const tmpColorByte_2 = new ColorByte();
 const tmpColorByte_3 = new ColorByte();
 const tmpColorByte_4 = new ColorByte();
 const tmpColorByte_5 = new ColorByte();
 
-const DEFAULT_FAR = 100_000_000;
+const DEFAULT_FAR = 65536; // Core.dll FAR_CLIPPING_PLANE 0x101cff8c.
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 
@@ -94,13 +127,17 @@ const PAWN_LIGHTING_MOVE_DISTANCE_SQ = 144;
 type PawnLightingState_T = {
     position: Vector3,
     lightingPosition: Vector3,
+    lightingRootPosition: Vector3,
+    lightingRadius: number,
     sector: SectorObject | null,
     lightingSector: SectorObject | null,
     leafIndex: number | null,
     lightingLeafIndex: number | null,
+    lightingSpecialLit: boolean,
     zoneIndex: number | null,
     lightingZoneIndex: number | null,
     envVersion: number,
+    ambientZoneVersion: number,
     pawnLightVersion: number,
     ambientR: number,
     ambientG: number,
@@ -119,6 +156,17 @@ type SectorWarmup_T = {
 };
 
 const frozenUpdateMatrixWorld = function () { };
+
+function updateEmitterRenderState(scene: Object3D, emitters: ReadonlySet<any>): void {
+    for (const emitter of emitters)
+        for (let node = emitter; node; node = node.parent) {
+            if (!node.visible) break;
+            if (node === scene) {
+                emitter.onRender();
+                break;
+            }
+        }
+}
 
 function unfreezeAncestors(node: THREE.Object3D): void {
     for (let n = node.parent; n; n = n.parent)
@@ -226,49 +274,78 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly viewport: HTMLViewportElement_T;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
+    protected horizontalFov = DEFAULT_HORIZONTAL_FOV;
+    protected fovMaxAspect = Infinity;
     public readonly cameraTarget = new Vector3(-87086.51708877791, 239936.94718888338, -3685.930229617832);
     public readonly scene = new Scene();
+    public readonly nameplateScene = new Scene();
+    protected readonly translucentRenderList = new TranslucentRenderList();
+    protected worldCamera: Camera = null;
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
     public keepMinFrameRate: boolean = false; // GL2KeepMinFrameRate; preview uses full detail without adaptive throttling.
-    public readonly mixer = new AnimationMixer(this.scene);
+    public readonly mixer = new SkeletalAnimationMixer(this.scene);
     public readonly skyRenderer = new SkyRenderer();
 
     protected uGlowPass: UGlowPass;
     protected mainRenderTarget: WebGLRenderTarget;
     protected displayGammaPass: DisplayGammaPass;
     protected displayGammaEnabled: boolean = false;
+    protected displayGamma = 0;
 
     public bspHelperCamera: PerspectiveCamera | null = null;
     public bspHelperCameraHelper: CameraHelper | null = null;
     public bspHelperActive: boolean = false;
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
+    public readonly radar = new Radar();
+    public readonly overHeadAlarm = new OverHeadAlarm();
+    protected readonly wideScreenBars = new WideScreenBars();
+    protected readonly fogBlend = new FogBlendState();
+    protected fogSource: L2Environment | ZoneObject | FogInfoObject | null = null;
+    protected readonly skyColors: ColorByte[] = [];
+    protected readonly prevSkyColors: ColorByte[] = [];
+    public readonly questArrow = new QuestArrow(this);
+    protected viewportWindow: ViewportWindow = null;
+    protected viewportSceneCanvas: HTMLCanvasElement = null;
     protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
     protected readonly visibleWorldBatchEmitters: any[] = [];
+    protected readonly arrViewportBatchEmitters: any[] = [];
+    protected readonly nameplateDepth: NameplateDepth;
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
+    protected pawnRange: number = null;
+    protected pawnLimit = 10000;
+    protected readonly arrVisiblePawns: PawnRenderableComponent[] = [];
+    protected pawnShadow = true;
+    protected sortTransparent = true;
+    protected renderDeco = true;
+    protected readonly pawnFishing = new Set<PawnFishingComponent>();
     protected readonly actorMeshes = new Set<ActorMeshComponent>();
-    protected readonly transientGeometries = new WeakMap<Object3D, Set<THREE.BufferGeometry>>();
+    protected readonly pickups = new Set<GroundPickup>();
+    protected readonly transientResources = new WeakMap<Object3D, Set<Disposable_T>>();
+    protected readonly retainedSkillVisuals = new Map<SkillVisualEffect, { effects: Object3D[], caster: BaseActor }>();
     protected readonly hairSimulations = new Set<HairSimulationComponent>();
     protected isUpdatingMixer = false;
     protected pawnLightingStates = new WeakMap<THREE.Object3D, PawnLightingState_T>();
-    protected lastRenderOrderSector: SectorObject | null = null;
 
     protected environment: L2Environment;
     protected activeFogId: string | null = null;
 
     protected readonly sectors = new Map<number, Map<number, SectorObject>>();
+    protected level: SectorObject = null;
+    protected levelTimeSeconds = 0;
     protected readonly arrLoadedSectors: SectorObject[] = [];
+    protected readonly arrSceneSectors: SectorObject[] = [];
 
     protected readonly pendingSectorWarmups: SectorWarmup_T[] = [];
     protected static readonly TEXTURE_WARMUP_FRAME_MS = 2;
-    protected static readonly MATERIAL_RESTORES_PER_FRAME = 8;
+    protected readonly pendingShaderCompiles = new Set<THREE.Object3D>();
 
     // deferred shader link/compile error reporting, see processShaderDiagnostics
     protected readonly pendingShaderChecks: any[] = [];
@@ -276,8 +353,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected parallelShaderCompileExt: any = undefined; // resolved lazily, null if unsupported
     protected isRendering = false;
     protected isRenderingFrame = false;
-    protected readonly _lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
-    protected readonly _lastListenerQuat = new Quaternion(0, 0, 0, 0);
+    protected readonly lastListenerPos = new Vector3(Infinity, Infinity, Infinity);
+    protected readonly lastListenerQuat = new Quaternion(0, 0, 0, 0);
     protected pixelRatio: number = global.devicePixelRatio;
     protected readonly frustum = new Frustum();
     protected readonly lastProjectionScreenMatrix = new Matrix4();
@@ -290,26 +367,42 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected screenBlackOutDuration = 0;
     protected screenFadeInDuration = 0;
     protected screenFadeColorAlpha = 1;
+    protected screenFadeDone: () => void = null;
+    protected screenFadeElapsed = 0;
+    protected screenFadeLastTime = 0;
     protected manPhysics: PhysicsManager = null;
     protected manUI: UIManager = null;
     protected manInput: InputManager = null;
 
-    public readonly player = new Player(this);
-    public readonly waterEffects = this.player.getComponent<WaterEffectsComponent>("waterEffects");
+    public player = new Player(this);
+    public getWaterEffects(): WaterEffectsComponent { return this.player.getComponent<WaterEffectsComponent>("waterEffects"); }
+
+    public setPlayer(player: Player): void {
+        this.getWaterEffects().underWaterEffect.removeFromParent();
+        this.player.deleteLandmark();
+        this.player = player;
+        this.manGame.getComponent("asset").playerController.setPawn(player);
+        this.scene.add(this.getWaterEffects().underWaterEffect);
+    }
     protected readonly shadowProjector = new ShadowProjector();
+    protected readonly meshBounds = new MeshBounds(this.shadowProjector);
+    protected readonly portalVisibility = new PortalVisibility(this.meshBounds);
+    protected readonly batchAngleVisibility = new BatchAngleVisibility(this.meshBounds);
+    protected readonly sectorOcclusion: SectorOcclusion;
     protected readonly colliderOverlay = new ColliderOverlay();
     protected showColliders = false;
 
     protected readonly sun: THREE.Mesh;
     protected readonly sunCam: THREE.Camera;
 
-    protected get physicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
-    protected get inputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
+    public getPhysicsManager(): PhysicsManager { return this.manPhysics || (this.manPhysics = this.manGame.getComponent("physics")); }
+    public getInputManager(): InputManager { return this.manInput || (this.manInput = this.manGame.getComponent("input")); }
     protected sectorBounds = new Array<THREE.Box3>();
     protected currentSectorIndex: THREE.Vector2 | null = null;
     public readonly globalSky = new Group();
     public readonly audioManager: AudioManager = new AudioManager();
     protected activeMusicId: number = -1;
+    protected isZoneMusicEnabled = true;
 
     protected manGame: GameManager;
     public setParent(parent: GameManager): this {
@@ -322,14 +415,83 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public constructor(viewport: HTMLViewportElement_T) {
         this.viewport = viewport;
-        this.renderer = new WebGLRenderer({
-            antialias: true,
-            preserveDrawingBuffer: true,
-            premultipliedAlpha: false,
-            logarithmicDepthBuffer: true,
-            alpha: true,
-        });
+        ColorManagement.enabled = false;
+        try {
+            this.renderer = new WebGLRenderer({
+                antialias: false,
+                preserveDrawingBuffer: true,
+                premultipliedAlpha: false,
+                logarithmicDepthBuffer: true,
+                alpha: true,
+            });
+        } catch (error) {
+            document.body.dataset.gpuUnavailable = "";
+            throw error;
+        }
 
+        this.nameplateDepth = new NameplateDepth(this.renderer);
+        this.sectorOcclusion = new SectorOcclusion(this.renderer, this.meshBounds);
+        this.setBatchAngleCulling(5);
+        this.setPortalCulling(true);
+        const renderBufferDirect = this.renderer.renderBufferDirect;
+        this.renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
+            if (group && group.count === 0) return;
+
+            this.nameplateDepth.beforeRender(material, object);
+            renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
+            this.sectorOcclusion.afterRender(camera, scene, geometry, material, object, group);
+        };
+
+        const dispose = this.renderer.dispose;
+        this.renderer.dispose = () => {
+            disposeStaticLighting(this.renderer);
+            this.nameplateDepth.dispose();
+            this.sectorOcclusion.dispose();
+            dispose.call(this.renderer);
+        };
+
+        this.renderer.outputColorSpace = LinearSRGBColorSpace;
+        this.renderer.setOpaqueSort((a, b) => {
+            const programA = this.renderer.properties.get(a.material).currentProgram?.id ?? -1;
+            const programB = this.renderer.properties.get(b.material).currentProgram?.id ?? -1;
+
+            return a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || programA - programB || a.material.id - b.material.id || a.materialVariant - b.materialVariant || a.z - b.z || a.id - b.id;
+        });
+        this.renderer.setTransparentSort((a, b) => {
+            const nameA = !!(a.object as any).isNameplate, nameB = !!(b.object as any).isNameplate;
+            if (nameA !== nameB) return nameA ? 1 : -1;
+
+            return a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || b.z - a.z || a.id - b.id;
+        });
+        const worldList = this.renderer.renderLists.get(this.scene, 0), sortWorldList = worldList.sort;
+        worldList.sort = (opaque, transparent) => {
+            sortWorldList(opaque, transparent);
+            // Engine 0x1065238d draws opaque actors before the translucent world list.
+            let count = 0;
+            for (const item of worldList.transparent) {
+                const actor = (item.object as LitSkinnedMesh).actorRenderable;
+                if (actor && actor.isOpaque() && item.material.blending === NormalBlending && item.material.depthWrite) worldList.opaque.push(item);
+                else worldList.transparent[count++] = item;
+            }
+            worldList.transparent.length = count;
+            if (this.sortTransparent) this.translucentRenderList.sort(worldList.transparent, this.worldCamera, this.arrSceneSectors);
+            if (this.portalVisibility.enabled || this.batchAngleVisibility.angle > 0) {
+                const camera = this.worldCamera === this.camera && this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.worldCamera;
+                const sector = this.getSector(camera.position);
+                if (this.portalVisibility.prepare(camera, sector)) {
+                    this.portalVisibility.filter(worldList.opaque, sector);
+                    this.portalVisibility.filter(worldList.transmissive, sector);
+                    this.portalVisibility.filter(worldList.transparent, sector);
+                }
+                if (this.batchAngleVisibility.prepare(camera)) {
+                    this.batchAngleVisibility.filter(worldList.opaque, camera);
+                    this.batchAngleVisibility.filter(worldList.transmissive, camera);
+                    this.batchAngleVisibility.filter(worldList.transparent, camera);
+                }
+            }
+            this.sectorOcclusion.sort(worldList.opaque);
+        };
+        this.renderer.info.autoReset = false;
         this.renderer.debug.checkShaderErrors = false; // profiled at ~90ms/sector; processShaderDiagnostics polls KHR_parallel_shader_compile instead
 
         this.mainRenderTarget = new WebGLRenderTarget(256, 256, {
@@ -344,6 +506,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.uGlowPass.renderToScreen = true;
 
         this.displayGammaPass = new DisplayGammaPass(256, 256, this.renderer.capabilities.isWebGL2 ? 4 : 0);
+        setTerrainTextureUnits(this.renderer.capabilities.maxTextures);
 
         this.renderer.autoClear = false;
 
@@ -352,11 +515,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.camera.position.set(0, 15, 5);
         this.camera.lookAt(0, 0, 0);
         this.scene.add(new Mesh(new BoxGeometry()));
+        this.scene.matrixAutoUpdate = false;
+        this.objectGroup.matrixAutoUpdate = false;
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
         this.scene.add(this.colliderOverlay);
-        this.scene.add(this.waterEffects.underWaterEffect);
+        this.scene.add(this.getWaterEffects().underWaterEffect);
         this.objectGroup.add(this.particleBatcher.root);
         this.mixer.addEventListener("finished", (event: any) => {
             let object = event.action.getRoot() as Object3D;
@@ -563,7 +728,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public getEnvironment(): L2Environment { return this.environment; }
 
     public debugPrintCamera(): void {
-        const camera = this.camera, controls = this.inputManager.controls;
+        const camera = this.camera, controls = this.getInputManager().controls;
 
         console.log([
             `this.camera.position.set(${camera.position.toArray().join(",")});`,
@@ -571,13 +736,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         ].join("\n"));
     }
 
-    public takeScreenshot() {
-        this.renderer.domElement.toBlob((blob) => {
-            if (!blob) return;
-
-            window.open(URL.createObjectURL(blob), "_blank");
-        }, "image/jpeg", 0.98);
-    }
 
     public toggleFrustumCulling(): void {
         this.frustumCullingEnabled = !this.frustumCullingEnabled;
@@ -643,6 +801,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.audioManager.cancelMusic();
     }
 
+    public setZoneMusicEnabled(isEnabled: boolean): void {
+        this.isZoneMusicEnabled = isEnabled;
+        if (!isEnabled) this.cancelMusic();
+    }
+
     public getSectorBounds(): readonly Box3[] { return this.sectorBounds; }
 
     public updateCameraMatrices(): void {
@@ -691,25 +854,29 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.lastSize.set(width, height);
     }
 
-    protected onHandleResize(): void {
-        const oldStyle = this.getDomElement().style.display;
-        this.getDomElement().style.display = "none";
-        const { width, height } = this.viewport.getBoundingClientRect();
-
-        const aspect = width / height;
-        this.camera.aspect = aspect;
-
-        const hFOV = MathUtils.degToRad(DEFAULT_HORIZONTAL_FOV);
-        const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / aspect);
+    public setHorizontalFov(fov = DEFAULT_HORIZONTAL_FOV, maxAspect = Infinity) {
+        this.horizontalFov = fov;
+        this.fovMaxAspect = maxAspect;
+        const hFOV = MathUtils.degToRad(fov);
+        const vFOV = 2 * Math.atan(Math.tan(hFOV / 2) / Math.min(this.camera.aspect, maxAspect));
         this.camera.fov = MathUtils.radToDeg(vFOV);
 
         if (this.bspHelperCamera) {
-            this.bspHelperCamera.aspect = aspect;
+            this.bspHelperCamera.aspect = this.camera.aspect;
             this.bspHelperCamera.fov = this.camera.fov;
             this.bspHelperCamera.updateProjectionMatrix();
         }
 
         this.camera.updateProjectionMatrix();
+    }
+
+    protected onHandleResize(): void {
+        const oldStyle = this.getDomElement().style.display;
+        this.getDomElement().style.display = "none";
+        const { width, height } = this.viewport.getBoundingClientRect();
+
+        this.camera.aspect = width / height;
+        this.setHorizontalFov(this.horizontalFov, this.fovMaxAspect);
         this.setSize(width, height);
 
         const pixelRatio = this.pixelRatio;
@@ -725,6 +892,24 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public enableZoneCulling = true;
 
+    public screenFadeOut(duration: number, color: readonly number[], done: () => void = null): boolean {
+        if (this.screenFadeStartedAt >= 0) return false;
+
+        this.screenFadeBlink({ fadeOutDuration: duration, blackOutDuration: Infinity, fadeInDuration: 0, fadeOutColor: [color[0], color[1], color[2], 255] } as IAnimationScreenFadeNotifyDecodeInfo);
+        this.screenFadeElement.style.zIndex = "9";
+        this.screenFadeDone = done;
+        this.screenFadeElapsed = 0;
+        this.screenFadeLastTime = this.screenFadeStartedAt;
+        return true;
+    }
+
+    public resetScreenFade(): void {
+        this.screenFadeStartedAt = -1;
+        this.screenFadeDone = null;
+        this.screenFadeElement.style.opacity = "0";
+        this.needsUpdate = true;
+    }
+
     public screenFadeBlink(info: IAnimationScreenFadeNotifyDecodeInfo): void {
         // UGameEngine::ScreenFadeBlink (L2.exe 0x825650) rejects a blink while either fade state is active.
         if (this.screenFadeStartedAt >= 0) return;
@@ -735,8 +920,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.screenBlackOutDuration = Math.max(0, info.blackOutDuration);
         this.screenFadeInDuration = Math.max(0, info.fadeInDuration);
         this.screenFadeColorAlpha = color[3] / 255;
+        this.screenFadeElement.style.zIndex = "9999";
         this.screenFadeElement.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-        this.screenFadeStartedAt = performance.now();
+        this.screenFadeStartedAt = this.manGame.getCurrentTime();
         this.needsUpdate = true;
     }
 
@@ -844,6 +1030,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         let time = currentTime - this.screenFadeStartedAt;
         let opacity: number;
+        let done: () => void = null;
+
+        if (this.screenFadeDone) {
+            const elapsed = this.screenFadeElapsed + Math.fround((currentTime - this.screenFadeLastTime) / 1000) * 1000;
+
+            this.screenFadeElapsed = Math.fround(elapsed);
+            this.screenFadeLastTime = currentTime;
+            time = this.screenFadeOutDuration > 0 ? Math.max(Math.fround(0.0001), Math.min(1, Math.fround(elapsed / this.screenFadeOutDuration))) * this.screenFadeOutDuration : 0;
+        }
 
         if (time < this.screenFadeOutDuration) {
             opacity = this.screenFadeOutDuration > 0 ? time / this.screenFadeOutDuration : 1;
@@ -852,6 +1047,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             if (time < this.screenBlackOutDuration) {
                 opacity = 1;
+                if (this.screenBlackOutDuration === Infinity) {
+                    this.screenFadeStartedAt = -1;
+                    done = this.screenFadeDone;
+                    this.screenFadeDone = null;
+                }
             } else {
                 time -= this.screenBlackOutDuration;
 
@@ -864,6 +1064,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         this.screenFadeElement.style.opacity = `${opacity * this.screenFadeColorAlpha}`;
+        if (done) done();
     }
 
     protected applyViewShake(_currentTime: number): boolean {
@@ -911,17 +1112,24 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.camera.updateMatrixWorld();
     }
 
-    public getSectorId(position: THREE.Vector3): [number, number] {
+    public getSectorId(position: THREE.Vector3, target: [number, number] = [0, 0]): [number, number] {
         const sectorSize = 256 * 128;
-        const sectorX = Math.floor(position.x / sectorSize) + 20;
-        const sectorY = Math.floor(position.y / sectorSize) + 18;
+        // UGameEngine::GetSWMapXY 0x824ba0 truncates FVector components before map conversion.
+        const sectorX = Math.trunc(Math.trunc(Math.fround(position.x)) / sectorSize + 20);
+        const sectorY = Math.trunc(Math.trunc(Math.fround(position.y)) / sectorSize + 18);
 
-        return [sectorX, sectorY];
+        target[0] = sectorX;
+        target[1] = sectorY;
+        return target;
     }
 
     public getSector(position: THREE.Vector3): SectorObject | null {
-        return this.getSectorByCoords(...this.getSectorId(position));
+        const [sectorX, sectorY] = this.getSectorId(position, arrSectorIndex);
+
+        return this.getSectorByCoords(sectorX, sectorY);
     }
+
+    public isSectorWarm(sector: SectorObject): boolean { return !this.pendingSectorWarmups.some(job => job.sector === sector); }
 
     public isSectorCollisionReady(position: THREE.Vector3): boolean {
         const sector = this.getSector(position);
@@ -930,23 +1138,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getSectorByCoords(sectorX: number, sectorY: number): SectorObject | null {
-        if (!this.sectors.has(sectorX))
-            return null;
-
-        const xsect = this.sectors.get(sectorX);
-
-        if (!xsect.has(sectorY))
-            return null;
-
-        return xsect.get(sectorY);
+        return this.sectors.get(sectorX)?.get(sectorY) ?? null;
     }
 
     protected static readonly EMITTER_DEBUG_MAX = 80;
 
-    public collectEmitterDebugInfo(): EmitterDebugInfo[] {
+    public collectEmitterDebugInfo(): EmitterDebugInfo_T[] {
         const cameraPosition = this.camera.position;
         const currentSector = this.getSector(cameraPosition);
-        const results: EmitterDebugInfo[] = [];
+        const results: EmitterDebugInfo_T[] = [];
 
         this.scene.traverse(obj => {
             const emitter = obj as any;
@@ -1016,11 +1216,28 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public setDisplayGamma(display: any, value: unknown): void {
-        display.gamma = parseFloat(value as any);
+        this.displayGamma = display.gamma = parseFloat(value as any);
         this.displayGammaEnabled = display.gamma !== 0;
 
         if (this.displayGammaEnabled) this.displayGammaPass.setRamp(display);
 
+        this.needsUpdate = true;
+    }
+
+    public getDisplayGamma() { return this.displayGamma; }
+
+    public getAntiAliasingLevels() { return [0, 1, 2].filter(level => level * 2 <= this.renderer.capabilities.maxSamples); }
+
+    public setAntiAliasing(level: number) {
+        const target = this.displayGammaPass.getTarget(), samples = Math.min(level * 2, this.renderer.capabilities.maxSamples);
+        if (target.samples === samples) return;
+
+        target.dispose();
+        target.samples = samples;
+        if (this.viewportWindow) {
+            this.viewportWindow.target.dispose();
+            this.viewportWindow.target.samples = samples;
+        }
         this.needsUpdate = true;
     }
 
@@ -1031,35 +1248,70 @@ export class RenderManager implements IEngineComponent<GameManager> {
         );
     }
 
+    public getLevel(): SectorObject { return this.level; }
+    public setLevel(level: SectorObject, netMode: ENetMode_T = ENetMode_T.NM_Standalone): void {
+        this.level = level;
+        this.fogSource = null;
+        if (level) {
+            level.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
+            for (const sector of this.arrSceneSectors) sector.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
+        }
+        this.levelTimeSeconds = 0;
+        this.updateLevelTime(0);
+    }
+
+    protected updateLevelTime(deltaTime: number): void { // ULevel::Tick 0x1059b8ff..0x1059b9d2 publishes before clamping actor delta.
+        if (!this.level) return;
+        const info = this.level.levelInfoActor;
+
+        if (!(info.getUnrealScriptProperty("Pauser") && (info.getUnrealScriptProperty("PauseDelay") as number) <= this.levelTimeSeconds))
+            this.levelTimeSeconds += Math.fround(Math.fround(deltaTime / 1000) * (info.getUnrealScriptProperty("TimeDilation") as number));
+
+        const timeSeconds = Math.fround(this.levelTimeSeconds);
+
+        info.setUnrealScriptProperty("TimeSeconds", timeSeconds);
+        for (const column of this.sectors.values()) for (const sector of column.values())
+            if (sector !== this.level) sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", timeSeconds);
+    }
+
     public addPawn(pawn: BaseActor): void {
         this.scene.add(pawn);
         pawn.updateMatrixWorld(true);
-        this.physicsManager.addPawn(pawn);
+        this.getPhysicsManager().addPawn(pawn);
         pawn.beginPlay();
+        this.queueShaderCompile(pawn);
         this.needsUpdate = true;
     }
 
-    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null): void {
+    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null, instigator?: ScriptHost_T): void {
         if (!(effect as any).isGameObject) throw new Error(`Transient effect '${effect.name}' is not a game object.`);
 
         const object = effect as Object3D & IObject;
 
         const lifetime = object.findComponent<EffectLifetimeComponent>("effectLifetime") || object.addComponent(new EffectLifetimeComponent(this));
 
-        this.retainTransientGeometries(effect);
+        this.retainTransientResources(effect);
         this.scene.add(effect);
-        this.physicsManager.registerPhysicsComponent(lifetime);
-        this.physicsManager.registerSimulationObjects(effect);
+        this.getPhysicsManager().registerPhysicsComponent(lifetime);
+        this.getPhysicsManager().registerSimulationObjects(effect);
 
         if (owner) (owner.findComponent<ActorOwnershipComponent>("actorOwnership") || owner.addComponent(new ActorOwnershipComponent())).gainScriptChild(effect);
         const script = object.findComponent<ScriptComponent>("script");
 
-        if (script) script.beginPlay();
+        if (script && !getProperty(object as any, "Level")) {
+            const level = owner ? getProperty(owner as any, "Level") : this.level ? this.level.levelInfoActor : null;
+
+            if (level) setScriptObjectProperty(object, "Level", level);
+        }
+        if (instigator !== undefined) setProperty(object as any, "Instigator", instigator);
+        if (object.findComponent("pawnMovement")) (object as BaseActor).beginPlay();
+        else if (script) script.beginPlay();
+        this.queueShaderCompile(effect);
         this.needsUpdate = true;
     }
 
     public removeTransientEffect(effect: Object3D): void {
-        this.retainTransientGeometries(effect);
+        this.retainTransientResources(effect);
 
         const base = (effect as any).scriptBase as BaseActor;
         const owner = (effect as any).scriptOwner as Object3D & IObject;
@@ -1073,7 +1325,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (ownership)
             for (const child of ownership.getScriptChildren()) ownership.loseScriptChild(child);
 
-        this.physicsManager.unregisterSimulationObjects(effect);
+        this.getPhysicsManager().unregisterSimulationObjects(effect);
         effect.removeFromParent();
 
         effect.traverse(child => {
@@ -1083,14 +1335,17 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             const materials = mesh.material instanceof Array ? mesh.material : [mesh.material];
 
-            for (const material of materials) material.dispose();
+            for (const material of materials)
+                if (!(material as any).isSharedMaterial && !resourceRefs.has(material)) material.dispose();
             if (mesh.isInstancedSpriteMesh) mesh.geometry.dispose();
         });
 
-        (effect as Object3D & IObject).detachComponents();
+        if ((effect as any).isActor) (effect as BaseActor).release();
+        else (effect as Object3D & IObject).detachComponents();
+        unregisterLevelActor(effect as any);
 
-        for (const geometry of this.transientGeometries.get(effect)) this.releaseGeometry(geometry);
-        this.transientGeometries.delete(effect);
+        for (const resource of this.transientResources.get(effect)) releaseResource(resource);
+        this.transientResources.delete(effect);
 
         this.needsUpdate = true;
     }
@@ -1098,23 +1353,77 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public retainGeometry(geometry: THREE.BufferGeometry): void { retainResource(geometry); }
     public releaseGeometry(geometry: THREE.BufferGeometry): void { releaseResource(geometry); }
 
-    protected retainTransientGeometries(effect: Object3D): void {
-        let geometries = this.transientGeometries.get(effect);
+    public retainMeshResources(meshes: THREE.Mesh[], target: Set<THREE.Material | THREE.Texture>): void {
+        const resources = new Set<THREE.Material | THREE.Texture>();
 
-        if (!geometries) this.transientGeometries.set(effect, geometries = new Set());
+        for (const mesh of meshes) {
+            for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+                if (material) collectMaterialResources(material, resources);
+            if ((mesh as any).skinMaterials)
+                for (const material of Object.values((mesh as any).skinMaterials) as THREE.Material[])
+                    collectMaterialResources(material, resources);
+        }
+
+        for (const resource of resources) {
+            if (target.has(resource)) continue;
+
+            target.add(resource);
+            retainResource(resource);
+        }
+    }
+
+    public releaseMeshResources(resources: Set<THREE.Material | THREE.Texture>): void {
+        for (const resource of resources) releaseResource(resource);
+
+        resources.clear();
+    }
+
+    public addPickup(pickup: GroundPickup): void {
+        for (let part = pickup; part; part = part.getNextPickup()) {
+            this.pickups.add(part);
+            this.scene.add(part);
+        }
+    }
+
+    public removePickup(pickup: GroundPickup): void {
+        this.pickups.delete(pickup);
+        pickup.release();
+    }
+
+    public clearDice(): void {
+        for (const pickup of this.pickups)
+            if ((pickup as any).isL2Dice) this.removePickup(pickup);
+    }
+
+    protected retainTransientResources(effect: Object3D): void {
+        let retained = this.transientResources.get(effect);
+
+        if (!retained) this.transientResources.set(effect, retained = new Set());
+
+        const resources = new Set<Disposable_T>();
 
         effect.traverse((object: any) => {
             // ActorMeshComponent owns skinned meshes; sprite instance buffers are private to each emitter.
-            if (!object.geometry || object.isSkinnedMesh || object.isInstancedSpriteMesh || geometries.has(object.geometry)) return;
+            if (!object.geometry || object.isSkinnedMesh) return;
+            if (!object.isInstancedSpriteMesh) resources.add(object.geometry);
 
-            geometries.add(object.geometry);
-            this.retainGeometry(object.geometry);
+            for (const material of Array.isArray(object.material) ? object.material : [object.material])
+                if (material) collectMaterialResources(material, resources);
         });
+
+        for (const resource of resources) {
+            if (retained.has(resource)) continue;
+
+            retained.add(resource);
+            retainResource(resource);
+        }
     }
 
     public removePawn(pawn: BaseActor): void {
-        if (!this.physicsManager.removePawn(pawn)) return;
+        if (!this.getPhysicsManager().removePawn(pawn)) return;
 
+        pawn.findComponent<PawnAttackComponent>("pawnAttack")?.detachSkillVisuals();
+        pawn.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
         arrPawnEffects.length = 0;
         for (const effect of pawn.getScriptChildren()) arrPawnEffects.push(effect);
         this.scene.traverse(object => {
@@ -1130,14 +1439,38 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
+    public retainSkillVisual(visual: SkillVisualEffect, effects: Object3D[], caster: BaseActor): void { this.retainedSkillVisuals.set(visual, { effects, caster }); }
+    public isRetainingSkillVisual(visual: SkillVisualEffect): boolean { return this.retainedSkillVisuals.has(visual); }
+    public replaceRetainedSkillTargets(actor: BaseActor, replacement: BaseActor): void {
+        for (const [visual, entry] of this.retainedSkillVisuals) {
+            if (replacement && entry.caster === actor) entry.caster = replacement;
+            visual.replaceTarget(actor, replacement);
+        }
+    }
+
+    public setRetainedSkillTargets(caster: BaseActor, skillId: number, actors: readonly BaseActor[]): void {
+        for (const [visual, entry] of this.retainedSkillVisuals)
+            if (entry.caster === caster) visual.setSkillTargets(skillId, actors);
+    }
+
+    public clearRetainedSkillVisuals(): void {
+        for (const [visual, { effects }] of this.retainedSkillVisuals) {
+            for (const effect of effects)
+                if (effect.parent) this.removeTransientEffect(effect);
+            visual.clear();
+            effects.length = 0;
+        }
+        this.retainedSkillVisuals.clear();
+    }
+
     protected runDeferredMixerOperations(): void {
         for (const operation of this.deferredMixerOperations) operation();
 
         this.deferredMixerOperations.length = 0;
     }
 
-    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<BaseActor> {
-        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment);
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering, undefined, preloadSkills, collisionSize);
     }
 
     public listNpcs(): Promise<INpcDefinition[]> {
@@ -1145,7 +1478,21 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
+    public getPawnRange(): number { return this.pawnRange ?? this.manGame.getComponent("asset").userConfig.clippingRange.pawn; }
+    public setPawnRange(range: number): void {
+        if (!Number.isFinite(range) || range <= 0) throw new Error(`Invalid pawn range '${range}'.`);
+        this.pawnRange = range;
+        this.needsUpdate = true;
+    }
+    public setPawnLimit(limit: number) {
+        if (!Number.isInteger(limit) || limit < 1) throw new Error(`Invalid pawn limit '${limit}'.`);
+
+        this.pawnLimit = limit;
+        this.needsUpdate = true;
+    }
     public unregisterPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.delete(component); }
+    public registerPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.add(component); }
+    public unregisterPawnFishing(component: PawnFishingComponent): void { this.pawnFishing.delete(component); }
     public registerActorMesh(component: ActorMeshComponent): void {
         this.actorMeshes.add(component);
         this.invalidatePawnLighting(component.getParent());
@@ -1153,36 +1500,90 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public unregisterActorMesh(component: ActorMeshComponent): void { this.actorMeshes.delete(component); }
     public registerHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.add(component); }
     public unregisterHairSimulation(component: HairSimulationComponent): void { this.hairSimulations.delete(component); }
+    public queueShaderCompile(root: THREE.Object3D): void { this.pendingShaderCompiles.add(root); }
 
     protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
-        for (const component of this.pawnRenderables)
-            component.getParent().updatePresentation(currentTime, deltaTime / 1000);
-    }
+        const timeDilation = this.level ? this.level.levelInfoActor.getUnrealScriptProperty("TimeDilation") as number : 1;
+        const actorDelta = Math.fround(Math.max(Math.fround(0.0005), Math.min(Math.fround(0.4), Math.fround(Math.fround(deltaTime / 1000) * timeDilation))));
 
-    protected updateSectorRenderOrder(activeSector: SectorObject | null): void {
-        if (activeSector === this.lastRenderOrderSector) return;
-
-        this.lastRenderOrderSector = activeSector;
-
-        this.sectors.forEach(row => row.forEach(sector => {
-            const order = sector === activeSector ? 0 : -1;
-            if (sector.staticMeshGroup) sector.staticMeshGroup.renderOrder = order;
-            if (sector.bspGroup) sector.bspGroup.renderOrder = order;
-        }));
-    }
-
-    protected updatePawnVisibility(): void {
         for (const component of this.pawnRenderables) {
             const pawn = component.getParent();
+            if (pawn !== this.player && !pawn.isInteractive()) continue;
+            if (pawn.isInStasis(currentTime)) continue;
 
-            pawn.visible = !this.frustumCullingEnabled || this.frustum.intersectsSphere(component.getRenderSphere());
+            component.tickActorView(actorDelta);
+
+            if (!pawn.visible && !(pawn as any).isPlayer && !pawn.findComponent("npcSimulation")) {
+                const animation = pawn.findComponent<AnimationComponent>("animation");
+                const attack = pawn.findComponent<PawnAttackComponent>("pawnAttack");
+                const lifecycle = pawn.findComponent<NpcLifecycleComponent>("npcLifecycle");
+                const script = pawn.findComponent<ScriptComponent>("script");
+
+                if (script) script.onUpdate(currentTime, actorDelta);
+
+                if (animation) animation.onUpdate(currentTime, actorDelta);
+                if (attack) attack.onUpdate(currentTime, actorDelta);
+                if (lifecycle) lifecycle.onUpdate(currentTime, actorDelta);
+                continue;
+            }
+
+            pawn.updatePresentation(currentTime, actorDelta);
         }
+    }
+
+    protected updatePawnVisibility(frustum = this.frustum): void {
+        const network = this.manGame.getComponent("network"), inWorld = network.isInWorld(), isObserving = network.isObserving();
+        const range = Math.fround(this.getPawnRange()) * CLIPPING_RANGE_SCALE;
+        const controller = this.manGame.getComponent("asset").playerController;
+        const viewTarget = getProperty(controller, "ViewTarget");
+
+        // The viewport controller's runtime transform is the player pawn's transform.
+        const reference = !viewTarget || viewTarget === controller ? this.player : viewTarget as unknown as THREE.Object3D;
+        reference.getWorldPosition(tmpPawnViewOrigin);
+        const originX = Math.fround(tmpPawnViewOrigin.x), originY = Math.fround(tmpPawnViewOrigin.y);
+        const limit = inWorld ? this.pawnLimit : 10000;
+
+        this.arrVisiblePawns.length = 0;
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent();
+            const state = this.resolvePawnLocation(pawn);
+            const dx = Math.fround(state.position.x) - originX, dy = Math.fround(state.position.y) - originY;
+            const inRange = inWorld ? component.updateActorView(Math.sqrt(dx * dx + dy * dy), range) : component.prepareActorView();
+
+            if (!state.sector || !state.sector.staticMeshGroup) {
+                pawn.visible = false;
+                continue;
+            }
+
+            pawn.visible = !pawn.getUnrealScriptProperty("bHidden") && (pawn !== this.player || !isObserving) && inRange;
+            if (pawn.visible) {
+                let leafVisible = false;
+                if (pawn.findComponent("script")) {
+                    const leaves = component.getAmbientZone(state.sector).leaves;
+
+                    for (let i = 0; i < leaves.length; i++)
+                        if (state.sector.visibleLeaves.has(leaves[i])) { leafVisible = true; break; }
+                } else leafVisible = state.leafIndex !== null && state.sector.visibleLeaves.has(state.leafIndex);
+
+                pawn.visible = leafVisible && (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            }
+            if (pawn.visible) {
+                if (limit < 10000 && pawn !== this.player) this.arrVisiblePawns.push(component);
+                else component.createSkin();
+            }
+        }
+        if (this.arrVisiblePawns.length > limit)
+            this.arrVisiblePawns.sort((a, b) => a.getParent().position.distanceToSquared(tmpPawnViewOrigin) - b.getParent().position.distanceToSquared(tmpPawnViewOrigin));
+        this.arrVisiblePawns.forEach((component, index) => {
+            component.getParent().visible = index < limit;
+            if (index < limit) component.createSkin();
+        });
 
         this.sectors.forEach(row => row.forEach(sector => {
             for (const pawn of sector.pawns.children) {
                 const state = this.resolvePawnLocation(pawn);
 
-                if (!state.sector) {
+                if (!state.sector || !state.sector.staticMeshGroup) {
                     pawn.visible = false;
                     continue;
                 }
@@ -1193,7 +1594,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     // USkeletalMeshInstance::Render, UnSkeletalMesh.cpp line 4908: zone ambient plus hardware lights.
-    protected updatePawnLighting(): void {
+    protected updatePawnLighting(updateShadow = true, currentTime = 0): void {
         const sunAmbient = this.environment.getAmbientPlaneActorLightHalved(tmpPawnSunAmbient);
 
         for (const row of this.sectors.values())
@@ -1201,16 +1602,42 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 for (const pawn of sector.pawns.children)
                     if (pawn.visible) this.updateActorLighting(pawn, sunAmbient);
 
-        this.updatePawnShadow();
+        if (updateShadow) this.updatePawnShadow();
 
         for (const component of this.pawnRenderables)
-            this.updateActorLighting(component.getParent(), sunAmbient);
+            if (component.getParent().visible) this.updateActorLighting(component.getParent(), sunAmbient);
 
-        for (const component of this.actorMeshes)
+        for (const component of this.actorMeshes) {
+            let parent = component.getParent().parent;
+            while (parent && !(parent as any).isActor) parent = parent.parent;
+            if (parent) continue;
+
             this.updateActorLighting(component.getParent(), sunAmbient);
+        }
+
+        for (const pickup of this.pickups) {
+            if (updateShadow) pickup.update(currentTime);
+            if (pickup.visible) this.updateActorLighting(pickup, sunAmbient);
+        }
     }
 
     // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
+    public setPawnShadow(enabled: boolean) { this.pawnShadow = enabled; }
+
+    public setUseTrilinear(enabled: boolean) { setUseTrilinear(enabled); }
+
+    public setTextureDetail(detail: number) { setTextureDetail(this.renderer, detail); }
+
+    public setSortTransparent(enabled: boolean) {
+        this.sortTransparent = enabled;
+        this.arrSceneSectors.forEach(sector => sector.setSortTransparent(enabled));
+    }
+
+    public setRenderDeco(enabled: boolean) {
+        this.renderDeco = enabled;
+        this.arrSceneSectors.forEach(sector => sector.setRenderDeco(enabled));
+    }
+
     protected updatePawnShadow(): void {
         const timeOfDay = this.environment.getTimeOfDay();
 
@@ -1227,7 +1654,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
 
         if (sun) tmpShadowDirection.copy(sun.lightDirection).normalize();
-        else tmpShadowDirection.set(0, 0, -1);
+        else tmpShadowDirection.set(-0, -0, -1);
 
         const minVertical = Math.abs(tmpShadowDirection.x) * 0.5;
 
@@ -1235,9 +1662,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
             tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
 
         arrShadowCasters.length = 0;
-        for (const component of this.pawnRenderables) arrShadowCasters.push(component.getParent());
+        if (this.pawnShadow) {
+            arrShadowCasters.push(this.player);
 
-        if (sector) for (const pawn of sector.pawns.children) arrShadowCasters.push(pawn);
+            const gui = this.manGame.getComponent("gui");
+            for (const component of this.pawnRenderables)
+                if (component.getParent() !== this.player && (gui.getScreen() !== "world" || gui.hasNameplate(component.getParent()))) arrShadowCasters.push(component.getParent());
+        }
 
         this.shadowProjector.update(this.renderer, this.player, arrShadowCasters, tmpShadowDirection);
     }
@@ -1254,13 +1685,17 @@ export class RenderManager implements IEngineComponent<GameManager> {
         state = {
             position: new Vector3(NaN, NaN, NaN),
             lightingPosition: new Vector3(NaN, NaN, NaN),
+            lightingRootPosition: new Vector3(NaN, NaN, NaN),
+            lightingRadius: -1,
             sector: null,
             lightingSector: null,
             leafIndex: null,
             lightingLeafIndex: null,
+            lightingSpecialLit: false,
             zoneIndex: null,
             lightingZoneIndex: null,
             envVersion: -1,
+            ambientZoneVersion: -1,
             pawnLightVersion: -1,
             ambientR: -1,
             ambientG: -1,
@@ -1278,10 +1713,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         actor.getWorldPosition(tmpPawnWorldPos);
 
-        if (state.position.equals(tmpPawnWorldPos) && state.sector) return state;
+        const sector = this.getSector(tmpPawnWorldPos);
+
+        if (state.position.equals(tmpPawnWorldPos) && state.sector === sector) return state;
 
         state.position.copy(tmpPawnWorldPos);
-        state.sector = this.getSector(tmpPawnWorldPos);
+        state.sector = sector;
         state.leafIndex = state.sector ? state.sector.findPositionLeaf(tmpPawnWorldPos) : null;
         state.zoneIndex = state.sector ? state.sector.findPositionZone(tmpPawnWorldPos) : null;
 
@@ -1295,10 +1732,22 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (!sector) return;
 
         const zoneInfo = state.zoneIndex === null ? null : sector.bspZones[state.zoneIndex]?.zoneInfo;
-        const moved = state.lightingPosition.distanceToSquared(state.position) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
+        const renderable = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<PawnRenderableComponent>("pawnRenderable") : null;
+        const ambientZone = renderable && (actor as BaseActor).findComponent("script") ? renderable.getAmbientZone(sector) : null;
+        const ambientZoneVersion = ambientZone ? ambientZone.version : -1;
+        const sphere = (actor as BaseActor).isActor ? (actor as BaseActor).getRenderSphere() : null;
+        const center = sphere ? sphere.center : state.position;
+        const radius = sphere ? sphere.radius : 24;
+        const lightingSphere = renderable ? renderable.getLightingSphere() : sphere;
+        const rootChanged = !state.lightingRootPosition.equals(lightingSphere ? lightingSphere.center : center);
+        const isSpecialLit = (actor as BaseActor).isActor && !!(actor as BaseActor).getUnrealScriptProperty("bSpecialLit");
+        const specialLitChanged = state.lightingSpecialLit !== isSpecialLit;
+        const moved = state.lightingPosition.distanceToSquared(center) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;
+        const boundsChanged = state.lightingRadius !== radius;
         const locationChanged = state.lightingSector !== sector || state.lightingLeafIndex !== state.leafIndex || state.lightingZoneIndex !== state.zoneIndex;
         const envVersion = this.environment.getEnvVersion();
-        const ambientChanged = state.envVersion !== envVersion || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
+        const renderLeavesChanged = state.ambientZoneVersion !== ambientZoneVersion;
+        const ambientChanged = state.envVersion !== envVersion || renderLeavesChanged || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
         const pawnLightVersion = pawnLights ? pawnLights.version : -1;
         let relevantLightsChanged = false;
@@ -1307,8 +1756,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         for (const light of state.lights)
             relevantLightUpdated = relevantLightUpdated || light.needsUpdate;
 
-        if (moved || locationChanged) {
-            sector.getRelevantLights(state.position, PAWN_LIGHTING_RADIUS, arrPawnLights, NUM_ACTOR_LIGHTS, !!zoneInfo?.isSunAffected);
+        if (moved || boundsChanged || locationChanged || specialLitChanged || renderLeavesChanged) {
+            const permeatingLights = ambientZone ? ambientZone.permeatingLights : state.leafIndex === null ? null : sector.bspLeaves[state.leafIndex].permeatingLights;
+
+            sector.getRelevantLights(center, radius, arrPawnLights, NUM_ACTOR_LIGHTS, !!(ambientZone || zoneInfo)?.isSunAffected, permeatingLights, isSpecialLit);
             relevantLightsChanged = state.lights.length !== arrPawnLights.length;
 
             for (let i = 0, len = arrPawnLights.length; i < len; i++) {
@@ -1319,15 +1770,17 @@ export class RenderManager implements IEngineComponent<GameManager> {
             state.lights.length = 0;
             state.lights.push(...arrPawnLights);
 
-            state.lightingPosition.copy(state.position);
+            state.lightingPosition.copy(center);
+            state.lightingRadius = radius;
             state.lightingSector = sector;
             state.lightingLeafIndex = state.leafIndex;
             state.lightingZoneIndex = state.zoneIndex;
+            state.lightingSpecialLit = isSpecialLit;
         }
 
-        if (!locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
+        if (!moved && !boundsChanged && !rootChanged && !locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
 
-        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getRenderSphere());
+        if (pawnLights) pawnLights.updateLighting(lightingSphere);
 
         arrLightingObjects.length = 0;
         arrLightingObjects.push(actor);
@@ -1335,75 +1788,43 @@ export class RenderManager implements IEngineComponent<GameManager> {
         while (arrLightingObjects.length > 0) {
             const object = arrLightingObjects.pop()!;
 
-            for (const child of object.children) arrLightingObjects.push(child);
+            for (const child of object.children) if (!(child as BaseActor).isActor) arrLightingObjects.push(child);
 
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
-                (object as LitSkinnedMesh).updateActorLighting(zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined);
+                (object as LitSkinnedMesh).updateActorLighting(ambientZone || zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined, lightingSphere);
         }
 
+        state.lightingRootPosition.copy(lightingSphere ? lightingSphere.center : center);
         state.envVersion = envVersion;
+        state.ambientZoneVersion = ambientZoneVersion;
         state.pawnLightVersion = pawnLightVersion;
         state.ambientR = sunAmbient.r;
         state.ambientG = sunAmbient.g;
         state.ambientB = sunAmbient.b;
     }
 
-    protected _updateObjects(currentTime: number) {
-        this.visibleWorldBatchEmitters.length = 0;
-        this.neighborVisibilitySectors.length = 0;
+    protected updateViewBillboards(camera: PerspectiveCamera) {
+        const projUp = tmpBillboardUp.copy(camera.up).normalize();
+        const projFront = tmpBillboardFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
+        const projRight = tmpBillboardRight.crossVectors(projFront, projUp).normalize();
+        projUp.crossVectors(projRight, projFront).normalize();
+        (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight);
+        (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
+    }
 
-        GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
-
-        const ambientSun = this.environment.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte);
-        const sunColor = this.environment.getBaseColorPlaneStaticMeshSunLightScaled(tmpColorByte_2);
-        (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(
-            (ambientSun.r + sunColor.r) / 255,
-            (ambientSun.g + sunColor.g) / 255,
-            (ambientSun.b + sunColor.b) / 255
-        );
-
-        {
-            const camera = this.camera;
-            const projUp = tmpBillboardUp.copy(camera.up).normalize();
-            const projFront = tmpBillboardFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
-            const projRight = tmpBillboardRight.crossVectors(projFront, projUp).normalize();
-            projUp.crossVectors(projRight, projFront).normalize();
-            (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight);
-            (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
-        }
-
-        if (this.bspHelperCamera) {
-            if (!this.bspHelperActive) {
-                this.bspHelperCamera.position.copy(this.camera.position);
-                this.bspHelperCamera.rotation.copy(this.camera.rotation);
-                this.bspHelperCamera.updateMatrixWorld(true);
-                if (this.bspHelperCameraHelper) {
-                    this.bspHelperCameraHelper.visible = false;
-                }
-            } else {
-                if (this.bspHelperCameraHelper) {
-                    this.bspHelperCameraHelper.visible = true;
-                }
-            }
-            if (this.bspHelperCameraHelper) {
-                this.bspHelperCameraHelper.update();
-            }
-        }
-
-
-        const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
-        const bspCullingPosition = bspCullingCamera.position;
+    protected updateViewVisibility(camera: PerspectiveCamera, frustum: Frustum, auxiliary = false) {
+        const bspCullingPosition = camera.position;
 
         const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
-        const fogSphere = new Sphere(bspCullingPosition, fogFar);
+        const fogSphere = tmpViewSphere.set(bspCullingPosition, fogFar);
 
-        this.frustum.setFromProjectionMatrix(new Matrix4().multiplyMatrices(bspCullingCamera.projectionMatrix, bspCullingCamera.matrixWorldInverse));
+        frustum.setFromProjectionMatrix(tmpViewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
 
         // UE2: BoundingPlanes[4] = FPlane(ViewOrigin + Z * FarClip, Z)
         {
-            tmpCamDir.set(0, 0, -1).applyQuaternion(bspCullingCamera.quaternion);
+            tmpCamDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
             tmpFarPoint.copy(bspCullingPosition).addScaledVector(tmpCamDir, fogFar);
-            this.frustum.planes[4].setFromNormalAndCoplanarPoint(tmpCamDir.negate(), tmpFarPoint);
+            frustum.planes[4].setFromNormalAndCoplanarPoint(tmpCamDir.negate(), tmpFarPoint);
         }
 
         // TODO: Clip static meshes against [ClippingRange] StaticMesh instead of fog.
@@ -1416,41 +1837,39 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const activeSector = this.getSector(bspCullingPosition);
 
-        this.physicsManager.setActiveSector(activeSector);
-        this.physicsManager.setTriggerPosition(this.camera.position);
-        this.updateSectorRenderOrder(activeSector);
+        if (!auxiliary) {
+            this.getPhysicsManager().setTriggerPosition(this.camera.position);
+        }
 
-        this.scene.traverse((object: THREE.Object3D) => {
-            if ((object as any).isSectorObject) {
-                const sector = object as SectorObject;
-                const isCameraInSector = activeSector === sector;
-                const wasVisible = sector.visible;
+        for (const sector of this.arrSceneSectors) {
+            if (sector.isRetired) { sector.visible = false; continue; }
+            const isCameraInSector = activeSector === sector;
+            const wasVisible = sector.visible;
 
-                if (!isCameraInSector) {
-                    if (!fogSphere.intersectsBox(sector.worldBounds)) {
-                        sector.visible = false;
-                        return;
-                    }
-                }
-
-                sector.visible = true;
-
-                const topLevelOnly = !isCameraInSector;
-
-                if (isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
-                    sector.updateVisibility(this.environment, bspCullingPosition, this.frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq, emitterCullDistSq);
-                } else {
-                    this.neighborVisibilitySectors.push(sector);
+            if (!isCameraInSector) {
+                if (!fogSphere.intersectsBox(sector.worldBounds)) {
+                    sector.visible = false;
+                    continue;
                 }
             }
-        });
 
-        if (this.neighborVisibilitySectors.length > 0) {
+            sector.visible = true;
+
+            const topLevelOnly = !isCameraInSector;
+
+            if (auxiliary || isCameraInSector || !wasVisible || !(sector as any).visibilityCacheInitialized) {
+                sector.updateVisibility(this.environment, bspCullingPosition, frustum, this.frustumCullingEnabled, topLevelOnly, staticMeshCullDistSq, emitterCullDistSq, auxiliary);
+            } else {
+                this.neighborVisibilitySectors.push(sector);
+            }
+        }
+
+        if (!auxiliary && this.neighborVisibilitySectors.length > 0) {
             const index = this.neighborVisibilityCursor++ % this.neighborVisibilitySectors.length;
             this.neighborVisibilitySectors[index].updateVisibility(
                 this.environment,
                 bspCullingPosition,
-                this.frustum,
+                frustum,
                 this.frustumCullingEnabled,
                 true,
                 staticMeshCullDistSq,
@@ -1458,8 +1877,81 @@ export class RenderManager implements IEngineComponent<GameManager> {
             );
         }
 
-        this.updatePawnVisibility();
-        this.updatePawnLighting();
+        this.updatePawnVisibility(frustum);
+        for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
+            let sector: SectorObject = null;
+            for (let parent = emitter.parent; parent; parent = parent.parent)
+                if (parent.isSectorObject) { sector = parent; break; }
+
+            if (!emitter.isActorAttachedEmitter && sector && !sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) {
+                emitter.setRenderVisible(false);
+                continue;
+            }
+
+            emitter.parent.getWorldPosition(tmpEmitterOrigin);
+            const dx = tmpEmitterOrigin.x - camera.position.x, dy = tmpEmitterOrigin.y - camera.position.y;
+            const visible = (emitter.isActorAttachedEmitter || !!sector && sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) && Math.sqrt(dx * dx + dy * dy) < emitterCullDist;
+            emitter.setRenderVisible(visible && !this.manuallyHiddenEmitterUuids.has(emitter.uuid));
+        }
+        return activeSector;
+    }
+
+    protected updateObjects(currentTime: number) {
+        this.visibleWorldBatchEmitters.length = 0;
+        this.neighborVisibilitySectors.length = 0;
+
+        GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
+
+        const ambientSun = this.environment.getAmbientPlaneStaticMeshSunLightHalved(tmpColorByte); // SetAmbientLight(amb >> 1) at 0x90d482; the HSV*32 add (0x90d3a3) only runs for far-LOD mode 2, which we never draw
+        (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(ambientSun.r / 255, ambientSun.g / 255, ambientSun.b / 255);
+
+        this.updateViewBillboards(this.camera);
+
+        if (this.bspHelperCamera) {
+            if (!this.bspHelperActive) {
+                this.bspHelperCamera.position.copy(this.camera.position);
+                this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
+                this.bspHelperCamera.updateMatrixWorld(true);
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = false;
+                }
+            } else {
+                if (this.bspHelperCameraHelper) {
+                    this.bspHelperCameraHelper.visible = true;
+                }
+            }
+            if (this.bspHelperCameraHelper) {
+                this.bspHelperCameraHelper.update();
+                this.bspHelperCameraHelper.updateMatrixWorld(true);
+            }
+        }
+
+
+        const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
+        const activeSector = this.updateViewVisibility(bspCullingCamera, this.frustum);
+        const sunLight = activeSector?.getSunLight();
+
+        if (sunLight && activeSector.brightness > 0) {
+            sunLight.getHardwareLight(this.camera.position, 0, tmpHardwareSun);
+            (GLOBAL_UNIFORMS.staticMeshHardwareSunColor.value as Vector3).set(tmpHardwareSun.color.r, tmpHardwareSun.color.g, tmpHardwareSun.color.b).divideScalar(activeSector.brightness); // per-level Brightness comes back from the hardwareSun attribute
+            (GLOBAL_UNIFORMS.staticMeshHardwareSunDirection.value as Vector3).copy(sunLight.lightDirection);
+        }
+
+        this.overHeadAlarm.clear();
+        this.manGame.getComponent("gui").updateNameplates();
+        this.updatePawnLighting(true, currentTime);
+
+        for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
+            if (!emitter.pendingSounds.length) continue;
+
+            let sector: SectorObject = null;
+            for (let parent = emitter.parent; parent; parent = parent.parent)
+                if (parent.isSectorObject) { sector = parent; break; }
+
+            for (const sound of emitter.pendingSounds)
+                if (sound.dataUri || sector) this.audioManager.playOneShotSound(sound.dataUri || sector.getSoundUri(sound.soundName), sound.position, sound.volume, sound.pitch, sound.refDistance, sound.maxDistance);
+            emitter.pendingSounds.length = 0;
+        }
 
         this.scene.traverseVisible(child => {
             if ((child as any).isUpdatable) {
@@ -1474,37 +1966,23 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
 
                 if ((child as any).particlePool) {
-                    if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
-
-                    const emitterUuid = (child as any).emitterActorUuid;
-                    const isVisible = (child as any).isActorAttachedEmitter || (!!sector && emitterUuid !== undefined && sector.visibleEmitterUuids.has(emitterUuid));
-
-                    if (!isVisible) return;
-
                     const mesh = (child as any).instancedMesh;
                     if (mesh?.visible && mesh.isWorldBatchCandidate)
                         this.visibleWorldBatchEmitters.push(child);
-
-                    const pendingSounds = (child as any).pendingSounds;
-                    if (pendingSounds.length) {
-                        for (const snd of pendingSounds)
-                            if (snd.dataUri || sector) this.audioManager.playOneShotSound(snd.dataUri || sector.getSoundUri(snd.soundName), snd.position, snd.volume, snd.pitch, snd.refDistance, snd.maxDistance);
-                        pendingSounds.length = 0;
-                    }
-                } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting) return;
-                else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment);
+                } else if ((child as any).isVehicleMesh) {
+                    const vehicleSector = this.getSector(child.getWorldPosition(tmpPawnWorldPos));
+                    if (vehicleSector) (child as any).update(vehicleSector, this.environment, this.renderer);
+                } else if (sector && sector !== activeSector && !(child as any).needsInitialLighting?.()) return;
+                else if (sector && 'computeLighting' in child) (child as any).update(sector, this.environment, this.renderer);
                 else (child as any).update(currentTime);
             }
 
             if ((child as THREE.Mesh).isMesh) {
-                const mat = (child as THREE.Mesh).material;
+                const mat = (child as THREE.Mesh).material as any;
                 if (mat) {
-                    const materials = (mat as any).isMaterial ? [mat] : (mat as any);
-                    (materials as THREE.Material[]).forEach(m => {
-                        if (m && (m as any).isUpdatable) {
-                            (m as any).update(currentTime);
-                        }
-                    });
+                    if (mat.isMaterial) {
+                        if (mat.isUpdatable) mat.update(currentTime);
+                    } else for (const m of mat) if (m && m.isUpdatable) m.update(currentTime);
                 }
             }
 
@@ -1520,12 +1998,28 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
 
-        this._updateEnvironment();
+        this.updateEnvironment();
     }
 
-    protected _updateEnvironment() {
+    protected blendSkyColor(color: ColorByte, index: number, update: boolean) {
+        let current = this.skyColors[index];
+
+        if (!current) {
+            current = this.skyColors[index] = color.clone();
+            this.prevSkyColors[index] = color.clone();
+        } else if (update) {
+            current.copy(this.prevSkyColors[index]).lerp(color, 1 - this.fogBlend.remainingTime / this.fogBlend.totalTime);
+        }
+
+        color.copy(current);
+    }
+
+    protected updateEnvironment(camera = this.camera, updateAudio = true) {
         const env = this.environment;
         if (!env) return;
+        const followsPawn = camera === this.camera && this.manGame.getComponent("network")?.isInWorld() && this.getInputManager().isFollowingPlayer() && this.getInputManager().isUsingOrbitControls();
+        const fogCamera = camera === this.camera && this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : camera;
+        const fogPosition = followsPawn ? this.player.position : fogCamera.position;
 
         const targetSkyColor = env.getSkyColor(tmpColorByte);
 
@@ -1547,11 +2041,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         let targetFogColor = env.getHazeColor(tmpColorByte_2);
+        let fogSource: L2Environment | ZoneObject | FogInfoObject = env;
 
         // targetFogStart = 1;
         // targetFogEnd = 10
 
-        const sector = this.getSector(this.camera.position);
+        const sector = this.getSector(fogPosition);
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let skyVisibility = 1.0;
 
@@ -1562,24 +2057,20 @@ export class RenderManager implements IEngineComponent<GameManager> {
         ];
 
         if (sector) {
-            const zoneIndex = sector.findPositionZone(this.camera.position);
+            const zoneIndex = sector.findPositionZone(fogPosition);
             const cameraZoneMask = 1n << BigInt(zoneIndex);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
-            if (zone && zone.fog) {
-                if (zone.isSunAffected) {
-                    const zR = zone.fog.color.r * 255;
-                    const zG = zone.fog.color.g * 255;
-                    const zB = zone.fog.color.b * 255;
-
-                    targetFogColor.set(
-                        (targetFogColor.r + zR) * 0.5,
-                        (targetFogColor.g + zG) * 0.5,
-                        (targetFogColor.b + zB) * 0.5
-                    );
-                } else {
-                    targetFogColor.set(zone.fog.color.r * 255, zone.fog.color.g * 255, zone.fog.color.b * 255);
-                }
+            // FLevelSceneNode::Render: direct zone fog (0x8f327c); outdoor world fog (0x8f3077-0x8f31b2).
+            if (zone && zone.fog && (!zone.isSunAffected || !this.manGame.getComponent("asset").getStreaming())) {
+                fogSource = zone;
+                targetFogStart = zone.fog.near;
+                targetFogEnd = zone.fog.far;
+                targetFogColor.set(zone.fog.color.r * 255, zone.fog.color.g * 255, zone.fog.color.b * 255);
+            } else if (zone && !zone.isSunAffected) {
+                fogSource = zone;
+                targetFogStart = DEFAULT_FAR;
+                targetFogEnd = DEFAULT_FAR + 1;
             }
 
             let accSkyR = 0, accSkyG = 0, accSkyB = 0, totalSkyWeight = 0;
@@ -1597,8 +2088,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             const fogInfosAll: any[] = [];
             const sectorSize = 256 * 128;
-            const currentX = Math.floor(this.camera.position.x / sectorSize) + 20;
-            const currentY = Math.floor(this.camera.position.y / sectorSize) + 18;
+            const currentX = Math.floor(fogPosition.x / sectorSize) + 20;
+            const currentY = Math.floor(fogPosition.y / sectorSize) + 18;
 
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
@@ -1616,8 +2107,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             this.activeFogId = null;
             let minFogDist = Infinity;
-            const bspCullingCamera = (this.bspHelperCamera && this.bspHelperActive) ? this.bspHelperCamera : this.camera;
-            const fogRefPosition = bspCullingCamera.position;
+            const fogRefPosition = fogPosition;
 
             let maxHArrLen = 0;
             const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
@@ -1722,6 +2212,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             });
 
             if (this.activeFogId) {
+                fogSource = activeInfos[0].fogInfo;
                 targetFogStart = accStart / totalFogWeight;
                 targetFogEnd = accEnd / totalFogWeight;
                 targetFogColor.set(
@@ -1778,10 +2269,40 @@ export class RenderManager implements IEngineComponent<GameManager> {
             } else tmpColorByte_4.set(255, 255, 255, 255);
         }
 
-        const waterVolume = sector ? sector.getWaterVolumeAt(this.camera.position) : null;
+        if (camera === this.camera) {
+            if (updateAudio) {
+                if (!this.fogSource) {
+                    this.fogBlend.snapToTarget(targetFogColor, targetFogStart, targetFogEnd);
+                    this.skyColors.length = this.prevSkyColors.length = 0;
+                } else if (fogSource !== this.fogSource) {
+                    this.prevSkyColors.forEach((color, index) => color.copy(this.skyColors[index]));
+                    this.fogBlend.setTarget(targetFogColor, targetFogStart, targetFogEnd);
+                } else {
+                    this.fogBlend.targetColor.copy(targetFogColor);
+                    this.fogBlend.targetStart = targetFogStart;
+                    this.fogBlend.targetEnd = targetFogEnd;
+                }
+                this.fogSource = fogSource;
+                this.fogBlend.update(this.viewShakeDelta);
+            }
+            if (this.fogSource) {
+                targetFogColor.copy(this.fogBlend.currentColor);
+                targetFogStart = this.fogBlend.currentStart;
+                targetFogEnd = this.fogBlend.currentEnd;
+                this.blendSkyColor(targetSkyColor, 0, updateAudio);
+                this.blendSkyColor(tmpColorByte_4, 1, updateAudio);
+                for (let i = 0; i < targetCloudColors.length; i++) this.blendSkyColor(targetCloudColors[i], i + 2, updateAudio);
+                for (let i = 0; i < blendedHazeColors.length; i++) this.blendSkyColor(blendedHazeColors[i], i + 5, updateAudio);
+            }
+        }
 
-        this.waterEffects.underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
-        this.audioManager.setUnderwater(!!waterVolume);
+        const waterSector = this.getSector(fogCamera.position);
+        const waterVolume = waterSector ? waterSector.getWaterVolumeAt(fogCamera.position) : null;
+
+        if (updateAudio) {
+            this.getWaterEffects().underWaterEffect.setVolume(waterVolume, env.getEnv().waterVolume.cellophaneColor);
+            this.audioManager.setUnderwater(!!waterVolume);
+        }
 
         if (waterVolume) {
             if (waterVolume.fog) {
@@ -1804,7 +2325,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (skyVisibility < 1.0)
             targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
 
-        this.skyRenderer.update(this.camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
+        this.skyRenderer.update(camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
 
         const clearColorThree = new Color().setRGB(targetClearColor.r / 255, targetClearColor.g / 255, targetClearColor.b / 255);
         this.renderer.setClearColor(clearColorThree);
@@ -1825,6 +2346,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
+        this.updateLevelTime(deltaTime);
+        for (const [visual, { effects }] of this.retainedSkillVisuals) {
+            visual.update(currentTime);
+            if (visual.hasActiveEffects() || effects.some(effect => effect.parent && (effect as Object3D & IObject).findComponent("nProjectile"))) continue;
+
+            visual.clear();
+            effects.length = 0;
+            this.retainedSkillVisuals.delete(visual);
+        }
         this.isRenderingFrame = this.isRendering && (this.isPersistentRendering || this.needsUpdate);
 
         if (!this.isRenderingFrame) return;
@@ -1834,10 +2364,23 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.manGame.getComponent("asset").tick(this);
         this.processSectorWarmups();
+        for (const root of this.pendingShaderCompiles)
+            if (root.parent) tmpShaderCompileGroup.children.push(root);
+
+        tmpShaderCompileGroup.fog = this.scene.fog;
+        if (tmpShaderCompileGroup.children.length) this.renderer.compileAsync(tmpShaderCompileGroup, this.camera); // the world has no three lights, so only fog has to match the real scene; roots stay parented where they are
+        tmpShaderCompileGroup.children.length = 0;
+        this.pendingShaderCompiles.clear();
         this.processShaderDiagnostics();
         this.viewShakeDelta = deltaTime / 1000;
 
-        for (const simulation of this.hairSimulations) simulation.restorePose();
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent(), animation = pawn.findComponent<AnimationComponent>("animation");
+            if (animation) animation.setSimulationEnabled((pawn === this.player || pawn.isInteractive()) && !pawn.isInStasis(currentTime));
+        }
+
+        for (const simulation of this.hairSimulations)
+            if (simulation.getParent().isInteractive() && !simulation.getParent().isInStasis(currentTime)) simulation.restorePose();
 
         this.isUpdatingMixer = true;
         try {
@@ -1847,13 +2390,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.runDeferredMixerOperations();
         }
 
-        for (const simulation of this.hairSimulations) simulation.update(deltaTime / 1000);
+        for (const simulation of this.hairSimulations)
+            if (simulation.getParent().isInteractive() && !simulation.getParent().isInStasis(currentTime)) simulation.update(deltaTime / 1000);
 
         const timeScale = this.environment.getTimeScale();
 
         if (timeScale !== 0) {
             const t = this.environment.getTimeOfDay();
-            const dt = deltaTime / 100000 * timeScale;
+            const dt = deltaTime / 1e5 * timeScale;
 
             const nt = (t + dt) % 24;
 
@@ -1867,10 +2411,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const timeOfDay = this.environment.getTimeOfDay();
 
         // UL2NEnvManager::IsDay (L2.exe 0x7b7320): 6.0 <= time <= 24.0.
-        this.waterEffects.setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
-        this.waterEffects.underWaterEffect.updatePresentation(this.camera);
+        this.getWaterEffects().setUnderWaterState(this.camera.position, timeOfDay >= 6 && timeOfDay <= 24);
+        this.getWaterEffects().underWaterEffect.updatePresentation(this.camera);
 
-        this.inputManager.updateCamera();
+        this.getInputManager().updateCamera();
 
         // const sector = this.scene.children[1].children[0].children[0] as any;
 
@@ -1891,18 +2435,23 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // }
 
         this.updatePawnPresentation(currentTime, deltaTime);
+        for (const effect of this.getPhysicsManager().getPhysicsComponents<EffectLifetimeComponent>("effectLifetime")) effect.updateTrailerTransform();
+        for (const fishing of this.pawnFishing) fishing.tick(deltaTime / 1000);
 
-        this.inputManager.updateFollowPlayer();
+        this.getInputManager().updateFollowPlayer(deltaTime);
+        this.getInputManager().updateMouseTarget();
 
         this.audioManager.update(currentTime);
 
-        this._updateObjects(currentTime);
+        this.updateObjects(currentTime);
 
         const activeSector = this.getSector(this.camera.position);
-        const musicInfo = activeSector ? activeSector.getMusicIdAt(this.camera.position) : { musicId: -1, isLooped: false, isForced: false };
+        const musicPosition = this.getInputManager().isFollowingPlayer() ? this.player.position : this.camera.position;
+        const musicSector = this.getSector(musicPosition);
+        const musicInfo = musicSector ? musicSector.getMusicIdAt(musicPosition) : { musicId: -1, isLooped: false, isForced: false };
         const musicId = musicInfo.musicId ?? -1;
 
-        if (musicId !== this.activeMusicId) {
+        if (this.isZoneMusicEnabled && musicId !== this.activeMusicId) {
             this.activeMusicId = musicId;
 
             if (musicId >= 0) {
@@ -1917,14 +2466,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
         {
             const camPos = this.camera.position;
             const timeOfDay = this.environment.getTimeOfDay();
-            const isDaytime = timeOfDay >= 6 && timeOfDay < 18;
+            const isSoundDay = timeOfDay >= 5.999 || timeOfDay <= 0.001, isSoundNight = timeOfDay < 6.001 || timeOfDay > 23.999; // UL2NEnvManager::IsSoundDay 0x104e7360 / IsSoundNight 0x104e73a0
             const isSubmerged = !!(activeSector && activeSector.getWaterVolumeAt(camPos));
 
-            this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isDaytime, isSubmerged);
+            this.audioManager.updateAmbientSounds(currentTime, camPos.x, camPos.y, camPos.z, isSoundDay, isSoundNight, isSubmerged);
 
-            if (!this._lastListenerPos.equals(camPos) || !this._lastListenerQuat.equals(this.camera.quaternion)) {
-                this._lastListenerPos.copy(camPos);
-                this._lastListenerQuat.copy(this.camera.quaternion);
+            if (!this.lastListenerPos.equals(camPos) || !this.lastListenerQuat.equals(this.camera.quaternion)) {
+                this.lastListenerPos.copy(camPos);
+                this.lastListenerQuat.copy(this.camera.quaternion);
 
                 const fwd = this.camera.getWorldDirection(new Vector3());
                 const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
@@ -1939,8 +2488,112 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.clear();
     }
 
+    public setViewportWindowParam(location: Vector3, rotation: Quaternion, screenWidth: number) {
+        this.clearViewportWindowParam();
+        this.viewportWindow = new ViewportWindow(screenWidth);
+        this.viewportWindow.target.samples = this.displayGammaPass.getTarget().samples;
+        this.modifyViewportWindowParam(location, rotation);
+        return this.viewportWindow.target;
+    }
+
+    public modifyViewportWindowParam(location: Vector3, rotation: Quaternion) {
+        if (!this.viewportWindow) throw new Error(`Viewport window is not initialized`);
+
+        const camera = this.viewportWindow.camera;
+        camera.position.copy(location);
+        camera.quaternion.copy(rotation);
+        camera.updateMatrixWorld(true);
+        this.needsUpdate = true;
+    }
+
+    public getViewportSceneTexture() { return this.viewportWindow ? this.viewportWindow.target.texture : null; }
+    public setViewportSceneCanvas(canvas: HTMLCanvasElement) { this.viewportSceneCanvas = canvas; }
+
+    public clearViewportWindowParam() {
+        if (!this.viewportWindow) return;
+
+        this.viewportWindow.dispose();
+        this.viewportWindow = null;
+        if (this.viewportSceneCanvas) this.viewportSceneCanvas.getContext("2d").clearRect(0, 0, this.viewportSceneCanvas.width, this.viewportSceneCanvas.height);
+    }
+
+    protected drawCameraSceneNode() {
+        const viewport = this.viewportWindow;
+        if (!viewport) return;
+
+        const renderer = this.renderer;
+        const mainFogId = this.activeFogId;
+        const shadowActive = GLOBAL_UNIFORMS.shadowActive.value;
+        viewport.capture(renderer, this.scene);
+        try {
+            this.updateEnvironment(viewport.camera, false);
+            this.updateViewBillboards(viewport.camera);
+            this.updateViewVisibility(viewport.camera, viewport.frustum, true);
+            this.updatePawnLighting(false);
+            this.particleBatcher.root.visible = true;
+            this.visualizer.getGroup().visible = false;
+            this.visualizer.getFogGroup().visible = false;
+            this.visualizer.getEmitterLabelGroup().visible = false;
+            this.colliderOverlay.visible = false;
+            this.scene.traverse(object => {
+                const node = object as any;
+                if (node.isNameplate) node.visible = false;
+                if (node.isSectorObject) node.helpers.visible = false;
+            });
+
+            renderer.setRenderTarget(viewport.target);
+            renderer.setScissorTest(false);
+            renderer.setClearColor(0, 1);
+            renderer.autoClear = false;
+            renderer.clear(true, true, true);
+            GLOBAL_UNIFORMS.shadowActive.value = 0;
+            this.skyRenderer.render(renderer);
+            GLOBAL_UNIFORMS.shadowActive.value = shadowActive;
+            renderer.clearDepth();
+            this.arrViewportBatchEmitters.length = 0;
+            this.scene.traverseVisible(object => {
+                const emitter = object as any;
+                if (!emitter.particlePool) return;
+
+                emitter.onRender();
+                if (emitter.instancedMesh?.visible && emitter.instancedMesh.isWorldBatchCandidate) this.arrViewportBatchEmitters.push(emitter);
+            });
+            this.particleBatcher.update(this.arrViewportBatchEmitters, viewport.camera);
+            this.worldCamera = viewport.camera;
+            renderer.render(this.scene, viewport.camera);
+            if (this.viewportSceneCanvas) {
+                const canvas = this.viewportSceneCanvas, ratio = renderer.getPixelRatio(), scale = Math.max(1, Math.floor(ratio));
+                const width = 252 * scale, height = 254 * scale;
+
+                if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+                renderer.setRenderTarget(null);
+                renderer.setViewport(0, 0, width / ratio, height / ratio);
+                this.displayGammaPass.render(renderer, viewport.target.texture, this.displayGammaEnabled);
+                const context = canvas.getContext("2d");
+                context.globalCompositeOperation = "copy";
+                context.drawImage(renderer.domElement, 0, renderer.domElement.height - height, width, height, 0, 0, width, height);
+            }
+        } finally {
+            try {
+                this.updateEnvironment(this.camera, false);
+            } finally {
+                this.activeFogId = mainFogId;
+                try {
+                    this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
+                } finally {
+                    viewport.restore(renderer, this.scene);
+                    const camera = this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.camera;
+                    for (const sector of this.arrSceneSectors) if (sector.visible && sector.bspGroup) sector.sortTranslucentBSP(camera.position);
+                }
+            }
+        }
+    }
+
     public onEngineTick(currentTime: number, _deltaTime: number): void {
-        if (!this.isRenderingFrame) return;
+        if (!this.isRenderingFrame || document.hidden) return;
+
+        this.renderer.info.reset();
+        this.drawCameraSceneNode();
 
         const viewShakeActive = this.applyViewShake(currentTime);
 
@@ -1948,7 +2601,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // i think bloom pass is only enabled when shader rendering used which is off by default
         // this.renderer.setRenderTarget(this.mainRenderTarget);
 
-        if (this.displayGammaEnabled) this.renderer.setRenderTarget(this.displayGammaPass.getTarget());
+        const worldRenderTarget = this.displayGammaPass.getTarget();
+        const renderToTarget = this.displayGammaEnabled || worldRenderTarget.samples > 0 || this.nameplateScene.children.some(object => object.visible && (object as Sprite).material.visible);
+        this.renderer.setRenderTarget(renderToTarget ? worldRenderTarget : null);
 
         // Render Sky (Background)
         this.renderer.clear();
@@ -2020,7 +2675,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // Always update HUD in Fogs/Audio mode to prevent stale data when transitioning between sectors or leaving them
         if (this.visualizer.isEnabled()) {
             // Capture raw source colors from the active fog if available
-            let activeFogColors: import("./visualizer").FogSourceColors | undefined;
+            let activeFogColors: import("./visualizer").FogSourceColors_T | undefined;
             if (this.activeFogId) {
                 const s = this.getSector(this.camera.position);
                 const fogInfo = s?.fogInfos?.find(fi => fi.uuid === this.activeFogId);
@@ -2035,7 +2690,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
             }
             // Capture global environment colors
-            const globalEnvColors: import("./visualizer").GlobalEnvColors = {
+            const globalEnvColors: import("./visualizer").GlobalEnvColors_T = {
                 fog: this.environment.getFogColor(new ColorByte()),
                 sky: this.environment.getSkyColor(new ColorByte()),
                 cloud1: this.environment.getCloudColor(0, new ColorByte()),
@@ -2046,7 +2701,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             };
 
             // Capture active zone fog data
-            let zoneFogData: import("./visualizer").ZoneFogData | undefined;
+            let zoneFogData: import("./visualizer").ZoneFogData_T | undefined;
             const sector = this.getSector(this.camera.position);
             if (sector) {
                 const zoneIndex = sector.findPositionZone(this.camera.position);
@@ -2078,31 +2733,73 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.autoClear = false;
 
         // Render World
-        this.renderer.render(this.scene, this.camera);
+        updateEmitterRenderState(this.scene, this.getPhysicsManager().getParticleEmitters());
+        this.drawWorld();
 
-        this.waterEffects.underWaterEffect.renderCellophane(this.renderer);
+        this.getWaterEffects().underWaterEffect.renderCellophane(this.renderer);
+        this.renderer.getSize(tmpSize);
+        if (this.getInputManager().isRenderingWide()) this.wideScreenBars.render(this.renderer, tmpSize);
+        this.overHeadAlarm.draw(this.renderer);
+        this.questArrow.draw();
+        this.radar.render(this.renderer, this.camera, this.player.position, tmpSize.x, tmpSize.y);
 
         // // Apply Native Bloom (Sun/Glow) -> Screen
         // this.uGlowPass.render(this.renderer, null, this.mainRenderTarget);
 
         // this.renderer.setRenderTarget(null);
 
-        if (this.displayGammaEnabled) this.displayGammaPass.render(this.renderer);
+        if (renderToTarget) this.displayGammaPass.render(this.renderer, undefined, this.displayGammaEnabled);
+        this.nameplateDepth.render(this.nameplateScene, this.camera);
 
         if (viewShakeActive) this.restoreViewShake();
+    }
+
+    public setPortalCulling(enabled: boolean): void {
+        this.portalVisibility.enabled = enabled;
+        this.needsUpdate = true;
+    }
+
+    public setSectorOcclusionCulling(enabled: boolean): void {
+        this.sectorOcclusion.enabled = enabled;
+        this.sectorOcclusion.invalidate();
+        this.needsUpdate = true;
+    }
+
+    public setBatchAngleCulling(degrees: number): void {
+        this.batchAngleVisibility.setAngle(degrees);
+        this.needsUpdate = true;
+    }
+
+    protected drawWorld() {
+        const frame = LocalSpaceSkeleton.renderFrame;
+        LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
+        this.nameplateDepth.begin(this.nameplateScene);
+        try {
+            this.worldCamera = this.camera;
+            const camera = this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.camera;
+            this.sectorOcclusion.begin(this.camera, camera, this.getSector(camera.position));
+            this.renderer.render(this.scene, this.camera);
+            this.nameplateDepth.finishWorld();
+        } catch (error) {
+            this.nameplateDepth.end();
+            throw error;
+        } finally {
+            this.sectorOcclusion.end();
+            LocalSpaceSkeleton.renderFrame = frame;
+        }
     }
 
     public onAfterEngineTick(_currentTime: number, _deltaTime: number): void {
         if (!this.isRenderingFrame) return;
 
         this.manUI.endFrame();
-        this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
+        if (!document.hidden) this.needsUpdate = this.viewShakeStates.length > 0 || this.screenFadeStartedAt >= 0;
         this.isRenderingFrame = false;
     }
 
     public startTicking(_currentTime: number): void {
         this.scene.updateMatrixWorld(true);
-        this.physicsManager.registerSimulationObjects(this.scene);
+        this.getPhysicsManager().registerSimulationObjects(this.scene);
         this.updateColliderOverlay();
         this.stitchTerrains();
         this.isRendering = true;
@@ -2119,7 +2816,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     protected updateColliderOverlay(): void {
-        if (this.showColliders) this.colliderOverlay.rebuild(this.physicsManager.getColliders());
+        if (this.showColliders) this.colliderOverlay.rebuild(this.getPhysicsManager().getColliders());
     }
 
     public setSky(sector: SectorObject) {
@@ -2128,7 +2825,42 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public getLoadedSectors(): readonly SectorObject[] { return this.arrLoadedSectors; }
 
+    public findMovableByRealId(realId: number): MovableObject | null {
+        for (const sector of this.arrLoadedSectors) {
+            let result: MovableObject = null;
+
+            sector.traverse(object => {
+                if (result || !(object as any).isMovableObject) return;
+
+                const properties = (object as MovableObject & { scriptProperties?: Map<string, unknown> }).scriptProperties;
+                if (properties instanceof Map && properties.get("L2ServerObjectRealID") === realId) result = object as MovableObject;
+            });
+
+            if (result) return result;
+        }
+
+        return null;
+    }
+
+    public updateClanHallDecorations(root: THREE.Object3D = this.objectGroup) {
+        const network = this.manGame.getComponent("network");
+
+        root.traverse(object => {
+            if (!(object as AgitStaticMeshActor).isAgitStaticMeshActor) return;
+
+            const actor = object as AgitStaticMeshActor, info = network.getClanHallDecoration(actor.agit.id), index = actor.agit.index;
+            actor.setAgitStatus(info && index > 0 && index < 32 && index <= info.status.length ? info.status[index - 1] : null);
+        });
+    }
+
     public addSector(sector: SectorObject) {
+        sector.setRenderDeco(this.renderDeco);
+        sector.setSortTransparent(this.sortTransparent);
+        if (this.level) {
+            sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", Math.fround(this.levelTimeSeconds));
+            sector.levelInfoActor.setUnrealScriptProperty("NetMode", this.level.levelInfoActor.getUnrealScriptProperty("NetMode"));
+        }
+
         if (sector.index) {
             if (!this.sectors.has(sector.index.x))
                 this.sectors.set(sector.index.x, new Map());
@@ -2144,30 +2876,33 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (sector.ambientSounds && sector.getComponents("ambientSound").length === 0)
             for (const info of sector.ambientSounds)
-                sector.addComponent(new AmbientSoundComponent(this.audioManager, info, sector.getSoundUri(info.soundName)));
+                sector.addComponent(new AmbientSoundComponent(this.audioManager, info));
 
+        this.shadowProjector.attachReceivers(sector);
+        this.updateClanHallDecorations(sector);
         retainSectorResources(sector, sector);
         this.pawnLightingStates = new WeakMap();
-        this.lastRenderOrderSector = null;
 
         sector.worldBounds.setFromObject(sector);
         this.sectorBounds.push(sector.worldBounds);
 
+        this.arrSceneSectors.push(sector);
         this.objectGroup.add(sector);
-        this.physicsManager.registerSimulationObjects(sector);
+        this.getPhysicsManager().registerSimulationObjects(sector);
         this.updateColliderOverlay();
         this.stitchTerrains();
 
         setLightingGate(sector, false);
 
         if (sector.staticMeshGroup) {
-            this.physicsManager.setEmitterWarmupGate(sector, false);
+            this.getPhysicsManager().setEmitterWarmupGate(sector, false);
         }
 
         this.queueSectorWarmup(sector, sector, !!sector.staticMeshGroup);
 
         sector.updateMatrixWorld(true);
         freezeStaticSubtree(sector);
+        this.sectorOcclusion.add(sector);
 
         const currentSector = this.getSector(this.camera.position);
         if (currentSector && this.visualizer.isEnabled()) {
@@ -2194,11 +2929,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     protected processSectorWarmups() {
+        pollStaticLighting();
         let jobIndex = -1;
         let jobDistance = Infinity;
         const cacheVisibleMaterials = new WeakMap<THREE.Mesh, Set<number>>();
 
         for (let i = 0; i < this.pendingSectorWarmups.length; i++) {
+            if (this.pendingSectorWarmups[i].sector.isRetired) continue;
             if (findVisibleMaterialBinding(this.pendingSectorWarmups[i].materialQueue, cacheVisibleMaterials) < 0) continue;
 
             const distance = this.pendingSectorWarmups[i].sector.worldBounds.distanceToPoint(this.camera.position);
@@ -2213,6 +2950,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (!visibleOnly) {
             for (let i = 0; i < this.pendingSectorWarmups.length; i++) {
+                if (this.pendingSectorWarmups[i].sector.isRetired) continue;
                 const distance = this.pendingSectorWarmups[i].sector.worldBounds.distanceToPoint(this.camera.position);
 
                 if (distance >= jobDistance) continue;
@@ -2225,10 +2963,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const job = jobIndex < 0 ? null : this.pendingSectorWarmups[jobIndex];
         if (!job) return;
 
-        const deadline = performance.now() + RenderManager.TEXTURE_WARMUP_FRAME_MS;
-        let restoredMaterials = 0;
-
-        while (job.materialQueue.length > 0 && restoredMaterials < RenderManager.MATERIAL_RESTORES_PER_FRAME) {
+        const deadline = performance.now() + (this.manGame.getComponent("network").isWorldLoading() ? 8 : RenderManager.TEXTURE_WARMUP_FRAME_MS);
+        while (job.materialQueue.length > 0) {
             const bindingIndex = visibleOnly ? findVisibleMaterialBinding(job.materialQueue, cacheVisibleMaterials) : job.materialQueue.length - 1;
             if (bindingIndex < 0) return;
 
@@ -2249,24 +2985,32 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if (binding.materialIndex < 0) binding.object.material = binding.material;
             else (binding.object.material as THREE.Material[])[binding.materialIndex] = binding.material;
 
-            restoredMaterials++;
             if (performance.now() >= deadline) return;
         }
 
         if (job.materialQueue.length > 0) return;
 
-        if (job.lightingQueue.length > 0) {
-            job.lightingQueue.pop().lightingGate = true;
-            return;
+        for (let i = job.lightingQueue.length - 1; i >= 0; i--) {
+            const object = job.lightingQueue[i];
+
+            object.lightingGate = true;
+            if (object.needsInitialLighting()) object.update(job.sector, this.environment, this.renderer);
+            if (!object.needsInitialLighting()) job.lightingQueue.splice(i, 1);
+            if (performance.now() >= deadline) return;
         }
+
+        if (job.lightingQueue.length > 0) return;
 
         this.pendingSectorWarmups.splice(jobIndex, 1);
         job.fallbackMaterials.forEach(material => material.dispose());
 
-        if (job.releaseEmitters)
-            this.physicsManager.setEmitterWarmupGate(job.sector, true);
+        this.queueShaderCompile(job.sector);
 
-        (job.sector as any).visibilityCacheInitialized = false;
+        if (job.releaseEmitters)
+            this.getPhysicsManager().setEmitterWarmupGate(job.sector, true);
+
+        job.sector.invalidateDoorPortals();
+        this.sectorOcclusion.add(job.sector);
     }
 
     protected queueSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean) {
@@ -2278,7 +3022,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         setLightingGate(root, true);
-        if (releaseEmitters) this.physicsManager.setEmitterWarmupGate(sector, true);
+        if (releaseEmitters) this.getPhysicsManager().setEmitterWarmupGate(sector, true);
+
+        this.queueShaderCompile(root);
     }
 
     // polls COMPLETION_STATUS_KHR instead of gl.getProgramInfoLog directly - see checkShaderErrors above
@@ -2325,20 +3071,27 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
+        this.shadowProjector.attachReceivers(sector.staticMeshGroup);
+        this.updateClanHallDecorations(sector.staticMeshGroup);
         retainSectorResources(sector, sector.staticMeshGroup);
 
         sector.worldBounds.setFromObject(sector);
 
         sector.staticMeshGroup.updateMatrixWorld(true);
-        this.physicsManager.registerSimulationObjects(sector.staticMeshGroup);
+        this.getPhysicsManager().registerSimulationObjects(sector.staticMeshGroup);
         this.updateColliderOverlay();
         if (!freezeStaticSubtree(sector.staticMeshGroup)) unfreezeAncestors(sector.staticMeshGroup);
+        this.sectorOcclusion.add(sector);
 
         setLightingGate(sector.staticMeshGroup, false);
         this.queueSectorWarmup(sector, sector.staticMeshGroup, true);
     }
 
     public removeSector(sector: SectorObject) {
+        sector.traverse(object => {
+            if ("cancelPendingLighting" in object) (object as any).cancelPendingLighting();
+        });
+        this.sectorOcclusion.remove(sector);
         this.pawnLightingStates = new WeakMap();
 
         for (let i = this.arrL2EventActors.length - 1; i >= 0; i--)
@@ -2351,12 +3104,16 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (sectorIndex >= 0) this.arrLoadedSectors.splice(sectorIndex, 1);
 
+        const sceneIndex = this.arrSceneSectors.indexOf(sector);
+
+        if (sceneIndex >= 0) this.arrSceneSectors.splice(sceneIndex, 1);
+
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
 
         for (const component of sector.getComponents<AmbientSoundComponent>("ambientSound")) sector.removeComponent(component);
 
-        this.physicsManager.unregisterSimulationObjects(sector);
+        this.getPhysicsManager().unregisterSimulationObjects(sector);
         this.updateColliderOverlay();
         this.objectGroup.remove(sector);
         this.stitchTerrains();
@@ -2371,29 +3128,44 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public disposeSector(sector: SectorObject) {
+        sector.releasePhysicsVolumeActors();
+        sector.releaseMusicVolumeActors();
+        sector.releaseZoneInfoActors();
+        sector.traverse(object => {
+            const actor = object as CollidingMesh;
+
+            if ((actor as any).scriptActor) (actor as any).scriptActor.release();
+            if (actor.collisionActors) for (const record of actor.collisionActors) if (record.object) record.object.release();
+            if (actor.isStaticMeshActor && actor.findComponent("script"))
+                actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        });
         const soundCache = (sector as any).decodeLibrary?.soundBlobCache as Map<string, { uri: string }>;
 
         if (soundCache) {
             for (const entry of soundCache.values()) {
-                if (!entry.uri) continue;
+                const uri = getMintedSoundUri(entry);
 
-                this.audioManager.releaseSound(entry.uri);
+                if (!uri) continue;
+
+                this.audioManager.releaseSound(uri);
                 entry.uri = null;
             }
         }
 
         releaseSectorResources(sector);
+        sector.releaseLevelActors();
     }
 
     public toggleBSPHelperCamera() {
         if (!this.bspHelperCamera) {
             this.bspHelperCamera = new PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.1, DEFAULT_FAR);
             this.bspHelperCamera.position.copy(this.camera.position);
-            this.bspHelperCamera.rotation.copy(this.camera.rotation);
+            this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
             this.bspHelperCamera.updateMatrixWorld(true);
 
             this.bspHelperCameraHelper = new CameraHelper(this.bspHelperCamera);
             this.bspHelperCameraHelper.name = "BSPHelperCameraHelper";
+            this.bspHelperCameraHelper.raycast = () => {};
             this.bspHelperCameraHelper.visible = false;
             this.scene.add(this.bspHelperCameraHelper);
 
@@ -2408,7 +3180,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             } else {
                 // Resume following main camera and hide helper
                 this.bspHelperCamera.position.copy(this.camera.position);
-                this.bspHelperCamera.rotation.copy(this.camera.rotation);
+                this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
                 this.bspHelperCamera.updateMatrixWorld(true);
                 if (this.bspHelperCameraHelper) {
                     this.bspHelperCameraHelper.visible = false;
@@ -2437,14 +3209,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
         });
 
-        if (terrains.length < 2) return;
-
         const result = Terrain.stitchAll(terrains);
 
         (window as any).terrainDebug = result;
 
         // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
-        for (const terrain of result.modified) this.physicsManager.refreshCollider(terrain);
+        for (const terrain of result.modified) this.getPhysicsManager().refreshCollider(terrain);
+
+        if (result.modified.length)
+            for (const sector of this.arrSceneSectors) this.sectorOcclusion.add(sector);
 
         this.updateColliderOverlay();
     }
@@ -2459,6 +3232,7 @@ function addResizeListeners(manager: RenderManager) {
 const resourceRefs = new Map<Disposable_T, number>();
 
 function retainResource(resource: Disposable_T): void {
+    if ((resource as any).isTexture && !resourceRefs.has(resource)) retainSharedTextureBuffer(resource as THREE.Texture);
     resourceRefs.set(resource, (resourceRefs.get(resource) ?? 0) + 1);
 }
 
@@ -2492,6 +3266,8 @@ function collectSectorResources(root: THREE.Object3D, target: Set<Disposable_T>)
         if (!(mesh as any).isMesh && !(child as any).isLine && !(child as any).isPoints) return;
 
         if (mesh.geometry) target.add(mesh.geometry);
+        if ((mesh as any).sortedIndexBuffers) (mesh as any).sortedIndexBuffers.forEach((buffer: Disposable_T) => target.add(buffer));
+        if ((child as AgitStaticMeshActor).isAgitStaticMeshActor) target.add((child as AgitStaticMeshActor).emptyGeometry);
 
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
 
@@ -2541,7 +3317,7 @@ function releaseSectorResources(sector: SectorObject) {
 
 // procedural maps nest several levels deep (uniforms.shDiffuse.value.map.texture), needs a real walk
 function collectTexturesDeep(value: any, textures: Set<THREE.Texture>, seen: WeakSet<object>): void {
-    if (!value || typeof value !== "object") return;
+    if (!value || typeof value !== "object" || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return;
     if (value.isTexture) { textures.add(value); return; }
     if (seen.has(value)) return;
 
@@ -2555,14 +3331,16 @@ function collectMaterialTextures(material: THREE.Material, textures: Set<THREE.T
         if ((value as THREE.Texture)?.isTexture) textures.add(value as THREE.Texture);
     }
 
-    if ((material as any).uniforms) collectTexturesDeep((material as any).uniforms, textures, seen);
+    if ((material as any).uniforms) collectTexturesDeep(getLocalUniforms((material as any).uniforms), textures, seen);
     if ((material as any).sprites) collectTexturesDeep((material as any).sprites, textures, seen);
+    if ((material as any).arrLightmaps) collectTexturesDeep((material as any).arrLightmaps, textures, seen);
 }
 
 function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean): SectorWarmup_T {
     const materialQueue: SectorMaterialBinding_T[] = [];
     const lightingQueue: any[] = [];
     const fallbackCache = new Map<string, MeshBasicMaterial>();
+    const cacheMaterialTextures = new Map<THREE.Material, THREE.Texture[]>();
 
     root.traverse(child => {
         if ("computeLighting" in child) lightingQueue.push(child);
@@ -2586,11 +3364,16 @@ function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEm
             const material = materials[i];
             if (!material) continue;
 
-            const textures = new Set<THREE.Texture>();
-            collectMaterialTextures(material, textures, new WeakSet());
-            if (textures.size === 0) continue;
+            let textures = cacheMaterialTextures.get(material);
 
-            materialTextures[i] = Array.from(textures);
+            if (!textures) {
+                const collected = new Set<THREE.Texture>();
+                collectMaterialTextures(material, collected, new WeakSet());
+                cacheMaterialTextures.set(material, textures = Array.from(collected));
+            }
+            if (textures.length === 0) continue;
+
+            materialTextures[i] = textures.slice();
         }
 
         if (!materialTextures.some(Boolean)) return;

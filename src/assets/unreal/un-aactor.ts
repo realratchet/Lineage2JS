@@ -18,6 +18,29 @@ import type { UModel } from "./model/un-model";
 import type { Matrix4Arr, Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
+export enum EActorViewType_T {
+    EAVT_None,
+    EAVT_InSight,
+    EAVT_InSighting,
+    EAVT_OutSight,
+    EAVT_OutSighting,
+    EAVT_Spawning,
+    EAVT_Deleting,
+    EAVT_Hiding,
+    EAVT_Showing,
+    EAVT_Controller,
+    EAVT_HighLight,
+    EAVT_Despawning
+}
+
+export enum ENetRole_T {
+    ROLE_None,
+    ROLE_DumbProxy,
+    ROLE_SimulatedProxy,
+    ROLE_AutonomousProxy,
+    ROLE_Authority
+}
+
 export type IActorCollisionDecodeInfo = {
     collideActors: boolean,
     collideWorld: boolean,
@@ -75,6 +98,8 @@ export abstract class UAActor extends UObject {
 
     // protected _mesh: any;
     declare public readonly forcedRegionTag: string;
+    declare public readonly isSpecialLit: boolean;
+    declare protected readonly forcedRegion: number;
     declare public readonly forcedVisibilityZoneTag: string;
 
     declare public readonly skins: FObjectArray<UTexture>;
@@ -277,6 +302,8 @@ export abstract class UAActor extends UObject {
             "bPendingDelete": "isPendingDelete",
 
             "ForcedRegionTag": "forcedRegionTag",
+            "bSpecialLit": "isSpecialLit",
+            "ForcedRegion": "forcedRegion",
             "ForcedVisibilityZoneTag": "forcedVisibilityZoneTag",
 
             "Skins": "skins",

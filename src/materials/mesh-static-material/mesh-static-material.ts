@@ -1,16 +1,21 @@
 import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
-import { appendGlobalUniforms } from "../global-uniforms";
+import HIGHLIGHT_SHADER from "./shader/highlight.fs";
+import { appendGlobalUniforms, getLocalUniforms } from "../global-uniforms";
 import { padTransformStages } from "./transform-stage";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide } from "three";
+import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide, DoubleSide, Texture } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
+import type DynamicLight from "../../objects/dynamic-light";
+import type ColorByte from "../../utils/color-byte";
+import type { PawnLight_T } from "../../rendering/components/pawn-light-component";
 
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask", "shDetail"]);
 
 // Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
 export const NUM_ACTOR_LIGHTS = 4;
 const MAX_HARDWARE_LIGHTS = 8; // D3DDrv SetPawnLight RVA 0x1c7b2.
+const arrEmptyPawnLights: PawnLight_T[] = [];
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shDetail" | "shMaterial2";
 type ApplyParams_T = {
@@ -24,6 +29,18 @@ type ApplyParams_T = {
 type SpriteParam_T = {
     framerate: number,
     sprites: any[]
+}
+
+function getProceduralMaps(uniforms: Record<string, Uniform>): any[] {
+    const maps = new Set<any>();
+
+    for (const uniform of Object.values(uniforms)) {
+        const value = (uniform as any)?.value;
+        const map = value?.isTexture ? value : value?.map?.texture;
+        if (map?.isTexture && map.isUpdatable) maps.add(map);
+    }
+
+    return [...maps];
 }
 
 function applyParameters({ name, parameters, uniforms, defines, sprites }: ApplyParams_T): void {
@@ -48,6 +65,7 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 
     Object.assign(uniforms[name].value = {}, restUniforms);
     Object.assign(defines, parameters.defines);
+    if (parameters.uniforms.fadeColors) defines[name === "shSpecular" ? "USE_FADE" : `USE_FADE_${defName}`] = "";
 
     if (parameters.isUsingMap) {
         if ((parameters as IDecodedSpriteParameter).isSprite) {
@@ -58,19 +76,22 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
         }
 
         if (parameters.isCubeMap) {
-            if (name !== "shSpecular") throw new Error(`Cubemap is unsupported in ${name}.`);
+            if (name !== "shDiffuse" && name !== "shSpecular" && name !== "shMaterial2") throw new Error(`Cubemap is unsupported in ${name}.`);
 
             defines[`USE_CUBE_MAP_${defName}`] = "";
-            uniforms[`${name}Cube`].value = parameters.uniforms.map.texture;
+            uniforms[`${name}Cube`] = new Uniform(parameters.uniforms.map.texture);
+            uniforms[`${name}CubeTransform`] = new Uniform(parameters.uniforms.cubeTransform || new Matrix3());
             return;
         }
 
         defines["USE_UV"] = "";
         defines[`USE_MAP_${defName}`] = "";
+        uniforms[`${name}Map`] = new Uniform(parameters.uniforms.map.texture);
+        uniforms[name].value.mapSize = parameters.uniforms.map.size;
 
         if (parameters.uvIndex === 1) {
-            defines["USE_UV2"] = "";
-            defines[`USE_MAP_${defName}_UV2`] = "";
+            defines["USE_UV1"] = "";
+            defines[`USE_MAP_${defName}_UV1`] = "";
         }
 
         if (parameters.transformType !== "none") {
@@ -94,10 +115,14 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
 export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
+    public arrLightmaps: Texture[] = [];
     protected spriteEntries: [string, SpriteParam_T][] = [];
     protected proceduralMaps: any[] = [];
 
     public isUpdatable = false;
+    public requiresSorting = false;
+    public shadowOpacity: IDecodedParameter = null;
+    protected shadowMaterial: MeshStaticMaterial = null;
 
     // @ts-ignore
     public constructor(info: MeshStaticMaterialParameters_T = { diffuse: null, opacity: null, specular: null, specularMask: null, side: FrontSide, blendingMode: "normal", transparent: false, depthWrite: true, depthTest: true, visible: true }) {
@@ -128,9 +153,10 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 diffuse: new Uniform(new Color(0xffffff)),
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
+                texModifierColor: new Uniform(new Vector3(1, 1, 1)),
+                texModifierAlpha: new Uniform(-1),
                 terrainDecorationFadeRange: new Uniform(new Vector2()),
-                uvTransform: new Uniform(new Matrix3()),
-                uv2Transform: new Uniform(new Matrix3()),
+                uv1Transform: new Uniform(new Matrix3()),
                 transformSpecular: new Uniform(null),
 
                 lightMap: new Uniform(null),
@@ -181,6 +207,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             case "modulate": defines["USE_MODULATED_FOG"] = ""; break;
             case "alphaModulate":
             case "translucent":
+            case "additive":
             case "brighten":
             case "darken":
             case "invisible": defines["USE_ADDITIVE_FOG"] = ""; break;
@@ -270,12 +297,11 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         });
 
         this.sprites = sprites;
+        this.shadowOpacity = info.shadowOpacity || null;
         this.spriteEntries = Object.entries(sprites);
 
         // procedural maps (water) drive their own animation through update()
-        this.proceduralMaps = Object.values(uniforms)
-            .map((u: any) => u?.value)
-            .filter((v: any) => v?.isTexture && v.isUpdatable);
+        this.proceduralMaps = getProceduralMaps(uniforms);
 
         this.isUpdatable = this.spriteEntries.length > 0 || this.proceduralMaps.length > 0;
 
@@ -284,8 +310,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         switch (info.blendingMode) {
             case "normal":
                 this.blending = NormalBlending;
-                // UE2 OB_Normal: when opacity is present, forces ZWrite=0 and enables alpha blending
-                if (info.opacity) this.depthWrite = false;
+                if (info.opacity) this.depthWrite = info.depthWrite;
                 break;
             case "masked":
                 // UE2 OB_Masked: opaque rendering (ONE,ZERO) + alpha test, no blending - AlphaRef=127 (~0.498), ZWrite=1
@@ -306,6 +331,13 @@ export default class MeshStaticMaterial extends ShaderMaterial {
                 this.blending = CustomBlending;
                 this.blendSrc = OneFactor;
                 this.blendDst = OneMinusSrcColorFactor;
+                this.transparent = true;
+                this.depthWrite = false;
+                break;
+            case "additive":
+                this.blending = CustomBlending;
+                this.blendSrc = OneFactor;
+                this.blendDst = OneFactor;
                 this.transparent = true;
                 this.depthWrite = false;
                 break;
@@ -349,7 +381,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         if (this.transparent) this.defines["NO_SHADOW_RECEIVE"] = "";
     }
 
-    public setLightmap(lightmap: MapData_T) {
+    public setLightmap(lightmaps: MapData_T[]) {
+        this.arrLightmaps = lightmaps.map(lightmap => lightmap.texture);
+        const lightmap = lightmaps[0];
         this.uniforms.lightMap.value = lightmap.texture;
 
         if (lightmap.texture) this.defines.USE_LIGHTMAP = "";
@@ -358,6 +392,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.needsUpdate = true;
 
         return this;
+    }
+
+    public updateLightmap(time: number) {
+        if (!this.arrLightmaps.length) return;
+
+        // BSP draw 0x8fb824..0x8fb840 truncates hour * count * float(1/24), then takes the remainder.
+        const index = Math.trunc(time * this.arrLightmaps.length * Math.fround(1 / 24)) % this.arrLightmaps.length;
+        this.uniforms.lightMap.value = this.arrLightmaps[index];
     }
 
     public disableDirectionalAmbient() {
@@ -425,10 +467,23 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public setLit() {
         this.defines["USE_LIT_ATTRIBUTES"] = "";
+        (this.defaultAttributeValues as any).hardwareSun = [0];
 
         this.needsUpdate = true;
 
         return this;
+    }
+
+    public createHighlightMaterial(): ShaderMaterial {
+        // Engine.dll 0x1063b330: lit solid(200,200,200,64), FB_AlphaBlend, ZTest, no ZWrite, two-sided.
+        const defines = { ...this.defines };
+        delete defines.USE_ADDITIVE_FOG;
+        delete defines.USE_MODULATED_FOG;
+
+        const material = new ShaderMaterial({ vertexShader: this.vertexShader, fragmentShader: HIGHLIGHT_SHADER, defines, uniforms: this.uniforms, transparent: true, depthTest: true, depthWrite: false, side: DoubleSide });
+        material.defaultAttributeValues = this.defaultAttributeValues;
+        material.forceSinglePass = true;
+        return material;
     }
 
     public setExtendedBoneInfluences() {
@@ -451,9 +506,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             radius: 0,
             cone: 0,
             effect: 0,
-            isPawnLight: false,
+            isHardwareLight: false,
             attenuation: new Vector2()
         })));
+        this.uniforms.actorLightPositions = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 3));
+        this.uniforms.actorLightDirections = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 3));
+        this.uniforms.actorLightColors = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 3));
+        this.uniforms.actorLightParameters = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 4));
+        this.uniforms.actorLightAttenuations = new Uniform(new Float32Array(MAX_HARDWARE_LIGHTS * 2));
 
         this.defines["USE_ACTOR_LIGHTS"] = "";
         this.defines["NUM_ACTOR_LIGHTS"] = MAX_HARDWARE_LIGHTS;
@@ -470,14 +530,143 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this;
     }
 
+    public updateActorLighting(ambient: ColorByte, scaledGlow: number, lights: readonly DynamicLight[], pawnLights: readonly PawnLight_T[] = arrEmptyPawnLights, center: Vector3 = null, radius: number = 0) {
+        const uniforms = this.uniforms;
+        const entries = uniforms.actorLights.value;
+        const count = Math.min(lights.length, entries.length);
+        const pawnCount = Math.min(pawnLights.length, entries.length - count);
+
+        ambient.toFloats(uniforms.actorAmbient.value);
+        uniforms.actorScaledGlow.value = scaledGlow;
+        uniforms.numActorLights.value = count + pawnCount;
+
+        for (let i = 0; i < count; i++) {
+            const light = lights[i];
+            const entry = entries[i];
+
+            entry.position.copy(light.lightPosition);
+            entry.direction.copy(light.lightDirection);
+            light.color.toFloats(entry.color);
+            entry.radius = light.lightRadius;
+            entry.cone = light.cone;
+            entry.effect = light.lightEffect;
+            entry.isHardwareLight = !!center;
+
+            if (center) light.getHardwareLight(center, radius, entry, false);
+        }
+
+        for (let i = 0; i < pawnCount; i++) {
+            const light = pawnLights[i];
+            const entry = entries[count + i];
+
+            entry.position.copy(light.position);
+            entry.direction.copy(light.direction);
+            entry.cone = light.cone;
+            entry.color.copy(light.color);
+            entry.radius = light.radius;
+            entry.effect = 0;
+            entry.isHardwareLight = true;
+            entry.attenuation.copy(light.attenuation);
+        }
+
+        this.packActorLights();
+    }
+
+    protected packActorLights(): void { // flat arrays upload in five calls, a struct array costs a setter per field per light
+        const uniforms = this.uniforms, entries = uniforms.actorLights.value;
+        const positions = uniforms.actorLightPositions.value, directions = uniforms.actorLightDirections.value, colors = uniforms.actorLightColors.value;
+        const parameters = uniforms.actorLightParameters.value, attenuations = uniforms.actorLightAttenuations.value;
+
+        for (let i = 0, count = uniforms.numActorLights.value; i < count; i++) {
+            const entry = entries[i];
+
+            entry.position.toArray(positions, i * 3);
+            entry.direction.toArray(directions, i * 3);
+            entry.color.toArray(colors, i * 3);
+            parameters[i * 4] = entry.radius;
+            parameters[i * 4 + 1] = entry.cone;
+            parameters[i * 4 + 2] = entry.effect;
+            parameters[i * 4 + 3] = entry.isHardwareLight ? 1 : 0;
+            entry.attenuation.toArray(attenuations, i * 2);
+        }
+    }
+
+    public updateHardwareLighting(ambient: ColorByte, lights: readonly DynamicLight[], center: Vector3, radius: number) {
+        const uniforms = this.uniforms;
+        const entries = uniforms.actorLights.value;
+        const count = Math.min(lights.length, entries.length);
+
+        ambient.toFloats(uniforms.actorAmbient.value);
+        uniforms.actorScaledGlow.value = 1;
+        uniforms.numActorLights.value = count;
+
+        for (let i = 0; i < count; i++) {
+            const light = lights[i];
+            const entry = entries[i];
+
+            entry.position.copy(light.lightPosition);
+            entry.direction.copy(light.lightDirection);
+            entry.radius = light.lightRadius;
+            entry.effect = light.lightEffect;
+            light.getHardwareLight(center, radius, entry);
+            entry.isHardwareLight = true;
+        }
+
+        this.packActorLights();
+    }
+
+    public getShadowMaterial(): MeshStaticMaterial {
+        if (!this.shadowOpacity) return null;
+        if (this.shadowMaterial) {
+            this.shadowMaterial.update(this.uniforms.globalTimeSeconds.value);
+            return this.shadowMaterial;
+        }
+
+        const material = this.shadowMaterial = new MeshStaticMaterial({ diffuse: null, opacity: this.shadowOpacity, specular: null, specularMask: null, side: FrontSide, blendingMode: "normal", transparent: true, depthWrite: false, depthTest: true, visible: true });
+
+        // FShadowBitmapRenderInterface::SetMaterial 0x93df70; trace7333994 uses SRCALPHA for color and alpha.
+        material.defines.USE_SHADOW_SILHOUETTE = "";
+        material.blending = CustomBlending;
+        material.blendSrc = material.blendSrcAlpha = SrcAlphaFactor;
+        material.blendDst = material.blendDstAlpha = OneMinusSrcAlphaFactor;
+        material.update(this.uniforms.globalTimeSeconds.value);
+        return material;
+    }
+
+    public dispose(): void {
+        if (this.shadowMaterial) this.shadowMaterial.dispose();
+        super.dispose();
+    }
+
     public copy(source: this): this {
-        super.copy(source);
-        // ShaderMaterial.copy clones the shared shadow render target into an unbacked Texture.
+        const copySource = Object.create(source) as this;
+        const uniforms = getLocalUniforms(source.uniforms);
+        const proceduralUniforms: Record<string, Uniform> = {};
+
+        for (const [name, uniform] of Object.entries(uniforms))
+            if ((uniform.value as any)?.isTexture && (uniform.value as any).isUpdatable) {
+                proceduralUniforms[name] = uniform;
+                delete uniforms[name];
+            }
+
+        copySource.uniforms = uniforms;
+
+        super.copy(copySource);
+        Object.assign(this.uniforms, proceduralUniforms);
         appendGlobalUniforms(this.uniforms);
+
+        for (const [name, uniform] of Object.entries(this.uniforms))
+            if (this.uniforms[`${name}Map`] && !proceduralUniforms[`${name}Map`]) this.uniforms[`${name}Map`].value = uniform.value.map.texture;
+
         this.sprites = source.sprites;
+        this.arrLightmaps = source.arrLightmaps;
         this.spriteEntries = source.spriteEntries;
-        this.proceduralMaps = source.proceduralMaps;
+        this.proceduralMaps = getProceduralMaps(this.uniforms);
         this.isUpdatable = source.isUpdatable;
+        this.requiresSorting = source.requiresSorting;
+        this.shadowOpacity = source.shadowOpacity;
+        if (this.shadowMaterial) this.shadowMaterial.dispose();
+        this.shadowMaterial = null;
 
         return this;
     }
@@ -499,6 +688,8 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             const activeFrame = sprites[activeFrameIndex];
 
             uniform.value.map = activeFrame;
+            uniform.value.mapSize = activeFrame.size;
+            this.uniforms[`${k}Map`].value = activeFrame.texture;
         }
     }
 }
@@ -514,6 +705,7 @@ type DirectionalAmbientLighting_T = BaseLighting_T & { direction: THREE.Vector3 
 type MeshStaticMaterialParameters_T = {
     diffuse: IDecodedParameter,
     opacity: IDecodedParameter,
+    shadowOpacity?: IDecodedParameter,
     specular: IDecodedParameter,
     specularMask: IDecodedParameter,
     detail?: IDecodedParameter,

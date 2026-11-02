@@ -1,7 +1,6 @@
 import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
-import { Mesh, PlaneGeometry, Vector3 } from "three";
-import * as THREE from "three";
+import { Mesh, PlaneGeometry, Vector3, Matrix4, type BufferGeometry, type WebGLRenderer, type Scene, type Camera } from "three";
 import BaseEmitter from "./base-emitter";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
 import type { SpriteDirections_T, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
@@ -24,11 +23,11 @@ const tmpOrigRight = new Vector3();
 const tmpOrigUp = new Vector3();
 const tmpSpinScaled = new Vector3();
 const tmpNormal = new Vector3();
-const tmpMatrix = new THREE.Matrix4();
+const tmpMatrix = new Matrix4();
 
 export class SpriteEmitter extends BaseEmitter {
     public spriteDirection: SpriteDirections_T;
-    public projectionNormal: THREE.Vector3;
+    public projectionNormal: Vector3;
 
     public constructor(config: SpriteEmitterConfig_T) {
         super(config);
@@ -39,13 +38,15 @@ export class SpriteEmitter extends BaseEmitter {
         this.isSpriteEmitter = true;
         this.material = config.material;
         this.spriteDirection = config.spriteDirection || "camera";
+        // USpriteEmitter::Initialize 0x106a9e99 forces UniformSize for PTDU_None.
+        if (this.spriteDirection === "camera") this.isUniformScale = true;
         this.projectionNormal = new Vector3().fromArray(config.projectionNormal ?? [0, 0, 1]);
 
         // Both camera-facing sprites and PTDU_Normal use one basis for the whole
         // emitter, so neither needs a mesh/draw call per particle. Velocity-driven
         // modes still require a per-particle basis and stay on the legacy path.
         // Animated textures select a frame per particle age.
-        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal");
+        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal" || this.spriteDirection === "up"); // except PTDU_Up, its basis is built in the shader
     }
 
     protected initParticleMesh() {
@@ -74,16 +75,16 @@ export class SpriteEmitter extends BaseEmitter {
 
 export default SpriteEmitter;
 
-class ParticleMesh extends Mesh<THREE.BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
+class ParticleMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
     public spriteDirection: SpriteDirections_T = "camera";
-    public projectionNormal: THREE.Vector3 = new Vector3(0, 0, 1);
+    public projectionNormal: Vector3 = new Vector3(0, 0, 1);
     public particleRef: SpriteParticle_T = null;
 
     public constructor(material: ParticleMaterial | AnimatedParticleMaterial) {
         super(geometry, material);
     }
 
-    onBeforeRender = (_renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
+    onBeforeRender = (_renderer: WebGLRenderer, _scene: Scene, camera: Camera) => {
 
         // UE2 math equivalent:
         // FVector ProjUp        = SceneNode->Deproject(FPlane(0,-1000,0,1)) - ProjBase;

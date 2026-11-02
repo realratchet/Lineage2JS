@@ -345,7 +345,7 @@ class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleM
         const size = ws.x || 1; // particle size.x is the ribbon half width
 
         // dynamic hf noise jitters the stored points in place
-        const noiseSteps = emitter.beamDynamicNoiseSteps(performance.now());
+        const noiseSteps = emitter.beamDynamicNoiseSteps(emitter.getCurrentTime());
 
         if (noiseSteps > 0 && beam.dynamicHFNoiseRange) {
             const [min, max] = beam.dynamicHFNoisePointsRange;

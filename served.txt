@@ -1,0 +1,2 @@
+^system/[^/]+\.dat$
+^system/window\.dll$

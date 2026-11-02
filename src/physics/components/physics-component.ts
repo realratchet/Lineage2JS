@@ -6,16 +6,17 @@ import type MovableObject from "../../objects/movable-object";
 import type RotatingObject from "../../objects/rotating-object";
 import type PhysicsManager from "../physics-manager";
 import type UIManager from "../../game/ui-manager";
+import type { CollisionActor_T } from "../collision-world";
+import type StaticMeshActor from "../../objects/static-mesh-actor";
 
-export interface IPhysicsComponent<TParent extends IObject = IObject> extends IComponent<TParent> {
+export type IPhysicsComponent<TParent extends IObject = IObject> = IComponent<TParent> & {
     readonly isPhysicsComponent: boolean;
     isPhysicsAdded(manager: PhysicsManager): boolean;
     onPhysicsAdded(manager: PhysicsManager): void;
     onPhysicsRemoved(manager: PhysicsManager): void;
-    getPhysicsTickRate?(): number;
     onPhysicsTick?(currentTime: number, deltaTime: number, actors: BaseActor[]): boolean;
     onTriggerPosition?(currentTime: number, position: Vector3): void;
-}
+};
 
 export abstract class PhysicsComponent<TParent extends IObject = IObject> extends ObjectComponent<TParent> implements IPhysicsComponent<TParent> {
     declare public readonly isPhysicsComponent: boolean;
@@ -50,6 +51,14 @@ export class ColliderComponent extends PhysicsComponent<ICollidable & IObject> {
     public readonly componentName = "collider";
     protected isRegistered = false;
 
+    public setCollision(actor: CollisionActor_T, collideActors?: boolean, blockActors?: boolean, blockPlayers?: boolean): void {
+        if (!this.physicsManager) throw new Error(`Collision actor '${this.getParent().name}' has no physics manager.`);
+        if (actor !== this.getParent() && (actor as StaticMeshActor).collisionOwner !== this.getParent())
+            throw new Error(`Collision actor '${actor.name}' does not belong to '${this.getParent().name}'.`);
+
+        this.physicsManager.setCollision(actor, collideActors, blockActors, blockPlayers);
+    }
+
     public onPhysicsAdded(manager: PhysicsManager): void {
         super.onPhysicsAdded(manager);
 
@@ -80,13 +89,18 @@ export class ColliderComponent extends PhysicsComponent<ICollidable & IObject> {
 export class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
     public readonly componentName = "mover";
     protected uiManager: UIManager = null;
-    protected nextUpdate = -1;
-    protected uiPosition = NaN;
+    protected areDoorsOpen = false;
 
     public onPhysicsAdded(manager: PhysicsManager): void {
         super.onPhysicsAdded(manager);
 
         this.uiManager = manager.getParent().getComponent("ui");
+        this.areDoorsOpen = this.uiManager.areDoorsOpen;
+        this.getParent().initializeMover();
+
+        const doorPosition = manager.getParent().getComponent("network").getDoorPosition(this.getParent());
+
+        if (doorPosition !== undefined) this.getParent().setOpen(doorPosition === 1);
     }
 
     public onPhysicsRemoved(manager: PhysicsManager): void {
@@ -95,26 +109,15 @@ export class MoverComponent extends PhysicsComponent<MovableObject & IObject> {
         super.onPhysicsRemoved(manager);
     }
 
-    public onTriggerPosition(currentTime: number, position: Vector3): void {
-        const nextUpdate = this.getParent().tryTrigger(currentTime, position);
-
-        if (nextUpdate !== null) this.nextUpdate = nextUpdate;
-    }
-
-    public onPhysicsTick(currentTime: number, _deltaTime: number, actors: BaseActor[]): boolean {
-        if (this.uiPosition !== this.uiManager.moverPosition) {
-            this.uiPosition = this.uiManager.moverPosition;
-            this.nextUpdate = -1;
-            this.getParent().setPosition(this.uiPosition);
-            return true;
+    public onPhysicsTick(_currentTime: number, deltaTime: number, actors: BaseActor[]): boolean {
+        if (this.areDoorsOpen !== this.uiManager.areDoorsOpen) {
+            this.areDoorsOpen = this.uiManager.areDoorsOpen;
+            this.getParent().setOpen(this.areDoorsOpen);
         }
 
-        if (this.nextUpdate < 0 || currentTime < this.nextUpdate) return false;
-
-        this.nextUpdate = this.getParent().updateMover(currentTime, actors);
-
-        return true;
+        return this.getParent().updateMover(deltaTime, actors);
     }
+
 }
 
 export class RotatingComponent extends PhysicsComponent<RotatingObject & IObject> {

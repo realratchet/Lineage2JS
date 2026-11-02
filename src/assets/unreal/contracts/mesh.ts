@@ -4,5 +4,5 @@ export type { ISwayingDecodeInfo } from "../static-mesh/un-movable-static-mesh-a
 export type { IMoverDecodeInfo } from "../un-mover";
 export type { IStaticMeshObjectDecodeInfo, IStaticMeshSwayDecodeInfo, IStaticMeshCollisionDecodeInfo, IMaterialInstancedDecodeInfo } from "../static-mesh/un-static-mesh";
 export type { ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "../static-mesh/un-static-mesh-instance";
-export type { IBSPCollisionModelDecodeInfo } from "../model/un-model";
+export type { IBSPCollisionModelDecodeInfo, IBSPCollisionNodeDecodeInfo_T } from "../model/un-model";
 export type * from "../static-mesh-batch";

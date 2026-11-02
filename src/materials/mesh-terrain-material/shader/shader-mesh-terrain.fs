@@ -21,10 +21,12 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
+#ifdef USE_PROJECTOR_RECEIVER
 uniform sampler2D shadowMap;
 uniform float shadowDarkness;
 uniform float shadowActive;
 varying vec4 vShadowCoord;
+#endif
 
 #ifdef USE_UV_TEXTURE
     #pragma params_include_layers
@@ -34,6 +36,10 @@ varying vec4 vShadowCoord;
     }
 
     varying vec2 vUv[UV_COUNT];
+#endif
+
+#ifdef USE_PROJECTOR_RECEIVER
+    #include <projector_receiver>
 #endif
 
 void main() {
@@ -51,12 +57,20 @@ void main() {
 
     diffuseColor.rgb *= texelDiffuse.rgb;
 
+    #ifdef TERRAIN_OVERLAY
+        diffuseColor.a *= texelDiffuse.a;
+    #endif
+
     #include <color_fragment>
 
     // D3DTOP_MODULATE2X: ATerrainInfo::Render (0x9bdfb8) passes EnableLighting Modulate2X=1
     diffuseColor.rgb *= 2.0;
 
     #include <alphatest_fragment>
+    #ifdef USE_PROJECTOR_RECEIVER
+        gl_FragColor = getProjectorShadow();
+        return;
+    #endif
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
     #ifdef USE_LIGHTMAP
         vec4 lightMapTexel= texture2D( lightMap, vUv2 );
@@ -68,16 +82,11 @@ void main() {
     reflectedLight.indirectDiffuse *= diffuseColor.rgb;
     vec3 outgoingLight = reflectedLight.indirectDiffuse;
 
-    if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
-        vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;
 
-        if ( all( greaterThanEqual( shadowCoord, vec3( 0.0 ) ) ) && all( lessThanEqual( shadowCoord, vec3( 1.0 ) ) ) )
-            outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
-    }
     #include <envmap_fragment>
-    #include <output_fragment>
+    #include <opaque_fragment>
     #include <tonemapping_fragment>
-    #include <encodings_fragment>
+    #include <colorspace_fragment>
     #include <fog_fragment>
     #include <premultiplied_alpha_fragment>
     #include <dithering_fragment>

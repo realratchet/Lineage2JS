@@ -1,4 +1,5 @@
 import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, NoBlending, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, ShaderMaterial, UniformsUtils, UniformsLib, Vector3, Vector4 } from "three";
+import { updateTextureFiltering } from "../../assets/decoders/texture-decoder";
 import VERTEX_SHADER from "./shader/shader-particle.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
@@ -16,7 +17,7 @@ export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean
         changed = true;
     }
     if (disableMipmaps && texture.minFilter !== LinearFilter && texture.mipmaps?.length > 1) {
-        texture.minFilter = LinearFilter;
+        updateTextureFiltering(texture, LinearFilter);
         changed = true;
     }
     if (changed) texture.needsUpdate = true;

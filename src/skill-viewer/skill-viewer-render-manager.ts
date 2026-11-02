@@ -5,6 +5,8 @@ import { ColorByte } from "../utils/color-byte";
 import type { NPawnLightComponent } from "../rendering/components/pawn-light-component";
 import type BaseActor from "../base-actor";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
+import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 
 // 127 = 1.0 in the Modulate2X domain, same as unlit meshes in LitSkinnedMesh
 const viewerZone = { ambient: [127, 127, 127], isSunAffected: false };
@@ -25,6 +27,23 @@ export class SkillViewerRenderManager extends RenderManager {
         GLOBAL_UNIFORMS.fogNear.value = 1e7;
         GLOBAL_UNIFORMS.fogFar.value = 2e7;
         (GLOBAL_UNIFORMS.staticMeshSunAmbient.value as Vector3).set(0.5, 0.5, 0.5);
+    }
+
+    protected updatePawnPresentation(currentTime: number, deltaTime: number): void {
+        for (const component of this.pawnRenderables) {
+            component.tickActorView(deltaTime / 1000);
+            component.getParent().getComponent<PawnMovementComponent>("pawnMovement").checkAnimationState(deltaTime / 1000);
+            component.getParent().updatePresentation(currentTime, deltaTime / 1000);
+        }
+    }
+
+    protected updatePawnVisibility(frustum = this.frustum): void {
+        for (const component of this.pawnRenderables) {
+            const pawn = component.getParent();
+
+            pawn.visible = (!this.frustumCullingEnabled || frustum.intersectsSphere(component.getRenderSphere())) && !pawn.checkLoadingResource(false);
+            if (pawn.visible) component.createSkin();
+        }
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
@@ -78,7 +97,7 @@ export class SkillViewerRenderManager extends RenderManager {
         (GLOBAL_UNIFORMS.cameraBillboardRight.value as Vector3).copy(projRight);
         (GLOBAL_UNIFORMS.cameraBillboardUp.value as Vector3).copy(projUp);
 
-        this.physicsManager.setTriggerPosition(this.camera.position);
+        this.getPhysicsManager().setTriggerPosition(this.camera.position);
         this.updatePawnVisibility();
 
         for (const component of this.pawnRenderables) this.updateViewerLighting(component.getParent());
@@ -130,7 +149,7 @@ export class SkillViewerRenderManager extends RenderManager {
     protected updateViewerLighting(actor: Object3D): void {
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
 
-        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getRenderSphere());
+        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getComponent<PawnRenderableComponent>("pawnRenderable").getLightingSphere());
 
         arrLightingObjects.length = 0;
         arrLightingObjects.push(actor);
@@ -138,7 +157,7 @@ export class SkillViewerRenderManager extends RenderManager {
         while (arrLightingObjects.length > 0) {
             const object = arrLightingObjects.pop()!;
 
-            for (const child of object.children) arrLightingObjects.push(child);
+            for (const child of object.children) if (!(child as BaseActor).isActor) arrLightingObjects.push(child);
 
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
                 (object as LitSkinnedMesh).updateActorLighting(viewerZone, [], tmpSunAmbient, pawnLights ? pawnLights.getLights() : undefined);
@@ -163,12 +182,13 @@ export class SkillViewerRenderManager extends RenderManager {
     }
 
     public onEngineTick(currentTime: number, _deltaTime: number): void {
-        if (!this.isRenderingFrame) return;
+        if (!this.isRenderingFrame || document.hidden) return;
 
         const viewShakeActive = this.applyViewShake(currentTime);
 
         this.renderer.autoClear = false;
         this.renderer.clear();
+        this.scene.traverseVisible(object => { if ((object as any).particlePool) (object as any).onRender(); });
         this.renderer.render(this.scene, this.camera);
 
         if (viewShakeActive) this.restoreViewShake();
@@ -180,7 +200,7 @@ export class SkillViewerRenderManager extends RenderManager {
 
     public startTicking(_currentTime: number): void {
         this.scene.updateMatrixWorld(true);
-        this.physicsManager.registerSimulationObjects(this.scene);
+        this.getPhysicsManager().registerSimulationObjects(this.scene);
         this.isRendering = true;
         this.needsUpdate = true;
     }

@@ -28,15 +28,15 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
     protected readonly targetLocation = new Vector3();
     protected readonly delta = new Vector3();
     protected readonly renderManager: RenderManager;
-    protected readonly target: BaseActor;
+    protected target: BaseActor;
     protected readonly caster: BaseActor;
-    protected readonly onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void;
+    protected readonly onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void | boolean;
     protected readonly mover: NMover;
     protected query: CollisionQuery_T;
     protected hasStarted = false;
     protected hasHit = false;
 
-    public constructor(renderManager: RenderManager, caster: BaseActor, target: BaseActor, onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void, mover: NMover = null) {
+    public constructor(renderManager: RenderManager, caster: BaseActor, target: BaseActor, onHit: (projectile: ProjectileActor_T, hitActor: boolean, impactActor: ICollidable | null) => void | boolean, mover: NMover = null) {
         super();
 
         this.renderManager = renderManager;
@@ -53,6 +53,8 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         this.velocity.fromArray(properties.get("Velocity"));
         this.acceleration.fromArray(properties.get("Acceleration"));
         properties.set("TargetActor", this.target);
+        this.target.getEffectTargetLocation(this.targetLocation);
+        this.targetLocation.toArray(properties.get("LastTargetLocation"));
         this.query = {
             location: effect.position, delta: this.delta,
             extent: new Vector3(properties.get("CollisionRadius"), properties.get("CollisionRadius"), properties.get("CollisionHeight")),
@@ -135,8 +137,13 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         if (mode === EPhysics_T.PHYS_None) return false;
         if (mode !== EPhysics_T.PHYS_NProjectile) throw new Error(`Projectile '${effect.name}' does not implement physics '${mode}'.`);
 
-        this.target.getEffectTargetLocation(this.targetLocation);
-        this.targetLocation.toArray(properties.get("LastTargetLocation"));
+        if (this.target && (!this.target.parent || this.target.isPendingKill())) {
+            this.removeTarget(this.target);
+        }
+        if (this.target) {
+            this.target.getEffectTargetLocation(this.targetLocation);
+            this.targetLocation.toArray(properties.get("LastTargetLocation"));
+        } else this.targetLocation.fromArray(properties.get("LastTargetLocation")); // ANProjectile::Tick 0x78cdd1 / 0x78d168.
 
         if (!this.hasStarted) {
             this.hasStarted = true;
@@ -183,7 +190,9 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
 
         tmpOldPosition.copy(effect.position);
         const distanceSquared = tmpOldPosition.distanceToSquared(this.targetLocation);
-        const hit = this.physicsManager.moveActor(this.query);
+        this.physicsManager.moveActor(this.query);
+        const hit = this.query.hit;
+        this.query.hit = null;
 
         if (hit || tmpOldPosition.distanceToSquared(effect.position) >= distanceSquared) {
             // Engine.dll physNProjectile 0x8d344d..0x8d3524 uses the post-movement position.
@@ -195,10 +204,10 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
             properties.set("Physics", EPhysics_T.PHYS_None);
             this.hasHit = true;
             // Engine.dll physNProjectile 0x8d351d..0x8d3523 passes TargetActor on arrival; processHitWall 0x793380 forwards the hit actor.
-            this.onHit(effect, hit ? !!hit.actor : !!this.target, hit ? hit.actor : this.target);
+            const retained = this.onHit(effect, hit ? !!hit.actor : !!this.target, hit ? hit.actor : this.target) === true;
 
             // Engine.dll UParticleEmitter::NotifyPreDestroy 0x612750 is empty for sprite/mesh/beam emitters.
-            if (!properties.get("bPreDestroy")) this.renderManager.removeTransientEffect(effect);
+            if (!retained && !properties.get("bPreDestroy")) this.renderManager.removeTransientEffect(effect);
             return true;
         }
 
@@ -219,6 +228,26 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         this.velocity.toArray(properties.get("Velocity"));
         this.acceleration.toArray(properties.get("Acceleration"));
         return true;
+    }
+
+    public replaceTarget(target: BaseActor, replacement: BaseActor): void {
+        if (this.target !== target) return;
+
+        this.target = replacement;
+        this.getParent().scriptProperties.set("TargetActor", replacement);
+    }
+
+    public removeTarget(target: BaseActor): void {
+        const properties = this.getParent().scriptProperties;
+
+        if (this.target === target) {
+            this.target = null;
+            properties.set("TargetActor", null);
+        }
+        const arrAssociated = properties.get("MagicInfo").AssociatedActor as BaseActor[];
+
+        for (let index = arrAssociated.length - 1; index >= 0; index--)
+            if (arrAssociated[index] === target) arrAssociated.splice(index, 1);
     }
 
     public detachFromBase(): void {

@@ -1,3 +1,11 @@
+@font-face {
+    font-family: L2Tahoma;
+    src: url("fonts/tahoma.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 body {
     padding: 0;
     margin: 0;
@@ -14,12 +22,75 @@ body {
         display: block;
     }
 
-    viewport.sector-precache {
+    .loading-progress {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        color: #ddd;
+        font: 13px/1.6 L2Tahoma, Tahoma, sans-serif;
+        text-align: center;
+
+        &[hidden] { display: none; }
+        &.loading-cover { background: #000; }
+
+        > div {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(420px, calc(100% - 48px));
+            height: 12.5%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 8px 16px;
+            background: #000;
+        }
+
+        progress {
+            appearance: none;
+            width: 100%;
+            height: 12px;
+            border: 1px solid #655231;
+            background: #211b12;
+            color: #caa344;
+
+            &::-webkit-progress-bar { background: #211b12; }
+            &::-webkit-progress-value { background: linear-gradient(#edce75, #caa344 45%, #927024); }
+            &::-moz-progress-bar { background: linear-gradient(#edce75, #caa344 45%, #927024); }
+            &:indeterminate::-webkit-progress-bar {
+                background: linear-gradient(90deg, #211b12 25%, #caa344 50%, #211b12 75%);
+                background-size: 200% 100%;
+                animation: loading-progress 1.5s linear infinite;
+            }
+        }
+
+        p {
+            align-self: center;
+            width: max-content;
+            max-width: calc(100vw - 48px);
+            margin: 8px 0 0;
+            text-shadow: 0 1px 3px #000;
+        }
+    }
+
+    &[data-gpu-unavailable] > .loading-progress { display: none; }
+
+    .gpu-error {
+        display: none;
+        width: 100%;
+        height: 100%;
+    }
+
+    &[data-gpu-unavailable] > viewport { display: none; }
+
+    viewport.sector-precache, viewport.asset-source, &[data-gpu-unavailable] > .gpu-error {
         display: grid;
         place-items: center;
         background: #0c0c0c;
         color: #ddd;
-        font: 14px monospace;
+        font: 14px/1.6 L2Tahoma, Tahoma, sans-serif;
 
         main {
             width: min(720px, calc(100% - 48px));
@@ -27,6 +98,7 @@ body {
 
         h1 {
             margin: 0 0 24px;
+            font-family: L2Tahoma, Tahoma, sans-serif;
             font-size: 24px;
             font-weight: normal;
         }
@@ -65,6 +137,8 @@ body {
             color: #777;
             cursor: default;
         }
+
+        input { font: inherit; }
     }
 
     .debug-view {
@@ -200,4 +274,9 @@ body {
             gap: 6px;
         }
     }
+}
+
+@keyframes loading-progress {
+    from { background-position: 100% 0; }
+    to { background-position: -100% 0; }
 }

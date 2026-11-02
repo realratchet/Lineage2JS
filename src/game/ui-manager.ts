@@ -2,14 +2,14 @@ import { IEngineComponent } from "./components";
 import type { WorkerMemoryStats_T } from "../assets/decode-worker/decode-protocol";
 import Stats from "../rendering/stats";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
-import { VisualizerMode, LeafVisualizerDetail } from "../rendering/visualizer";
-import type Visualizer from "../rendering/visualizer";
+import { LeafVisualizerDetail, VisualizerMode, type default as Visualizer } from "../rendering/visualizer";
 import type RenderManager from "../rendering/render-manager";
 import type BaseActor from "../base-actor";
 import type { PawnAttackSelection_T } from "../objects/components/pawn-attack-component";
 import type GameManager from "./game-manager";
 import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import { WeaponType } from "../assets/unreal/un-pawn";
+import type NDomLayer from "../nwindow/ndom";
 
 type DebugTab = "controls" | "environment" | "bsp" | "statistics" | VisualizerMode.Fogs | VisualizerMode.Audio | VisualizerMode.Emitters;
 type GraphSeries_T = { label: string, color: string, values: number[] };
@@ -22,14 +22,16 @@ function formatClock(hours: number) {
 }
 
 export class UIManager implements IEngineComponent<GameManager> {
-    public moverPosition = 0;
+    public areDoorsOpen = false;
     public fogPreset = "4";
+    protected fogPresetSelect: HTMLSelectElement = null;
     public showLevel = true;
     public showColliders = false;
     public followPlayer = false;
 
     protected manGame: GameManager;
     protected readonly stats = new (Stats as any)(0);
+    protected statsWindow: HTMLElement = this.stats.dom;
     protected readonly debugView = document.createElement("aside");
     protected readonly debugTabs = new Map<DebugTab, { button: HTMLButtonElement, panel: HTMLElement }>();
     protected activeTab: DebugTab = "controls";
@@ -68,10 +70,11 @@ export class UIManager implements IEngineComponent<GameManager> {
         const title = document.createElement("strong");
         title.textContent = "DEBUG";
         const hint = document.createElement("span");
-        hint.textContent = "F4 to close";
+        hint.textContent = "` to close";
         header.append(title, hint);
         this.stats.dom.classList.add("debug-stats");
         this.stats.showPanel(0);
+        this.statsWindow.style.display = localStorage.getItem("showFPS:*") === "true" ? "block" : "none";
         document.body.appendChild(this.stats.dom);
 
         const tabs = document.createElement("nav");
@@ -92,6 +95,37 @@ export class UIManager implements IEngineComponent<GameManager> {
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
     public getParent(): GameManager { return this.manGame; }
+
+    public getStatsWindow() { return this.statsWindow; }
+
+    public async createStatsWindow(layer: NDomLayer) {
+        const grip = "L2UI_CH3.FrameCtrl.smallbar", back = "L2UI_CH3.SmallWnd.Smallwindow2_back";
+
+        await layer.loadTextures([grip + "1", grip + "2", grip + "3", back + "1", back + "2", "L2UI_CH3.PlayerStatusWnd.ps_sizecontrol1"]);
+
+        const element = layer.createWindow(0, 84, 104, 64), handle = layer.createWindow(0, 0, 12, 64, element);
+
+        element.classList.add("debug-stats", "ndom-opaque");
+        element.setAttribute("role", "region");
+        element.setAttribute("aria-label", "Rendering statistics");
+        layer.tile(handle, 0, 0, 12, 8, 0, 0, 12, 8, grip + "1");
+        layer.tile(handle, 0, 8, 12, 48, 0, 0, 12, 8, grip + "2");
+        layer.tile(handle, 0, 56, 12, 8, 0, 0, 12, 8, grip + "3");
+        layer.tile(element, 12, 0, 16, 64, 0, 0, 16, 76, back + "1");
+        layer.tile(element, 28, 0, 72, 64, 0, 0, 16, 76, back + "2");
+        layer.tile(element, 100, 0, 4, 64, 0, 0, 4, 76, "L2UI_CH3.PlayerStatusWnd.ps_sizecontrol1");
+        handle.addEventListener("mousedown", event => {
+            if (event.button !== 0) return;
+
+            event.preventDefault();
+            layer.dragWindow(element, event);
+        });
+        element.style.display = this.statsWindow.style.display;
+        this.stats.dom.classList.remove("debug-stats");
+        this.stats.dom.style.cssText = "position:absolute;left:18px;top:8px;cursor:pointer";
+        element.appendChild(this.stats.dom);
+        this.statsWindow = element;
+    }
 
     public async onInit(): Promise<this> {
         this.addRenderControls();
@@ -127,7 +161,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         if (this.activeTab === "statistics") {
             const info = render.renderer.info;
             const memory = (performance as any).memory;
-            const heap = memory ? memory.usedJSHeapSize / 1048576 : 0;
+            const heap = memory ? memory.usedJSHeapSize / (1024 * 1024) : 0;
             const gpuMemory = this.getGpuMemoryUsage(render);
             if (performance.now() - this.workerMemoryPolledAt > 1000) {
                 this.workerMemoryPolledAt = performance.now();
@@ -143,8 +177,8 @@ export class UIManager implements IEngineComponent<GameManager> {
             this.statisticsElement.textContent = [
                 `FPS:              ${this.frameRate.toFixed(1)}`,
                 `Frame:            ${this.frameTime.toFixed(2)} ms`,
-                `JS heap:          ${memory ? `${heap.toFixed(1)} / ${(memory.jsHeapSizeLimit / 1048576).toFixed(1)} MB` : "unavailable"}`,
-                `Package buffers:  ${this.workerMemory.map(stats => stats ? `${(stats.buffers / 1048576).toFixed(0)} MB (${stats.packages})` : "-").join(" / ")}`,
+                `JS heap:          ${memory ? `${heap.toFixed(1)} / ${(memory.jsHeapSizeLimit / (1024 * 1024)).toFixed(1)} MB` : "unavailable"}`,
+                `Package buffers:  ${this.workerMemory.map(stats => stats ? `${(stats.buffers / (1024 * 1024)).toFixed(0)} MB (${stats.packages})` : "-").join(" / ")}`,
                 `VRAM:             ${gpuMemory.total ? `${gpuMemory.used.toFixed(1)} / ${gpuMemory.total.toFixed(1)} MB` : "unavailable"}`,
                 `GPU vendor:       ${this.gpuVendor}`,
                 `GPU renderer:     ${this.gpuRenderer}`,
@@ -271,7 +305,10 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.statisticsElement = document.createElement("pre");
         this.statisticsElement.className = "debug-info";
         panel.append(this.statisticsCanvas, this.statisticsElement);
-        this.addCheckbox(panel, "Show FPS overlay", true, value => this.stats.dom.style.display = value ? "block" : "none");
+        this.addCheckbox(panel, "Show FPS overlay", this.statsWindow.style.display !== "none", value => {
+            this.statsWindow.style.display = value ? "block" : "none";
+            localStorage.setItem("showFPS:*", String(value));
+        });
     }
 
     protected async pollWorkerMemory(): Promise<void> {
@@ -418,6 +455,15 @@ export class UIManager implements IEngineComponent<GameManager> {
         return button;
     }
 
+    public setFogPreset(preset: string) {
+        if (!/^[1-5]$/.test(preset)) throw new Error(`Invalid fog preset '${preset}'.`);
+
+        this.fogPreset = preset;
+        if (this.fogPresetSelect) this.fogPresetSelect.value = preset;
+        localStorage.setItem("fogPreset:*", preset);
+        this.manGame.getComponent("render").needsUpdate = true;
+    }
+
     protected addRenderControls(): void {
         const render = this.manGame.getComponent("render");
         const environment = render.getEnvironment();
@@ -426,17 +472,15 @@ export class UIManager implements IEngineComponent<GameManager> {
         const sky = this.addSection("Sky", false, "environment");
         const audio = this.addSection("Audio", false, "environment");
 
-        this.addSelect(quality, "Fog Range", {
-            "1 (2k-8k)": "1", "2 (3k-10k)": "2", "3 (4k-12k)": "3", "4 (5k-14k)": "4", "5 (8k-20k)": "5"
-        }, this.fogPreset, value => this.fogPreset = value);
+        this.fogPresetSelect = this.addSelect(quality, "Fog Range", Object.fromEntries(environment.getEnv().fog.ranges.map((range, index) => [`${index + 1} (${range.x * 2048}-${range.y * 2048})`, String(index + 1)])), this.fogPreset, value => this.setFogPreset(value));
         this.addCheckbox(world, "Show Level", this.showLevel, value => { this.showLevel = value; render.setLevelVisible(value); });
         this.addCheckbox(world, "Show Colliders", this.showColliders, value => { this.showColliders = value; render.setCollidersVisible(value); });
-        this.addRange(world, "Door Position", this.moverPosition, 0, 1, 0.01, value => { this.moverPosition = value; render.needsUpdate = true; });
+        this.addCheckbox(world, "Open Doors", this.areDoorsOpen, value => { this.areDoorsOpen = value; render.needsUpdate = true; });
         this.addCheckbox(sky, "Celestials", render.skyRenderer.config.celestials, value => render.skyRenderer.config.celestials = value);
         this.addCheckbox(sky, "Haze", render.skyRenderer.config.haze1, value => render.skyRenderer.config.haze1 = value);
         this.addCheckbox(sky, "Stars/Clouds", render.skyRenderer.config.starsClouds, value => render.skyRenderer.config.starsClouds = value);
-        this.addRange(audio, "Music Volume", render.audioManager.musicVolume, 0, 1, 0.01, value => render.audioManager.musicVolume = value);
-        this.addRange(audio, "Ambient Volume", render.audioManager.ambientVolume, 0, 1, 0.01, value => render.audioManager.ambientVolume = value);
+        this.addRange(audio, "Music Volume", render.audioManager.getMusicVolume(), 0, 1, 0.01, value => render.audioManager.setMusicVolume(value));
+        this.addRange(audio, "Ambient Volume", render.audioManager.getAmbientVolume(), 0, 1, 0.01, value => render.audioManager.setAmbientVolume(value));
 
         const timeRange = this.addRange(world, "Time", environment.getTimeOfDay(), 0, 24, 0.01, value => { environment.setTimeOfDay(value); timeClock.value = formatClock(value); render.needsUpdate = true; });
         const timeClock = this.addText(world, "Time (HH:MM)", formatClock(environment.getTimeOfDay()), value => {
@@ -512,7 +556,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         const skills = this.addSection("Player Skills");
         const skill = { id: 1012 };
         this.addText(skills, "Skill ID", String(skill.id), value => skill.id = Number(value)).type = "number";
-        const weapon = this.addSelect(skills, "Weapon animation (preview)", Object.fromEntries(Object.entries(WeaponType).filter(([, value]) => typeof value === "number").map(([name, value]) => [name, String(value)])), String(render.player.getUnrealScriptProperty("CurWeaponType")), () => {});
+        const weapon = this.addSelect(skills, "Weapon animation (preview)", Object.fromEntries(Object.entries(WeaponType).filter(([, value]) => typeof value === "number").map(([name, value]) => [name, String(value)])), String(render.player.scriptClassId ? render.player.getUnrealScriptProperty("CurWeaponType") : 0), () => {});
         const target = this.addSelect(skills, "Target", { Self: "self", "Spawned NPC": "npc" }, "self", () => {});
         this.addButton(skills, "Cast", () => {
             const targetActor = target.value === "npc" ? this.spawnedNpc : render.player;
@@ -590,9 +634,8 @@ export class UIManager implements IEngineComponent<GameManager> {
     public addDisplayGammaControls(): void {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
         const display = asset.userConfig.display;
-        display.gamma = 0;
         const steps = GAMMA_STEPS.reduce((acc, gamma) => (acc[gamma.toFixed(1)] = gamma, acc), { off: 0 } as Record<string, number>);
-        this.addSelect(this.qualitySection, "Gamma", steps, "0", value => render.setDisplayGamma(display, Number(value)));
+        this.addSelect(this.qualitySection, "Gamma", steps, String(render.getDisplayGamma()), value => render.setDisplayGamma(display, Number(value)));
     }
 }
 

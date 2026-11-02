@@ -1,9 +1,11 @@
 import type { UClass } from "@l2js/core";
 import type { UObject } from "./un-object";
 import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
-import pullScriptDumps, { dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
+import pullScriptDumps, { dumpObjectClass, dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
 import type { HeightMapInfo_T, UTerrainSector, ITerrainSegmentDecodeInfo } from "./un-terrain-sector";
 import type UPhysicsVolume from "./un-physics-volume";
+import type UVolume from "./un-volume";
+import UPrimitive from "./un-primitive";
 import type { UMaterial } from "./un-material";
 import type { FStaticLightmapTexture } from "./model/un-multilightmap-texture";
 import type { UStaticMesh, IStaticMeshObjectDecodeInfo } from "./static-mesh/un-static-mesh";
@@ -23,6 +25,7 @@ import type { UPawn } from "./un-pawn";
 import type { UStaticMeshActor } from "./static-mesh/un-static-mesh-actor";
 import type { ULight } from "./un-light";
 import type { UMusicVolume } from "./un-music-volume";
+import type { UBlockingVolume } from "./un-blocking-volume";
 import type { UAmbientSoundObject } from "./un-ambient-sound";
 import type { Vector3Arr } from "./library-types";
 
@@ -36,6 +39,7 @@ export type LoadSettings_T = {
     loadEmitterList?: { name: string, emitters?: string[] }[],
     loadAudio?: boolean,
     textures: "auto" | "rgba" | "compressed",
+    rgbaTextures?: boolean,
     helpersZoneBounds?: boolean,
     isSkyLevel?: boolean,
     decodeWorkerPoolSize?: number,
@@ -50,11 +54,15 @@ export type LoadSettings_T = {
     [key: `_${string}`]: any // debug/testing overrides, see core.ts
 };
 
+type SharedScriptProperties_T = { properties: IBaseObjectDecodeInfo["scriptProperties"], overrides: Set<string> };
+
 export class DecodeLibraryBuilder {
     public readonly library: DecodeLibrary;
 
     protected readonly materialsLoading = new Set<string>();
     protected readonly skeletalMeshes = new Map<string, ISkinnedMeshObjectDecodeInfo>();
+    protected readonly cacheScriptDefaults = new WeakMap<Function, Map<string, any>>();
+    protected readonly cacheSharedScriptProperties = new WeakMap<Function, SharedScriptProperties_T>();
     protected readonly settings: LoadSettings_T;
 
     public constructor(library: DecodeLibrary, settings: LoadSettings_T) {
@@ -62,6 +70,8 @@ export class DecodeLibraryBuilder {
         this.library = library;
         this.settings = settings;
     }
+
+    public getSettings() { return this.settings; }
 
     public isLoadingExtendedBoneInfluences() { return this.settings.loadExtendedBoneInfluences !== false; }
 
@@ -117,12 +127,14 @@ export class DecodeLibraryBuilder {
         return result.object;
     }
 
-    public pullSound(sound: USound): { uri: string, data: Uint8Array, mimeType: string } | null {
+    public pullSound(sound: USound): { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } | null {
         if (!sound) return null;
 
         sound = sound.loadSelf();
 
-        const soundKey = sound.objectName ?? sound.uuid;
+        const soundKey = sound.name;
+        this.library.sounds[soundKey] = soundKey;
+        this.library.scriptObjects[soundKey.toLowerCase()] = dumpObjectClass(sound);
         let soundEntry = this.library.soundBlobCache.get(soundKey);
 
         if (soundEntry) return soundEntry;
@@ -135,7 +147,7 @@ export class DecodeLibraryBuilder {
         const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
 
         // Blob URLs are minted by refreshSoundBlobUris on the thread that owns the library.
-        soundEntry = { uri: null, data: audioData, mimeType };
+        soundEntry = { uri: null, data: audioData, mimeType, assetName: sound.name };
         this.library.soundBlobCache.set(soundKey, soundEntry);
 
         return soundEntry;
@@ -172,6 +184,7 @@ export class DecodeLibraryBuilder {
         this.library.bspZones.push(...result.bspZones);
         Object.assign(this.library.bspZoneIndexMap, result.bspZoneIndexMap);
 
+        this.library.bspRootOutside = result.bspRootOutside;
         this.library.bspNodes.push(...result.bspNodes);
         this.library.bspColliders.push(...result.bspColliders);
         this.library.leafActors.push(...result.leafActors);
@@ -234,14 +247,35 @@ export class DecodeLibraryBuilder {
 
     public pullLevel(level: ULevel, sectorName: string): void {
         level = level.loadSelf();
+        this.library.levelPackageName = (level as any).pkg.getObjectPath(0);
+        this.library.levelObjectName = level.objectName;
+        this.library.levelObjectOuter = (level as any).pkg.getObjectPath(level.exp.idPackage);
 
         const levelInfo = level.levelInfo.loadSelf();
         const batching = this.settings.batching ?? { terrain: true, staticMeshes: true };
+
+        for (const actor of level.getActors()) {
+            this.library.levelActorUuids.push(actor ? actor.uuid : null);
+            if (!actor) { this.library.levelActors.push(null); continue; }
+
+            actor.loadSelf();
+            const info: Pick<IBaseObjectDecodeInfo, "uuid" | "name" | "scriptClassId" | "scriptProperties" | "sharedScriptProperties" | "ownerUuid"> = { uuid: actor.uuid, name: actor.objectName };
+
+            this.setScriptClass(actor, info, true);
+            this.library.levelActors.push(info);
+        }
 
         // sectorName is the caller's own key, not level.url.map (stale on some packages, e.g. 23_17)
         const sectorMatch = /^(\d+)_(\d+)$/.exec(sectorName);
 
         this.library.brightness = levelInfo.brightness;
+        this.library.levelInfo = levelInfo.getDecodeInfo(this.library);
+        this.setScriptClass(levelInfo, this.library.levelInfo);
+        const physicsVolume = levelInfo.physicsVolume ? levelInfo.physicsVolume.loadSelf() : null;
+        if (physicsVolume) {
+            this.library.levelInfo.physicsVolume = physicsVolume.getDecodeInfo(this.library);
+            this.setScriptClass(physicsVolume, this.library.levelInfo.physicsVolume);
+        }
         // Engine.dll MultiPointCheck 0x85f530..0x85f533: BSP hits return LevelInfo.
         this.library.levelInfoCollisionRadius = levelInfo.collisionRadius;
         this.library.name = level.url.map;
@@ -256,8 +290,16 @@ export class DecodeLibraryBuilder {
         const model = level.getModel().setLevelInfo(levelInfo).loadSelf();
 
         this.pullModel(model, levelInfo, this.settings.loadBaseModel !== false);
+        const zoneActors = new Set<FZoneInfo>([levelInfo]);
+
+        for (let i = 0; i < this.library.bspZones.length; i++) {
+            const actor = model.getZoneActor(i).loadSelf();
+            this.setScriptClass(actor, this.library.bspZones[i].zoneInfo);
+            zoneActors.add(actor);
+        }
+
         this.pullActors(level);
-        this.pullScriptDumps(level.getActors(), level.getAmbientActors());
+        this.pullScriptDumps(level.getActors(), level.getAmbientActors(), zoneActors, physicsVolume ? [physicsVolume] : []);
     }
 
     public pullScriptClasses(classes: Iterable<UClass>): void {
@@ -281,12 +323,12 @@ export class DecodeLibraryBuilder {
 
             if ((actor as any).isPhysicsVolume) {
                 const volume = actor.loadSelf() as UPhysicsVolume;
+                this.pullVolumeCollisionActor(volume);
                 const volumeInfo = volume.getDecodeInfo(this.library);
 
-                if (volumeInfo) {
-                    this.setScriptClass(volume, volumeInfo);
-                    this.library.waterVolumes.push(volumeInfo);
-                }
+                this.setScriptClass(volume, volumeInfo);
+                this.library.physicsVolumes.push(volumeInfo);
+                if (volumeInfo.type === "WaterVolume" && volumeInfo.bsp) this.library.waterVolumes.push(volumeInfo as any);
                 continue;
             }
 
@@ -354,14 +396,19 @@ export class DecodeLibraryBuilder {
                 case "StaticMeshActor":
                 case "Mover":
                 case "MovableStaticMeshActor": {
+                    const staticMeshActor = actor.loadSelf() as UStaticMeshActor;
+
+                    if (!staticMeshActor.isDeleteMe && staticMeshActor.isCollidingActors && staticMeshActor.mesh) {
+                        const mesh = staticMeshActor.mesh.loadSelf() as UStaticMesh;
+                        this.library.staticMeshCollisionActors.push({ uuid: actor.uuid, name: actor.objectName, position: staticMeshActor.location.getElements(), collisionBounds: mesh.getCollisionBoundingBox(staticMeshActor).getDecodeInfo(), collision: staticMeshActor.getCollisionDecodeInfo() });
+                    }
+
                     if (this.settings.loadStaticModels === false) break;
 
                     const staticMeshList = this.settings.loadStaticModelList;
 
                     if (staticMeshList && staticMeshList.length && !staticMeshList.some(i => typeof i === "number" ? i === actor.exportIndex + 1 : i === actor.objectName))
                         break;
-
-                    const staticMeshActor = actor.loadSelf() as UStaticMeshActor;
 
                     if (!staticMeshActor.isDeleteMe) this.pullStaticMeshActor(staticMeshActor);
                     break;
@@ -373,13 +420,26 @@ export class DecodeLibraryBuilder {
                     if (!light.isDeleteMe) this.library.lightActors.push(light.getDecodeInfo(this.library));
                     break;
                 }
-                case "MusicVolume": {
-                    if (this.settings.loadAudio === false) break;
+                case "BlockingVolume": {
+                    const volume = actor.loadSelf() as UBlockingVolume;
+                    this.pullVolumeCollisionActor(volume);
 
+                    if (!volume.isDeleteMe) {
+                        const volumeInfo = volume.getDecodeInfo();
+
+                        this.setScriptClass(volume, volumeInfo);
+                        this.library.blockingVolumes.push(volumeInfo);
+                    }
+                    break;
+                }
+                case "MusicVolume": {
                     const music = actor.loadSelf() as UMusicVolume;
+                    this.pullVolumeCollisionActor(music);
+
                     const musicInfo = music.getDecodeInfo(this.library);
 
-                    this.library.audioList.push(musicInfo);
+                    this.setScriptClass(music, musicInfo);
+                    if (this.settings.loadAudio !== false) this.library.audioList.push(musicInfo);
                     this.library.musicVolumes.push(musicInfo);
                     break;
                 }
@@ -396,6 +456,13 @@ export class DecodeLibraryBuilder {
         }
     }
 
+    protected pullVolumeCollisionActor(volume: UVolume): void {
+        if (volume.isDeleteMe || !volume.isCollidingActors) return;
+
+        const bounds = volume.brush ? volume.brush.loadSelf().getCollisionBoundingBox(volume) : UPrimitive.getCylinderCollisionBoundingBox(volume);
+        this.library.volumeCollisionActors.push({ uuid: volume.uuid, name: volume.objectName, position: volume.location.getElements(), collisionBounds: bounds.getDecodeInfo(), collision: volume.getCollisionDecodeInfo() });
+    }
+
     public pullStaticMeshActor(actor: UStaticMeshActor): void {
         const result = actor.getDecodeInfo(this);
 
@@ -403,16 +470,17 @@ export class DecodeLibraryBuilder {
 
         this.setScriptClass(actor, result.object);
 
-        for (const leafIndex of result.leafIndices)
-            if (this.library.leafActors[leafIndex])
-                this.library.leafActors[leafIndex].push(result.object);
-
         this.library.exportedActors.add(actor.uuid);
         this.library.geometryInstances[result.geometryUuid]++;
 
-        if (!result.zoneBounds) return;
-
         const zoneInfo = this.library.bspZones[this.library.bspZoneIndexMap[result.zoneUuid]].zoneInfo;
+
+        if (!this.library.isSkyLevel && zoneInfo.type === "Sky") zoneInfo.children.push(result.object);
+        else for (const leafIndex of result.leafIndices)
+            if (this.library.leafActors[leafIndex])
+                this.library.leafActors[leafIndex].push(result.object);
+
+        if (!result.zoneBounds) return;
 
         zoneInfo.bounds.isValid = true;
 
@@ -442,13 +510,43 @@ export class DecodeLibraryBuilder {
         zoneInfo.children.push(result.object);
     }
 
-    protected setScriptClass(actor: UObject, info: IBaseObjectDecodeInfo): void {
+    protected setScriptClass(actor: UObject, info: Pick<IBaseObjectDecodeInfo, "scriptClassId" | "scriptProperties" | "sharedScriptProperties" | "ownerUuid">, shareProperties: boolean = false): void {
         const cls = (actor.constructor as any).hostClass as UClass;
 
         if (!cls) return;
 
+        const owner = actor.propertyDict.get("Owner") as UAActor;
+
         info.scriptClassId = cls.name;
-        info.scriptProperties = dumpObjectScriptProperties(actor);
+        if (shareProperties) {
+            const ctor = actor.constructor;
+            let shared = this.cacheSharedScriptProperties.get(ctor);
+
+            if (shared) info.scriptProperties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults, shared.overrides);
+            else {
+                const properties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults);
+                const layout = (ctor as any)._classLayout as Map<string, any>;
+
+                if (!layout) throw new Error(`Script class '${ctor.name}' has no property layout.`);
+
+                shared = { properties: {}, overrides: new Set() };
+
+                for (const name of Map.prototype.keys.call(actor.propertyDict))
+                    if (layout.has(name)) shared.overrides.add(name);
+                info.scriptProperties = {};
+
+                for (const name of Object.keys(properties)) {
+                    if (layout.has(name)) shared.properties[name] = properties[name];
+                    else info.scriptProperties[name] = properties[name];
+                }
+                this.cacheSharedScriptProperties.set(ctor, shared);
+            }
+            info.sharedScriptProperties = shared.properties;
+            info.scriptProperties.bStatic = actor.propertyDict.get("bStatic");
+            info.scriptProperties.bAlwaysRelevant = actor.propertyDict.get("bAlwaysRelevant");
+        } else info.scriptProperties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults);
+        if (this.library.levelPackageName) info.scriptProperties.Outer = (actor as any).pkg.getObjectPath(actor.exp.idPackage);
+        info.ownerUuid = owner ? owner.uuid : null;
     }
 }
 

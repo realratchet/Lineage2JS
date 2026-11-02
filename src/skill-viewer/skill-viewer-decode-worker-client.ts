@@ -1,7 +1,8 @@
 import DecodeWorkerClient from "../assets/decode-worker/decode-worker-client";
+import { revokeSoundUri } from "../assets/decode-worker/decode-cache";
 import type DecodeLibrary from "../assets/unreal/decode-library";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
-import type { ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
+import type { ICharacterArmorSelection, INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn";
 
 type NpcPreload_T = { library: Promise<DecodeLibrary> };
 
@@ -16,8 +17,8 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
 
     public setEnterEventEnabled(enabled: boolean): void { this.isEnterEventEnabled = enabled; }
 
-    public async resolveNpc(selector: string | number): Promise<INpcDefinition> {
-        const npc = await super.resolveNpc(selector);
+    public async resolveNpc(selector: string | number, settings: LoadSettings_T): Promise<INpcDefinition> {
+        const npc = await super.resolveNpc(selector, settings);
 
         return this.isEnterEventEnabled ? npc : Object.assign({}, npc, { enterEvent: null });
     }
@@ -53,7 +54,7 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
         while (this.arrCharacterPreloads.length < count) this.arrCharacterPreloads.push(super.decodeCharacter(settings));
     }
 
-    public decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: L2JS.Engine.INpcEquipment | null = null): Promise<DecodeLibrary> {
+    public decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
         const preload = npcId === null || equipment !== null ? null : this.cacheNpcPreloads.get(npcId);
 
         if (preload) this.cacheNpcPreloads.delete(npcId);
@@ -62,7 +63,7 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
     }
 
     // animations travel only with the first decode of a set, and only a consumed library reaches decodeObject3D's cache
-    protected async consumeSkeletalMesh(pending: Promise<DecodeLibrary>, settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: L2JS.Engine.INpcEquipment | null): Promise<DecodeLibrary> {
+    protected async consumeSkeletalMesh(pending: Promise<DecodeLibrary>, settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string, texturePaths: string[], npcId: number, equipment: INpcEquipment | null): Promise<DecodeLibrary> {
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
         let library = await pending;
 
@@ -113,8 +114,7 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
 function hasAnimations(library: DecodeLibrary): boolean { return library.pawnActors.some(info => Object.keys(info.animations).length > 0); }
 
 function revokeSounds(library: DecodeLibrary): void {
-    for (const sound of library.soundBlobCache.values())
-        if (sound.uri) URL.revokeObjectURL(sound.uri);
+    for (const sound of library.soundBlobCache.values()) revokeSoundUri(sound);
 }
 
 async function reportPreloadFailure(npc: INpcDefinition, library: Promise<DecodeLibrary>): Promise<void> {

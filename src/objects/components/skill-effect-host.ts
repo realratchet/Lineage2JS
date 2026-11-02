@@ -12,11 +12,16 @@ import type PawnMovementComponent from "../../physics/components/pawn-movement-c
 import type SoundComponent from "../../audio/components/sound-component";
 import type EffectsComponent from "../../rendering/components/effects-component";
 import { NPawnLightComponent, type PawnLight_T } from "../../rendering/components/pawn-light-component";
-import type { NpcSkillSound_T } from "@l2js/engine/contracts/pawn";
-import type { ProjectileActor_T } from "../../physics/components/projectile-component";
-import NProjectileComponent from "../../physics/components/projectile-component";
+import type { DecodeLibrary } from "@l2js/engine";
+import type { NpcSkillSound_T, IPawnEquipmentDecodeInfo } from "@l2js/engine/contracts/pawn";
+import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import NMover from "../../physics/mover";
-import type { ScriptHost_T } from "../../ue-script/vm";
+import UnScriptVM, { type ScriptHost_T } from "../../ue-script/vm";
+import type RibbonEmitter from "../emitters/ribbon-emitter";
+import { EPhysics_T } from "@l2js/engine/un-aactor";
+
+const cacheSkillVMs = new WeakMap<DecodeLibrary, UnScriptVM>();
+const cacheEffectLibraries = new WeakMap<object, DecodeLibrary>();
 
 const tmpPosition = new Vector3();
 const tmpDirection = new Vector3();
@@ -33,6 +38,7 @@ const tmpMatrix = new Matrix4();
 type RuntimeActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, any>, scriptClassId: string };
 
 export class SkillEffectHost implements SkillEffectHost_T {
+    protected scriptVM: UnScriptVM = null;
     protected readonly renderManager: RenderManager;
     protected readonly addEffectCallback: (effect: Object3D, owner: SkillActor_T | null) => void;
     protected readonly removeEffectCallback: (effect: Object3D) => void;
@@ -43,19 +49,42 @@ export class SkillEffectHost implements SkillEffectHost_T {
         this.removeEffectCallback = removeEffect;
     }
 
-    public createEffect(caster: SkillActor_T, classId: string): SkillActor_T {
-        const effect = this.actor(caster).getComponent<ScriptComponent>("script").createObject(classId) as any;
+    public createEffect(caster: SkillActor_T, classId: string, assets: DecodeLibrary = null): SkillActor_T {
+        if (assets && !cacheSkillVMs.has(assets)) cacheSkillVMs.set(assets, new UnScriptVM(assets));
+
+        const vm = assets ? cacheSkillVMs.get(assets) : null;
+        const effect = assets ? this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, assets, classId, vm) : this.actor(caster).getComponent<ScriptComponent>("script").createObject(classId) as any;
+
+        if (vm) {
+            vm.initializeHost(effect);
+            cacheEffectLibraries.set(effect, assets);
+        }
 
         if (!effect.isObject3D) throw new Error(`Skill effect '${classId}' is not an actor.`);
         return effect;
     }
 
     public addEffect(effect: SkillActor_T, owner: SkillActor_T | null): void { this.addEffectCallback(this.object(effect), owner); }
-    public removeEffect(effect: SkillActor_T): void { this.removeEffectCallback(this.object(effect)); }
+    public removeEffect(effect: SkillActor_T, fadeOut: number = 0): void {
+        const object = this.object(effect);
+
+        if (fadeOut > 0 && (object as any).isEmitterActor) {
+            (object as any).kill();
+            object.traverse((child: any) => {
+                if (child.particlePool) child.fadeOut(fadeOut);
+            });
+            const lifeSpan = effect.scriptProperties.get("LifeSpan") as number;
+
+            effect.scriptProperties.set("LifeSpan", lifeSpan > 0 ? Math.min(lifeSpan, fadeOut) : fadeOut);
+            return;
+        }
+
+        this.removeEffectCallback(object);
+    }
     public isAlive(actor: SkillActor_T): boolean { return !!this.object(actor).parent; }
 
     public isA(actor: SkillActor_T, classId: string, caster: SkillActor_T): boolean {
-        const classes = (this.script(caster).getVM() as any).library.scriptClasses;
+        const classes = (cacheEffectLibraries.get(actor) || ((this.scriptVM || this.script(caster).getVM()) as any).library).scriptClasses;
 
         for (let cls = classes[actor.scriptClassId]; cls; cls = classes[cls.superClassId])
             if (cls.id.toLowerCase() === classId.toLowerCase()) return true;
@@ -88,8 +117,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public setRotation(actor: SkillActor_T, value: QuaternionArr): void { this.object(actor).quaternion.fromArray(value); }
-    public getCollisionRadius(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionRadius() : Number(actor.getUnrealScriptProperty("CollisionRadius")); }
-    public getCollisionHeight(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionHeight() : Number(actor.getUnrealScriptProperty("CollisionHeight")); }
+    public getCollisionRadius(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionRadius() : Number(actor.scriptProperties.get("CollisionRadius")); }
+    public getCollisionHeight(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionHeight() : Number(actor.scriptProperties.get("CollisionHeight")); }
 
     public getEffectTargetLocation(actor: SkillActor_T, out: Vector3Arr): Vector3Arr {
         this.actor(actor).getEffectTargetLocation(tmpPosition);
@@ -178,6 +207,54 @@ export class SkillEffectHost implements SkillEffectHost_T {
         });
     }
 
+    protected getWeaponMesh(actor: SkillActor_T, left: boolean) {
+        const library = (this.script(actor).getVM() as any).library;
+        const equipment = library.pawnEquipment as IPawnEquipmentDecodeInfo;
+        const hand = left ? "Left" : "Right";
+        const item = equipment && (equipment.items.find(item => item.bone === `${hand}HandBone`) || equipment.items.find(item => item.bone === `${hand}ArmBone`));
+        const path = item ? item.mesh : left && library.npcBow ? library.npcBow.weaponMesh : null;
+
+        if (!path) return null;
+        const mesh = library.scriptMeshes[path.toLowerCase()];
+
+        if (!mesh) throw new Error(`Pawn '${actor.name}' has no decoded weapon mesh '${path}'.`);
+        return mesh;
+    }
+
+    public getWeaponLength(actor: SkillActor_T, left: boolean, scale: number = 1): number | null {
+        const mesh = this.getWeaponMesh(actor, left);
+
+        if (!mesh) return null;
+
+        return mesh.sk_unkArr11.length ? Math.fround(mesh.weaponLength * scale) : mesh.weaponLength;
+    }
+
+    public attachTrailer(actor: SkillActor_T, assets: DecodeLibrary, shotTime: number, numPoints: number, lifeSpanOffset: number, rightHand: boolean): void {
+        const mesh = this.getWeaponMesh(actor, !rightHand);
+
+        if (!mesh || !mesh.sk_unkArr11.length || mesh.sk_unkArr11[0] <= 0) return;
+        const length = mesh.sk_unkArr11[0] * mesh.meshScale[0];
+        const effect = this.createEffect(actor, "LineageEffect.RibbonSet", assets);
+        const emitter = this.object(effect).children[0] as RibbonEmitter;
+        const bone = actor.getUnrealScriptProperty(rightHand ? "RightHandBone" : "LeftHandBone") as string;
+
+        effect.scriptProperties.set("Physics", EPhysics_T.PHYS_None);
+        effect.scriptProperties.set("LifeSpan", Math.fround(shotTime + Math.fround(lifeSpanOffset)));
+        emitter.attachTrailer(bone, length, shotTime, numPoints);
+        this.addEffect(effect, actor);
+        this.attachToBone(actor, effect, bone);
+    }
+
+    public setSoulShotVelocity(actor: SkillActor_T, velocity: number): void {
+        let index = 0;
+
+        // SpawnNTransientEffect 0x79955f: first two emitters' StartVelocityRange.X (+0x380/+0x384).
+        this.object(actor).traverse((child: any) => {
+            if (child.particlePool && index++ < 2) child.setStartVelocityRangeX(velocity);
+        });
+        if (index < 2) throw new Error(`Soulshot '${actor.name}' has fewer than two emitters.`);
+    }
+
     public createDamageEffect(actor: SkillActor_T): SkillActor_T | null {
         const effect = this.actor(actor).getComponent<EffectsComponent>("effects").createDamageEffect();
 
@@ -188,8 +265,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     public isLowDetail(): boolean { return this.renderManager.keepMinFrameRate; }
     public playAttackSounds(actor: SkillActor_T, critical: boolean = false): void { this.actor(actor).getComponent<SoundComponent>("sound").playAttackSounds(critical); }
 
-    public playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T): void {
-        this.actor(actor).getComponent<SoundComponent>("sound").playSkillSound(sound, target ? this.actor(target) : undefined);
+    public playSkillSound(actor: SkillActor_T, sound: NpcSkillSound_T, target?: SkillActor_T, assets: DecodeLibrary = null, onStarted?: (duration: number) => void): void {
+        this.actor(actor).getComponent<SoundComponent>("sound").playSkillSound(sound, target ? this.actor(target) : undefined, assets, onStarted);
     }
 
     public addViewShakeState(duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, amplitude: Vector3Arr, velocity: Vector3Arr, position: Vector3Arr, origin: Vector3Arr, strength: number, range: number, type?: "damage" | "upDown"): void {
@@ -227,7 +304,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public executeProgram(caster: SkillActor_T, context: SkillScriptHost_T, program: IScriptFunctionDecodeInfo): boolean {
-        return !!this.script(caster).getVM().invoke(context, program);
+        if (!this.scriptVM) this.scriptVM = this.script(caster).getVM();
+        return !!this.scriptVM.invoke(context, program);
     }
 
     protected projectile(component: NProjectileComponent): SkillProjectile_T {

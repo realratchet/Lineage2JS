@@ -3,6 +3,9 @@ uniform float opacity;
 uniform sampler2D map;
 
 varying vec2 vUv;
+#ifdef USE_PARTICLE_INSTANCING
+varying vec4 vInstanceTint;
+#endif
 
 #include <common>
 #include <color_pars_fragment>
@@ -18,6 +21,9 @@ void main() {
     vec4 diffuseColor = vec4( diffuse, opacity );
     
     diffuseColor *= texelColor;
+    #ifdef USE_PARTICLE_INSTANCING
+        diffuseColor *= vInstanceTint;
+    #endif
     
     #include <logdepthbuf_fragment>
     #include <color_fragment>
@@ -27,5 +33,5 @@ void main() {
     #include <l2_fog_fragment>
     
     #include <tonemapping_fragment>
-    #include <encodings_fragment>
+    #include <colorspace_fragment>
 }

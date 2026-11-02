@@ -11,6 +11,10 @@ attribute vec4 instanceUV;
 attribute vec3 instanceUVBlend;
 varying vec3 vSubdivisionBlend;
 #endif
+#ifdef USE_VELOCITY_UP
+attribute vec3 instanceDirection;
+uniform vec3 particleViewLocation;
+#endif
 #ifdef USE_WORLD_PARTICLE_BATCH
 #ifdef USE_FIXED_NORMAL
 attribute vec3 instanceRight;
@@ -47,6 +51,16 @@ void main() {
         vec3 up = cameraBillboardUp * c - cameraBillboardRight * s;
         vec3 worldPosition = instancePosition + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y);
     #endif
+    #elif defined(USE_VELOCITY_UP)
+        vec3 viewCross = cross(instancePosition - particleViewLocation, instanceDirection); // PTDU_Up, ParticleMesh.onBeforeRender order: local basis, spin, both axes negated
+        float viewCrossLength = length(viewCross);
+        vec3 localRight = viewCrossLength > 0.0 ? viewCross / viewCrossLength : vec3(0.0);
+        vec3 localUp = instanceDirection;
+        float s = sin(instanceSpin);
+        float c = cos(instanceSpin);
+        vec3 right = -(localRight * c + localUp * s);
+        vec3 up = -(localUp * c - localRight * s);
+        vec3 worldPosition = (modelMatrix * vec4(instancePosition + right * (position.x * instanceScale.x) + up * (position.y * instanceScale.y), 1.0)).xyz;
     #else
     #ifdef USE_FIXED_NORMAL
         // PTDU_Normal has one emitter-local basis for every particle. Transform it

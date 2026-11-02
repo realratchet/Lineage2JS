@@ -57,7 +57,7 @@ export type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
 export type ParticleBlendModes_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 
 export type EmitterConfig_T = {
-    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter" | "VertMeshEmitter",
+    type?: "SpriteEmitter" | "MeshEmitter" | "BeamEmitter" | "VertMeshEmitter" | "RibbonEmitter",
     name?: string,
     scriptClassId?: string,
     blendingMode: ParticleBlendModes_T,
@@ -635,7 +635,7 @@ const REQUIRED_SETTINGS = [
     "acceleration", "addLocationFromOtherEmitter", "addVelocityFromOtherEmitter", "autoResetTimeRange", "isAutoDestroyed", "isAutoReset",
     "clockwiseSpinChance", "colorScaleRepeats", "coordinateSystem", "drawStyle", "maxParticles",
     "effectAxis", "fadeInEndTime", "fadeInFactor", "fadeOutFactor", "fadeOutStartTime",
-    "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning",
+    "getVelocityDirectionFrom", "initialParticlesPerSecond", "isAutomaticInitialSpawning", "minSquaredVelocity",
     "initialDelayRange", "startVelocityRadialRange", "isIndependentSprayAccel",
     "isDisabled", "isFadingIn", "isFadingOut", "isResetOnTrigger", "isRespawningDeadParticles", "isTriggerDisabled", "isBlendBetweenSubdivisions", "isDepthTesting", "isDepthWriting",
     "isScaleSizeRegular", "isSpawningTowardsNormal", "isSpinning", "isUniformScale",
@@ -753,7 +753,7 @@ export abstract class UParticleSound extends UObject {
         const snd = this.sound.loadSelf();
         if (!snd) return null;
 
-        const soundKey = snd.objectName ?? snd.uuid;
+        const soundKey = snd.name;
 
         if (!builder.pullSound(snd)) return null;
 

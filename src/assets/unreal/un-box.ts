@@ -19,8 +19,10 @@ export abstract class FBox extends UObject {
     public getCenter() { return !this.isValid ? FVector.make() : this.max.add(this.min).multiplyScalar(0.5); }
     public getExtents() { return !this.isValid ? FVector.make() : this.max.sub(this.min).multiplyScalar(0.5); }
 
-    public constructor(min?: FVector, max?: FVector, isValid?: 0 | 1) {
+    public constructor(min?: FVector, max?: FVector, isValid?: 0 | 1, initialize = true) {
         super();
+
+        if (!initialize) return;
 
         this.min = min ?? this.min ?? FVector.make();
         this.max = max ?? this.max ?? FVector.make();
@@ -73,6 +75,14 @@ export abstract class FBox extends UObject {
         }
 
         return FBox.make(other, other, 1);
+    }
+
+    public addBox(other: FBox): FBox {
+        // Core FBox::operator+=(FBox) 0x101198a0 copies the right box unless both are valid.
+        if (!this.isValid || !other.isValid)
+            return FBox.make(other.min.clone(), other.max.clone(), other.isValid);
+
+        return this.add(other.min).add(other.max);
     }
 
     public transformBy(matrix: FMatrix): FBox {

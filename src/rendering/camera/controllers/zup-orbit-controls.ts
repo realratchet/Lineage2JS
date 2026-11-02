@@ -1,5 +1,4 @@
-import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3 } from "three";
-import type { Matrix4 } from "three";
+import { EventDispatcher, MOUSE, Quaternion, Spherical, TOUCH, Vector2, Vector3, type Matrix4 } from "three";
 
 // Forked from three OrbitControls for the mirrored horizontal projection.
 
@@ -11,6 +10,12 @@ export class ZUpOrbitControls extends EventDispatcher {
     public target: Vector3;
     public enabled: boolean;
     public update: () => boolean;
+    public rotate: (yaw: number, pitch: number) => void;
+    public manualYaw = 0;
+    public onCameraInput: (action: "press" | "release" | "axis" | "wheel", yaw: number, pitch: number) => void = null;
+    public onCameraZoom: (direction: number, distance: number) => number = null;
+    public unclippedDistance: number = 0;
+    public unclippedOffset: Vector3 = null;
     protected nativeLike: boolean;
 
     [key: string]: any;
@@ -90,7 +95,7 @@ export class ZUpOrbitControls extends EventDispatcher {
         this.zoom0 = this.object.zoom;
 
         // the target DOM element for key events
-        this._domElementKeyEvents = null;
+        this.domElementKeyEvents = null;
         this.nativeLike = false;
 
         this.setNativeLikeControls = function (nativeLike: boolean) {
@@ -122,7 +127,7 @@ export class ZUpOrbitControls extends EventDispatcher {
         this.listenToKeyEvents = function (domElement: HTMLElement) {
 
             domElement.addEventListener("keydown", onKeyDown);
-            this._domElementKeyEvents = domElement;
+            this.domElementKeyEvents = domElement;
 
         };
 
@@ -168,6 +173,13 @@ export class ZUpOrbitControls extends EventDispatcher {
                 const position = scope.object.position;
 
                 offset.copy(position).sub(scope.target);
+                if (scope.unclippedOffset) offset.copy(scope.unclippedOffset);
+
+                if (scope.unclippedDistance > 0) {
+                    if (scope.unclippedOffset) offset.setLength(scope.unclippedDistance);
+                    else offset.set(0, 0, scope.unclippedDistance).applyQuaternion(scope.object.quaternion);
+                    scope.unclippedDistance = 0;
+                }
 
                 // rotate offset to "y-axis-is-up" space
                 offset.applyQuaternion(quat);
@@ -245,6 +257,7 @@ export class ZUpOrbitControls extends EventDispatcher {
 
                 // rotate offset back to "camera-up-vector-is-up" space
                 offset.applyQuaternion(quatInverse);
+                if (scope.unclippedOffset) scope.unclippedOffset.copy(offset);
 
                 position.copy(scope.target).add(offset);
 
@@ -303,9 +316,9 @@ export class ZUpOrbitControls extends EventDispatcher {
             scope.domElement.removeEventListener("pointerup", onPointerUp);
 
 
-            if (scope._domElementKeyEvents !== null) {
+            if (scope.domElementKeyEvents !== null) {
 
-                scope._domElementKeyEvents.removeEventListener("keydown", onKeyDown);
+                scope.domElementKeyEvents.removeEventListener("keydown", onKeyDown);
 
             }
 
@@ -329,6 +342,7 @@ export class ZUpOrbitControls extends EventDispatcher {
         };
 
         let state = STATE.NONE;
+
 
         const EPS = 0.000001;
 
@@ -369,6 +383,8 @@ export class ZUpOrbitControls extends EventDispatcher {
 
         function rotateLeft(angle: number) {
 
+            scope.manualYaw -= angle;
+
             sphericalDelta.theta -= angle;
 
         }
@@ -378,6 +394,12 @@ export class ZUpOrbitControls extends EventDispatcher {
             sphericalDelta.phi -= angle;
 
         }
+
+        this.rotate = function (yaw: number, pitch: number) {
+            rotateLeft(-yaw);
+            rotateUp(-pitch);
+            scope.update();
+        };
 
         const panLeft = function () {
 
@@ -539,6 +561,8 @@ export class ZUpOrbitControls extends EventDispatcher {
 
             rotateUp(2 * Math.PI * rotateDelta.y / element.clientHeight);
 
+            scope.onCameraInput?.("axis", rotateDelta.x * 65536 / element.clientHeight, -rotateDelta.y * 65536 / element.clientHeight);
+
             rotateStart.copy(rotateEnd);
 
             scope.update();
@@ -582,6 +606,17 @@ export class ZUpOrbitControls extends EventDispatcher {
         }
 
         function handleMouseWheel(event: WheelEvent) {
+
+            if (scope.nativeLike && scope.onCameraZoom && event.deltaY !== 0) {
+                const direction = Math.sign(event.deltaY), distance = scope.unclippedDistance || scope.object.position.distanceTo(scope.target), next = scope.onCameraZoom(direction, distance);
+
+                if (next !== null) {
+                    scope.unclippedDistance = next;
+                    scope.update();
+                    scope.onCameraInput?.("wheel", direction, 0);
+                    return;
+                }
+            }
 
             let dollyFunc = null;
 
@@ -847,6 +882,8 @@ export class ZUpOrbitControls extends EventDispatcher {
 
             }
 
+            if (state === STATE.ROTATE) scope.onCameraInput?.("release", 0, 0);
+
             scope.dispatchEvent(_endEvent);
 
             state = STATE.NONE;
@@ -855,6 +892,7 @@ export class ZUpOrbitControls extends EventDispatcher {
 
         function onPointerCancel(event: PointerEvent) {
 
+            if (state === STATE.ROTATE) scope.onCameraInput?.("release", 0, 0);
             removePointer(event);
 
         }
@@ -947,6 +985,8 @@ export class ZUpOrbitControls extends EventDispatcher {
                     state = STATE.NONE;
 
             }
+
+            if (state === STATE.ROTATE) scope.onCameraInput?.("press", 0, 0);
 
             if (state !== STATE.NONE) {
 

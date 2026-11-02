@@ -1,5 +1,7 @@
-import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending } from "three";
+import { batchStaticMeshTextures } from "./static-mesh-texture-batching";
+import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
+import SortedIndexBuffer from "../../rendering/sorted-index-buffer";
 import Terrain from "../../objects/terrain";
 import CollidingMesh from "../../objects/colliding-mesh";
 import ZoneObject, { SectorObject } from "../../objects/zone-object";
@@ -59,7 +61,7 @@ function createBatchObject(
         collision: actors[0].collision,
         scaledGlow: actors[0].scaledGlow,
         isSunAffected: actors.some(a => a.isSunAffected ?? true),
-        ambient: actors[0].ambient
+        ambient: actors[0].ambient && { glow: actors[0].ambient.glow, vector: actors[0].ambient.vector, isUnlit: actors[0].ambient.isUnlit } // hardware-lit elements are baked per element (LitActorMesh.computeHardwareLighting)
     });
 
     mergedObject.material = canonicalizeStaticMeshMaterials(mergedObject.material);
@@ -94,6 +96,33 @@ function createBatchObject(
     }
 
     return mergedObject;
+}
+
+function makeSortedIndexBuffers(library: DecodeLibrary, object: CollidingMesh, batch: StaticMeshBatchManifest_T["batches"][number]) {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    const buffers = new Map<number, SortedIndexBuffer>();
+
+    for (let i = 0; i < batch.actors.length; i++) {
+        const actor = batch.actors[i], geometry = library.geometries[actor.instance.mesh.geometry];
+        let inverse: Matrix4 = null, center: Vector3 = null;
+
+        for (const group of object.batchElements[i].groups) {
+            if (!(materials[group.materialIndex] as any).requiresSorting || !group.count) continue;
+
+            if (!inverse) {
+                const matrix = new Matrix4().compose(new Vector3().fromArray(actor.position), new Quaternion().fromArray(actor.quaternion), new Vector3().fromArray(actor.scale));
+                center = new Vector3().fromArray(geometry.bounds.sphere.center).applyMatrix4(matrix);
+                center.set(Math.fround(center.x), Math.fround(center.y), Math.fround(center.z));
+                inverse = matrix.invert();
+            }
+            if (group.count % 3) throw new Error(`Invalid sorted static mesh section: ${actor.name}`);
+            buffers.set(group.start, new SortedIndexBuffer(geometry.attributes.positions as Float32Array, object.batchIndices, group.start, group.count, batch.perActorAmbient[i].startVertex, inverse, center));
+        }
+    }
+    if (buffers.size) {
+        object.sortedIndexBuffers = buffers;
+        object.sortedIndexRange = { start: 0, count: 0 };
+    }
 }
 
 export function decodeStaticMeshActorLight(_library: DecodeLibrary, info?: ILightInstanceDecodeInfo): MeshLight_T | null {
@@ -179,7 +208,7 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
                 || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
             // The merged light matrix has always been identity (see mergeBatchGeometriesData)
             const lightInfo: MeshLight_T | null = batch.lights
-                ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment }
+                ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment, staticLighting: batch.staticLighting }
                 : null;
 
             const batchObject = createBatchObject(
@@ -195,10 +224,13 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
             );
 
             const source = geometry.index?.array as StaticMeshIndexArray_T;
+            batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
+            batchStaticMeshTextures(batchObject, source);
             if (source) {
                 const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
                 batchObject.batchIndices = target;
                 job.indexCopy = { source, target, offset: 0 };
+                makeSortedIndexBuffers(library, batchObject, batch);
             }
 
             staticMeshGroup.add(batchObject);
@@ -293,6 +325,8 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
         vertexCount: number;
         startIndex: number;
         indexCount: number;
+        groupOffset?: number;
+        groupCount?: number;
         sector: THREE.Mesh;
     }[] = [];
 
@@ -390,6 +424,7 @@ export function batchTerrainSectors(
             const info = batchSectorInfo[i];
             const sector = info.sector;
             const matIndex = materials.length;
+            const sectorGroups = (sector as any).hasTerrainPasses ? sector.geometry.groups : [];
 
             if (Array.isArray(sector.material)) {
                 sector.material.forEach((m: Material) => materials.push(m));
@@ -397,7 +432,11 @@ export function batchTerrainSectors(
                 materials.push(sector.material);
             }
 
-            mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
+            info.groupOffset = mergedGeometry.groups.length;
+            info.groupCount = Math.max(1, sectorGroups.length);
+
+            if (sectorGroups.length === 0) mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
+            else for (const group of sectorGroups) mergedGeometry.addGroup(info.startIndex + group.start, group.count, matIndex + group.materialIndex);
         }
 
         const batchedTerrain = new Mesh(mergedGeometry, materials as any);
@@ -421,8 +460,8 @@ export function batchTerrainSectors(
             (sector as any).batchSectorIndex = i;
 
             // Properties used by zone-object.ts for culling and updates:
-            (sector as any).batchGroupOffset = i;
-            (sector as any).batchGroupCount = 1;
+            (sector as any).batchGroupOffset = info.groupOffset;
+            (sector as any).batchGroupCount = info.groupCount;
 
             // Shift bounds to world space for frustum culling in zone-object.ts
             (sector as any).bounds.min.add(sector.position);

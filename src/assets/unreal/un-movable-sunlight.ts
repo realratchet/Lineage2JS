@@ -4,6 +4,8 @@ import type { DecodeLibrary } from "./decode-library";
 export type ISunLightDecodeInfo = Omit<ILightDecodeInfo, "type"> & { type: "Sunlight" };
 
 export abstract class UNMovableSunLight extends ULight {
+    public readonly isMovableSunLight = true;
+
     // public lightness: number = 128;
     // public type = 0x13;
 

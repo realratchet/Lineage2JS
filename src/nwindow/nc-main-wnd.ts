@@ -1,0 +1,116 @@
+import type { default as NDomLayer, NDomButton_T } from "./ndom";
+import NCFrameCtrl from "./nc-frame-ctrl";
+import NCMinimizedWnd from "./nc-minimized-wnd";
+import NCSkillWnd from "./nc-skill-wnd";
+import NCActionWnd from "./nc-action-wnd";
+import NCQuestWnd from "./nc-quest-wnd";
+import NCClanWnd from "./nc-clan-wnd";
+import NCDetailStatusWnd from "./nc-detail-status-wnd";
+import type NCCoolTimeIcon from "./nc-cool-time-icon";
+import type { default as Skin, DetailStatusWndView_T, SkillWndView_T, ActionWndView_T, QuestWndView_T, ClanWndView_T } from "./skin";
+import SysString_T from "./sys-string";
+
+const TEX_BACK = "L2UI_CH3.TabButton.MainWndTabBack";
+const arrTabs: { type: MainTab_T, title: number, tooltip: number, texture: string }[] = [
+    { type: "status", title: SysString_T.CharacterStatus, tooltip: SysString_T.StatusAltT, texture: "L2UI_CH3.TabButton.MainWndTabBtn1" },
+    { type: "skills", title: SysString_T.Skills, tooltip: SysString_T.SkillsMagicAltK, texture: "L2UI_CH3.TabButton.MainWndTabBtn2" },
+    { type: "actions", title: SysString_T.Actions, tooltip: SysString_T.ActionsAltC, texture: "L2UI_CH3.TabButton.MainWndTabBtn3" },
+    { type: "clan", title: SysString_T.Clan, tooltip: SysString_T.ClanActionAltN, texture: "L2UI_CH3.TabButton.MainWndTabBtn4" },
+    { type: "quest", title: SysString_T.Quest, tooltip: SysString_T.QuestsAltU, texture: "L2UI_CH3.TabButton.MainWndTabBtn5" }
+];
+
+export type MainTab_T = "status" | "skills" | "actions" | "clan" | "quest";
+
+export class NCMainWnd { // C4 NWindow RVA 0x5d8a0: five 44x41 tabs at (12,25), 256x335 pages at (0,66).
+    public static getTextures() { return [TEX_BACK, ...arrTabs.flatMap(tab => [tab.texture, `${tab.texture}On`, ...NCMinimizedWnd.getTextures(tab.texture.replace("Btn", "Icon"))]), ...NCFrameCtrl.getTextures(), ...NCSkillWnd.getTextures(), ...NCActionWnd.getTextures(), ...NCQuestWnd.getTextures(), ...NCClanWnd.getTextures(), ...NCDetailStatusWnd.getTextures()]; }
+    public readonly element: HTMLDivElement;
+    public readonly skillWnd: SkillWndView_T;
+    public readonly actionWnd: ActionWndView_T;
+    public readonly questWnd: QuestWndView_T;
+    public readonly clanWnd: ClanWndView_T;
+    public readonly detailStatusWnd: DetailStatusWndView_T;
+    public onSelect: (tab: MainTab_T) => void = null;
+    protected readonly caption: HTMLDivElement;
+    protected readonly tabs: NDomButton_T[] = [];
+    protected readonly pages: Record<MainTab_T, HTMLDivElement>;
+    protected selectedTab: MainTab_T = "status";
+    protected readonly minimized: NCMinimizedWnd;
+
+    public constructor(protected readonly layer: NDomLayer, coolTimes: Map<string, NCCoolTimeIcon>, skin: Skin) {
+        this.element = layer.createWindow(0, 0, 256, 401);
+        this.element.hidden = true;
+        this.element.tabIndex = -1;
+        this.minimized = new NCMinimizedWnd(layer, this.element, () => this.setVisible(true), arrTabs[0].texture.replace("Btn", "Icon"), arrTabs[0].tooltip, false);
+        layer.tile(this.element, 0, 20, 256, 46, 0, 0, 256, 46, TEX_BACK);
+        this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(SysString_T.CharacterStatus), true, () => this.setVisible(false), null, () => this.minimize());
+        this.detailStatusWnd = skin.createDetailStatusWnd(layer, this.element);
+        this.skillWnd = skin.createSkillWnd(layer, coolTimes, this.element);
+        this.actionWnd = skin.createActionWnd(layer, this.element);
+        this.questWnd = skin.createQuestWnd(layer, this.element);
+        this.clanWnd = skin.createClanWnd(layer, this.element);
+        this.pages = { status: this.detailStatusWnd.element, skills: this.skillWnd.element, actions: this.actionWnd.element, clan: this.clanWnd.element, quest: this.questWnd.element };
+        Object.values(this.pages).forEach(page => page.tabIndex = -1);
+
+        arrTabs.forEach((entry, index) => {
+            const select = () => this.selectTab(entry.type);
+            const tab = layer.tab(this.element, 12 + index * 45, 25, 44, 41, entry.texture, `${entry.texture}On`, null, layer.getManager().getSysString(entry.tooltip), select);
+
+            this.tabs.push(tab);
+        });
+        this.selectTab("status");
+    }
+
+    public placeOnScreen(width: number, height: number) { this.minimized.place(width - 266, Math.max(0, height * 0.5 - 252)); }
+    public isVisible() { return !this.element.hidden; }
+    protected minimize() {
+        const tab = arrTabs.find(tab => tab.type === this.selectedTab);
+
+        this.minimized.setIcon(tab.texture.replace("Btn", "Icon"), tab.tooltip);
+        this.setVisible(false);
+        this.minimized.minimize();
+    }
+    public setVisible(visible: boolean) {
+        if (visible && this.minimized.isVisible()) { this.minimized.restore(true); return; }
+
+        this.element.hidden = !visible;
+        this.minimized.hide();
+        this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
+        for (let i = 0; i < (visible ? 2 : 1); i++) { // NCMainWnd Show 0x10064a1d / 0x1005f1a4 each refresh the tabs.
+            this.skillWnd.setVisible(false);
+            this.clanWnd.setVisible(false);
+            this.questWnd.setVisible(false);
+            if (!visible) continue;
+
+            if (this.selectedTab === "skills") this.skillWnd.setVisible(true);
+            else if (this.selectedTab === "clan") this.clanWnd.setVisible(true);
+            else if (this.selectedTab === "quest") this.questWnd.setVisible(true);
+        }
+    }
+    public getSelectedTab() { return this.selectedTab; }
+
+    public selectTab(type: MainTab_T) {
+        this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
+        if (type === "skills") this.skillWnd.setVisible(false);
+        this.selectedTab = type;
+        arrTabs.forEach((entry, index) => {
+            const selected = entry.type === type;
+
+            if (entry.type === "quest") this.questWnd.setVisible(selected);
+            else if (entry.type === "skills") this.skillWnd.setVisible(selected);
+            else if (entry.type === "clan") this.clanWnd.setVisible(selected);
+            else this.pages[entry.type].hidden = !selected;
+            this.tabs[index].setTextures(selected ? `${entry.texture}On` : entry.texture, `${entry.texture}On`);
+            this.tabs[index].setAttribute("aria-selected", String(selected));
+            if (!selected) return;
+
+            const title = this.layer.getManager().getSysString(entry.title);
+
+            this.layer.renderText(this.caption, title, 0xffc8d2dc);
+            this.element.setAttribute("aria-label", title);
+        });
+        this.pages[type].focus();
+        if (this.onSelect) this.onSelect(type);
+    }
+}
+
+export default NCMainWnd;

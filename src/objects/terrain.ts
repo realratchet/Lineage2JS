@@ -8,6 +8,7 @@ import { ColorByte } from "../utils/color-byte";
 import buildTriangleIndex from "../physics/triangle-index";
 import { GameMesh } from "../game/components";
 import { ColliderComponent } from "../physics/components/physics-component";
+import type { ScriptHost_T } from "../ue-script/vm";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -15,6 +16,29 @@ const tmpNormal = new Vector3();
 // const tmpSun = new Color();
 const cbAmbient = new ColorByte();
 const cbLight = new ColorByte();
+
+function expandTerrainPasses(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]): THREE.Material | THREE.Material[] {
+    const materials = Array.isArray(material) ? material : [material];
+
+    if (!materials.some(entry => (entry as any).isTerrainMaterial && (entry as any).passes.length > 0)) return material;
+
+    const groups = geometry.groups.length > 0 ? geometry.groups.slice() : [{ start: 0, count: geometry.index.count, materialIndex: 0 }];
+    const expanded: THREE.Material[] = [];
+
+    geometry.clearGroups();
+
+    for (const group of groups) {
+        const base = materials[group.materialIndex];
+
+        for (const pass of [base, ...((base as any).isTerrainMaterial ? (base as any).passes : [])]) {
+            pass.vertexColors = base.vertexColors;
+            geometry.addGroup(group.start, group.count, expanded.length);
+            expanded.push(pass);
+        }
+    }
+
+    return expanded;
+}
 
 export class Terrain extends GameMesh implements ICollidable {
     public readonly isCollidable = true;
@@ -34,6 +58,7 @@ export class Terrain extends GameMesh implements ICollidable {
     protected boundsPosition: THREE.Vector3;
 
     protected lightingInfo?: TerrainLightingInfo_T;
+    public hasTerrainPasses = false;
     protected lastUpdatedTime: number = -1;
     protected lastShadowIndex: number = -1;
     protected lastShadowNextIndex: number = -1;
@@ -55,6 +80,8 @@ export class Terrain extends GameMesh implements ICollidable {
     public heightmapX: number = 0;
     public heightmapY: number = 0;
     public terrainSegmentUuid: string;
+    public terrainInfoUuid: string;
+    public terrainInfoActor: ScriptHost_T = null;
 
     public useShadowLerp: boolean = true;
     public lightingRevision: number = 0;
@@ -65,8 +92,9 @@ export class Terrain extends GameMesh implements ICollidable {
     public batchSectorIndex: number = -1;
 
     public constructor(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], fieldInfo?: TerrainFieldInfo_T, lightingInfo?: TerrainLightingInfo_T) {
-        super(geometry, material);
+        super(geometry, expandTerrainPasses(geometry, material));
 
+        this.hasTerrainPasses = this.material !== material;
         this.lightingInfo = lightingInfo;
 
         if (fieldInfo) this.setTerrainField(fieldInfo);
@@ -98,7 +126,7 @@ export class Terrain extends GameMesh implements ICollidable {
         if (heightmapY !== undefined) this.heightmapY = heightmapY;
     }
 
-    public get needsInitialLighting(): boolean {
+    public needsInitialLighting(): boolean {
         return !!this.lightingInfo && !this.staticLightingCache;
     }
 
@@ -106,7 +134,7 @@ export class Terrain extends GameMesh implements ICollidable {
 
     public update(sector: SectorObject, env: L2Environment) {
         if (!this.lightingInfo) return;
-        if (this.needsInitialLighting && !this.lightingGate) return;
+        if (this.needsInitialLighting() && !this.lightingGate) return;
 
         const timeOfDay = env.getTimeOfDay();
         let shadowIndex = 0;
@@ -381,6 +409,7 @@ export class Terrain extends GameMesh implements ICollidable {
     }
 
     public getCollisionPrimitive(): CollisionPrimitive_T {
+        this.updateWorldMatrix(true, false);
         this.analyticalBounds.setFromArray(this.analyticalPrimitive.vertices).applyMatrix4(this.matrixWorld);
 
         return this.analyticalPrimitive;
@@ -402,6 +431,15 @@ export class Terrain extends GameMesh implements ICollidable {
 
             attrPositions.needsUpdate = true;
             this.geometry.computeVertexNormals();
+        }
+
+        this.geometry.computeBoundingBox();
+        this.geometry.boundingSphere = null;
+        this.bounds.copy(this.geometry.boundingBox);
+        if (this.batchGeometry) {
+            this.bounds.translate(this.position);
+            this.batchGeometry.boundingBox = null;
+            this.batchGeometry.boundingSphere = null;
         }
 
         const arrIndices = this.geometry.index.array;
@@ -520,10 +558,12 @@ export class Terrain extends GameMesh implements ICollidable {
     }
 
     public static stitchAll(terrains: Terrain[]) {
-        if (terrains.length < 2) return { processed: terrains.length, stitches: 0, modified: [] as Terrain[] };
-
         const terrainMap = new Map<string, Terrain>();
         for (const t of terrains) {
+            t.stitchEastNeighbor = null;
+            t.stitchSouthNeighbor = null;
+            t.stitchCornerNeighbor = null;
+
             const key = `${t.mapX}_${t.mapY}_${t.offsetX}_${t.offsetY}`;
             terrainMap.set(key, t);
         }

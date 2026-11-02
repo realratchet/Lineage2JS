@@ -4,23 +4,23 @@ import type { DecodeLibraryBuilder } from "../decode-library-builder";
 
 abstract class UVertMeshEmitter extends UParticleEmitter {
     declare protected mesh: UVertMesh;
-    declare protected useMeshBlendMode: boolean;
-    declare protected renderTwoSided: boolean;
-    declare protected useParticleColor: boolean;
+    declare protected isUsingMeshBlendMode: boolean;
+    declare protected isRenderingTwoSided: boolean;
+    declare protected isUsingParticleColor: boolean;
 
     public getPropertyMap(): Record<string, string> {
         return Object.assign({}, super.getPropertyMap(), {
             "VertexMesh": "mesh",
-            "UseMeshBlendMode": "useMeshBlendMode",
-            "RenderTwoSided": "renderTwoSided",
-            "UseParticleColor": "useParticleColor"
+            "UseMeshBlendMode": "isUsingMeshBlendMode",
+            "RenderTwoSided": "isRenderingTwoSided",
+            "UseParticleColor": "isUsingParticleColor"
         });
     }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder) {
         const mesh = this.mesh ? this.mesh.loadSelf().getDecodeInfo(builder) : null;
 
-        return Object.assign(super.getDecodeInfo(builder), { type: "VertMeshEmitter", mesh, useMeshBlendMode: this.useMeshBlendMode, renderTwoSided: this.renderTwoSided, useParticleColor: this.useParticleColor });
+        return Object.assign(super.getDecodeInfo(builder), { type: "VertMeshEmitter", mesh, useMeshBlendMode: this.isUsingMeshBlendMode, renderTwoSided: this.isRenderingTwoSided, useParticleColor: this.isUsingParticleColor });
     }
 }
 

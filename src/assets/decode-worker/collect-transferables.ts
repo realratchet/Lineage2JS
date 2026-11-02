@@ -2,13 +2,18 @@
 // would drag the package graph along are normalized/nulled with path-tagged warnings) and collects every
 // reachable ArrayBuffer as the transfer list - `exclude` buffers skip transfer, they would detach worker-side
 
-function isNonIndexKey(key: string): boolean { return !/^\d+$/.test(key); }
+const indexKeyPattern = /^\d+$/;
 
-export function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>): ArrayBuffer[] {
+function isNonIndexKey(key: string): boolean { return !indexKeyPattern.test(key); }
+
+export function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>, prepared?: object[]): ArrayBuffer[] {
     const buffers = new Set<ArrayBuffer>();
     const sanitizedValues = new Map<any, any>(); // original -> replacement, preserves aliasing
-    const visited = new Set<any>();
-    const stack: [any, string][] = [];
+    const stack: any[] = [];
+
+    if (prepared)
+        for (const value of prepared)
+            sanitizedValues.set(value, value);
 
     function addBuffer(buffer: ArrayBuffer, path: string) {
         if (exclude?.has(buffer)) {
@@ -58,18 +63,27 @@ export function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>)
             const plain = new Array(value.length);
 
             sanitizedValues.set(value, plain);
+            sanitizedValues.set(plain, plain);
 
-            for (let i = 0; i < value.length; i++)
-                plain[i] = sanitize(value[i], `${path}[${i}]`);
+            for (let i = 0; i < value.length; i++) {
+                const child = value[i];
 
+                plain[i] = child !== null && (typeof child === "object" || typeof child === "function") ? sanitize(child, `${path}[${i}]`) : child;
+            }
+
+            stack.push(plain, path);
             return plain;
         }
 
         sanitizedValues.set(value, value);
+        stack.push(value, path);
         return value;
     }
 
-    function pushChild(container: any, key: any, child: any, path: string) {
+    function pushChild(container: any, key: any, child: any, path: string, kind: "object" | "array" | "map" = "object") {
+        if (child === null || typeof child !== "object" && typeof child !== "function" && child === child) return;
+
+        path = kind === "array" ? `${path}[${key}]` : kind === "map" ? `${path}[${typeof key === "string" ? `'${key}'` : "<key>"}]` : `${path}.${key}`;
         const safe = sanitize(child, path);
 
         if (safe !== child) {
@@ -80,17 +94,13 @@ export function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>)
                 console.warn(`[decode-worker] could not replace ${path} with its sanitized value:`, e);
             }
         }
-
-        if (safe !== null && typeof safe === "object") stack.push([safe, path]);
     }
 
-    stack.push([sanitize(root, "library"), "library"]);
+    sanitize(root, "library");
 
     while (stack.length > 0) {
-        const [value, path] = stack.pop();
-
-        if (value === null || typeof value !== "object" || visited.has(value)) continue;
-        visited.add(value);
+        const path = stack.pop() as string;
+        const value = stack.pop();
 
         if (value instanceof ArrayBuffer) {
             addBuffer(value, path);
@@ -106,33 +116,32 @@ export function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>)
 
         if (value instanceof Map) {
             for (const [key, entry] of value)
-                pushChild(value, key, entry, `${path}[${typeof key === "string" ? `'${key}'` : "<key>"}]`);
+                pushChild(value, key, entry, path, "map");
             continue;
         }
 
         if (value instanceof Set) {
             /* set entries cannot be replaced in place - non-clonable ones get swapped out */
             for (const entry of value) {
+                if (entry === null || typeof entry !== "object" && typeof entry !== "function" && entry === entry) continue;
+
                 const safe = sanitize(entry, `${path}<entry>`);
 
                 if (safe !== entry) value.delete(entry);
-                if (safe !== null && typeof safe === "object") {
-                    if (safe !== entry) value.add(safe);
-                    stack.push([safe, `${path}<entry>`]);
-                }
+                if (safe !== entry && safe !== null && typeof safe === "object") value.add(safe);
             }
             continue;
         }
 
         if (Array.isArray(value)) {
             for (let i = 0; i < value.length; i++)
-                pushChild(value, i, value[i], `${path}[${i}]`);
+                pushChild(value, i, value[i], path, "array");
             continue;
         }
 
         /* plain object - structured clone copies own enumerable keys only */
         for (const key of Object.keys(value))
-            pushChild(value, key, value[key], `${path}.${key}`);
+            pushChild(value, key, value[key], path);
     }
 
     return [...buffers];

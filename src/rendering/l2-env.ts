@@ -3,10 +3,12 @@ import { Color, MathUtils } from "three";
 import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
 import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
+import { hsvToColorPlane } from "../objects/dynamic-light";
 
 // const tmpColor_1 = new Color();
 // const tmpColor_2 = new Color();
 // const tmpColor_3 = new Color();
+const tmpSunColor = new Color();
 const tmpColorByte = new ColorByte();
 const tmpColorByte_2 = new ColorByte();
 
@@ -48,13 +50,6 @@ export class FogBlendState {
     }
 
     public setTarget(color: ColorByte, start: number, end: number): void {
-        const colorChanged = color.r !== this.targetColor.r ||
-            color.g !== this.targetColor.g ||
-            color.b !== this.targetColor.b;
-        const rangeChanged = start !== this.targetStart || end !== this.targetEnd;
-
-        if (!colorChanged && !rangeChanged) return;
-
         this.prevColor.copy(this.currentColor);
         this.prevStart = this.currentStart;
         this.prevEnd = this.currentEnd;
@@ -84,6 +79,7 @@ export class FogBlendState {
 }
 
 export class L2Environment {
+    protected entryMap = false;
     protected activeEnv: 0 | 1 | 2 = 0;
     protected env: EnvInfo;
     protected envColors: Readonly<{ [key in 0 | 1 | 2]: EnvColor }>;
@@ -101,7 +97,15 @@ export class L2Environment {
     public setTimeScale(scale: number) { this.timeScale = scale; }
 
     public getTimeOfDay() { return this.time / 3600 % 24; }
+    public isEntryMap() { return this.entryMap; }
+    public setEntryMap(entryMap: boolean) { this.entryMap = entryMap; }
     public setTimeOfDay(hours: number) { this.time = (hours % 24) * 3600; }
+    public setTimeToLobbyTime() {
+        // UL2NEnvManager::SetTimeToLobbyTime (0x7b7c30): StartTime, environment 0.
+        this.setTimeOfDay(this.env.setup.startTime);
+        this.setActiveEnv(0);
+        this.setTimeScale(0);
+    }
     public getEnvColor() { return this.envColors[this.activeEnv]; }
     public getTimeSeconds() { return this.time; }
     public getActiveEnv() { return this.activeEnv; }
@@ -116,6 +120,15 @@ export class L2Environment {
     public getEnv() { return this.env; }
 
     public getNormalizedTime() { return this.getTimeOfDay() / 24; }
+
+    public getBaseColorPlaneActorSunLight(target: Color): Color {
+        const [curr, next, fraction] = pickArrayIndices(this.getTimeOfDay(), this.getEnvColor().light.actor);
+        if (curr === next) return target.setRGB(0, 0, 0);
+
+        hsvToColorPlane(curr.hue, curr.saturation, target);
+        hsvToColorPlane(next.hue, next.saturation, tmpSunColor);
+        return target.lerp(tmpSunColor, fraction);
+    }
 
     public getBaseColorPlaneStaticMeshSunLight(target: ColorByte): ColorByte {
         const timeOfDay = this.getTimeOfDay();
@@ -290,11 +303,11 @@ export class L2Environment {
         if (totalElements === 1) return [0, 0, 1];
 
         const timePerElement = 24.0 / totalElements;
-        const currEnvIndex = Math.floor(timeOfDay / timePerElement) % totalElements;
+        const currEnvIndex = (Math.floor(timeOfDay / timePerElement - 0.5) + totalElements) % totalElements; // GetIndexForTime 0x97e1b0: last slot at or before t, else n-1
         const nextEnvIndex = (currEnvIndex + 1) % totalElements;
 
-        let currEnvTime = currEnvIndex * timePerElement;
-        let nextEnvTime = nextEnvIndex * timePerElement;
+        let currEnvTime = (currEnvIndex + 0.5) * timePerElement; // slot time 0x97e170: i * 24 / n + 24 / n * 0.5
+        let nextEnvTime = (nextEnvIndex + 0.5) * timePerElement;
 
         while (nextEnvTime < currEnvTime) nextEnvTime += 24.0;
 
@@ -373,7 +386,7 @@ function getScaleValue(timeOfDay: number, array: TimeScale[]): number {
     return curr.scale + (next.scale - curr.scale) * lFrac;
 }
 
-function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorByte): ColorByte {
+function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorByte, applyBrightness: boolean = true): ColorByte {
     const [hsvCurr, hsvNext, lFrac] = pickArrayIndices(timeOfDay, array);
     if (!hsvCurr) return target.set(255, 255, 255, 255);
 
@@ -383,7 +396,8 @@ function getColorByteFromHSV(timeOfDay: number, array: TimeHSV[], target: ColorB
     target.setFromHSV(hsvCurr.hue, hsvCurr.saturation, 255);
     tmpColorByte_2.setFromHSV(hsvNext.hue, hsvNext.saturation, 255);
 
-    return target.lerp(tmpColorByte_2, lFrac).multiplyScalar(v / 255);
+    target.lerp(tmpColorByte_2, lFrac);
+    return applyBrightness ? target.multiplyScalar(v / 255) : target;
 }
 
 function getColorFromTimeColor(timeOfDay: number, array: TimeColor[], target: ColorByte): ColorByte {

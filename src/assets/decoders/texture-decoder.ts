@@ -1,9 +1,121 @@
-import { CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
+import { DDSConstants } from "@l2js/engine/dds/dds-constants";
+import { WebGLRenderer, CompressedTexture, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping, Vector2, DataTexture, RGBAFormat, RGFormat, FloatType, RedFormat, LinearMipmapLinearFilter, NearestMipmapNearestFilter, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format } from "three";
 import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { TextureClampMode_T, DataTextureFormats_T, IDataTextureDecodeInfo, ITextureDecodeInfo, MapData_T } from "@l2js/engine/contracts/texture";
+import { releaseSharedTextureBuffer, restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
 import WetWaterTexture from "../../materials/wet-water-texture";
 import { dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
+
+type TextureSource_T = { key: string, info: ITextureDecodeInfo };
+
+const cacheTextureSources = new WeakMap<THREE.Texture, TextureSource_T>();
+const cacheTextureFilters = new WeakMap<THREE.Texture, [THREE.MinificationTextureFilter, THREE.MagnificationTextureFilter]>();
+const cacheTextureReferences = new Set<WeakRef<THREE.Texture>>();
+const textureFinalizer = new FinalizationRegistry<WeakRef<THREE.Texture>>(texture => cacheTextureReferences.delete(texture));
+const cacheTextureLOD = new WeakMap<THREE.Texture, [number, number]>();
+let textureRenderer: WebGLRenderer = null;
+let textureDetail = 0;
+let useTrilinear = true;
+
+export function setUseTrilinear(enabled: boolean) {
+    if (useTrilinear === enabled) return;
+
+    useTrilinear = enabled;
+    for (const reference of cacheTextureReferences) {
+        const texture = reference.deref();
+        if (texture) updateTextureFiltering(texture);
+        else cacheTextureReferences.delete(reference);
+    }
+}
+
+export function updateTextureFiltering(texture: THREE.Texture, minFilter: THREE.MinificationTextureFilter = null): void {
+    if (texture.isRenderTargetTexture || (texture as any).isCanvasTexture) return;
+
+    let filters = cacheTextureFilters.get(texture);
+    if (!filters) {
+        const originalMin = minFilter ?? texture.minFilter;
+        if (texture.magFilter !== LinearFilter || originalMin !== LinearFilter && originalMin !== LinearMipmapLinearFilter) return;
+
+        filters = [originalMin, texture.magFilter];
+        cacheTextureFilters.set(texture, filters);
+        const reference = new WeakRef(texture);
+
+        cacheTextureReferences.add(reference);
+        textureFinalizer.register(texture, reference);
+    } else if (minFilter !== null) filters[0] = minFilter;
+
+    const nextMin = useTrilinear ? filters[0] : filters[0] === LinearFilter ? NearestFilter : NearestMipmapNearestFilter;
+    const magFilter = useTrilinear ? filters[1] : NearestFilter;
+    if (texture.minFilter === nextMin && texture.magFilter === magFilter) return;
+
+    texture.minFilter = nextMin;
+    texture.magFilter = magFilter;
+    texture.needsUpdate = true;
+}
+
+export function copyTextureFiltering(source: THREE.Texture, target: THREE.Texture): void {
+    const filters = cacheTextureFilters.get(source);
+
+    target.minFilter = filters ? filters[0] : source.minFilter;
+    target.magFilter = filters ? filters[1] : source.magFilter;
+    updateTextureFiltering(target);
+}
+
+export function setTextureDetail(renderer: WebGLRenderer, detail: number): void {
+    if (textureRenderer === renderer && textureDetail === detail) return;
+
+    textureRenderer = renderer;
+    textureDetail = detail;
+    for (const reference of cacheTextureReferences) {
+        const texture = reference.deref();
+        if (texture) updateTextureLOD(texture);
+        else cacheTextureReferences.delete(reference);
+    }
+}
+
+function updateTextureLOD(texture: THREE.Texture): void {
+    const bounds = cacheTextureLOD.get(texture);
+    if (!bounds || !textureRenderer) return;
+
+    const object = textureRenderer.properties.get(texture).__webglTexture;
+    if (!object) return;
+
+    const gl = textureRenderer.getContext() as WebGL2RenderingContext;
+    const target = (texture as any).isCubeTexture ? gl.TEXTURE_CUBE_MAP : (texture as any).isCompressedArrayTexture ? gl.TEXTURE_2D_ARRAY : gl.TEXTURE_2D;
+    const binding = target === gl.TEXTURE_CUBE_MAP ? gl.TEXTURE_BINDING_CUBE_MAP : target === gl.TEXTURE_2D_ARRAY ? gl.TEXTURE_BINDING_2D_ARRAY : gl.TEXTURE_BINDING_2D;
+    const previous = gl.getParameter(binding);
+
+    gl.bindTexture(target, object);
+    gl.texParameteri(target, gl.TEXTURE_BASE_LEVEL, Math.max(bounds[0], Math.min(bounds[1], textureDetail)));
+    gl.bindTexture(target, previous);
+}
+
+function registerTextureLOD(texture: THREE.Texture, bounds: [number, number]): void {
+    if (!Number.isInteger(bounds[0]) || !Number.isInteger(bounds[1]) || bounds[0] < 0 || bounds[1] < 0) throw new Error(`Invalid texture LOD bounds for '${texture.name}'.`);
+
+    cacheTextureLOD.set(texture, bounds);
+    const onUpdate = texture.onUpdate;
+
+    texture.onUpdate = function () {
+        if (onUpdate) onUpdate.call(this, texture);
+        updateTextureLOD(texture);
+    };
+    updateTextureLOD(texture);
+}
+
+export function getTextureLODBounds(texture: THREE.Texture): [number, number] { return cacheTextureLOD.get(texture); }
+
+export function copyTextureLOD(source: THREE.Texture, target: THREE.Texture): void {
+    const bounds = cacheTextureLOD.get(source);
+    if (bounds) registerTextureLOD(target, bounds);
+}
+
+export function retainSharedTextureBuffer(texture: THREE.Texture): void {
+    const source = cacheTextureSources.get(texture);
+
+    if (source) source.info.buffer = restoreSharedTextureBuffer(source.key, source.info.buffer);
+}
 
 function getClamping(mode: TextureClampMode_T): THREE.Wrapping {
     return mode === "clamp" ? ClampToEdgeWrapping : RepeatWrapping;
@@ -61,11 +173,11 @@ function decodeDDS(buffer: ArrayBuffer, preferCompressed: boolean = false): THRE
         let rgbaData: Uint8Array | null = null;
         const input = new Uint8Array(buffer, dataOffset);
 
-        if (fourCC === 0x31545844) { // DXT1
+        if (fourCC === DDSConstants.FOURCC_DXT1) { // DXT1
             rgbaData = dxt1ToRgba(width, height, input);
-        } else if (fourCC === 0x33545844) { // DXT3
+        } else if (fourCC === DDSConstants.FOURCC_DXT3) { // DXT3
             rgbaData = dxt3ToRgba(width, height, input);
-        } else if (fourCC === 0x35545844) { // DXT5
+        } else if (fourCC === DDSConstants.FOURCC_DXT5) { // DXT5
             rgbaData = dxt5ToRgba(width, height, input);
         }
 
@@ -171,6 +283,14 @@ export function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo):
         default: throw new Error(`Unsupported texture format: ${info.textureType}`);
     }
 
+    if (info.buffer) {
+        const key = (info as any).sharedTextureKey || (info.name ? `${info.name.toLowerCase()}:${info.textureType}:${info.buffer.byteLength}` : null);
+        const source = { key, info };
+
+        if (key) cacheTextureSources.set(texture, source);
+        texture.addEventListener("dispose", () => releaseSharedTextureBuffer(source.info.buffer));
+    }
+
     texture.wrapS = info.wrapS ? getClamping(info.wrapS) : RepeatWrapping;
     texture.wrapT = info.wrapT ? getClamping(info.wrapT) : RepeatWrapping;
 
@@ -179,6 +299,9 @@ export function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo):
 
     const width = texture.image?.width ?? (texture as any).width ?? 1;
     const height = texture.image?.height ?? (texture as any).height ?? 1;
+
+    updateTextureFiltering(texture);
+    if (info.minLOD !== undefined && info.maxLOD !== undefined) registerTextureLOD(texture, [info.minLOD, info.maxLOD]);
 
     return { texture, size: new Vector2(width, height) };
 }
@@ -198,11 +321,11 @@ export function decodeTextureAsB64(info: ITextureDecodeInfo): string | null {
             const dataOffset = 128; // DDS header size
             const input = new Uint8Array(info.buffer, dataOffset);
 
-            if (fourCC === 0x31545844) { // DXT1
+            if (fourCC === DDSConstants.FOURCC_DXT1) { // DXT1
                 rgbaData = dxt1ToRgba(width, height, input);
-            } else if (fourCC === 0x33545844) { // DXT3
+            } else if (fourCC === DDSConstants.FOURCC_DXT3) { // DXT3
                 rgbaData = dxt3ToRgba(width, height, input);
-            } else if (fourCC === 0x35545844) { // DXT5
+            } else if (fourCC === DDSConstants.FOURCC_DXT5) { // DXT5
                 rgbaData = dxt5ToRgba(width, height, input);
             } else {
                 console.warn(`Unsupported DDS FourCC for B64 decode: ${fourCC}`);

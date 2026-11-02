@@ -1,9 +1,10 @@
 import { Matrix4, Matrix3, Vector3, Quaternion } from "three";
 import { generateUUID } from "three/src/math/MathUtils";
 import buildTriangleIndex from "../../physics/triangle-index";
+import { buildStaticLightIndices } from "./static-lighting";
 import type { DecodeLibrary, Vector3Arr, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "@l2js/engine";
 import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
-import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, IMaterialInstancedDecodeInfo, ILightInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { StaticMeshBatchManifest_T, StaticMeshBatchInfo_T, BatchElement_T, BatchElementGroup_T, BatchLightEntry_T, BatchHardwareLighting_T, IStaticMeshSwayDecodeInfo, IStaticMeshActorDecodeInfo, IMaterialInstancedDecodeInfo, ILightInstanceDecodeInfo } from "@l2js/engine/contracts/mesh";
 
 // data-only half of static mesh batching: merges shared material sections into library.geometries plus a
 // library.staticMeshBatches manifest and rewrites library.leafActors - worker-safe (three.js math only),
@@ -30,6 +31,7 @@ type PreparedActorGeometryData_T = {
     ambient: { glow: number, vector: Vector3Arr, isUnlit: boolean, hardwareLighting?: boolean };
     scaledGlow: number;
     isSunAffected: boolean;
+    hardware: BatchHardwareLighting_T | null;
     collider: Uint32Array | null;
     collision: any;
 }
@@ -40,14 +42,15 @@ function groupActorsForBatching(
     unbatchable: IStaticMeshActorDecodeInfo[]
 ): Map<string, IStaticMeshActorDecodeInfo[]> {
     const batchGroups = new Map<string, IStaticMeshActorDecodeInfo[]>();
+    const dynamicLights = library.lightActors.filter(light => light.dynamic);
 
     uniqueActors.forEach(actorBase => {
         const actor = actorBase as IStaticMeshActorDecodeInfo;
         const meshMaterials = actor.instance?.mesh?.materials;
         const meshGeometry = library.geometries[actor.instance?.mesh?.geometry];
         const collision = actor.collision;
-        const hasDistinctCollision = collision.useCylinderCollision || collision.blockZeroExtent !== collision.blockNonZeroExtent || !!meshGeometry?.staticMeshCollision?.collisionModel;
-        const isBatchable = !(actor as any).dontBatch && !hasDistinctCollision && meshMaterials && meshGeometry;
+        const hasDistinctCollision = collision.useCylinderCollision || collision.blockZeroExtent !== collision.blockNonZeroExtent || !!meshGeometry?.staticMeshCollision?.collisionModel || !!(actor.scriptProperties.bOnlyAffectPawns ?? actor.sharedScriptProperties?.bOnlyAffectPawns);
+        const isBatchable = !(actor as any).dontBatch && !hasDistinctCollision && meshMaterials && meshGeometry && !(actor.ambient?.hardwareLighting && isReachedByDynamicLight(dynamicLights, (actor as any).bounds));
 
         if (!isBatchable) {
             unbatchable.push(actor);
@@ -66,6 +69,13 @@ function groupActorsForBatching(
             batchGroups.delete(key);
         }
     });
+
+    for (const actor of unbatchable) {
+        if (!actor.sharedScriptProperties) continue;
+
+        actor.scriptProperties = { ...actor.sharedScriptProperties, ...actor.scriptProperties };
+        delete actor.sharedScriptProperties;
+    }
 
     return batchGroups;
 }
@@ -125,6 +135,31 @@ function prepareActorLights(info?: ILightInstanceDecodeInfo): { scene: BatchLigh
     return { scene, environment };
 }
 
+const tmpHardwareCenter = new Vector3();
+
+function getHardwareLighting(actor: IStaticMeshActorDecodeInfo, sphere: { center: number[], radius: number }, worldMatrix: Matrix4): BatchHardwareLighting_T { // the stored UPrimitive sphere the unbatched path reads back through geometry.boundingSphere
+    tmpHardwareCenter.fromArray(sphere.center).applyMatrix4(worldMatrix);
+
+    return { sphere: [tmpHardwareCenter.x, tmpHardwareCenter.y, tmpHardwareCenter.z, sphere.radius * worldMatrix.getMaxScaleOnAxis()], permeatingLights: actor.permeatingLights, isSpecialLit: !!actor.isSpecialLit };
+}
+
+function isReachedByDynamicLight(dynamicLights: DecodeLibrary["lightActors"], bounds: { min: number[], max: number[] }): boolean {
+    for (const light of dynamicLights) {
+        const position = light.position as number[], reach = 25 * (light.radius + 1);
+        let distanceSq = 0;
+
+        for (let axis = 0; axis < 3; axis++) {
+            const delta = Math.max(bounds.min[axis] - position[axis], 0, position[axis] - bounds.max[axis]);
+
+            distanceSq += delta * delta;
+        }
+
+        if (distanceSq < reach * reach) return true;
+    }
+
+    return false;
+}
+
 function prepareActorGeometriesData(
     library: DecodeLibrary,
     actors: IStaticMeshActorDecodeInfo[],
@@ -182,6 +217,7 @@ function prepareActorGeometriesData(
             ambient: actor.ambient,
             scaledGlow: actor.scaledGlow,
             isSunAffected: actor.isSunAffected ?? true,
+            hardware: actor.ambient?.hardwareLighting ? getHardwareLighting(actor, meshGeo.bounds.sphere, worldMatrix) : null,
             collider: meshGeo.colliderIndices || null,
             collision: (actor as any).collision || null
         } as PreparedActorGeometryData_T;
@@ -190,43 +226,43 @@ function prepareActorGeometriesData(
     return { actorGeometries, materialUuids };
 }
 
-function blocksPawn(collision: any): boolean {
-    if (!collision) return true;
-    if (!collision.blockNonZeroExtent) return false;
-    if (collision.worldGeometry) return true;
-    if (!collision.collideActors) return false;
-
-    return collision.blockPlayers;
-}
-
 // rangeStart/rangeEnd bound the actors that actually reference this light, so
 // getAffectedVertices (lit-actor.ts) can skip scanning the rest of the batch
 function mergeMeshLightFlags(
     totalVertices: number,
     vertexCounts: number[],
     flagArrays: Uint8Array[]
-): { flags: Uint8Array, rangeStart: number, rangeEnd: number } {
-    const bytesNeeded = Math.ceil(totalVertices / 8);
-    const result = new Uint8Array(bytesNeeded);
+): { flags: Uint8Array, rangeStart: number, rangeEnd: number, flagsOffset: number } {
     let globalVertex = 0;
     let rangeStart = totalVertices;
     let rangeEnd = 0;
+
+    for (let ai = 0; ai < vertexCounts.length; ai++) {
+        if (flagArrays[ai]) {
+            rangeStart = Math.min(rangeStart, globalVertex);
+            rangeEnd = globalVertex + vertexCounts[ai];
+        }
+        globalVertex += vertexCounts[ai];
+    }
+
+    if (rangeStart > rangeEnd) { rangeStart = 0; rangeEnd = 0; }
+
+    const flagsOffset = rangeStart >> 3;
+    const result = new Uint8Array(Math.ceil(rangeEnd / 8) - flagsOffset);
+    globalVertex = 0;
 
     for (let ai = 0; ai < vertexCounts.length; ai++) {
         const actorVertexCount = vertexCounts[ai];
         const actorFlags = flagArrays[ai];
 
         if (actorFlags) {
-            rangeStart = Math.min(rangeStart, globalVertex);
-            rangeEnd = Math.max(rangeEnd, globalVertex + actorVertexCount);
-
             for (let vi = 0; vi < actorVertexCount; vi++) {
                 const srcByte = Math.floor(vi / 8);
                 const srcBit = vi % 8;
 
                 if (srcByte < actorFlags.length && (actorFlags[srcByte] & (1 << srcBit))) {
                     const dstVertex = globalVertex + vi;
-                    const dstByte = Math.floor(dstVertex / 8);
+                    const dstByte = Math.floor(dstVertex / 8) - flagsOffset;
                     const dstBit = dstVertex % 8;
                     result[dstByte] |= (1 << dstBit);
                 }
@@ -235,9 +271,7 @@ function mergeMeshLightFlags(
         globalVertex += actorVertexCount;
     }
 
-    if (rangeStart > rangeEnd) { rangeStart = 0; rangeEnd = 0; } // no actor referenced this light
-
-    return { flags: result, rangeStart, rangeEnd };
+    return { flags: result, rangeStart, rangeEnd, flagsOffset };
 }
 
 function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]) {
@@ -254,7 +288,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     for (const geo of actorGeometries) {
         totalVertices += geo.vertexCount;
         totalIndices += geo.indices ? geo.indices.length : 0;
-        if (geo.collider && blocksPawn(geo.collision)) totalColliderIndices += geo.collider.length;
+        if (geo.collider) totalColliderIndices += geo.collider.length;
         if (geo.colors) {
             hasColors = true;
             ColorArrayConstructor = geo.colors.constructor;
@@ -277,20 +311,21 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const mergedColliderIndices = totalColliderIndices > 0 ? new Uint32Array(totalColliderIndices) : null;
 
     const mergedSceneLights = new Map<string, Uint8Array[]>();
-    const mergedEnvLights = new Map<string, Uint8Array[]>();
+    const mergedEnvLights = new Map<string, { light: string, flags: Uint8Array[] }>();
     let hasAnyLights = false;
-    const perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean }[] = [];
+    const perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean, hardware: BatchHardwareLighting_T | null }[] = [];
 
     let vertexOffset = 0;
     let indexOffset = 0;
     let colliderIndexOffset = 0;
+    const actorColliderIndices: Uint32Array[] = [];
     const mergedGroups: { start: number, count: number, materialIndex: number, actorIndex: number }[] = [];
 
     const tmpV = new Vector3();
     const tmpN = new Vector3();
 
     for (let ai = 0; ai < actorGeometries.length; ai++) {
-        const { positions, normals, uvs, colors, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, collider, collision } = actorGeometries[ai];
+        const { positions, normals, uvs, colors, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, hardware, collider, collision } = actorGeometries[ai];
 
         for (let vi = 0; vi < vertexCount; vi++) {
             tmpV.fromArray(positions, vi * 3);
@@ -345,7 +380,8 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             indexOffset += indices.length;
         }
 
-        if (mergedColliderIndices && collider && blocksPawn(collision)) {
+        if (mergedColliderIndices && collider) {
+            actorColliderIndices.push(mergedColliderIndices.subarray(colliderIndexOffset, colliderIndexOffset + collider.length));
             if (reverseWinding) {
                 for (let ci = 0; ci < collider.length; ci += 3) {
                     mergedColliderIndices[colliderIndexOffset + ci] = collider[ci] + vertexOffset;
@@ -358,7 +394,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
                 }
             }
             colliderIndexOffset += collider.length;
-        }
+        } else actorColliderIndices.push(null);
 
         if (lights) {
             hasAnyLights = true;
@@ -366,12 +402,14 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
                 if (!mergedSceneLights.has(entry.light)) mergedSceneLights.set(entry.light, new Array(actorGeometries.length).fill(null));
                 mergedSceneLights.get(entry.light)![ai] = entry.flags;
             }
-            for (const entry of lights.environment) {
-                if (!mergedEnvLights.has(entry.light)) mergedEnvLights.set(entry.light, new Array(actorGeometries.length).fill(null));
-                mergedEnvLights.get(entry.light)![ai] = entry.flags;
-            }
+            lights.environment.forEach((entry, slot) => { // one entry per time slot, all naming the same NMovableSunLight; 0x90bd55 indexes them by slot
+                const key = `${slot}:${entry.light}`;
+
+                if (!mergedEnvLights.has(key)) mergedEnvLights.set(key, { light: entry.light, flags: new Array(actorGeometries.length).fill(null) });
+                mergedEnvLights.get(key)!.flags[ai] = entry.flags;
+            });
         }
-        perActorAmbient.push({ startVertex: vertexOffset, count: vertexCount, ambient, scaledGlow, isSunAffected });
+        perActorAmbient.push({ startVertex: vertexOffset, count: vertexCount, ambient, scaledGlow, isSunAffected, hardware });
         vertexOffset += vertexCount;
     }
 
@@ -381,12 +419,12 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     if (hasAnyLights) {
         mergedLights = {
             scene: Array.from(mergedSceneLights.entries()).map(([light, flagArrays]) => {
-                const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
-                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
+                const { flags, rangeStart, rangeEnd, flagsOffset } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
+                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd, flagsOffset };
             }),
-            environment: Array.from(mergedEnvLights.entries()).map(([light, flagArrays]) => {
-                const { flags, rangeStart, rangeEnd } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
-                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd };
+            environment: Array.from(mergedEnvLights.values()).map(({ light, flags: flagArrays }) => {
+                const { flags, rangeStart, rangeEnd, flagsOffset } = mergeMeshLightFlags(totalVertices, vertexCounts, flagArrays);
+                return { light, flags, vertexRangeStart: rangeStart, vertexRangeEnd: rangeEnd, flagsOffset };
             })
         };
     }
@@ -402,6 +440,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
         },
         mergedLights,
         mergedColliderIndices,
+        actorColliderIndices,
         perActorAmbient,
         mergedGroups,
         mergedIndices,
@@ -464,10 +503,68 @@ function mortonKey(position: number[] | undefined): number {
     return key;
 }
 
+function equalScriptProperties(a: any, b: any): boolean {
+    if (Object.is(a, b)) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) !== Array.isArray(b) || (Array.isArray(a) && a.length !== b.length)) return false;
+
+    const keys = Object.keys(a);
+
+    if (keys.length !== Object.keys(b).length) return false;
+
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+
+        if (!Object.prototype.hasOwnProperty.call(b, key) || !equalScriptProperties(a[key], b[key])) return false;
+    }
+
+    return true;
+}
+
+export function shareBatchScriptProperties(manifest: StaticMeshBatchManifest_T): void {
+    const classes = new Map<string, IStaticMeshActorDecodeInfo[]>();
+
+    for (const batch of manifest.batches) {
+        for (const actor of batch.actors) {
+            if (!actor.scriptProperties || actor.sharedScriptProperties) continue;
+
+            let actors = classes.get(actor.scriptClassId);
+
+            if (!actors) classes.set(actor.scriptClassId, actors = []);
+            actors.push(actor);
+        }
+    }
+
+    for (const actors of classes.values()) {
+        if (actors.length < 2) continue;
+
+        const shared = { ...actors[0].scriptProperties };
+
+        for (let i = 1; i < actors.length; i++) {
+            const properties = actors[i].scriptProperties;
+
+            for (const key of Object.keys(shared))
+                if (!Object.prototype.hasOwnProperty.call(properties, key) || !equalScriptProperties(shared[key], properties[key])) delete shared[key];
+        }
+
+        if (!Object.keys(shared).length) continue;
+
+        for (const actor of actors) {
+            const properties: typeof actor.scriptProperties = {};
+
+            for (const key of Object.keys(actor.scriptProperties))
+                if (!Object.prototype.hasOwnProperty.call(shared, key)) properties[key] = actor.scriptProperties[key];
+
+            actor.sharedScriptProperties = shared;
+            actor.scriptProperties = properties;
+        }
+    }
+}
+
 export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatchManifest_T {
     const manifest: StaticMeshBatchManifest_T = { batches: [], unbatchable: [] };
 
     (library as any).staticMeshBatches = manifest;
+    const staticLights = new Set(library.lightActors.filter(light => !light.dynamic && !light.isSunlightColor && light.type !== "Sunlight").map(light => light.name));
 
     // per-actor leaf lists, collected before rewriteLeafActors replaces the
     // entries with batch-level ones
@@ -511,11 +608,13 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 attributes,
                 mergedLights,
                 mergedColliderIndices,
+                actorColliderIndices,
                 perActorAmbient,
                 mergedGroups,
                 mergedIndices,
                 totalIndices
             } = mergeBatchGeometriesData(actorGeometries);
+            const colliderIndices = actorGeometries[0].collision.collideActors ? mergedColliderIndices : null;
 
             const batchUuid = generateUUID();
             const batchElements: BatchElement_T[] = actors.map((a, ai) => ({
@@ -574,7 +673,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
-                collisionIndex: mergedColliderIndices && mergedColliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, mergedColliderIndices) : null,
+                collisionIndex: colliderIndices && colliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, colliderIndices) : null,
                 groups: finalGroups
             } as IGeometryDecodeInfo;
             library.materials[batchUuid] = {
@@ -583,14 +682,28 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 materials: materialUuids
             } as IMaterialGroupDecodeInfo;
 
+            let staticLighting: StaticMeshBatchInfo_T["staticLighting"];
+            const vertexCount = attributes.positions.length / 3;
+            const arrStaticLights = mergedLights ? mergedLights.scene.filter(light => staticLights.has(light.light)) : [];
+
+            if (vertexCount >= 1e5 && arrStaticLights.length >= 128) {
+                const glow = new Float32Array(vertexCount);
+
+                for (const actor of perActorAmbient) glow.fill(actor.scaledGlow, actor.startVertex, actor.startVertex + actor.count);
+                staticLighting = { ...buildStaticLightIndices(arrStaticLights, vertexCount), lights: arrStaticLights.map(light => light.light), glow };
+            }
+
             manifest.batches.push({
                 uuid: batchUuid,
                 name: `Batch_${actors.length}_${actors[0].name}`,
                 geometry: batchUuid,
                 materials: batchUuid,
                 actors,
-                colliderIndices: mergedColliderIndices,
+                colliderIndices,
+                actorColliderIndices: mergedColliderIndices,
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length }] : []),
                 lights: mergedLights,
+                staticLighting,
                 perActorAmbient,
                 batchElements
             });
@@ -601,6 +714,8 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
             manifest.unbatchable.push(...actors);
         }
     });
+
+    shareBatchScriptProperties(manifest);
 
     return manifest;
 }

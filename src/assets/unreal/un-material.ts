@@ -6,6 +6,7 @@ import type { FRotator } from "./un-rotator";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { ParticleBlendModes_T } from "./emitters/un-particle-emitter";
 import type { ColorArr, Vector3Arr, EulerArr } from "./library-types";
+import type { ITextureDecodeInfo } from "./un-texture";
 
 export type IDecodedParameter = {
     uniforms: Record<string, any>,
@@ -30,7 +31,7 @@ export type DecodableMaterialModifier_T = "fadeColor" | "panTexture" | "rotateTe
 export type IBaseMaterialDecodeInfo = { name?: string, materialType: DecodableMaterial_T, color?: boolean };
 export type ICubemapDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "cubemap", faces: (string | null)[] };
 export type ISolidMaterialDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "solid", solidColor: number };
-export type ILightmappedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "lightmapped", material: string, lightmap: string | null };
+export type ILightmappedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "lightmapped", material: string, lightmap: string | null, lightmaps: string[] };
 export type IMaterialGroupDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "group", materials: string[] };
 export type IParticleMaterialDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "particle", material: string | null, blendingMode: ParticleBlendModes_T, opacity: number };
 export type IMaterialModifier = { type: string };
@@ -144,7 +145,7 @@ export type ICombinerDecodeInfo = IBaseMaterialDecodeInfo & {
     alphaFrom2: boolean
 };
 
-export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "invisible" | "brighten" | "darken";
+export type SupportedBlendingTypes_T = "normal" | "masked" | "modulate" | "alphaModulate" | "translucent" | "additive" | "invisible" | "brighten" | "darken";
 
 abstract class UBaseMaterial extends UObject {
     // public readonly skipRemaining = true;
@@ -508,9 +509,9 @@ export abstract class UShader extends UMaterial {
             case OutputBlending_T.OB_Normal: blendingMode = "normal"; break;
             case OutputBlending_T.OB_Masked: blendingMode = "masked"; break;
             case OutputBlending_T.OB_Modulate: blendingMode = "modulate"; break;
-            case OutputBlending_T.OB_Translucent: blendingMode = "translucent"; break;
+            case OutputBlending_T.OB_Translucent: blendingMode = "additive"; break; // ONE, ONE - not FB_Translucent's ONE, INVSRCCOLOR (cruma_inside call 9124000)
             case OutputBlending_T.OB_Invisible: blendingMode = "invisible"; break;
-            case OutputBlending_T.OB_Brighten: blendingMode = "brighten"; break;
+            case OutputBlending_T.OB_Brighten: blendingMode = "translucent"; break; // ONE, INVSRCCOLOR, which FB_* calls translucent
             case OutputBlending_T.OB_Darken: blendingMode = "darken"; break;
             default: console.warn("Unknown blending mode:", this.outputBlending); break;
         }
@@ -542,6 +543,20 @@ export abstract class UShader extends UMaterial {
 
     public getTextureSize(): { width: number; height: number; } | null {
         return this.diffuse?.loadSelf?.().getTextureSize() || this.opacity?.loadSelf?.().getTextureSize() || null;
+    }
+}
+
+export abstract class UConstantColor extends UBaseMaterial {
+    declare protected Color: FColor;
+
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo {
+        return { name: this.uuid, materialType: "texture", textureType: "rgba", buffer: new Uint8Array([this.Color.r, this.Color.g, this.Color.b, this.Color.a]).buffer, width: 1, height: 1, detailScale: 1 } as ITextureDecodeInfo;
+    }
+
+    public getTextureSize() { return { width: 1, height: 1 }; }
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), { "Color": "Color" });
     }
 }
 
@@ -785,7 +800,7 @@ export abstract class UTexPanner extends UBaseModifier {
             materialType: "modifier",
             modifierType: "panTexture",
             transform: {
-                matrix: this.matrix.getElements3x3(),
+                matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1], // UTexPanner::GetMatrix (Engine.dll 0x8792a0) replaces cached M from TimeSeconds.
                 map: builder.pullMaterial(this.material),
                 rate: [rateU, rateV]
             }

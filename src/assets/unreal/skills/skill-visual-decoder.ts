@@ -1,9 +1,47 @@
-import type { APackage, UClass, UObject } from "@l2js/core";
+import type { APackage } from "@l2js/core";
+import { EAttachMethod_T, type USkillVisualEffect, type FSkillActionInfo, type USkillActionLocateEffect } from "../un-skill-visual-effect";
 import DecodeLibrary from "../decode-library";
 import type { NpcSkillAttack_T, NpcSkillAttachOn_T, NpcSkillEffectAction_T, NpcSkillEffectPhase_T } from "../un-pawn";
 import getNativeEffect from "./native-effects";
-import { getNativeSkillBinding } from "./native-skill-bindings";
+import { getNativeEffectBinding, type NativeEffectBinding_T } from "./native-effect-bindings";
 import createSkillVisualDefinition from "./skill-visual-definition";
+import UConfigLocalization from "../conf-files/un-conf-localization";
+
+let cacheSoulShot: UConfigLocalization = null;
+
+async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: string, hands: number[][], velocityScale: number }> {
+    // SpawnNTransientEffect 0x799053 / 0x79905b / 0x79934a / 0x7997b5.
+    const fishing = id >= 2181 && id <= 2186;
+    const grade = fishing ? id - 2181 : [2039, 2047, 2061].includes(id) ? 0 : id >= 2150 && id <= 2164 ? (id - 2150) % 5 + 1 : -1;
+
+    if (grade < 0) return null;
+    if (!cacheSoulShot) {
+        const config = await new UConfigLocalization("assets/system/soulshot.int").decode();
+
+        await config.load();
+        cacheSoulShot = config;
+    }
+
+    const properties = cacheSoulShot.getProperties(["None", "D", "C", "B", "A", "S"][grade]);
+    const prefix = fishing || id === 2039 || id >= 2150 && id <= 2154 ? "" : "Spirit";
+    const sticks = properties.find(property => property.name === `${prefix}OnSticks`);
+    const books = properties.find(property => property.name === `${prefix}OnBooks`);
+
+    if (!sticks || !books) throw new Error(`Soulshot '${id}' has no charging effects.`);
+    const hands = ["HAND", "1HS", "2HS", "DUAL", "POLE", "BOW", "THROW", "DUALFIST"].map(type => {
+        const properties = cacheSoulShot.getProperties(type);
+
+        return ["LH", "RH"].map(hand => {
+            const property = properties.find(property => property.name === hand);
+            const mode = property ? parseInt(property.value, 10) : NaN;
+
+            if (![-1, 0, 1].includes(mode)) throw new Error(`Soulshot weapon '${type}.${hand}' has invalid mode '${mode}'.`);
+            return fishing && hand === "LH" ? -1 : mode;
+        });
+    });
+    // SpawnNTransientEffect 0x104c9cc7 scales fishing-rod metadata; an absent length retains30.
+    return { sticks: sticks.value, books: books.value, hands, velocityScale: fishing ? Math.fround(1 / 3) : 1 };
+}
 
 type SkillVisualDecodeOps_T = {
     loadPackage: (packageName: string) => Promise<APackage>;
@@ -12,7 +50,7 @@ type SkillVisualDecodeOps_T = {
 };
 
 export function validatePlayerSkillSource(id: number, level: number, operationType: number): void {
-    if (operationType !== 0 && operationType !== 1) throw new Error(`Player skill '${id}:${level}' operation type '${operationType}' is not supported.`);
+    if (operationType !== 0 && operationType !== 1 && operationType !== 3) throw new Error(`Player skill '${id}:${level}' operation type '${operationType}' is not supported.`);
 }
 
 function splitGroupedObjectPath(path: string): [string, string, string] {
@@ -23,14 +61,14 @@ function splitGroupedObjectPath(path: string): [string, string, string] {
     return [parts[0], parts[1], parts[2]];
 }
 
-function getAttachOn(attachOn: number): NpcSkillAttachOn_T {
+function getAttachOn(attachOn: EAttachMethod_T): NpcSkillAttachOn_T {
     switch (attachOn) {
-        case 0: return "none";
-        case 1: return "rightHand";
-        case 2: return "leftHand";
-        case 3: return "boneSpecified";
-        case 4: return "aliasSpecified";
-        case 5: return "trail";
+        case EAttachMethod_T.EAM_None: return "none";
+        case EAttachMethod_T.EAM_RH: return "rightHand";
+        case EAttachMethod_T.EAM_LH: return "leftHand";
+        case EAttachMethod_T.EAM_BoneSpecified: return "boneSpecified";
+        case EAttachMethod_T.EAM_AliasSpecified: return "aliasSpecified";
+        case EAttachMethod_T.EAM_Trail: return "trail";
         default: throw new Error(`Skill action AttachOn '${attachOn}' is not implemented.`);
     }
 }
@@ -41,27 +79,35 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
 
     for (const attack of attacks) {
         const visualPath = attack.visualEffect;
-        let visual: UObject = null;
+        let visual: USkillVisualEffect = null;
 
         if (visualPath && visualPath.toLowerCase() !== "none") {
             const [packageName, groupName, objectName] = splitGroupedObjectPath(visualPath);
             const pkg = await loadPackage(packageName);
 
-            visual = pkg.fetchObjectByType<UObject>("SkillVisualEffect", objectName, groupName);
+            visual = pkg.fetchObjectByType<USkillVisualEffect>("SkillVisualEffect", objectName, groupName);
 
             // Core.dll StaticLoadObject 0x1016d4f5 -> ULinkerLoad::Create 0x1014dfed uses outer index -1.
-            if (!visual) visual = pkg.fetchObjectByType<UObject>("SkillVisualEffect", objectName);
+            if (!visual) visual = pkg.fetchObjectByType<USkillVisualEffect>("SkillVisualEffect", objectName);
 
             if (visual) visual.loadSelf();
         }
 
         // Engine.dll SetMagicInfo 0x79b45e; MagicProcess 0x7b4f65 branches on the resolved object.
-        const native = visual ? null : getNativeSkillBinding(attack.name, attack.id);
+        const soulshot = visual ? null : await getSoulShotEffects(attack.id);
+        const binding: NativeEffectBinding_T = visual ? null : soulshot ? { effects: [], soundPhases: ["casting"] as NpcSkillEffectPhase_T[] } : getNativeEffectBinding(attack.id);
+        const native = attack.castStyle === 0 && binding?.transient ? binding.transient : binding;
 
         if (!visual && !native)
             throw new Error(`Skill '${attack.id}:${attack.level}' (${attack.name}) has no resolved visual or implemented native recipe.`);
 
         const decoded = Object.assign({}, attack, { visual: createSkillVisualDefinition(visual ? [] : null, native) });
+
+        if (soulshot) {
+            decoded.visual.soulshot = soulshot;
+            await pullEffectTemplate(soulshot.sticks, true);
+            await pullEffectTemplate(soulshot.books, true);
+        }
 
         library.npcSkillAttacks.push(decoded);
 
@@ -69,6 +115,16 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
             const weapon = getNativeEffect(path, native.effectGroup).find(effect => effect.weaponId !== undefined);
 
             await pullEffectTemplate(path, true, weapon?.weaponId);
+        }
+
+        if (decoded.visual.echoCrystal) await pullEffectTemplate("LineageEffect.e_u059_a", true);
+
+        if (decoded.visual.firecracker) {
+            for (let i = 0; i < 4; i++) {
+                await pullEffectTemplate(`LineageEffect.e_u519_fireseed_${i}`, true);
+                await pullEffectTemplate(`LineageEffect.e_u519_firecracker_${i}`, true);
+            }
+            if (decoded.visual.firecracker === 3) await pullEffectTemplate("LineageEffect.m_u015_b", true);
         }
 
         decoded.sounds = decoded.sounds.slice();
@@ -95,39 +151,37 @@ export async function decodeSkillVisuals(library: DecodeLibrary, attacks: readon
             continue;
         }
 
-        const phases: [string, NpcSkillEffectPhase_T][] = [["CastingActions", "casting"], ["ShotActions", "shot"], ["ExplosionActions", "explosion"]];
+        const phases: [FSkillActionInfo[], NpcSkillEffectPhase_T][] = [[visual.castingActions, "casting"], [visual.shotActions, "shot"], [visual.explosionActions, "explosion"]];
 
-        decoded.flyingTime = Number(visual.propertyDict.get("FlyingTime")) || 0;
+        decoded.flyingTime = Number(visual.flyingTime) || 0;
 
-        for (const [property, phase] of phases) {
-            const infos = visual.propertyDict.get(property) as UObject[];
-
+        for (const [infos, phase] of phases) {
             if (!infos) continue;
 
             for (const rawInfo of infos) {
                 const info = rawInfo.loadSelf();
-                const action = (info.propertyDict.get("Action") as UObject).loadSelf();
-                const effectClass = action.propertyDict.get("EffectClass") as UClass;
+                const action = info.action.loadSelf() as USkillActionLocateEffect;
+                const effectClass = action.effectClass;
 
                 if (!effectClass) continue;
 
-                const offset = action.propertyDict.get("offset") as any;
+                const offset = action.offset as any;
                 const effectPath = effectClass.name;
 
                 decoded.visual.actions!.push({
                     phase,
-                    specificStage: Number(info.propertyDict.get("SpecificStage")) || 0,
+                    specificStage: Number(info.specificStage) || 0,
                     effectClass: effectPath,
-                    attachOn: getAttachOn(Number(action.propertyDict.get("AttachOn")) || 0),
-                    attachBoneName: String(action.propertyDict.get("AttachBoneName") || "None"),
-                    isAbsolute: !!action.propertyDict.get("bAbsolute"),
-                    spawnDelay: Number(action.propertyDict.get("SpawnDelay")) || 0,
-                    useCharacterRotation: !!action.propertyDict.get("bUseCharacterRotation"),
+                    attachOn: getAttachOn(Number(action.attachOn) || 0),
+                    attachBoneName: String(action.attachBoneName || "None"),
+                    isAbsolute: !!action.isAbsolute,
+                    spawnDelay: Number(action.spawnDelay) || 0,
+                    useCharacterRotation: !!action.isUsingCharacterRotation,
                     offset: offset && typeof offset.getElements === "function" ? offset.getElements() : [0, 0, 0],
-                    relativeToCylinder: !!action.propertyDict.get("bRelativeToCylinder"),
-                    spawnOnTarget: !!action.propertyDict.get("bSpawnOnTarget"),
-                    sizeScale: !!action.propertyDict.get("bSizeScale"),
-                    onMultiTarget: !!action.propertyDict.get("bOnMultiTarget")
+                    relativeToCylinder: !!action.isRelativeToCylinder,
+                    spawnOnTarget: !!action.isSpawningOnTarget,
+                    sizeScale: !!action.isSizeScaled,
+                    onMultiTarget: !!action.isMultiTarget
                 });
 
                 if (pulledEffects.has(effectPath.toLowerCase())) continue;

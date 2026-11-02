@@ -66,6 +66,7 @@ export class UConfigAudio extends BaseConfigFile {
     protected swimSound: SwimSoundConfig_T = null;
     protected pawnSounds: Record<PawnSoundSection_T, PawnSound_T> = null;
     protected criticalSound: CriticalSound_T = null;
+    protected soulshotSound: CriticalSound_T = null;
 
     public load(): this {
         const contents = this.decodeConfig();
@@ -89,6 +90,12 @@ export class UConfigAudio extends BaseConfigFile {
             volume: getPawnNumber(etcSound, "EtcSound", "CriticalSound_Vol", 255),
             radius: getPawnNumber(etcSound, "EtcSound", "CriticalSound_Radius", 50)
         };
+        // Engine.dll Action_Attack 0x8bdc62 / 0x8bdc79 / 0x8bdc9b / 0x8bdcc5.
+        this.soulshotSound = {
+            sound: etcSound?.get("soulshotsound") ?? "skillsound.soul_shot_shot",
+            volume: getPawnNumber(etcSound, "EtcSound", "SoulShotSound_Vol", 255),
+            radius: getPawnNumber(etcSound, "EtcSound", "SoulShotSound_Radius", 50)
+        };
 
         return this;
     }
@@ -109,6 +116,12 @@ export class UConfigAudio extends BaseConfigFile {
         if (!this.criticalSound) throw new Error(`'${this.path}' was not loaded.`);
 
         return this.criticalSound;
+    }
+
+    public getSoulshotSound(): CriticalSound_T {
+        if (!this.soulshotSound) throw new Error(`'${this.path}' was not loaded.`);
+
+        return this.soulshotSound;
     }
 }
 

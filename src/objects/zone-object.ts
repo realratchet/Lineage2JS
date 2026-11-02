@@ -5,13 +5,21 @@ import type { Terrain } from "./terrain";
 import type { TerrainDecoration } from "./terrain-decoration";
 import { encompassesVolume } from "../physics/volume-bsp";
 import { GameObject } from "../game/components";
+import PhysicsVolume from "./physics-volume";
+import type MovableObject from "./movable-object";
+import { isPortalBlocked } from "../rendering/door-portals";
+import MusicVolume from "./music-volume";
+import Actor from "./actor";
+import type { BatchRenderGroup_T, LitActorMesh } from "./lit-actor";
+import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
-import type UnScriptVM from "../ue-script/vm";
+import UnScriptVM, { getProperty, setLevelActors, deleteLevelActors, registerLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
-import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
-import type { IBSPSectionDecodeInfo_T, IBSPZoneDecodeInfo_T, IBSPNodeDecodeInfo_T, IBSPLeafDecodeInfo_T } from "@l2js/engine/contracts/zone";
+import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
+import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T, IBSPZoneDecodeInfo_T, IBSPNodeDecodeInfo_T, IBSPLeafDecodeInfo_T } from "@l2js/engine/contracts/zone";
 
 const tmpColor = new Color();
 const tmpColorByte = new ColorByte();
@@ -22,14 +30,66 @@ const tmpSphere = new Sphere();
 const tmpActorBox = new Box3();
 const tmpEmitterBox = new Box3();
 const arrLightSortKeys = new Float64Array(8);
+let arrBSPStack = new Int32Array(256);
+const arrLightNodes: number[] = [];
+const arrLightLeaves: number[] = [];
+const arrLightCandidates: number[] = [];
+const tmpLightCenter = new Vector3();
+const tmpLightExtent = new Vector3();
 const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
-const TRANSPARENT_SORT_DISTANCE_SQ = 128 * 128;
 
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
-type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string };
-type BatchGroup_T = { start: number; count: number; materialIndex: number; distance: number; transparent: number };
+type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string; actorIndex: number };
+type TranslucentBSPSection_T = { mesh: THREE.Mesh; source: Uint8Array | Uint16Array | Uint32Array; nodes: Int32Array; starts: Uint32Array; counts: Uint32Array; order: Int32Array; previous: Int32Array };
+type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number };
+type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, version: number, source: Uint8Array | Uint16Array | Uint32Array, ranges: Map<number, { count: number, bounds: Box3 }> };
+const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
+
+function getBatchBounds(geometry: BufferGeometry, source: BatchBounds_T["source"], group: BatchGroup_T): Box3 {
+    const position = geometry.getAttribute("position");
+    const version = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
+    let cache = cacheBatchBounds.get(geometry);
+
+    if (!cache || cache.position !== position || cache.version !== version || cache.source !== source) {
+        cache = { position, version, source, ranges: new Map() };
+        cacheBatchBounds.set(geometry, cache);
+    }
+
+    const cached = cache.ranges.get(group.start);
+    if (cached && cached.count === group.count) return cached.bounds;
+
+    const bounds = new Box3();
+    for (let i = group.start, end = Math.min(group.start + group.count, source.length); i < end; i++)
+        bounds.expandByPoint(tmpVec3.fromBufferAttribute(position, source[i]));
+
+    cache.ranges.set(group.start, { count: group.count, bounds });
+    return bounds;
+}
+
+function considerLight(light: DynamicLight, position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, isSpecialLit: boolean) {
+    if (light.isSpecialLit !== isSpecialLit) return;
+    if (light.isSunlight && !allowSunlight) return;
+
+    const key = light.getSortKey(position, radius);
+
+    if (key <= 0) return;
+    if (target.length === maxLights && key <= arrLightSortKeys[maxLights - 1]) return;
+
+    let index = Math.min(target.length, maxLights - 1);
+
+    while (index > 0 && arrLightSortKeys[index - 1] < key) {
+        target[index] = target[index - 1];
+        arrLightSortKeys[index] = arrLightSortKeys[index - 1];
+        index--;
+    }
+
+    target[index] = light;
+    arrLightSortKeys[index] = key;
+
+    if (target.length > maxLights) target.length = maxLights;
+}
 
 function getTransparentLookup(object: any, transparentMaterials: Set<number>): Uint8Array {
     let lookup = object.transparentLookup as Uint8Array;
@@ -80,26 +140,51 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
     }
 
     const target = index.array as Uint8Array | Uint16Array | Uint32Array;
+    const position = geometry.getAttribute("position");
+    const positionVersion = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
+    const groups: BatchRenderGroup_T[] = object.batchRenderGroups || (object.batchRenderGroups = []);
     let offset = 0;
-    let run: BatchGroup_T = null;
+    let copyStart = 0, copyCount = 0;
+    let run: BatchRenderGroup_T = null;
+    let groupCount = 0;
 
     for (const group of visibleGroups) {
-        target.set(source.subarray(group.start, group.start + group.count), offset);
+        if (copyCount && copyStart + copyCount !== group.start) {
+            target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+            copyCount = 0;
+        }
+
+        if (!copyCount) copyStart = group.start;
+        copyCount += group.count;
 
         if (run && run.materialIndex === group.materialIndex) {
             run.count += group.count;
         } else {
-            if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
-            run = { start: offset, count: group.count, materialIndex: group.materialIndex, distance: group.distance, transparent: group.transparent };
+            run = groups[groupCount];
+            if (!run) run = groups[groupCount] = { start: 0, count: 0, materialIndex: 0, bounds: new Box3(), boundsStart: 0, boundsCount: 0, position, index, positionVersion, indexVersion: 0 };
+            run.start = offset;
+            run.count = group.count;
+            run.materialIndex = group.materialIndex;
+            run.position = position;
+            run.index = index;
+            run.positionVersion = positionVersion;
+            run.indexVersion = index.version + 1;
+            run.bounds.makeEmpty();
+            geometry.groups.push(run);
+            groupCount++;
         }
+
+        run.bounds.union(getBatchBounds(geometry, source, group));
+        run.boundsStart = run.start;
+        run.boundsCount = run.count;
 
         offset += group.count;
     }
 
-    if (run) geometry.addGroup(run.start, run.count, run.materialIndex);
+    if (copyCount) target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
 
-    index.updateRange.offset = 0;
-    index.updateRange.count = offset;
+    index.clearUpdateRanges();
+    index.addUpdateRange(0, offset);
     index.needsUpdate = true;
 }
 
@@ -132,6 +217,7 @@ export class ZoneObject extends Object3D {
     public isFogZone: boolean = false;
     public isSunAffected: boolean = false;
     public isSkyZoneInfo: boolean = false;
+    public readonly skyOrigin = new Vector3();
 
     public readonly boundsRender = new Box3();
     public readonly boundsRenderSphere = new Sphere();
@@ -189,14 +275,27 @@ export type LightInfo_T = {
 
 export class SectorObject extends GameObject {
     public readonly isSectorObject = true;
+    public readonly isLevelActor = false;
+    public readonly scriptClassId = "engine.Level";
+    public readonly scriptProperties = new Map<string, ScriptValue_T>();
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
+    public isRetired = false;
     public scriptVM: UnScriptVM;
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
     public readonly pawns = new Object3D(); // players/mobs - scene-graph home only, visibility resolved live (RenderManager.updatePawnVisibility)
     public readonly fogInfos: FogInfoObject[] = [];
 
+    public levelInfo: IBaseZoneDecodeInfo;
+    public levelActorUuids: (string | null)[] = [];
+    protected readonly arrLevelActors: (ScriptHost_T | null)[] = [];
+    protected readonly arrLevelActorRecords: DecodeLibrary["levelActors"] = [];
+    protected firstDynamicActor = 0;
+    protected hasRearrangedLevelActors = false;
+    protected readonly cacheLevelActorIndices = new Map<string, number>();
+    protected readonly cacheLevelActorObjects = new Map<string, ScriptHost_T>();
+    protected levelActorHostsReady = false;
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];
     public bspLeaves: BSPLeafData[];
@@ -209,7 +308,14 @@ export class SectorObject extends GameObject {
     public readonly gridBounds = new Box3();
 
     public musicVolumes?: IMusicVolumeDecodeInfo[];
+    public musicVolumeInfos: IMusicVolumeDecodeInfo[] = [];
     public waterVolumes?: IWaterVolumeDecodeInfo[];
+    public physicsVolumes: PhysicsVolumeDecodeInfo_T[] = [];
+    public readonly physicsVolumeActors: PhysicsVolume[] = [];
+    public readonly musicVolumeActors: MusicVolume[] = [];
+    public levelInfoActor: Actor = null;
+    public readonly zoneInfoActors: Actor[] = [];
+    protected physicsVolumeObjectFactory: ScriptObjectFactory_T = null;
     public ambientSounds?: IAmbientSoundObjectDecodeInfo[];
 
     public bspSections?: IBSPSectionDecodeInfo_T[];
@@ -220,19 +326,30 @@ export class SectorObject extends GameObject {
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
     public visibleEmitterUuids: Set<string> = new Set();
     public visibleLeaves: Set<number> = new Set();
+    protected arrTranslucentBSP: TranslucentBSPSection_T[] = null;
+    protected arrBSPRanks: Int32Array = null;
     public readonly lights: Record<string, DynamicLight> = {};
     public readonly lightList: DynamicLight[] = [];
+    protected readonly cacheLightIndicesByName = new Map<string, number[]>();
+    protected readonly arrSunAndDynamicLightIndices: number[] = [];
     public readonly retainedResources = new Set<{ dispose(): void }>();
 
     public outdoorZoneMask: bigint = 1n << 1n; // sun-affected zones, visible from outside the sector
 
+    protected renderDeco = true;
+    protected sortTransparent = true;
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
-    protected readonly candidateStaticActorUuids = new Set<string>();
-    protected readonly visibleStaticActorUuids = new Set<string>();
-    protected readonly visibleStaticActorDistances = new Map<string, number>();
+    protected readonly cacheStaticActorIndices = new Map<string, number>();
+    protected readonly arrBSPStack: number[] = [];
+    protected staticActorCandidateStamps = new Uint32Array(256);
+    protected staticActorVisibleStamps = new Uint32Array(256);
+    protected staticActorDistances = new Float64Array(256);
+    protected staticVisibilityStamp = 0;
     protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
     protected visibilityCacheInitialized = false;
+    protected doorPortalsDirty = true;
+    protected readonly blockedDoorPortals = new Set<number>();
     protected readonly visibilityCachePosition = new Vector3();
     protected readonly visibilityCachePlanes = new Float64Array(24);
     protected visibilityCacheFrustumCulling = true;
@@ -241,15 +358,270 @@ export class SectorObject extends GameObject {
     protected visibilityCacheEmitterDistanceSq = Infinity;
     protected visibilityCacheEnvVersion = -1;
     protected visibilityCacheTimeStep = -1;
-    protected _lastLoggedStaticMeshLeaf: number | null = null;
+    protected lastLoggedStaticMeshLeaf: number | null = null;
 
-    protected _lastLoggedZone: number | null = null;
-    protected _lastLoggedLeaf: number | null = null;
+    protected lastLoggedZone: number | null = null;
+    protected lastLoggedLeaf: number | null = null;
+
+    public getLevelActorCount(): number { return this.arrLevelActors.length; }
+    public getFirstDynamicActor(): number { return this.firstDynamicActor; }
+
+    public rearrangeLevelActors(): void {
+        if (this.hasRearrangedLevelActors) return;
+
+        const entries = Array.from(this.arrLevelActors, (actor, index) => {
+            const info = this.arrLevelActorRecords[index];
+            const host = actor === undefined && info ? info : actor;
+
+            return { actor, info, exists: !!host, isStatic: host && !!getProperty(host, "bStatic"), isAlwaysRelevant: host && !!getProperty(host, "bAlwaysRelevant") };
+        });
+        const ordered = entries.slice(0, 2);
+
+        // UGameEngine::LoadMap 0x105622af..0x1056249f; EndLoadSWLevel 0x105a4542..0x105a46a3.
+        for (let group = 0; group < 3; group++) {
+            if (group === 2) this.firstDynamicActor = ordered.length;
+            for (let index = 2; index < entries.length; index++) {
+                const entry = entries[index];
+
+                if (entry.exists && (entry.isStatic ? entry.isAlwaysRelevant ? 1 : 0 : 2) === group) ordered.push(entry);
+            }
+        }
+
+        this.arrLevelActors.length = this.arrLevelActorRecords.length = 0;
+        this.cacheLevelActorIndices.clear();
+        for (const entry of ordered) {
+            if (entry.info) this.cacheLevelActorIndices.set(entry.info.uuid, this.arrLevelActors.length);
+            this.arrLevelActors.push(entry.actor);
+            this.arrLevelActorRecords.push(entry.info);
+        }
+        this.hasRearrangedLevelActors = true;
+    }
+
+    public allocateLevelActor(construct: () => ScriptHost_T): ScriptHost_T {
+        const index = this.arrLevelActors.length;
+
+        this.arrLevelActors.push(null);
+        this.arrLevelActorRecords.push(null);
+        const actor = construct();
+
+        if (!actor || typeof actor !== "object" || typeof actor.scriptClassId !== "string" || !actor.scriptClassId || actor.isLevelActor === false) throw new Error(`Invalid constructed level actor in '${this.name}'.`);
+        this.arrLevelActors[index] = actor;
+        return actor;
+    }
+
+    public addLevelActor(actor: ScriptHost_T): void {
+        const index = this.cacheLevelActorIndices.get((actor as any).actorUuid);
+
+        if (index !== undefined) {
+            const previous = this.arrLevelActors[index];
+
+            if (previous === null || previous && previous !== actor) throw new Error(`Level actor '${(actor as any).actorUuid}' already has a different identity`);
+            this.arrLevelActors[index] = actor;
+        } else if (!this.arrLevelActors.includes(actor)) {
+            this.arrLevelActors.push(actor);
+            this.arrLevelActorRecords.push(null);
+        }
+    }
+
+    public removeLevelActor(actor: ScriptHost_T): void {
+        const index = this.arrLevelActors.indexOf(actor);
+
+        if (index < 0) throw new Error(`Actor '${actor.scriptClassId}' is absent from '${this.name}'`);
+        this.arrLevelActors[index] = null;
+    }
+
+    public getTerrainInfoActor(uuid: string): ScriptHost_T {
+        const index = this.cacheLevelActorIndices.get(uuid);
+
+        if (index === undefined) throw new Error(`Actor '${uuid}' is absent from '${this.name}'.`);
+        const info = this.arrLevelActorRecords[index];
+
+        if (!this.scriptVM.isClassChildOf(info.scriptClassId, "engine.TerrainInfo")) throw new Error(`Actor '${uuid}' is not a TerrainInfo.`);
+        let actor = this.arrLevelActors[index];
+
+        if (actor === undefined) {
+            const object = new Actor(info as any);
+
+            object.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.arrLevelActors[index] = actor = object;
+        }
+        if (!actor) throw new Error(`Actor '${uuid}' has been removed from '${this.name}'.`);
+        return actor;
+    }
+
+    public getLevelActor(index: number): ScriptHost_T | null {
+        if (!Number.isInteger(index) || index < 0 || index >= this.arrLevelActors.length) throw new Error(`Invalid actor slot '${index}' in '${this.name}'`);
+        if (this.arrLevelActors[index] !== undefined) return this.arrLevelActors[index];
+        if (!this.staticMeshGroup) throw new Error(`Level actors in '${this.name}' are not ready`);
+
+        if (!this.levelActorHostsReady) {
+            this.traverse((object: any) => {
+                if (object.scriptActor) this.cacheLevelActorObjects.set(object.scriptActor.actorUuid, object.scriptActor);
+                else if (object.actorUuid && object.scriptClassId) this.cacheLevelActorObjects.set(object.actorUuid, object);
+            });
+            this.levelActorHostsReady = true;
+        }
+
+        const info = this.arrLevelActorRecords[index];
+        let actor = this.cacheLevelActorObjects.get(info.uuid);
+        const mesh = this.staticMeshMap.get(info.uuid) as any;
+
+        if (!actor && mesh && mesh.collisionActors) {
+            const record = mesh.collisionActors.find((record: any) => record.actor.uuid === info.uuid);
+
+            if (record) actor = mesh.getCollisionActor(record.firstTriangle);
+        }
+        if (!actor) {
+            const object = new Actor(info as any);
+
+            object.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            actor = object;
+        } else {
+            if (!(actor as any).findComponent || !(actor as any).findComponent("script")) this.scriptVM.initializeHost(actor);
+            setScriptObjectProperty(actor as any, "Level", this.scriptVM.getLevelInfo());
+            setScriptObjectProperty(actor as any, "XLevel", this);
+            registerLevelActor(actor);
+        }
+        if (actor.scriptClassId !== info.scriptClassId) throw new Error(`Actor '${info.uuid}' has class '${actor.scriptClassId}', expected '${info.scriptClassId}'`);
+        this.arrLevelActors[index] = actor;
+        return actor;
+    }
+
+    public releaseLevelActors(): void {
+        for (const actor of this.arrLevelActors) if (actor) unregisterLevelActor(actor);
+        deleteLevelActors(this.scriptVM.getLevelInfo());
+        this.scriptVM.setLevelInfo(null);
+        this.arrLevelActors.length = 0;
+        this.arrLevelActorRecords.length = 0;
+        this.firstDynamicActor = 0;
+        this.hasRearrangedLevelActors = false;
+        this.cacheLevelActorObjects.clear();
+        this.cacheLevelActorIndices.clear();
+    }
+
+    public setPhysicsVolumeScriptRuntime(objectFactory: ScriptObjectFactory_T): void {
+        this.physicsVolumeObjectFactory = objectFactory;
+        this.createZoneInfoActors();
+        for (const actor of new Set([this.levelInfoActor, ...this.zoneInfoActors])) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
+        this.createPhysicsVolumeActors();
+        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, objectFactory, false);
+        this.createMusicVolumeActors();
+        const volume = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        if (volume) volume.setScriptRuntime(this.scriptVM, objectFactory, false);
+    }
+
+    public createZoneInfoActors(): void {
+        if (this.levelInfoActor) return;
+        if (!this.physicsVolumeObjectFactory) throw new Error(`Sector '${this.name}' has no zone script runtime.`);
+
+        const actors = new Map<string, Actor>();
+        function create(info: IBaseZoneDecodeInfo) {
+            if (actors.has(info.uuid)) return actors.get(info.uuid);
+            if (!info.scriptClassId || !info.scriptProperties) throw new Error(`Zone '${info.name}' has no decoded script data.`);
+
+            const actor = new Actor({ uuid: info.uuid, name: info.name, scriptClassId: info.scriptClassId, scriptProperties: info.scriptProperties });
+            actors.set(info.uuid, actor);
+            return actor;
+        }
+
+        this.levelInfoActor = create(this.levelInfo);
+        const records = this.scriptVM.getLibrary().levelActors;
+
+        this.arrLevelActors.length = records.length;
+        this.arrLevelActorRecords.push(...records);
+        for (let index = 0; index < records.length; index++) {
+            if (records[index]) this.cacheLevelActorIndices.set(records[index].uuid, index);
+            else this.arrLevelActors[index] = null;
+        }
+        this.scriptVM.setLevelInfo(this.levelInfoActor);
+        setLevelActors(this.levelInfoActor, this);
+        for (const zone of this.bspZones) this.zoneInfoActors.push(create(zone.zoneInfo));
+        for (const actor of actors.values()) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
+        if (this.levelInfo.physicsVolume) {
+            const volume = new PhysicsVolume(this.levelInfo.physicsVolume, this.cacheLevelActorIndices.has(this.levelInfo.physicsVolume.uuid));
+            setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
+            setScriptObjectProperty(volume, "bNoDelete", true);
+            setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
+            volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+        } else if (this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume")) {
+            throw new Error(`Level '${this.levelInfo.name}' has an unresolved PhysicsVolume.`);
+        }
+        for (const actor of actors.values()) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+    }
+
+    public releaseZoneInfoActors(): void {
+        if (this.levelInfoActor) {
+            const volume = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+            if (volume) volume.release(false);
+            setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", null);
+        }
+
+        const actors = new Set(this.zoneInfoActors);
+        if (this.levelInfoActor) actors.add(this.levelInfoActor);
+        for (const actor of actors) actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        this.zoneInfoActors.length = 0;
+        this.levelInfoActor = null;
+    }
+
+    public getDefaultPhysicsVolume(): PhysicsVolume {
+        this.createZoneInfoActors();
+        const cached = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        if (cached) return cached;
+
+        const info: PhysicsVolumeDecodeInfo_T = { uuid: `${this.levelInfoActor.actorUuid}.DefaultPhysicsVolume`, type: "PhysicsVolume", name: "DefaultPhysicsVolume", objectPath: "Engine.DefaultPhysicsVolume", scriptClassId: "engine.DefaultPhysicsVolume", scriptProperties: {}, bsp: null };
+        this.scriptVM.initializeHost(info as any);
+        const volume = new PhysicsVolume(info);
+        setScriptObjectProperty(volume, "Level", this.levelInfoActor as any);
+        volume.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+        setScriptObjectProperty(this.levelInfoActor, "PhysicsVolume", volume as any);
+        setScriptObjectProperty(volume, "Priority", -1e6);
+        setScriptObjectProperty(volume, "bNoDelete", true);
+        return volume;
+    }
+
+    public createPhysicsVolumeActors(): void {
+        if (this.physicsVolumeActors.length || !this.physicsVolumes.length) return;
+        if (!this.physicsVolumeObjectFactory) throw new Error(`Sector '${this.name}' has no physics volume script runtime.`);
+
+        const cached = this.levelInfoActor.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        for (const info of this.physicsVolumes) this.physicsVolumeActors.push(cached && cached.actorUuid === info.uuid ? cached : new PhysicsVolume(info));
+        for (const actor of this.physicsVolumeActors) setScriptObjectProperty(actor, "Level", this.levelInfoActor as any);
+        for (const actor of this.physicsVolumeActors) actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+    }
+
+    public releasePhysicsVolumeActors(): void {
+        for (const actor of this.physicsVolumeActors) actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        this.physicsVolumeActors.length = 0;
+    }
+
+    public createMusicVolumeActors(): void {
+        if (this.musicVolumeActors.length || !this.musicVolumeInfos.length) return;
+
+        for (const info of this.musicVolumeInfos) {
+            if (!info.scriptClassId || !info.scriptProperties) throw new Error(`Volume '${info.name}' has no decoded script data.`);
+
+            const actor = new MusicVolume(info);
+            actor.setUnrealScriptProperty("Level", this.levelInfoActor);
+            actor.setScriptRuntime(this.scriptVM, this.physicsVolumeObjectFactory, false);
+            this.musicVolumeActors.push(actor);
+        }
+    }
+
+    public releaseMusicVolumeActors(): void {
+        for (const actor of this.musicVolumeActors) actor.release(!actor.getUnrealScriptProperty("bStatic") && !actor.getUnrealScriptProperty("bNoDelete"));
+        this.musicVolumeActors.length = 0;
+    }
 
     public setLights(lights: DynamicLight[]): this {
         for (const light of lights) {
+            const index = this.lightList.length;
+
             this.lights[light.name] = light;
             this.lightList.push(light);
+
+            if (light.isSunlight || light.isDynamic) this.arrSunAndDynamicLightIndices.push(index);
+            if (this.cacheLightIndicesByName.has(light.name)) this.cacheLightIndicesByName.get(light.name)!.push(index);
+            else this.cacheLightIndicesByName.set(light.name, [index]);
         }
 
         return this;
@@ -263,31 +635,80 @@ export class SectorObject extends GameObject {
         return entry.uri;
     }
 
-    // GetRelevantLights, UnRenderVisibility.cpp line 439: Consider only contains zone-relevant lights.
-    public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean): DynamicLight[] {
+    public getPermeatingLights(bounds: Box3, target: string[], forcedRegionTag: string = "None", forcedRegion: number = 0): string[] {
+        this.boxLeafIndices(bounds, arrLightLeaves, forcedRegionTag, forcedRegion);
         target.length = 0;
 
-        for (const light of this.lightList) {
-            if (light.isSunlight && !allowSunlight) continue;
+        for (const index of arrLightLeaves)
+            for (const name of this.bspLeaves[index].permeatingLights) if (!target.includes(name)) target.push(name);
 
-            const key = light.getSortKey(position, radius);
+        return target;
+    }
 
-            if (key <= 0) continue;
-            if (target.length === maxLights && key <= arrLightSortKeys[maxLights - 1]) continue;
+    public boxLeafIndices(bounds: Box3, target: number[], forcedRegionTag: string = "None", forcedRegion: number = 0): number[] {
+        target.length = 0;
+        arrLightNodes.length = 0;
+        if (!this.bspNodes.length) return target;
 
-            let index = Math.min(target.length, maxLights - 1);
+        bounds.getCenter(tmpLightCenter);
+        bounds.getSize(tmpLightExtent).multiplyScalar(0.5);
+        const tag = forcedRegionTag.toLowerCase();
+        arrLightNodes.push(0);
 
-            while (index > 0 && arrLightSortKeys[index - 1] < key) {
-                target[index] = target[index - 1];
-                arrLightSortKeys[index] = arrLightSortKeys[index - 1];
-                index--;
+        while (arrLightNodes.length) {
+            const node = this.bspNodes[arrLightNodes.pop()], plane = node.plane;
+            const distance = tmpLightCenter.x * plane.x + tmpLightCenter.y * plane.y + tmpLightCenter.z * plane.z - plane.w;
+            const pushOut = Math.abs(tmpLightExtent.x * plane.x) + Math.abs(tmpLightExtent.y * plane.y) + Math.abs(tmpLightExtent.z * plane.z);
+
+            for (let side = 0; side < 2; side++) {
+                if ((side ? -distance : distance) >= pushOut) continue;
+                const child = side ? node.front : node.back;
+                if (child >= 0) {
+                    arrLightNodes.push(child);
+                    continue;
+                }
+                if (node.leaves[side] < 0) continue;
+                const leaf = this.bspLeaves[node.leaves[side]];
+                if (tag === "none") {
+                    if (forcedRegion && leaf.zone !== forcedRegion) continue;
+                } else if (this.bspZones[leaf.zone].zoneInfo.scriptProperties.ZoneTag.toLowerCase() !== tag) continue;
+
+                target.push(node.leaves[side]);
             }
-
-            target[index] = light;
-            arrLightSortKeys[index] = key;
-
-            if (target.length > maxLights) target.length = maxLights;
         }
+
+        return target;
+    }
+
+    public getSunLight(): DynamicLight | null {
+        for (const index of this.arrSunAndDynamicLightIndices)
+            if (this.lightList[index].lightMethod === "Sunlight") return this.lightList[index];
+
+        return null;
+    }
+
+    // GetRelevantLights, UnRenderVisibility.cpp line 439: Consider only contains zone-relevant lights.
+    public getRelevantLights(position: THREE.Vector3, radius: number, target: DynamicLight[], maxLights: number, allowSunlight: boolean, permeatingLights: string[] = null, isSpecialLit: boolean = false): DynamicLight[] {
+        target.length = 0;
+
+        if (!permeatingLights) {
+            for (const light of this.lightList) considerLight(light, position, radius, target, maxLights, allowSunlight, isSpecialLit);
+
+            return target;
+        }
+
+        arrLightCandidates.length = 0; // Consider = leaf permeating lights only, never the zone list (sub_919BA0 0x919de0..0x919fe4)
+        for (const index of this.arrSunAndDynamicLightIndices) arrLightCandidates.push(index);
+        for (const name of permeatingLights) {
+            const indices = this.cacheLightIndicesByName.get(name);
+
+            if (indices) for (const index of indices) arrLightCandidates.push(index);
+        }
+
+        arrLightCandidates.sort((a, b) => a - b);
+
+        for (let i = 0, len = arrLightCandidates.length; i < len; i++)
+            if (i === 0 || arrLightCandidates[i] !== arrLightCandidates[i - 1]) considerLight(this.lightList[arrLightCandidates[i]], position, radius, target, maxLights, allowSunlight, isSpecialLit);
 
         return target;
     }
@@ -306,6 +727,7 @@ export class SectorObject extends GameObject {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
         this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
+        this.invalidateDoorPortals();
 
         let outdoorMask = 1n << 0n;
 
@@ -316,6 +738,27 @@ export class SectorObject extends GameObject {
         if (outdoorMask === (1n << 0n)) outdoorMask |= 1n << 1n;
 
         this.outdoorZoneMask = outdoorMask;
+    }
+
+    public invalidateDoorPortals(): void {
+        this.doorPortalsDirty = true;
+        this.visibilityCacheInitialized = false;
+    }
+
+    protected updateDoorPortals(): void {
+        if (!this.doorPortalsDirty) return;
+
+        const doors: MovableObject[] = [];
+        this.traverse(object => {
+            const door = object as MovableObject;
+
+            if (door.isMovableObject && door.isServerControlled() && !door.getUnrealScriptProperty("bInterpolating")) doors.push(door);
+        });
+        this.blockedDoorPortals.clear();
+        for (let i = 0; i < this.bspNodes.length; i++)
+            if (isPortalBlocked(this.bspNodes[i], doors)) this.blockedDoorPortals.add(i);
+
+        this.doorPortalsDirty = false;
     }
 
     protected cacheSectionZoneAmbient = new Map<number, ColorByte | null>();
@@ -348,6 +791,28 @@ export class SectorObject extends GameObject {
         const color = r || g || b ? new ColorByte(r >> 1, g >> 1, b >> 1) : null;
         this.cacheSectionZoneAmbient.set(sectionIndex, color);
         return color;
+    }
+
+    public pointRegion(position: THREE.Vector3) {
+        if (!this.levelInfoActor) throw new Error(`Sector '${this.name}' has no LevelInfo.`);
+        if (this.bspNodes.length === 0) return { Zone: this.levelInfoActor, iLeaf: -1, ZoneNumber: 0 };
+
+        const x = Math.fround(position.x), y = Math.fround(position.y), z = Math.fround(position.z);
+        let index = 0;
+
+        while (true) {
+            const node = this.bspNodes[index], plane = node.plane;
+            const side = y * plane.y + z * plane.z + x * plane.x - plane.w >= 0 ? 1 : 0;
+            const child = side ? node.front : node.back;
+
+            if (child >= 0) {
+                index = child;
+                continue;
+            }
+
+            const zone = this.bspZones.length ? node.zones[side] : 0;
+            return { Zone: this.zoneInfoActors[zone] || this.levelInfoActor, iLeaf: node.leaves[side], ZoneNumber: zone };
+        }
     }
 
     public findPositionZone(position: THREE.Vector3) {
@@ -410,7 +875,7 @@ export class SectorObject extends GameObject {
 
     public setSun(sunMaterial: any) { this.sunTexture = sunMaterial; }
 
-    public getMusicIdAt(cameraPosition: THREE.Vector3): { musicId: number | null, isLooped: boolean, isForced: boolean } {
+    public getMusicIdAt(position: THREE.Vector3): { musicId: number | null, isLooped: boolean, isForced: boolean } {
         let highestPriority = -Infinity;
         let selectedMusicId: number | null = null;
         let isLooped = false, isForced = false;
@@ -418,7 +883,7 @@ export class SectorObject extends GameObject {
         if (this.musicVolumes) {
             for (const vol of this.musicVolumes) {
                 if (vol.priority <= highestPriority) continue; // seems that it's first match, previous implementation used order in which export table was created this made it seem like its working fine but after it was changed to use from level it caused a regression i didn't notce until now
-                if (!encompassesVolume(cameraPosition, vol.bsp)) continue;
+                if (!encompassesVolume(position, vol.bsp)) continue;
 
                 highestPriority = vol.priority;
                 selectedMusicId = vol.musicId;
@@ -443,38 +908,12 @@ export class SectorObject extends GameObject {
         return selected;
     }
 
-    public getActiveZoneMask(cameraPosition: THREE.Vector3): bigint {
+    public getActiveZoneMask(cameraPosition: THREE.Vector3, leafIndex?: number | null): bigint {
         if (this.bspNodes.length === 0 || !this.bspLeaves) {
             return (1n << 64n) - 1n;
         }
 
-        const findZonePosition = tmpVec4.set(cameraPosition.x, cameraPosition.y, cameraPosition.z, -1);
-        let nodeIndex = 0;
-        let leafIndex: number | null = null;
-        let node: BSPNodeData;
-
-        while (true) {
-            node = this.bspNodes[nodeIndex];
-            const plane = node.plane;
-            const side = findZonePosition.dot(plane);
-
-            if (node.front >= 0 && side >= 0) {
-                nodeIndex = node.front;
-            } else if (node.back >= 0 && side <= 0) {
-                nodeIndex = node.back;
-            } else {
-                const candidateLeaf = side >= 0 ? node.leaves[1] : node.leaves[0];
-                if (candidateLeaf >= 0 && candidateLeaf < this.bspLeaves.length) {
-                    leafIndex = candidateLeaf;
-                } else {
-                    const fallbackLeaf = side >= 0 ? node.leaves[0] : node.leaves[1];
-                    if (fallbackLeaf >= 0 && fallbackLeaf < this.bspLeaves.length) {
-                        leafIndex = fallbackLeaf;
-                    }
-                }
-                break;
-            }
-        }
+        if (leafIndex === undefined) leafIndex = this.findPositionLeaf(cameraPosition);
 
         const cameraZone = leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length
             ? this.bspLeaves[leafIndex].zone
@@ -523,6 +962,7 @@ export class SectorObject extends GameObject {
         leafOnlyMode: boolean = false,
         topLevelOnly: boolean = false
     ): { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> } {
+        this.updateDoorPortals();
         const visibleNodes = new Set<number>();
         const visibleLeaves = new Set<number>();
 
@@ -583,20 +1023,16 @@ export class SectorObject extends GameObject {
 
         const zoneDepthMap = new Map<number, number>();
         const zonesAddedThroughPortals = new Set<number>();
-        for (let i = 0; i < 64; i++) {
-            if (currentZoneMask & (1n << BigInt(i))) {
-                zoneDepthMap.set(i, recursionDepth);
-            }
-        }
+        const nodeStack = this.arrBSPStack;
+        let stackCount = 1;
+        nodeStack[0] = 0;
 
-        const nodeStack: { nodeIndex: number; pass: "front" | "plane" }[] = [];
-        nodeStack.push({ nodeIndex: 0, pass: "front" });
-
-        while (nodeStack.length > 0) {
-            const { nodeIndex, pass } = nodeStack.pop()!;
+        while (stackCount > 0) {
+            const entry = nodeStack[--stackCount];
+            const nodeIndex = entry >= 0 ? entry : -entry - 1;
             const node = this.bspNodes[nodeIndex];
 
-            if (pass === "front") {
+            if (entry >= 0) {
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
                 if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
                     if (!(nodeZoneMask & currentZoneMask)) {
@@ -609,31 +1045,17 @@ export class SectorObject extends GameObject {
                 if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
                     const renderBound = library.bspRenderBounds[node.iRenderBound];
                     if (renderBound && renderBound.isValid) {
-                        let boxVisible = false;
-                        for (let zoneIndex = 0; zoneIndex < 64; zoneIndex++) {
-                            const zoneBit = 1n << BigInt(zoneIndex);
-                            if (currentZoneMask & zoneBit) {
-                                if (nodeZoneMask && (nodeZoneMask & zoneBit)) {
-                                    const box = new Box3(
-                                        new Vector3(...renderBound.min),
-                                        new Vector3(...renderBound.max)
-                                    );
-                                    if (!frustumCullingEnabled || cameraFrustum.intersectsBox(box)) {
-                                        boxVisible = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (!boxVisible) {
-                            continue;
+                        if (!nodeZoneMask || !(nodeZoneMask & currentZoneMask)) continue;
+                        if (frustumCullingEnabled) {
+                            tmpActorBox.min.fromArray(renderBound.min);
+                            tmpActorBox.max.fromArray(renderBound.max);
+                            if (!cameraFrustum.intersectsBox(tmpActorBox)) continue;
                         }
                     }
                 }
 
                 const planeDot = cameraPos.dot(node.plane);
-                const isFront = planeDot >= 0;
+                const isFront = planeDot > 0;
 
                 const farChild = isFront ? node.back : node.front;
                 const nearChild = isFront ? node.front : node.back;
@@ -642,7 +1064,7 @@ export class SectorObject extends GameObject {
                 const nearLeafIndex = isFront ? node.leaves[1] : node.leaves[0];
 
                 if (farChild >= 0) {
-                    nodeStack.push({ nodeIndex: farChild, pass: "front" });
+                    nodeStack[stackCount++] = farChild;
                 } else {
                     if (farLeafIndex >= 0 && farLeafIndex < (this.bspLeaves?.length || 0)) {
                         const leaf = this.bspLeaves[farLeafIndex];
@@ -652,10 +1074,10 @@ export class SectorObject extends GameObject {
                     }
                 }
 
-                nodeStack.push({ nodeIndex: nodeIndex, pass: "plane" });
+                nodeStack[stackCount++] = -nodeIndex - 1;
 
                 if (nearChild >= 0) {
-                    nodeStack.push({ nodeIndex: nearChild, pass: "front" });
+                    nodeStack[stackCount++] = nearChild;
                 } else {
                     if (nearLeafIndex >= 0 && nearLeafIndex < (this.bspLeaves?.length || 0)) {
                         const leaf = this.bspLeaves[nearLeafIndex];
@@ -679,7 +1101,7 @@ export class SectorObject extends GameObject {
 
                     if (hasViewZone && hasPortalFlag && nodeZone0 >= 0 && nodeZone1 >= 0 && nodeZone0 !== nodeZone1) {
                         const planeDot = cameraPos.dot(currentNode.plane);
-                        const isFront = planeDot >= 0;
+                        const isFront = planeDot > 0;
 
                         const currentZone = isFront ? nodeZone1 : nodeZone0;
                         const oppositeZone = isFront ? nodeZone0 : nodeZone1;
@@ -691,8 +1113,11 @@ export class SectorObject extends GameObject {
                         const portalSphere = currentNode.exclusiveSphereBound;
                         const portalDistance = cameraPosition.distanceTo(portalSphere.center);
                         const isPortalInRange = portalDistance <= (PORTAL_MAX_DISTANCE + portalSphere.radius);
+                        // shortcut: retain indoor-to-outdoor visibility until indoor BSP boundary visibility is verified.
+                        const isDoorOccluded = !!(currentZoneBit & this.outdoorZoneMask) && !(this.outdoorZoneMask & (1n << BigInt(oppositeZone))) && this.blockedDoorPortals.has(current) && Math.abs(planeDot) > portalSphere.radius;
 
                         const portalVisible = isCurrentZoneActive &&
+                            !isDoorOccluded &&
                             isPortalInRange &&
                             (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
@@ -739,21 +1164,14 @@ export class SectorObject extends GameObject {
             }
         }
 
-        const filteredVisibleLeaves = new Set<number>();
         for (const leafIndex of visibleLeaves) {
-            if (leafIndex >= 0 && leafIndex < (this.bspLeaves?.length || 0)) {
-                const leaf = this.bspLeaves[leafIndex];
-                if (leaf && leaf.zone >= 0) {
-                    const leafZoneBit = 1n << BigInt(leaf.zone);
-                    const isZoneInMask = !!(leafZoneBit & currentZoneMask);
-
-                    if (isZoneInMask) filteredVisibleLeaves.add(leafIndex);
-                }
-            }
+            const leaf = this.bspLeaves[leafIndex];
+            if (!leaf || leaf.zone < 0 || !(currentZoneMask & (1n << BigInt(leaf.zone))))
+                visibleLeaves.delete(leafIndex);
         }
 
         this.lastZoneMask = currentZoneMask;
-        return { visibleNodes, visibleLeaves: filteredVisibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
+        return { visibleNodes, visibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
     }
 
 
@@ -768,10 +1186,10 @@ export class SectorObject extends GameObject {
 
         const leafOnlyMode = !isCameraInSector;
 
-        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition, cameraLeaf);
 
         let currentZone: number | null = null;
-        const leafIndex = this.findPositionLeaf(cameraPosition);
+        const leafIndex = cameraLeaf;
         if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
             currentZone = this.bspLeaves[leafIndex].zone;
         }
@@ -779,19 +1197,19 @@ export class SectorObject extends GameObject {
             currentZone = this.findPositionZone(cameraPosition);
         }
 
-        const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
-        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
+        const zoneChanged = currentZone !== null && currentZone >= 0 && (this.lastLoggedZone === null || this.lastLoggedZone !== currentZone);
+        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this.lastLoggedLeaf === null || this.lastLoggedLeaf !== leafIndex);
 
         if (zoneChanged || leafChanged) {
             if (zoneChanged) {
-                const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
+                const previousZone = this.lastLoggedZone !== null ? this.lastLoggedZone : "unknown";
                 console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
-                this._lastLoggedZone = currentZone;
+                this.lastLoggedZone = currentZone;
             }
             if (leafChanged) {
-                const previousLeaf = this._lastLoggedLeaf !== null ? this._lastLoggedLeaf : "unknown";
+                const previousLeaf = this.lastLoggedLeaf !== null ? this.lastLoggedLeaf : "unknown";
                 console.log(`[Leaf Change] Leaf: ${previousLeaf} -> ${leafIndex}`);
-                this._lastLoggedLeaf = leafIndex;
+                this.lastLoggedLeaf = leafIndex;
             }
         }
 
@@ -833,21 +1251,21 @@ export class SectorObject extends GameObject {
         }
     }
 
-    protected _animatedLights?: DynamicLight[];
-    protected _lastLightEnvVersion = -1;
+    protected animatedLights?: DynamicLight[];
+    protected lastLightEnvVersion = -1;
 
     protected updateLights(environment: L2Environment) {
         const envVersion = environment.getEnvVersion();
 
-        if (this._lastLightEnvVersion !== envVersion || !this._animatedLights) {
-            this._lastLightEnvVersion = envVersion;
-            this._animatedLights = [];
+        if (this.lastLightEnvVersion !== envVersion || !this.animatedLights) {
+            this.lastLightEnvVersion = envVersion;
+            this.animatedLights = [];
 
             for (const light of Object.values(this.lights)) {
                 light.update(environment, this.brightness);
 
                 if (light.isDynamic || light.isTimeBased) {
-                    this._animatedLights.push(light);
+                    this.animatedLights.push(light);
                 } else {
                     light.needsUpdate = false;
                 }
@@ -855,7 +1273,7 @@ export class SectorObject extends GameObject {
             return;
         }
 
-        for (const light of this._animatedLights) light.update(environment, this.brightness);
+        for (const light of this.animatedLights) light.update(environment, this.brightness);
     }
 
     protected isVisibilityCacheValid(environment: L2Environment, cameraPosition: Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean, topLevelOnly: boolean, staticMeshCullDistanceSq: number, emitterCullDistanceSq: number) {
@@ -900,8 +1318,115 @@ export class SectorObject extends GameObject {
         return false;
     }
 
-    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity) {
-        this.updateLights(environment);
+    public setSortTransparent(enabled: boolean) {
+        if (this.sortTransparent === enabled) return;
+
+        this.sortTransparent = enabled;
+        this.visibilityCacheInitialized = false;
+        if (this.staticMeshGroup) this.staticMeshGroup.traverse(object => {
+            const mesh = object as LitActorMesh;
+            if (!mesh.sortedIndexBuffers) return;
+
+            if (mesh.elemVisibility) mesh.elemVisibility.fill(2);
+            if (!enabled) mesh.sortedIndexBuffers.forEach(buffer => buffer.dispose());
+        });
+    }
+
+    public setRenderDeco(enabled: boolean) {
+        if (this.renderDeco === enabled) return;
+
+        this.renderDeco = enabled;
+        this.visibilityCacheInitialized = false;
+    }
+
+    public getTranslucentBSP() {
+        if (this.arrTranslucentBSP) return this.arrTranslucentBSP;
+
+        this.arrTranslucentBSP = [];
+        for (const child of this.bspGroup.children as THREE.Mesh[]) {
+            if ((child as any).priority !== "transparent" || !child.geometry.index) continue;
+
+            const index = child.geometry.index, source = (index.array as Uint16Array).slice(), nodeAttr = child.geometry.getAttribute("nodeIndex").array as Uint32Array;
+            const nodes: number[] = [], starts: number[] = [], counts: number[] = [];
+
+            for (let i = 0; i < source.length; i += 3) {
+                const node = nodeAttr[source[i]];
+
+                if (nodes.length && nodes[nodes.length - 1] === node) counts[counts.length - 1] += 3;
+                else { nodes.push(node); starts.push(i); counts.push(3); }
+            }
+
+            const order = new Int32Array(nodes.length);
+
+            for (let i = 0; i < order.length; i++) order[i] = i;
+            this.arrTranslucentBSP.push({ mesh: child, source, nodes: Int32Array.from(nodes), starts: Uint32Array.from(starts), counts: Uint32Array.from(counts), order, previous: order.slice() });
+        }
+
+        return this.arrTranslucentBSP;
+    }
+
+    public sortTranslucentBSP(cameraPosition: THREE.Vector3) { // Engine 0x1064d596: translucent nodes are prepended during the front-to-back walk, so 0x106523ec draws them back to front
+        const sections = this.getTranslucentBSP();
+        let hasVisible = false;
+
+        for (const section of sections) if (section.mesh.visible) { hasVisible = true; break; }
+        if (!hasVisible || !this.bspNodes.length) return;
+
+        const nodes = this.bspNodes, ranks = this.arrBSPRanks || (this.arrBSPRanks = new Int32Array(nodes.length));
+        const x = cameraPosition.x, y = cameraPosition.y, z = cameraPosition.z;
+        let top = 0, rank = 0;
+
+        arrBSPStack[top++] = 0;
+        while (top > 0) {
+            const entry = arrBSPStack[--top];
+
+            if (entry < 0) {
+                let lastRank = rank;
+                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) lastRank++;
+                rank = lastRank;
+                for (let coplanar = ~entry; coplanar >= 0; coplanar = nodes[coplanar].iPlane) ranks[coplanar] = --lastRank;
+                continue;
+            }
+
+            const node = nodes[entry], plane = node.plane;
+            const isFront = x * plane.x + y * plane.y + z * plane.z - plane.w > 0;
+            const near = isFront ? node.front : node.back, far = isFront ? node.back : node.front;
+
+            if (top + 3 > arrBSPStack.length) { const grown = new Int32Array(arrBSPStack.length * 2); grown.set(arrBSPStack); arrBSPStack = grown; }
+            if (near >= 0) arrBSPStack[top++] = near;
+            arrBSPStack[top++] = ~entry;
+            if (far >= 0) arrBSPStack[top++] = far;
+        }
+
+        for (const section of sections) {
+            if (!section.mesh.visible) continue;
+
+            const { order, previous, nodes: sectionNodes } = section;
+
+            order.sort((a, b) => ranks[sectionNodes[a]] - ranks[sectionNodes[b]]);
+
+            let isChanged = false;
+
+            for (let i = 0; i < order.length; i++) if (order[i] !== previous[i]) { isChanged = true; break; }
+            if (!isChanged) continue;
+
+            const index = section.mesh.geometry.index, target = index.array as Uint16Array;
+            let offset = 0;
+
+            for (let i = 0; i < order.length; i++) {
+                const block = order[i], start = section.starts[block], count = section.counts[block];
+
+                target.set(section.source.subarray(start, start + count), offset);
+                offset += count;
+            }
+
+            previous.set(order);
+            index.needsUpdate = true;
+        }
+    }
+
+    public updateVisibility(environment: L2Environment, cameraPosition: THREE.Vector3, cameraFrustum: THREE.Frustum, frustumCullingEnabled: boolean = true, topLevelOnly: boolean = false, staticMeshCullDistanceSq: number = Infinity, emitterCullDistanceSq: number = Infinity, auxiliary = false) {
+        if (!auxiliary) this.updateLights(environment);
 
         if (this.isVisibilityCacheValid(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, topLevelOnly, staticMeshCullDistanceSq, emitterCullDistanceSq)) return;
 
@@ -918,10 +1443,10 @@ export class SectorObject extends GameObject {
         this.helpers.visible = isCameraInSector;
 
         const leafOnlyMode = !isCameraInSector;
-        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition, cameraLeaf);
 
         let currentZone: number | null = null;
-        const leafIndex = this.findPositionLeaf(cameraPosition);
+        const leafIndex = cameraLeaf;
         if (leafIndex !== null && leafIndex >= 0 && leafIndex < this.bspLeaves.length) {
             currentZone = this.bspLeaves[leafIndex].zone;
         }
@@ -929,19 +1454,19 @@ export class SectorObject extends GameObject {
             currentZone = this.findPositionZone(cameraPosition);
         }
 
-        const zoneChanged = currentZone !== null && currentZone >= 0 && (this._lastLoggedZone === null || this._lastLoggedZone !== currentZone);
-        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this._lastLoggedLeaf === null || this._lastLoggedLeaf !== leafIndex);
+        const zoneChanged = currentZone !== null && currentZone >= 0 && (this.lastLoggedZone === null || this.lastLoggedZone !== currentZone);
+        const leafChanged = leafIndex !== null && leafIndex >= 0 && (this.lastLoggedLeaf === null || this.lastLoggedLeaf !== leafIndex);
 
-        if (zoneChanged || leafChanged) {
+        if (!auxiliary && (zoneChanged || leafChanged)) {
             if (zoneChanged) {
-                const previousZone = this._lastLoggedZone !== null ? this._lastLoggedZone : "unknown";
+                const previousZone = this.lastLoggedZone !== null ? this.lastLoggedZone : "unknown";
                 console.log(`[Zone Change] Zone: ${previousZone} -> ${currentZone}`);
-                this._lastLoggedZone = currentZone;
+                this.lastLoggedZone = currentZone;
             }
             if (leafChanged) {
-                const previousLeaf = this._lastLoggedLeaf !== null ? this._lastLoggedLeaf : "unknown";
+                const previousLeaf = this.lastLoggedLeaf !== null ? this.lastLoggedLeaf : "unknown";
                 console.log(`[Leaf Change] Leaf: ${previousLeaf} -> ${leafIndex}`);
-                this._lastLoggedLeaf = leafIndex;
+                this.lastLoggedLeaf = leafIndex;
             }
         }
 
@@ -967,10 +1492,12 @@ export class SectorObject extends GameObject {
             });
             let visibleMeshCount = 0;
             let bspAmbientColor: ColorByte | null = null;
+            let bspLightmapColor: ColorByte | null = null;
             if (environment) {
                 bspAmbientColor = environment.getAmbientPlaneBSPLightHalved(tmpColorByte);
                 const sunColor = environment.getBaseColorPlaneBSPSunLightScaled(tmpColorByte2);
                 bspAmbientColor.set(bspAmbientColor.r + sunColor.r, bspAmbientColor.g + sunColor.g, bspAmbientColor.b + sunColor.b, bspAmbientColor.a);
+                bspLightmapColor = environment.getAmbientPlaneBSPLight(tmpColorByte2);
             }
 
             let outdoorCount = 0, indoorCount = 0;
@@ -998,14 +1525,22 @@ export class SectorObject extends GameObject {
                         const sectionZoneAmbient = isOutdoor ? null : this.getSectionZoneAmbient(sectionIndex);
 
                         const applyAmbient = (m: any) => {
+                            if (m.updateLightmap) m.updateLightmap(isOutdoor && environment ? environment.getTimeOfDay() : 0);
                             if (m?.uniforms?.ambient?.value?.color) {
-                                if (isOutdoor && bspAmbientColor && !hasLightmap(m)) {
+                                if (isOutdoor && bspLightmapColor && hasLightmap(m) && !sectionInfo.isUnlit) {
+                                    bspLightmapColor.toFloats(m.uniforms.ambient.value.color);
+                                    if (m.defines.USE_BSP_AMBIENT === undefined) {
+                                        m.defines.USE_BSP_AMBIENT = "";
+                                        m.defines.USE_AMBIENT = "";
+                                        m.needsUpdate = true;
+                                    }
+                                } else if (isOutdoor && bspAmbientColor && !hasLightmap(m)) {
                                     bspAmbientColor.toFloats(m.uniforms.ambient.value.color);
                                     if (m.defines && m.defines.USE_AMBIENT === undefined) {
                                         m.defines.USE_AMBIENT = "";
                                         m.needsUpdate = true;
                                     }
-                                } else if (sectionZoneAmbient) {
+                                } else if (sectionZoneAmbient && !hasLightmap(m)) {
                                     sectionZoneAmbient.toFloats(m.uniforms.ambient.value.color);
                                     if (m.defines && m.defines.USE_AMBIENT === undefined) {
                                         m.defines.USE_AMBIENT = "";
@@ -1031,9 +1566,11 @@ export class SectorObject extends GameObject {
                 }
             });
 
-            if (zoneChanged && bspAmbientColor) {
+            if (!auxiliary && zoneChanged && bspAmbientColor) {
                 console.log(`[BSP Ambient] Outdoor: ${outdoorCount}, Indoor: ${indoorCount}, Color: rgb(${bspAmbientColor.r.toFixed(2)}, ${bspAmbientColor.g.toFixed(2)}, ${bspAmbientColor.b.toFixed(2)})`);
             }
+
+            this.sortTranslucentBSP(cameraPosition);
 
             if (zoneChanged && currentZone !== null && currentZone >= 0) {
                 const finalActiveZones: number[] = [];
@@ -1047,12 +1584,7 @@ export class SectorObject extends GameObject {
         }
 
         if (library && this.staticMeshGroup && this.staticMeshMap.size > 0) {
-            const candidateActorUuids = this.candidateStaticActorUuids;
-            const visibleActorUuids = this.visibleStaticActorUuids;
-            const visibleActorDistances = this.visibleStaticActorDistances;
-            candidateActorUuids.clear();
-            visibleActorUuids.clear();
-            visibleActorDistances.clear();
+            const stamp = ++this.staticVisibilityStamp;
 
             for (const leafIndex of visibleLeaves) {
                 const actors = library.leafActors[leafIndex];
@@ -1060,8 +1592,9 @@ export class SectorObject extends GameObject {
                     for (const actorBase of actors) {
                         if (actorBase.type !== "StaticMeshActor") continue;
                         const actor = actorBase as StaticMeshActorDecodeInfo_T;
-                        if (candidateActorUuids.has(actor.uuid)) continue;
-                        candidateActorUuids.add(actor.uuid);
+                        const actorIndex = this.getStaticActorIndex(actor.uuid);
+                        if (this.staticActorCandidateStamps[actorIndex] === stamp) continue;
+                        this.staticActorCandidateStamps[actorIndex] = stamp;
 
                         tmpActorBox.min.fromArray(actor.bounds.min);
                         tmpActorBox.max.fromArray(actor.bounds.max);
@@ -1075,8 +1608,8 @@ export class SectorObject extends GameObject {
                         const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
 
                         if (isFrustumVisible && isZoneVisible && isInRange) {
-                            visibleActorUuids.add(actor.uuid);
-                            visibleActorDistances.set(actor.uuid, distSq);
+                            this.staticActorVisibleStamps[actorIndex] = stamp;
+                            this.staticActorDistances[actorIndex] = distSq;
                         }
                     }
                 }
@@ -1094,11 +1627,11 @@ export class SectorObject extends GameObject {
                         processedBatches.add(object.uuid);
                     }
 
-                    this.staticMeshVisibilityEntries.push({ object, uuid });
+                    this.staticMeshVisibilityEntries.push({ object, uuid, actorIndex: (object as any).isBatch ? -1 : this.getStaticActorIndex(uuid) });
                 });
             }
 
-            for (const { object, uuid } of this.staticMeshVisibilityEntries) {
+            for (const { object, uuid, actorIndex } of this.staticMeshVisibilityEntries) {
                 if ((object as any).isBatch) {
                     const batchElements = (object as any).batchElements;
                     const geometry = (object as any).geometry;
@@ -1116,15 +1649,22 @@ export class SectorObject extends GameObject {
                     let elemRelight = (object as any).elemRelight as Uint8Array;
                     if (!elemRelight || elemRelight.length !== batchElements.length)
                         elemRelight = (object as any).elemRelight = new Uint8Array(batchElements.length);
+                    let elemActorIndices = (object as any).elemActorIndices as Int32Array;
+                    if (!elemActorIndices || elemActorIndices.length !== batchElements.length) {
+                        elemActorIndices = (object as any).elemActorIndices = new Int32Array(batchElements.length);
+                        for (let ei = 0; ei < batchElements.length; ei++) elemActorIndices[ei] = this.getStaticActorIndex(batchElements[ei].uuid);
+                    }
+                    const candidateStamps = this.staticActorCandidateStamps, visibleStamps = this.staticActorVisibleStamps, actorDistances = this.staticActorDistances;
                     let visibilityChanged = false;
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
                         const elem = batchElements[ei];
+                        const actorIndex = elemActorIndices[ei];
 
-                        let elemVisible = visibleActorUuids.has(elem.uuid);
-                        let distSq = visibleActorDistances.get(elem.uuid) ?? 0;
+                        let elemVisible = visibleStamps[actorIndex] === stamp;
+                        let distSq = elemVisible ? actorDistances[actorIndex] : 0;
 
-                        if (!elemVisible && !candidateActorUuids.has(elem.uuid)) {
+                        if (!elemVisible && candidateStamps[actorIndex] !== stamp) {
                             let inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
                             if (!inVisibleLeaves) {
                                 for (const li of elem.leaves) {
@@ -1156,8 +1696,24 @@ export class SectorObject extends GameObject {
                         }
                     }
 
-                    const transparentSortPosition = (object as any).transparentSortPosition as Vector3;
-                    const sortChanged = !!sortedTransparentMats?.size && (!transparentSortPosition || transparentSortPosition.distanceToSquared(cameraPosition) >= TRANSPARENT_SORT_DISTANCE_SQ);
+                    let sortChanged = false;
+                    const previousGroups = (object as any).visibleBatchGroups as BatchGroup_T[];
+
+                    if (!visibilityChanged && sortedTransparentMats?.size && previousGroups) {
+                        let previousDistance = Infinity, previousMaterial = -1;
+
+                        for (const group of previousGroups) {
+                            if (!group.transparent) continue;
+                            const distance = elemDistances[group.elementIndex];
+
+                            if (distance > previousDistance || distance === previousDistance && group.materialIndex < previousMaterial) {
+                                sortChanged = true;
+                                break;
+                            }
+                            previousDistance = distance;
+                            previousMaterial = group.materialIndex;
+                        }
+                    }
 
                     if (visibilityChanged) (object as any).needsRelightPass = true; // catch up a newly-visible element's dynamic lighting
 
@@ -1176,9 +1732,12 @@ export class SectorObject extends GameObject {
                             const distance = elemDistances[ei];
 
                             for (const g of batchElements[ei].groups) {
-                                let entry = groupPool[groupCount];
-                                if (!entry) entry = groupPool[groupCount] = { start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
+                                if (!g.count) continue;
 
+                                let entry = groupPool[groupCount];
+                                if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
+
+                                entry.elementIndex = ei;
                                 entry.start = g.start;
                                 entry.count = g.count;
                                 entry.materialIndex = g.materialIndex;
@@ -1197,16 +1756,30 @@ export class SectorObject extends GameObject {
                         }
 
                         object.visible = groupCount > 0;
-                        if (sortedTransparentMats?.size) {
-                            if (transparentSortPosition) transparentSortPosition.copy(cameraPosition);
-                            else (object as any).transparentSortPosition = cameraPosition.clone();
+                    }
+
+                    if (this.sortTransparent && object.visible && (object as any).sortedIndexBuffers) {
+                        const mesh = object as LitActorMesh, index = geometry.index;
+                        let offset = 0, changed = false;
+
+                        for (const group of mesh.visibleBatchGroups) {
+                            const sorted = mesh.sortedIndexBuffers.get(group.start);
+                            if (sorted && sorted.apply(index.array as Uint8Array | Uint16Array | Uint32Array, offset, cameraPosition, auxiliary, visibilityChanged || sortChanged)) changed = true;
+                            offset += group.count;
+                        }
+                        if (changed) {
+                            mesh.sortedIndexRange.count = offset;
+                            index.clearUpdateRanges();
+                            index.updateRanges.push(mesh.sortedIndexRange);
+                            index.needsUpdate = true;
+                            for (const group of mesh.batchRenderGroups) group.indexVersion = index.version;
                         }
                     }
 
                     if (object.visible) visibleCount++;
 
                 } else {
-                    let isVisible = visibleActorUuids.has(uuid);
+                    let isVisible = this.staticActorVisibleStamps[actorIndex] === stamp;
 
                     if (!isVisible && (object as any).actorBoundsMin && !isCameraInSector) {
                         tmpActorBox.min.fromArray((object as any).actorBoundsMin);
@@ -1227,9 +1800,9 @@ export class SectorObject extends GameObject {
                 }
             }
 
-            if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
+            if (!auxiliary && leafIndex !== null && leafIndex >= 0 && leafIndex !== this.lastLoggedStaticMeshLeaf) {
                 console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
-                this._lastLoggedStaticMeshLeaf = leafIndex;
+                this.lastLoggedStaticMeshLeaf = leafIndex;
             }
         }
 
@@ -1278,6 +1851,29 @@ export class SectorObject extends GameObject {
 
         const terrainZoneVisible = !frustumCullingEnabled || (finalZoneMask & this.outdoorZoneMask) !== 0n;
         this.updateTerrainSectors(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, terrainZoneVisible);
+    }
+
+    protected getStaticActorIndex(uuid: string): number { // string-keyed sets dominated the per-frame visibility pass while the camera turns
+        let index = this.cacheStaticActorIndices.get(uuid);
+
+        if (index !== undefined) return index;
+
+        index = this.cacheStaticActorIndices.size;
+        this.cacheStaticActorIndices.set(uuid, index);
+
+        if (index >= this.staticActorVisibleStamps.length) {
+            const size = this.staticActorVisibleStamps.length * 2;
+            const candidates = new Uint32Array(size), visible = new Uint32Array(size), distances = new Float64Array(size);
+
+            candidates.set(this.staticActorCandidateStamps);
+            visible.set(this.staticActorVisibleStamps);
+            distances.set(this.staticActorDistances);
+            this.staticActorCandidateStamps = candidates;
+            this.staticActorVisibleStamps = visible;
+            this.staticActorDistances = distances;
+        }
+
+        return index;
     }
 
     protected emitterObjectsByUuid?: Map<string, THREE.Object3D[]>;
@@ -1341,7 +1937,7 @@ export class SectorObject extends GameObject {
                 }
 
                 const decorations = this.terrainRenderables.decorations.get(sector.terrainSegmentUuid);
-                if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible));
+                if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible, this.renderDeco));
             });
 
             if (groupKey === (batch as any).visibleGroupKey) continue;
@@ -1349,10 +1945,7 @@ export class SectorObject extends GameObject {
 
             if (visibleGroups.length > 0) {
                 batch.visible = true;
-                batchGeo.clearGroups();
-                visibleGroups.forEach(g => {
-                    batchGeo.addGroup(g.start, g.count, g.materialIndex);
-                });
+                batchGeo.groups = visibleGroups;
             } else {
                 batch.visible = false;
             }
@@ -1363,7 +1956,7 @@ export class SectorObject extends GameObject {
             if (isVisible) terrain.update?.(this, environment);
 
             const decorations = this.terrainRenderables.decorations.get(terrain.terrainSegmentUuid);
-            if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible));
+            if (decorations) decorations.forEach(decoration => decoration.updateVisibility(cameraPosition, isVisible, this.renderDeco));
         }
     }
 
@@ -1377,7 +1970,7 @@ export class SectorObject extends GameObject {
         this.helpers.visible = isCameraInSector;
 
         const leafOnlyMode = !isCameraInSector;
-        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition);
+        const activeZoneMask = leafOnlyMode ? this.outdoorZoneMask : this.getActiveZoneMask(cameraPosition, cameraLeaf);
 
         const { finalZoneMask, visibleLeaves } = this.traverseBSP(cameraPosition, activeZoneMask, cameraFrustum, frustumCullingEnabled, 0, leafOnlyMode);
 
@@ -1467,9 +2060,9 @@ export class SectorObject extends GameObject {
         });
 
         const leafIndex = this.findPositionLeaf(cameraPosition);
-        if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this._lastLoggedStaticMeshLeaf) {
+        if (leafIndex !== null && leafIndex >= 0 && leafIndex !== this.lastLoggedStaticMeshLeaf) {
             console.log(`leaf #${leafIndex} meshes ${visibleCount}/${this.staticMeshMap.size}`);
-            this._lastLoggedStaticMeshLeaf = leafIndex;
+            this.lastLoggedStaticMeshLeaf = leafIndex;
         }
     }
 }
@@ -1495,6 +2088,7 @@ class BSPZoneData {
 class BSPLeafData {
     public zone: number
     public permiating: number
+    public permeatingLights: string[]
     public volumetric: number
     public visibleZones: bigint
     public musicId?: number
@@ -1506,6 +2100,7 @@ class BSPLeafData {
 
         leaf.zone = info.zone;
         leaf.permiating = info.permiating;
+        leaf.permeatingLights = info.permeatingLights;
         leaf.volumetric = info.volumetric;
         leaf.visibleZones = info.visibleZones;
         leaf.musicId = info.musicId;
@@ -1515,6 +2110,7 @@ class BSPLeafData {
 }
 
 class BSPNodeData {
+    public portalVertices?: number[];
     public back: number;
     public front: number;
     public iPlane: number; // Index to next coplanar node (UE2 line 1472-1473)
@@ -1536,6 +2132,7 @@ class BSPNodeData {
         node.iPlane = info.iPlane !== undefined ? info.iPlane : -1;
 
         node.plane.fromArray(info.plane);
+        node.portalVertices = info.portalVertices;
 
         node.leaves[0] = info.leaves[0];
         node.leaves[1] = info.leaves[1];

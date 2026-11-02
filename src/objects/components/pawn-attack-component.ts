@@ -1,8 +1,8 @@
-import { Object3D, Vector3 } from "three";
+import { Matrix4, Object3D, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, ObjectComponent, type IObject } from "../../game/components";
-import { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
-import { getPawnRotation } from "../../utils/rotator";
-import SoundComponent from "../../audio/components/sound-component";
+import SoundComponent, { ANIMATION_NOTIFY_EVENT } from "../../audio/components/sound-component";
+import Rotator, { getPawnRotation } from "../../utils/rotator";
+import type ActorMeshComponent from "../../rendering/components/actor-mesh-component";
 import SkillVisualEffect, { type SkillCast_T } from "@l2js/engine/skills/skill-visual-effect";
 import { getSkillHitTimeOffset, getSkillPreviewListTarget } from "@l2js/engine/skills/skill-visual-definition";
 import SkillEffectHost from "./skill-effect-host";
@@ -13,7 +13,7 @@ import type RenderManager from "../../rendering/render-manager";
 import type AnimationComponent from "./animation-component";
 import type { ScriptComponent } from "../../game/script-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
-import type { NpcSkillAttack_T, NpcSkillEffectPhase_T } from "@l2js/engine/contracts/pawn";
+import type { NpcSkillAttack_T, NpcSkillEffectPhase_T, INpcBowDecodeInfo } from "@l2js/engine/contracts/pawn";
 
 const ATTACK_RANGE_PADDING = 20;
 const arrPhysicalAnimations = ["atk01", "atk02", "atk03"];
@@ -21,14 +21,29 @@ const tmpNpcPosition = new Vector3();
 const tmpTargetPosition = new Vector3();
 const tmpEffectPosition = new Vector3();
 const tmpAttackDirection = new Vector3();
+const tmpArrowWorld = new Matrix4();
+const tmpArrowRelative = new Matrix4();
+const tmpArrowRotation = new Rotator();
 
 export type PawnAttack_T = {
     label: string;
     animation: string;
+    rate: number;
     skill: NpcSkillAttack_T | null;
 };
 
 export type PawnAttackSelection_T = number | "random";
+
+export type NAttackActionParam_T = {
+    targetObjectId: number;
+    actionTarget: BaseActor;
+    damage: number;
+    isMiss: boolean;
+    isCritical: boolean;
+    isShieldDefense: boolean;
+    isSpirit: boolean;
+    soulshotGrade: number;
+};
 
 export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnAttack";
@@ -36,6 +51,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected readonly attacks: PawnAttack_T[] = [];
     protected readonly attackEffects: Object3D[] = [];
     protected readonly skillEffects: SkillVisualEffect;
+    protected readonly transientSkillEffects: SkillVisualEffect;
+    protected readonly transientEffects: Object3D[] = [];
     protected target: BaseActor = null;
     protected requestedTarget: BaseActor = null;
     protected nextAttack: PawnAttack_T = null;
@@ -48,6 +65,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected attackStartedAt = 0;
     protected shotTriggered = false;
     protected lastShotName: string = null;
+    protected maxAtkShotNum = 0;
+    protected attackParams: readonly NAttackActionParam_T[] = [];
     protected stageShot = 0;
     protected stagePreShot = 0;
     protected pendingPreShot = false;
@@ -60,12 +79,14 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected skillTweenTime = 0;
     protected skillShotTime = 0;
     protected isActive = false;
+    protected isServerAction = false;
+    protected serverHitTime = 0;
     protected lastTime = 0;
     protected bowProjectile: ProjectileActor_T = null;
     protected bowPreShotFrame = 0;
     protected bowShotFrame = 0;
 
-    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[], protected readonly bow: L2JS.Engine.INpcBowDecodeInfo = null) {
+    public constructor(renderManager: RenderManager, protected readonly animationNames: readonly string[], skills: readonly NpcSkillAttack_T[], protected bow: INpcBowDecodeInfo = null) {
         super();
 
         this.renderManager = renderManager;
@@ -75,12 +96,12 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
             if (index >= 0) this.attackEffects.splice(index, 1);
         }));
-
-        for (const physical of arrPhysicalAnimations) {
-            const animation = animationNames.find(name => name.toLowerCase() === physical);
-
-            if (animation) this.attacks.push({ label: `Physical: ${animation}`, animation, skill: null });
-        }
+        this.transientSkillEffects = new SkillVisualEffect(new SkillEffectHost(renderManager, (effect, owner) => {
+            for (let i = this.transientEffects.length - 1; i >= 0; i--)
+                if (!this.transientEffects[i].parent) this.transientEffects.splice(i, 1);
+            this.transientEffects.push(effect as any);
+            renderManager.addTransientEffect(effect as any, owner as any);
+        }, effect => renderManager.removeTransientEffect(effect as any)));
 
         for (const skill of skills) {
             if (skill.passive) continue;
@@ -90,10 +111,40 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         }
     }
 
+    public onAttach(): void {
+        const parent = this.getParent();
+        const weapon = parent.scriptClassId ? parent.getUnrealScriptProperty("CurWeaponType") as number : 0;
+        const attacks: PawnAttack_T[] = [];
+
+        for (const physical of arrPhysicalAnimations) {
+            if (this.bow && physical !== "atk01") continue;
+            const name = physical[0].toUpperCase() + physical.slice(1);
+            const selected = parent.scriptClassId ? (parent.getUnrealScriptProperty(`${name}AnimName`) as string[])[weapon] : physical;
+            const animation = this.animationNames.find(name => name.toLowerCase() === selected.toLowerCase());
+            const rate = parent.scriptClassId ? (parent.getUnrealScriptProperty(`${name}AnimRate`) as number[])[weapon] : 1;
+
+            if (animation) attacks.push({ label: `Physical: ${animation}`, animation, rate: rate === 0 ? 1 : rate, skill: null }); // APawn::GetAtk01AnimRate 0x60cdb0.
+        }
+
+        this.attacks.unshift(...attacks);
+    }
+
+    public setWeapon(bow: INpcBowDecodeInfo): void {
+        for (let i = this.attacks.length - 1; i >= 0; i--)
+            if (!this.attacks[i].skill) this.attacks.splice(i, 1);
+
+        this.bow = bow;
+        this.onAttach();
+    }
+
+    public isAttacking(): boolean { return this.currentAttack !== null; }
+    public hasAction(): boolean { return this.isActive || this.currentAttack !== null; }
+    public isPhysicalAttacking(): boolean { return this.currentAttack !== null && !this.currentAttack.skill; }
+
     public addSkill(skill: NpcSkillAttack_T): number {
         const animation = skill.animation || null;
 
-        const attack = { label: `Skill ${skill.id}: ${skill.name}`, animation, skill };
+        const attack = { label: `Skill ${skill.id}: ${skill.name}`, animation, rate: 1, skill };
         const index = this.attacks.findIndex(entry => entry.skill?.id === skill.id && entry.skill.level === skill.level && entry.animation === animation);
 
         if (index < 0) return this.attacks.push(attack) - 1;
@@ -102,11 +153,16 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public onDetach(): void {
-        for (const effect of this.attackEffects)
-            if (effect.parent) this.renderManager.removeTransientEffect(effect);
+        const parent = this.getParent();
 
-        this.skillEffects.clear();
-        this.attackEffects.length = 0;
+        this.detachSkillVisuals();
+        for (const [visual, effects] of [[this.transientSkillEffects, this.transientEffects], [this.skillEffects, this.attackEffects]] as const) {
+            if (this.renderManager.isRetainingSkillVisual(visual)) continue;
+            for (const effect of effects)
+                if (effect.parent && (!(effect as any).scriptOwner || (effect as any).scriptOwner === parent)) this.renderManager.removeTransientEffect(effect);
+            effects.length = 0;
+            visual.clear();
+        }
         this.bowProjectile = null;
         this.target = null;
         this.requestedTarget = null;
@@ -116,6 +172,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.requestedAssociatedActors = null;
         this.targetExcepted = false;
         this.currentAttack = null;
+        this.attackParams = [];
         this.shotTriggered = false;
         this.lastShotName = null;
         this.stageShot = 0;
@@ -123,6 +180,23 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.pendingPreShot = false;
         this.pendingShot = null;
         this.isActive = false;
+    }
+
+    public detachSkillVisuals(): void {
+        const caster = this.getParent();
+
+        if (this.bowProjectile?.parent) this.renderManager.removeTransientEffect(this.bowProjectile);
+        this.bowProjectile = null;
+
+        for (const [visual, effects] of [[this.skillEffects, this.attackEffects], [this.transientSkillEffects, this.transientEffects]] as const) {
+            if (this.renderManager.isRetainingSkillVisual(visual)) continue;
+            visual.detachCaster(caster);
+            if (!visual.hasActiveEffects() && !effects.some(effect => (effect as Object3D & IObject).findComponent("nProjectile"))) continue;
+
+            this.renderManager.retainSkillVisual(visual, effects, caster);
+            for (const effect of effects)
+                if ((visual.ownsProjectile(effect as any) || (effect as Object3D & IObject).findComponent("nProjectile")) && (effect as any).scriptOwner === caster) caster.loseScriptChild(effect);
+        }
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<void> {
@@ -142,25 +216,21 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         }
         if (name !== "animnotify_attackshot") return COMPONENT_EVENT_NOT_HANDLED;
 
-        // Engine.dll AnimNotify_AttackShot::Notify 0x94c34d / 0x94c368.
-        const finalShot = !this.currentAttack.skill || notify.object.objectName === this.lastShotName;
-
-        if (finalShot || this.currentAttack.skill.isMultiShot) {
-            if (this.currentAttack.skill) this.pendingShot = finalShot ? "finalShot" : "shot";
-            else {
-                // Engine.dll AnimNotify_AttackShot 0x94c414..0x94c44b: first physical hit, not the animation-end fallback.
-                if (!this.shotTriggered && this.target) {
-                    this.target.getComponent<SoundComponent>("sound").playAttackSounds();
-                    this.skillEffects.addAttackLight(this.getParent(), this.target);
-                }
-                this.triggerShot(this.lastTime, finalShot);
-            }
+        if (!this.currentAttack.skill) {
+            this.triggerAttackShot();
+            return;
         }
+
+        // Engine.dll AnimNotify_AttackShot::Notify 0x94c34d / 0x94c368.
+        const finalShot = notify.object.objectName === this.lastShotName;
+
+        if (finalShot || this.currentAttack.skill.isMultiShot) this.pendingShot = finalShot ? "finalShot" : "shot";
     }
 
     public onUpdate(currentTime: number, _deltaTime: number): void {
         this.lastTime = currentTime;
         this.skillEffects.update(currentTime);
+        this.transientSkillEffects.update(currentTime);
 
         if (!this.isActive) return;
 
@@ -202,23 +272,27 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
         const target = this.requestedTarget;
         const index = this.selection === "random" ? this.attacks.indexOf(this.nextAttack) : this.selection;
-        const attack = this.attacks[index];
+        let attack = this.attacks[index];
 
         if (!attack) throw new Error(`NPC attack '${this.selection}' does not exist.`);
+        // Engine.dll SetMagicInfo 0x79b469/0x79b47b stores full packet time; InitSkillProcess 0x798aff reads it.
+        if (this.isServerAction && attack.skill) attack = { ...attack, skill: { ...attack.skill, hitTime: this.serverHitTime, previewTarget: undefined } };
 
         const rangeTarget = attack.skill?.previewTarget === "self" ? parent : target;
 
-        parent.getWorldPosition(tmpNpcPosition);
-        rangeTarget.getWorldPosition(tmpTargetPosition);
+        if (!this.isServerAction) {
+            parent.getWorldPosition(tmpNpcPosition);
+            rangeTarget.getWorldPosition(tmpTargetPosition);
 
-        const range = attack.skill ? attack.skill.castRange : this.bow?.attackRange;
-        const attackRange = parent.getCollisionRadius() + target.getCollisionRadius() + (range === undefined ? ATTACK_RANGE_PADDING : Math.max(0, range));
-        const dx = tmpTargetPosition.x - tmpNpcPosition.x;
-        const dy = tmpTargetPosition.y - tmpNpcPosition.y;
+            const range = attack.skill ? attack.skill.castRange : this.bow?.attackRange;
+            const attackRange = parent.getCollisionRadius() + target.getCollisionRadius() + (range === undefined ? ATTACK_RANGE_PADDING : Math.max(0, range));
+            const dx = tmpTargetPosition.x - tmpNpcPosition.x;
+            const dy = tmpTargetPosition.y - tmpNpcPosition.y;
 
-        if (dx * dx + dy * dy - attackRange * attackRange > 1e-5) {
-            if (!parent.isLocomoting()) parent.goToActor(rangeTarget, attackRange);
-            return;
+            if (dx * dx + dy * dy - attackRange * attackRange > 1e-5) {
+                if (!parent.isLocomoting()) parent.goToActor(rangeTarget, attackRange);
+                return;
+            }
         }
 
         parent.stopMoving();
@@ -253,8 +327,21 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
                 this.updateSkillAnimation(currentTime);
             }
         } else {
-            parent.playAnimation(attack.animation, 0.1, 1, false, true);
-            this.lastShotName = this.getAttackShotNotify(parent);
+            const rate = attack.rate * (parent.scriptClassId ? parent.getUnrealScriptProperty("AttackSpeedRate") as number : 1);
+
+            if (!Number.isFinite(rate) || rate <= 0) throw new Error(`Pawn '${parent.name}' has invalid attack rate '${rate}'.`);
+
+            if (this.bow) parent.playAnimation(attack.animation, 0.2 / rate, rate, false, true); // BowAttackProcess 0x8c6b9f..0x8c6bcd.
+            else parent.playAnimation(attack.animation, 0.1 / rate, rate * 1.1, false, true); // SwordAttackProcess 0x8c75f6..0x8c762b.
+
+            if (!this.bow && parent.ridePawn) {
+                const rider = parent.ridePawn;
+                const animation = (rider.getUnrealScriptProperty("RiderAtkAnimName") as string[])[parent.rideType];
+
+                if (animation.toLowerCase() !== "none") rider.playAnimation(animation, 0.1 / rate, rate * 1.1, false, true);
+            }
+
+            this.initAttackShots(parent);
             if (this.bow) this.initBowAttack();
         }
     }
@@ -281,8 +368,28 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         names.push(...selected.names);
         this.flexibleAnimationIndex = selected.flexibleIndex;
         // Engine.dll SetSkillAnim 0x7977ca..0x797825: mobskillanimgrp replaces only the NPC's final slot.
-        if (attack.animation) names[Math.max(0, names.length - 1)] = attack.animation;
+        if (attack.animation && (parent.getUnrealScriptProperty("bNpc") || animation.getAnimationClip(attack.animation))) names[Math.max(0, names.length - 1)] = attack.animation;
+        if (!parent.getUnrealScriptProperty("bNpc") && attack.animation && !names.some(name => animation.getAnimationClip(name))) {
+            const fallback = getSkillAnimation(parent, "C");
+
+            names.length = 0;
+            names.push(...fallback.names);
+            this.flexibleAnimationIndex = fallback.flexibleIndex;
+        }
         if (names.length === 0) return;
+        if (this.isServerAction && this.serverHitTime <= 0.5) {
+            const name = names.slice().reverse().find(name => animation.getAnimationClip(name));
+
+            names.length = 0;
+            if (!name) return;
+
+            names.push(name);
+            times.push(animation.getAnimationClip(name).duration);
+            this.skillAnimationRate = 1;
+            this.skillTweenTime = 0;
+            this.skillShotTime = 0;
+            return;
+        }
 
         let totalTime = 0;
         let notifyTime = 0;
@@ -368,8 +475,93 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
     public getAttacks(): readonly PawnAttack_T[] { return this.attacks; }
 
-    public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false): void {
-        if (!target) throw new Error("NPC attack has no target.");
+    public replaceTarget(actor: BaseActor, replacement: BaseActor): void {
+        if (this.target === actor) this.target = replacement;
+        if (this.requestedTarget === actor) this.requestedTarget = replacement;
+        for (let i = 0; i < this.associatedActors.length; i++)
+            if (this.associatedActors[i] === actor) this.associatedActors[i] = replacement;
+        if (this.requestedAssociatedActors) this.requestedAssociatedActors = this.requestedAssociatedActors.map(target => target === actor ? replacement : target);
+        this.attackParams = this.attackParams.map(hit => hit.actionTarget === actor ? { ...hit, actionTarget: replacement } : hit);
+        this.skillEffects.replaceTarget(actor, replacement);
+        this.transientSkillEffects.replaceTarget(actor, replacement);
+    }
+
+    public attackFromServer(hits: readonly NAttackActionParam_T[]): void {
+        const attacks = this.attacks.filter(attack => !attack.skill);
+
+        if (attacks.length === 0) throw new Error(`Pawn '${this.getParent().name}' has no physical attack animations.`);
+
+        this.attack(hits[0].actionTarget, this.attacks.indexOf(attacks[Math.floor(Math.random() * attacks.length)]));
+        this.attackParams = hits;
+        this.isServerAction = true;
+    }
+
+    public castFromServer(target: BaseActor, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly BaseActor[], targetExcepted: boolean, elapsed: number = 0): void {
+        if (!Number.isFinite(hitTime)) throw new Error(`Invalid server cast time '${hitTime}'.`);
+
+        skill = { ...skill, previewTarget: undefined };
+        this.attack(target, this.addSkill(skill), [], associatedActors, targetExcepted, true);
+        if (skill.castStyle === 0) return;
+        this.serverHitTime = Math.max(0, hitTime - elapsed);
+        this.isServerAction = true;
+    }
+
+    public attachSkillVisual(skill: NpcSkillAttack_T, target: BaseActor, hitTime: number, associatedActors: readonly BaseActor[], elapsed: number): void {
+        skill = { ...skill, previewTarget: undefined };
+        const remaining = Math.max(0, hitTime - elapsed);
+        const cast: SkillCast_T = { skill, caster: this.getParent(), target, associatedActors, locList: [], targetExcepted: associatedActors.length > 0, stageShot: 1, stagePreShot: 0, finalShot: true, shotTime: remaining, firstShotTime: remaining };
+
+        if (skill.castStyle === 0) {
+            this.transientSkillEffects.start(cast, this.lastTime);
+            return;
+        }
+        const current = this.currentAttack?.skill;
+        const pending = this.selection !== "random" ? this.attacks[this.selection]?.skill : null;
+
+        if (this.isActive && !current && pending && pending.id === skill.id && pending.level === skill.level) {
+            Object.assign(pending, { visual: skill.visual, flyingTime: skill.flyingTime, sounds: skill.sounds, assets: skill.assets });
+            return;
+        }
+
+        if (current && current.id === skill.id && current.level === skill.level) Object.assign(current, { visual: skill.visual, flyingTime: skill.flyingTime, sounds: skill.sounds, assets: skill.assets, visualTimeScale: hitTime > 0 ? remaining / hitTime : 0 });
+        skill.visualTimeScale = hitTime > 0 ? remaining / hitTime : 0;
+
+        if (remaining > 0 && this.isActive && current && current.id === skill.id && current.level === skill.level && !this.shotTriggered) {
+            this.skillEffects.start({ ...cast, stageShot: 0, finalShot: false }, this.lastTime);
+            return;
+        }
+
+        if (current && current.id === skill.id && current.level === skill.level) this.shotTriggered = true;
+
+        if (skill.visual.effects.some(effect => effect.phase === "preshot")) {
+            this.transientSkillEffects.notify("preshot", this.lastTime, { ...cast, stagePreShot: 1 });
+            this.transientSkillEffects.notify("preshot", this.lastTime, { ...cast, stagePreShot: 2 });
+        }
+
+        const projectile = this.transientSkillEffects.notify("shot", this.lastTime, cast);
+
+        if (!projectile) this.transientSkillEffects.notify("explosion", this.lastTime, cast);
+    }
+
+    public setSkillTargets(skillId: number, actors: readonly BaseActor[], target: BaseActor = undefined): void {
+        this.skillEffects.setSkillTargets(skillId, actors);
+        this.transientSkillEffects.setSkillTargets(skillId, actors);
+        const attack = this.currentAttack || (this.selection !== "random" ? this.attacks[this.selection] : null);
+
+        if (!this.isActive || !attack || !attack.skill || attack.skill.id !== skillId) return;
+
+        if (target !== undefined) {
+            this.requestedTarget = this.target = target;
+            this.getParent().faceActor(target === this.getParent() ? null : target);
+        }
+        this.requestedAssociatedActors = actors;
+        this.associatedActors.length = 0;
+        this.associatedActors.push(...actors);
+        this.targetExcepted = actors.length > 0; // AddAssociatedActorNotify 0x79821a..0x798239.
+    }
+
+    public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false, isServerAction: boolean = false): void {
+        if (!target && (!isServerAction || selection === "random" || !this.attacks[selection]?.skill)) throw new Error("NPC attack has no target.");
         if (this.attacks.length === 0) throw new Error(`${this.getParent().name || "NPC"} has no attacks.`);
         if (selection !== "random" && !this.attacks[selection]) throw new Error(`NPC attack '${selection}' does not exist.`);
         if (!Array.isArray(locList) || locList.some(location => !Array.isArray(location) || location.length !== 3 || !location.every(Number.isFinite))) throw new Error(`NPC skill locations must be XYZ triples of finite numbers.`);
@@ -378,7 +570,20 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
         const parent = this.getParent();
 
+        const skill = selection === "random" ? null : this.attacks[selection].skill;
+
+        if (skill && skill.castStyle !== 0 && !parent.getUnrealScriptProperty("bNpc") && !skill.animation && !skill.animationCategory) return;
+
+        if (skill && skill.castStyle === 0) {
+            if (!skill.visual) return;
+            const cast: SkillCast_T = { skill, caster: parent, target, associatedActors: associatedActors || [], locList, targetExcepted, stageShot: 0, stagePreShot: 0, finalShot: false, shotTime: 0, firstShotTime: 0 };
+
+            if (!this.transientSkillEffects.start(cast, this.lastTime)) this.finish();
+            return;
+        }
+
         this.stop();
+        this.isServerAction = isServerAction;
         this.requestedTarget = target;
         this.requestedAssociatedActors = associatedActors && associatedActors.slice();
         // Server supplies bTargetExcepted; Engine.dll AddAssociatedActorNotify 0x798239 sets Pawn+0x500.
@@ -400,22 +605,27 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     public stop(): void {
-        this.skillEffects.clear();
+        this.skillEffects.clearSkillTargets();
+        this.transientSkillEffects.clearSkillTargets();
+        if (!this.isActive && !this.currentAttack) return;
 
-        if (!this.isActive && !this.currentAttack && !this.skillEffects.hasPending() && this.attackEffects.length === 0) return;
-
-        for (const effect of this.attackEffects)
-            if (effect.parent) this.renderManager.removeTransientEffect(effect);
-
-        this.attackEffects.length = 0;
+        this.skillEffects.cancel();
+        if (this.bowProjectile?.parent) this.renderManager.removeTransientEffect(this.bowProjectile);
 
         this.finish();
     }
 
+    public clear(): void {
+        this.stop();
+        this.skillEffects.clear();
+        for (const effect of this.attackEffects)
+            if (effect.parent) this.renderManager.removeTransientEffect(effect);
+
+        this.attackEffects.length = 0;
+    }
+
     protected finish(): void {
         const parent = this.getParent();
-
-        this.skillEffects.finish();
 
         this.associatedActors.length = 0;
         this.requestedAssociatedActors = null;
@@ -425,6 +635,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.nextAttack = null;
         this.currentAttack = null;
         this.bowProjectile = null;
+        this.attackParams = [];
         this.shotTriggered = false;
         this.lastShotName = null;
         this.stageShot = 0;
@@ -432,7 +643,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.pendingPreShot = false;
         this.pendingShot = null;
         this.isActive = false;
-        parent.stopMoving();
+        if (!this.isServerAction) parent.stopMoving();
         parent.faceActor(null);
         parent.playMovementAnimation("idle");
     }
@@ -483,6 +694,10 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
 
         if (!this.bowProjectile && (force || frame >= this.bowPreShotFrame)) {
             const target = this.target;
+
+            if (!target || !target.parent) return;
+
+            const param = this.attackParams[0];
             const arrow = parent.getComponent<ScriptComponent>("script").createObject("LineageEffect.NArrow") as unknown as ProjectileActor_T;
             const properties = arrow.scriptProperties;
 
@@ -494,11 +709,39 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             properties.get("DrawScale3D")[0] *= scale;
             arrow.scale.x *= scale;
             const projectile = arrow.addComponent(new NProjectileComponent(this.renderManager, parent, target, (_arrow, hitActor, impactActor) => {
+                const target = properties.get("TargetActor") as BaseActor;
+
                 // Engine.dll ANProjectile::processHitWall 0x78d5b0: physical impact sounds/light are deferred until arrival.
-                if (hitActor && impactActor === target) {
-                    target.getComponent<SoundComponent>("sound").playAttackSounds();
-                    this.skillEffects.addAttackLight(parent, target);
+                if (!properties.get("Owner") || !hitActor || impactActor !== target || param?.isMiss) return false;
+
+                this.actionAttack(target, param);
+                // APawn::AttackedNotify 0x105ee8c5..0x105eeed1; physical BowAttackProcess uses ActionID 2.
+                properties.set("LifeSpan", !param?.isSpirit && param?.isShieldDefense ? 0.1 : 16);
+                const mesh = arrow.getComponent<ActorMeshComponent>("actorMesh").getMesh();
+
+                tmpAttackDirection.set(1, 0, 0).applyQuaternion(arrow.quaternion);
+                // APawn::AttackedNotify 0x105ee9d3 uses ULodMesh.Scale (+0x84), not Origin (+0x90).
+                tmpEffectPosition.copy(mesh.meshScale).multiplyScalar(properties.get("CollisionHeight") * properties.get("DrawScale") * properties.get("DrawScale3D")[0] * 1.3).multiply(tmpAttackDirection);
+                arrow.position.sub(tmpEffectPosition);
+                arrow.updateWorldMatrix(true, false);
+                tmpArrowWorld.copy(arrow.matrixWorld);
+
+                if (param?.isSpirit || !param?.isShieldDefense) {
+                    if (!target.attachObjectToBone(arrow, target.getUnrealScriptProperty("EffectSpawnBoneIdx") as number)) throw new Error(`Pawn '${target.name}' cannot attach its hit arrow.`);
+
+                    arrow.parent.updateWorldMatrix(true, false);
+                    tmpArrowRelative.copy(arrow.parent.matrixWorld).invert().multiply(tmpArrowWorld);
+                    tmpArrowRelative.decompose(arrow.position, arrow.quaternion, arrow.scale);
+                    arrow.position.toArray(properties.get("RelativeLocation"));
+                    tmpArrowRotation.setFromRotationMatrix(tmpArrowRelative);
+                    properties.set("RelativeRotation", [tmpArrowRotation.pitch, tmpArrowRotation.yaw, tmpArrowRotation.roll]);
+                    target.gainScriptChild(arrow);
                 }
+
+                const index = this.attackEffects.indexOf(arrow);
+
+                if (index >= 0) this.attackEffects.splice(index, 1);
+                return true;
             }));
 
             this.addAttackEffect(arrow);
@@ -534,20 +777,56 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         if (finalShot && !projectileExplosion) this.triggerPhase("explosion", currentTime + (this.currentAttack.skill?.flyingTime || 0) * 1000);
     }
 
-    protected getAttackShotNotify(parent: BaseActor): string {
+    protected initAttackShots(parent: BaseActor): void {
         const action = parent.getAnimationAction();
         const notifications = action ? (action.getClip() as any).animationNotifies as IAnimationNotifyDecodeInfo[] : null;
 
-        if (!notifications) return null;
+        this.lastShotName = null;
+        this.maxAtkShotNum = 0;
 
-        // Engine.dll AnimGetAttackShotNotifyTimeRev 0x949da7 / 0x949df7.
-        for (let i = notifications.length - 1; i >= 0; i--) {
-            const object = notifications[i].object;
+        if (!notifications) return;
 
-            if (object?.type === "native" && object.className.toLowerCase() === "animnotify_attackshot") return object.objectName;
+        // Engine.dll GetAtkShotNum 0x8c0a70; SwordAttackProcess 0x8c7611.
+        for (const notify of notifications) {
+            const object = notify.object;
+
+            if (object?.type !== "native" || object.className.toLowerCase() !== "animnotify_attackshot") continue;
+            this.lastShotName = object.objectName;
+            this.maxAtkShotNum++;
+        }
+    }
+
+    protected triggerAttackShot(): void {
+        if (this.shotTriggered || !this.target || !this.target.parent) return;
+
+        const params = this.attackParams;
+
+        // Engine.dll AnimNotify_AttackShot 0x94c414..0x94c589.
+        if (this.stageShot === 0) {
+            this.actionAttack(this.target, params[0]);
+            this.stageShot++;
+            if (this.stageShot === this.maxAtkShotNum)
+                for (let i = 1; i < params.length; i++) this.actionAttack(params[i].actionTarget, params[i]);
+        } else if (this.stageShot < this.maxAtkShotNum) {
+            const param = params.length > 1 ? params[this.stageShot] : params[0];
+            const target = params.length > 1 ? param && param.actionTarget : this.target;
+
+            if (target) {
+                this.actionAttack(target, param);
+                this.stageShot++;
+            }
         }
 
-        return null;
+        this.shotTriggered = this.stageShot === this.maxAtkShotNum;
+    }
+
+    protected actionAttack(target: BaseActor, param: NAttackActionParam_T = null): void {
+        if (!target || !target.parent || param?.isMiss) return;
+
+        // Engine.dll Action_Attack 0x8bda4e / 0x8bdb40 / 0x8bde50.
+        target.getComponent<SoundComponent>("sound").playAttackSounds(param?.isCritical, param?.isShieldDefense, param?.isSpirit);
+        this.skillEffects.addAttackImpact(this.getParent(), target, param?.isCritical, param?.isShieldDefense, param?.isSpirit, param?.soulshotGrade || 0);
+        if (!param?.isShieldDefense) this.skillEffects.addAttackLight(this.getParent(), target);
     }
 
     protected getFirstShotTime(): number {

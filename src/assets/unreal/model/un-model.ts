@@ -15,6 +15,8 @@ import FVector from "../un-vector";
 import FBox, { type IBoxDecodeInfo } from "../un-box";
 import { DoubleSide, type Side } from "three";
 import type { ULevelInfo } from "../un-level-info";
+import type { UAActor } from "../un-aactor";
+import type { ULight } from "../un-light";
 import type { FPlane } from "../un-plane";
 import type { FMatrix } from "../un-matrix";
 import type { DecodeLibrary, IBaseObjectOrInstanceDecodeInfo, IGeometryDecodeInfo } from "../decode-library";
@@ -32,6 +34,7 @@ export type IBSPSectionDecodeInfo_T = {
     nodeIndices: number[],  // nodes in this section
     isUnlit?: boolean,
     isOutdoor?: boolean,
+    skyZone?: string,
     depthTest?: boolean,
     depthWrite?: boolean,
     side?: Side,
@@ -39,9 +42,11 @@ export type IBSPSectionDecodeInfo_T = {
     blendingMode?: SupportedBlendingTypes_T
 };
 
+export type IBSPCollisionNodeDecodeInfo_T = { plane: Vector4Arr, children: [number, number], isCsg: boolean, collision?: IBSPNodeCollisionInfo_T };
 export type IBSPCollisionModelDecodeInfo = {
-    planes: Vector4Arr[];
-    hulls: IBSPNodeCollisionInfo_T[];
+    bounds: IBoxDecodeInfo;
+    rootOutside: boolean;
+    nodes: IBSPCollisionNodeDecodeInfo_T[];
 };
 
 const MAX_NODE_VERTICES = 16;       // Max vertices in a Bsp node, pre clipping.
@@ -147,6 +152,17 @@ export abstract class UModel extends UPrimitive {
     public getLevelInfo() { return this.levelInfo; }
     public getBspNodes() { return this.bspNodes; }
     public getIsRootOutside() { return this.isRootOutside; }
+    public getCollisionBoundingBox(owner?: UAActor): FBox { return owner ? this.boundingBox.transformBy(owner.localToWorld()) : this.boundingBox; }
+    public getLeafHull(node: FBSPNode): IBSPNodeCollisionInfo_T {
+        const hullIndexList = (this.leafHulls.getTypedArray() as Int32Array).slice(node.iCollisionBound);
+        let hullPlanesCount = 0;
+
+        while (hullIndexList[hullPlanesCount] >= 0) hullPlanesCount++;
+
+        const bounds = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 7)).buffer);
+
+        return { flags: [...hullIndexList.slice(0, hullPlanesCount)], bounds: { isValid: true, min: [bounds[0], bounds[1], bounds[2]], max: [bounds[3], bounds[4], bounds[5]] } };
+    }
 
     protected preLoad(pkg: APackage, exp: UExport): void {
         super.preLoad(pkg, exp);
@@ -261,74 +277,61 @@ export abstract class UModel extends UPrimitive {
 
         iNodes[0] = iNode;
 
-        const min = Math.min(Math.min(extent.x, extent.y), extent.z);
-        const max = Math.max(Math.max(extent.x, extent.y), extent.z);
+        while (index >= 0) {
+            iNode = iNodes[index--];
 
-        if (min * 2 > max) {
-            const pushOut = extent.length();
-            while (index >= 0) {
-                iNode = iNodes[index--];
+            const node = this.bspNodes[iNode];
+            const pushOut = boxPushOut(node.plane, extent);
+            const distance = node.plane.dot(origin);
 
-                const node = this.bspNodes[iNode];
-                const distance = node.plane.dot(origin);
-
-                if (distance < pushOut) {
-                    if (node.iBack !== -1)
-                        iNodes[++index] = node.iBack;
-                    else if (node.iLeaf[0] !== -1)
-                        outLeaves.push(node.iLeaf[0]);
-                }
-
-                if (-distance < pushOut) {
-                    if (node.iFront !== -1)
-                        iNodes[++index] = node.iFront;
-                    else if (node.iLeaf[1] !== -1)
-                        outLeaves.push(node.iLeaf[1]);
-                }
+            if (distance < pushOut) {
+                if (node.iBack !== -1)
+                    iNodes[++index] = node.iBack;
+                else if (node.iLeaf[0] !== -1)
+                    outLeaves.push(node.iLeaf[0]);
             }
-        } else {
-            while (index >= 0) {
-                iNode = iNodes[index--];
 
-                const node = this.bspNodes[iNode];
-                const pushOut = boxPushOut(node.plane, extent);
-                const distance = node.plane.dot(origin);
-
-                if (distance < pushOut) {
-                    if (node.iBack !== -1)
-                        iNodes[++index] = node.iBack;
-                    else if (node.iLeaf[0] !== -1)
-                        outLeaves.push(node.iLeaf[0]);
-                }
-
-                if (-distance < pushOut) {
-                    if (node.iFront !== -1)
-                        iNodes[++index] = node.iFront;
-                    else if (node.iLeaf[1] !== -1)
-                        outLeaves.push(node.iLeaf[1]);
-                }
+            if (-distance < pushOut) {
+                if (node.iFront !== -1)
+                    iNodes[++index] = node.iFront;
+                else if (node.iLeaf[1] !== -1)
+                    outLeaves.push(node.iLeaf[1]);
             }
         }
 
         return outLeaves;
     }
 
-    public boxLeaves(box: FBox): FLeaf[] {
-        if (this.bspNodes.length === 0) return [];
-
-        const origin = box.getCenter();
-        const extent = box.getExtents();
-
-        return this.boxLeavesRecursive(0, origin, extent).map(i => this.leaves[i]);
+    public boxLeaves(box: FBox, forcedRegionTag: string = "None", forcedRegion: number = 0): FLeaf[] {
+        return this.boxLeafIndices(box, forcedRegionTag, forcedRegion).map(i => this.leaves[i]);
     }
 
-    public boxLeafIndices(box: FBox): number[] {
+    public getLeafPermeatingLights(leafIndex: number): ULight[] {
+        const leaf = this.leaves[leafIndex], lights: ULight[] = [];
+
+        if (leaf.iPermeating >= 0)
+            for (let i = leaf.iPermeating; this.lights[i]; i++)
+                lights.push((this.lights[i] as ULight).loadSelf());
+
+        return lights;
+    }
+
+    public boxLeafIndices(box: FBox, forcedRegionTag: string = "None", forcedRegion: number = 0): number[] {
         if (this.bspNodes.length === 0) return [];
 
         const origin = box.getCenter();
         const extent = box.getExtents();
 
-        return this.boxLeavesRecursive(0, origin, extent);
+        const indices = this.boxLeavesRecursive(0, origin, extent), tag = forcedRegionTag.toLowerCase();
+        if (tag === "none" && forcedRegion === 0) return indices;
+
+        return indices.filter(index => {
+            const zone = this.leaves[index].iZone;
+            if (tag === "none") return zone === forcedRegion;
+
+            const actor = this.zones[zone].zoneActor;
+            return actor && actor.loadSelf().zoneTag.toLowerCase() === tag;
+        });
     }
 
     public isCsg(node: FBSPNode): boolean {
@@ -338,7 +341,15 @@ export abstract class UModel extends UPrimitive {
     public getZoneDecodeInfo(library: DecodeLibrary, uLevelInfo: ULevelInfo): ModelZoneDecodeResult_T {
         const result: ModelZoneDecodeResult_T = { bspLeaves: [], bspZones: [], bspZoneIndexMap: {} };
 
-        this.leaves.forEach((leaf: FLeaf) => result.bspLeaves.push(leaf.getDecodeInfo()));
+        this.leaves.forEach((leaf: FLeaf) => {
+            const info = leaf.getDecodeInfo();
+
+            if (leaf.iPermeating >= 0)
+                for (let i = leaf.iPermeating; this.lights[i]; i++)
+                    info.permeatingLights.push(this.lights[i].objectName);
+
+            result.bspLeaves.push(info);
+        });
         this.zones.forEach((zone: FZoneProperties, index: number) => {
             const bspZone = zone.getDecodeInfo(library, uLevelInfo);
 
@@ -351,40 +362,24 @@ export abstract class UModel extends UPrimitive {
     }
 
     public getCollisionModelDecodeInfo(): IBSPCollisionModelDecodeInfo {
-        const planes = this.bspNodes.map((node: FBSPNode) => node.plane.getElements());
-        const hulls: IBSPNodeCollisionInfo_T[] = [];
-        const leafHulls = this.leafHulls.getTypedArray() as Int32Array;
+        const nodes = this.bspNodes.map((node: FBSPNode) => {
+            const info: IBSPCollisionNodeDecodeInfo_T = { plane: node.plane.getElements(), children: [node.iFront, node.iBack], isCsg: this.isCsg(node) };
 
-        for (const node of this.bspNodes) {
-            if (node.iCollisionBound < 0) continue;
+            if (node.iCollisionBound >= 0) info.collision = this.getLeafHull(node);
 
-            const hullIndexList = leafHulls.slice(node.iCollisionBound);
-            let hullPlanesCount = 0;
+            return info;
+        });
 
-            while (hullIndexList[hullPlanesCount] >= 0) hullPlanesCount++;
-
-            const bounds = new Float32Array(new Int32Array(hullIndexList.slice(hullPlanesCount + 1, hullPlanesCount + 7)).buffer);
-
-            hulls.push({
-                flags: [...hullIndexList.slice(0, hullPlanesCount)],
-                bounds: {
-                    isValid: true,
-                    min: [bounds[0], bounds[1], bounds[2]],
-                    max: [bounds[3], bounds[4], bounds[5]]
-                }
-            });
-        }
-
-        return { planes, hulls };
+        return { bounds: this.boundingBox.getDecodeInfo(), rootOutside: this.isRootOutside, nodes };
     }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder, uLevelInfo: ULevelInfo): ModelDecodeResult_T {
         const library = builder.library;
         const result: ModelDecodeResult_T = Object.assign(this.getZoneDecodeInfo(library, uLevelInfo), {
-            bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
+            bspRootOutside: this.isRootOutside, bspNodes: [], bspColliders: [], leafActors: [], nodeToSection: [], nodeZoneMasks: [], bspRenderBounds: [], bspSections: [], bspSectionIndexMap: new Map(), geometries: [], materials: []
         });
 
-        this.multiLightmaps.map((lm: FMultiLightmapTexture) => builder.pullStaticLightmap(lm.textures[0].staticLightmap));
+        this.multiLightmaps.forEach((lm: FMultiLightmapTexture) => lm.textures.forEach(texture => builder.pullStaticLightmap(texture.staticLightmap)));
 
         result.leafActors.length = result.bspLeaves.length;
         result.nodeToSection.length = this.bspNodes.length;
@@ -403,6 +398,7 @@ export abstract class UModel extends UPrimitive {
             result.bspRenderBounds[i] = this.bounds.getElem(i, _box).getDecodeInfo() ?? { isValid: false, min: [0, 0, 0], max: [0, 0, 0] };
 
         const sectionMap = new Map<PriorityGroups_T, Map<string, ObjectsForSection_T>>();
+        const portalPosition = FVector.make();
 
         for (let nodeIndex = 0, ncount = this.bspNodes.length; nodeIndex < ncount; nodeIndex++) {
             const node: FBSPNode = this.bspNodes[nodeIndex];
@@ -412,6 +408,15 @@ export abstract class UModel extends UPrimitive {
             nodeInfo.zoneMask = result.nodeZoneMasks[nodeIndex] = node.zoneMask;
 
             result.bspNodes.push(nodeInfo);
+
+            if (surf.flags & PolyFlags_T.PF_Portal) {
+                nodeInfo.portalVertices = [];
+                for (let vertexIndex = 0; vertexIndex < node.numVertices; vertexIndex++) {
+                    const vert = this.vertices.getElem(node.iVertPool + vertexIndex);
+                    const position = this.points.getElem(vert.pVertex, portalPosition);
+                    nodeInfo.portalVertices.push(position.x, position.y, position.z);
+                }
+            }
 
             if (node.iCollisionBound >= 0) {
                 const hulls = this.leafHulls.getTypedArray() as Int32Array;
@@ -462,7 +467,7 @@ export abstract class UModel extends UPrimitive {
 
             if (library.isSkyLevel && !isSkyZone) continue;
 
-            if (!library.isSkyLevel && isSkyZone) continue;
+            const skyZone = !library.isSkyLevel && isSkyZone ? zoneActor.uuid : undefined;
 
             if (node.iCollisionBound >= 0) {
                 result.bspColliders.push(nodeInfo.collision.bounds);
@@ -489,7 +494,7 @@ export abstract class UModel extends UPrimitive {
 
             const isOutdoor = zoneIndex === 0 || (zoneActor && (zoneActor as any).isSunAffected); // zone 0 is LevelInfo (Outdoor)
 
-            const composedKey = `${sectionKey}/${isOutdoor}`;
+            const composedKey = `${sectionKey}/${isOutdoor}${skyZone ? `/${skyZone}` : ""}`;
 
             if (!sectionMap.has(priority)) sectionMap.set(priority, new Map());
             const prioritySections = sectionMap.get(priority);
@@ -503,6 +508,7 @@ export abstract class UModel extends UPrimitive {
                     totalVertices: 0,
                     nodes: [],
                     isOutdoor,
+                    skyZone,
                     isWaterSheet: !!(surf.flags & PF_WaterSheet)
                 });
             }
@@ -608,6 +614,7 @@ export abstract class UModel extends UPrimitive {
                     materialType: "lightmapped",
                     material: material,
                     lightmap: lightmap,
+                    lightmaps: this.multiLightmaps[sectionData.lightmapTextureIndex].textures.map(texture => texture.staticLightmap.uuid),
                 } as IBaseMaterialDecodeInfo]);
             } else {
                 finalMaterialUuid = material;
@@ -633,8 +640,9 @@ export abstract class UModel extends UPrimitive {
                 geometry: geometryUuid,
                 nodeIndices,
                 isOutdoor: sectionData.isOutdoor,
+                skyZone: sectionData.skyZone,
                 isUnlit: !!(sectionData.polyFlags & PF_Unlit),
-                sectionName: sectionKey,
+                sectionName: library.isSkyLevel ? `${nodes[0].surf.material.name}/${sectionData.polyFlags}/${sectionData.lightmapTextureIndex}` : sectionKey,
                 depthWrite: this.isSky ? false : undefined,
                 depthTest: this.isSky ? false : undefined,
                 fog: this.isSky ? true : undefined,
@@ -670,7 +678,7 @@ function boxPushOut(normal: FVector | FPlane, size: FVector) {
 
 type PriorityGroups_T = "opaque" | "transparent";
 type ModelZoneDecodeResult_T = { bspLeaves: IBSPLeafDecodeInfo_T[], bspZones: IBSPZoneDecodeInfo_T[], bspZoneIndexMap: Record<string, number> };
-type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspNodes: IBSPNodeDecodeInfo_T[], bspColliders: IBoxDecodeInfo[], leafActors: IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: IBoxDecodeInfo[], bspSections: IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, IGeometryDecodeInfo][], materials: [string, IBaseMaterialDecodeInfo][] };
+type ModelDecodeResult_T = ModelZoneDecodeResult_T & { bspRootOutside: boolean, bspNodes: IBSPNodeDecodeInfo_T[], bspColliders: IBoxDecodeInfo[], leafActors: IBaseObjectOrInstanceDecodeInfo[][], nodeToSection: number[], nodeZoneMasks: bigint[], bspRenderBounds: IBoxDecodeInfo[], bspSections: IBSPSectionDecodeInfo_T[], bspSectionIndexMap: Map<string, number>, geometries: [string, IGeometryDecodeInfo][], materials: [string, IBaseMaterialDecodeInfo][] };
 type ObjectsForSection_T = {
     material: string,  // material UUID
     lightmap: string | null,  // lightmap UUID
@@ -679,6 +687,7 @@ type ObjectsForSection_T = {
     totalVertices: number,
     nodes: NodeInfo_T[],
     isOutdoor: boolean,
+    skyZone?: string,
     isWaterSheet: boolean
 };
 type NodeInfo_T = { node: FBSPNode, surf: FBSPSurf, light?: LightmapInfo_T | null, nodeIndex: number };

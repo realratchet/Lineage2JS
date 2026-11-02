@@ -72,11 +72,11 @@ export var Stats = function () {
 
             var time = (performance || Date).now();
 
-            msPanel.update(time - beginTime, 200);
+            msPanel.update(time - beginTime);
 
             if (time >= prevTime + 1000) {
 
-                fpsPanel.update((frames * 1000) / (time - prevTime), 100);
+                fpsPanel.update((frames * 1000) / (time - prevTime));
 
                 prevTime = time;
                 frames = 0;
@@ -84,7 +84,7 @@ export var Stats = function () {
                 if (memPanel) {
 
                     var memory = performance.memory;
-                    memPanel.update(memory.usedJSHeapSize / 1048576, memory.jsHeapSizeLimit / 1048576);
+                    memPanel.update(memory.usedJSHeapSize / (1024 * 1024));
 
                 }
 
@@ -111,7 +111,7 @@ export var Stats = function () {
 
 Stats.Panel = function (name, fg, bg) {
 
-    var min = Infinity, max = 0, round = Math.round;
+    var round = Math.round, values = [];
     var PR = round(window.devicePixelRatio || 1);
 
     var WIDTH = 80 * PR, HEIGHT = 48 * PR,
@@ -143,24 +143,33 @@ Stats.Panel = function (name, fg, bg) {
 
         dom: canvas,
 
-        update: function (value, maxValue) {
+        update: function (value) {
 
-            min = Math.min(min, value);
-            max = Math.max(max, value);
+            values.push(value);
+            if (values.length > GRAPH_WIDTH / PR) values.shift();
+
+            if (canvas.style.display === 'none') return;
+
+            var min = Math.min.apply(null, values), max = Math.max.apply(null, values), range = max - min;
 
             context.fillStyle = bg;
             context.globalAlpha = 1;
             context.fillRect(0, 0, WIDTH, GRAPH_Y);
             context.fillStyle = fg;
             context.fillText(round(value) + ' ' + name + ' (' + round(min) + '-' + round(max) + ')', TEXT_X, TEXT_Y);
-
-            context.drawImage(canvas, GRAPH_X + PR, GRAPH_Y, GRAPH_WIDTH - PR, GRAPH_HEIGHT, GRAPH_X, GRAPH_Y, GRAPH_WIDTH - PR, GRAPH_HEIGHT);
-
-            context.fillRect(GRAPH_X + GRAPH_WIDTH - PR, GRAPH_Y, PR, GRAPH_HEIGHT);
+            context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT);
 
             context.fillStyle = bg;
             context.globalAlpha = 0.9;
-            context.fillRect(GRAPH_X + GRAPH_WIDTH - PR, GRAPH_Y, PR, round((1 - (value / maxValue)) * GRAPH_HEIGHT));
+            context.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH - values.length * PR, GRAPH_HEIGHT);
+
+            for (var i = 0; i < values.length; i++) {
+
+                var x = GRAPH_X + GRAPH_WIDTH - (values.length - i) * PR;
+
+                context.fillRect(x, GRAPH_Y, PR, range ? round((1 - (values[i] - min) / range) * GRAPH_HEIGHT) : 0);
+
+            }
 
         }
 

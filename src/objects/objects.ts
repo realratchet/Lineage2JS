@@ -1,5 +1,18 @@
 import type * as RAPIER from "@dimforge/rapier3d";
 import type * as THREE from "three";
+import type { ScriptHost_T } from "../ue-script/vm";
+import type Terrain from "./terrain";
+
+export function getScriptActor(actor: ICollidable | null): ScriptHost_T | null {
+    if (!actor) return null;
+    if ((actor as any).isTerrain) {
+        const host = (actor as Terrain).terrainInfoActor;
+
+        if (!host) throw new Error(`Terrain '${actor.name}' has no TerrainInfo actor.`);
+        return host;
+    }
+    return actor as unknown as ScriptHost_T;
+}
 
 export type ICollidable = THREE.Object3D<THREE.Event> & {
     readonly isCollidable: boolean;
@@ -20,17 +33,18 @@ export type ICollidable = THREE.Object3D<THREE.Event> & {
 
 export type CollisionHull_T = {
     planes: [number, number, number, number, number][];
+    boxPlanes: [number, number, number, number, number][];
     bounds: THREE.Box3;
 };
 
-export type CollisionBspIndex_T = {
-    cellSize: number;
-    keys: Int32Array;
-    offsets: Uint32Array;
-    hullIndices: Uint32Array;
-    largeHullIndices: Uint32Array;
-    marks: Uint32Array;
-    queryTag: number;
+export type CollisionModel_T = {
+    planes: Float32Array;
+    children: Int32Array;
+    isCsg: Uint8Array;
+    hullIndices: Int32Array;
+    hulls: CollisionHull_T[];
+    rootOutside: boolean;
+    bounds: THREE.Box3;
 };
 
 export type CollisionTriangleIndex_T = {
@@ -51,8 +65,7 @@ export type CollisionTriangleIndex_T = {
 type CollisionPrimitiveUnion_T =
     | {
         kind: "bsp";
-        hulls: CollisionHull_T[];
-        index: CollisionBspIndex_T;
+        model: CollisionModel_T;
         bounds: THREE.Box3;
         supportsZeroExtent: boolean;
         supportsNonZeroExtent: boolean;
@@ -65,7 +78,7 @@ type CollisionPrimitiveUnion_T =
         collisionNodes: Int32Array;
         collisionBounds: Float32Array;
         index?: CollisionTriangleIndex_T;
-        simpleCollisionHulls?: CollisionHull_T[];
+        collisionModel?: CollisionModel_T;
         useSimpleLineCollision?: boolean;
         useSimpleBoxCollision?: boolean;
         matrixWorld: THREE.Matrix4;

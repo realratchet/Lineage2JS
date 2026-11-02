@@ -3,14 +3,16 @@ import { FPlane } from "../un-plane";
 import type { Vector4Arr } from "../library-types";
 import type { IBoxDecodeInfo } from "../un-box";
 
-export type IBSPNodeCollisionInfo_T = { flags: number[], bounds: IBoxDecodeInfo };
+export type IBSPNodeCollisionInfo_T = { flags: number[], bounds: IBoxDecodeInfo, boxPlanes?: Vector4Arr[] };
 export type IBSPNodeDecodeInfo_T = {
     children: [number, number],
     plane: Vector4Arr,
     leaves: [number, number],
     zones: [number, number],
     surfFlags: number,
+    portalVertices?: number[],
     iPlane: number,
+    isCsg: boolean,
     iRenderBound: number,
     spheres: {
         exclusive: Vector4Arr,
@@ -47,7 +49,7 @@ export class FBSPNode implements Constructable_T {
     public readonly iZone: number[] = new Array(2); // 2  byte visibility zone in 1=front, 0=back.
     public numVertices: number;                     // 1  byte number of vertices in node.
     public flags: number;                           // 1  byte node flags.
-    public bspNodeFlags: FlagDict_T<keyof typeof BspNodeFlags_T>;
+    public get bspNodeFlags(): FlagDict_T<keyof typeof BspNodeFlags_T> { return flagBitsToDict(this.flags, BspNodeFlags_T); }
     public readonly iLeaf: number[] = new Array(2); // 8  byte leaf in back and front, INDEX_NONE=not a leaf.
 
     public iVertexIndex: number;
@@ -72,7 +74,6 @@ export class FBSPNode implements Constructable_T {
 
         this.zoneMask = pkg.read("uint64");
         this.flags = pkg.read("uint8");
-        this.bspNodeFlags = flagBitsToDict(this.flags, BspNodeFlags_T);
         this.iVertPool = pkg.read("compat32");
         this.iSurf = pkg.read("compat32");
 
@@ -122,6 +123,7 @@ export class FBSPNode implements Constructable_T {
             zones: [this.iZone[0], this.iZone[1]],
             surfFlags,
             iPlane: this.iPlane,
+            isCsg: this.numVertices > 0 && !(this.flags & (BspNodeFlags_T.NF_IsNew | BspNodeFlags_T.NF_NotCsg)),
             iRenderBound: this.iRenderBound !== -1 ? this.iRenderBound : undefined, // INDEX_NONE = -1
             spheres: {
                 exclusive: [this.exclusiveSphereBound.x, this.exclusiveSphereBound.y, this.exclusiveSphereBound.z, this.exclusiveSphereBound.w],

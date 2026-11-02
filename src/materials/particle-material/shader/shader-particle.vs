@@ -10,7 +10,6 @@ varying vec3 vSubdivisionBlend;
 #endif
 
 #include <common>
-#include <uv_pars_vertex>
 #include <envmap_pars_vertex>
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
@@ -25,7 +24,6 @@ void main() {
     vSubdivisionBlend = vec3(uv * uvOffsetScale.zw + subdivisionBlend.xy, subdivisionBlend.z);
     #endif
 
-    #include <uv_vertex>
     #include <color_vertex>
     #include <morphcolor_vertex>
 

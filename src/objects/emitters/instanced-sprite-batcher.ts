@@ -1,4 +1,5 @@
 import { Camera, CustomBlending, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, ShaderMaterial, Vector3, ZeroFactor } from "three";
+import { copyShaderMaterial } from "../../materials/global-uniforms";
 
 const baseGeometry = new PlaneGeometry(2, 2);
 const DEPTH_BUCKET_SIZE = 2048;
@@ -84,14 +85,7 @@ class SpriteParticleBatch {
         geometry.instanceCount = 0;
 
         const material = new ShaderMaterial();
-        const sourceUniforms = sourceMaterial.uniforms;
-
-        // ShaderMaterial.copy deep-clones uniforms, and cloneUniforms clones textures through a
-        // bare `new this.constructor()` - WetWaterTexture can't survive that; uniforms are shared anyway
-        sourceMaterial.uniforms = {};
-        material.copy(sourceMaterial);
-        sourceMaterial.uniforms = sourceUniforms;
-        material.uniforms = sourceUniforms;
+        copyShaderMaterial(sourceMaterial, material);
         material.defines = { ...(sourceMaterial.defines ?? {}), USE_WORLD_PARTICLE_BATCH: "" };
         material.visible = true;
         material.needsUpdate = true;
@@ -254,8 +248,8 @@ class SpriteParticleBatch {
     }
 
     protected markUpdated(attribute: InstancedBufferAttribute, count: number) {
-        attribute.updateRange.offset = 0;
-        attribute.updateRange.count = count;
+        attribute.clearUpdateRanges();
+        attribute.addUpdateRange(0, count);
         attribute.needsUpdate = true;
     }
 

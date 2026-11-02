@@ -282,14 +282,23 @@ class ExportRef extends LazyPropertyValue {
 
 class ExportRefArray extends LazyPropertyValue {
     protected readonly items: any[];
+    protected readonly template: any[];
 
-    public constructor(items: any[]) {
+    public constructor(loader: AssetLoader, value: any[]) {
         super();
 
-        this.items = items;
+        this.items = Array.from(value, item => isDataExport(item) ? new ExportRef(loader, item) : item);
+        this.template = typeof (value as any).nativeClone === "function" ? (value as any).nativeClone() : null;
+        if (this.template) this.template.length = 0;
     }
 
-    public resolve() { return this.items.map(item => item instanceof ExportRef ? item.resolve() : item); }
+    public resolve() {
+        const items = this.template ? (this.template as any).nativeClone() : [];
+
+        for (const item of this.items) items.push(item instanceof ExportRef ? item.resolve() : item);
+
+        return items;
+    }
 }
 
 function isDataExport(value: any): value is UObject {
@@ -300,14 +309,21 @@ function isDataExport(value: any): value is UObject {
 function unresolveDefaults(loader: AssetLoader, field: UField) {
     const dict = Object.getOwnPropertyDescriptor(field, "propertyDict");
 
-    if (!dict) return;
+    if (dict)
+        for (const [key, value] of Map.prototype.entries.call(dict.value))
+            Map.prototype.set.call(dict.value, key, unresolveDefaultValue(loader, value));
 
-    for (const [key, value] of Map.prototype.entries.call(dict.value)) {
-        if (Array.isArray(value)) {
-            if (value.some(isDataExport))
-                Map.prototype.set.call(dict.value, key, new ExportRefArray(value.map(item => isDataExport(item) ? new ExportRef(loader, item) : item)));
-        } else if (isDataExport(value)) Map.prototype.set.call(dict.value, key, new ExportRef(loader, value));
-    }
+    const defaults = (field as any).kls?.defaultNamedProperties;
+
+    if (defaults)
+        for (const key of Object.keys(defaults)) defaults[key] = unresolveDefaultValue(loader, defaults[key]);
+}
+
+function unresolveDefaultValue(loader: AssetLoader, value: any): any {
+    if (Array.isArray(value) && value.some(isDataExport))
+        return new ExportRefArray(loader, value);
+
+    return isDataExport(value) ? new ExportRef(loader, value) : value;
 }
 
 export default AssetLoader;

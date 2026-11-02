@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+const webpack = require("webpack");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { initChunkerMiddleware } = require("./chunker-middleware");
 // const { SourceMapDevToolPlugin } = require("webpack");
@@ -18,7 +20,11 @@ function* walkSync(dir) {
 const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U", "OGG"];
 
 function createModuleConfig({ name, resolve, entry: _entry, library, isWorker }) {
-    return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats }) {
+    return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats, httpAssets, defaultLoginServer, preloadSectors = [], characterCreationRaces = [0, 1, 2, 3, 4], loginExitUrl = "", clientDownloadUrl = "" }) {
+        if (!characterCreationRaces.length || characterCreationRaces.some(race => !Number.isInteger(race) || race < 0 || race > 4) || new Set(characterCreationRaces).size !== characterCreationRaces.length)
+            throw new Error(`Invalid character creation races: ${characterCreationRaces}`);
+        if (preloadSectors.some(sector => !/^\d+_\d+$/.test(sector))) throw new Error(`Invalid preload sectors: ${preloadSectors}`);
+
         const pluginsSASS = (mode === "production"
             ? [{ loader: MiniCssExtractPlugin.loader }]
             : ["style-loader"])
@@ -27,10 +33,51 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 "sass-loader",
             ]);
 
-        const dirAssets = "assets-c4/";
-        const plugins = [];
+        const dirAssets = path.resolve(__dirname, "../assets-c4") + path.sep;
+        const plugins = [new webpack.DefinePlugin({ BITMAP_NAMEPLATES: JSON.stringify(process.env.BITMAP_NAMEPLATES !== "0"), DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""), PRELOAD_SECTORS: JSON.stringify(preloadSectors), CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces), LOGIN_EXIT_URL: JSON.stringify(loginExitUrl), CLIENT_DOWNLOAD_URL: JSON.stringify(clientDownloadUrl) })];
+        const servedAssets = { files: Object.create(null), version: "" };
+        const dirThreeWasm = path.resolve(__dirname, "../node_modules/three-wasm/src");
 
         if (!isWorker) {
+            const servedPath = path.resolve(__dirname, "../served.txt");
+            const patterns = fs.existsSync(servedPath) ? fs.readFileSync(servedPath, "utf8").split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => new RegExp(line, "i")) : [];
+
+            if (patterns.length && fs.existsSync(dirAssets)) {
+                const hash = crypto.createHash("sha256");
+
+                for (const fname of Array.from(walkSync(dirAssets)).sort()) {
+                    const relPath = path.relative(dirAssets, fname).split(path.sep).join("/");
+
+                    if (!patterns.some(pattern => pattern.test(relPath))) continue;
+
+                    servedAssets.files[relPath.toLowerCase()] = relPath;
+                    hash.update(JSON.stringify(relPath));
+                    hash.update(fs.readFileSync(fname));
+                }
+
+                if (Object.keys(servedAssets.files).length) servedAssets.version = hash.digest("hex");
+            }
+
+            plugins.push({ apply(compiler) {
+                compiler.hooks.thisCompilation.tap("served-assets", compilation => {
+                    compilation.hooks.processAssets.tap({ name: "served-assets", stage: webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL }, () => {
+                        compilation.emitAsset("served-assets.json", new webpack.sources.RawSource(JSON.stringify(servedAssets)));
+                    });
+                });
+            } });
+
+            if (!fs.existsSync(dirThreeWasm)) throw new Error(`three-wasm is not linked at '${dirThreeWasm}', run 'npm link ../three-wasm'.`);
+
+            for (const name of ["Matrix4", "Euler"])
+                plugins.push(new webpack.NormalModuleReplacementPlugin(new RegExp(`three[\\\\/]src[\\\\/]math[\\\\/]${name}\\.js$`), data => {
+                    if (!data.createData || !data.createData.resource) return;
+
+                    data.createData.resource = path.join(dirThreeWasm, `${name}.js`);
+                    data.createData.context = dirThreeWasm;
+                }));
+        }
+
+        if (!isWorker && httpAssets) {
             const fileList = {
                 comment: "This file is auto-generated, any changes will be lost.",
                 supported: {},
@@ -51,11 +98,13 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             }
 
             fs.writeFileSync(path.join(__dirname, "../asset-list.json"), JSON.stringify(fileList, undefined, 4));
+        }
 
+        if (!isWorker) {
             plugins.push(new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
-                    { from: "../asset-list.json", to: "asset-list.json" },
+                    ...(httpAssets ? [{ from: "../asset-list.json", to: "asset-list.json" }] : []),
                     // ...copyFiles
                 ],
             }));
@@ -126,7 +175,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             }
         }, {
             test: /\.(js|jsx|ts|tsx)$/,
-            exclude: /(node_modules|submodules)/,
+            exclude: /(node_modules|submodules|three-wasm)/,
             use: [
                 {
                     loader: "babel-loader",
@@ -161,7 +210,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             mode,
             stats,
             target: isWorker ? "webworker" : "web",
-            resolve,
+            resolve: !isWorker ? { ...resolve, alias: { ...resolve.alias, "three$": path.resolve(__dirname, "../node_modules/three/src/Three.js"), "three": path.resolve(__dirname, "../node_modules/three") } } : resolve,
             optimization: {
                 minimize
             },
@@ -181,12 +230,27 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 allowedHosts: "all",
                 hot: false,
                 liveReload: process.env.LIVE_RELOAD !== "0",
-                static: {
+                client: process.env.LIVE_RELOAD === "0" ? false : undefined,
+                static: httpAssets ? {
                     directory: path.resolve(__dirname, "../", dirAssets),
                     publicPath: "/assets"
-                },
+                } : false,
                 setupMiddlewares: (middlewares, devServer) => {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
+
+                    middlewares.unshift({ name: "served-assets", path: "/assets", middleware: (req, res, next) => {
+                        let assetPath;
+
+                        try { assetPath = decodeURIComponent(req.url.split("?")[0]).slice(1).toLowerCase(); }
+                        catch (e) { return res.sendStatus(400); }
+
+                        const file = servedAssets.files[assetPath];
+
+                        if (file) return res.sendFile(path.resolve(dirAssets, file));
+                        if (httpAssets) return next();
+
+                        res.sendStatus(404);
+                    } });
 
                     const reportFile = path.join(__dirname, "../sector-test-report.jsonl");
 

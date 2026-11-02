@@ -10,8 +10,9 @@ import type { UTexture } from "../un-texture";
 import type { UStaticMeshInstance, ILightInstanceDecodeInfo, IStaticMeshInstanceDecodeInfo } from "./un-static-mesh-instance";
 import type { USound } from "../un-sound";
 import type { FLeaf } from "../un-leaf";
+import { LightEffect_T, LightType_T, type ULight } from "../un-light";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
-import type { DecodeLibrary, IBaseObjectDecodeInfo } from "../decode-library";
+import type { IBaseObjectDecodeInfo } from "../decode-library";
 import type { Vector3Arr } from "../library-types";
 import type { ISwayingDecodeInfo } from "./un-movable-static-mesh-actor";
 import type { IMoverDecodeInfo } from "../un-mover";
@@ -21,9 +22,15 @@ export type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
     type: "StaticMeshActor",
     instance: IStaticMeshInstanceDecodeInfo,
     bounds: IBoxDecodeInfo,
+    collisionBounds: IBoxDecodeInfo,
     scaledGlow: number,
     isSunAffected?: boolean,
+    isSpecialLit?: boolean,
+    permeatingLights?: string[],
+    forcedRegionTag?: string,
+    forcedRegion?: number,
     dontBatch?: boolean,
+    agit?: { id: number, index: number, accessories: { depth: number, mesh: IStaticMeshObjectDecodeInfo }[] },
     mover?: IMoverDecodeInfo,
     rotating?: IRotatingDecodeInfo,
     swaying?: ISwayingDecodeInfo,
@@ -38,7 +45,15 @@ export type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
 
 type StaticMeshActorDecodeResult_T = { object: IStaticMeshActorDecodeInfo, leafIndices: number[], zoneUuid: string, geometryUuid: string, zoneBounds: { min: number[], max: number[] } } | null;
 
-abstract class FAccessory extends UObject {
+export abstract class FAccessory extends UObject {
+    public static readonly plainStructFields = true;
+    declare public Depth: number;
+    declare public Mesh: UStaticMesh;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), { "Depth": "Depth", "Mesh": "Mesh" });
+    }
+
     // public unkBytes: Uint8Array;
 
     // public load(pkg: UPackage, tag?: PropertyTag): this {
@@ -50,6 +65,22 @@ abstract class FAccessory extends UObject {
 
 function getSwayPhase(uuid: string): number {
     return cyrb53(uuid) / Number.MAX_SAFE_INTEGER * Math.PI * 2;
+}
+
+function isAnimatedHardwareLight(light: ULight): boolean {
+    if (light.effect === LightEffect_T.LE_Sunlight) return !(light as any).isMovableSunLight;
+    if (light.isDynamic || light.isSunlightColor) return true;
+
+    switch (light.type) {
+        case LightType_T.LT_Pulse:
+        case LightType_T.LT_Blink:
+        case LightType_T.LT_Flicker:
+        case LightType_T.LT_Strobe:
+        case LightType_T.LT_SubtlePulse:
+        case LightType_T.LT_TexturePaletteLoop:
+            return true;
+        default: return false;
+    }
 }
 
 export abstract class UStaticMeshActor extends UAActor {
@@ -141,6 +172,21 @@ export abstract class UStaticMeshActor extends UAActor {
         });
     }
 
+    public getCollisionDecodeInfo(): IActorCollisionDecodeInfo {
+        return {
+            collideActors: this.isCollidingActors ?? true,
+            collideWorld: this.isCollidingWorld ?? true,
+            blockActors: this.isBlockingActors ?? true,
+            blockPlayers: this.isBlockingPlayers ?? true,
+            blockZeroExtent: this.isBlockingZeroExtentTraces ?? true,
+            blockNonZeroExtent: this.isBlockingNonZeroExtentTraces ?? true,
+            worldGeometry: this.isWorldGeometry ?? true,
+            useCylinderCollision: !!this.isUsingCylinderCollision,
+            collisionRadius: this.collisionRadius,
+            collisionHeight: this.collisionHeight
+        };
+    }
+
     protected getActorDecodeInfo(): Partial<IStaticMeshActorDecodeInfo> { return {}; }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder): StaticMeshActorDecodeResult_T {
@@ -168,16 +214,20 @@ export abstract class UStaticMeshActor extends UAActor {
         // static per-vertex lighting on bStatic || (mover && !bDynamicLightMover) (UnStaticMesh.cpp Illuminate)
         const isMoverWithoutDynamicLight = this.physics === EPhysics_T.PHYS_MovingBrush && !this.isDynamicLightMover;
 
-        if (!isStatic && !isMoverWithoutDynamicLight) {
-            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
+        if ((!isStatic && !isMoverWithoutDynamicLight) || !this.instance) {
+            const ambActor = this.getAmbientLightingActor();
+            // UnRenderStaticMesh hardware lights: 0x90d4d3-0x90d50f, no baked instance stream.
+            const ambient = { glow: ambActor.ambientGlow, vector: FColor.fromFloating(...ambActor.getZone().ambientVector.getElements()).toArray(), isUnlit: ambActor.isUnlit, hardwareLighting: true };
+
+            return this.getActorDecodeResult(builder, meshInfo, null, predictedBox, ambient);
         }
 
         if (this.isHiddenInEditor) {
             // Still export actor even if hidden, is this really needed?
-            return this.getActorDecodeResult(library, meshInfo, null, predictedBox, null);
+            return this.getActorDecodeResult(builder, meshInfo, null, predictedBox, null);
         }
 
-        const leaves: FLeaf[] = baseModel ? baseModel.boxLeaves(predictedBox) : [];
+        const leaves: FLeaf[] = baseModel ? baseModel.boxLeaves(predictedBox, this.forcedRegionTag, this.forcedRegion) : [];
         const instance = this.instance ? this.instance.getDecodeInfo(library) : null
 
         // if (attributes.positions.length / 3 === 1587)
@@ -213,12 +263,13 @@ export abstract class UStaticMeshActor extends UAActor {
             isUnlit: this.isUnlit,
         };
 
-        return this.getActorDecodeResult(library, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
+        return this.getActorDecodeResult(builder, meshInfo, instanceColors, predictedBox, ambientProps, instance?.lights);
     }
 
-    protected getActorDecodeResult(library: DecodeLibrary, meshInfo: IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: FBox, ambient: { glow: number, vector: number[], isUnlit: boolean }, lights?: ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
+    protected getActorDecodeResult(builder: DecodeLibraryBuilder, meshInfo: IStaticMeshObjectDecodeInfo, instanceColors: Float32Array | Uint8Array | null, predictedBox: FBox, ambient: IStaticMeshActorDecodeInfo["ambient"], lights?: ILightInstanceDecodeInfo): StaticMeshActorDecodeResult_T {
         this.instance?.loadSelf().setActor(this);
 
+        const library = builder.library;
         const geometryInfo = library.geometries[meshInfo.geometry];
         if (!geometryInfo) {
             console.warn(`Geometry info not found for meshInfo.geometry: ${meshInfo.geometry}, actor: ${this.objectName}`);
@@ -251,16 +302,24 @@ export abstract class UStaticMeshActor extends UAActor {
             ? { rotator: [this.rotation.pitch, this.rotation.yaw, this.rotation.roll], rate: [this.rotationRate.pitch, this.rotationRate.yaw, this.rotationRate.roll] } as IRotatingDecodeInfo
             : undefined;
 
+        const permeatingLeaves = this.physics === EPhysics_T.PHYS_None && (ambient?.hardwareLighting || this.isAgitDefaultStaticMesh) ? baseModel.boxLeafIndices(predictedBox, this.forcedRegionTag, this.forcedRegion) : null;
+        const isLiveHardwareLit = !!ambient?.hardwareLighting && (!permeatingLeaves || permeatingLeaves.some(index => baseModel.getLeafPermeatingLights(index).some(isAnimatedHardwareLight)));
+
         const actorInfo = {
             uuid: this.uuid,
             type: "StaticMeshActor",
             name: this.objectName,
             position: _position,
             scaledGlow: this.scaleGlow,
-            isSunAffected: this.isSunAffected,
+            forcedRegionTag: this.forcedRegionTag,
+            forcedRegion: this.forcedRegion,
+            isSunAffected: this.isUnlit ? false : this.isSunAffected,
+            isSpecialLit: this.isSpecialLit,
+            permeatingLights: permeatingLeaves ? Array.from(new Set(permeatingLeaves.flatMap(index => library.bspLeaves[index].permeatingLights))) : undefined,
             ambient,
             rotating,
-            dontBatch: !!this.dontBatch || !!rotating,
+            dontBatch: !!this.dontBatch || !!rotating || isLiveHardwareLit || !!this.isAgitDefaultStaticMesh,
+            agit: this.isAgitDefaultStaticMesh ? { id: this.agitID, index: this.accessoryIndex, accessories: Array.from(this.accessoryTypeList || [], accessory => ({ depth: accessory.Depth, mesh: builder.pullStaticMesh(accessory.Mesh, null) })) } : undefined,
             isRangeIgnored: !!this.isRangeIgnored,
             scale: this.scale?.multiplyScalar(this.drawScale).getElements() || [1, 1, 1],
             quaternion: this.rotation?.getQuaternionElements() || [0, 0, 0, 1],
@@ -277,18 +336,8 @@ export abstract class UStaticMeshActor extends UAActor {
                 min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
                 max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
             },
-            collision: {
-                collideActors: this.isCollidingActors ?? true,
-                collideWorld: this.isCollidingWorld ?? true,
-                blockActors: this.isBlockingActors ?? true,
-                blockPlayers: this.isBlockingPlayers ?? true,
-                blockZeroExtent: this.isBlockingZeroExtentTraces ?? true,
-                blockNonZeroExtent: this.isBlockingNonZeroExtentTraces ?? true,
-                worldGeometry: this.isWorldGeometry ?? true,
-                useCylinderCollision: !!this.isUsingCylinderCollision,
-                collisionRadius: this.collisionRadius,
-                collisionHeight: this.collisionHeight
-            },
+            collisionBounds: (this.mesh as UStaticMesh).getCollisionBoundingBox(this).getDecodeInfo(),
+            collision: this.getCollisionDecodeInfo(),
             ...this.getActorDecodeInfo()
         } as IStaticMeshActorDecodeInfo;
 
@@ -306,9 +355,7 @@ export abstract class UStaticMeshActor extends UAActor {
         let leafIndices: number[] = [];
 
         if (baseModel) {
-            const origin = inflatedBox.getCenter();
-            const inflatedExtent = inflatedBox.getExtents();
-            leafIndices = baseModel.boxLeavesRecursive(0, origin, inflatedExtent);
+            leafIndices = baseModel.boxLeafIndices(inflatedBox, this.forcedRegionTag, this.forcedRegion);
 
             for (const leafIndex of leafIndices) {
                 const leaf = library.bspLeaves[leafIndex];

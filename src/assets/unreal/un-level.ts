@@ -1,5 +1,5 @@
 import FURL from "./un-url";
-import { BufferValue, type APackage, type UExport, FObjectArray } from "@l2js/core";
+import { BufferValue, type APackage, type UExport, FObjectArray, ObjectFlags_T } from "@l2js/core";
 import UObject from "./un-object";
 import type { UAActor } from "./un-aactor";
 import type { UModel } from "./model/un-model";
@@ -41,6 +41,11 @@ abstract class ULevelBase extends UObject {
             this.ambientActors = FObjectArray.loadOfSize(0, pkg);
             this.actors = FObjectArray.loadOfSize(dbNum, pkg);
         }
+
+        // ULinkerLoad::CreateExport 0x1014ac6d rejects exports outside the client load context.
+        for (const actors of [this.ambientActors, this.actors])
+            for (let index = 0; index < actors.length; index++)
+                if (actors[index] && !actors[index].exp.anyFlags(ObjectFlags_T.RF_LoadForClient)) actors[index] = null;
 
         this.url.load(pkg);
     }

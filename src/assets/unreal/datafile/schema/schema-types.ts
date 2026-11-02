@@ -1,5 +1,6 @@
 export { SCHEMA_ACTIONNAME_E_DAT } from "./actionname-e.schema";
-export { CHARACTER_ARMOR_GROUPS, CHARACTER_ARMOR_SLOTS, SCHEMA_ARMORGRP_DAT } from "./armorgrp.schema";
+export { CHARACTER_ARMOR_GROUPS, CHARACTER_ARMOR_SLOTS, CHARACTER_FULL_ARMOR_SLOT, CHARACTER_ALLDRESS_SLOT, CHARACTER_HEAD_ARMOR_SLOTS, SCHEMA_ARMORGRP_DAT } from "./armorgrp.schema";
+export { SCHEMA_HELMETGRP_DAT, SCHEMA_HAIRACCESSARYGRP_DAT } from "./helmetgrp.schema";
 export { SCHEMA_CASTLENAME_E_DAT } from "./castlename-e.schema";
 export { CHARGRP_RECORD_COUNT, SCHEMA_CHARGRP_DAT } from "./chargrp.schema";
 export { SCHEMA_CLASSINFO_E_DAT } from "./classinfo-e.schema";

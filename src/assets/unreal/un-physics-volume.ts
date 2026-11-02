@@ -4,7 +4,13 @@ import type { FColor } from "./un-color";
 import type { DecodeLibrary, IBaseObjectDecodeInfo } from "./decode-library";
 import type { Vector3Arr, ColorArr } from "./library-types";
 
-export type IWaterVolumeDecodeInfo = IBaseObjectDecodeInfo & {
+export type PhysicsVolumeDecodeInfo_T = IBaseObjectDecodeInfo & {
+    type: "PhysicsVolume" | "WaterVolume",
+    objectPath: string,
+    bsp: IVolumeBspDecodeInfo | null
+};
+
+export type IWaterVolumeDecodeInfo = PhysicsVolumeDecodeInfo_T & {
     type: "WaterVolume",
     priority: number,
     fluidFriction: number,
@@ -120,9 +126,11 @@ export abstract class UPhysicsVolume extends UVolume {
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary): IWaterVolumeDecodeInfo | null {
-        if (!this.isWaterVolume && !this.isL2WaterVolume && this.constructor.friendlyName !== "WaterVolume") return null;
-        if (!this.brush) return null;
+    public getDecodeInfo(library: DecodeLibrary): PhysicsVolumeDecodeInfo_T | IWaterVolumeDecodeInfo {
+        const isWater = this.isWaterVolume || this.isL2WaterVolume || this.constructor.friendlyName === "WaterVolume";
+
+        if (!isWater)
+            return { uuid: this.uuid, type: "PhysicsVolume", name: this.objectName, objectPath: this.name, bsp: this.brush ? this.getWorldBspInfo() : null };
 
         const zoneVelocity = this.zoneVelocity ? this.zoneVelocity.getElements() : [0, 0, 0] as Vector3Arr;
         const gravity = this.gravity ? this.gravity.getElements() : [0, 0, -1500] as Vector3Arr;
@@ -134,8 +142,9 @@ export abstract class UPhysicsVolume extends UVolume {
         } : null;
 
         return {
-            ...super.getDecodeInfo(library),
+            ...(this.brush ? super.getDecodeInfo(library) : { uuid: this.uuid, name: this.objectName }),
             type: "WaterVolume",
+            objectPath: this.name,
             priority: this.priority ?? this.locationPriority ?? 0,
             fluidFriction: this.fluidFriction ?? 2.4,
             gravity,
@@ -145,7 +154,7 @@ export abstract class UPhysicsVolume extends UVolume {
             cellophane: this.useCellophane && this.cellophaneColor ? this.cellophaneColor.toArray() as ColorArr : null,
             waitHitEffect: this.waitHitEffect ?? null,
             runHitEffect: this.runHitEffect ?? null,
-            bsp: this.getWorldBspInfo()
+            bsp: this.brush ? this.getWorldBspInfo() : null
         };
     }
 }

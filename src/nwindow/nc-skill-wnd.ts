@@ -1,0 +1,198 @@
+import NCTooltip from "./nc-tooltip";
+import { type default as NDomLayer, NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
+import type { SkillEntry_T } from "../network/game-packets";
+import type NCCoolTimeIcon from "./nc-cool-time-icon";
+import SysString_T from "./sys-string";
+
+const TEX_BACK = "L2UI_CH3.SkillWnd.Skill_Back";
+const TEX_TAB = "L2UI_CH3.SkillWnd.Skill_Tab2";
+const TEX_TAB_SELECTED = "L2UI_CH3.SkillWnd.Skill_Tab1";
+const TEX_OUTLINE = "L2UI.NWindow.Icon_Back";
+const TEX_PRESSED = "L2UI.NWindow.Icon_Click";
+const TEX_SELECTED = "L2UI.NWindow.item_click";
+const TEX_TOGGLE = "L2_SkillTime.ToggleEffect.ToggleEffect001";
+
+export class NCSkillWnd {
+    public static getTextures() { return [TEX_BACK, TEX_TAB, TEX_TAB_SELECTED, `${TEX_TAB}_over`, TEX_OUTLINE, TEX_PRESSED, TEX_SELECTED, TEX_TOGGLE, ...NDOM_SCROLL_TEXTURES, ...new NCTooltip().getTextures()]; }
+    public readonly element: HTMLDivElement;
+    public onShow: () => void = null;
+    public onUse: (id: number, ctrl: boolean, shift: boolean) => void = null;
+    protected readonly layer: NDomLayer;
+    protected readonly list: NDomScrollPane_T;
+    protected readonly skillTabs: NDomButton_T[] = [];
+    protected skills: SkillEntry_T[] = [];
+    protected pendingSkills: SkillEntry_T[] = [];
+    protected isPassive = false;
+    protected pressedSelection: HTMLDivElement = null;
+    protected pressedFrame: HTMLDivElement = null;
+    protected readonly coolTimeIcons = new Map<string, HTMLDivElement>();
+    protected readonly toggleIcons = new Map<string, HTMLDivElement>();
+    protected activeSkills = new Set<string>();
+
+    public constructor(layer: NDomLayer, protected readonly coolTimes: Map<string, NCCoolTimeIcon>, parent: HTMLElement) {
+        this.layer = layer;
+        this.element = layer.createWindow(0, 66, 256, 335, parent);
+        this.element.hidden = true;
+        layer.tile(this.element, 0, 0, 256, 335, 0, 0, 256, 335, TEX_BACK);
+        this.list = layer.scrollPane(this.element, 9, 40, 239, 280, 35); // NCSkillWnd item grid on NCScrollWnd.
+        this.list.setAttribute("role", "tabpanel");
+        this.list.tabIndex = -1;
+        for (const type of ["wheel", "mousedown"]) this.list.addEventListener(type, () => this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove()));
+
+        [SysString_T.Active, SysString_T.Passive].forEach((id, index) => {
+            const label = layer.getManager().getSysString(id);
+            const select = () => {
+                this.isPassive = index === 1;
+                this.list.setScroll(0);
+                this.paintSkills();
+                this.list.focus();
+            };
+            const tab = layer.tab(this.element, 12 + index * 94, 8, 94, 23, TEX_TAB, TEX_TAB_SELECTED, label, null, select);
+
+            this.skillTabs.push(tab);
+        });
+        this.paintSkills();
+    }
+
+    public isVisible() { return !this.element.hidden && !this.element.parentElement.hidden; }
+    public setVisible(visible: boolean) {
+        if (visible && !this.element.hidden) return;
+
+        this.pendingSkills = this.skills = [];
+        this.list.setScroll(0);
+        this.paintSkills();
+        if (visible && this.onShow) this.onShow();
+        this.element.hidden = !visible;
+    }
+
+    public getMacroCommand(id: number) {
+        const skill = this.skills.find(skill => skill.id === id);
+
+        if (!skill || skill.isPassive) return null;
+
+        const strings = this.layer.getManager().strings, info = strings.skillInfos[`${id}:${skill.level}`];
+
+        return `/${strings.commands[24]} ${info ? info.name : strings.skillNames[id]}`;
+    }
+
+    public async setSkills(skills: SkillEntry_T[]) {
+        this.pendingSkills = skills;
+
+        const strings = this.layer.getManager().strings;
+
+        await this.layer.loadTextures([...new Set(skills.map(skill => strings.skillInfos[`${skill.id}:${skill.level}`]?.icon || strings.skillIcons[skill.id]))]);
+        if (this.pendingSkills !== skills) return;
+
+        this.skills = skills;
+        this.paintSkills();
+    }
+
+    public clearSelection() {
+        if (this.pressedSelection) this.pressedSelection.hidden = true;
+        if (this.pressedFrame) this.pressedFrame.hidden = true;
+
+        this.pressedSelection = this.pressedFrame = null;
+    }
+
+    public setActiveSkills(skills: Set<string>) {
+        this.activeSkills = skills;
+        for (const [key, icon] of this.toggleIcons) icon.hidden = !skills.has(key);
+    }
+
+    public renderCoolTimes() {
+        if (!this.isVisible()) return;
+
+        for (const [key, element] of this.coolTimeIcons) {
+            const coolTime = this.coolTimes.get(key);
+            const texture = coolTime && coolTime.texture && this.layer.hasTexture(coolTime.texture) ? coolTime.texture : "";
+
+            if (element.dataset.texture === texture) continue;
+
+            element.hidden = !texture;
+            if (texture) this.layer.setTile(element, 32, 32, 0, 0, 32, 32, texture, coolTime.color);
+            element.dataset.texture = texture;
+        }
+    }
+
+    protected paintSkills() {
+        const layer = this.layer, strings = layer.getManager().strings;
+
+        this.element.querySelectorAll(".ndom-tooltip").forEach(element => element.remove());
+
+        this.skillTabs.forEach((tab, index) => {
+            const selected = this.isPassive === (index === 1);
+
+            tab.setTextures(selected ? TEX_TAB_SELECTED : TEX_TAB, TEX_TAB_SELECTED);
+            tab.setAttribute("aria-selected", String(selected));
+        });
+        this.clearSelection();
+        this.list.content.replaceChildren();
+        this.coolTimeIcons.clear();
+        this.toggleIcons.clear();
+
+        const skills = this.skills.filter(skill => skill.isPassive === this.isPassive);
+
+        this.list.setContentHeight(Math.ceil(skills.length / 6) * 35);
+        skills.forEach((skill, index) => {
+            const button = document.createElement("button");
+
+            button.type = "button";
+            button.draggable = false;
+            button.className = "ndom-inventory-item";
+            button.dataset.skillId = String(skill.id);
+            button.dataset.icon = strings.skillInfos[`${skill.id}:${skill.level}`]?.icon || strings.skillIcons[skill.id];
+            const info = NCTooltip.skill(strings, skill.id, skill.level);
+
+            button.setAttribute("aria-label", info.title);
+            layer.tooltip(this.element, button, info);
+            layer.place(button, index % 6 * 37, Math.trunc(index / 6) * 35, index % 6 === 5 ? 38 : 37, 35);
+            const selection = layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, TEX_SELECTED);
+
+            selection.hidden = true;
+            layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, button.dataset.icon);
+            if (!skill.isPassive) layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE);
+
+            const frame = skill.isPassive ? null : layer.tile(button, 0, 0, 34, 34, 0, 0, 34, 34, TEX_PRESSED);
+
+            if (frame) frame.hidden = true;
+
+            if (strings.skillInfos[`${skill.id}:${skill.level}`]?.isToggle) {
+                const toggle = layer.tile(button, 1, 1, 32, 32, 0, 0, 32, 32, TEX_TOGGLE);
+
+                toggle.hidden = !this.activeSkills.has(`${skill.id}:${skill.level}`);
+                this.toggleIcons.set(`${skill.id}:${skill.level}`, toggle);
+            }
+
+            const coolTimeIcon = layer.createWindow(1, 1, 32, 32, button);
+
+            coolTimeIcon.className = "ndom-tile";
+            coolTimeIcon.hidden = true;
+            coolTimeIcon.dataset.texture = "";
+            this.coolTimeIcons.set(`${skill.id}:${skill.level}`, coolTimeIcon);
+
+            const use = (event: MouseEvent | KeyboardEvent) => { if (this.onUse) this.onUse(skill.id, event.ctrlKey, event.shiftKey); };
+            button.addEventListener("mousedown", event => {
+                if (event.button !== 0) return;
+
+                this.clearSelection();
+                this.pressedSelection = selection;
+                this.pressedFrame = frame;
+                selection.hidden = false;
+                layer.getManager().playPickupSound();
+                if (frame) frame.hidden = false;
+            });
+            button.addEventListener("click", use);
+            button.addEventListener("keydown", event => {
+                if (event.repeat || event.key !== "Enter" && event.key !== " ") return;
+
+                event.preventDefault();
+                layer.getManager().playButtonSound(!skill.isPassive);
+                use(event);
+            });
+            this.list.content.appendChild(button);
+        });
+
+    }
+}
+
+export default NCSkillWnd;

@@ -1,7 +1,7 @@
 node_modules/
 bin/
 /assets*
-.vscode/tasks.json
+.vscode/*
 /build/*
 *cpp/
 cpp/l2_viewer/

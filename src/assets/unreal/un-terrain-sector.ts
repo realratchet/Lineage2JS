@@ -91,6 +91,7 @@ export abstract class UTerrainSector extends UObject {
     declare protected texInfo: FPrimitiveArray<"uint16">;
     declare protected someSectorVisibilityMask: Int16Array; // zoneVisibilityMask - 64-zone PVS mask
     declare protected renderPasses: FTerrainSectorRenderPass[];
+    declare protected normals: Float32Array;
 
     public getDecorationInfo() {
         return { offsetX: this.offsetX, offsetY: this.offsetY, quadsX: this.quadsXActual, quadsY: this.quadsYActual };
@@ -117,7 +118,7 @@ export abstract class UTerrainSector extends UObject {
         };
 
         // Generate triangulation data on demand
-        this.generateTriangles();
+        if (!this.normals) this.generateTriangles();
 
         const vertexCount = 17 * 17;
         const width = iTerrainMap.width;
@@ -135,7 +136,7 @@ export abstract class UTerrainSector extends UObject {
 
         let iii = 0;
 
-        normals.set(this.triangles.normals)
+        normals.set(this.normals)
 
         for (let y = 0; y < 17; y++) {
             for (let x = 0; x < 17; x++) {
@@ -145,7 +146,7 @@ export abstract class UTerrainSector extends UObject {
                 const idxOffset = y * 17 + x;
                 const idxVertOffset = idxOffset * 3;
 
-                const { x: px, y: py, z: pz } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld);
+                const { x: px, y: py, z: pz } = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld, v);
                 // const [nx, nz, ny] = [
                 //     this.triangles.normals[0 + 3 * iii],
                 //     this.triangles.normals[1 + 3 * iii],
@@ -282,10 +283,10 @@ export abstract class UTerrainSector extends UObject {
                     const offset = Math.min(hmy, (width - 1)) * width + Math.min(hmx, (width - 1));
 
                     // rebuild the world-space (Z-up) vertex via info.toWorld
-                    const worldVert = FVector.make(hmx, hmy, data[offset]).transformBy(info.toWorld);
+                    const worldVert = v.set(hmx, hmy, data[offset]).transformBy(info.toWorld, v);
 
                     // Transform by the layer's texture matrix to get UVs
-                    const uvVert = worldVert.applyMatrix4(layer.terrainMatrix);
+                    const uvVert = worldVert.applyMatrix4(layer.terrainMatrix, v);
 
                     uvs[layerOffset + idxOffset + 0] = uvVert.x;
                     uvs[layerOffset + idxOffset + 1] = uvVert.y;
@@ -316,8 +317,8 @@ export abstract class UTerrainSector extends UObject {
             indices,
             bounds: {
                 box: trueBoundingBox.isValid ? {
-                    min: this.boundingBox.min.sub(center).getElements() as Vector3Arr,
-                    max: this.boundingBox.max.sub(center).getElements() as Vector3Arr
+                    min: trueBoundingBox.min.sub(center).getElements() as Vector3Arr,
+                    max: trueBoundingBox.max.sub(center).getElements() as Vector3Arr
                 } : null
             }
         };
@@ -494,6 +495,29 @@ export abstract class UTerrainSector extends UObject {
 
     public generateTriangles() {
         const info = this.info.loadSelf();
+        const normals = new Float32Array(17 * 17 * 3);
+
+        if (info.texModifyInfo.loadSelf().colorOp !== 1) {
+            debugger;
+            throw new Error("not implemented");
+        }
+
+        for (let y = 0, i = 0; y <= 16; y++) {
+            for (let x = 0; x <= 16; x++, i += 3) {
+                const normal = this.getVertexNormal(x, y);
+
+                normals[i] = normal.x;
+                normals[i + 1] = normal.y;
+                normals[i + 2] = normal.z;
+            }
+        }
+
+        this.normals = normals;
+    }
+
+    /*
+    public generateTriangles() {
+        const info = this.info.loadSelf();
         const invSize = 1 / 4096;
         const hmx = info.heightmapX, hmy = info.heightmapY;
         const vertexCount = 17 * 17;
@@ -614,6 +638,8 @@ export abstract class UTerrainSector extends UObject {
         // TODO: update decorators
 
     }
+
+    */
 
     protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }
 

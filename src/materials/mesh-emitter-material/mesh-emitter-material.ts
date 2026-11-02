@@ -15,7 +15,8 @@ export type MeshEmitterMaterialParameters = {
     depthWrite?: boolean,
     depthTest?: boolean,
     sprites?: THREE.Texture[],
-    framerate?: number
+    framerate?: number,
+    isInstanced?: boolean
 };
 
 export default class MeshEmitterMaterial extends ShaderMaterial {
@@ -39,7 +40,7 @@ export default class MeshEmitterMaterial extends ShaderMaterial {
             transparent: info.transparent !== undefined ? info.transparent : true,
             depthWrite: info.depthWrite !== undefined ? info.depthWrite : false,
             depthTest: info.depthTest !== undefined ? info.depthTest : true,
-            defines: { USE_FOG: "" }
+            defines: info.isInstanced ? { USE_FOG: "", USE_PARTICLE_INSTANCING: "" } : { USE_FOG: "" }
         });
 
         if (info.sprites && info.sprites.length > 1) {

@@ -96,8 +96,8 @@ export class TerrainDecoration extends InstancedMesh {
         this.lightingRevision = terrain.lightingRevision;
     }
 
-    public updateVisibility(cameraPosition: Vector3, terrainVisible: boolean) {
-        const visible = terrainVisible && (this.forceRender || this.bounds.distanceToPoint(cameraPosition) <= this.fadeoutRadius[1]);
+    public updateVisibility(cameraPosition: Vector3, terrainVisible: boolean, renderDeco: boolean = true) {
+        const visible = terrainVisible && (this.forceRender || renderDeco && this.bounds.distanceToPoint(cameraPosition) <= this.fadeoutRadius[1]);
 
         this.visible = visible;
         if (this.visible) this.updateLighting();

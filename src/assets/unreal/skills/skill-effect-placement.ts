@@ -63,7 +63,7 @@ function getBoneRotation(host: SkillEffectHost_T, actor: SkillActor_T, bone: str
 export class SkillEffectPlacement {
     protected readonly host: SkillEffectHost_T;
     protected readonly trailers: { effect: SkillActor_T, host: SkillActor_T, sameRotation: boolean, relative: boolean, offset: Vector3Arr }[] = [];
-    protected readonly pawnLights: { actor: SkillActor_T, light: unknown }[] = [];
+    protected readonly pawnLights: { actor: SkillActor_T, light: unknown, isCasting: boolean }[] = [];
 
     public constructor(host: SkillEffectHost_T) { this.host = host; }
 
@@ -74,7 +74,7 @@ export class SkillEffectPlacement {
         for (let i = this.trailers.length - 1; i >= 0; i--) {
             const { effect, host, sameRotation, relative, offset } = this.trailers[i];
 
-            if (!this.host.isAlive(effect)) { this.trailers.splice(i, 1); continue; }
+            if (!this.host.isAlive(effect) || !this.host.isAlive(host)) { this.trailers.splice(i, 1); continue; }
 
             this.host.getPosition(host, tmpPosition, true);
             if (relative) {
@@ -99,15 +99,61 @@ export class SkillEffectPlacement {
         this.trailers.length = 0;
     }
 
+    public hasPending(): boolean { return this.trailers.length > 0 || this.pawnLights.length > 0; }
+
+    public cancelCastingLights(): void {
+        // Engine.dll MagicStop 0x7b554f..0x7b5587 removes FNPawnLight type2 only.
+        for (let i = this.pawnLights.length - 1; i >= 0; i--) {
+            const light = this.pawnLights[i];
+
+            if (!light.isCasting) continue;
+            this.host.removePawnLight(light.actor, light.light);
+            this.pawnLights.splice(i, 1);
+        }
+    }
+
     public addTrailer(effect: SkillActor_T, host: SkillActor_T, offset: Vector3Arr, relative: boolean, sameRotation: boolean): void {
         this.trailers.push({ effect, host, sameRotation, relative, offset: [...offset] });
     }
 
+    public spawnSoulShot(skill: NpcSkillAttack_T, caster: SkillActor_T): void {
+        const shot = skill.visual.soulshot;
+        const weapon = caster.getUnrealScriptProperty("CurWeaponType") as number;
+        const hands = shot.hands[weapon];
+
+        if (!hands) throw new Error(`Pawn '${caster.name}' has invalid weapon type '${weapon}'.`);
+
+        for (let i = 0; i < hands.length; i++) {
+            if (hands[i] === -1) continue;
+            const length = this.host.getWeaponLength(caster, i === 0);
+
+            if (length === null) continue;
+            if (!Number.isFinite(length)) throw new Error(`Pawn '${caster.name}' has invalid weapon length '${length}'.`);
+
+            const sticks = hands[i] === 1 && length > 12;
+            const boneProperty = i === 0 ? "LeftHandBone" : "RightHandBone";
+            const hasBone = (caster.getUnrealScriptProperty(boneProperty) as string).toLowerCase() !== "none";
+            let actor: SkillActor_T;
+
+            this.spawn({ phase: "casting", effectClass: sticks ? shot.sticks : shot.books, host: "caster", location: [0, 0, 0], rotation: "zero", boneProperty: hasBone ? boneProperty : undefined, relativeRotation: hasBone && !sticks && i === 0 ? [0, 16384, 0] : undefined }, skill, caster, caster, 0, effect => {
+                actor = effect;
+                this.host.addEffect(effect, caster);
+            });
+            if (hasBone && sticks) this.host.setSoulShotVelocity(actor, this.host.getWeaponLength(caster, i === 0, shot.velocityScale));
+        }
+    }
+
     public spawn(info: NativeSkillEffect_T, skill: NpcSkillAttack_T, caster: SkillActor_T, target: SkillActor_T, shotTime: number, addEffect: (effect: SkillActor_T) => void, source: SkillActor_T = caster, locList: readonly Vector3Arr[] = [], hitActor: boolean = !!target, impactActor: SkillActor_T = hitActor ? target : null): boolean {
+        if (info.weaponTrail) {
+            // Engine.dll 0x79bceb/0x79c1ea: GL2KeepMinFrameRate and bNpc gate APawn::AttachTrailer.
+            if (!this.host.isLowDetail() && !caster.getUnrealScriptProperty("bNpc")) this.host.attachTrailer(caster, skill.assets, shotTime, 0, 0.8, true);
+            return true;
+        }
         // Engine.dll 0x7aa351..0x7aa35b: reject NULL, then distinguish TargetPawn == caster.
         if (info.targetIsCaster !== undefined && (!target || info.targetIsCaster !== (target === caster))) return true;
         // Engine.dll 0x7a9288..0x7a928e: Siege Hammer exits before both shake and particle without a target.
         if (info.targetRequired === "phase" && !target) return false;
+        if (info.targetClass && (!target || !this.host.isA(target, info.targetClass, caster))) return false;
         // Engine.dll 0x7a8198..0x7a81be rejects null/non-Pawn/NPC targets before the arm effect and Shot sound.
         if (info.targetIsNpc !== undefined && (!target || !target.isActor || target.getUnrealScriptProperty("bNpc") !== info.targetIsNpc)) return false;
         // Engine.dll Explosion 0x78f7cd/0x78fa8d/0x78fab4: hit actor, projectile Owner, then TargetActor.
@@ -137,7 +183,7 @@ export class SkillEffectPlacement {
             if (info.attackSounds && effectHost.isActor) this.host.playAttackSounds(effectHost, info.attackSounds === "critical");
             // Engine.dll Action_Attack 0x8bde04..0x8bde4a: IsRendered and GL2KeepMinFrameRate precede the light.
             if (info.damageEffect === "associated") this.spawnAssociatedDamageEffect(caster, effectHost, addEffect);
-            this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime);
+            this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime, null, info.phase === "casting");
             return true;
         }
 
@@ -179,7 +225,10 @@ export class SkillEffectPlacement {
             targetHeight = tmpPosition2[2] + this.host.getCollisionHeight(target) - (hasMesh ? tmpPosition[2] : this.host.getCollisionHeight(target));
         }
 
-        const effect = info.viewShake ? null : damageOnly ? this.host.createDamageEffect(effectHost) : this.host.createEffect(caster, info.effectClass);
+        const effect = info.viewShake ? null : damageOnly ? this.host.createDamageEffect(effectHost) : this.host.createEffect(caster, info.effectClass, skill.assets);
+
+        if (info.phase === "casting" && skill.visualTimeScale > 0 && skill.visualTimeScale < 1 && (effect as any).isEmitterActor)
+            effect.scriptProperties.set("SpeedRate", (effect as any).getSpeedRate() / skill.visualTimeScale);
         if (damageOnly && effect === null) return true;
         const effectRotation = tmpRotation2;
         if (effect) this.host.getRotation(effect, effectRotation);
@@ -208,7 +257,7 @@ export class SkillEffectPlacement {
         if (effect && info.attach === "trail" && info.position === undefined) {
             const pivot = effect.scriptProperties.get("TrailerPrePivot");
             // Engine.dll SpawnSkillEffect 0x79841e..0x798443: location mode 1 negates scaled mesh Origin.Z; 0x7983de skips it for a null host.
-            if (!info.templatePivot) pivot[2] = -getPawnMeshHeight(this.host, effectHost);
+            if (!info.templatePivot) pivot[2] = info.trailerPrePivot === "casterFeet" ? -this.host.getCollisionHeight(caster) : -getPawnMeshHeight(this.host, effectHost);
             tmpPosition[2] += this.host.getCollisionHeight(effectHost);
             if (effect.scriptProperties.get("bTrailerPrePivot")) FVector.addElements(tmpPosition, pivot, tmpPosition);
         } else if (info.position === "center") tmpPosition[2] += this.host.getCollisionHeight(effectHost);
@@ -299,7 +348,8 @@ export class SkillEffectPlacement {
         if (info.scale === "cancelCasterRadius") scale *= 9 / radius;
         // Engine.dll Shot 0x7a8ed7..0x7a8ee9: target radius / 9, without the casting radius threshold.
         if (info.scale === "targetRadius") scale = this.host.getCollisionRadius(target) / 9;
-        const delay = info.hitDelay === undefined ? info.delay || 0 : Math.max(0, skill.hitTime + info.hitDelay);
+        if (info.scale === "casterCollisionRadius") scale = radius / 9;
+        const delay = info.hitDelay === undefined && info.hitDelayScale === undefined ? info.delay || 0 : Math.max(0, skill.hitTime * (info.hitDelayScale === undefined ? 1 : info.hitDelayScale) + (info.hitDelay || 0));
         this.host.setParticleScale(effect, scale);
         this.host.setParticleDelay(effect, delay);
 
@@ -372,7 +422,7 @@ export class SkillEffectPlacement {
         this.host.setRotation(effect, effectRotation);
 
         addEffect(effect);
-        if (info.pawnLight) this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime, effect);
+        if (info.pawnLight) this.addPawnLight(info.pawnLight, caster, effectHost, source, shotTime, effect, info.phase === "casting");
         if (info.physics === "trailer") {
             const properties = effect.scriptProperties;
             // Engine.dll Explosion 0x78eb27..0x78eb46: PHYS_Trailer, bTrailerPrePivot set, bTrailerSameRotation cleared; follows its Owner.
@@ -383,14 +433,14 @@ export class SkillEffectPlacement {
             tmpPosition[2] += this.host.getCollisionHeight(caster);
             this.addTrailer(effect, caster, tmpPosition, false, false);
         }
-        let hasNamedBone = false;
+        let hasNamedBone = false, isBoneAttached = true;
         if (info.boneProperty) {
             const bone = effectHost.getUnrealScriptProperty(info.boneProperty);
             if (typeof bone !== "string") throw new Error(`${effectHost.name} has invalid bone property '${info.boneProperty}': '${bone}'.`);
             hasNamedBone = bone.toLowerCase() !== "none";
             // Engine.dll Init 0x7a1883 and PreShot 0x7a446c ignore AttachToBone's return value.
             // Engine.dll Init 0x79bdea/0x79e29c: NAME_None selects bone 2, an unmatched name does not.
-            if (!this.host.attachToBone(effectHost, effect, !hasNamedBone && info.boneFallback !== undefined ? info.boneFallback : bone, info.isAbsolute)) console.warn(`[skill-effects] ${effectHost.name} has no bone '${bone}' from '${info.boneProperty}'; '${info.effectClass}' remains unattached.`);
+            isBoneAttached = this.host.attachToBone(effectHost, effect, !hasNamedBone && info.boneFallback !== undefined ? info.boneFallback : bone, info.isAbsolute);
         } else if (info.bone !== undefined) {
             let bone: number | string = info.bone;
             if (info.boneFallback !== undefined) {
@@ -399,8 +449,8 @@ export class SkillEffectPlacement {
                 else if (typeof bone === "string" && this.host.matchBone(effectHost, bone) < 0) bone = info.boneFallback;
             }
             const attached = bone !== null && this.host.attachToBone(effectHost, effect, bone, info.isAbsolute);
-            // Engine.dll 0x78f6eb ignores AttachToBone failure; 0x7ceb50 rejects non-skeletal hosts.
-            if (!attached && !info.boneOptional) throw new Error(`${effectHost.name} has no bone ${info.bone}.`);
+            isBoneAttached = attached;
+            // Engine.dll 0x78f6eb/0x79e8b3 ignore AttachToBone failure.
             const properties = effect.scriptProperties;
             const owner = effect.scriptOwner;
             // Engine.dll physTrailer 0x8ce46a..0x8ce581: an unbased PHYS_Trailer still follows Owner after AttachToBone fails.
@@ -417,13 +467,13 @@ export class SkillEffectPlacement {
         }
         if (info.relativeLocation && (!info.relativeLocationOnNamedBone || hasNamedBone)) {
             effect.scriptProperties.set("RelativeLocation", info.relativeLocation.slice());
-            this.host.setPosition(effect, info.relativeLocation);
+            if (isBoneAttached) this.host.setPosition(effect, info.relativeLocation);
         }
         // Engine.dll Init 0x7a1984 skips the rotation write on the NAME_None branch.
         if (info.relativeRotation && (!info.relativeRotationOnNamedBone || hasNamedBone)) {
             effect.scriptProperties.set("RelativeRotation", info.relativeRotation.slice());
             getRotatorQuaternionElements(...info.relativeRotation, effectRotation);
-            this.host.setRotation(effect, effectRotation);
+            if (isBoneAttached) this.host.setRotation(effect, effectRotation);
         }
 
         if (info.damageEffect === true && effectHost.isActor) {
@@ -446,22 +496,7 @@ export class SkillEffectPlacement {
         if (effectHost.isActor && !this.host.isLowDetail() && this.host.isRendered(effectHost)) {
             const damage = this.host.createDamageEffect(effectHost);
             if (damage) {
-                const effectRotation = tmpRotation2;
-                getTargetRotation(this.host, caster, effectHost, effectRotation, false);
-                this.host.getPosition(effectHost, tmpPosition, true);
-                tmpPosition[2] += this.host.getCollisionHeight(effectHost);
-                this.host.getPosition(caster, tmpCasterPosition, true);
-                tmpCasterPosition[2] += this.host.getCollisionHeight(caster);
-                FVector.subElements(tmpPosition, tmpCasterPosition, tmpPosition2);
-                const distance = Math.sqrt(FVector.lengthSqElements(tmpPosition2));
-                // 0x8bf41a..0x8bf4a1: floats[0xa68640/0xad6508/0xacbc2c] = 1/2, 150, 0.85; distance-radius stays signed.
-                const offset = this.host.getCollisionHeight(effectHost) + this.host.getCollisionRadius(effectHost) > 150 ? Math.min(distance * 0.85, distance - this.host.getCollisionRadius(caster)) : this.host.getCollisionRadius(effectHost) / 2;
-                FVector.applyQuaternionElements([1, 0, 0], effectRotation, tmpPosition2);
-                tmpPosition[0] -= tmpPosition2[0] * offset;
-                tmpPosition[1] -= tmpPosition2[1] * offset;
-                tmpPosition[2] -= tmpPosition2[2] * offset;
-                this.host.setPosition(damage, tmpPosition);
-                this.host.setRotation(damage, effectRotation);
+                this.setAttackImpactTransform(caster, effectHost, damage);
                 addEffect(damage);
             }
         }
@@ -470,7 +505,11 @@ export class SkillEffectPlacement {
     public spawnSerialized(action: NpcSkillEffectAction_T, skill: NpcSkillAttack_T, caster: SkillActor_T, source: SkillActor_T, target: SkillActor_T, shotTime: number, initializeProjectile: boolean, onProjectile: (actor: SkillActor_T) => void): SkillActor_T {
         // Engine.dll LocateEffect 0x795ffa..0x796037 rejects a null selected host.
         if (action.spawnOnTarget && !target) return null;
-        const effect = this.host.createEffect(caster, action.effectClass);
+        const effect = this.host.createEffect(caster, action.effectClass, skill.assets);
+
+        if (action.phase === "casting" && skill.visualTimeScale > 0 && skill.visualTimeScale < 1 && (effect as any).isEmitterActor)
+            effect.scriptProperties.set("SpeedRate", (effect as any).getSpeedRate() / skill.visualTimeScale);
+
         // Engine.dll TriggerCasting 0x7969a2..0x7969e3; transient casting does not adjust lifetime.
         if (action.phase === "casting" && skill.castStyle !== 0 && shotTime > 0) {
             const fixed = effect.scriptProperties.get("FixedLifeTime") as number;
@@ -482,7 +521,7 @@ export class SkillEffectPlacement {
         const hostIsPawn = !!attachHost.isActor;
         const radius = hostIsPawn ? this.host.getCollisionRadius(attachHost) : attachHost.scriptProperties.get("CollisionRadius") as number;
         const height = hostIsPawn ? this.host.getCollisionHeight(attachHost) : 0;
-        const sourceProjectile = !action.useCharacterRotation && !!this.host.getProjectile(source);
+        const sourceProjectile = !action.useCharacterRotation && this.host.isA(source, "engine.NProjectile", caster);
         let projectile = false;
         // Engine.dll 0x796c48..0x796c6b: multi-target Notify results bypass projectile initialization.
         if (action.phase === "shot" && initializeProjectile && this.host.isA(effect, "engine.NSkillProjectile", caster)) {
@@ -491,7 +530,7 @@ export class SkillEffectPlacement {
         }
 
         // Engine.dll USkillAction_LocateEffect::Notify 0x796643 / 0x79666a: delay emission after spawning the actor.
-        const delay = action.spawnDelay < 0 ? skill.hitTime + action.spawnDelay : action.spawnDelay;
+        const delay = (action.spawnDelay < 0 ? skill.hitTime + action.spawnDelay : action.spawnDelay) * (skill.visualTimeScale ?? 1);
         if (delay > 0) this.host.setParticleDelay(effect, delay);
         // Engine.dll LocateEffect 0x79603d..0x796053: target effects and non-pawns do not use CastingEffectScale.
         let sizeScale = !action.spawnOnTarget && hostIsPawn ? getPawnCastingEffectScale(attachHost) : 1;
@@ -543,15 +582,22 @@ export class SkillEffectPlacement {
         }
 
         if (action.attachOn === "trail" && !projectile) {
-            const selfRotation = !!effect.scriptProperties.get("bSelfRotation");
-            const sameRotation = !selfRotation && (action.useCharacterRotation || !!effect.scriptProperties.get("bTrailerSameRotation"));
+            const properties = effect.scriptProperties;
+            properties.set("Physics", EPhysics_T.PHYS_Trailer);
             // Engine.dll LocateEffect 0x79634c / physTrailer 0x8ce46a: local RelativeTrailOffset or world TrailerPrePivot.
-            if (action.useCharacterRotation) this.addTrailer(effect, attachHost, tmpPosition, true, sameRotation);
-            else {
-                tmpPosition2[2] += height;
-                this.addTrailer(effect, attachHost, tmpPosition2, false, sameRotation);
+            if (action.useCharacterRotation) {
+                properties.set("RelativeTrailOffset", [...tmpPosition]);
+                properties.set("bRelativeTrail", true);
+                if (!properties.get("bSelfRotation")) properties.set("bTrailerSameRotation", true);
             }
-            this.update();
+            else {
+                properties.set("TrailerPrePivot", [...tmpPosition2]);
+                properties.set("bTrailerPrePivot", true);
+            }
+            this.host.getPosition(attachHost, tmpPosition, true);
+            tmpPosition[2] += height;
+            FVector.addElements(tmpPosition, tmpPosition2, tmpPosition);
+            this.host.setPosition(effect, tmpPosition);
             return effect;
         }
 
@@ -572,7 +618,45 @@ export class SkillEffectPlacement {
         this.addPawnLight({ color: [1, 1, 1], radius: 30, lifeTime: 0.2, spot: true, position: "center", rotation: "targetDisplacement", radiusOffset: -2 }, caster, target, caster, 0);
     }
 
-    protected addPawnLight(light: NativeSkillEffect_T["pawnLight"], caster: SkillActor_T, host: SkillActor_T, source: SkillActor_T, shotTime: number, effect: SkillActor_T = null): void {
+    public addAttackImpact(caster: SkillActor_T, target: SkillActor_T, critical: boolean, shield: boolean, spirit: boolean, grade: number): void {
+        if (!target?.isActor || !this.host.isRendered(target)) return;
+
+        const add = (effect: SkillActor_T): void => {
+            this.setAttackImpactTransform(caster, target, effect);
+            this.host.addEffect(effect, target);
+        };
+        const damage = this.host.isLowDetail() ? null : this.host.createDamageEffect(target);
+
+        if (damage) add(damage);
+
+        if (spirit) {
+            if (grade > 5) return;
+
+            // APawn::AssociateAttackedNotify 0x8bf605..0x8bf638: bUseDarkEffect (+0x1708, bit 0).
+            const suffix = critical ? caster.getUnrealScriptProperty("bUseDarkEffect") ? "d" : "e" : "c";
+            add(this.host.createEffect(caster, `LineageEffect.e_u${505 + grade}_${suffix}`));
+        } else if (critical && !shield) add(this.host.createEffect(caster, "LineageEffect.p_u004_a"));
+    }
+
+    protected setAttackImpactTransform(caster: SkillActor_T, target: SkillActor_T, effect: SkillActor_T): void {
+        getTargetRotation(this.host, caster, target, tmpRotation, false);
+        this.host.getPosition(target, tmpPosition, true);
+        tmpPosition[2] += this.host.getCollisionHeight(target);
+        this.host.getPosition(caster, tmpCasterPosition, true);
+        tmpCasterPosition[2] += this.host.getCollisionHeight(caster);
+        FVector.subElements(tmpPosition, tmpCasterPosition, tmpPosition2);
+        const distance = Math.sqrt(FVector.lengthSqElements(tmpPosition2));
+        const offset = this.host.getCollisionHeight(target) + this.host.getCollisionRadius(target) > 150 ? Math.min(distance * 0.85, distance - this.host.getCollisionRadius(caster)) : this.host.getCollisionRadius(target) / 2;
+
+        FVector.applyQuaternionElements([1, 0, 0], tmpRotation, tmpPosition2);
+        tmpPosition[0] -= tmpPosition2[0] * offset;
+        tmpPosition[1] -= tmpPosition2[1] * offset;
+        tmpPosition[2] -= tmpPosition2[2] * offset;
+        this.host.setPosition(effect, tmpPosition);
+        this.host.setRotation(effect, tmpRotation);
+    }
+
+    protected addPawnLight(light: NativeSkillEffect_T["pawnLight"], caster: SkillActor_T, host: SkillActor_T, source: SkillActor_T, shotTime: number, effect: SkillActor_T = null, isCasting: boolean = false): void {
         // Engine.dll 0x78f6f0..0x78f6fb: Cast<APawn> rejects non-Pawn impact actors.
         if (!host.isActor) return;
         if (!effect && (!light.spot || !light.position || !light.rotation || light.target)) throw new Error("Pawn light without an effect requires a fixed spotlight transform.");
@@ -598,7 +682,7 @@ export class SkillEffectPlacement {
             FVector.subElements(tmpCasterPosition, tmpLightPosition, tmpLightDirection);
             FVector.normalElements(tmpLightDirection, tmpLightDirection);
         }
-        this.pawnLights.push({ actor: host, light: this.host.addPawnLight(host, light.spot && !light.target ? null : effect, light.color, light.radius, light.lifeTime === undefined ? shotTime : light.lifeTime, light.spot ? tmpLightPosition : null, light.spot ? tmpLightDirection : null, light.target ? tmpCasterPosition : null) });
+        this.pawnLights.push({ actor: host, isCasting, light: this.host.addPawnLight(host, light.spot && !light.target ? null : effect, light.color, light.radius, light.lifeTime === undefined ? shotTime : light.lifeTime, light.spot ? tmpLightPosition : null, light.spot ? tmpLightDirection : null, light.target ? tmpCasterPosition : null) });
     }
 }
 

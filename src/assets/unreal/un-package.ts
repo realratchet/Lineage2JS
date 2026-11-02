@@ -15,7 +15,7 @@ import UNSun from "./un-nsun";
 import UNMoon from "./un-nmoon";
 import UNMovableSunLight from "./un-movable-sunlight";
 import ULight from "./un-light";
-import UStaticMeshActor from "./static-mesh/un-static-mesh-actor";
+import UStaticMeshActor, { FAccessory } from "./static-mesh/un-static-mesh-actor";
 import UPlayerStart from "./un-player-start";
 import UPhysicsVolume from "./un-physics-volume";
 import UDefaultPhysicsVolume from "./un-physics";
@@ -30,6 +30,8 @@ import USpriteEmitter from "./emitters/un-sprite-emitter";
 import FRotator from "./un-rotator";
 import UCamera from "./un-camera";
 import UPointRegion from "./un-point-region";
+import UL2Event from "./un-l2-event";
+import UNMagicInfo from "./un-nmagic-info";
 import UTextureModifyInfo from "./un-texture-modify-info";
 import UTexture from "./un-texture";
 import UPlatte from "./un-palette";
@@ -42,29 +44,35 @@ import UTerrainLayer from "./un-terrain-layer";
 import UDecoLayer from "./un-deco-layer";
 import UWetTexture, { UADrop } from "./un-wet-texture";
 import UBeamEmitter from "./emitters/un-beam-emitter";
+import URibbonEmitter from "./emitters/un-ribbon-emitter";
 import FRange, { FRangeVector } from "./un-range";
+import FProjectorRenderInfoPtr from "./un-projector-render-info-ptr";
 import FTIntMap from "./un-tint-map";
 import UTerrainSector from "./un-terrain-sector";
 import UTerrainPrimitive from "./un-terrain-primitive";
+import UReachSpec from "./un-reach-spec";
 import FCoords from "./un-coords";
 import FQuaternion from "./un-quaternion";
 import UStaticMeshInstance from "./static-mesh/un-static-mesh-instance";
 import UStaticMesh from "./static-mesh/un-static-mesh";
 import ULevelSummary from "./un-level-summary";
 import USound from "./un-sound";
+import UFont from "./un-font";
 import UAmbientSoundObject from "./un-ambient-sound";
 import UMover from "./un-mover";
 import * as NEnv from "./un-l2env";
 import * as PEmitter from "./emitters/un-particle-emitter"
 import UMovableStaticMeshActor, { FL2RotatorTime } from "./static-mesh/un-movable-static-mesh-actor";
 import UL2FogInfo, { UL2EnvironmentColorInfo } from "./un-fog-info";
-import { fetchAssetHandle } from "./asset-handle";
+import { fetchAssetHandle, fetchPackageSource } from "./asset-handle";
 import UPawn from "./un-pawn";
+import UL2Float from "./un-l2-float";
 import USkeletalMesh from "./skeletal-mesh/un-skeletal-mesh";
 import USkeletalMeshInstance from "./un-skeletal-mesh-instance";
 import UMeshAnimation from "./skeletal-mesh/un-mesh-animation";
 import USkillVisualEffect, { USkillAction, FSkillActionInfo, USkillActionLocateEffect, USkillActionSwordTrail } from "./un-skill-visual-effect";
 import * as AnimNotify from "./skeletal-mesh/un-anim-notify";
+import USceneManager, { UMatAction, UActionMoveCamera, UInterpolationPoint } from "./un-scene-manager";
 
 export type NativeClientTypes_T =
     | NativeTypes_T
@@ -88,6 +96,7 @@ export type NativeClientTypes_T =
     | "SkillAction_LocateEffect"
     | "SkillAction_SwordTrail"
     | "NProjectile"
+    | "L2Float"
     | "NSkillProjectile"
     | "AnimNotify"
     | "AnimNotify_IdleSound"
@@ -126,6 +135,13 @@ export type CoreStructsReturnType_T<T extends CoreStructs_T> =
 
 export class UPackage extends APackage {
     protected async readArrayBuffer() {
+        const source = await fetchPackageSource(this.path);
+
+        if (source) {
+            this.handle.source = source;
+            return new ArrayBuffer(0);
+        }
+
         const response = await fetchAssetHandle(this.path);
         const readable = await response.getReadable();
 
@@ -275,6 +291,7 @@ export class UEnginePackage extends UPackage implements EnginePackage_T {
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainSector");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "TerrainPrimitive");
+        addClassDependency(nameTable, nameHash, imports, exports, "Native", "ReachSpec");
 
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "LevelBase");
         addClassDependency(nameTable, nameHash, imports, exports, "Native", "Level");
@@ -301,6 +318,8 @@ export class UNativePackage extends ANativePackage {
             case "Color": Constructor = FColor; break;
             case "Rotator": Constructor = FRotator; break;
             case "PointRegion": Constructor = UPointRegion; break;
+            case "L2Event": Constructor = UL2Event; break;
+            case "NMagicInfo": Constructor = UNMagicInfo; break;
             case "TextureModifyinfo": Constructor = UTextureModifyInfo; break;
             case "Box": Constructor = FBox; break;
             case "Plane": Constructor = FPlane; break;
@@ -312,6 +331,8 @@ export class UNativePackage extends ANativePackage {
             case "TerrainIntensityMap": Constructor = FTIntMap; break;
             case "Coords": Constructor = FCoords; break;
             case "Quat": Constructor = FQuaternion; break;
+            case "ProjectorRenderInfoPtr":
+            case "StaticMeshProjectorRenderInfoPtr": Constructor = FProjectorRenderInfoPtr; break;
 
             case "NTimeColor": Constructor = NEnv.FNTimeColor; break;
             case "NTimeHSV": Constructor = NEnv.FNTimeHSV; break;
@@ -321,6 +342,7 @@ export class UNativePackage extends ANativePackage {
 
             case "L2RotatorTime": Constructor = FL2RotatorTime; break;
             case "SkillActionInfo": Constructor = FSkillActionInfo; break;
+            case "AccessoryType": Constructor = FAccessory; break;
 
             case "FFighter":
             case "baium":
@@ -343,8 +365,6 @@ export class UNativePackage extends ANativePackage {
             case "Interpolator":
             case "AnimRep":
             case "Orientation":
-            case "AccessoryType":
-            case "L2Event":
             case "ParticleBeamEndPoint": Constructor = PEmitter.UParticleBeamEndPoint; break;
             case "ParticleBeamScale": Constructor = PEmitter.UParticleBeamScale; break;
             case "ADrop": Constructor = UADrop; break;
@@ -367,6 +387,7 @@ export class UNativePackage extends ANativePackage {
 
         switch (constructorName) {
             case "Level": Constructor = ULevel; break;
+            case "L2Float": Constructor = UL2Float; break;
             case "Model": Constructor = UModel; break;
             case "Brush": Constructor = UBrush; break;
 
@@ -386,6 +407,7 @@ export class UNativePackage extends ANativePackage {
             case "StaticMeshInstance": Constructor = UStaticMeshInstance; break;
 
             case "PlayerStart": Constructor = UPlayerStart; break;
+            case "ReachSpec": Constructor = UReachSpec; break;
             case "Camera": Constructor = UCamera; break;
             case "Pawn": Constructor = UPawn; break;
 
@@ -412,11 +434,13 @@ export class UNativePackage extends ANativePackage {
             case "VertMesh": Constructor = UVertMesh; break;
             case "SkeletalMeshInstance": Constructor = USkeletalMeshInstance; break;
 
+            case "Font": Constructor = UFont; break;
             case "Texture": Constructor = UTexture; break;
             case "WetTexture": Constructor = UWetTexture; break;
             case "Palette": Constructor = UPlatte; break;
 
             case "Emitter": Constructor = UEmitter; break;
+            case "NCubics": Constructor = UEmitter; break;
             case "NProjectile": Constructor = UEmitter; break;
             case "NSkillProjectile": Constructor = UEmitter; break; // ANSkillProjectile : ANProjectile : AEmitter (EngineClasses.h 3832/3866)
             case "WaterHitEmitter": Constructor = UEmitter; break;
@@ -424,6 +448,7 @@ export class UNativePackage extends ANativePackage {
             case "VertMeshEmitter": Constructor = UVertMeshEmitter; break;
             case "SpriteEmitter": Constructor = USpriteEmitter; break;
             case "BeamEmitter": Constructor = UBeamEmitter; break;
+            case "RibbonEmitter": Constructor = URibbonEmitter; break;
 
 
 
@@ -436,6 +461,7 @@ export class UNativePackage extends ANativePackage {
             case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
             case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
             case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
+            case "ConstantColor": Constructor = UnMaterials.UConstantColor; break;
             case "Shader": Constructor = UnMaterials.UShader; break;
             case "FinalBlend": Constructor = UnMaterials.UFinalBlend; break;
             case "TexEnvMap": Constructor = UnMaterials.UTexEnvMap; break;
@@ -457,13 +483,20 @@ export class UNativePackage extends ANativePackage {
 
             // Classes we don't care about atm are marked as UObject for general puprose constructor
             case "L2SeamlessInfo":
-            case "SceneManager":
+            case "MatObject":
+            case "MatSubAction":
             case "PathNode":
-            case "InterpolationPoint":
             case "Projector":
             case "AntiPortalActor":
             case "LineagePlayerController":
             case "AmbientSound": Constructor = UObject; break;
+
+            case "SceneManager": Constructor = USceneManager; break;
+            case "MatAction":
+            case "ActionWarp":
+            case "ActionPause": Constructor = UMatAction; break;
+            case "ActionMoveCamera": Constructor = UActionMoveCamera; break;
+            case "InterpolationPoint": Constructor = UInterpolationPoint; break;
 
             case "SkillVisualEffect": Constructor = USkillVisualEffect; break;
             case "SkillAction": Constructor = USkillAction; break;
@@ -523,6 +556,7 @@ export class UNativePackage extends ANativePackage {
 
         this.registerNativeClass("TerrainSector", "Object");
         this.registerNativeClass("TerrainPrimitive", "Primitive");
+        this.registerNativeClass("ReachSpec", "Object");
 
         this.registerNativeClass("LevelBase", "Object");
         this.registerNativeClass("Level", "LevelBase");

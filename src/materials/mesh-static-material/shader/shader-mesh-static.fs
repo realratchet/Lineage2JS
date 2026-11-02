@@ -1,5 +1,27 @@
 uniform vec3 diffuse;
+#ifdef USE_TEX_MODIFIER
+uniform vec3 texModifierColor;
+uniform float texModifierAlpha;
+#else
+const vec3 texModifierColor = vec3(1.0);
+const float texModifierAlpha = -1.0;
+#endif
 uniform float opacity;
+#ifdef USE_PAWN_MATERIALS
+    flat varying int vPawnPart;
+    varying vec2 vPawnSpecularUv;
+    varying vec2 vPawnWorldSpecularUv;
+    struct PawnMaterialData {
+        vec4 color;
+        vec4 maps;
+        vec4 parameters;
+        int operation;
+        int envMode;
+        bool visible;
+    };
+    uniform vec4 pawnMaterialData[NUM_PAWN_PARTS * 4];
+    uniform bool pawnSilhouette;
+#endif
 #ifdef USE_TERRAIN_DECORATION_FADE
     varying float vTerrainDecorationFade;
 #endif
@@ -9,10 +31,12 @@ uniform float opacity;
 #include <common>
 #include <dithering_pars_fragment>
 #include <color_pars_fragment>
-#include <uv_pars_fragment>
+#ifdef USE_UV
+    varying vec2 vUv;
+#endif
 
-// extended to match shader-mesh-static.vs's uv2 gating (adds USE_UV2)
-#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV2)
+// Three reserves USE_UV2 for its third UV set.
+#if defined(USE_LIGHTMAP) || defined(USE_AOMAP) || defined(USE_UV1)
     varying vec2 vUv2;
 #endif
 
@@ -29,15 +53,38 @@ uniform float opacity;
 #include <logdepthbuf_pars_fragment>
 #include <clipping_planes_pars_fragment>
 
+#if defined(USE_FADE) || defined(USE_FADE_MATERIAL2) || defined(USE_FADE_DIFFUSE)
+    struct FadeData {
+        vec3 color1;
+        vec3 color2;
+        float period;
+        float phase;
+        int fadeType;
+    };
+#endif
+
+#ifdef USE_CUBE_MAP_DIFFUSE
+    uniform samplerCube shDiffuseCube;
+    uniform mat3 shDiffuseCubeTransform;
+#endif
+
 #ifdef USE_CUBE_MAP_SPECULAR
     uniform samplerCube shSpecularCube;
+    uniform mat3 shSpecularCubeTransform;
+#endif
+
+#ifdef USE_CUBE_MAP_MATERIAL2
+    uniform samplerCube shMaterial2Cube;
+    uniform mat3 shMaterial2CubeTransform;
 #endif
 
 #if defined(USE_UV) && (defined(USE_MAP_DIFFUSE) || defined(USE_MAP_OPACITY) || defined(USE_MAP_SPECULAR) || defined(USE_MAP_SPECULAR_MASK) || defined(USE_MAP_MATERIAL2) || defined(USE_MAP_DETAIL))
-    struct TextureData {
-        sampler2D texture;
-        vec2 size;
-    };
+    uniform sampler2D shDiffuseMap;
+    uniform sampler2D shOpacityMap;
+    uniform sampler2D shSpecularMap;
+    uniform sampler2D shSpecularMaskMap;
+    uniform sampler2D shDetailMap;
+    uniform sampler2D shMaterial2Map;
 
     #define MAX_TRANSFORM_STAGES 2
 
@@ -91,7 +138,7 @@ uniform float opacity;
         #endif
 
         struct DetailData {
-            TextureData map;
+            vec2 mapSize;
             float scale;
             #ifdef USE_MAP_DETAIL_TRANSFORM
                 #if USE_MAP_DETAIL_TRANSFORM != ENVMAP && USE_MAP_DETAIL_TRANSFORM != ENVMAPWORLD
@@ -110,7 +157,7 @@ uniform float opacity;
             #if defined(USE_MAP_DETAIL_TRANSFORM)
                 #define UV_DETAIL vUvTransformedDetail
             #endif
-        #elif defined(USE_MAP_DETAIL_UV2)
+        #elif defined(USE_MAP_DETAIL_UV1)
             #define UV_DETAIL vUv2
         #else
             #define UV_DETAIL vUv
@@ -119,7 +166,7 @@ uniform float opacity;
 #endif
 
 #ifdef USE_DIFFUSE
-    #if defined(USE_UV) && defined(USE_MAP_DIFFUSE)
+    #if (defined(USE_UV) && defined(USE_MAP_DIFFUSE)) || defined(USE_FADE_DIFFUSE)
         #ifdef USE_MAP_DIFFUSE_TRANSFORM
             varying vec2 vUvTransformedDiffuse;
             
@@ -151,8 +198,11 @@ uniform float opacity;
         #endif
 
         struct DiffuseData {
+            #ifdef USE_FADE_DIFFUSE
+                FadeData fadeColors;
+            #endif
             #ifdef USE_MAP_DIFFUSE
-                TextureData map;
+                vec2 mapSize;
 
                 #if defined(USE_MAP_DIFFUSE_TRANSFORM) && USE_MAP_DIFFUSE_TRANSFORM != ENVMAP && USE_MAP_DIFFUSE_TRANSFORM != ENVMAPWORLD
                 TransformDiffuseData transform;
@@ -171,7 +221,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_DIFFUSE) && defined(USE_MAP_DIFFUSE_TRANSFORM)
             #define UV_DIFFUSE vUvTransformedDiffuse
-        #elif defined(USE_MAP_DIFFUSE_UV2)
+        #elif defined(USE_MAP_DIFFUSE_UV1)
             #define UV_DIFFUSE vUv2
         #else
             #define UV_DIFFUSE vUv
@@ -214,7 +264,7 @@ uniform float opacity;
 
         struct OpacityData {
             #ifdef USE_MAP_OPACITY
-                TextureData map;
+                vec2 mapSize;
             #endif
             #if defined(USE_MAP_OPACITY_TRANSFORM) && USE_MAP_OPACITY_TRANSFORM != ENVMAP && USE_MAP_OPACITY_TRANSFORM != ENVMAPWORLD
                 TransformOpacityData transform;
@@ -232,7 +282,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_OPACITY) && defined(USE_MAP_OPACITY_TRANSFORM)
             #define UV_OPACITY vUvTransformedOpacity
-        #elif defined(USE_MAP_OPACITY_UV2)
+        #elif defined(USE_MAP_OPACITY_UV1)
             #define UV_OPACITY vUv2
         #else
             #define UV_OPACITY vUv
@@ -242,15 +292,6 @@ uniform float opacity;
 
 #ifdef USE_SPECULAR
     #if defined(USE_MAP_SPECULAR) || defined(USE_FADE)
-        #ifdef USE_FADE
-            struct FadeData {
-                vec3 color1;
-                vec3 color2;
-                float period;
-                float phase;
-                int fadeType;
-            };
-        #endif
 
         #ifdef USE_MAP_SPECULAR_TRANSFORM
             varying vec2 vUvTransformedSpecular;
@@ -288,7 +329,7 @@ uniform float opacity;
             #endif
 
             #ifdef USE_MAP_SPECULAR
-                TextureData map;
+                vec2 mapSize;
             #endif
 
             #if defined(USE_MAP_SPECULAR_TRANSFORM) && USE_MAP_SPECULAR_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_TRANSFORM != ENVMAPWORLD
@@ -307,7 +348,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_SPECULAR) && defined(USE_MAP_SPECULAR_TRANSFORM)
             #define UV_SPECULAR vUvTransformedSpecular
-        #elif defined(USE_MAP_SPECULAR_UV2)
+        #elif defined(USE_MAP_SPECULAR_UV1)
             #define UV_SPECULAR vUv2
         #else
             #define UV_SPECULAR vUv
@@ -350,7 +391,7 @@ uniform float opacity;
 
         struct SpecularMaskData {
             #ifdef USE_MAP_SPECULAR_MASK
-                TextureData map;
+                vec2 mapSize;
             #endif
             #if defined(USE_MAP_SPECULAR_MASK_TRANSFORM) && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAP && USE_MAP_SPECULAR_MASK_TRANSFORM != ENVMAPWORLD
                 TransformSpecularMaskData transform;
@@ -368,7 +409,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_SPECULAR_MASK) && defined(USE_MAP_SPECULAR_MASK_TRANSFORM)
             #define UV_SPECULAR_MASK vUvTransformedSpecularMask
-        #elif defined(USE_MAP_SPECULAR_MASK_UV2)
+        #elif defined(USE_MAP_SPECULAR_MASK_UV1)
             #define UV_SPECULAR_MASK vUv2
         #else
             #define UV_SPECULAR_MASK vUv
@@ -377,7 +418,7 @@ uniform float opacity;
 #endif
 
 #ifdef USE_MATERIAL2
-    #if defined(USE_UV) && defined(USE_MAP_MATERIAL2)
+    #if (defined(USE_UV) && defined(USE_MAP_MATERIAL2)) || defined(USE_FADE_MATERIAL2)
         #ifdef USE_MAP_MATERIAL2_TRANSFORM
             varying vec2 vUvTransformedMaterial2;
             
@@ -409,8 +450,11 @@ uniform float opacity;
         #endif
 
         struct Material2Data {
+            #ifdef USE_FADE_MATERIAL2
+                FadeData fadeColors;
+            #endif
             #ifdef USE_MAP_MATERIAL2
-                TextureData map;
+                vec2 mapSize;
 
                 #ifdef USE_MAP_MATERIAL2_TRANSFORM
                 TransformMaterial2Data transform;
@@ -424,7 +468,7 @@ uniform float opacity;
     #ifdef USE_UV
         #if defined(USE_MAP_MATERIAL2) && defined(USE_MAP_MATERIAL2_TRANSFORM)
             #define UV_MATERIAL2 vUvTransformedMaterial2
-        #elif defined(USE_MAP_MATERIAL2_UV2)
+        #elif defined(USE_MAP_MATERIAL2_UV1)
             #define UV_MATERIAL2 vUv2
         #else
             #define UV_MATERIAL2 vUv
@@ -488,11 +532,34 @@ uniform float opacity;
     varying vec3 vLitColor;
 #endif
 
-#if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+#if defined(USE_PROJECTOR_RECEIVER) && !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
     uniform sampler2D shadowMap;
     uniform float shadowDarkness;
     uniform float shadowActive;
     varying vec4 vShadowCoord;
+#endif
+
+#if defined(USE_FADE) || defined(USE_FADE_MATERIAL2) || defined(USE_FADE_DIFFUSE)
+vec3 getFadeColor(FadeData fade) {
+    // UFadeColor::GetColor 0x87b690: phase/period precede linear or sinusoidal interpolation.
+    float fadeTime = (globalTimeSeconds + fade.phase) / fade.period;
+    float fadePercent;
+
+    if (fade.fadeType == 1) {
+        fadePercent = 0.5 + cos(fadeTime * PI * 0.5) * 0.5;
+    } else {
+        float fadeCycle = floor(fadeTime);
+        float fadeFrac = fadeTime - fadeCycle;
+        fadePercent = (mod(fadeCycle, 2.0) != 0.0) ? fadeFrac : 1.0 - fadeFrac;
+    }
+
+    float mixValue = 1.0 - fadePercent;
+    return mix(fade.color1, fade.color2, mixValue);
+}
+#endif
+
+#ifdef USE_PROJECTOR_RECEIVER
+    #include <projector_receiver>
 #endif
 
 void main() {
@@ -500,13 +567,51 @@ void main() {
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
 
+    #ifdef USE_PAWN_MATERIALS
+        int partRow = vPawnPart * 4;
+        PawnMaterialData part = PawnMaterialData(pawnMaterialData[partRow], pawnMaterialData[partRow + 1], pawnMaterialData[partRow + 2], int(pawnMaterialData[partRow + 3].x), int(pawnMaterialData[partRow + 3].y), pawnMaterialData[partRow + 3].z > 0.5);
+        if (pawnSilhouette) { // same coverage as the per-part black FrontSide silhouette the shadow pass draws for unbatched meshes
+            if (!part.visible || !gl_FrontFacing) discard;
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+        if (!part.visible || part.parameters.w == 0.0 && !gl_FrontFacing || part.parameters.w == 1.0 && gl_FrontFacing) discard;
+        vec4 texelDiffuse = samplePawnTexture(int(part.maps.x), vUv);
+        diffuseColor = part.color;
+        diffuseColor.rgb *= texelDiffuse.rgb;
+        if (part.parameters.y > 0.0) diffuseColor.a *= texelDiffuse.a;
+        if (part.maps.w >= 0.0) diffuseColor.a *= samplePawnTexture(int(part.maps.w), vUv).a;
+        if (texModifierAlpha < 0.0 && diffuseColor.a < part.parameters.x) discard;
+        vec3 outgoingLight = vLitColor * 2.0 * diffuseColor.rgb;
+        if (part.parameters.z > 0.0) {
+            vec2 uvSpecular = part.envMode == 1 ? vPawnWorldSpecularUv : vPawnSpecularUv;
+            vec3 specularColor = samplePawnTexture(int(part.maps.y), uvSpecular).rgb;
+            float mask = part.maps.z < 0.0 ? 1.0 : samplePawnTexture(int(part.maps.z), vUv).a;
+            if (part.operation == 2) { outgoingLight = mix(outgoingLight, specularColor, mask); diffuseColor.a = mask; }
+            else if (part.operation == 1) outgoingLight *= specularColor * 2.0;
+            else outgoingLight += mask * specularColor;
+        }
+    #else
     ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
     
     // #include <map_fragment>
     // boomer tech
     #ifdef USE_DIFFUSE
-        #ifdef USE_MAP_DIFFUSE
-            vec4 texelDiffuse = texture2D(shDiffuse.map.texture, UV_DIFFUSE);
+        #ifdef USE_FADE_DIFFUSE
+            diffuseColor.rgb *= getFadeColor(shDiffuse.fadeColors);
+        #endif
+        #ifdef USE_CUBE_MAP_DIFFUSE
+            vec3 diffuseMapDirection = vReflect;
+            #ifdef USE_ENVMAP_CAMERA
+                diffuseMapDirection = (viewMatrix * vec4(diffuseMapDirection, 0.0)).xyz * vec3(-1.0, 1.0, -1.0);
+            #endif
+            vec4 texelDiffuse = textureCube(shDiffuseCube, shDiffuseCubeTransform * diffuseMapDirection);
+            diffuseColor.rgb *= texelDiffuse.rgb;
+            #ifdef USE_MASKING
+                diffuseColor.a *= texelDiffuse.a;
+            #endif
+        #elif defined(USE_MAP_DIFFUSE)
+            vec4 texelDiffuse = texture2D(shDiffuseMap, UV_DIFFUSE);
             // texelDiffuse = mapTexelToLinear(texelDiffuse);
             diffuseColor.rgb *= texelDiffuse.rgb;
 
@@ -518,9 +623,9 @@ void main() {
 
     #ifdef USE_DETAIL
         #ifdef USE_MAP_DETAIL_TRANSFORM
-            diffuseColor.rgb *= texture2D(shDetail.map.texture, UV_DETAIL).rgb * 2.0;
+            diffuseColor.rgb *= texture2D(shDetailMap, UV_DETAIL).rgb * 2.0;
         #else
-            diffuseColor.rgb *= texture2D(shDetail.map.texture, UV_DETAIL * shDetail.scale).rgb * 2.0;
+            diffuseColor.rgb *= texture2D(shDetailMap, UV_DETAIL * shDetail.scale).rgb * 2.0;
         #endif
     #endif
 
@@ -530,15 +635,25 @@ void main() {
         
         vec4 color2 = vec4(1.0);
         #ifdef USE_MATERIAL2
+            #ifdef USE_FADE_MATERIAL2
+                color2.rgb = getFadeColor(shMaterial2.fadeColors);
+            #endif
+            #ifdef USE_CUBE_MAP_MATERIAL2
+                vec3 envMapDirection = vReflect;
+                #ifdef USE_ENVMAP_CAMERA
+                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz * vec3(-1.0, 1.0, -1.0); // D3D camera space: X flipped in clip (ue2-conventions.ts), +Z forward
+                #endif
+                color2 = textureCube(shMaterial2Cube, shMaterial2CubeTransform * envMapDirection);
+            #endif
             #ifdef USE_MAP_MATERIAL2
-                color2 = texture2D(shMaterial2.map.texture, UV_MATERIAL2);
+                color2 = texture2D(shMaterial2Map, UV_MATERIAL2);
             #endif
         #endif
         
         float maskVal = 1.0;
         #ifdef USE_SPECULAR
             #ifdef USE_MAP_SPECULAR
-                 maskVal = texture2D(shSpecular.map.texture, UV_SPECULAR).g;
+                 maskVal = texture2D(shSpecularMap, UV_SPECULAR).g;
             #endif
         #endif
         
@@ -567,7 +682,7 @@ void main() {
 
     #ifdef USE_OPACITY
         #ifdef USE_MAP_OPACITY
-            vec4 texelOpacity = texture2D(shOpacity.map.texture, UV_OPACITY);
+            vec4 texelOpacity = texture2D(shOpacityMap, UV_OPACITY);
             
             diffuseColor.a *= texelOpacity.a;
         #endif
@@ -584,7 +699,18 @@ void main() {
     // #include <alphamap_fragment>
 
 
-    #include <alphatest_fragment>
+    #ifdef USE_SHADOW_SILHOUETTE
+        if (diffuseColor.a <= 0.0) discard;
+        gl_FragColor = vec4(0.0, 0.0, 0.0, diffuseColor.a);
+        return;
+    #endif
+    if (texModifierAlpha < 0.0) {
+        #include <alphatest_fragment>
+    }
+    #ifdef USE_PROJECTOR_RECEIVER
+        gl_FragColor = getProjectorShadow();
+        return;
+    #endif
     // #include <specularmap_fragment>
     
     // accumulation (baked indirect lighting only)
@@ -607,7 +733,7 @@ void main() {
         #endif
     #endif
 
-    #ifdef USE_AMBIENT
+    #if defined(USE_AMBIENT) && !defined(USE_BSP_AMBIENT)
         reflectedLight.indirectDiffuse += ambient.brightness * ambient.color * 2.0;
     #endif
 
@@ -617,7 +743,10 @@ void main() {
         #else
             reflectedLight.indirectDiffuse += vIndirectFront;
         #endif
-        #include <lightmap_fragment>
+        #ifdef USE_LIGHTMAP
+            vec4 lightMapTexel = texture2D( lightMap, vUv2 );
+            reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity;
+        #endif
         reflectedLight.indirectDiffuse *= BRDF_Lambert( diffuseColor.rgb );
         #ifdef DOUBLE_SIDED
             reflectedLight.directDiffuse = ( gl_FrontFacing ) ? vLightFront : vLightBack;
@@ -637,36 +766,23 @@ void main() {
         float specularMaskValue = 1.0;
 
         #ifdef USE_FADE
-            // UFadeColor::GetColor (UnMaterial.cpp line 332): Time = (TimeSeconds + FadePhase) / FadePeriod
-            float fadeTime = (globalTimeSeconds + shSpecular.fadeColors.phase) / shSpecular.fadeColors.period;
-            float fadePercent;
-
-            if (shSpecular.fadeColors.fadeType == 1) {
-                fadePercent = 0.5 + cos(fadeTime * PI * 0.5) * 0.5;
-            } else {
-                float fadeCycle = floor(fadeTime);
-                float fadeFrac = fadeTime - fadeCycle;
-                fadePercent = (mod(fadeCycle, 2.0) != 0.0) ? fadeFrac : 1.0 - fadeFrac;
-            }
-
-            float mixValue = 1.0 - fadePercent;
-            specularColor = mix(shSpecular.fadeColors.color1, shSpecular.fadeColors.color2, mixValue) * 2.0;
+            specularColor = getFadeColor(shSpecular.fadeColors) * 2.0;
         #else
             #ifdef USE_CUBE_MAP_SPECULAR
                 vec3 envMapDirection = vReflect;
                 #ifdef USE_ENVMAP_CAMERA
-                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz;
+                    envMapDirection = (viewMatrix * vec4(envMapDirection, 0.0)).xyz * vec3(-1.0, 1.0, -1.0); // D3D camera space: X flipped in clip (ue2-conventions.ts), +Z forward
                 #endif
-                specularColor = textureCube(shSpecularCube, vec3(-envMapDirection.x, envMapDirection.yz)).rgb;
+                specularColor = textureCube(shSpecularCube, shSpecularCubeTransform * envMapDirection).rgb;
             #elif defined(USE_MAP_SPECULAR)
-                vec4 texelSpecular = texture2D(shSpecular.map.texture, UV_SPECULAR);
+                vec4 texelSpecular = texture2D(shSpecularMap, UV_SPECULAR);
                 specularColor = texelSpecular.rgb;
             #endif
         #endif
 
         
         #ifdef USE_MAP_SPECULAR_MASK
-            vec4 texelSpecularMask = texture2D(shSpecularMask.map.texture, UV_SPECULAR_MASK);
+            vec4 texelSpecularMask = texture2D(shSpecularMaskMap, UV_SPECULAR_MASK);
             #ifdef USE_SELF_ILLUMINATION
                 // D3DTOP_BLENDCURRENTALPHA over CURRENT, which is indirectDiffuse here - directDiffuse is 0 unlit
                 reflectedLight.indirectDiffuse = mix(reflectedLight.indirectDiffuse, specularColor, texelSpecularMask.a);
@@ -680,6 +796,10 @@ void main() {
 
     vec3 outgoingLight = reflectedLight.indirectDiffuse + reflectedLight.directDiffuse;
 
+    #ifdef USE_BSP_AMBIENT
+        outgoingLight = clamp(outgoingLight, 0.0, 1.0) * ambient.color * 2.0;
+    #endif
+
     #if defined(USE_SPECULAR) && !defined(USE_SELF_ILLUMINATION)
         #ifdef USE_MODULATE_SPECULAR_2X
             outgoingLight *= specularColor * 2.0;
@@ -688,19 +808,28 @@ void main() {
         #endif
     #endif
 
-    #if !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
-        if ( shadowActive > 0.0 && vShadowCoord.w > 0.0 ) {
-            vec3 shadowCoord = vShadowCoord.xyz / vShadowCoord.w;
-
-            if ( all( greaterThanEqual( shadowCoord, vec3( 0.0 ) ) ) && all( lessThanEqual( shadowCoord, vec3( 1.0 ) ) ) )
-                outgoingLight *= 1.0 - texture2D( shadowMap, shadowCoord.xy ).a * shadowDarkness;
-        }
     #endif
     
     #include <envmap_fragment>
-    #include <output_fragment>
+    outgoingLight *= texModifierColor;
+
+    if (texModifierAlpha >= 0.0) {
+        #ifdef USE_PAWN_MATERIALS
+            bool masked = part.parameters.x == 127.0 / 255.0;
+        #else
+            #ifdef USE_ALPHATEST
+                bool masked = alphaTest == 127.0 / 255.0;
+            #else
+                bool masked = false;
+            #endif
+        #endif
+        diffuseColor.a = masked ? diffuseColor.a * texModifierAlpha : texModifierAlpha;
+        if (diffuseColor.a <= 0.0) discard;
+    }
+
+    #include <opaque_fragment>
     #include <tonemapping_fragment>
-    #include <encodings_fragment>
+    #include <colorspace_fragment>
 
     #ifdef USE_TERRAIN_DECORATION_FADE
         gl_FragColor.a *= vTerrainDecorationFade;

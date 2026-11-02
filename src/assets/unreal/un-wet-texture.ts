@@ -94,7 +94,7 @@ export abstract class UWetTexture extends UTexture {
             }));
 
         const wetInfo: IWetTextureDecodeInfo = {
-            name: this.uuid,
+            name: this.name,
             materialType: "texture",
             textureType: "wet",
             width: info.width,
