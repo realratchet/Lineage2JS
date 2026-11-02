@@ -10,7 +10,8 @@ const LABEL_DISABLED = 0xffa0a0a0;
 const ATLAS_WIDTH = 2048;
 const MIN_THUMB = 15;
 
-type AtlasEntry_T = { url: string, x: number, y: number, width: number, height: number, atlasWidth: number, atlasHeight: number, frames: [number, number][], frameTime: number };
+type AtlasFrame_T = { url: string, x: number, y: number, atlasWidth: number, atlasHeight: number };
+type AtlasEntry_T = AtlasFrame_T & { width: number, height: number, frames: AtlasFrame_T[], frameTime: number };
 type ModalWindow_T = { element: HTMLElement };
 
 function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with RGBA bitfields: raw canvas bytes, no PNG compression pass.
@@ -318,7 +319,7 @@ export class NDomLayer {
         for (const [element, position] of this.windowPositions) this.place(element, position[0], position[1]);
     }
 
-    public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true) { // tinted copies share the atlas image of the same call
+    public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true) { // tinted copies share atlas pages of the same call
         const canvas = this.manager.canvas;
 
         await canvas.loadTextures([...paths, ...tinted.map(([path]) => path)], useIntrinsicAlpha);
@@ -335,7 +336,9 @@ export class NDomLayer {
         const animations: { frames: (ImageBitmap | HTMLCanvasElement)[], frameTime: number }[] = requests.map(([, [key, tint]]) => tint === 0xffffff ? canvas.getTextureAnimation(key, useIntrinsicAlpha) : { frames: [canvas.getTintedImage(key, tint, -1, useIntrinsicAlpha)], frameTime: 0 });
         const images = animations.flatMap(image => image.frames);
         const atlasWidth = Math.max(ATLAS_WIDTH, ...images.map(image => image.width));
+        const atlasHeight = Math.max(ATLAS_WIDTH, ...images.map(image => image.height));
         const places: [number, number][] = [];
+        const arrPages: number[][] = [[]];
         let x = 0, y = 0, shelf = 0;
 
         for (const i of images.map((_, i) => i).sort((a, b) => images[b].height - images[a].height)) {
@@ -345,27 +348,39 @@ export class NDomLayer {
                 shelf = 0;
             }
 
+            if (y + images[i].height > atlasHeight) {
+                arrPages.push([]);
+                x = y = shelf = 0;
+            }
+
             places[i] = [x, y];
+            arrPages[arrPages.length - 1].push(i);
             x += images[i].width + 1;
             shelf = Math.max(shelf, images[i].height);
         }
 
-        const atlas = document.createElement("canvas");
+        const frames: AtlasFrame_T[] = [];
 
-        atlas.width = atlasWidth;
-        atlas.height = y + shelf;
+        for (const page of arrPages) {
+            const atlas = document.createElement("canvas");
 
-        const context = atlas.getContext("2d", { willReadFrequently: true });
+            atlas.width = atlasWidth;
+            atlas.height = Math.max(...page.map(i => places[i][1] + images[i].height));
 
-        images.forEach((image, i) => context.drawImage(image, places[i][0], places[i][1]));
+            const context = atlas.getContext("2d", { willReadFrequently: true });
 
-        const url = URL.createObjectURL(encodeBitmap(atlas));
+            page.forEach(i => context.drawImage(images[i], places[i][0], places[i][1]));
+
+            const url = URL.createObjectURL(encodeBitmap(atlas));
+
+            page.forEach(i => frames[i] = { url, x: places[i][0], y: places[i][1], atlasWidth, atlasHeight: atlas.height });
+        }
 
         let first = 0;
         keys.forEach((key, i) => {
-            const image = animations[i], frames = places.slice(first, first + image.frames.length);
+            const image = animations[i], arrFrames = frames.slice(first, first + image.frames.length);
 
-            if (!this.atlas.has(key)) this.atlas.set(key, { url, x: frames[0][0], y: frames[0][1], width: image.frames[0].width, height: image.frames[0].height, atlasWidth, atlasHeight: atlas.height, frames, frameTime: image.frameTime });
+            if (!this.atlas.has(key)) this.atlas.set(key, { ...arrFrames[0], width: image.frames[0].width, height: image.frames[0].height, frames: arrFrames, frameTime: image.frameTime });
             first += image.frames.length;
         });
     }
@@ -433,7 +448,7 @@ export class NDomLayer {
         element.style.backgroundSize = `${entry.atlasWidth * scaleX}px ${entry.atlasHeight * scaleY}px`;
         element.style.backgroundPosition = `${-(entry.x + u) * scaleX}px ${-(entry.y + v) * scaleY}px`;
         if (entry.frames.length > 1) {
-            const frames = [...entry.frames, entry.frames[0]].map(([x, y]) => ({ backgroundPosition: `${-(x + u) * scaleX}px ${-(y + v) * scaleY}px`, easing: "steps(1, end)" }));
+            const frames = [...entry.frames, entry.frames[0]].map(frame => ({ backgroundImage: `url(${frame.url})`, backgroundSize: `${frame.atlasWidth * scaleX}px ${frame.atlasHeight * scaleY}px`, backgroundPosition: `${-(frame.x + u) * scaleX}px ${-(frame.y + v) * scaleY}px`, easing: "steps(1, end)" }));
             const animation = element.animate(frames, { duration: entry.frameTime * entry.frames.length, iterations: Infinity });
 
             animation.startTime = 0;
