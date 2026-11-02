@@ -31,7 +31,7 @@ export type SkillProjectile_T = {
 export type SkillEffectHost_T = {
     createEffect(caster: SkillActor_T, classId: string, assets?: import("../decode-library").DecodeLibrary): SkillActor_T;
     addEffect(effect: SkillActor_T, owner: SkillActor_T | null): void;
-    removeEffect(effect: SkillActor_T): void;
+    removeEffect(effect: SkillActor_T, fadeOut?: number): void;
     isAlive(actor: SkillActor_T): boolean;
     isA(actor: SkillActor_T, classId: string, caster: SkillActor_T): boolean;
     call(actor: SkillActor_T, name: string): void;

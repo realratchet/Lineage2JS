@@ -267,7 +267,8 @@ export abstract class BaseEmitter extends Object3D {
     protected isFadingIn: boolean;
     protected fadeInEndTime: number;
     protected fadeInFactor: THREE.Vector4;
-    protected fadeFactor: number;
+    protected fadeFactor: number = 1;
+    protected fadeOutDuration: number = 0;
     protected opacity: number;
     protected minSquaredVelocity: number;
     protected allParticlesDead: boolean;
@@ -296,6 +297,10 @@ export abstract class BaseEmitter extends Object3D {
         this.generalSettings.particlesPerSecond = 0;
         this.isAutoReset = this.isAutoDestroyed = false;
         this.killPending = true;
+    }
+    public fadeOut(duration: number): void {
+        this.kill();
+        this.fadeOutDuration = duration;
     }
     public handlesUnrealNative(_index: number, name: string): boolean { return name.toLowerCase() === "trigger"; }
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
@@ -1474,6 +1479,11 @@ export abstract class BaseEmitter extends Object3D {
                 }
             }
 
+            if (this.fadeFactor < 1) {
+                if (this.drawStyle === "alpha" || this.drawStyle === "modulate" || this.drawStyle === "alphaModulate") color.w *= this.fadeFactor;
+                else color.multiplyScalar(this.fadeFactor);
+            }
+
             const particleExtent = Math.max(particle.scale.x, particle.scale.y, particle.scale.z) * this.particleGeometryRadius;
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(particleExtent));
             this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(-particleExtent));
@@ -1578,7 +1588,10 @@ export abstract class BaseEmitter extends Object3D {
         }
 
         // Engine.dll AEmitter::Tick 0x8a4f88 scales emitter delta after the ordinary actor tick.
-        const dt = Math.fround((deltaTime === undefined ? clamp((currentTime - this.currentTime) / 1000, 0, 0.15) : deltaTime) * (owner && owner.getSpeedRate ? owner.getSpeedRate() : 1));
+        const delta = deltaTime === undefined ? clamp((currentTime - this.currentTime) / 1000, 0, 0.15) : deltaTime;
+        const dt = Math.fround(delta * (owner && owner.getSpeedRate ? owner.getSpeedRate() : 1));
+
+        if (this.fadeOutDuration > 0) this.fadeFactor = Math.max(0, this.fadeFactor - delta / this.fadeOutDuration);
 
         if (this.initialDelay > 0) {
             this.initialDelay = Math.fround(this.initialDelay - dt);

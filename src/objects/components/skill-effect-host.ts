@@ -65,7 +65,22 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public addEffect(effect: SkillActor_T, owner: SkillActor_T | null): void { this.addEffectCallback(this.object(effect), owner); }
-    public removeEffect(effect: SkillActor_T): void { this.removeEffectCallback(this.object(effect)); }
+    public removeEffect(effect: SkillActor_T, fadeOut: number = 0): void {
+        const object = this.object(effect);
+
+        if (fadeOut > 0 && (object as any).isEmitterActor) {
+            (object as any).kill();
+            object.traverse((child: any) => {
+                if (child.particlePool) child.fadeOut(fadeOut);
+            });
+            const lifeSpan = effect.scriptProperties.get("LifeSpan") as number;
+
+            effect.scriptProperties.set("LifeSpan", lifeSpan > 0 ? Math.min(lifeSpan, fadeOut) : fadeOut);
+            return;
+        }
+
+        this.removeEffectCallback(object);
+    }
     public isAlive(actor: SkillActor_T): boolean { return !!this.object(actor).parent; }
 
     public isA(actor: SkillActor_T, classId: string, caster: SkillActor_T): boolean {

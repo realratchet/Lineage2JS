@@ -132,7 +132,7 @@ export class SkillVisualEffect implements SkillScriptHost_T {
         this.clearSkillTargets();
         this.placement.cancelCastingLights();
         for (const effect of this.castingEffects) // Engine.dll MagicStop 0x7b5410 destroys Pawn+0x52c (TriggerCasting) and Pawn+0x364 (NSkillProjectileActor) only.
-            if (this.host.isAlive(effect)) this.host.removeEffect(effect);
+            if (this.host.isAlive(effect)) this.host.removeEffect(effect, 0.15);
         for (const projectile of this.preparedProjectiles)
             if (this.host.isAlive(projectile)) this.host.removeEffect(projectile);
         this.castingEffects.length = 0;
