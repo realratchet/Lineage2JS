@@ -509,7 +509,15 @@ function equalScriptProperties(a: any, b: any): boolean {
 
     const keys = Object.keys(a);
 
-    return keys.length === Object.keys(b).length && keys.every(key => Object.prototype.hasOwnProperty.call(b, key) && equalScriptProperties(a[key], b[key]));
+    if (keys.length !== Object.keys(b).length) return false;
+
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+
+        if (!Object.prototype.hasOwnProperty.call(b, key) || !equalScriptProperties(a[key], b[key])) return false;
+    }
+
+    return true;
 }
 
 export function shareBatchScriptProperties(manifest: StaticMeshBatchManifest_T): void {

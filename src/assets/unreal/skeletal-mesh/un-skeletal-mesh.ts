@@ -989,7 +989,7 @@ function normalizeBoneName(name: string) {
 function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
     const boneCount = refSkeleton.length;
     const boneInfos = new Array<IBoneDecodeInfo>(boneCount)
-    const boneCoords = new Array<FBoneCoord>(boneCount);
+    // const boneCoords = new Array<FBoneCoord>(boneCount);
     // const matrices = [];
 
     for (let boneIndex = 0; boneIndex < boneCount; boneIndex++) {
@@ -1013,15 +1013,15 @@ function collectSkeleton(refSkeleton: FMeshBone[]): IBoneDecodeInfo[] {
             quaternion: [boneRot.x, boneRot.y, boneRot.z, boneRot.w]
         } as IBoneDecodeInfo;
 
-        boneRot.w = -boneRot.w;
+        // boneRot.w = -boneRot.w;
 
-        let bc = boneCoords[boneIndex] = new FBoneCoord();
-        bc.origin = bonePos;
-        bc.axis = boneRot.toAxis();
+        // let bc = boneCoords[boneIndex] = new FBoneCoord();
+        // bc.origin = bonePos;
+        // bc.axis = boneRot.toAxis();
 
-        if (boneIndex > 0) {
-            bc = boneCoords[boneIndex] = boneCoords[bone.parentIndex].untransformCoords(bc);
-        }
+        // if (boneIndex > 0) {
+        //     bc = boneCoords[boneIndex] = boneCoords[bone.parentIndex].untransformCoords(bc);
+        // }
 
         // const invCoords = bc.invert();
 

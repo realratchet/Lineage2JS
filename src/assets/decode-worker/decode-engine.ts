@@ -1119,8 +1119,10 @@ export class DecodeEngine {
 
             while (cls && cls.id !== "engine.Mover") cls = library.scriptClasses[cls.superClassId];
             if (!cls) continue;
+            const properties = actor.sharedScriptProperties ? { ...actor.sharedScriptProperties, ...actor.scriptProperties } : actor.scriptProperties;
+
             for (const field of ["OpeningSound", "OpenedSound", "ClosingSound", "ClosedSound"]) {
-                let sound = actor.scriptProperties[field];
+                let sound = properties[field];
 
                 if (sound === undefined)
                     for (let cls = library.scriptClasses[actor.scriptClassId]; cls && sound === undefined; cls = library.scriptClasses[cls.superClassId]) sound = cls.defaults[field];

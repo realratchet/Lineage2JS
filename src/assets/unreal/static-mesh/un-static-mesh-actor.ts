@@ -19,7 +19,6 @@ import type { IMoverDecodeInfo } from "../un-mover";
 
 export type IStaticMeshActorDecodeInfo = IBaseObjectDecodeInfo & {
     actorName: string;
-    sharedScriptProperties?: IBaseObjectDecodeInfo["scriptProperties"];
     type: "StaticMeshActor",
     instance: IStaticMeshInstanceDecodeInfo,
     bounds: IBoxDecodeInfo,

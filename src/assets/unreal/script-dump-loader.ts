@@ -150,14 +150,21 @@ function dumpPropertyValue(value: any): ScriptPropertyValue_T {
     throw new Error(`Cannot transfer UnrealScript default '${value.constructor?.name ?? typeof value}'.`);
 }
 
-export function dumpObjectScriptProperties(object: UObject, cacheDefaults?: WeakMap<Function, Map<string, ScriptPropertyValue_T>>): Record<string, ScriptPropertyValue_T> {
+function* getObjectScriptPropertyNames(dict: Map<string, any>, baseOverrides: Set<string>): IterableIterator<string> {
+    yield* Map.prototype.keys.call(dict);
+
+    for (const name of baseOverrides)
+        if (!Map.prototype.has.call(dict, name)) yield name;
+}
+
+export function dumpObjectScriptProperties(object: UObject, cacheDefaults?: WeakMap<Function, Map<string, ScriptPropertyValue_T>>, baseOverrides?: Set<string>): Record<string, ScriptPropertyValue_T> {
     const properties: Record<string, ScriptPropertyValue_T> = {};
     const dict = object.propertyDict;
     const ctor = object.constructor as any;
     let defaults = cacheDefaults ? cacheDefaults.get(ctor) : null;
     let defaultDict: Map<string, any> = null;
 
-    for (const name of dict.keys()) {
+    for (const name of baseOverrides ? getObjectScriptPropertyNames(dict, baseOverrides) : dict.keys()) {
         const isDefault = cacheDefaults && !Map.prototype.has.call(dict, name);
 
         if (isDefault && defaults?.has(name)) {

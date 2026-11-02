@@ -54,12 +54,15 @@ export type LoadSettings_T = {
     [key: `_${string}`]: any // debug/testing overrides, see core.ts
 };
 
+type SharedScriptProperties_T = { properties: IBaseObjectDecodeInfo["scriptProperties"], overrides: Set<string> };
+
 export class DecodeLibraryBuilder {
     public readonly library: DecodeLibrary;
 
     protected readonly materialsLoading = new Set<string>();
     protected readonly skeletalMeshes = new Map<string, ISkinnedMeshObjectDecodeInfo>();
     protected readonly cacheScriptDefaults = new WeakMap<Function, Map<string, any>>();
+    protected readonly cacheSharedScriptProperties = new WeakMap<Function, SharedScriptProperties_T>();
     protected readonly settings: LoadSettings_T;
 
     public constructor(library: DecodeLibrary, settings: LoadSettings_T) {
@@ -256,9 +259,9 @@ export class DecodeLibraryBuilder {
             if (!actor) { this.library.levelActors.push(null); continue; }
 
             actor.loadSelf();
-            const info: Pick<IBaseObjectDecodeInfo, "uuid" | "name" | "scriptClassId" | "scriptProperties" | "ownerUuid"> = { uuid: actor.uuid, name: actor.objectName };
+            const info: Pick<IBaseObjectDecodeInfo, "uuid" | "name" | "scriptClassId" | "scriptProperties" | "sharedScriptProperties" | "ownerUuid"> = { uuid: actor.uuid, name: actor.objectName };
 
-            this.setScriptClass(actor, info);
+            this.setScriptClass(actor, info, true);
             this.library.levelActors.push(info);
         }
 
@@ -507,7 +510,7 @@ export class DecodeLibraryBuilder {
         zoneInfo.children.push(result.object);
     }
 
-    protected setScriptClass(actor: UObject, info: Pick<IBaseObjectDecodeInfo, "scriptClassId" | "scriptProperties" | "ownerUuid">): void {
+    protected setScriptClass(actor: UObject, info: Pick<IBaseObjectDecodeInfo, "scriptClassId" | "scriptProperties" | "sharedScriptProperties" | "ownerUuid">, shareProperties: boolean = false): void {
         const cls = (actor.constructor as any).hostClass as UClass;
 
         if (!cls) return;
@@ -515,7 +518,33 @@ export class DecodeLibraryBuilder {
         const owner = actor.propertyDict.get("Owner") as UAActor;
 
         info.scriptClassId = cls.name;
-        info.scriptProperties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults);
+        if (shareProperties) {
+            const ctor = actor.constructor;
+            let shared = this.cacheSharedScriptProperties.get(ctor);
+
+            if (shared) info.scriptProperties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults, shared.overrides);
+            else {
+                const properties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults);
+                const layout = (ctor as any)._classLayout as Map<string, any>;
+
+                if (!layout) throw new Error(`Script class '${ctor.name}' has no property layout.`);
+
+                shared = { properties: {}, overrides: new Set() };
+
+                for (const name of Map.prototype.keys.call(actor.propertyDict))
+                    if (layout.has(name)) shared.overrides.add(name);
+                info.scriptProperties = {};
+
+                for (const name of Object.keys(properties)) {
+                    if (layout.has(name)) shared.properties[name] = properties[name];
+                    else info.scriptProperties[name] = properties[name];
+                }
+                this.cacheSharedScriptProperties.set(ctor, shared);
+            }
+            info.sharedScriptProperties = shared.properties;
+            info.scriptProperties.bStatic = actor.propertyDict.get("bStatic");
+            info.scriptProperties.bAlwaysRelevant = actor.propertyDict.get("bAlwaysRelevant");
+        } else info.scriptProperties = dumpObjectScriptProperties(actor, this.cacheScriptDefaults);
         if (this.library.levelPackageName) info.scriptProperties.Outer = (actor as any).pkg.getObjectPath(actor.exp.idPackage);
         info.ownerUuid = owner ? owner.uuid : null;
     }
