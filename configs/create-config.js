@@ -252,20 +252,6 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                         res.sendStatus(404);
                     } });
 
-                    const reportFile = path.join(__dirname, "../sector-test-report.jsonl");
-
-                    devServer.app.post("/sector-test/report", require("express").json({ limit: "4mb" }), (req, res) => {
-                        fs.appendFileSync(reportFile, JSON.stringify({ t: new Date().toISOString(), ...req.body }) + "\n");
-                        res.sendStatus(204);
-                    });
-
-                    const npcReportFile = path.join(__dirname, "../npc-test-report.jsonl");
-
-                    devServer.app.post("/npc-test/report", require("express").json({ limit: "4mb" }), (req, res) => {
-                        fs.appendFileSync(npcReportFile, JSON.stringify({ t: new Date().toISOString(), ...req.body }) + "\n");
-                        res.sendStatus(204);
-                    });
-
                     return middlewares;
                 }
             };
