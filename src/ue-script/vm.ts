@@ -163,7 +163,9 @@ const cacheScriptObjects = new WeakMap<ScriptHost_T, WeakRef<ScriptHost_T>>();
 const cacheScriptObjectClasses = new WeakMap<ScriptHost_T, ScriptObjectClasses_T>();
 const cacheScriptResources = new Map<string, WeakRef<ScriptHost_T>>();
 const cacheScriptResourceAliases = new WeakMap<WeakRef<ScriptHost_T>, Set<string>>();
+const cacheResourceProperties = new WeakSet<ScriptHost_T>();
 const cacheLibraryScriptResources = new WeakMap<DecodeLibrary, Map<string, ScriptHost_T>>();
+const cacheClassParents = new WeakMap<Record<string, string | null>, [string, string | null][]>();
 let scriptLocalization: Map<string, Map<string, Map<string, string>>> = null;
 const scriptObjectFinalizer = new FinalizationRegistry<WeakRef<ScriptHost_T>>(reference => {
     registeredScriptObjects.delete(reference);
@@ -183,6 +185,32 @@ function registerScriptObject(object: ScriptHost_T, classes: ScriptObjectClasses
     registeredScriptObjects.add(reference);
     scriptObjectFinalizer.register(object, reference);
 }
+
+function getClassParents(parents: Record<string, string | null>): [string, string | null][] {
+    let entries = cacheClassParents.get(parents);
+
+    if (!entries) {
+        entries = Object.entries(parents).map(([id, parent]) => [id.toLowerCase(), parent ? parent.toLowerCase() : null]);
+        cacheClassParents.set(parents, entries);
+    }
+    return entries;
+}
+
+type ClassParentRecords_T = { parents: Map<string, string | null>, records: Map<Record<string, string | null>, number>, revision: number };
+
+function loadClassParents(parents: Record<string, string | null>, cache: ClassParentRecords_T): void {
+    if (cache.records.get(parents) === cache.revision) return;
+
+    for (const [id, parent] of getClassParents(parents)) {
+        const previous = cache.parents.get(id);
+
+        if (previous !== undefined && previous !== parent) cache.revision++;
+        cache.parents.set(id, parent);
+    }
+    cache.records.set(parents, cache.revision);
+}
+
+export function getScriptResource(path: string): ScriptHost_T | null { return cacheScriptResources.get(path.toLowerCase())?.deref() || null; }
 
 function registerScriptResourceAlias(id: string, object: ScriptHost_T): void {
     id = id.toLowerCase();
@@ -1390,15 +1418,17 @@ export class UnScriptVM {
     }
 
     public loadFunctions(): void {
+        const parents: ClassParentRecords_T = { parents: this.classParents, records: new Map(), revision: 0 };
+
         for (const cls of Object.values(this.library.scriptClasses)) {
             for (const [id, names] of Object.entries(cls.enums || {})) this.enumsById.set(id.toLowerCase(), names);
-            for (const [id, parent] of Object.entries(cls.classParents || {})) this.classParents.set(id.toLowerCase(), parent ? parent.toLowerCase() : null);
+            loadClassParents(cls.classParents || {}, parents);
             for (const [id, actual] of Object.entries(cls.classAliases || {})) this.classAliases.set(id.toLowerCase(), actual.toLowerCase());
             for (const [id, type] of Object.entries(cls.objectClasses || {})) this.objectClasses.set(id.toLowerCase(), type.toLowerCase());
         }
         for (const [id, info] of Object.entries(this.library.scriptObjects || {})) {
             this.objectClasses.set(id.toLowerCase(), info.classId.toLowerCase());
-            for (const [cls, parent] of Object.entries(info.classParents)) this.classParents.set(cls.toLowerCase(), parent ? parent.toLowerCase() : null);
+            loadClassParents(info.classParents, parents);
         }
         for (const cls of Object.values(this.library.scriptClasses)) this.classParents.set(cls.id.toLowerCase(), cls.superClassId ? cls.superClassId.toLowerCase() : null);
         if (this.classParents.has("__native__.class")) this.classAliases.set("core.class", "__native__.class");
@@ -1420,11 +1450,12 @@ export class UnScriptVM {
 
         if (!resources) cacheLibraryScriptResources.set(this.library, resources = new Map());
         const seen = new Set<DecodeLibrary["scriptObjects"][string]>();
+        const parents: ClassParentRecords_T = { parents: this.classParents, records: new Map(), revision: 0 };
         const active = new Set<DecodeLibrary["scriptObjects"][string]>(), objectClasses = this.objectClasses;
 
         function pull(info: DecodeLibrary["scriptObjects"][string], classes: ScriptObjectClasses_T): ScriptHost_T {
             if (!info.path) throw new Error(`Script resource has no canonical path.`);
-            for (const [id, parent] of Object.entries(info.classParents)) classes.parents.set(id.toLowerCase(), parent ? parent.toLowerCase() : null);
+            loadClassParents(info.classParents, parents);
             const key = info.path.toLowerCase();
             let object = resources.get(key) || cacheScriptResources.get(key)?.deref();
 
@@ -1438,9 +1469,13 @@ export class UnScriptVM {
             const outer = info.outer ? pull(info.outer, classes) : null;
 
             if (!object) {
-                object = { scriptClassId: info.classId, isLevelActor: false, isScriptResource: true, scriptObjectPath: info.path, scriptProperties: { Name: info.path.slice(info.path.lastIndexOf(".") + 1), Outer: outer, Class: info.classId, ObjectFlags: 0 } } as ScriptResource_T;
+                object = { scriptClassId: info.classId, isLevelActor: false, isScriptResource: true, scriptObjectPath: info.path, scriptProperties: { ...info.properties, Name: info.path.slice(info.path.lastIndexOf(".") + 1), Outer: outer, Class: info.classId, ObjectFlags: 0 } } as ScriptResource_T;
                 registerScriptObject(object, classes);
             } else if (object.scriptClassId.toLowerCase() !== info.classId.toLowerCase()) throw new Error(`Script resource '${info.path}' changed class.`);
+            if (info.properties && !cacheResourceProperties.has(object)) {
+                Object.assign(object.scriptProperties, info.properties);
+                cacheResourceProperties.add(object);
+            }
             resources.set(key, object);
             objectClasses.set(key, info.classId.toLowerCase());
             registerScriptResourceAlias(info.path, object);

@@ -1,4 +1,4 @@
-definitions[__KEY__] = Object.assign(__DEFINITION__, { create(Constructor) {
+Object.assign(__DEFINITION__, { create(Constructor) {
     const definition = this;
     return class __NAME__ extends Constructor {
         static isDynamicClass = true;
@@ -20,4 +20,4 @@ definitions[__KEY__] = Object.assign(__DEFINITION__, { create(Constructor) {
         makeLayout() { makePrebuiltLayout(this); }
         __TO_STRING__
     };
-} });
+} })

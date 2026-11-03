@@ -154,7 +154,7 @@ export abstract class UModel extends UPrimitive {
     public getIsRootOutside() { return this.isRootOutside; }
     public getCollisionBoundingBox(owner?: UAActor): FBox { return owner ? this.boundingBox.transformBy(owner.localToWorld()) : this.boundingBox; }
     public getLeafHull(node: FBSPNode): IBSPNodeCollisionInfo_T {
-        const hullIndexList = (this.leafHulls.getTypedArray() as Int32Array).slice(node.iCollisionBound);
+        const hullIndexList = (this.leafHulls.getTypedArray() as Int32Array).subarray(node.iCollisionBound);
         let hullPlanesCount = 0;
 
         while (hullIndexList[hullPlanesCount] >= 0) hullPlanesCount++;
@@ -420,7 +420,7 @@ export abstract class UModel extends UPrimitive {
 
             if (node.iCollisionBound >= 0) {
                 const hulls = this.leafHulls.getTypedArray() as Int32Array;
-                const hullIndexList = hulls.slice(node.iCollisionBound);
+                const hullIndexList = hulls.subarray(node.iCollisionBound);
 
                 let hullPlanesCount = 0;
                 while (hullIndexList[hullPlanesCount] >= 0)
@@ -555,7 +555,7 @@ export abstract class UModel extends UPrimitive {
                 const textureY: FVector = this.vectors.getElem(surf.vTextureV, _textureY);
                 const tangentZ: FVector = this.vectors.getElem(surf.vNormal, _tangentZ);
 
-                const texSize = surf.material?.loadSelf?.().getTextureSize();
+                const texSize = builder.getMaterialTextureSize(surf.material);
                 const texWidth = texSize?.width ?? TEXEL_SCALE;
                 const texHeight = texSize?.height ?? TEXEL_SCALE;
 

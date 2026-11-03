@@ -1,4 +1,5 @@
 import UObject from "./un-object";
+import { v5 as seededUuid } from "uuid";
 import { generateUUID } from "three/src/math/MathUtils";
 
 Object.assign(UObject, {
@@ -22,7 +23,7 @@ Object.defineProperty(UObject.prototype, "uuid", {
     get() {
         if (this._uuid !== undefined) return this._uuid;
 
-        this._uuid = `${this.constructor.friendlyName ?? this.constructor.name}_${this.objectName}_${generateUUID()}`;
+        this._uuid = this.isPackageAsset && this.pkg && this.exportIndex !== null && this.exportIndex !== undefined && this.exportIndex >= 0 ? seededUuid(`${this.pkg.path.toLowerCase()}:${this.exportIndex}`, "86b41f73-4c91-4e54-a781-2c7e87f42f21") : `${this.constructor.friendlyName ?? this.constructor.name}_${this.objectName}_${generateUUID()}`;
 
         // this._uuid = this.name ?? `${this.constructor.name}_${this.objectName}_${generateUUID()}`;
 

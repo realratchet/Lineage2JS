@@ -65,6 +65,8 @@ export class Radar { // Engine.dll UCanvas::DrawRadarBack 0x7FDFF0, DrawRadarTar
 
         this.setRect(renderer, width - w, height - h, w, h, width, true);
 
+        renderer.state.buffers.depth.setReversed(this.camera.reversedDepth);
+        renderer.state.buffers.depth.setClear(1);
         renderer.clearDepth();
         this.draw(renderer, "radar_back", 0, 0, 0, 0, 0, pitch, yaw);
         renderer.clearDepth();

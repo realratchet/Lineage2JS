@@ -86,7 +86,9 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             layer.alphaMap.uniforms.map.texture.premultiplyAlpha = true;
             layer.alphaMap.uniforms.map.texture.needsUpdate = true;
 
-            layerCode.push(`${ws}layer = vec4(texture2D(layer${i}Map, vUv[${i + 1}]).rgb, layerMask.r);`)
+            layerCode.push(`${ws}layer = texture2D(layer${i}Map, vUv[${i + 1}]);`);
+            // D3DDrv.dll RVA 0xb10b..0xb120 selects MODULATE alpha for transparent bitmaps.
+            layerCode.push(`${ws}layer.a ${layer.transparent ? "*=" : "="} layerMask.r;`);
             if (isOverlay) {
                 layerCode.push(`${ws}overlayColor = layer.rgb * layer.a + overlayColor * (1.0 - layer.a);`);
                 layerCode.push(`${ws}overlayAlpha = layer.a + overlayAlpha * (1.0 - layer.a);`);
@@ -134,5 +136,5 @@ export default MeshTerrainMaterial;
 
 type MeshTerrainMaterialParameters = {
     uvs: MapData_T,
-    layers: { map: IDecodedParameter, alphaMap: IDecodedParameter }[]
+    layers: { map: IDecodedParameter, alphaMap: IDecodedParameter, transparent: boolean }[]
 };

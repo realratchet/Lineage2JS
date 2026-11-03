@@ -535,8 +535,8 @@ export abstract class USkeletalMesh extends ULodMesh {
                     const track = move.animTracks.getElem(boneIndexAnim);
                     const trackFrameCount = track.keyTime.getElemCount();
 
-                    const lenPos = track.keyPos.getElemCount();
-                    const lenRot = track.keyQuat.getElemCount();
+                    const lenPos = track.keyPos.byteLength / 12;
+                    const lenRot = track.keyQuat.byteLength / 16;
 
                     const timesPos = new Float32Array(lenPos + 1);
                     const timesRot = new Float32Array(lenRot + 1);
@@ -549,34 +549,27 @@ export abstract class USkeletalMesh extends ULodMesh {
 
                         if (j < lenPos) {
                             const idxPos = j * 3;
-                            let pos = track.keyPos.getElem(j < lenPos ? j : lenPos - 1);
-
-                            pos = makeVector(pos);
 
                             timesPos[j] = time / framerate;
 
-                            positions[idxPos + 0] = pos.x;
-                            positions[idxPos + 1] = pos.y;
-                            positions[idxPos + 2] = pos.z;
+                            positions[idxPos + 0] = track.keyPos.getFloat32(j * 12 + 0, true);
+                            positions[idxPos + 1] = track.keyPos.getFloat32(j * 12 + 4, true);
+                            positions[idxPos + 2] = track.keyPos.getFloat32(j * 12 + 8, true);
 
                         }
 
                         if (j < lenRot) {
-                            let rot = track.keyQuat.getElem(j < lenRot ? j : lenRot - 1);
                             const idxRot = j * 4;
-
-
-                            rot = makeQuaternion(rot);
-
-                            if (boneIndexAnim > 0)
-                                rot = rot.conjugate();
+                            const x = track.keyQuat.getFloat32(j * 16 + 0, true);
+                            const y = track.keyQuat.getFloat32(j * 16 + 4, true);
+                            const z = track.keyQuat.getFloat32(j * 16 + 8, true);
 
                             timesRot[j] = time / framerate;
 
-                            rotations[idxRot + 0] = rot.x;
-                            rotations[idxRot + 1] = rot.y;
-                            rotations[idxRot + 2] = rot.z;
-                            rotations[idxRot + 3] = rot.w;
+                            rotations[idxRot + 0] = boneIndexAnim > 0 ? -x : x;
+                            rotations[idxRot + 1] = boneIndexAnim > 0 ? -y : y;
+                            rotations[idxRot + 2] = boneIndexAnim > 0 ? -z : z;
+                            rotations[idxRot + 3] = track.keyQuat.getFloat32(j * 16 + 12, true);
                         }
                     }
 

@@ -45,7 +45,8 @@ type LibraryChunkRef_T = { isLibraryChunk: true, index: number, kind: number, by
 type LibraryChunkSource_T = { kind: number, bytes: Uint8Array | Blob, offset?: number, length?: number };
 type LibraryBlobRange_T = { file: Blob, offset: number, end: number, padding: number };
 type LibraryChunkRange_T = { offset: number, end: number, refs: LibraryChunkRef_T[] };
-export type SeekableLibrary_T = { file: Blob, library: any, entries: LibraryChunkEntry_T[], values: Map<number, any> };
+export type LibraryBytes_T = { parts: (Uint8Array | Blob)[], byteLength: number };
+export type SeekableLibrary_T = { file: Blob, library: any, entries: LibraryChunkEntry_T[], values: Map<number, any>, packageBuffers?: Set<ArrayBuffer> };
 
 const TYPED_ARRAY_KINDS: (new (buffer: ArrayBuffer, byteOffset?: number, length?: number) => ArrayBufferView)[] = [
     Int8Array, Uint8Array, Uint8ClampedArray,
@@ -118,13 +119,14 @@ class ByteWriter {
         if (index !== undefined) return this.u32(index * 2);
 
         this.cacheStrings.set(value, this.cacheStrings.size);
-        const encoded = textEncoder.encode(value);
-        this.u32(encoded.length * 2 + 1);
-        this.blob(encoded);
+        this.ensure(4 + value.length * 3);
+        const { written } = textEncoder.encodeInto(value, this.bytes.subarray(this.length + 4));
+        this.u32(written * 2 + 1);
+        this.length += written;
     }
 
     public result(): Uint8Array {
-        return this.bytes.slice(0, this.length); // slice releases the (possibly 2x) growth buffer
+        return this.bytes.subarray(0, this.length);
     }
 }
 
@@ -192,10 +194,14 @@ export function serializeLibrary(root: any): Uint8Array {
 }
 
 export function serializeLibraryBlob(root: any, seekable: SeekableLibrary_T = null): Blob {
-    return encodeLibrary(root, seekable, true) as Blob;
+    return new Blob(serializeLibraryParts(root, seekable).parts);
 }
 
-function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean): Uint8Array | Blob {
+export function serializeLibraryParts(root: any, seekable: SeekableLibrary_T = null): LibraryBytes_T {
+    return encodeLibrary(root, seekable, true) as LibraryBytes_T;
+}
+
+function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean): Uint8Array | LibraryBytes_T {
     const writer = new ByteWriter();
     const memo = new Map<any, number>();
     const chunks: LibraryChunkSource_T[] = [];
@@ -315,7 +321,7 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
     }
 
     const result = new Uint8Array(asBlob ? HEADER_SIZE + directorySize + metadata.length + (CHUNK_ALIGNMENT - (HEADER_SIZE + directorySize + metadata.length) % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT : length);
-    const parts: BlobPart[] = [result];
+    const parts: (Uint8Array | Blob)[] = [result];
     const view = new DataView(result.buffer);
     let offset = HEADER_SIZE + directorySize;
     let directoryOffset = HEADER_SIZE;
@@ -366,7 +372,7 @@ function encodeLibrary(root: any, seekable: SeekableLibrary_T, asBlob: boolean):
 
     flushRange();
 
-    return asBlob ? new Blob(parts) : result;
+    return asBlob ? { parts, byteLength: length } : result;
 }
 
 type ObjectFrame_T = { type: "object", value: Record<string, any>, index: number, count: number };
@@ -383,6 +389,7 @@ class LibraryDecoder {
     protected nextFrame: DecoderFrame_T = null;
     protected hasRoot = false;
     protected root: any;
+    protected isSynchronous = false;
 
     protected readonly chunks: (index: number, kind: number, byteLength: number) => any;
 
@@ -390,6 +397,11 @@ class LibraryDecoder {
         this.reader = new ByteReader(buffer);
         this.reader.offset = offset;
         this.chunks = chunks;
+    }
+
+    public readAll(): any {
+        this.isSynchronous = true;
+        return this.readValue();
     }
 
     protected readValue(): any {
@@ -422,7 +434,8 @@ class LibraryDecoder {
 
                 this.reader.offset += count;
                 this.refs.push(value);
-                this.nextFrame = { type: "buffer", value, index: 0, count, sourceOffset };
+                if (this.isSynchronous) new Uint8Array(value).set(new Uint8Array(this.reader.buffer, sourceOffset, count));
+                else this.nextFrame = { type: "buffer", value, index: 0, count, sourceOffset };
                 return value;
             }
             case Tag.TypedArray: {
@@ -441,9 +454,15 @@ class LibraryDecoder {
             }
             case Tag.Object: {
                 const value: Record<string, any> = {};
+                const count = this.reader.u32();
 
                 this.refs.push(value);
-                this.nextFrame = { type: "object", value, index: 0, count: this.reader.u32() };
+                if (this.isSynchronous) {
+                    for (let i = 0; i < count; i++) {
+                        const key = this.reader.string();
+                        value[key] = this.readValue();
+                    }
+                } else this.nextFrame = { type: "object", value, index: 0, count };
                 return value;
             }
             case Tag.Array: {
@@ -451,21 +470,32 @@ class LibraryDecoder {
                 const value = new Array(count);
 
                 this.refs.push(value);
-                this.nextFrame = { type: "array", value, index: 0, count };
+                if (this.isSynchronous)
+                    for (let i = 0; i < count; i++) value[i] = this.readValue();
+                else this.nextFrame = { type: "array", value, index: 0, count };
                 return value;
             }
             case Tag.Map: {
                 const value = new Map();
+                const count = this.reader.u32();
 
                 this.refs.push(value);
-                this.nextFrame = { type: "map", value, index: 0, count: this.reader.u32(), key: undefined, hasKey: false };
+                if (this.isSynchronous) {
+                    for (let i = 0; i < count; i++) {
+                        const key = this.readValue();
+                        value.set(key, this.readValue());
+                    }
+                } else this.nextFrame = { type: "map", value, index: 0, count, key: undefined, hasKey: false };
                 return value;
             }
             case Tag.Set: {
                 const value = new Set();
+                const count = this.reader.u32();
 
                 this.refs.push(value);
-                this.nextFrame = { type: "set", value, index: 0, count: this.reader.u32() };
+                if (this.isSynchronous)
+                    for (let i = 0; i < count; i++) value.add(this.readValue());
+                else this.nextFrame = { type: "set", value, index: 0, count };
                 return value;
             }
             default: throw new Error(`Corrupt decode-cache file (unknown tag ${tag})`);
@@ -659,9 +689,7 @@ export async function openLibraryFile(file: Blob): Promise<SeekableLibrary_T> {
         return { isLibraryChunk: true, index, kind, byteLength } as LibraryChunkRef_T;
     });
 
-    while (decoder.step()) { }
-
-    return { file, library: decoder.result(), entries, values: new Map() };
+    return { file, library: decoder.readAll(), entries, values: new Map() };
 }
 
 function collectChunkRefs(root: any, values: Map<number, any>, containers: any[]): LibraryChunkRef_T[] {
@@ -765,6 +793,42 @@ export async function getLibraryChunkBlob(seekable: SeekableLibrary_T, ref: any,
     return new Blob([await readBlob(seekable.file.slice(entry.offset, entry.offset + entry.length))], { type: mimeType });
 }
 
+function hydrateLibraryRange(seekable: SeekableLibrary_T, range: LibraryChunkRange_T, buffer: ArrayBuffer): void {
+    const bytes = new Uint8Array(buffer);
+    let length = 0, contiguous = true;
+
+    for (const ref of range.refs) {
+        if (ref.kind === ARRAY_BUFFER_KIND) continue;
+
+        const aligned = length + (CHUNK_ALIGNMENT - length % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
+
+        for (let i = length; i < aligned; i++)
+            if (bytes[i] !== 0) contiguous = false;
+
+        length = aligned;
+        if (seekable.entries[ref.index].offset - range.offset !== length) contiguous = false;
+        length += ref.byteLength;
+    }
+
+    const chunks = contiguous && length === buffer.byteLength ? bytes : new Uint8Array(length);
+    let offset = 0;
+
+    for (const ref of range.refs) {
+        const entry = seekable.entries[ref.index];
+
+        if (ref.kind === ARRAY_BUFFER_KIND) {
+            seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, buffer, entry.offset - range.offset));
+            continue;
+        }
+
+        offset += (CHUNK_ALIGNMENT - offset % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
+        if (chunks.buffer !== buffer)
+            chunks.set(new Uint8Array(buffer, entry.offset - range.offset, ref.byteLength), offset);
+        seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, chunks.buffer, offset));
+        offset += ref.byteLength;
+    }
+}
+
 export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seekable.library): Promise<any> {
     const containers = [];
     const refs = collectChunkRefs(root, seekable.values, containers);
@@ -772,40 +836,20 @@ export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any 
 
     for (const range of ranges) {
         const buffer = await readBlob(seekable.file.slice(range.offset, range.end));
-        const bytes = new Uint8Array(buffer);
-        let length = 0, contiguous = true;
-
-        for (const ref of range.refs) {
-            if (ref.kind === ARRAY_BUFFER_KIND) continue;
-
-            const aligned = length + (CHUNK_ALIGNMENT - length % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
-
-            for (let i = length; i < aligned; i++)
-                if (bytes[i] !== 0) contiguous = false;
-
-            length = aligned;
-            if (seekable.entries[ref.index].offset - range.offset !== length) contiguous = false;
-            length += ref.byteLength;
-        }
-
-        const chunks = contiguous && length === buffer.byteLength ? bytes : new Uint8Array(length);
-        let offset = 0;
-
-        for (const ref of range.refs) {
-            const entry = seekable.entries[ref.index];
-
-            if (ref.kind === ARRAY_BUFFER_KIND) {
-                seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, buffer, entry.offset - range.offset));
-                continue;
-            }
-
-            offset += (CHUNK_ALIGNMENT - offset % CHUNK_ALIGNMENT) % CHUNK_ALIGNMENT;
-            if (chunks.buffer !== buffer)
-                chunks.set(new Uint8Array(buffer, entry.offset - range.offset, ref.byteLength), offset);
-            seekable.values.set(ref.index, decodeChunk(ref.kind, ref.byteLength, chunks.buffer, offset));
-            offset += ref.byteLength;
-        }
+        hydrateLibraryRange(seekable, range, buffer);
     }
 
+    return replaceChunkRefs(root, seekable.values, containers);
+}
+
+export function hydrateLibraryFileSync(seekable: SeekableLibrary_T, root: any = seekable.library): any {
+    if (!fileReader) throw new Error(`Synchronous package cache reads require a decode worker.`);
+    const containers = [];
+    const refs = collectChunkRefs(root, seekable.values, containers);
+    const ranges = buildChunkRanges(seekable, refs);
+    for (const range of ranges) {
+        const buffer = fileReader.readAsArrayBuffer(seekable.file.slice(range.offset, range.end));
+        hydrateLibraryRange(seekable, range, buffer);
+    }
     return replaceChunkRefs(root, seekable.values, containers);
 }

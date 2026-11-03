@@ -55,7 +55,7 @@ const TEX_BUTTON_DOWN = SKIN_SLOTS.buttonDown;
 const arrMaps = Array.from({ length: 6 }, (_, i) => `L2Font-e.Minimap.ch4_worldmap${i + 1}`);
 
 export class NCMapWnd {
-    public static getTextures() { return [TEX_BACK, TEX_MARKER, TEX_TARGET, TEX_PARTY, TEX_SHADOW, TEX_SUN, TEX_MOON, TEX_QUEST, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_ZOOM_IN, TEX_ZOOM_IN_DOWN, TEX_ZOOM_OUT, TEX_ZOOM_OUT_DOWN, ...arrMapInfo.slice(1).map(info => info.texture), ...arrMaps, ...NCFrameCtrl.getTextures(), ...NCMinimizedWnd.getTextures(TEX_FOLDED), ...new NCTooltip().getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_MARKER, TEX_TARGET, TEX_PARTY, TEX_SHADOW, TEX_SUN, TEX_MOON, TEX_QUEST, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_ZOOM_IN, TEX_ZOOM_IN_DOWN, TEX_ZOOM_OUT, TEX_ZOOM_OUT_DOWN, ...NCFrameCtrl.getTextures(), ...NCMinimizedWnd.getTextures(TEX_FOLDED), ...new NCTooltip().getTextures()]; }
     public readonly element: HTMLDivElement;
     public onShow: () => void = null;
     protected readonly layer: NDomLayer;
@@ -118,8 +118,14 @@ export class NCMapWnd {
         map.style.overflow = "hidden";
 
         // NCMinimapWnd::OnPaint 0x100bbf6b: two columns, three rows of 1024px tiles.
-        arrMaps.forEach((path, index) => this.arrMapTiles.push(layer.tile(map, index % 2 * 1024, Math.trunc(index / 2) * 1024, 1024, 1024, 0, 0, 1024, 1024, path)));
-        this.townMap = layer.tile(map, 0, 0, 653, 626, 0, 0, 653, 626, arrMapInfo[1].texture);
+        arrMaps.forEach((_, index) => {
+            const tile = layer.createWindow(index % 2 * 1024, Math.trunc(index / 2) * 1024, 1024, 1024, map);
+
+            tile.className = "ndom-tile";
+            this.arrMapTiles.push(tile);
+        });
+        this.townMap = layer.createWindow(0, 0, 653, 626, map);
+        this.townMap.className = "ndom-tile";
         this.townMap.hidden = true;
         this.grid = layer.createWindow(0, 0, 328, 328, map);
         this.grid.style.overflow = "hidden";
@@ -498,14 +504,13 @@ export class NCMapWnd {
         this.layer.place(this.map, 0, 0, info.width, info.height);
         for (const tile of this.arrMapTiles) tile.hidden = id !== 0;
         for (const button of this.arrMapButtons) button.hidden = id !== 0;
-        this.townMap.hidden = id === 0;
+        this.townMap.hidden = true;
         this.paintGrid();
         this.returnButton.hidden = id === 0;
         this.viewport.setAttribute("aria-label", `${id ? "Town" : "World"} map. Use arrow keys or drag to pan.`);
-        if (id) {
+        if (id)
             this.layer.place(this.townMap, 0, 0, info.width, info.height);
-            this.layer.setTile(this.townMap, info.width, info.height, 0, 0, info.width, info.height, info.texture);
-        }
+        this.loadMapTextures(id);
         this.setPosition(this.worldX, this.worldY, false, this.worldZ);
         for (const marker of this.arrTargetMarkers) {
             [marker.x, marker.y] = this.project(marker.worldX, marker.worldY, true);
@@ -514,6 +519,18 @@ export class NCMapWnd {
         this.setQuestLocation(this.questLocation);
         this.paintTargetMarkers();
         this.paintPartyMarkers();
+    }
+
+    protected async loadMapTextures(id: number) {
+        const info = arrMapInfo[id], paths = id ? [info.texture] : arrMaps;
+
+        if (paths.some(path => !this.layer.hasTexture(path))) await this.layer.loadTextures(paths);
+        if (this.mapId !== id) return;
+
+        if (id) {
+            this.layer.setTile(this.townMap, info.width, info.height, 0, 0, info.width, info.height, info.texture);
+            this.townMap.hidden = false;
+        } else arrMaps.forEach((path, index) => this.layer.setTile(this.arrMapTiles[index], 1024, 1024, 0, 0, 1024, 1024, path));
     }
 
     protected enterMap(id: number) {

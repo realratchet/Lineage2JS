@@ -4,6 +4,13 @@ import { copyTextureFiltering, copyTextureLOD, getTextureLODBounds } from "./tex
 
 type TextureEntry_T = { index: number; material: Material; texture: CompressedTexture };
 
+function getShaderId(cache: Map<string, number>, source: string): number {
+    let id = cache.get(source);
+
+    if (id === undefined) cache.set(source, id = cache.size);
+    return id;
+}
+
 export function batchStaticMeshTextures(object: any, indices: ArrayLike<number>): void {
     const materials = object.material as Material[];
     if (!Array.isArray(materials) || !indices) return;
@@ -21,6 +28,7 @@ export function batchStaticMeshTextures(object: any, indices: ArrayLike<number>)
         }
     }
     const buckets = new Map<string, TextureEntry_T[]>();
+    const cacheShaderIds = new Map<string, number>();
     for (let i = 0; i < materials.length; i++) {
         const material = materials[i] as any, data = material.uniforms?.shDiffuse?.value, texture = data?.map?.texture as CompressedTexture;
         if (bad.has(i) || !material.isStaticMeshMaterial || material.transparent || material.isUpdatable || material.defines.USE_ACTOR_LIGHTS !== undefined || !texture?.isCompressedTexture || (texture as any).isCubeTexture || (texture as any).isUpdatable || (texture as any).isCompressedArrayTexture) continue;
@@ -28,7 +36,7 @@ export function batchStaticMeshTextures(object: any, indices: ArrayLike<number>)
         const compare = Object.create(material);
         compare.name = "";
         compare.uniforms = { ...material.uniforms, shDiffuse: { value: { ...data, map: { ...data.map, texture: null } } }, shDiffuseMap: { value: null } };
-        const key = getCanonicalStaticMaterialKey(compare) + material.vertexShader + material.fragmentShader + JSON.stringify([texture.image.width, texture.image.height, texture.format, texture.type, texture.mipmaps.length, texture.wrapS, texture.wrapT, texture.minFilter, texture.magFilter, texture.anisotropy, texture.colorSpace, texture.flipY, texture.premultiplyAlpha, getTextureLODBounds(texture)]);
+        const key = getCanonicalStaticMaterialKey(compare) + JSON.stringify([getShaderId(cacheShaderIds, material.vertexShader), getShaderId(cacheShaderIds, material.fragmentShader), texture.image.width, texture.image.height, texture.format, texture.type, texture.mipmaps.length, texture.wrapS, texture.wrapT, texture.minFilter, texture.magFilter, texture.anisotropy, texture.colorSpace, texture.flipY, texture.premultiplyAlpha, getTextureLODBounds(texture)]);
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push({ index: i, material, texture });
     }

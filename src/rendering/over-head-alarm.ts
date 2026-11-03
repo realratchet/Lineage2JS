@@ -60,6 +60,8 @@ export class OverHeadAlarm {
         this.camera.top = this.height / 2;
         this.camera.bottom = -this.height / 2;
         this.camera.updateProjectionMatrix();
+        renderer.state.buffers.depth.setReversed(this.camera.reversedDepth);
+        renderer.state.buffers.depth.setClear(1);
         renderer.clearDepth();
 
         for (let i = 0; i < this.count; i++) {

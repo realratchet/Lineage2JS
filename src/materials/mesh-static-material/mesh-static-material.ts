@@ -43,6 +43,18 @@ function getProceduralMaps(uniforms: Record<string, Uniform>): any[] {
     return [...maps];
 }
 
+function getTriggeredTransforms(uniforms: Record<string, Uniform>): any[] {
+    const transforms: any[] = [];
+    for (const name of TRANSFORM_CHAIN_SLOTS) {
+        const uniform = uniforms[name];
+        if (!uniform || !uniform.value) continue;
+        const value = uniform.value;
+        if (value.transform?.triggered) transforms.push(value.transform);
+        for (const transform of value.innerTransforms || []) if (transform.triggered) transforms.push(transform);
+    }
+    return transforms;
+}
+
 function applyParameters({ name, parameters, uniforms, defines, sprites }: ApplyParams_T): void {
 
     let defName;
@@ -118,6 +130,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public arrLightmaps: Texture[] = [];
     protected spriteEntries: [string, SpriteParam_T][] = [];
     protected proceduralMaps: any[] = [];
+    protected triggeredTransforms: any[] = [];
 
     public isUpdatable = false;
     public requiresSorting = false;
@@ -302,8 +315,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
         // procedural maps (water) drive their own animation through update()
         this.proceduralMaps = getProceduralMaps(uniforms);
+        this.triggeredTransforms = getTriggeredTransforms(uniforms);
 
-        this.isUpdatable = this.spriteEntries.length > 0 || this.proceduralMaps.length > 0;
+        this.isUpdatable = this.spriteEntries.length > 0 || this.proceduralMaps.length > 0 || this.triggeredTransforms.length > 0;
 
         if (info.opacity) this.transparent = true;
 
@@ -662,6 +676,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.arrLightmaps = source.arrLightmaps;
         this.spriteEntries = source.spriteEntries;
         this.proceduralMaps = getProceduralMaps(this.uniforms);
+        this.triggeredTransforms = getTriggeredTransforms(this.uniforms);
         this.isUpdatable = source.isUpdatable;
         this.requiresSorting = source.requiresSorting;
         this.shadowOpacity = source.shadowOpacity;
@@ -676,6 +691,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
         for (const map of this.proceduralMaps)
             map.update(time);
+
+        for (const transform of this.triggeredTransforms)
+            transform.timeSeconds = transform.triggered.getTimeSeconds(this.uniforms.levelTimeSeconds.value);
 
         for (let i = 0; i < this.spriteEntries.length; i++) {
             const [k, { sprites, framerate }] = this.spriteEntries[i];

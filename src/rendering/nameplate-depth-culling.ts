@@ -1,4 +1,4 @@
-import { Box3, BufferGeometry, Frustum, Matrix4, Object3D, PerspectiveCamera, Sprite, Vector2, Vector3 } from "three";
+import { Box3, BufferGeometry, Frustum, Matrix4, Object3D, PerspectiveCamera, Sprite, Vector2, Vector3, WebGLCoordinateSystem } from "three";
 
 const tmpPoint = new Vector3();
 const tmpProjection = new Matrix4();
@@ -46,7 +46,7 @@ export class NameplateDepthCulling {
             elements[i] = (elements[i] - centerX * elements[i + 3]) / halfX;
             elements[i + 1] = (elements[i + 1] - centerY * elements[i + 3]) / halfY;
         }
-        this.frustum.setFromProjectionMatrix(tmpProjection.multiply(camera.matrixWorldInverse));
+        this.frustum.setFromProjectionMatrix(tmpProjection.multiply(camera.matrixWorldInverse), WebGLCoordinateSystem, camera.reversedDepth);
         this.frame++;
         scene.traverseVisible(object => {
             const mesh = object as any;

@@ -197,14 +197,14 @@ export abstract class UStaticMeshActor extends UAActor {
             return null;
         }
 
-        const mesh = this.mesh.loadSelf() as UStaticMesh;
+        const mesh = this.mesh as UStaticMesh;
         const meshInfo = builder.pullStaticMesh(mesh, null);
 
         const level = this.getLevel();
         const baseModel = level.getModel();
         const localToWorld = this.localToWorld();
 
-        const predictedBox = mesh.getRenderBoundingBox(this).transformBy(localToWorld);
+        const predictedBox = builder.getStaticMeshBounds(mesh).transformBy(localToWorld);
 
         this.instance?.loadSelf().setActor(this);
 
@@ -233,7 +233,7 @@ export abstract class UStaticMeshActor extends UAActor {
         // if (attributes.positions.length / 3 === 1587)
         //     debugger;
 
-        const instanceColors = (mesh.useVertexColor && instance?.color) || null;
+        const instanceColors = (builder.getStaticMeshMetadata(mesh).useVertexColor && instance?.color) || null;
         const ambActor = this.getAmbientLightingActor();
         const xmodel = this.levelInfo.getLevel().getModel();
 
@@ -336,7 +336,7 @@ export abstract class UStaticMeshActor extends UAActor {
                 min: [predictedBox.min.x, predictedBox.min.y, predictedBox.min.z],
                 max: [predictedBox.max.x, predictedBox.max.y, predictedBox.max.z]
             },
-            collisionBounds: (this.mesh as UStaticMesh).getCollisionBoundingBox(this).getDecodeInfo(),
+            collisionBounds: builder.getStaticMeshBounds(this.mesh as UStaticMesh, this, true).getDecodeInfo(),
             collision: this.getCollisionDecodeInfo(),
             ...this.getActorDecodeInfo()
         } as IStaticMeshActorDecodeInfo;

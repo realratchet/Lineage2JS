@@ -101,6 +101,8 @@ uniform float opacity;
         float phaseU, phaseV; // oscillate
         float amplitudeU, amplitudeV; // oscillate
         int typeU, typeV; // oscillate
+        bool useLocalTime;
+        float timeSeconds;
         float offsetU, offsetV; // rotate + oscillate
     };
 #endif
@@ -131,6 +133,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -191,6 +195,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -255,6 +261,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -317,6 +325,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -383,6 +393,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif
@@ -443,6 +455,8 @@ uniform float opacity;
                     float amplitudeV;
                     int typeU;
                     int typeV;
+                    bool useLocalTime;
+                    float timeSeconds;
                     float offsetU;
                     float offsetV;
                 #endif

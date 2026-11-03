@@ -46,7 +46,7 @@ export abstract class UAmbientSoundObject extends UAActor {
     public getDecodeInfo(builder: DecodeLibraryBuilder) {
         if (!this.sound) return null;
 
-        const snd = this.sound.loadSelf();
+        const snd = this.sound;
         if (!snd) return null;
 
         console.assert(isFinite(this.radius));

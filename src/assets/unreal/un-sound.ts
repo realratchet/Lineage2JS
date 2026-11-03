@@ -27,3 +27,5 @@ export abstract class USound extends UObject {
 }
 
 export default USound;
+
+(USound.prototype as any).isPackageAsset = true;

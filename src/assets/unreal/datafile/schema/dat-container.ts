@@ -4,8 +4,8 @@ import { BufferValue, type UEncodedFile, type ValidTypes_T, type ValueTypeNames_
 const decoderASCF = new TextDecoder("windows-1252");
 const decoderUTF16 = new TextDecoder("utf-16");
 
-function readUTF16(pkg: UEncodedFile): string {
-    return pkg.read(new BufferValue(BufferValue.utf16)).value as string;
+export function readUTF16(pkg: UEncodedFile): string {
+    return decoderUTF16.decode(pkg.read(pkg.read("uint32")));
 }
 
 export class ASCFType implements IDatContainerType {

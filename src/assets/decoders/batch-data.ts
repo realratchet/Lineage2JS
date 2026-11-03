@@ -256,16 +256,16 @@ function mergeMeshLightFlags(
         const actorFlags = flagArrays[ai];
 
         if (actorFlags) {
-            for (let vi = 0; vi < actorVertexCount; vi++) {
-                const srcByte = Math.floor(vi / 8);
-                const srcBit = vi % 8;
+            const count = Math.min(actorFlags.length, Math.ceil(actorVertexCount / 8));
+            const shift = globalVertex & 7;
+            const offset = Math.floor(globalVertex / 8) - flagsOffset;
+            const tail = actorVertexCount & 7;
 
-                if (srcByte < actorFlags.length && (actorFlags[srcByte] & (1 << srcBit))) {
-                    const dstVertex = globalVertex + vi;
-                    const dstByte = Math.floor(dstVertex / 8) - flagsOffset;
-                    const dstBit = dstVertex % 8;
-                    result[dstByte] |= (1 << dstBit);
-                }
+            for (let bi = 0; bi < count; bi++) {
+                const bits = tail && bi === Math.floor(actorVertexCount / 8) ? actorFlags[bi] & ((1 << tail) - 1) : actorFlags[bi];
+
+                result[offset + bi] |= bits << shift;
+                if (shift) result[offset + bi + 1] |= bits >>> (8 - shift);
             }
         }
         globalVertex += actorVertexCount;
@@ -495,12 +495,16 @@ function mortonKey(position: number[] | undefined): number {
 
     let x = Math.max(0, Math.min(0xffff, ((position[0] + 165000) / 6) | 0));
     let y = Math.max(0, Math.min(0xffff, ((position[1] + 165000) / 6) | 0));
-    let key = 0;
+    x = (x | x << 8) & 0x00ff00ff;
+    y = (y | y << 8) & 0x00ff00ff;
+    x = (x | x << 4) & 0x0f0f0f0f;
+    y = (y | y << 4) & 0x0f0f0f0f;
+    x = (x | x << 2) & 0x33333333;
+    y = (y | y << 2) & 0x33333333;
+    x = (x | x << 1) & 0x55555555;
+    y = (y | y << 1) & 0x55555555;
 
-    for (let i = 0; i < 16; i++)
-        key += ((x >> i) & 1) * Math.pow(2, 2 * i) + ((y >> i) & 1) * Math.pow(2, 2 * i + 1);
-
-    return key;
+    return (x | y << 1) >>> 0;
 }
 
 function equalScriptProperties(a: any, b: any): boolean {
@@ -617,32 +621,32 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
             const colliderIndices = actorGeometries[0].collision.collideActors ? mergedColliderIndices : null;
 
             const batchUuid = generateUUID();
-            const batchElements: BatchElement_T[] = actors.map((a, ai) => ({
+            const batchElements: BatchElement_T[] = actors.map(a => ({
                 uuid: a.uuid,
                 boundsMin: a.bounds?.min || [0, 0, 0],
                 boundsMax: a.bounds?.max || [0, 0, 0],
-                groups: mergedGroups
-                    .filter(g => g.actorIndex === ai)
-                    .map(g => ({ start: g.start, count: g.count, materialIndex: g.materialIndex })),
+                groups: [],
                 zoneMask: (a as any).zoneMask || 0n,
                 isRangeIgnored: !!(a as any).isRangeIgnored,
                 leaves: actorLeaves.get(a.uuid) ?? null
             }));
 
+            for (const group of mergedGroups)
+                batchElements[group.actorIndex].groups.push({ start: group.start, count: group.count, materialIndex: group.materialIndex });
+
             // Regroup indices per material if multi-material
             let finalGroups: [number, number, number][];
 
             if (mergedGroups.some(g => g.materialIndex !== 0)) {
-                const materialGroupsMap = new Map<number, { indices: number[], elementGroup: BatchElementGroup_T }[]>();
+                const sourceIndices = mergedIndices.slice();
+                const materialGroupsMap = new Map<number, { start: number, count: number, elementGroup: BatchElementGroup_T }[]>();
                 for (const group of mergedGroups) {
                     const matIndex = group.materialIndex;
                     if (!materialGroupsMap.has(matIndex)) materialGroupsMap.set(matIndex, []);
-                    const indices: number[] = [];
-                    for (let ii = 0; ii < group.count; ii++) indices.push(mergedIndices[group.start + ii]);
                     const elementGroup = batchElements[group.actorIndex].groups.find(g =>
                         g.start === group.start && g.count === group.count && g.materialIndex === group.materialIndex
                     )!;
-                    materialGroupsMap.get(matIndex)!.push({ indices, elementGroup });
+                    materialGroupsMap.get(matIndex)!.push({ start: group.start, count: group.count, elementGroup });
                 }
                 finalGroups = [];
                 let globalIndexOffset = 0;
@@ -650,12 +654,12 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     const entries = materialGroupsMap.get(matIndex)!;
                     const matGroupStart = globalIndexOffset;
                     let matGroupCount = 0;
-                    for (const { indices, elementGroup } of entries) {
+                    for (const { start, count, elementGroup } of entries) {
                         elementGroup.start = globalIndexOffset;
 
-                        mergedIndices.set(indices, globalIndexOffset);
-                        globalIndexOffset += indices.length;
-                        matGroupCount += indices.length;
+                        mergedIndices.set(sourceIndices.subarray(start, start + count), globalIndexOffset);
+                        globalIndexOffset += count;
+                        matGroupCount += count;
                     }
                     finalGroups.push([matGroupStart, matGroupCount, matIndex]);
                 });

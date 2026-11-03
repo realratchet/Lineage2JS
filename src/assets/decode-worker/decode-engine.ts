@@ -8,12 +8,13 @@ import UDataFile from "@l2js/engine/datafile/un-datafile";
 import * as SchemasC4 from "@l2js/engine/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "../decoders/batch-data";
 import { convertDDSMaterialsToRGBA, dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
+import PackageCache from "./package-cache";
 import buildDecodeLibrary from "./build-decode-library";
-import prepareLibraryForTransfer from "./collect-transferables";
+import prepareLibraryForTransfer, { collectTransferables } from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
 import { serializeLibrary, serializeLibraryBlob, deserializeLibrary, openLibraryFile, hydrateLibraryFile, getLibraryChunkBlob, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectClass, dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
-import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T, ClientConfig_T } from "./decode-protocol";
+import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T, ClientConfig_T, ConfirmSharedScriptMessage_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
@@ -68,6 +69,17 @@ type StoredAssets_T = { entries: Record<string, any>, seekable: SeekableLibrary_
 const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
 const SCRIPT_KEYS = ["scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects"] as const;
 const SKILL_VOICE_GROUPS = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman"];
+
+async function hydrateLibraryAssets(seekable: SeekableLibrary_T, library: DecodeLibrary = seekable.library): Promise<DecodeLibrary> {
+    if (library === null) return null;
+
+    const assets: Record<string, any> = Object.assign({}, library);
+
+    for (const key of SCRIPT_KEYS) delete assets[key];
+    await hydrateLibraryFile(seekable, assets);
+
+    return Object.assign(library, assets);
+}
 
 function copyLibraryAssets(target: DecodeLibrary, source: DecodeLibrary): void {
     for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
@@ -372,7 +384,7 @@ function decodeTextureRGBA(info: ITextureDecodeInfo, useIntrinsicAlpha = true): 
 
         if (data.format && data.format !== "rgba") throw new Error(`UI texture '${info.name}' has unsupported data format '${data.format}'.`);
 
-        buffer = info.buffer.slice(0);
+        buffer = info.buffer.slice(0, width * height * 4);
     } else {
         if (info.textureType !== "dds") throw new Error(`UI texture '${info.name}' has unsupported type '${info.textureType}'.`);
 
@@ -428,6 +440,7 @@ export class DecodeEngine {
     protected assetLoader: AssetLoader = null;
     protected hasSweptCache = false;
     protected cacheCharGrpRows: Record<string, any>[] = null;
+    protected cacheCharGroups: ICharacterGroup[] = null;
     protected cacheArmorGrpRows: Record<string, any>[] = null;
     protected cacheWeaponGrpRows: Record<string, any>[] = null;
     protected cacheEtcItemGrpRows: Record<string, any>[] = null;
@@ -455,6 +468,10 @@ export class DecodeEngine {
     protected readonly configFiles = new Map<string, string>();
     protected readonly scriptLocalizations = new Map<string, Promise<UConfigLocalization>>();
 
+    public setLoadSettings(settings: LoadSettings_T): void {
+        this.assetLoader.packageCacheSettings = settings;
+    }
+
     protected async sweepCache(settings: LoadSettings_T): Promise<void> {
         if (this.hasSweptCache) return;
 
@@ -479,7 +496,20 @@ export class DecodeEngine {
         pkgCore.loadNativeClasses();
     }
 
-    public async decodeClientConfig(): Promise<ClientConfig_T> {
+    public async decodeClientConfig(settings: LoadSettings_T = {}): Promise<ClientConfig_T> {
+        this.setLoadSettings(settings);
+        const cacheSettings = { cache: settings.cache };
+        const cached = await DecodeCache.loadCachedLibrary("client_config", cacheSettings);
+
+        if (cached && cached.scriptLocalizationProperties) return cached;
+
+        const config = await this.buildClientConfig();
+
+        await DecodeCache.storeCachedLibraryDurable("client_config", cacheSettings, config);
+        return config;
+    }
+
+    protected async buildClientConfig(): Promise<ClientConfig_T> {
         const [userConfig, warriorFile, scriptLocalization, scriptConfig] = await Promise.all([
             getUserConfig(),
             new UConfigWarrior("assets/system/lineagewarrior.int").decode(),
@@ -492,7 +522,12 @@ export class DecodeEngine {
         for (const className of warriorConfig.getClassNames())
             warriorAnimations[className] = warriorConfig.getAnimations(className);
 
-        return { userConfig, warriorAnimations, scriptLocalization, scriptConfig };
+        const scriptLocalizationProperties = new Map<string, Map<string, LocalizationProperty_T[]>>();
+
+        for (const [name, file] of this.scriptLocalizations)
+            scriptLocalizationProperties.set(name, (await file).getSections());
+
+        return { userConfig, warriorAnimations, scriptLocalization, scriptConfig, scriptLocalizationProperties };
     }
 
     protected async decodeConfigFiles(): Promise<Map<string, Map<string, [string, string][]>>> {
@@ -559,6 +594,7 @@ export class DecodeEngine {
     }
 
     public async decodeSector(sectorName: string, settings: LoadSettings_T, onCache?: (fromCache: boolean) => void): Promise<{ library: any, fromCache: boolean }> {
+        this.setLoadSettings(settings);
         await this.sweepCache(settings);
 
         console.log(`[decode] decoding sector '${sectorName}'`);
@@ -572,6 +608,7 @@ export class DecodeEngine {
     }
 
     public async decodeSectorBinary(sectorName: string, settings: LoadSettings_T): Promise<BinarySector_T> {
+        this.setLoadSettings(settings);
         await this.sweepCache(settings);
 
         console.log(`[decode] decoding sector '${sectorName}'`);
@@ -585,13 +622,14 @@ export class DecodeEngine {
     }
 
     public async decodeSectorTransfer(sectorName: string, settings: LoadSettings_T, onCache?: (fromCache: boolean) => void): Promise<{ library: DecodeLibrary, buffers: ArrayBuffer[] }> {
+        this.setLoadSettings(settings);
         await this.sweepCache(settings);
-        const cached = !(settings as any).isSkyLevel ? await DecodeCache.openCachedLibrary(sectorName, settings) : null;
+        const cached = !(settings as any).isSkyLevel ? await DecodeCache.openCachedLibrary(sectorName, settings, (value, name, uuid) => this.prepareCachedPackageAsset(value, name, uuid)) : null;
         if (cached && onCache) onCache(true);
 
         if (cached)
             for (const sound of cached.library.soundBlobCache.values())
-                if (!sound.assetName || !this.sentSoundIds.has(sound.assetName.toLowerCase())) sound.data = await getLibraryChunkBlob(cached, sound.data, sound.mimeType);
+                if (!sound.assetName || !this.sentSoundIds.has(sound.assetName.toLowerCase())) sound.data = (sound.data as any).isLibraryChunk === true ? await getLibraryChunkBlob(cached, sound.data, sound.mimeType) : new Blob([sound.data], { type: sound.mimeType });
 
         const library = cached ? await this.hydrateSectorTransfer(cached) : (await this.decodeSectorCore(sectorName, settings, false, onCache)).library;
         const { transfer, fresh } = this.prepareTransfer(library);
@@ -605,12 +643,36 @@ export class DecodeEngine {
         if (cached) {
             for (const value of cached.values.values())
                 buffers.add(ArrayBuffer.isView(value) ? value.buffer as ArrayBuffer : value);
+            for (const buffer of cached.packageBuffers) buffers.add(buffer);
         } else {
-            for (const buffer of prepareLibraryForTransfer(transfer, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => transfer[key]))) buffers.add(buffer);
+            for (const buffer of collectTransferables(transfer, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => transfer[key]))) buffers.add(buffer);
         }
 
         for (const [sent, id] of fresh) sent.add(id);
         return { library: transfer, buffers: Array.from(buffers).filter(buffer => !retained.has(buffer)) };
+    }
+
+    protected prepareCachedPackageAsset(value: any, name: string, uuid: string): any {
+        if (SCRIPT_KEYS.includes(name as any) && this.sentScriptIds[name].has(uuid)) return null;
+        if (name === "soundBlobCache" && value.assetName && this.sentSoundIds.has(value.assetName.toLowerCase())) value.data = null;
+        if (name !== "materials") return value;
+        if (value.materialType === "sprite") value.sprites = value.sprites.map(texture => ({ ...texture }));
+        this.prepareCachedMaterialTextures(uuid, value);
+        return value;
+    }
+
+    protected prepareCachedMaterialTextures(id: string, material: any): void {
+        const textures = material.materialType === "texture" ? [material as ITextureDecodeInfo] : material.materialType === "sprite" ? (material as IAnimatedSpriteDecodeInfo).sprites : [];
+        textures.forEach((texture, index) => {
+            const key = (texture as any).sharedTextureKey || `${texture.name ? texture.name.toLowerCase() : `${id}:${index}`}:${texture.textureType}:${texture.buffer.byteLength}`;
+            if (this.confirmedTextureIds.has(key)) {
+                (texture as any).sharedTextureKey = key;
+                texture.buffer = null;
+                return;
+            }
+            const buffer = this.cacheTextureBuffers.get(key);
+            if (buffer) texture.buffer = buffer;
+        });
     }
 
     protected async hydrateSectorTransfer(cached: SeekableLibrary_T): Promise<DecodeLibrary> {
@@ -620,31 +682,17 @@ export class DecodeEngine {
             for (const id of Object.keys(library[key]))
                 if (this.sentScriptIds[key].has(id)) library[key][id] = null;
 
-        for (const [id, material] of Object.entries(library.materials)) {
-            const textures = material.materialType === "texture" ? [material as ITextureDecodeInfo] : material.materialType === "sprite" ? (material as IAnimatedSpriteDecodeInfo).sprites : [];
-
-            textures.forEach((texture, index) => {
-                const key = (texture as any).sharedTextureKey || `${texture.name ? texture.name.toLowerCase() : `${id}:${index}`}:${texture.textureType}:${texture.buffer.byteLength}`;
-
-                if (this.confirmedTextureIds.has(key)) {
-                    (texture as any).sharedTextureKey = key;
-                    texture.buffer = null;
-                    return;
-                }
-
-                const buffer = this.cacheTextureBuffers.get(key);
-
-                if (buffer) texture.buffer = buffer;
-            });
-        }
+        for (const [id, material] of Object.entries(library.materials))
+            this.prepareCachedMaterialTextures(id, material);
 
         for (const sound of library.soundBlobCache.values())
             if (sound.assetName && this.sentSoundIds.has(sound.assetName.toLowerCase())) sound.data = null;
 
-        return hydrateLibraryFile(cached);
+        return hydrateLibraryAssets(cached);
     }
 
     public async precacheSector(sectorName: string, settings: LoadSettings_T): Promise<PrecacheResult_T> {
+        this.setLoadSettings(settings);
         await this.sweepCache(settings);
 
         if (await DecodeCache.hasCachedLibrary(sectorName, settings))
@@ -652,14 +700,16 @@ export class DecodeEngine {
 
         try {
             const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(sectorName, "Level"));
-            const library = buildDecodeLibrary(pkg, sectorName, settings);
+            const packageCache = await this.openPackageCache(pkg, settings);
+            const library = buildDecodeLibrary(pkg, sectorName, settings, packageCache);
 
-            await this.pullSectorScriptAssets(library, settings);
+            await this.pullSectorScriptAssets(library, settings, packageCache);
+            await packageCache.flush();
             buildStaticMeshBatchData(library);
             prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
             if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
-            return { cached: false, bytes: await DecodeCache.storeCachedLibraryDurable(sectorName, settings, library) };
+            return { cached: false, bytes: await DecodeCache.storeCachedLibraryDurable(sectorName, settings, await packageCache.externalize(library)) };
         } finally {
             this.freeSector(sectorName);
         }
@@ -681,16 +731,18 @@ export class DecodeEngine {
         }
 
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(sectorName, "Level"));
-        const library = buildDecodeLibrary(pkg, sectorName, settings);
+        const packageCache = await this.openPackageCache(pkg, settings);
+        const library = buildDecodeLibrary(pkg, sectorName, settings, packageCache);
 
-        await this.pullSectorScriptAssets(library, settings);
+        await this.pullSectorScriptAssets(library, settings, packageCache);
+        await packageCache.flush();
         buildStaticMeshBatchData(library);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if (convertToRGBA) convertDDSMaterialsToRGBA(library);
         this.freeSector(sectorName);
-        if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, library);
+        if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, await packageCache.externalize(library));
 
         // Main-thread decode owns these blob URLs.
         if (withSoundUris) DecodeCache.refreshSoundBlobUris(library);
@@ -712,19 +764,40 @@ export class DecodeEngine {
         }
 
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(sectorName, "Level"));
-        const library = buildDecodeLibrary(pkg, sectorName, settings);
+        const packageCache = await this.openPackageCache(pkg, settings);
+        const library = buildDecodeLibrary(pkg, sectorName, settings, packageCache);
 
-        await this.pullSectorScriptAssets(library, settings);
+        await this.pullSectorScriptAssets(library, settings, packageCache);
+        await packageCache.flush();
         buildStaticMeshBatchData(library);
         prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
-        if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, library);
+        if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, await packageCache.externalize(library));
 
         const buffer = this.serializeTransfer(library);
 
         this.freeSector(sectorName);
         return { buffer, fromCache: false };
+    }
+
+    protected createDecodeBuilder(library: DecodeLibrary, settings: LoadSettings_T, packageCache: PackageCache = new PackageCache(settings)): DecodeLibraryBuilder {
+        return new DecodeLibraryBuilder(library, settings, packageCache);
+    }
+
+    protected async openPackageCache(pkg: APackage, settings: LoadSettings_T): Promise<PackageCache> {
+        const cache = new PackageCache(settings);
+        const packages = this.assetLoader.getDependencies(pkg).filter(path => path !== this.assetLoader.getNativePackage().path).map(path => this.assetLoader.getPackage(path));
+        await cache.open(packages);
+        await cache.build(packages);
+        return cache;
+    }
+
+    public async precachePackage(path: string, settings: LoadSettings_T): Promise<{ exports: number, hits: number, misses: number }> {
+        this.setLoadSettings(settings);
+        const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(path));
+        const cache = await this.openPackageCache(pkg, settings);
+        return { exports: Object.keys((cache as any).packages.get(pkg.path)?.entries || {}).filter(key => !key.endsWith(":frame")).length, hits: cache.hits, misses: cache.misses };
     }
 
     public freeSector(sectorName: string) {
@@ -735,7 +808,20 @@ export class DecodeEngine {
         this.assetLoader.free(pkg);
     }
 
-    public async decodeEnvConfig(): Promise<any> {
+    public async decodeEnvConfig(settings: LoadSettings_T = {}): Promise<any> {
+        this.setLoadSettings(settings);
+        const cacheSettings = { cache: settings.cache };
+        const cached = await DecodeCache.loadCachedLibrary("environment", cacheSettings);
+
+        if (cached) return cached;
+
+        const config = await this.buildEnvConfig();
+
+        await DecodeCache.storeCachedLibraryDurable("environment", cacheSettings, config);
+        return config;
+    }
+
+    protected async buildEnvConfig(): Promise<any> {
         const pkgL2Skies = await this.assetLoader.using(this.assetLoader.getPackage("l2_skies", "Texture"), { neverUnload: true });
         const envFile = await (new UConfigEnv("assets/system/env.int").asReadable()).decode();
         const envConfig = await envFile.load(this.assetLoader.getNativePackage(), this.assetLoader.getEnginePackage(), pkgL2Skies);
@@ -756,6 +842,8 @@ export class DecodeEngine {
                 if (this.cacheDecodePackageLoads.get(pkg) === pending) this.cacheDecodePackageLoads.delete(pkg);
             }
         }
+
+        else await this.assetLoader.load(pkg);
 
         this.cacheDecodePackages.set(pkg, performance.now());
 
@@ -779,16 +867,17 @@ export class DecodeEngine {
         for (const byExt of (this.assetLoader as any).packages.values()) for (const pkg of byExt.values()) {
             if (!pkg.buffer && !pkg.source) continue;
 
-            buffers += (pkg.buffer ? pkg.buffer.byteLength : 0) + (pkg.source ? pkg.source.buffer.byteLength : 0);
+            buffers += (pkg.buffer ? pkg.buffer.byteLength : 0) + (pkg.source ? pkg.source.getMemorySize() : 0);
             packages++;
         }
 
         return { buffers, packages };
     }
 
-    protected async fetchSkeletalMesh(path: string): Promise<USkeletalMesh> {
+    protected async fetchSkeletalMesh(path: string, builder: DecodeLibraryBuilder): Promise<USkeletalMesh> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Animation"));
+        await builder.preparePackageCache(pkg);
         const lowerName = objectName.toLowerCase();
         const entry = pkg.exportGroups.SkeletalMesh.find(entry => (entry.export.objectName as string).toLowerCase() === lowerName);
 
@@ -797,9 +886,10 @@ export class DecodeEngine {
         return pkg.fetchObject<USkeletalMesh>(entry.index + 1);
     }
 
-    protected async fetchCharacterMaterial(path: string): Promise<UMaterial> {
+    protected async fetchCharacterMaterial(path: string, builder: DecodeLibraryBuilder): Promise<UMaterial> {
         const [packageName, objectName] = splitObjectPath(path);
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Texture"));
+        await builder.preparePackageCache(pkg);
         const lowerName = objectName.toLowerCase();
         const entry = pkg.exports.find(entry => objectName.includes(".") ? pkg.getObjectPath(entry).toLowerCase() === path.toLowerCase() : (entry.objectName as string).toLowerCase() === lowerName);
 
@@ -816,7 +906,7 @@ export class DecodeEngine {
 
             const path = getSkinMaterialPath(basePath, index);
 
-            materials[index] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
+            materials[index] = builder.pullMaterial(await this.fetchCharacterMaterial(path, builder));
         }
 
         return materials;
@@ -866,7 +956,7 @@ export class DecodeEngine {
         const sounds = await this.getStoredAssets("character_sounds", key, builder.getSettings(), async () => {
             const sounds = new DecodeLibrary();
 
-            await this.decodeCharacterSounds(sounds, new DecodeLibraryBuilder(sounds, builder.getSettings()), row, chestId, leftHandId, bootsId);
+            await this.decodeCharacterSounds(sounds, this.createDecodeBuilder(sounds, builder.getSettings()), row, chestId, leftHandId, bootsId);
             prepareLibraryForTransfer(sounds, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => sounds[key]));
 
             return sounds;
@@ -923,6 +1013,7 @@ export class DecodeEngine {
             throw new Error(`Sound '${objectName}' not found in '${packageName}'.`);
         }
 
+        await builder.preparePackageCache(pkg);
         const sound = pkg.fetchObject<USound>(entry.index + 1);
         const soundName = sound.name;
 
@@ -994,7 +1085,7 @@ export class DecodeEngine {
     }
 
     protected async pullSkillVisuals(library: DecodeLibrary, builder: DecodeLibraryBuilder, attacks: readonly NpcSkillAttack_T[]): Promise<void> {
-        await decodeSkillVisuals(library, attacks, async packageName => this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Effect")), (path, pullScript, weaponId) => this.pullEffectTemplate(library, builder, path, pullScript, weaponId), (path, required) => this.pullSoundPath(builder, path, required));
+        await decodeSkillVisuals(library, attacks, async packageName => { const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Effect")); await builder.preparePackageCache(pkg); return pkg; }, (path, pullScript, weaponId) => this.pullEffectTemplate(library, builder, path, pullScript, weaponId), (path, required) => this.pullSoundPath(builder, path, required));
     }
 
     protected async pullScriptActorTemplates(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> {
@@ -1012,7 +1103,7 @@ export class DecodeEngine {
 
             if (typeof meshPath !== "string" || meshPath.toLowerCase() === "none") continue;
 
-            const info = Object.assign({}, builder.pullSkeletalMesh(await this.fetchSkeletalMesh(meshPath), false));
+            const info = Object.assign({}, builder.pullSkeletalMesh(await this.fetchSkeletalMesh(meshPath, builder), false));
 
             builder.pullScriptClassFunctions([cls]);
             info.scriptClassId = cls.name;
@@ -1024,6 +1115,7 @@ export class DecodeEngine {
 
     protected async pullEffectTemplate(library: DecodeLibrary, builder: DecodeLibraryBuilder, path: string, pullScript: boolean = false, weaponId?: number): Promise<void> {
         const [pkg, cls] = await this.fetchScriptClass(path);
+        await builder.preparePackageCache(pkg);
         const emitter = pkg.newObject<UEmitter>(cls);
 
         emitter.objectName = cls.objectName;
@@ -1087,17 +1179,17 @@ export class DecodeEngine {
 
         for (const path of meshes)
             if (!library.scriptMeshes[path.toLowerCase()]) {
-                const mesh = await this.fetchSkeletalMesh(path);
+                const mesh = await this.fetchSkeletalMesh(path, builder);
 
                 library.scriptMeshes[path.toLowerCase()] = builder.pullSkeletalMesh(mesh, animations);
                 library.scriptObjects[path.toLowerCase()] = dumpObjectClass(mesh);
             }
         for (const path of materials)
             if (!library.scriptMaterials[path.toLowerCase()]) {
-                const material = await this.fetchCharacterMaterial(path);
+                const material = await this.fetchCharacterMaterial(path, builder);
 
                 library.scriptMaterials[path.toLowerCase()] = builder.pullMaterial(material);
-                library.scriptObjects[path.toLowerCase()] = dumpObjectClass(material);
+                if (!library.scriptObjects[path.toLowerCase()]?.properties) library.scriptObjects[path.toLowerCase()] = dumpObjectClass(material);
             }
         for (const path of sounds)
             if (!(path in library.sounds)) {
@@ -1106,9 +1198,9 @@ export class DecodeEngine {
             }
     }
 
-    protected async pullSectorScriptAssets(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
+    protected async pullSectorScriptAssets(library: DecodeLibrary, settings: LoadSettings_T, packageCache: PackageCache = null): Promise<void> {
         const [, cls] = await this.fetchScriptClass("Engine.DefaultPhysicsVolume");
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings, packageCache);
 
         builder.pullScriptClasses([cls]);
         const sounds = new Set<string>();
@@ -1143,7 +1235,7 @@ export class DecodeEngine {
 
         if (paths.size === 0) return;
 
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
 
         for (const path of paths) await this.pullEffectTemplate(library, builder, path, true);
     }
@@ -1157,7 +1249,7 @@ export class DecodeEngine {
             return isNpcMeshPackage(packageName) && getNpcBundleName(packageName) === bundleName;
         });
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
         const manifest: NpcBundleManifest_T = { actors: {} };
         const meshIndices = new Map<string, number>();
         const materialIds = new Map<string, string>();
@@ -1173,7 +1265,7 @@ export class DecodeEngine {
 
             if (meshIndices.has(meshPath)) continue;
 
-            const mesh = await this.fetchSkeletalMesh(npc.mesh);
+            const mesh = await this.fetchSkeletalMesh(npc.mesh, builder);
             let info: ISkinnedMeshObjectDecodeInfo;
 
             try {
@@ -1239,7 +1331,7 @@ export class DecodeEngine {
                         let material = textureIds.get(key);
 
                         if (!material) {
-                            material = builder.pullMaterial(await this.fetchCharacterMaterial(path));
+                            material = builder.pullMaterial(await this.fetchCharacterMaterial(path, builder));
                             textureIds.set(key, material);
                         }
 
@@ -1266,6 +1358,7 @@ export class DecodeEngine {
     }
 
     public async precacheNpcBundle(settings: LoadSettings_T, packageName: string): Promise<void> {
+        this.setLoadSettings(settings);
         await this.getNpcBundle(settings, packageName);
     }
 
@@ -1322,7 +1415,7 @@ export class DecodeEngine {
         // D3DDrv::SetMaterial 0x1001e827 uses UMaterial's default object field+0x38 for null.
         const defaults = await this.getStoredAssets("npc_runtime", "default-material", settings, async () => {
             const library = new DecodeLibrary();
-            const builder = new DecodeLibraryBuilder(library, settings);
+            const builder = this.createDecodeBuilder(library, settings);
             const [, cls] = await this.fetchScriptClass("Engine.Material");
 
             (cls as any).loadDefaults();
@@ -1372,7 +1465,7 @@ export class DecodeEngine {
             animationNotifies: includeAnimations ? sourceInfo.animationNotifies : {}
         });
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
 
         library.name = `${npc.id}_${npc.name}`;
         library.geometries[info.geometry] = bundle.geometries[info.geometry];
@@ -1401,7 +1494,7 @@ export class DecodeEngine {
 
         library.pawnActors.push(info);
 
-        if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
+        if (cached.seekable) await hydrateLibraryAssets(cached.seekable, library);
 
         prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
 
@@ -1413,7 +1506,7 @@ export class DecodeEngine {
     protected async decodeMeshlessNpc(settings: LoadSettings_T, npc: INpcDefinition): Promise<DecodeLibrary> {
         const [, cls] = await this.fetchScriptClass(npc.className);
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
         const emitterClass = dumpObjectScriptProperties(cls).EmitterClass; // teleport_npc_sm PostBeginPlay spawns DynamicLoadObject(EmitterClass)
 
         library.name = `${npc.id}_${npc.name}`;
@@ -1439,11 +1532,12 @@ export class DecodeEngine {
     }
 
     public async decodeSkeletalMesh(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         if (npcId !== null) return this.decodeNpc(settings, npcId, includeAnimations, equipment);
 
-        const mesh = await this.fetchSkeletalMesh(`${packageName}.${meshName}`);
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
+        const mesh = await this.fetchSkeletalMesh(`${packageName}.${meshName}`, builder);
         const meshInfo = builder.pullSkeletalMesh(mesh, true);
 
         await this.pullAnimationNotifyAssets(builder, meshInfo.animationNotifies);
@@ -1457,7 +1551,7 @@ export class DecodeEngine {
 
             if (!material || material.materialType !== "group") throw new Error(`Skeletal mesh '${packageName}.${meshName}' has no material group.`);
 
-            const skins = await Promise.all(texturePaths.map(async path => builder.pullMaterial(await this.fetchCharacterMaterial(path))));
+            const skins = await Promise.all(texturePaths.map(async path => builder.pullMaterial(await this.fetchCharacterMaterial(path, builder))));
 
             skins.forEach((skin, i) => material.materials[i] = skin);
         }
@@ -1480,13 +1574,14 @@ export class DecodeEngine {
     }
 
     public async decodeItem(settings: LoadSettings_T, id: number): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         const tables = await Promise.all([this.decodeEtcItemGrp(), this.decodeWeaponGrp(), this.decodeArmorGrp()]);
         const row = tables.flat().find(row => row.id === id);
 
         if (!row) throw new Error(`Missing item '${id}'.`);
 
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
         const meshes = [row.drop_mesh1 ?? row.drop_mesh_1, row.drop_mesh2 ?? row.drop_mesh_2, row.drop_mesh3 ?? row.drop_mesh_3];
         const skins = [row.drop_tex1 ?? row.drop_texture_1, row.drop_tex2 ?? row.drop_texture_2, row.drop_tex3 ?? row.drop_texture_3];
 
@@ -1501,7 +1596,7 @@ export class DecodeEngine {
 
             if (!path || path.toLowerCase() === "none") continue;
 
-            const mesh = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path), false);
+            const mesh = builder.pullSkeletalMesh(await this.fetchSkeletalMesh(path, builder), false);
             const itemSkins = skins.filter((skin, j) => skin && skin.toLowerCase() !== "none" && (i === j || !meshes[i + 1] || meshes[i + 1].toLowerCase() === "none"));
 
             if (row.drop_type !== 0) {
@@ -1518,7 +1613,7 @@ export class DecodeEngine {
             library.scriptMeshes[path.toLowerCase()] = mesh;
             library.pickup.items.push({ mesh: path, skins: itemSkins, meshIndex: i, collisionRadius, collisionHeight });
 
-            for (const skin of itemSkins) library.scriptMaterials[skin.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(skin));
+            for (const skin of itemSkins) library.scriptMaterials[skin.toLowerCase()] = builder.pullMaterial(await this.fetchCharacterMaterial(skin, builder));
         }
 
         if (!library.pickup.items.length) throw new Error(`Item '${id}' has no drop mesh.`);
@@ -1627,6 +1722,11 @@ export class DecodeEngine {
         }
     }
 
+    public confirmSharedScript(keys: ConfirmSharedScriptMessage_T["keys"]): void {
+        for (const key of SCRIPT_KEYS)
+            for (const id of keys[key]) this.sentScriptIds[key].add(id);
+    }
+
     protected getTextureBuffer(key: string, buffer: ArrayBuffer): ArrayBuffer {
         if (this.confirmedTextureIds.has(key)) return buffer;
 
@@ -1649,12 +1749,14 @@ export class DecodeEngine {
     }
 
     public async decodeItemBinary(settings: LoadSettings_T, id: number): Promise<ArrayBuffer> {
+        this.setLoadSettings(settings);
         return this.serializeTransfer(await this.decodeItem(settings, id));
     }
 
     public async decodeVehicle(settings: LoadSettings_T): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         const [, cls] = await this.fetchScriptClass("LineageVehicle.PassengerShip");
-        const library = new DecodeLibrary(), builder = new DecodeLibraryBuilder(library, settings);
+        const library = new DecodeLibrary(), builder = this.createDecodeBuilder(library, settings);
 
         library.name = "PassengerShip";
         builder.pullScriptClasses([cls]);
@@ -1678,6 +1780,7 @@ export class DecodeEngine {
 
             if (!entry) throw new Error(`Vehicle mesh '${path}' does not exist.`);
 
+            await builder.preparePackageCache(pkg);
             const mesh = builder.pullStaticMesh(pkg.fetchObject<UStaticMesh>(pkg.exports.indexOf(entry) + 1));
 
             library.leafActors.push([{ ...mesh, name }]);
@@ -1691,6 +1794,7 @@ export class DecodeEngine {
     }
 
     public async decodeVehicleBinary(settings: LoadSettings_T): Promise<ArrayBuffer> {
+        this.setLoadSettings(settings);
         return this.serializeTransfer(await this.decodeVehicle(settings));
     }
 
@@ -1702,7 +1806,7 @@ export class DecodeEngine {
 
     protected async decodeEffectTemplateAssets(settings: LoadSettings_T, classPaths: string[], soundPaths: string[], scriptClassPaths: string[], requiredSounds: boolean): Promise<DecodeLibrary> {
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
 
         library.name = "EffectTemplates";
 
@@ -1767,8 +1871,9 @@ export class DecodeEngine {
     }
 
     public async decodeUITextures(settings: LoadSettings_T, paths: string[], useIntrinsicAlpha = true): Promise<UITexture_T[]> {
+        this.setLoadSettings(settings);
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, { ...settings, rgbaTextures: false } as LoadSettings_T);
+        const builder = this.createDecodeBuilder(library, { ...settings, rgbaTextures: false } as LoadSettings_T);
         const textures: UITexture_T[] = [];
 
         library.loadMipmaps = false;
@@ -1793,7 +1898,9 @@ export class DecodeEngine {
                 throw new Error(`UI texture '${path}' does not exist.`);
             }
 
-            const info = (pkg.fetchObject(ref) as UTexture).loadSelf().getDecodeInfo(builder) as ITextureDecodeInfo | IAnimatedSpriteDecodeInfo;
+            await builder.preparePackageCache(pkg);
+            const uuid = builder.pullMaterial(pkg.fetchObject(ref) as UTexture);
+            const info = library.materials[uuid] as ITextureDecodeInfo | IAnimatedSpriteDecodeInfo;
 
             if (info.materialType === "sprite") {
                 const frames = (info as IAnimatedSpriteDecodeInfo).sprites.map(sprite => decodeTextureRGBA(sprite as ITextureDecodeInfo, useIntrinsicAlpha));
@@ -1811,6 +1918,9 @@ export class DecodeEngine {
 
     protected async decodeZoneNameMasks(): Promise<GameStrings_T["zoneNameMasks"]> {
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage("L2ZoneName", "Texture"));
+        const library = new DecodeLibrary();
+        const builder = this.createDecodeBuilder(library, this.assetLoader.packageCacheSettings);
+        await builder.preparePackageCache(pkg);
         const masks: GameStrings_T["zoneNameMasks"] = {};
 
         for (const entry of pkg.exportGroups.Texture) {
@@ -1818,22 +1928,29 @@ export class DecodeEngine {
 
             if (!/^\d+_\d+$/.test(name)) continue;
 
-            const texture = pkg.fetchObject<UTexture>(entry.index + 1).loadSelf();
-            const mipmap = texture.mipmaps[0];
-
-            if (texture.format !== ETextureFormat.TEXF_P8 || !mipmap || mipmap.getByteLength() !== mipmap.sizeW * mipmap.sizeH)
+            const texture = builder.getTextureSource(pkg.fetchObject<UTexture>(entry.index + 1));
+            if (texture.format !== ETextureFormat.TEXF_P8 || !texture.data || texture.data.byteLength !== texture.width * texture.height)
                 throw new Error(`Zone name mask '${name}' is not an indexed texture.`);
-
-            const pixels = new Uint8Array(mipmap.getByteLength());
-
-            mipmap.getImageBuffer(pixels, 0);
-            masks[name] = { width: mipmap.sizeW, height: mipmap.sizeH, pixels };
+            masks[name] = { width: texture.width, height: texture.height, pixels: texture.data.slice() };
         }
 
         return masks;
     }
 
-    public async decodeGameStrings(): Promise<GameStrings_T> {
+    public async decodeGameStrings(settings: LoadSettings_T = {}): Promise<GameStrings_T> {
+        this.setLoadSettings(settings);
+        const cacheSettings = { cache: settings.cache };
+        const cached = await DecodeCache.loadCachedLibrary("game_strings", cacheSettings);
+
+        if (cached && cached.staticObjectNames) return cached;
+
+        const strings = await this.buildGameStrings();
+
+        await DecodeCache.storeCachedLibraryDurable("game_strings", cacheSettings, strings);
+        return strings;
+    }
+
+    protected async buildGameStrings(): Promise<GameStrings_T> {
         const trueFontInfo = new UConfigTTFontInfo("assets/system/ttfontinfo.ini");
 
         await trueFontInfo.decode();
@@ -1844,7 +1961,7 @@ export class DecodeEngine {
         await localization.decode();
         await localization.load();
 
-        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols, commands, npcNames, obscene, quests, residences, recipes, hennas, zoneNames, zoneNameMasks, npcGroups] = await Promise.all([
+        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols, commands, npcNames, obscene, quests, residences, recipes, hennas, zoneNames, zoneNameMasks, npcGroups, staticObjectNames] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_SYSTEMMSG_E_DAT, "assets/system/systemmsg-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SYSSTRING_E_DAT, "assets/system/sysstring-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SERVERNAME_E_DAT, "assets/system/servername-e.dat").asReadable()).decode(),
@@ -1866,7 +1983,8 @@ export class DecodeEngine {
             (new UDataFile(SchemasC4.SCHEMA_HENNAGRP_E_DAT, "assets/system/hennagrp-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_ZONENAME_E_DAT, "assets/system/zonename-e.dat").asReadable()).decode(),
             this.decodeZoneNameMasks(),
-            (new UDataFile(SchemasC4.SCHEMA_NPCGRP_DAT, "assets/system/Npcgrp.dat").asReadable()).decode()
+            (new UDataFile(SchemasC4.SCHEMA_NPCGRP_DAT, "assets/system/Npcgrp.dat").asReadable()).decode(),
+            (new UDataFile(SchemasC4.SCHEMA_STATICOBJECT_E_DAT, "assets/system/staticobject-e.dat").asReadable()).decode()
         ]);
         const itemInfos: Record<number, ItemInfo_T> = {};
 
@@ -1930,6 +2048,7 @@ export class DecodeEngine {
             skillCastStyles: Object.fromEntries(tables.skills.map(row => [`${row.skill_id}:${row.skill_level}`, row.cast_style])),
             npcPassiveSkills: Object.fromEntries(npcGroups.datarows.map((row: any) => [row.tag, row.dtab])),
             npcNames: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, row.name])),
+            staticObjectNames: Object.fromEntries(staticObjectNames.datarows.map((row: any) => [row.id, row.name])),
             npcTitles: Object.fromEntries(npcNames.datarows.filter((row: any) => row.description).map((row: any) => [row.id, row.description])),
             npcTitleColors: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, (row.reserved << 24 | row.blue << 16 | row.green << 8 | row.red) >>> 0])), // Engine.dll 0x718eae: npcname colour is a verbatim four-byte dword.
             obsceneWords: obscene.datarows.map((row: any) => row.text),
@@ -2053,6 +2172,7 @@ export class DecodeEngine {
     }
 
     public async decodeSkill(settings: LoadSettings_T, id: number, level: number, record: NpcSkillAttack_T = null): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         const attack = record || this.getSkillRecord(await this.decodeSkillTables(), id, level);
         const visualEffect = attack.visualEffect;
 
@@ -2094,7 +2214,7 @@ export class DecodeEngine {
         for (const path of soundPaths) {
             const source = await this.getStoredAssets("skill_visuals", `sound:${path.toLowerCase()}`, settings, async () => {
                 const source = new DecodeLibrary();
-                const name = await this.pullSoundPath(new DecodeLibraryBuilder(source, settings), path, false);
+                const name = await this.pullSoundPath(this.createDecodeBuilder(source, settings), path, false);
 
                 if (name) source.sounds[path] = name;
 
@@ -2114,7 +2234,7 @@ export class DecodeEngine {
     protected async decodeSkillAssets(settings: LoadSettings_T, attack: NpcSkillAttack_T): Promise<DecodeLibrary> {
         const library = new DecodeLibrary();
 
-        await this.pullSkillVisuals(library, new DecodeLibraryBuilder(library, settings), [attack]);
+        await this.pullSkillVisuals(library, this.createDecodeBuilder(library, settings), [attack]);
         prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -2130,11 +2250,19 @@ export class DecodeEngine {
     protected async getStoredAssets(name: string, key: string, settings: LoadSettings_T, decode: () => Promise<DecodeLibrary>, select: (library: DecodeLibrary) => DecodeLibrary = null): Promise<DecodeLibrary> {
         let bundle = this.cacheStoredAssets.get(name);
 
-        if (!bundle) {
+        if (!bundle || !bundle.entries[key]) {
             const seekable = await DecodeCache.openCachedLibrary(name, settings);
 
-            bundle = { entries: seekable ? seekable.library.entries : {}, seekable, settings, dirty: false };
-            this.cacheStoredAssets.set(name, bundle);
+            if (!bundle) {
+                bundle = { entries: seekable ? seekable.library.entries : {}, seekable, settings, dirty: false };
+                this.cacheStoredAssets.set(name, bundle);
+            } else if (seekable) {
+                for (const [id, value] of Object.entries(bundle.entries))
+                    if (!value.isLibraryChunk && !(id in seekable.library.entries)) seekable.library.entries[id] = value;
+
+                bundle.entries = seekable.library.entries;
+                bundle.seekable = seekable;
+            }
         }
 
         if (!bundle.entries[key]) {
@@ -2161,7 +2289,7 @@ export class DecodeEngine {
                     for (const sound of cached.library.soundBlobCache.values())
                         if (sound.data.isLibraryChunk) sound.data = await getLibraryChunkBlob(cached, sound.data, sound.mimeType);
 
-                return hydrateLibraryFile(cached);
+                return hydrateLibraryAssets(cached);
             });
         }
 
@@ -2198,13 +2326,13 @@ export class DecodeEngine {
         const rows = await this.decodeCharGrp();
         const row = getCharacterRow(rows, charIndex);
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
 
         library.name = splitObjectPath(row.face_mesh[0])[1];
 
         for (let i = 0, len = meshPaths.length; i < len; i++) {
-            const mesh = await this.fetchSkeletalMesh(meshPaths[i]);
-            const texture = await this.fetchCharacterMaterial(texturePaths[i]);
+            const mesh = await this.fetchSkeletalMesh(meshPaths[i], builder);
+            const texture = await this.fetchCharacterMaterial(texturePaths[i], builder);
             const decodeAnimations = i === 0 && includeAnimations || /_l_ad\d+$/i.test(meshPaths[i]);
             const meshInfo = builder.pullSkeletalMesh(mesh, decodeAnimations, false, i === 0);
             const textureUuid = builder.pullMaterial(texture);
@@ -2245,6 +2373,7 @@ export class DecodeEngine {
     }
 
     public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, includeAnimations: boolean = true, equipment: ICharacterEquipment = null): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         await this.sweepCache(settings);
 
         const rows = await this.decodeCharGrp();
@@ -2330,12 +2459,12 @@ export class DecodeEngine {
 
         await this.applyCharacterHairConfig(library.pawnActors, meshPaths);
         await this.pullCharacterPawnEffects(library, settings, `LineageWarrior.${splitObjectPath(row.face_mesh[0])[1].replace(/_m\d+_f$/, "")}`);
-        await this.pullCharacterSounds(library, new DecodeLibraryBuilder(library, settings), row, armor.chest, equipment?.leftHand || 0, armor.boots);
-        await this.pullCharacterEquipment(library, new DecodeLibraryBuilder(library, settings), row, equipment, hairVariant);
+        await this.pullCharacterSounds(library, this.createDecodeBuilder(library, settings), row, armor.chest, equipment?.leftHand || 0, armor.boots);
+        await this.pullCharacterEquipment(library, this.createDecodeBuilder(library, settings), row, equipment, hairVariant);
         const notifyEffects = await this.getStoredAssets("character_effects", `notifies:${charIndex}`, settings, async () => {
             const effects = new DecodeLibrary();
 
-            await this.pullAnimationNotifyEffects(new DecodeLibraryBuilder(effects, settings), manifest.animationNotifies);
+            await this.pullAnimationNotifyEffects(this.createDecodeBuilder(effects, settings), manifest.animationNotifies);
             prepareLibraryForTransfer(effects, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => effects[key]));
             if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(effects);
 
@@ -2344,7 +2473,7 @@ export class DecodeEngine {
 
         copyLibraryAssets(library, notifyEffects);
 
-        if (cached.seekable) await hydrateLibraryFile(cached.seekable, library);
+        if (cached.seekable) await hydrateLibraryAssets(cached.seekable, library);
 
         return library;
     }
@@ -2360,7 +2489,7 @@ export class DecodeEngine {
     protected async decodeCharacterPawnEffects(settings: LoadSettings_T, classPath: string): Promise<DecodeLibrary> {
         const library = new DecodeLibrary();
 
-        await this.pullPawnEffects(library, new DecodeLibraryBuilder(library, settings), classPath);
+        await this.pullPawnEffects(library, this.createDecodeBuilder(library, settings), classPath);
         prepareLibraryForTransfer(library, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => library[key]));
         if (settings.rgbaTextures !== false) convertDDSMaterialsToRGBA(library);
 
@@ -2457,14 +2586,14 @@ export class DecodeEngine {
         }
 
         const library = new DecodeLibrary();
-        const builder = new DecodeLibraryBuilder(library, settings);
+        const builder = this.createDecodeBuilder(library, settings);
         const manifest: CharacterBundle_T = { name, animationSet: cacheName, animations: {}, animationSequences: {}, animationNotifies: {}, skinNotifies: {}, meshes: {}, materials: {} };
         const faceMesh = row.face_mesh[0] as string;
 
         library.name = name;
 
         for (const path of meshPaths) {
-            const mesh = await this.fetchSkeletalMesh(path);
+            const mesh = await this.fetchSkeletalMesh(path, builder);
             const isAttached = /_l_ad\d+$/i.test(path);
             const info = builder.pullSkeletalMesh(mesh, path === faceMesh || isAttached, false);
 
@@ -2491,7 +2620,7 @@ export class DecodeEngine {
                 texturePaths.add(getSkinMaterialPath(path, index));
 
         for (const path of texturePaths)
-            manifest.materials[path] = builder.pullMaterial(await this.fetchCharacterMaterial(path));
+            manifest.materials[path] = builder.pullMaterial(await this.fetchCharacterMaterial(path, builder));
 
         for (const head of await this.decodeArmorGrp()) {
             if (!SchemasC4.CHARACTER_HEAD_ARMOR_SLOTS.includes(head.body_part)) continue;
@@ -2630,25 +2759,29 @@ export class DecodeEngine {
     }
 
     public async decodeCharacterEquipment(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: ICharacterEquipment): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         await this.sweepCache(settings);
 
         const row = getCharacterRow(await this.decodeCharGrp(), charIndex);
         const library = new DecodeLibrary();
 
-        await this.pullCharacterEquipment(library, new DecodeLibraryBuilder(library, settings), row, equipment, hairVariant);
+        await this.pullCharacterEquipment(library, this.createDecodeBuilder(library, settings), row, equipment, hairVariant);
 
         return library;
     }
 
     public async decodeCharacterEquipmentBinary(settings: LoadSettings_T, charIndex: number, hairVariant: number, equipment: ICharacterEquipment): Promise<ArrayBuffer> {
+        this.setLoadSettings(settings);
         return this.serializeTransfer(await this.decodeCharacterEquipment(settings, charIndex, hairVariant, equipment), true);
     }
 
     public async decodeCharacterBinary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean, equipment: ICharacterEquipment): Promise<ArrayBuffer> {
+        this.setLoadSettings(settings);
         return this.serializeTransfer(await this.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment));
     }
 
     public async decodeSkeletalMeshTransfer(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: INpcEquipment | null = null): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         const { transfer, fresh } = this.prepareTransfer(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment));
 
         for (const [sent, id] of fresh) sent.add(id);
@@ -2656,14 +2789,17 @@ export class DecodeEngine {
     }
 
     public async decodeSkeletalMeshBinary(settings: LoadSettings_T, packageName: string, meshName: string, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, includeAnimations: boolean = true, equipment: INpcEquipment | null = null): Promise<ArrayBuffer> {
+        this.setLoadSettings(settings);
         return this.serializeTransfer(await this.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment));
     }
 
     public async decodeEffectTemplatesBinary(settings: LoadSettings_T, classPaths: string[], soundPaths: string[] = [], scriptClassPaths: string[] = [], requiredSounds: boolean = true): Promise<ArrayBuffer> {
+        this.setLoadSettings(settings);
         return this.serializeTransfer(await this.decodeEffectTemplates(settings, classPaths, soundPaths, scriptClassPaths, requiredSounds));
     }
 
     public async decodeSkillBinary(settings: LoadSettings_T, id: number, level: number, urgent: boolean = false, record: NpcSkillAttack_T = null): Promise<ArrayBuffer> {
+        this.setLoadSettings(settings);
         const library = await this.decodeSkill(settings, id, level, record);
 
         for (const sound of library.soundBlobCache.values())
@@ -2673,20 +2809,24 @@ export class DecodeEngine {
     }
 
     public async decodeSkillTransfer(settings: LoadSettings_T, id: number, level: number, urgent: boolean = false, record: NpcSkillAttack_T = null): Promise<DecodeLibrary> {
+        this.setLoadSettings(settings);
         const { transfer, fresh } = this.prepareTransfer(await this.decodeSkill(settings, id, level, record), urgent);
 
         for (const [sent, id] of fresh) sent.add(id);
         return transfer;
     }
 
-    public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
+    public async precacheCharacters(settings: LoadSettings_T, charIndex: number = null): Promise<void> {
+        this.setLoadSettings(settings);
         if (!DecodeCache.isCacheEnabled(settings)) return;
 
         await this.sweepCache(settings);
 
-        const groups = await this.decodeCharGroups();
+        const groups = await this.decodeCharGroups(settings);
 
         for (const group of groups) {
+            if (charIndex !== null && group.index !== charIndex) continue;
+
             const name = characterBundleCacheName(group.index, group.name);
 
             if (!this.cacheCharacterBundles.has(group.index) && !await DecodeCache.hasCachedLibrary(name, settings))
@@ -2698,7 +2838,25 @@ export class DecodeEngine {
         }
     }
 
-    public async decodeCharGroups(): Promise<ICharacterGroup[]> {
+    public async decodeCharGroups(settings: LoadSettings_T = {}): Promise<ICharacterGroup[]> {
+        this.setLoadSettings(settings);
+        if (this.cacheCharGroups) return this.cacheCharGroups;
+
+        const cacheSettings = { cache: settings.cache };
+        const cached = await DecodeCache.loadCachedLibrary("character_groups", cacheSettings);
+
+        if (cached) {
+            for (const [index, pieces] of cached.hairPieces) this.cacheCharacterHairPieces.set(index, pieces);
+            return this.cacheCharGroups = cached.groups;
+        }
+
+        const groups = await this.buildCharGroups();
+
+        await DecodeCache.storeCachedLibraryDurable("character_groups", cacheSettings, { groups, hairPieces: this.cacheCharacterHairPieces });
+        return this.cacheCharGroups = groups;
+    }
+
+    protected async buildCharGroups(): Promise<ICharacterGroup[]> {
         const rows = await this.decodeCharGrp();
         const armorRows = await this.decodeArmorGrp();
         const itemNames = new Map((await this.decodeItemNames()).map(item => [item.id as number, item]));
@@ -2828,11 +2986,11 @@ export class DecodeEngine {
                             copyCharacterMaterial(assets, bundle.library, info.materials);
                             copyCharacterMaterial(assets, bundle.library, material);
                         }
-                        if (bundle.seekable) await hydrateLibraryFile(bundle.seekable, assets);
+                        if (bundle.seekable) await hydrateLibraryAssets(bundle.seekable, assets);
                     }
                 }
 
-                await this.decodeCharacterEquipmentAssets(assets, new DecodeLibraryBuilder(assets, builder.getSettings()), row, part as ICharacterEquipment, hairVariant);
+                await this.decodeCharacterEquipmentAssets(assets, this.createDecodeBuilder(assets, builder.getSettings()), row, part as ICharacterEquipment, hairVariant);
                 prepareLibraryForTransfer(assets, this.collectPackageBuffers(), SCRIPT_KEYS.map(key => assets[key]));
                 if (builder.getSettings().rgbaTextures !== false) convertDDSMaterialsToRGBA(assets);
 
@@ -2849,7 +3007,7 @@ export class DecodeEngine {
             const sounds = new DecodeLibrary();
             const weapon = equipment.rightHand ? (await this.decodeWeaponGrp()).find(row => row.id === equipment.rightHand) : null;
             const config = (await this.getAudioConfig()).getPawnSound("ItemSound");
-            const arrSounds = weapon && weapon.tag === 0 ? await Promise.all(weapon.item_sound.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(new DecodeLibraryBuilder(sounds, builder.getSettings()), path, false) : null)) : [];
+            const arrSounds = weapon && weapon.tag === 0 ? await Promise.all(weapon.item_sound.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(this.createDecodeBuilder(sounds, builder.getSettings()), path, false) : null)) : [];
 
             sounds.pawnEquipment = { weaponType: info.weaponType, items: [], attackSound: arrSounds.length ? { sounds: arrSounds, volume: config.volume, radius: config.radius } : null };
             return sounds;
@@ -3064,6 +3222,7 @@ export class DecodeEngine {
     }
 
     public async resolveNpc(selector: string | number, settings: LoadSettings_T): Promise<INpcDefinition> {
+        this.setLoadSettings(settings);
         const definitions = await this.decodeNpcDefinitions(settings);
 
         if (typeof selector === "number") {

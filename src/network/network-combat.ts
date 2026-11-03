@@ -619,7 +619,14 @@ export class NetworkCombat {
     }
 
     public updateTarget() {
-        const object = this.network.actors.objects.get(this.network.getTargetId());
+        const objectId = this.network.getTargetId(), object = this.network.actors.objects.get(objectId);
+
+        if (!object) {
+            const name = this.network.actors.getStaticObjectName(objectId), status = this.network.actors.doorStatuses.get(objectId);
+
+            this.network.ui.setTarget(name === null ? null : { npcId: 0, name, curHp: status ? status.curHp : 0, maxHp: status ? status.maxHp : 0, curMp: 0, maxMp: 0, showHp: status ? status.showHp : false, showMp: false, levelDifference: 0 });
+            return;
+        }
 
         this.network.ui.setTarget(object ? { npcId: object.npcId, name: object.name, curHp: object.curHp, maxHp: object.maxHp, curMp: object.curMp, maxMp: object.maxMp, showHp: object.isSummon ? object.objectId === this.network.actors.petInfo.objectId : object.maxHp > 0, showMp: object.kind !== "npc" && object.maxMp > 0, levelDifference: object.levelDifference } : null); // NCTargetStatusWnd paint 0x10113600: summons show HP + level colour only to their owner.
     }

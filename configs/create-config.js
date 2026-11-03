@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const webpack = require("webpack");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { initChunkerMiddleware } = require("./chunker-middleware");
-const prebuiltClasses = process.env.PREBUILT_CLASSES === "1" ? require("./prebuild-classes") : null;
+const prebuiltClasses = process.env.PREBUILT_CLASSES !== "0" && (process.env.PREBUILT_CLASSES === "1" || process.env.CLASS_CABINET_SOURCE || fs.existsSync(path.resolve(__dirname, "../assets-c4"))) ? require("./prebuild-classes") : null;
 // const { SourceMapDevToolPlugin } = require("webpack");
 
 function* walkSync(dir) {
@@ -106,6 +106,7 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             plugins.push(new CopyWebpackPlugin({
                 patterns: [
                     { from: "../html", to: "" },
+                    { from: path.join(path.dirname(require.resolve("zlib-streams/package.json")), "LICENSE"), to: "zlib-streams.LICENSE" },
                     ...(httpAssets ? [{ from: "../asset-list.json", to: "asset-list.json" }] : []),
                     // ...copyFiles
                 ],
@@ -139,6 +140,9 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         }
 
         const rules = [{
+            test: /zlib-streams[\\/]dist[\\/]zip-module\.wasm$/,
+            type: "asset/inline"
+        }, {
             test: /\.(sa|sc|c)ss$/,
             use: pluginsSASS,
             exclude: /(node_modules|submodules)/,

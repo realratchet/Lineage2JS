@@ -1,4 +1,4 @@
-import { WebGLRenderTarget, WebGLRenderer, ShaderMaterial, LinearFilter, RGBAFormat } from "three";
+import { WebGLRenderTarget, WebGLRenderer, ShaderMaterial, LinearFilter, RGBAFormat, DepthTexture, FloatType } from "three";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 import type { DisplayConfig_T } from "@l2js/engine/contracts/config";
 
@@ -10,9 +10,10 @@ export class DisplayGammaPass {
     protected readonly material: ShaderMaterial;
     protected readonly fsQuad: FullScreenQuad;
 
-    public constructor(width: number, height: number, samples: number) {
+    public constructor(width: number, height: number, samples: number, reversedDepth = false) {
 
         this.target = new WebGLRenderTarget(width, height, { minFilter: LinearFilter, magFilter: LinearFilter, format: RGBAFormat, samples });
+        if (reversedDepth) this.target.depthTexture = new DepthTexture(width, height, FloatType);
         this.target.texture.name = "DisplayGammaPass.target";
 
         // the world render leaves autoClear off, so the blit must not depth-test against a stale buffer

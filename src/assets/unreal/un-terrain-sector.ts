@@ -751,7 +751,7 @@ export abstract class UTerrainSector extends UObject {
         const info = this.info;
         const alphaMap = info.layers[layerIndex].alphaMap;
 
-        if (alphaMap.width === info.heightmapX) {
+        if (info.getTextureSource(alphaMap, false).width === info.heightmapX) {
             // Special-case 1:1 alphamap:heightmap ratio for performance
 
             const ox = x + this.offsetX;
@@ -790,7 +790,7 @@ export abstract class UTerrainSector extends UObject {
                 }
             }
         } else {
-            let ratio = alphaMap.width / info.heightmapX;
+            let ratio = info.getTextureSource(alphaMap, false).width / info.heightmapX;
 
             let minX = Math.floor(ratio * (x + this.offsetX));
             let maxX = Math.ceil(ratio * (x + this.offsetX + 1));
@@ -851,7 +851,7 @@ export abstract class UTerrainSector extends UObject {
 
         if (!alphaMap) return false;
 
-        const ratio = (alphaMap.width || 0) / info.heightmapX;
+        const ratio = (info.getTextureSource(alphaMap, false).width || 0) / info.heightmapX;
 
         const minx = Math.floor(ratio * this.offsetX), maxx = Math.ceil(ratio * (this.offsetX + this.quadsX));
         const miny = Math.floor(ratio * this.offsetY), maxy = Math.ceil(ratio * (this.offsetY + this.quadsY));

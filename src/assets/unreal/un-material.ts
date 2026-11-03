@@ -1,5 +1,6 @@
 import { type FPrimitiveArray, type UnserializedProperty_T } from "@l2js/core";
 import UObject from "./un-object";
+import { dumpObjectClass, dumpObjectScriptProperties } from "./script-dump-loader";
 import type { FColor } from "./un-color";
 import type { FMatrix } from "./un-matrix";
 import type { FRotator } from "./un-rotator";
@@ -107,7 +108,8 @@ export type ITexOscillatorDecodeInfo = IBaseMaterialModifierDecodeInfo & {
         typeU: "pan" | "stretch" | "stretchRepeat" | "jitter",
         typeV: "pan" | "stretch" | "stretchRepeat" | "jitter",
         offsetU: number,
-        offsetV: number
+        offsetV: number,
+        triggered?: { path: string, properties: Record<string, any> }
     }
 };
 
@@ -764,6 +766,43 @@ export abstract class UTexOscillator extends UBaseModifier {
     }
 }
 
+export enum ERetriggerAction_T {
+    RTA_Reverse,
+    RTA_Reset,
+    RTA_Ignore,
+    RTA_Retrigger
+}
+
+export abstract class UTexOscillatorTriggered extends UTexOscillator {
+    declare protected retriggerAction: ERetriggerAction_T;
+    declare protected stopAfterPeriod: number;
+    declare protected triggeredTime: number;
+    declare protected reverse: boolean;
+    declare protected triggered: boolean;
+
+    protected getPropertyMap() {
+        return Object.assign({}, super.getPropertyMap(), {
+            "RetriggerAction": "retriggerAction",
+            "StopAfterPeriod": "stopAfterPeriod",
+            "TriggeredTime": "triggeredTime",
+            "Reverse": "reverse",
+            "Triggered": "triggered"
+        });
+    }
+
+    public getDecodeInfo(builder: DecodeLibraryBuilder): ITexOscillatorDecodeInfo {
+        const info = super.getDecodeInfo(builder) as ITexOscillatorDecodeInfo;
+        const properties = dumpObjectScriptProperties(this);
+        const object = { ...dumpObjectClass(this), properties };
+
+        builder.pullScriptClasses([(this.constructor as any).hostClass]);
+        builder.library.scriptObjects[this.name.toLowerCase()] = object;
+        info.transform.triggered = { path: this.name, properties };
+
+        return info;
+    }
+}
+
 export abstract class UTexCoordSource extends UBaseModifier {
     public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo {
         return {
@@ -852,3 +891,5 @@ export abstract class UStaticMeshMaterial extends UBaseMaterial {
 }
 
 export default UMaterial;
+
+(UBaseMaterial.prototype as any).isPackageAsset = true;

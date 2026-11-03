@@ -90,7 +90,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             const indices = source.subarray(indexOffset, indexOffset + indexCount);
 
             const bounds = new Box3();
-            for (const index of indices) bounds.expandByPoint(tmpPosition.fromArray(vertices, index * 3));
+            for (let i = 0; i < indices.length; i++) bounds.expandByPoint(tmpPosition.fromArray(vertices, indices[i] * 3));
 
             this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: indices.length < 384 ? null : buildTriangleIndex(vertices, indices), matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
             indexOffset += indices.length;

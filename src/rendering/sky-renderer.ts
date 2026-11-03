@@ -424,6 +424,7 @@ export default class SkyRenderer {
         if (!this.camera) return;
 
         if (this.skyZone) {
+            (this.skyCamera as any)._reversedDepth = this.camera.reversedDepth;
             this.skyCamera.copy(this.camera, false);
             this.skyCamera.layers.set(1);
             // FSkySceneNode::FSkySceneNode (Engine.dll 0x8ea050): recenter the view at SkyZoneInfo.

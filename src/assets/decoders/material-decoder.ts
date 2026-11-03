@@ -1,3 +1,4 @@
+import TexOscillatorTriggered from "../../materials/mesh-static-material/tex-oscillator-triggered";
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 import _decodeTexture, { copyTextureFiltering, copyTextureLOD, updateTextureFiltering } from "./texture-decoder";
 import { restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
@@ -43,7 +44,7 @@ const cacheStaticMaterialsByName = new Map<string, WeakCacheEntry_T<Map<string, 
 const canonicalStaticMaterials = new Map<string, WeakCacheEntry_T<THREE.Material>>();
 const dynamicUniformNames = new Set([
     "ambientLightColor", "cameraBillboardRight", "cameraBillboardUp", "directionalLights",
-    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTimeSeconds",
+    "directionalLightShadows", "fogColor", "fogDensity", "fogFar", "fogNear", "globalTimeSeconds", "levelTimeSeconds",
     "hemisphereLights", "ltc_1", "ltc_2", "pointLights", "pointLightShadows", "rectAreaLights",
     "spotLights", "spotLightShadows"
 ]);
@@ -364,7 +365,10 @@ function decodeTexOscillatorModifer(library: DecodeLibrary, info: MaterialContra
                 typeU: info.transform.typeU === "pan" ? 0 : info.transform.typeU === "stretch" ? 1 : info.transform.typeU === "stretchRepeat" ? 2 : 3,
                 typeV: info.transform.typeV === "pan" ? 0 : info.transform.typeV === "stretch" ? 1 : info.transform.typeV === "stretchRepeat" ? 2 : 3,
                 offsetU: info.transform.offsetU,
-                offsetV: info.transform.offsetV
+                offsetV: info.transform.offsetV,
+                useLocalTime: !!info.transform.triggered,
+                timeSeconds: 0,
+                triggered: info.transform.triggered ? new TexOscillatorTriggered(info.transform.triggered.path, info.transform.triggered.properties, info.transform.rateU, info.transform.rateV) : null
             },
             innerTransforms: resolved.innerTransforms,
             numInnerTransforms: resolved.innerTransforms.length
@@ -672,9 +676,11 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IMaterialTerrainSegm
     return MeshTerrainMaterial.create({
         uvs,
         layers: terrainMaterial.layers.map(({ map, alphaMap }) => {
+            const texture = map ? library.materials[map] as ITextureDecodeInfo : null;
             return {
-                map: map ? decodeParameter(library, library.materials[map]) : null,
-                alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null
+                map: texture ? decodeParameter(library, texture) : null,
+                alphaMap: alphaMap ? decodeParameter(library, library.materials[alphaMap]) : null,
+                transparent: !!(texture && (texture.isAlphaTexture || texture.isMasked))
             };
         })
     });

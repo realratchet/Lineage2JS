@@ -28,7 +28,7 @@ export class SkillViewerAssetManager extends AssetManager {
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
-        const [clientConfig, charGroups] = await Promise.all([this.decodeWorker.getClientConfig(), this.decodeWorker.getCharGroups()]);
+        const [clientConfig, charGroups] = await Promise.all([this.decodeWorker.getClientConfig(this.loadSettings), this.decodeWorker.getCharGroups(this.loadSettings)]);
 
         this.userConfig = clientConfig.userConfig;
         this.warriorAnimations = clientConfig.warriorAnimations;

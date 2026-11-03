@@ -104,6 +104,7 @@ export class NetworkActors {
     public readonly objects = new Map<number, NetObject_T>();
     public readonly doors = new Map<number, number>();
     public readonly doorPositions = new Map<number, number>();
+    public readonly doorStatuses = new Map<number, { curHp: number, maxHp: number, showHp: boolean }>();
     public readonly staticObjects = new Map<number, number>();
     public readonly appearances = new Map<number, GamePackets.Appearance_T>();
     public readonly pickups = new Map<number, GroundPickup>();
@@ -135,6 +136,17 @@ export class NetworkActors {
         for (const id of this.staticObjects.values()) if (id === objectId) return true;
 
         return false;
+    }
+
+    public getStaticObjectName(objectId: number): string | null {
+        let realId = this.doors.get(objectId);
+
+        if (!realId)
+            for (const [id, serverId] of this.staticObjects) if (serverId === objectId) { realId = id; break; }
+
+        if (!realId) return null;
+
+        return this.network.ui.getStrings().staticObjectNames[realId] ?? "";
     }
 
     public async loadNpcNames() {
@@ -338,8 +350,10 @@ export class NetworkActors {
 
         const mover = this.network.getParent().getComponent("render").findMovableByRealId(doorId);
 
+        this.doorStatuses.set(objectId, { curHp: currentHp, maxHp, showHp: showHp !== 0 });
         this.doorPositions.set(doorId, isOpen === 0 ? 1 : 0);
         if (mover) mover.setOpen(isOpen === 0);
+        if (objectId === this.network.getTargetId()) this.network.combat.updateTarget();
     }
 
     public getDoorPosition(mover: MovableObject): number { return this.doorPositions.get((mover as any).scriptProperties?.get("L2ServerObjectRealID")); }
@@ -987,6 +1001,7 @@ export class NetworkActors {
 
         this.network.movement.removeVehicle(objectId);
         this.doors.delete(objectId);
+        this.doorStatuses.delete(objectId);
         for (const [realId, id] of this.staticObjects) if (id === objectId) this.staticObjects.delete(realId);
         for (const vehicle of this.network.movement.vehicles.values()) vehicle.riders.delete(objectId);
         this.network.movement.endRide(objectId);

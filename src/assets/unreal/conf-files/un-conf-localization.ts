@@ -39,6 +39,8 @@ export class UConfigLocalization extends BaseConfigFile {
         return this.sections.get(className.toLowerCase()) || [];
     }
 
+    public getSections(): Map<string, LocalizationProperty_T[]> { return this.sections; }
+
     public getStrings(): Map<string, Map<string, string>> {
         const sections = new Map<string, Map<string, string>>();
 

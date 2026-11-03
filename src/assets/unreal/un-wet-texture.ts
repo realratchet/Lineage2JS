@@ -62,9 +62,10 @@ export abstract class UWetTexture extends UTexture {
     }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo | string {
-        const source = this.sourceTexture?.loadSelf();
+        const source = this.sourceTexture;
         const sourceUuid = source ? builder.pullMaterial(source) : null;
-        const info = sourceUuid ? builder.library.materials[sourceUuid] : null;
+        const decoded = sourceUuid ? builder.library.materials[sourceUuid] : null;
+        const info = decoded ? { ...decoded } : null;
 
         // no usable source, draw it as a plain texture instead
         if (!info || info.materialType === "empty")

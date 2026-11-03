@@ -364,7 +364,7 @@ export class NDomLayer {
         for (const page of arrPages) {
             const atlas = document.createElement("canvas");
 
-            atlas.width = atlasWidth;
+            atlas.width = Math.min(atlasWidth, Math.max(...page.map(i => places[i][0] + images[i].width + 1)));
             atlas.height = Math.max(...page.map(i => places[i][1] + images[i].height));
 
             const context = atlas.getContext("2d", { willReadFrequently: true });
@@ -373,7 +373,8 @@ export class NDomLayer {
 
             const url = URL.createObjectURL(encodeBitmap(atlas));
 
-            page.forEach(i => frames[i] = { url, x: places[i][0], y: places[i][1], atlasWidth, atlasHeight: atlas.height });
+            page.forEach(i => frames[i] = { url, x: places[i][0], y: places[i][1], atlasWidth: atlas.width, atlasHeight: atlas.height });
+            atlas.width = atlas.height = 0;
         }
 
         let first = 0;

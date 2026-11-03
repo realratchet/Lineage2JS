@@ -151,6 +151,55 @@ export type CoreStructsReturnType_T<T extends CoreStructs_T> =
     : never;
 
 export class UPackage extends APackage {
+    public cachedResolver: any = null;
+    protected restoringResolver: Promise<this> = null;
+    public rawOnly = false;
+    public keepRawSource = false;
+    public requiresRawDependencies = false;
+
+    public async decode(): Promise<this> {
+        if (this.isDecoded()) return this;
+        if (this.restoringResolver) return this.restoringResolver;
+        this.restoringResolver = this.decodePackage();
+        try {
+            return await this.restoringResolver;
+        } finally {
+            this.restoringResolver = null;
+        }
+    }
+
+    protected async decodePackage(): Promise<this> {
+        const settings = (this.loader as any).packageCacheSettings;
+        if (!this.rawOnly && settings && globalThis.isSecureContext && /\.(usx|utx|uax)$/i.test(this.path)) {
+            const { restorePackageResolver } = await import("./package-resolver");
+            const restored = await restorePackageResolver(this, settings);
+            if (restored) {
+                this.cachedResolver = restored;
+                this.source = restored.source;
+                this.buffer = new ArrayBuffer(0);
+                this.contentOffset = 0;
+                return this;
+            }
+        }
+        this.cachedResolver = null;
+        return super.decode();
+    }
+
+    public free(): void {
+        super.free();
+        this.cachedResolver = null;
+    }
+
+    public resetRawPackage(): void {
+        this.free();
+        this.rawOnly = true;
+        this.cachedResolver = null;
+        this.header = null;
+        this.exports = null;
+        this.imports = null;
+        this.nameTable = null;
+    }
+
     protected async readArrayBuffer() {
         const source = await fetchPackageSource(this.path);
 
@@ -498,6 +547,7 @@ export class UNativePackage extends ANativePackage {
             case "TexCoordSource": Constructor = UnMaterials.UTexCoordSource; break;
             case "ColorModifier": Constructor = UnMaterials.UColorModifier; break;
             case "TexOscillator": Constructor = UnMaterials.UTexOscillator; break;
+            case "TexOscillatorTriggered": Constructor = UnMaterials.UTexOscillatorTriggered; break;
             case "FadeColor": Constructor = UnMaterials.UFadeColor; break;
             case "ConstantColor": Constructor = UnMaterials.UConstantColor; break;
             case "Shader": Constructor = UnMaterials.UShader; break;

@@ -89,7 +89,7 @@ function requireNotifyProperty<T>(notify: UObject, name: string, value: T | unde
 function pullSound(builder: DecodeLibraryBuilder, value: USound | null): string {
     if (!value) return null;
 
-    const sound = value.loadSelf();
+    const sound = value;
     const soundName = sound.name;
 
     return builder.pullSound(sound) ? soundName : null;

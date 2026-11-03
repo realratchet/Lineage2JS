@@ -1,6 +1,9 @@
 // import * as _path from "path";
 
 import { AAssetLoader, APackage, UField, UObject, LazyPropertyValue, type ANativePackage, type AssetListInfo_T, type CorePackageConstructor_T, type EnginePackageConstructor_T, type NativePackageConstructor_T, type PackageConstructor_T } from "@l2js/core";
+import { queueConvertedAssetRelease, retainAssetSource } from "./unreal/asset-handle";
+import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import type DecodeLibraryBuilder from "./unreal/decode-library-builder";
 import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
 
 // type SupportedExtensions_T = "UNR" | "UTX" | "USX" | "UAX" | "U" | "UKX" | "USK" | "NATIVE";
@@ -199,6 +202,44 @@ import type { UCorePackage, UEnginePackage } from "@l2js/engine/un-package";
 
 
 export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePackage, ANativePackage> {
+
+    public decodeLibraryBuilder: DecodeLibraryBuilder = null;
+    public packageCacheSettings: LoadSettings_T = {};
+
+    public async load<T extends APackage = APackage>(pkg: T): Promise<T> {
+        await super.load(pkg);
+        const packages = this.getDependencies(pkg).filter(path => path !== this.getNativePackage().path).map(path => this.getPackage(path));
+        for (const entry of packages as any[]) if (entry.requiresRawDependencies) await this.retainPackageSources(entry);
+        const restored = packages.filter((entry: any) => !!entry.cachedResolver);
+        if (!restored.length) return pkg;
+        const { packageIdentity } = await import("./unreal/package-resolver");
+        const { isCacheEnabled } = await import("./decode-worker/decode-cache");
+        const stale = restored.filter((entry: any) => (entry.cachedResolver.version !== (this.packageCacheSettings.cache === false ? 0 : this.packageCacheSettings.cache?.version ?? 0) || !isCacheEnabled(this.packageCacheSettings) || this.packageCacheSettings._packageCache === false || entry.cachedResolver.identity !== packageIdentity(this.getDependencies(entry).filter(path => path !== this.getNativePackage().path).map(path => this.getPackage(path)))));
+        if (!stale.length) {
+            for (const entry of packages as any[]) if (entry.cachedResolver) queueConvertedAssetRelease(entry.path, this.packageCacheSettings, entry.cachedResolver.identity);
+            return pkg;
+        }
+        for (const entry of stale as any[]) {
+            entry.resetRawPackage();
+            this.pkgDependencies.delete(entry.path);
+            await super.load(entry);
+        }
+        return this.load(pkg);
+    }
+
+    public async retainPackageSources(pkg: APackage): Promise<void> {
+        for (const path of this.getDependencies(pkg)) {
+            if (!/\.(usx|utx|uax)$/i.test(path)) continue;
+            const dependency = this.getPackage(path) as any;
+            dependency.keepRawSource = true;
+            dependency.rawOnly = true;
+            await retainAssetSource(path);
+            if (!dependency.cachedResolver) continue;
+            dependency.resetRawPackage();
+            this.pkgDependencies.delete(path);
+            await super.load(dependency);
+        }
+    }
 
     protected pkgRefCounts = new Map<string, number>();
 

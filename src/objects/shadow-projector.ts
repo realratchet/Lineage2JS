@@ -290,9 +290,12 @@ export class ShadowProjector {
     protected renderShadow(renderer: THREE.WebGLRenderer, caster: Object3D, camera: Camera, target: WebGLRenderTarget, reusePose: boolean = false): void {
         arrSwappedObjects.length = arrSwappedMaterials.length = arrHiddenAttachments.length = arrPawnMeshes.length = 0;
         const previousTarget = renderer.getRenderTarget(), autoClear = renderer.autoClear, alpha = renderer.getClearAlpha(), visible = caster.visible;
+        const depth = renderer.state.buffers.depth, reversedDepth = depth.getReversed();
         renderer.getClearColor(tmpClearColor);
         this.renderingShadow = true;
         try {
+            depth.setReversed(camera.reversedDepth);
+            depth.setClear(1);
             caster.visible = true;
             swapMaterials(caster, this.silhouette, this.cacheSilhouetteMaterials, reusePose);
             renderer.setRenderTarget(this.blurTarget);
@@ -302,6 +305,8 @@ export class ShadowProjector {
             renderer.render(caster, camera);
             this.blur(renderer, target);
         } finally {
+            depth.setReversed(reversedDepth);
+            depth.setClear(1);
             renderer.autoClear = autoClear;
             renderer.setRenderTarget(previousTarget);
             renderer.setClearColor(tmpClearColor, alpha);

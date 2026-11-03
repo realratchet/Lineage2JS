@@ -25,6 +25,11 @@ type DecoRandom_T = { seed: number };
 
 const tmpLocation: Vector3Arr = [0, 0, 0];
 const tmpNormal: Vector3Arr = [0, 0, 0];
+const tmpScale: Vector3Arr = [0, 0, 0];
+const tmpWhite: Vector3Arr = [1, 1, 1];
+let tmpMatrices = new Float32Array(0);
+let tmpColors = new Uint8Array(0);
+let tmpTerrainVertexIndices = new Uint16Array(0);
 
 function getSRand(random: DecoRandom_T) {
     random.seed = (Math.imul(random.seed, 196314165) + 907633515) | 0;
@@ -118,9 +123,7 @@ export abstract class UDecoLayer extends UObject {
         sectors.forEach((sector, sectorIndex) => {
             const { offsetX, offsetY, quadsX, quadsY } = sector.getDecorationInfo();
             const random: DecoRandom_T = { seed: (this.seed + sectorIndex) | 0 };
-            const matrices: number[] = [];
-            const colors: number[] = [];
-            const terrainVertexIndices: number[] = [];
+            let count = 0;
 
             for (let y = 0; y < quadsY; y++) {
                 for (let x = 0; x < quadsX; x++) {
@@ -153,11 +156,11 @@ export abstract class UDecoLayer extends UObject {
 
                         FVector.setElements(tmpLocation, tmpLocation[0] + tmpNormal[0] * decoLayerOffset, tmpLocation[1] + tmpNormal[1] * decoLayerOffset, tmpLocation[2] + tmpNormal[2] * decoLayerOffset);
 
-                        const scale: Vector3Arr = [
-                            scaleRange.max[0] + (scaleRange.min[0] - scaleRange.max[0]) * getSRand(random),
-                            scaleRange.max[1] + (scaleRange.min[1] - scaleRange.max[1]) * getSRand(random),
-                            scaleRange.max[2] + (scaleRange.min[2] - scaleRange.max[2]) * getSRand(random)
-                        ];
+                        const scale = tmpScale;
+
+                        scale[0] = scaleRange.max[0] + (scaleRange.min[0] - scaleRange.max[0]) * getSRand(random);
+                        scale[1] = scaleRange.max[1] + (scaleRange.min[1] - scaleRange.max[1]) * getSRand(random);
+                        scale[2] = scaleRange.max[2] + (scaleRange.min[2] - scaleRange.max[2]) * getSRand(random);
 
                         if (this.scaleMap) {
                             const mapScale = info.getTextureColor(globalX, globalY, this.scaleMap);
@@ -166,19 +169,33 @@ export abstract class UDecoLayer extends UObject {
                             scale[2] *= mapScale[2];
                         }
 
-                        const matrixOffset = matrices.length;
-                        matrices.length += 16;
-                        setDecorationMatrix(matrices, matrixOffset, tmpLocation, tmpNormal, scale, !!this.randomYaw, random);
+                        if (count === tmpTerrainVertexIndices.length) {
+                            const capacity = Math.max(256, count * 2);
+                            const matrices = new Float32Array(capacity * 16), colors = new Uint8Array(capacity * 3), indices = new Uint16Array(capacity);
 
-                        const color = this.colorMap ? info.getTextureColor(globalX, globalY, this.colorMap) : [1, 1, 1] as Vector3Arr;
+                            matrices.set(tmpMatrices);
+                            colors.set(tmpColors);
+                            indices.set(tmpTerrainVertexIndices);
+                            tmpMatrices = matrices;
+                            tmpColors = colors;
+                            tmpTerrainVertexIndices = indices;
+                        }
+
+                        setDecorationMatrix(tmpMatrices, count * 16, tmpLocation, tmpNormal, scale, !!this.randomYaw, random);
+
+                        const color = this.colorMap ? info.getTextureColor(globalX, globalY, this.colorMap) : tmpWhite;
                         const baseColor = this.disregardTerrainLighting ? 127 : 255;
-                        colors.push(Math.floor(baseColor * color[0]), Math.floor(baseColor * color[1]), Math.floor(baseColor * color[2]));
-                        if (!this.disregardTerrainLighting) terrainVertexIndices.push(y * 17 + x);
+
+                        tmpColors[count * 3] = Math.floor(baseColor * color[0]);
+                        tmpColors[count * 3 + 1] = Math.floor(baseColor * color[1]);
+                        tmpColors[count * 3 + 2] = Math.floor(baseColor * color[2]);
+                        if (!this.disregardTerrainLighting) tmpTerrainVertexIndices[count] = y * 17 + x;
+                        count++;
                     }
                 }
             }
 
-            if (matrices.length === 0) return;
+            if (count === 0) return;
 
             result.push({
                 uuid: `${this.uuid}:${sector.uuid}`,
@@ -186,9 +203,9 @@ export abstract class UDecoLayer extends UObject {
                 name: `${this.objectName || "DecorationLayer"}_${sectorIndex}`,
                 terrainSegment: sector.uuid,
                 mesh,
-                matrices: new Float32Array(matrices),
-                colors: new Uint8Array(colors),
-                terrainVertexIndices: this.disregardTerrainLighting ? undefined : new Uint16Array(terrainVertexIndices),
+                matrices: tmpMatrices.slice(0, count * 16),
+                colors: tmpColors.slice(0, count * 3),
+                terrainVertexIndices: this.disregardTerrainLighting ? undefined : tmpTerrainVertexIndices.slice(0, count),
                 fadeoutRadius,
                 drawOrder: this.drawOrder,
                 forceRender: !!this.isForcingRender

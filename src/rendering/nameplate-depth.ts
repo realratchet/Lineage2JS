@@ -57,10 +57,15 @@ export class NameplateDepth {
                 let format: number = gl.DEPTH_COMPONENT24;
                 try {
                     const type = gl.getFramebufferAttachmentParameter(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);
-                    if (type !== gl.RENDERBUFFER) throw new Error(`Nameplate depth source must have a depth renderbuffer`);
-
-                    gl.bindRenderbuffer(gl.RENDERBUFFER, gl.getFramebufferAttachmentParameter(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.FRAMEBUFFER_ATTACHMENT_OBJECT_NAME));
-                    format = gl.getRenderbufferParameter(gl.RENDERBUFFER, gl.RENDERBUFFER_INTERNAL_FORMAT);
+                    if (type === gl.TEXTURE && target && target.depthTexture) {
+                        const texture = target.depthTexture;
+                        if (texture.format === DepthStencilFormat) format = texture.type === FloatType ? gl.DEPTH32F_STENCIL8 : gl.DEPTH24_STENCIL8;
+                        else format = texture.type === FloatType ? gl.DEPTH_COMPONENT32F : texture.type === UnsignedShortType ? gl.DEPTH_COMPONENT16 : gl.DEPTH_COMPONENT24;
+                    } else {
+                        if (type !== gl.RENDERBUFFER) throw new Error(`Nameplate depth source must have a depth renderbuffer or texture`);
+                        gl.bindRenderbuffer(gl.RENDERBUFFER, gl.getFramebufferAttachmentParameter(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.FRAMEBUFFER_ATTACHMENT_OBJECT_NAME));
+                        format = gl.getRenderbufferParameter(gl.RENDERBUFFER, gl.RENDERBUFFER_INTERNAL_FORMAT);
+                    }
                 } finally {
                     gl.bindRenderbuffer(gl.RENDERBUFFER, previous);
                 }

@@ -1,6 +1,7 @@
 import DecodeEngine from "./decode-engine";
 import type { MainToWorkerMessage_T, WorkerToMainMessage_T } from "./decode-protocol";
 import { selectAssetFiles, setServedAssets } from "../asset-source";
+import { withAssetSources, releaseAssetSources } from "../unreal/asset-handle";
 
 const ctx = self as any;
 
@@ -9,7 +10,6 @@ if (typeof ctx.location.reload !== "function") {
     ctx.location.reload = () => { };
 }
 
-const DECODE_PACKAGE_SWEEP_MS = 5000;
 const engine = new DecodeEngine();
 
 function post(message: WorkerToMainMessage_T, transfer?: Transferable[]) {
@@ -57,7 +57,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decodeEnv": {
             try {
-                const info = await engine.decodeEnvConfig();
+                const info = await engine.decodeEnvConfig(msg.settings);
                 const transfer = engine.collectTransferables(info);
 
                 post({ type: "envDecoded", requestId: msg.requestId, info }, transfer);
@@ -69,7 +69,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "precacheCharacters": {
             try {
-                await engine.precacheCharacters(msg.settings);
+                await engine.precacheCharacters(msg.settings, msg.charIndex);
                 post({ type: "charactersPrecached", requestId: msg.requestId });
             } catch (e) {
                 console.error("[decode-worker] failed to precache characters:", e);
@@ -89,7 +89,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "charGroups": {
             try {
-                post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups() });
+                post({ type: "charGroupsDecoded", requestId: msg.requestId, groups: await engine.decodeCharGroups(msg.settings) });
             } catch (e) {
                 console.error("[decode-worker] failed to decode character groups:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -158,7 +158,10 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "gameStrings": {
             try {
-                post({ type: "gameStringsDecoded", requestId: msg.requestId, strings: await engine.decodeGameStrings() });
+                const strings = await engine.decodeGameStrings(msg.settings);
+                const transfer = engine.collectTransferables(strings.zoneNameMasks);
+
+                post({ type: "gameStringsDecoded", requestId: msg.requestId, strings }, transfer);
             } catch (e) {
                 console.error("[decode-worker] failed to decode game strings:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
@@ -238,13 +241,9 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             }
             break;
         }
-        case "memoryStats": {
-            post({ type: "memoryStatsDecoded", requestId: msg.requestId, stats: engine.getMemoryStats() });
-            break;
-        }
         case "clientConfig": {
             try {
-                post({ type: "clientConfigDecoded", requestId: msg.requestId, config: await engine.decodeClientConfig() });
+                post({ type: "clientConfigDecoded", requestId: msg.requestId, config: await engine.decodeClientConfig(msg.settings) });
             } catch (e) {
                 console.error("[decode-worker] failed to decode client config:", e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e) });
@@ -274,8 +273,6 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
 
 const arrMessages: MainToWorkerMessage_T[] = [];
 let isProcessingMessages = false;
-let lastMessageDrain = -Infinity;
-let lastMaintenance = performance.now();
 
 function isUrgentMessage(message: MainToWorkerMessage_T): boolean {
     return message.type === "decodeCharacterEquipment" || message.type === "decodeCharacter" || message.type === "decodeSkill" && message.urgent;
@@ -291,6 +288,14 @@ function queueMessage(message: MainToWorkerMessage_T): void {
 function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
     const message = event.data;
 
+    if (message.type === "memoryStats") {
+        post({ type: "memoryStatsDecoded", requestId: message.requestId, stats: engine.getMemoryStats() });
+        return;
+    }
+    if (message.type === "maintenance") {
+        if (!isProcessingMessages && arrMessages.length === 0) void maintainPackages();
+        return;
+    }
     if (message.type === "promoteSkill") {
         const index = arrMessages.findIndex(entry => entry.type === "decodeSkill" && entry.requestId === message.requestId);
 
@@ -313,6 +318,10 @@ function onMessage(event: MessageEvent<MainToWorkerMessage_T>) {
         engine.confirmSharedTextures(message.keys);
         return;
     }
+    if (message.type === "confirmSharedScript") {
+        engine.confirmSharedScript(message.keys);
+        return;
+    }
     queueMessage(message);
     void processMessages();
 }
@@ -322,29 +331,24 @@ async function processMessages(): Promise<void> {
 
     isProcessingMessages = true;
 
-    while (arrMessages.length > 0)
-        await handleMessage(arrMessages.shift()!);
+    await withAssetSources(async () => {
+        while (arrMessages.length > 0)
+            await handleMessage(arrMessages.shift()!);
+    });
 
-    lastMessageDrain = performance.now();
     isProcessingMessages = false;
 }
 
 ctx.onmessage = onMessage;
 
-setInterval(async () => {
-    if (isProcessingMessages) return;
-
-    const now = performance.now();
-
-    if (now - lastMessageDrain < 500 && now - lastMaintenance < 3 * DECODE_PACKAGE_SWEEP_MS) return;
-
+async function maintainPackages(): Promise<void> {
     isProcessingMessages = true;
     try {
         await engine.flushStoredAssets();
         engine.releaseDecodePackages(0);
-        lastMaintenance = performance.now();
+        await releaseAssetSources();
     } finally {
         isProcessingMessages = false;
         void processMessages();
     }
-}, DECODE_PACKAGE_SWEEP_MS);
+}

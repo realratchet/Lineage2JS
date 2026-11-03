@@ -35,10 +35,12 @@ export abstract class FBox extends UObject {
             this.max.set(-Infinity, -Infinity, -Infinity);
         }
 
-        for (let ax of ["x", "y", "z"]) {
-            this.min[ax as "x" | "y" | "z"] = Math.min(this.min[ax as "x" | "y" | "z"], point[ax as "x" | "y" | "z"]);
-            this.max[ax as "x" | "y" | "z"] = Math.max(this.max[ax as "x" | "y" | "z"], point[ax as "x" | "y" | "z"]);
-        }
+        this.min.x = Math.min(this.min.x, point.x);
+        this.max.x = Math.max(this.max.x, point.x);
+        this.min.y = Math.min(this.min.y, point.y);
+        this.max.y = Math.max(this.max.y, point.y);
+        this.min.z = Math.min(this.min.z, point.z);
+        this.max.z = Math.max(this.max.z, point.z);
 
         this.isValid = 1;
 
@@ -86,7 +88,9 @@ export abstract class FBox extends UObject {
     }
 
     public transformBy(matrix: FMatrix): FBox {
-        let bbox = FBox.make();
+        const bbox = FBox.make();
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
 
         for (let x: 0 | 1 = 0; x < 2; x++) {
             const ex = this.getExtrema(x as 0 | 1);
@@ -96,13 +100,22 @@ export abstract class FBox extends UObject {
 
                 for (let z: 0 | 1 = 0; z < 2; z++) {
                     const ez = this.getExtrema(z as 0 | 1);
-                    const vec = FVector.make(ex.x, ey.y, ez.z);
-                    const trans = matrix.transformVector(vec);
+                    const point = bbox.min.set(ex.x, ey.y, ez.z);
 
-                    bbox = bbox.add(trans);
+                    matrix.transformVector(point, point);
+                    minX = Math.min(minX, point.x);
+                    minY = Math.min(minY, point.y);
+                    minZ = Math.min(minZ, point.z);
+                    maxX = Math.max(maxX, point.x);
+                    maxY = Math.max(maxY, point.y);
+                    maxZ = Math.max(maxZ, point.z);
                 }
             }
         }
+
+        bbox.min.set(minX, minY, minZ);
+        bbox.max.set(maxX, maxY, maxZ);
+        bbox.isValid = 1;
 
         return bbox;
     }

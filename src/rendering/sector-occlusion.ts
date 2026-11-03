@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, DoubleSide, Frustum, Matrix4, Mesh, MeshBasicMaterial, Object3D, Scene, WebGLRenderer } from "three";
+import { Box3, BoxGeometry, DoubleSide, Frustum, Matrix4, Mesh, MeshBasicMaterial, Object3D, Scene, WebGLRenderer, WebGLCoordinateSystem } from "three";
 import MeshBounds from "./mesh-bounds";
 import { SectorObject } from "../objects/zone-object";
 
@@ -126,7 +126,7 @@ export class SectorOcclusion {
         this.width = width; this.height = height; this.samples = samples;
         this.camera = camera;
         this.issueQueries = camera.matrixWorldInverse.equals(this.view) && camera.projectionMatrix.equals(this.projection);
-        this.frustum.setFromProjectionMatrix(tmpMatrix.multiplyMatrices(this.projection, this.view));
+        this.frustum.setFromProjectionMatrix(tmpMatrix.multiplyMatrices(this.projection, this.view), WebGLCoordinateSystem, cullingCamera.reversedDepth);
 
         for (const record of this.sectors.values()) {
             record.proxy.visible = false;

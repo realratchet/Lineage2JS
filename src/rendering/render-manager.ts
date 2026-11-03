@@ -9,7 +9,7 @@ import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
-import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, NormalBlending, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion } from "three";
+import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, NormalBlending, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion, DepthTexture, FloatType, WebGLCoordinateSystem } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS, { getLocalUniforms } from "../materials/global-uniforms";
 import Player from "../player";
@@ -417,11 +417,19 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.viewport = viewport;
         ColorManagement.enabled = false;
         try {
+            const canvas = document.createElement("canvas");
+            canvas.style.display = "block";
+            const context = canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: true, premultipliedAlpha: false, alpha: true });
+            if (!context) throw new Error(`WebGL2 context is unavailable`);
+            const reversedDepthBuffer = !!context.getExtension("EXT_clip_control");
             this.renderer = new WebGLRenderer({
+                canvas,
+                context,
                 antialias: false,
                 preserveDrawingBuffer: true,
                 premultipliedAlpha: false,
-                logarithmicDepthBuffer: true,
+                reversedDepthBuffer,
+                logarithmicDepthBuffer: !reversedDepthBuffer,
                 alpha: true,
             });
         } catch (error) {
@@ -429,6 +437,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
             throw error;
         }
 
+        (this.camera as any)._reversedDepth = this.renderer.capabilities.reversedDepthBuffer;
+        this.camera.updateProjectionMatrix();
+        const render = this.renderer.render;
+        this.renderer.render = (scene, camera) => {
+            setReversedDepth(this.renderer, camera.reversedDepth);
+            render.call(this.renderer, scene, camera);
+        };
         this.nameplateDepth = new NameplateDepth(this.renderer);
         this.sectorOcclusion = new SectorOcclusion(this.renderer, this.meshBounds);
         this.setBatchAngleCulling(5);
@@ -501,11 +516,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
             stencilBuffer: false
         });
         this.mainRenderTarget.texture.name = "RenderManager.mainTarget";
+        if (this.camera.reversedDepth) this.mainRenderTarget.depthTexture = new DepthTexture(256, 256, FloatType);
 
         this.uGlowPass = new UGlowPass(new Vector2(256, 256));
         this.uGlowPass.renderToScreen = true;
 
-        this.displayGammaPass = new DisplayGammaPass(256, 256, this.renderer.capabilities.isWebGL2 ? 4 : 0);
+        this.displayGammaPass = new DisplayGammaPass(256, 256, this.renderer.capabilities.isWebGL2 ? 4 : 0, this.camera.reversedDepth);
         setTerrainTextureUnits(this.renderer.capabilities.maxTextures);
 
         this.renderer.autoClear = false;
@@ -770,7 +786,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
         const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-            ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+            ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse), WebGLCoordinateSystem, this.bspHelperCamera.reversedDepth)
             : this.frustum;
         const currentSectorMap = new Map<number, Map<number, SectorObject>>();
 
@@ -796,6 +812,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
+    public getActiveMusicId(): number { return this.activeMusicId; }
+
     public cancelMusic(): void {
         this.activeMusicId = null;
         this.audioManager.cancelMusic();
@@ -811,7 +829,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public updateCameraMatrices(): void {
         this.camera.updateMatrixWorld();
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
-        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
+        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix, WebGLCoordinateSystem, this.camera.reversedDepth);
     }
 
 
@@ -1268,6 +1286,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.levelTimeSeconds += Math.fround(Math.fround(deltaTime / 1000) * (info.getUnrealScriptProperty("TimeDilation") as number));
 
         const timeSeconds = Math.fround(this.levelTimeSeconds);
+        GLOBAL_UNIFORMS.levelTimeSeconds.value = timeSeconds;
 
         info.setUnrealScriptProperty("TimeSeconds", timeSeconds);
         for (const column of this.sectors.values()) for (const sector of column.values())
@@ -1818,7 +1837,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
         const fogSphere = tmpViewSphere.set(bspCullingPosition, fogFar);
 
-        frustum.setFromProjectionMatrix(tmpViewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+        frustum.setFromProjectionMatrix(tmpViewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), WebGLCoordinateSystem, camera.reversedDepth);
 
         // UE2: BoundingPlanes[4] = FPlane(ViewOrigin + Z * FarClip, Z)
         {
@@ -2406,7 +2425,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
 
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
-        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
+        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix, WebGLCoordinateSystem, this.camera.reversedDepth);
 
         const timeOfDay = this.environment.getTimeOfDay();
 
@@ -2545,6 +2564,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             renderer.setScissorTest(false);
             renderer.setClearColor(0, 1);
             renderer.autoClear = false;
+            setReversedDepth(renderer, viewport.camera.reversedDepth);
             renderer.clear(true, true, true);
             GLOBAL_UNIFORMS.shadowActive.value = 0;
             this.skyRenderer.render(renderer);
@@ -2602,7 +2622,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // this.renderer.setRenderTarget(this.mainRenderTarget);
 
         const worldRenderTarget = this.displayGammaPass.getTarget();
-        const renderToTarget = this.displayGammaEnabled || worldRenderTarget.samples > 0 || this.nameplateScene.children.some(object => object.visible && (object as Sprite).material.visible);
+        const renderToTarget = this.camera.reversedDepth || this.displayGammaEnabled || worldRenderTarget.samples > 0 || this.nameplateScene.children.some(object => object.visible && (object as Sprite).material.visible);
+        setReversedDepth(this.renderer, this.camera.reversedDepth);
         this.renderer.setRenderTarget(renderToTarget ? worldRenderTarget : null);
 
         // Render Sky (Background)
@@ -2657,7 +2678,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             if (this.visualizer.isEnabled()) {
                 const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                    ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse), WebGLCoordinateSystem, this.bspHelperCamera.reversedDepth)
                     : this.frustum;
 
                 if (this.visualizer.getMode() === VisualizerMode.Portals) {
@@ -2908,7 +2929,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (currentSector && this.visualizer.isEnabled()) {
             const cameraPos = this.bspHelperActive && this.bspHelperCamera ? this.bspHelperCamera.position : this.camera.position;
             const cameraFrustum = this.bspHelperActive && this.bspHelperCamera
-                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse))
+                ? new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(this.bspHelperCamera.projectionMatrix, this.bspHelperCamera.matrixWorldInverse), WebGLCoordinateSystem, this.bspHelperCamera.reversedDepth)
                 : this.frustum;
 
             const currentSectorMap = new Map<number, Map<number, SectorObject>>();
@@ -3159,6 +3180,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public toggleBSPHelperCamera() {
         if (!this.bspHelperCamera) {
             this.bspHelperCamera = new PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.1, DEFAULT_FAR);
+            (this.bspHelperCamera as any)._reversedDepth = this.camera.reversedDepth;
+            this.bspHelperCamera.updateProjectionMatrix();
             this.bspHelperCamera.position.copy(this.camera.position);
             this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
             this.bspHelperCamera.updateMatrixWorld(true);
@@ -3334,6 +3357,12 @@ function collectMaterialTextures(material: THREE.Material, textures: Set<THREE.T
     if ((material as any).uniforms) collectTexturesDeep(getLocalUniforms((material as any).uniforms), textures, seen);
     if ((material as any).sprites) collectTexturesDeep((material as any).sprites, textures, seen);
     if ((material as any).arrLightmaps) collectTexturesDeep((material as any).arrLightmaps, textures, seen);
+}
+
+function setReversedDepth(renderer: WebGLRenderer, reversedDepth: boolean) {
+    const depth = renderer.state.buffers.depth;
+    depth.setReversed(reversedDepth);
+    depth.setClear(1);
 }
 
 function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean): SectorWarmup_T {

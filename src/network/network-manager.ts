@@ -508,6 +508,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
         this.actors.doors.clear();
         this.actors.doorPositions.clear();
+        this.actors.doorStatuses.clear();
         this.actors.staticObjects.clear();
         this.actors.appearances.clear();
         this.actors.userInfo = null;

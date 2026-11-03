@@ -1,4 +1,4 @@
-import { AlwaysDepth, CanvasTexture, DepthTexture, DoubleSide, LessEqualDepth, NearestFilter, NoColorSpace, Sprite, SpriteMaterial, Uniform, Vector2 } from "three";
+import { CanvasTexture, DepthTexture, DoubleSide, NearestFilter, NoColorSpace, Sprite, SpriteMaterial, Uniform, Vector2 } from "three";
 import { FontType_T, NAMEPLATE_FONT, type default as NWindowCanvas } from "../nwindow/nwindow-canvas";
 
 export class Nameplate extends Sprite {
@@ -37,7 +37,11 @@ if (opaqueDepthEnabled) {
     #else
         float nameplateDepth = gl_FragCoord.z;
     #endif
-    if (nameplateDepth > texture2D(opaqueDepth, gl_FragCoord.xy / opaqueDepthSize).r) discard;
+    #ifdef USE_REVERSED_DEPTH_BUFFER
+        if (nameplateDepth < texture2D(opaqueDepth, gl_FragCoord.xy / opaqueDepthSize).r) discard;
+    #else
+        if (nameplateDepth > texture2D(opaqueDepth, gl_FragCoord.xy / opaqueDepthSize).r) discard;
+    #endif
 }`);
         };
     }
@@ -46,7 +50,7 @@ if (opaqueDepthEnabled) {
         this.opaqueDepth.value = texture;
         this.opaqueDepthSize.value.set(width, height);
         this.opaqueDepthEnabled.value = !!texture;
-        this.material.depthFunc = texture ? AlwaysDepth : LessEqualDepth;
+        this.material.depthTest = !texture;
     }
 
     protected createTexture() {

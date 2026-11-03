@@ -29,8 +29,8 @@ type TerrainInfoDecodeResult_T = { object: IBaseObjectDecodeInfo & { children: I
 
 const MAP_SIZE_X = 128 * 256;
 const MAP_SIZE_Y = 128 * 256;
-const cacheTextureRgba = new WeakMap<UTexture, Uint8Array>();
-const cacheTextureData = new WeakMap<UTexture, Uint8Array>();
+const cacheTextureRgba = new WeakMap<object, Uint8Array>();
+const cacheTextureData = new WeakMap<object, Uint8Array>();
 
 const tmpFaceNormal1: Vector3Arr = [0, 0, 0];
 const tmpFaceNormal2: Vector3Arr = [0, 0, 0];
@@ -54,10 +54,10 @@ function getTerrainFaceNormal(a: FVector, b: FVector, c: FVector, normal: Vector
     return normalizeTerrainFace(normalizeTerrainFace(normal));
 }
 
-function getTextureRgba(texture: UTexture): Uint8Array {
+function getTextureRgba(texture: any): Uint8Array {
     if (cacheTextureRgba.has(texture)) return cacheTextureRgba.get(texture);
 
-    const data = texture.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array;
+    const data = texture.data;
     let rgba: Uint8Array;
 
     switch (texture.format) {
@@ -72,14 +72,14 @@ function getTextureRgba(texture: UTexture): Uint8Array {
     return rgba;
 }
 
-function getTextureRed(texture: UTexture, offset: number): number {
+function getTextureRed(texture: any, offset: number): number {
     if (!(offset >= 0 && offset < texture.width * texture.height)) return undefined;
 
     const isDxt1 = texture.format === ETextureFormat.TEXF_DXT1;
     let data = cacheTextureData.get(texture);
 
     if (!data) {
-        data = texture.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array;
+        data = texture.data;
         if (data.length < ((texture.width + 3) >> 2) * ((texture.height + 3) >> 2) * (isDxt1 ? 8 : 16)) throw new Error(`Truncated DXT terrain map '${texture.name}'.`);
         cacheTextureData.set(texture, data);
     }
@@ -128,6 +128,7 @@ class FTerrainRenderCombination {
 }
 
 export abstract class ATerrainInfo extends AInfo {
+    protected readonly cacheTextureSources = new WeakMap<UTexture, any>();
     declare public readonly terrainMap: UTexture;
     declare public readonly terrainScale: FVector;
     declare public readonly layers: UTerrainLayer[];
@@ -314,14 +315,26 @@ export abstract class ATerrainInfo extends AInfo {
     public isInvertedTerrain() { return !!this.inverted; }
 
 
+    public getTextureSource(texture: UTexture, pixels: boolean = true): any {
+        let source = this.cacheTextureSources.get(texture);
+        if (source && (!pixels || !source.data?.isLibraryChunk)) return source;
+        const builder = (this.pkg.loader as any).decodeLibraryBuilder as DecodeLibraryBuilder;
+        source = builder ? builder.getTextureSource(texture, pixels) : texture.loadSelf().getSourceDecodeInfo();
+        this.cacheTextureSources.set(texture, source);
+        return source;
+    }
+
+    protected getTextureMipCount(texture: any): number | undefined {
+        return texture && typeof texture.getSourceDecodeInfo === "function" ? this.getTextureSource(texture, false).mipCount : undefined;
+    }
+
     public getLayerAlpha(x: number, y: number, layer: number, alphaMap: UTexture) {
-        const texture = alphaMap
+        const reference = alphaMap
             ? alphaMap
             : (layer === -1 ? this.terrainMap : this.layers[layer].alphaMap);
 
-        if (!texture) return 0;
-
-        texture.loadSelf();
+        if (!reference) return 0;
+        const texture = this.getTextureSource(reference);
 
         switch (texture.format) {
             case ETextureFormat.TEXF_L8:
@@ -340,19 +353,19 @@ export abstract class ATerrainInfo extends AInfo {
             y = Math.floor(y * texture.height / this.heightmapY);
         }
 
-        if (texture.mipmaps.getElemCount() <= 0) return 0;
+        if (texture.mipCount <= 0) return 0;
 
-        const data = texture.mipmaps.getElem(0)?.dataArray;
+        const data = texture.data;
 
         if (!data) return 0;
 
         const offset = x + y * texture.width;
 
         switch (texture.format) {
-            case ETextureFormat.TEXF_L8: return data.getElem(offset);
-            case ETextureFormat.TEXF_P8: return texture.palette.loadSelf().colors.getElem(data.getElem(offset)).r;
+            case ETextureFormat.TEXF_L8: return data[offset];
+            case ETextureFormat.TEXF_P8: return texture.paletteRed[data[offset]];
             case ETextureFormat.TEXF_RGB8:
-            case ETextureFormat.TEXF_RGBA8: return data.getElem(offset * 4 + 3);
+            case ETextureFormat.TEXF_RGBA8: return data[offset * 4 + 3];
             case ETextureFormat.TEXF_DXT1:
             case ETextureFormat.TEXF_DXT3:
             case ETextureFormat.TEXF_DXT5: return getTextureRed(texture, offset);
@@ -361,22 +374,22 @@ export abstract class ATerrainInfo extends AInfo {
     }
 
     public getTextureColor(x: number, y: number, texture: UTexture): Vector3Arr {
-        texture = texture.loadSelf();
-        x = Math.floor(x * texture.width / this.heightmapX);
-        y = Math.floor(y * texture.height / this.heightmapY);
+        const source = this.getTextureSource(texture);
+        x = Math.floor(x * source.width / this.heightmapX);
+        y = Math.floor(y * source.height / this.heightmapY);
 
-        if (texture.mipmaps.getElemCount() <= 0) return [0, 0, 0];
+        if (source.mipCount <= 0) return [0, 0, 0];
 
-        const data = texture.mipmaps.getElem(0).dataArray;
-        const offset = (x + y * texture.width) * 4;
+        const data = source.data;
+        const offset = (x + y * source.width) * 4;
 
-        switch (texture.format) {
+        switch (source.format) {
             case ETextureFormat.TEXF_RGB8:
-            case ETextureFormat.TEXF_RGBA8: return [data.getElem(offset + 2) / 255, data.getElem(offset + 1) / 255, data.getElem(offset) / 255];
+            case ETextureFormat.TEXF_RGBA8: return [data[offset + 2] / 255, data[offset + 1] / 255, data[offset] / 255];
             case ETextureFormat.TEXF_DXT1:
             case ETextureFormat.TEXF_DXT3:
             case ETextureFormat.TEXF_DXT5: {
-                const rgba = getTextureRgba(texture);
+                const rgba = getTextureRgba(source);
                 return [rgba[offset] / 255, rgba[offset + 1] / 255, rgba[offset + 2] / 255];
             }
             default: return [0, 0, 0];
@@ -537,13 +550,15 @@ export abstract class ATerrainInfo extends AInfo {
 
             if (!layer || !layer.map && !layer.alphaMap) continue;
 
-            if (layer.alphaMap && layer.alphaMap.loadSelf().format === ETextureFormat.TEXF_P8) {
-                const palette = layer.alphaMap.palette.loadSelf();
-
-                for (let p = 0; p < 256; p++) {
-                    const colr = palette.colors[p];
-
-                    colr.a = colr.r;
+            if (layer.alphaMap && this.getTextureSource(layer.alphaMap, false).format === ETextureFormat.TEXF_P8) {
+                const builder = (this.pkg.loader as any).decodeLibraryBuilder as DecodeLibraryBuilder;
+                if (builder && builder.isPackageCaching()) builder.setAlphaPalette(layer.alphaMap);
+                else {
+                    const palette = layer.alphaMap.loadSelf().palette.loadSelf();
+                    for (let p = 0; p < 256; p++) {
+                        const colr = palette.colors[p];
+                        colr.a = colr.r;
+                    }
                 }
             }
 
@@ -596,24 +611,33 @@ export abstract class ATerrainInfo extends AInfo {
     }
 
     public getGlobalVertex(x: number, y: number) { return x + y * this.heightmapX; }
-    protected heightmapToWorld(H: FVector) { return H.transformPointBy(this.toWorld); }
+    protected heightmapToWorld(x: number, y: number, z: number) {
+        const coords = this.toWorld;
+
+        x -= coords.origin.x;
+        y -= coords.origin.y;
+        z -= coords.origin.z;
+
+        return FVector.make(x * coords.xAxis.x + y * coords.xAxis.y + z * coords.xAxis.z, x * coords.yAxis.x + y * coords.yAxis.y + z * coords.yAxis.z, x * coords.zAxis.x + y * coords.zAxis.y + z * coords.zAxis.z);
+    }
     protected getHeightmap(x: number, y: number) {
 
         x = Math.min(x, this.heightmapX - 1);
         y = Math.min(y, this.heightmapY - 1);
 
-        const width = this.terrainMap.width;
-        const array = this.terrainMap.mipmaps[0].dataArray;
+        const source = this.getTextureSource(this.terrainMap);
+        const width = source.width;
+        const array = source.data;
 
-        switch (this.terrainMap.format) {
+        switch (source.format) {
             case ETextureFormat.TEXF_G16:
                 const offset = (x + y * width) * 2;     // our byte array is uint16
-                const bitA = array.getElem(offset);     // least significant bit
-                const bitB = array.getElem(offset + 1); // most significant bit
+                const bitA = array[offset];     // least significant bit
+                const bitB = array[offset + 1]; // most significant bit
 
                 return (bitB << 8) + bitA;
             case ETextureFormat.TEXF_P8:
-                return 256 * this.terrainMap.mipmaps[0].dataArray.getElem(x + y * width);
+                return 256 * array[x + y * width];
             case ETextureFormat.TEXF_RGB8:
                 // L2 implementation has more assembly compared to UE
                 break;
@@ -676,13 +700,13 @@ export abstract class ATerrainInfo extends AInfo {
         const vertices = new Array<FVector>(vCount);
         const faceNormals = new Float32Array(vCount * 6);
 
-        const terrain = this.terrainMap.loadSelf();
+        const terrain = this.getTextureSource(this.terrainMap);
 
         // debugger;
 
         for (let y = startY; y < endY; y++) {
             for (let x = startX; x < endX; x++) {
-                const vertex = this.heightmapToWorld(FVector.make(x, y, this.getHeightmap(x, y)));
+                const vertex = this.heightmapToWorld(x, y, this.getHeightmap(x, y));
                 vertex.x = Math.fround(vertex.x);
                 vertex.y = Math.fround(vertex.y);
                 vertex.z = Math.fround(vertex.z);
@@ -824,7 +848,7 @@ export abstract class ATerrainInfo extends AInfo {
 
             // non-texture maps (shaders) have no mipmaps, only skip when both sides
             // are plain textures without any texture data
-            if (layer.map?.loadSelf().mipmaps?.getElemCount() === 0 && layer.alphaMap?.loadSelf().mipmaps?.getElemCount() === 0) {
+            if (this.getTextureMipCount(layer.map) === 0 && this.getTextureMipCount(layer.alphaMap) === 0) {
                 layers[k] = { map: null, alphaMap: null };
                 continue;
             }

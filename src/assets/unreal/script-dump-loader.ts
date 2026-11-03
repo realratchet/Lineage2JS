@@ -68,9 +68,15 @@ export type IScriptClassDecodeInfo = IScriptStateDecodeInfo & {
 
 export type ScriptPropertyValue_T = number | boolean | string | null | ScriptPropertyValue_T[] | { [key: string]: ScriptPropertyValue_T };
 
+type ScriptReferences_T = Pick<IScriptClassDecodeInfo, "enums" | "classParents" | "classAliases" | "objectClasses">;
+
 const cacheFunctions = new WeakMap<UFunction, IScriptFunctionDecodeInfo>();
 const cacheScriptObjects = new WeakMap<UObject, DecodeLibrary["scriptObjects"][string]>();
+const cacheObjectClassParents = new WeakMap<UClass, Record<string, string | null>>();
+const cachePackageObjects = new WeakMap<object, Map<string, DecodeLibrary["scriptObjects"][string]>>();
+const packageClassParents = { "core.Package": "core.Object", "core.Object": null };
 const cacheScriptClasses = new WeakMap<DecodeLibrary, WeakSet<IScriptClassDecodeInfo>>();
+const cacheScriptReferences = new WeakMap<UStruct, { references: ScriptReferences_T, objects: DecodeLibrary["scriptObjects"] }>();
 
 function getOwnerId(id: string): string {
     const index = id.lastIndexOf(".");
@@ -96,14 +102,20 @@ function getObjectClass(object: UObject): UClass {
 
 export function dumpObjectClass(object: UObject) {
     if (cacheScriptObjects.has(object)) return cacheScriptObjects.get(object)!;
-    const cls = getObjectClass(object), classParents: Record<string, string | null> = {};
-    let parent = cls;
+    const cls = getObjectClass(object);
+    let classParents = cacheObjectClassParents.get(cls);
 
-    while (parent) {
-        const id = getObjectId(parent), next = parent.exp.idSuper ? (parent as any).pkg.fetchObject(parent.exp.idSuper) as UClass : null;
+    if (!classParents) {
+        classParents = {};
+        let parent = cls;
 
-        classParents[id] = next ? getObjectId(next) : null;
-        parent = next;
+        while (parent) {
+            const id = getObjectId(parent), next = parent.exp.idSuper ? (parent as any).pkg.fetchObject(parent.exp.idSuper) as UClass : null;
+
+            classParents[id] = next ? getObjectId(next) : null;
+            parent = next;
+        }
+        cacheObjectClassParents.set(cls, classParents);
     }
     // Core.dll registers Class in Core at 0x10183d40..0x10183d8e.
     const path = object.isClass && object.name === "__native__.Class" ? "core.Class" : getObjectId(object), info: DecodeLibrary["scriptObjects"][string] = { path, classId: getObjectId(cls), classParents, outer: null };
@@ -120,20 +132,37 @@ export function dumpObjectClass(object: UObject) {
 }
 
 function dumpObjectOuter(pkg: any, index: number, root: string): DecodeLibrary["scriptObjects"][string] {
+    let objects = cachePackageObjects.get(pkg);
+
+    if (!objects) cachePackageObjects.set(pkg, objects = new Map());
+    const key = `${root}:${index}`, cached = objects.get(key);
+
+    if (cached) return cached;
     const entry = index > 0 ? pkg.exports[index - 1] : index < 0 ? pkg.getImportEntry(index) : null;
     const type = index > 0 ? pkg.getPackageName(entry.idClass) : entry ? entry.className : "Package";
 
     if (type !== "Package") return dumpObjectClass(pkg.fetchObject(index));
     const isRoot = !index || index < 0 && !entry.idPackage;
 
-    return { path: isRoot ? root : pkg.getObjectPath(index), classId: "core.Package", classParents: { "core.Package": "core.Object", "core.Object": null }, outer: isRoot ? null : dumpObjectOuter(pkg, entry.idPackage, root) };
+    const info = { path: isRoot ? root : pkg.getObjectPath(index), classId: "core.Package", classParents: packageClassParents, outer: isRoot ? null : dumpObjectOuter(pkg, entry.idPackage, root) };
+
+    objects.set(key, info);
+    return info;
+}
+
+function dumpPropertyArray(value: ArrayLike<any>): ScriptPropertyValue_T[] {
+    const result = new Array<ScriptPropertyValue_T>(value.length);
+
+    for (let i = 0; i < value.length; i++) result[i] = dumpPropertyValue(value[i]);
+
+    return result;
 }
 
 function dumpPropertyValue(value: any): ScriptPropertyValue_T {
     if (value === null || value === undefined) return null;
     if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") return value;
-    if (Array.isArray(value)) return [...value].map(dumpPropertyValue);
-    if (typeof value.getTypedArray === "function") return Array.from(value.getTypedArray(), dumpPropertyValue);
+    if (Array.isArray(value)) return dumpPropertyArray(value);
+    if (typeof value.getTypedArray === "function") return dumpPropertyArray(value.getTypedArray());
     if (typeof value.getElements === "function") return value.getElements().map(dumpPropertyValue);
     if (typeof value.toArray === "function") return value.toArray().map(dumpPropertyValue);
     if (value.constructor?.plainStructFields || value.constructor?.hostClass?.isStruct && !value.constructor.hostClass.isClass) {
@@ -456,7 +485,16 @@ function getConstructedClasses(script: UStruct): UClass[] {
 }
 
 function dumpScriptReferences(script: UStruct, library: DecodeLibrary) {
+    const cached = cacheScriptReferences.get(script);
+
+    if (cached) {
+        for (const [id, info] of Object.entries(cached.objects))
+            if (!library.scriptObjects[id]?.properties) library.scriptObjects[id] = info;
+        return cached.references;
+    }
+
     const enums: Record<string, string[]> = {}, classParents: Record<string, string | null> = {}, classAliases: Record<string, string> = {}, objectClasses: Record<string, string> = {};
+    const objects: DecodeLibrary["scriptObjects"] = {};
     const seenFields = new Set<UProperty>();
 
     function pullObject(object: UObject, id = getObjectId(object)): void {
@@ -464,7 +502,7 @@ function dumpScriptReferences(script: UStruct, library: DecodeLibrary) {
 
         const info = dumpObjectClass(object);
 
-        library.scriptObjects[id.toLowerCase()] = library.scriptObjects[info.path.toLowerCase()] = info;
+        objects[id.toLowerCase()] = objects[info.path.toLowerCase()] = info;
         objectClasses[id] = getObjectId(cls);
         pullClass(cls);
     }
@@ -548,7 +586,12 @@ function dumpScriptReferences(script: UStruct, library: DecodeLibrary) {
     pullStruct(script);
     for (const value of script.propertyDict.values()) pullValue(value);
     for (const field of script.childPropFields.values()) pullValue(field.loadSelf().getDefaultValue());
-    return { enums, classParents, classAliases, objectClasses };
+    const references = { enums, classParents, classAliases, objectClasses };
+
+    for (const [id, info] of Object.entries(objects))
+        if (!library.scriptObjects[id]?.properties) library.scriptObjects[id] = info;
+    cacheScriptReferences.set(script, { references, objects });
+    return references;
 }
 
 export function pullScriptClasses(library: DecodeLibrary, classes: Iterable<UClass>): void {

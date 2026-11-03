@@ -1,9 +1,9 @@
-type WebLockState_T<T> = { callback: () => Promise<T>, result: T, error: any, failed: boolean };
+type WebLockState_T<T> = { callback: (lock: Lock) => Promise<T>, result: T, error: any, failed: boolean };
 
-function createLockCallback<T>(state: WebLockState_T<T>): () => Promise<void> {
-    return async function () {
+function createLockCallback<T>(state: WebLockState_T<T>): (lock: Lock) => Promise<void> {
+    return async function (lock: Lock) {
         try {
-            state.result = await state.callback();
+            state.result = await state.callback(lock);
         } catch (error) {
             state.failed = true;
             state.error = error;
@@ -11,7 +11,7 @@ function createLockCallback<T>(state: WebLockState_T<T>): () => Promise<void> {
     };
 }
 
-async function requestWebLock<T>(name: string, callback: () => Promise<T>, options: LockOptions = {}): Promise<T> {
+async function requestWebLock<T>(name: string, callback: (lock: Lock) => Promise<T>, options: LockOptions = {}): Promise<T> {
     const state: WebLockState_T<T> = { callback, result: undefined, error: undefined, failed: false };
 
     try {

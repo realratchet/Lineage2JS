@@ -1,7 +1,8 @@
-import { FORMAT_VERSION, serializeLibrary, serializeLibraryBlob, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type SeekableLibrary_T } from "./library-serializer";
+import { FORMAT_VERSION, serializeLibrary, serializeLibraryBlob, serializeLibraryParts, isSerializedLibrary, openLibraryFile, hydrateLibraryFile, type LibraryBytes_T, type SeekableLibrary_T } from "./library-serializer";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import { getAssetSourceId } from "../asset-source";
 import { openAssetCatalog, storeAssetCatalog } from "./asset-catalog";
+import { restorePackageAssets } from "./package-cache";
 import requestWebLock from "../web-lock";
 
 const CACHE_TTL_DAYS = 7;
@@ -17,7 +18,7 @@ function getCacheVersion(settings: LoadSettings_T): number {
 }
 
 function hashSettings(settings: LoadSettings_T): string {
-    const json = JSON.stringify({ ...settings, formatVersion: FORMAT_VERSION, scriptVersion: 14, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
+    const json = JSON.stringify({ ...settings, formatVersion: FORMAT_VERSION, scriptVersion: 14, packageVersion: 8, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)
@@ -27,11 +28,11 @@ function hashSettings(settings: LoadSettings_T): string {
 }
 
 function isAssetCatalog(sectorName: string): boolean {
-    return ["npc_runtime", "skill_visuals", "effect_templates", "character_effects", "character_sounds", "character_equipment"].includes(sectorName);
+    return ["npc_runtime", "skill_visuals", "effect_templates", "character_effects", "character_sounds", "character_equipment", "character_parts"].includes(sectorName);
 }
 
 function cacheFileName(sectorName: string, settings: LoadSettings_T): string {
-    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${isAssetCatalog(sectorName) ? ".a1" : ""}.bin`;
+    return `${sectorName}.v${getCacheVersion(settings)}.${hashSettings(settings)}${isAssetCatalog(sectorName) ? ".a1" : /^\d+_\d+$/.test(sectorName) ? ".p1" : ""}.bin`;
 }
 
 async function getCacheDir(create: boolean): Promise<FileSystemDirectoryHandle> {
@@ -86,7 +87,7 @@ export async function loadCachedLibrary(sectorName: string, settings: LoadSettin
     }
 }
 
-export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T): Promise<SeekableLibrary_T | null> {
+export async function openCachedLibrary(sectorName: string, settings: LoadSettings_T, preparePackageAsset: (value: any, name: string, uuid: string) => any = null): Promise<SeekableLibrary_T | null> {
     if (!isCacheEnabled(settings)) return null;
 
     return requestWebLock(cacheFileName(sectorName, settings), async () => {
@@ -95,7 +96,10 @@ export async function openCachedLibrary(sectorName: string, settings: LoadSettin
         if (!file) return null;
 
         try {
-            return isAssetCatalog(sectorName) ? await openAssetCatalog(file) : await openLibraryFile(file);
+            const seekable = isAssetCatalog(sectorName) ? await openAssetCatalog(file) : await openLibraryFile(file);
+            seekable.packageBuffers = new Set();
+            if (!await restorePackageAssets(seekable.library, settings, preparePackageAsset, seekable.packageBuffers)) return null;
+            return seekable;
         } catch (e) {
             if (isAssetCatalog(sectorName)) {
                 const dir = await getCacheDir(false);
@@ -152,11 +156,11 @@ export async function storeCachedLibraryDurable(sectorName: string, settings: Lo
     return requestWebLock(cacheFileName(sectorName, settings), async () => {
         if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
 
-        const bytes = serializeLibraryBlob(library, seekable);
+        const bytes = /Firefox\//.test(navigator.userAgent) ? serializeLibraryParts(library, seekable) : serializeLibraryBlob(library, seekable);
 
         await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
 
-        return bytes.size;
+        return bytes instanceof Blob ? bytes.size : bytes.byteLength;
     });
 }
 
@@ -166,7 +170,7 @@ export async function storeCachedLibraryBufferDurable(sectorName: string, settin
     await writeCacheFile(cacheFileName(sectorName, settings), sectorName, new Uint8Array(buffer));
 }
 
-async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array | Blob, seekable: SeekableLibrary_T = null): Promise<void> {
+async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8Array | Blob | LibraryBytes_T, seekable: SeekableLibrary_T = null): Promise<void> {
     const dir = await getCacheDir(true);
     const temporaryName = `${fileName}.tmp`;
 
@@ -174,7 +178,7 @@ async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8
         const temporary = await dir.getFileHandle(temporaryName, { create: true });
         const writable = await temporary.createWritable();
 
-        await writable.write(bytes);
+        await writeCacheBytes(writable, bytes);
         await writable.close();
         if (typeof (temporary as any).move === "function") {
             await (temporary as any).move(fileName);
@@ -186,11 +190,46 @@ async function writeCacheFile(fileName: string, sectorName: string, bytes: Uint8
     const handle = await dir.getFileHandle(fileName, { create: true });
     const writable = await handle.createWritable();
 
-    await writable.write(bytes);
+    await writeCacheBytes(writable, bytes);
     await writable.close();
     if (seekable) await dir.removeEntry(temporaryName);
 
-    console.log(`[decode-cache] cached sector '${sectorName}' (${((bytes instanceof Blob ? bytes.size : bytes.length) / 1024 / 1024).toFixed(1)} MB)`);
+    console.log(`[decode-cache] cached sector '${sectorName}' (${((bytes instanceof Blob ? bytes.size : bytes.byteLength) / 1024 / 1024).toFixed(1)} MB)`);
+}
+
+async function writeCacheBytes(writable: FileSystemWritableFileStream, bytes: Uint8Array | Blob | LibraryBytes_T): Promise<void> {
+    if ("parts" in bytes) {
+        const buffer = new Uint8Array(Math.min(bytes.byteLength, 4 * 1024 * 1024));
+        let used = 0;
+
+        for (const part of bytes.parts) {
+            const size = part instanceof Blob ? part.size : part.byteLength;
+
+            for (let offset = 0; offset < size;) {
+                const length = Math.min(size - offset, buffer.length - used);
+                const value = part instanceof Blob ? new Uint8Array(await part.slice(offset, offset + length).arrayBuffer()) : part.subarray(offset, offset + length);
+
+                buffer.set(value, used);
+                used += length;
+                offset += length;
+                if (used === buffer.length) {
+                    await writable.write(buffer);
+                    used = 0;
+                }
+            }
+        }
+
+        if (used) await writable.write(buffer.subarray(0, used));
+        return;
+    }
+
+    if (bytes instanceof Blob && /Firefox\//.test(navigator.userAgent)) {
+        for (let offset = 0; offset < bytes.size; offset += 4 * 1024 * 1024)
+            await writable.write(await bytes.slice(offset, offset + 4 * 1024 * 1024).arrayBuffer());
+        return;
+    }
+
+    await writable.write(bytes);
 }
 
 async function writeCacheFileSafe(fileName: string, sectorName: string, bytes: Uint8Array): Promise<void> {
@@ -256,4 +295,70 @@ export function revokeSoundUri(entry: any): void {
     const uri = getMintedSoundUri(entry);
 
     if (uri) URL.revokeObjectURL(uri);
+}
+
+function hashPackageSettings(settings: LoadSettings_T): string {
+    return hashSettings({ cache: settings.cache, textures: "auto", rgbaTextures: false });
+}
+
+export async function getPackageCacheDir(settings: LoadSettings_T, create: boolean, path: string): Promise<FileSystemDirectoryHandle> {
+    const dir = await getCacheDir(create);
+    const packages = await dir.getDirectoryHandle(`packages.v${getCacheVersion(settings)}.${hashPackageSettings(settings)}`, { create });
+    return packages.getDirectoryHandle(path.slice(path.lastIndexOf(".") + 1).toLowerCase(), { create });
+}
+
+function packageFileName(path: string): string {
+    return path.slice(path.lastIndexOf("/") + 1).replace(/\.[^.]+$/, ".bin").toLowerCase();
+}
+
+export async function loadCachedPackage(path: string, settings: LoadSettings_T): Promise<any> {
+    return readCachedPackage(path, settings, openLibraryFile);
+}
+
+export async function getCachedPackageFile(path: string, settings: LoadSettings_T): Promise<File | null> {
+    return readCachedPackage(path, settings, file => file);
+}
+
+async function readCachedPackage(path: string, settings: LoadSettings_T, read: (file: File) => any): Promise<any> {
+    if (!isCacheEnabled(settings) || settings._packageCache === false) return null;
+    try {
+        const dir = await getPackageCacheDir(settings, false, path);
+        const handle = await dir.getFileHandle(packageFileName(path));
+        return await requestWebLock(`package:${path}:${hashPackageSettings(settings)}`, async () => {
+            const file = await handle.getFile();
+            return file.size ? read(file) : null;
+        });
+    } catch (error) {
+        if (error instanceof DOMException && error.name === "NotFoundError") return null;
+        throw error;
+    }
+}
+
+export async function storeCachedPackage(path: string, settings: LoadSettings_T, data: any): Promise<void> {
+    if (!isCacheEnabled(settings) || settings._packageCache === false) return;
+    const sourcePixels = [];
+    const entries: Record<string, any> = {};
+    for (const [key, entry] of Object.entries(data.entries) as [string, any][]) {
+        const source = entry.result?.source;
+        if (!source) { entries[key] = entry; continue; }
+        const pixelIndex = sourcePixels.length;
+        const pixels = source.pixelIndex === undefined ? source : data.sourcePixels[source.pixelIndex];
+        sourcePixels.push({ data: pixels.data, paletteRed: pixels.paletteRed });
+        entries[key] = { ...entry, result: { ...entry.result, source: { ...source, data: null, paletteRed: null, pixelIndex } } };
+    }
+    const stored = { ...data, entries, sourcePixels };
+    const bytes = serializeLibraryBlob(stored);
+    await requestWebLock(`package:${path}:${hashPackageSettings(settings)}`, async () => {
+        const dir = await getPackageCacheDir(settings, true, path);
+        const name = packageFileName(path);
+        const handle = await dir.getFileHandle(name, { create: true });
+        const writable = await handle.createWritable();
+        try {
+            await writeCacheBytes(writable, bytes);
+            await writable.close();
+        } catch (error) {
+            try { await writable.abort(); } catch { }
+            throw error;
+        }
+    });
 }

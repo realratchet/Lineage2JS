@@ -3,6 +3,7 @@ import { Matrix4, ShaderMaterial, Uniform, UniformsLib, UniformsUtils, Vector3 }
 export const GLOBAL_UNIFORMS = Object.freeze(UniformsUtils.merge([
     UniformsLib.fog, {
         globalTimeSeconds: new Uniform(0),
+        levelTimeSeconds: new Uniform(0),
         staticMeshSunAmbient: new Uniform(new Vector3()),
         staticMeshHardwareSunColor: new Uniform(new Vector3()),
         staticMeshHardwareSunDirection: new Uniform(new Vector3()),

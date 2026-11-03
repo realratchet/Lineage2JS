@@ -1,4 +1,10 @@
-import type { UClass } from "@l2js/core";
+import { v5 as seededUuid } from "uuid";
+import StringSet from "./utils/string-set";
+import type PackageCache from "../decode-worker/package-cache";
+import FBox from "./un-box";
+import FVector from "./un-vector";
+import type UTexture from "./un-texture";
+import type { UClass, APackage } from "@l2js/core";
 import type { UObject } from "./un-object";
 import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
 import pullScriptDumps, { dumpObjectClass, dumpObjectScriptProperties, pullScriptClasses, pullScriptClassFunctions } from "./script-dump-loader";
@@ -64,37 +70,123 @@ export class DecodeLibraryBuilder {
     protected readonly cacheScriptDefaults = new WeakMap<Function, Map<string, any>>();
     protected readonly cacheSharedScriptProperties = new WeakMap<Function, SharedScriptProperties_T>();
     protected readonly settings: LoadSettings_T;
+    protected readonly packageCache: PackageCache;
+    protected readonly textureSources = new Map<string, any>();
+    protected readonly textureFrames = new Map<string, any>();
+    protected readonly alphaPalettes = new Set<string>();
+    protected readonly materialSizes = new Map<string, { width: number, height: number }>();
+    protected readonly staticMeshMetadata = new Map<string, any>();
 
-    public constructor(library: DecodeLibrary, settings: LoadSettings_T) {
+    public constructor(library: DecodeLibrary, settings: LoadSettings_T, packageCache: PackageCache = null) {
 
         this.library = library;
         this.settings = settings;
+        this.packageCache = packageCache?.isEnabled() ? packageCache : null;
     }
 
     public getSettings() { return this.settings; }
+
+    public isPackageCaching(): boolean { return !!this.packageCache; }
 
     public isLoadingExtendedBoneInfluences() { return this.settings.loadExtendedBoneInfluences !== false; }
 
     public pullMaterial(material: UMaterial): string {
         if (!material) return null;
 
-        material = material.loadSelf();
-
-        if (material.uuid in this.library.materials) return material.uuid;
         if (this.materialsLoading.has(material.uuid)) return material.uuid;
+        const cached = this.packageCache?.read(material, "material", this.library);
+        if (cached !== undefined) {
+            this.materialSizes.set(material.uuid, cached.textureSize);
+            this.applyAlphaPalette(cached.uuid, cached.source);
+            return cached.uuid;
+        }
+        if (material.uuid in this.library.materials) return material.uuid;
+        this.packageCache?.begin(material, "material", this.library);
+        material = material.loadSelf();
 
         this.materialsLoading.add(material.uuid);
 
         const info = material.getDecodeInfo(this);
+        if (this.packageCache && typeof (material as any).getTextureFrameDecodeInfo === "function" && !this.textureFrames.has(material.uuid))
+            (material as UTexture).getTextureFrameDecodeInfo(this);
+        const textureSize = typeof material.getTextureSize === "function" ? material.getTextureSize() : null;
+        const source = this.packageCache && typeof (material as any).getSourceDecodeInfo === "function" ? (material as UTexture).getSourceDecodeInfo(this) : null;
+        this.materialSizes.set(material.uuid, textureSize);
 
         this.materialsLoading.delete(material.uuid);
 
-        if (typeof info === "string") return info;
-        if (!info) return null;
+        if (typeof info === "string" || !info) {
+            this.packageCache?.end(material, this.library, { uuid: info || null, textureSize, source });
+            return info || null;
+        }
 
         this.library.materials[material.uuid] = info;
+        this.applyAlphaPalette(material.uuid, source);
+        this.packageCache?.end(material, this.library, { uuid: material.uuid, textureSize, source });
 
         return material.uuid;
+    }
+
+    public getTextureSource(texture: UTexture, pixels: boolean = true): any {
+        let source = this.textureSources.get(texture.uuid);
+        if (source && (!pixels || !source.data?.isLibraryChunk)) return source;
+        source = this.packageCache?.readTextureSource(texture, pixels);
+        if (!source) source = texture.loadSelf().getSourceDecodeInfo(this);
+        this.textureSources.set(texture.uuid, source);
+        return source;
+    }
+
+    public beginTextureFrame(texture: UTexture): void {
+        this.packageCache?.read(texture, "frame", this.library);
+        this.packageCache?.begin(texture, "frame", this.library);
+    }
+
+    public setTextureFrame(texture: UTexture, info: any, next: UTexture): void {
+        if (!this.packageCache) return;
+        this.textureFrames.set(texture.uuid, info);
+        this.packageCache.addMaterialDependency(info.detail, this.library);
+        this.packageCache.end(texture, this.library, { info, next: next ? { path: (next as any).pkg.path, index: next.exportIndex } : null });
+    }
+
+    public getCachedTextureFrame(texture: UTexture): { info: any, next: UTexture } | null {
+        const cached = this.packageCache?.readTextureFrame(texture, this.library) || null;
+        if (cached) this.textureFrames.set(texture.uuid, cached.info);
+        return cached;
+    }
+
+    public getCachedTextureSource(texture: UTexture): any {
+        return this.packageCache?.readTextureSource(texture, false) || null;
+    }
+
+    public setAlphaPalette(texture: UTexture): void {
+        const source = this.getTextureSource(texture, false);
+        if (source.paletteId) this.alphaPalettes.add(source.paletteId);
+    }
+
+    protected applyAlphaPalette(uuid: string, source: any): void {
+        if (!uuid || !source || !source.paletteId || !this.alphaPalettes.size) return;
+        const material: any = this.library.materials[uuid];
+        if (!material) return;
+        const textures = material.materialType === "sprite" ? material.sprites : [material];
+        let changed = false;
+        const result = textures.map(texture => {
+            if (!this.alphaPalettes.has(source.palettes[texture.name]) || texture.textureType !== "rgba") return texture;
+            const data = new Uint8Array(texture.buffer);
+            let differs = false;
+            for (let i = 0; i < data.length; i += 4) if (data[i] !== data[i + 3]) { differs = true; break; }
+            if (!differs) return texture;
+            const copy = data.slice();
+            for (let i = 0; i < copy.length; i += 4) copy[i + 3] = copy[i];
+            changed = true;
+            return { ...texture, buffer: copy.buffer };
+        });
+        if (changed) this.library.materials[uuid] = material.materialType === "sprite" ? { ...material, sprites: result } : result[0];
+    }
+
+    public getMaterialTextureSize(material: UMaterial): { width: number, height: number } | null {
+        if (!material) return null;
+        if (!this.materialSizes.has(material.uuid)) this.pullMaterial(material);
+        return this.materialSizes.has(material.uuid) ? this.materialSizes.get(material.uuid) : material.loadSelf().getTextureSize();
     }
 
     public pullStaticLightmap(lightmap: FStaticLightmapTexture): string {
@@ -106,9 +198,17 @@ export class DecodeLibraryBuilder {
     }
 
     public pullStaticMesh(mesh: UStaticMesh, modifiers?: string[]): IStaticMeshObjectDecodeInfo {
+        const kind = "mesh";
+        const cached = this.packageCache?.read(mesh, kind, this.library);
+        if (cached !== undefined) {
+            this.staticMeshMetadata.set(mesh.uuid, cached.metadata);
+            for (const uuid of cached.colorMaterials) if (this.library.materials[uuid]) this.library.materials[uuid].color = true;
+            return this.getStaticMeshVariant(cached.object, modifiers);
+        }
+        this.packageCache?.begin(mesh, kind, this.library);
         mesh = mesh.loadSelf();
 
-        const result = mesh.getDecodeInfo(this, modifiers);
+        const result = mesh.getDecodeInfo(this, this.packageCache ? null : modifiers);
 
         if (result.geometry) {
             this.library.geometryInstances[result.object.geometry] = 0;
@@ -124,12 +224,53 @@ export class DecodeLibraryBuilder {
             if (material) material.color = true;
         }
 
-        return result.object;
+        const metadata = { renderBounds: mesh.getRenderBoundingBox().getDecodeInfo(), collisionBounds: (mesh as any).collisionModel ? (mesh as any).collisionModel.loadSelf().getCollisionBoundingBox().getDecodeInfo() : null, useVertexColor: mesh.useVertexColor };
+        this.staticMeshMetadata.set(mesh.uuid, metadata);
+        this.packageCache?.end(mesh, this.library, { object: result.object, metadata, colorMaterials: result.colorMaterials });
+        return this.packageCache ? this.getStaticMeshVariant(result.object, modifiers) : result.object;
+    }
+
+    protected getStaticMeshVariant(info: IStaticMeshObjectDecodeInfo, modifiers?: string[]): IStaticMeshObjectDecodeInfo {
+        if (!modifiers?.length) return info;
+        const hash = new StringSet(modifiers).hash();
+        const materials = seededUuid(new Uint8Array(new BigUint64Array([hash]).buffer), info.uuid);
+        if (!(materials in this.library.materials)) this.library.materials[materials] = { materialType: "instance", baseMaterial: info.uuid, modifiers } as any;
+        return { ...info, materials };
+    }
+
+    public async preparePackageCache(pkg: APackage): Promise<void> {
+        if (!this.packageCache) return;
+        const packages = pkg.loader.getDependencies(pkg).filter(path => path !== pkg.loader.getNativePackage().path).map(path => pkg.loader.getPackage(path));
+        await this.packageCache.open(packages);
+        await this.packageCache.build(packages);
+    }
+
+    public getStaticMeshMetadata(mesh: UStaticMesh): any {
+        if (!this.staticMeshMetadata.has(mesh.uuid)) this.pullStaticMesh(mesh);
+        return this.staticMeshMetadata.get(mesh.uuid);
+    }
+
+    public getStaticMeshBounds(mesh: UStaticMesh, owner: UAActor = null, collision: boolean = false): FBox {
+        if (collision && owner.isUsingCylinderCollision) return UPrimitive.getCylinderCollisionBoundingBox(owner);
+        const metadata = this.getStaticMeshMetadata(mesh);
+        const info = metadata.renderBounds;
+        let bounds = FBox.make(FVector.make(...info.min), FVector.make(...info.max), info.isValid ? 1 : 0);
+        if (!collision) return bounds;
+        const transform = owner.localToWorld();
+        bounds = bounds.transformBy(transform);
+        if (metadata.collisionBounds) {
+            const info = metadata.collisionBounds;
+            bounds = bounds.addBox(FBox.make(FVector.make(...info.min), FVector.make(...info.max), info.isValid ? 1 : 0).transformBy(transform));
+        }
+        return bounds;
     }
 
     public pullSound(sound: USound): { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } | null {
         if (!sound) return null;
 
+        const cached = this.packageCache?.read(sound, "sound", this.library);
+        if (cached !== undefined) return cached ? this.library.soundBlobCache.get(sound.name) : null;
+        this.packageCache?.begin(sound, "sound", this.library);
         sound = sound.loadSelf();
 
         const soundKey = sound.name;
@@ -137,11 +278,17 @@ export class DecodeLibraryBuilder {
         this.library.scriptObjects[soundKey.toLowerCase()] = dumpObjectClass(sound);
         let soundEntry = this.library.soundBlobCache.get(soundKey);
 
-        if (soundEntry) return soundEntry;
+        if (soundEntry) {
+            this.packageCache?.end(sound, this.library, true);
+            return soundEntry;
+        }
 
         const audioData = sound.getAudioData();
 
-        if (!audioData || audioData.length === 0) return null;
+        if (!audioData || audioData.length === 0) {
+            this.packageCache?.end(sound, this.library, false);
+            return null;
+        }
 
         const fileType = sound.getFileType()?.toLowerCase() ?? "wav";
         const mimeType = fileType === "ogg" ? "audio/ogg" : "audio/wav";
@@ -149,6 +296,7 @@ export class DecodeLibraryBuilder {
         // Blob URLs are minted by refreshSoundBlobUris on the thread that owns the library.
         soundEntry = { uri: null, data: audioData, mimeType, assetName: sound.name };
         this.library.soundBlobCache.set(soundKey, soundEntry);
+        this.packageCache?.end(sound, this.library, true);
 
         return soundEntry;
     }
@@ -399,8 +547,8 @@ export class DecodeLibraryBuilder {
                     const staticMeshActor = actor.loadSelf() as UStaticMeshActor;
 
                     if (!staticMeshActor.isDeleteMe && staticMeshActor.isCollidingActors && staticMeshActor.mesh) {
-                        const mesh = staticMeshActor.mesh.loadSelf() as UStaticMesh;
-                        this.library.staticMeshCollisionActors.push({ uuid: actor.uuid, name: actor.objectName, position: staticMeshActor.location.getElements(), collisionBounds: mesh.getCollisionBoundingBox(staticMeshActor).getDecodeInfo(), collision: staticMeshActor.getCollisionDecodeInfo() });
+                        const mesh = staticMeshActor.mesh as UStaticMesh;
+                        this.library.staticMeshCollisionActors.push({ uuid: actor.uuid, name: actor.objectName, position: staticMeshActor.location.getElements(), collisionBounds: this.getStaticMeshBounds(mesh, staticMeshActor, true).getDecodeInfo(), collision: staticMeshActor.getCollisionDecodeInfo() });
                     }
 
                     if (this.settings.loadStaticModels === false) break;
@@ -468,7 +616,7 @@ export class DecodeLibraryBuilder {
 
         if (!result) return;
 
-        this.setScriptClass(actor, result.object);
+        this.setScriptClass(actor, result.object, true);
 
         this.library.exportedActors.add(actor.uuid);
         this.library.geometryInstances[result.geometryUuid]++;

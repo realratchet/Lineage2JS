@@ -12,11 +12,11 @@ const tmpEmitterBounds = new Box3();
 const tmpExtent = new Vector3();
 const arrNodes: number[] = [];
 
-type Part_T = { item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split: boolean };
+type Part_T = { item: any, state: State_T, actor: Owner_T, emitter: EmitterOwner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split: boolean };
 type Owner_T = { center: Vector3, radius: number, path: number, leaves: number[], parts: Part_T[], count: number, ordinals: Map<number, number> };
 type State_T = { sector: SectorObject, nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], actorCount: number, leaves: number[][], leafCounts: number[], dynamicLeaves: Set<number>, meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], cursor: number, cullBackfaces: boolean };
 type BatchRange_T = { starts: Uint32Array, stamp: number };
-type EmitterOwner_T = { owner: Owner_T, state: State_T, stamp: number };
+type EmitterOwner_T = { owner: Owner_T, state: State_T, stamp: number, distance: number, key: number, items: any[] };
 
 export class TranslucentRenderList {
     protected readonly cacheStates = new WeakMap<SectorObject, State_T>();
@@ -26,6 +26,9 @@ export class TranslucentRenderList {
     protected readonly arrStates: State_T[] = [];
     protected readonly arrParts: Part_T[] = [];
     protected readonly arrOutput: any[] = [];
+    protected readonly arrDeferred: EmitterOwner_T[] = [];
+    protected readonly arrSortedDeferred: EmitterOwner_T[] = [];
+    protected readonly arrNameplates: any[] = [];
     protected partCount = 0;
     protected previousOutputCount = 0;
     protected stamp = 0;
@@ -94,18 +97,19 @@ export class TranslucentRenderList {
         return state;
     }
 
-    protected getEmitter(object: any): EmitterOwner_T {
+    protected getEmitter(object: any, x: number, y: number, z: number): EmitterOwner_T {
         let emitter = object.emitterActor || object;
         while (emitter && !emitter.isEmitterActor) emitter = emitter.parent;
-        if (!emitter) return null;
+        if (!emitter || emitter.getUnrealScriptProperty("bDisableSorting")) return null;
 
         let entry = this.cacheEmitters.get(emitter);
-        if (entry && entry.stamp === this.stamp) return entry.state ? entry : null;
+        if (entry && entry.stamp === this.stamp) return entry;
         if (!entry) {
-            entry = { owner: { center: new Vector3(), radius: 0, path: 1, leaves: [], parts: [], count: 0, ordinals: new Map() }, state: null, stamp: 0 };
+            entry = { owner: { center: new Vector3(), radius: 0, path: 1, leaves: [], parts: [], count: 0, ordinals: new Map() }, state: null, stamp: -1, distance: 0, key: 0, items: [] };
             this.cacheEmitters.set(emitter, entry);
         }
-        entry.stamp = this.stamp; entry.state = null;
+        entry.state = null;
+        entry.items.length = 0;
         const owner = entry.owner;
         owner.count = 0; owner.leaves.length = 0;
         owner.path = emitter.getUnrealScriptProperty("bStatic") ? 0 : 1;
@@ -115,11 +119,15 @@ export class TranslucentRenderList {
             tmpBounds.union(child.getRenderBounds(tmpEmitterBounds));
         }
         if (tmpBounds.isEmpty()) return null;
+        entry.stamp = this.stamp;
 
         // FDynamicActor::Update 0x8e7c08 builds the emitter sphere from its world box.
         tmpBounds.getCenter(owner.center);
         tmpBounds.getSize(tmpExtent).multiplyScalar(0.5);
         owner.center.set(Math.fround(owner.center.x), Math.fround(owner.center.y), Math.fround(owner.center.z));
+        const dx = Math.fround(owner.center.x - x), dy = Math.fround(owner.center.y - y), dz = Math.fround(owner.center.z - z);
+        entry.distance = (dx * dx + dy * dy) + dz * dz;
+        entry.key = Math.fround(entry.distance);
         const radiusSquared = Math.fround(Math.max(owner.center.distanceToSquared(tmpBounds.min), owner.center.distanceToSquared(tmpBounds.max)));
         owner.radius = Math.fround(Math.fround(Math.sqrt(radiusSquared)) * Math.fround(1.001)); // Core 0x1015079b..0x101507b5.
         emitter.getWorldPosition(tmpPosition);
@@ -141,7 +149,7 @@ export class TranslucentRenderList {
                     else if (node.leaves[1] >= 0) owner.leaves.push(node.leaves[1]);
                 }
             }
-            if (!owner.leaves.length) return null;
+            if (!owner.leaves.length) return entry;
 
             const index = state.actors.length;
             state.actors.push(owner);
@@ -153,16 +161,17 @@ export class TranslucentRenderList {
             entry.state = state;
             return entry;
         }
-        return null;
+        return entry;
     }
 
-    protected add(item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split = !!state) {
+    protected add(item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split = !!state, emitter: EmitterOwner_T = null) {
         let part = this.arrParts[this.partCount];
-        if (!part) part = this.arrParts[this.partCount] = { item: null, state: null, actor: null, node: -1, start: 0, count: 0, materialIndex: 0, ordinal: 0, split: false };
+        if (!part) part = this.arrParts[this.partCount] = { item: null, state: null, actor: null, emitter: null, node: -1, start: 0, count: 0, materialIndex: 0, ordinal: 0, split: false };
         this.partCount++;
         part.item = item; part.state = state; part.actor = actor; part.node = node;
         part.start = start; part.count = count; part.materialIndex = materialIndex; part.ordinal = ordinal;
         part.split = split;
+        part.emitter = emitter;
 
         if (actor) {
             let index = actor.count++;
@@ -228,8 +237,8 @@ export class TranslucentRenderList {
                 const start = item.group ? item.group.start : 0, count = item.group ? item.group.count : item.geometry.index.count;
                 this.add(item, state, owners[0], -1, start, count, item.group ? item.group.materialIndex : 0, owners[0].ordinals.get(start) || 0);
             } else {
-                const emitter = this.getEmitter(object);
-                this.add(item, emitter ? emitter.state : null, emitter ? emitter.owner : null, -1, item.group ? item.group.start : 0, item.group ? item.group.count : 0, item.group ? item.group.materialIndex : 0, item.renderOrder, false);
+                const emitter = this.getEmitter(object, x, y, z);
+                this.add(item, emitter ? emitter.state : null, emitter ? emitter.owner : null, -1, item.group ? item.group.start : 0, item.group ? item.group.count : 0, item.group ? item.group.materialIndex : 0, item.renderOrder, false, emitter);
             }
         }
         for (const state of this.arrStates) {
@@ -255,13 +264,33 @@ export class TranslucentRenderList {
             if (!output) output = this.arrOutput[count] = { group: null, range: { start: 0, count: 0, materialIndex: 0 } };
             output.id = item.id; output.object = item.object; output.geometry = item.geometry; output.material = item.material; output.materialVariant = item.materialVariant;
             output.groupOrder = item.groupOrder; output.renderOrder = item.renderOrder; output.z = item.z;
+            output.emitter = part.emitter;
             output.group = part.split || item.group ? output.range : null;
             output.range.start = part.start; output.range.count = part.count; output.range.materialIndex = part.materialIndex;
             items[count++] = output;
         }
         items.length = count;
-        for (let i = count; i < this.previousOutputCount; i++) { const item = this.arrOutput[i]; item.object = item.geometry = item.material = null; }
-        for (let i = this.partCount; i < oldPartCount; i++) { const part = this.arrParts[i]; part.item = part.state = part.actor = null; }
+        let worldCount = 0;
+        for (const item of items) {
+            if (item.emitter) {
+                if (!item.emitter.items.length) this.arrDeferred.push(item.emitter);
+                item.emitter.items.push(item);
+            } else if (item.object.isNameplate) this.arrNameplates.push(item);
+            else items[worldCount++] = item;
+        }
+        // Engine.dll RVA 0x3524f1..0x352c36 defers DT_Particle until after world translucency and decorations.
+        for (let i = this.arrDeferred.length - 1; i >= 0; i--) {
+            const emitter = this.arrDeferred[i];
+            let index = 0;
+            while (index < this.arrSortedDeferred.length && this.arrSortedDeferred[index].distance > emitter.key) index++;
+            for (let j = this.arrSortedDeferred.length; j > index; j--) this.arrSortedDeferred[j] = this.arrSortedDeferred[j - 1];
+            this.arrSortedDeferred[index] = emitter;
+        }
+        for (const emitter of this.arrSortedDeferred) for (const item of emitter.items) items[worldCount++] = item;
+        for (const item of this.arrNameplates) items[worldCount++] = item;
+        this.arrDeferred.length = this.arrSortedDeferred.length = this.arrNameplates.length = 0;
+        for (let i = count; i < this.previousOutputCount; i++) { const item = this.arrOutput[i]; item.object = item.geometry = item.material = item.emitter = null; }
+        for (let i = this.partCount; i < oldPartCount; i++) { const part = this.arrParts[i]; part.item = part.state = part.actor = part.emitter = null; }
         this.previousOutputCount = count;
     }
 }

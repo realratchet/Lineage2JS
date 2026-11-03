@@ -45,6 +45,8 @@ export class NetworkMovement {
 
     public constructor(protected readonly network: NetworkManager) {}
 
+    public getPendingTeleportPosition(): Vector3 { return this.teleportPending ? this.teleportPosition : null; }
+
     public readLocation(packet: PacketReader): GamePackets.Location_T {
         tmpLocation.x = packet.d();
         tmpLocation.y = packet.d();
@@ -276,7 +278,7 @@ export class NetworkMovement {
             }
 
             if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
-        }
+        } else if ((sector.getMusicIdAt(render.player.position).musicId ?? -1) !== render.getActiveMusicId()) render.cancelMusic();
 
         this.network.actors.teleportInfoPending = true;
         this.network.session.game.appearing();

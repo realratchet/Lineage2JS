@@ -122,6 +122,27 @@ export abstract class UTexture extends UMaterial {
         return { width: this.width, height: this.height };
     }
 
+    public getSourceDecodeInfo(builder: DecodeLibraryBuilder = null) {
+        const mipCount = this.mipmaps.getElemCount();
+        const data = mipCount ? this.mipmaps.getElem(0).dataArray.getTypedArray() as Uint8Array : null;
+        const palette = this.palette ? this.palette.loadSelf() : null;
+        const paletteRed = palette ? new Uint8Array(palette.colors.getElemCount()) : null;
+        if (palette) for (let i = 0; i < paletteRed.length; i++) paletteRed[i] = palette.colors.getElem(i).r;
+        const palettes: Record<string, string> = {};
+        let frame: UTexture = this;
+        for (let i = 0, length = this.totalFrameNum || 1; i < length && frame; i++) {
+            const cached = frame !== this && builder ? builder.getCachedTextureSource(frame) : null;
+            if (cached) {
+                palettes[frame.name] = cached.paletteId;
+                frame = cached.animNext ? frame.pkg.loader.getPackage(cached.animNext.path).fetchObject<UTexture>(cached.animNext.index + 1) : null;
+            } else {
+                palettes[frame.name] = frame.palette ? frame.palette.name : null;
+                frame = frame.animNext;
+            }
+        }
+        return { name: this.name, format: this.format.valueOf(), width: this.width, height: this.height, mipCount, data, paletteRed, paletteId: this.palette ? this.palette.name : null, palettes, animNext: this.animNext ? { path: this.animNext.pkg.path, index: this.animNext.exportIndex } : null };
+    }
+
     public doLoad(pkg: APackage, exp: UExport) {    // 2785
         super.doLoad(pkg, exp);
 
@@ -175,10 +196,15 @@ export abstract class UTexture extends UMaterial {
     }
 
     protected decodeTexture(builder: DecodeLibraryBuilder) {
+        builder.beginTextureFrame(this);
         const library = builder.library;
         const totalMipCount = this.mipmaps.length;
 
-        if (totalMipCount === 0) return { materialType: "empty" };
+        if (totalMipCount === 0) {
+            const info = { materialType: "empty" };
+            builder.setTextureFrame(this, info, this.animNext);
+            return info;
+        }
 
         const loadMipmaps = library.loadMipmaps && totalMipCount > 1;
         let maxLOD = totalMipCount - 1;
@@ -336,7 +362,7 @@ export abstract class UTexture extends UMaterial {
             default: throw new Error(`Unsupported texture format: ${format}`);
         }
 
-        return {
+        const info = {
             materialType: "texture",
             textureType,
             name: this.name,
@@ -354,7 +380,11 @@ export abstract class UTexture extends UMaterial {
             isMasked: this.isMasked,
             isAlphaTexture: this.isAlphaTexture
         } as ITextureDecodeInfo;
+        builder.setTextureFrame(this, info, this.animNext);
+        return info;
     }
+
+    public getTextureFrameDecodeInfo(builder: DecodeLibraryBuilder): any { return this.decodeTexture(builder); }
 
     public getDecodeInfo(builder: DecodeLibraryBuilder): IBaseMaterialDecodeInfo | string {
         if (typeof this.totalFrameNum === "number" && this.totalFrameNum > 1) {
@@ -363,8 +393,14 @@ export abstract class UTexture extends UMaterial {
             let tex: UTexture = this;
 
             for (let i = 0, len = this.totalFrameNum; i < len && tex; i++) {
-                sprites.push(tex.loadSelf().decodeTexture(builder));
-                tex = tex.animNext;
+                const cached = builder.getCachedTextureFrame(tex);
+                if (cached) {
+                    sprites.push(cached.info);
+                    tex = cached.next;
+                } else {
+                    sprites.push(tex.loadSelf().decodeTexture(builder));
+                    tex = tex.animNext;
+                }
             }
 
             return {
@@ -375,7 +411,8 @@ export abstract class UTexture extends UMaterial {
             } as IAnimatedSpriteDecodeInfo;
         }
 
-        return this.decodeTexture(builder);
+        const cached = builder.getCachedTextureFrame(this);
+        return cached ? cached.info : this.decodeTexture(builder);
     }
 }
 

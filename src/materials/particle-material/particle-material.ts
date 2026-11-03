@@ -184,7 +184,8 @@ export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) 
             blending: CustomBlending,
             blendSrc: ZeroFactor,
             blendDst: OneMinusSrcColorFactor,
-            ...preserveDestinationAlpha
+            ...preserveDestinationAlpha,
+            isAdditive: true // D3DDrv.dll RVA 0xa583..0xa626 overrides fog to FColor(0, 0, 0, 0).
         };
         // PTDS_Brighten: ONE, ONE_MINUS_SRC_COLOR (screen blend).
         case "brighten": return {

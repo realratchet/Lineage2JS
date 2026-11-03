@@ -1,4 +1,4 @@
-import { AnimationClip, Object3D, Vector3 } from "three";
+import { AnimationClip, Object3D, Vector3, WebGLCoordinateSystem } from "three";
 import RenderManager, { type HTMLViewportElement_T } from "../rendering/render-manager";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import { ColorByte } from "../utils/color-byte";
@@ -69,7 +69,7 @@ export class SkillViewerRenderManager extends RenderManager {
 
         this.camera.updateMatrixWorld();
         this.lastProjectionScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
-        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix);
+        this.frustum.setFromProjectionMatrix(this.lastProjectionScreenMatrix, WebGLCoordinateSystem, this.camera.reversedDepth);
 
         this.updatePawnPresentation(currentTime, deltaTime);
         this.audioManager.update(currentTime);
@@ -88,6 +88,7 @@ export class SkillViewerRenderManager extends RenderManager {
         this.visibleWorldBatchEmitters.length = 0;
 
         GLOBAL_UNIFORMS.globalTimeSeconds.value = currentTime / 1000;
+        GLOBAL_UNIFORMS.levelTimeSeconds.value = currentTime / 1000;
 
         const projUp = tmpBillboardUp.copy(this.camera.up).normalize();
         const projFront = tmpBillboardFront.set(0, 0, 1).applyQuaternion(this.camera.quaternion).normalize();

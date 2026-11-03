@@ -1,7 +1,9 @@
 import type { IDatContainerType, ISchemaValue } from "./schema/dat-schema";
 import fetchAssetHandle from "../asset-handle";
-import { ASCFType } from "./schema/dat-container";
+import { ASCFType, readUTF16 } from "./schema/dat-container";
 import { UEncodedFile, BufferValue, type ValidTypes_T, type ValueTypeNames_T } from "@l2js/core";
+
+const tmpASCF = new ASCFType();
 
 export class UDataFile extends UEncodedFile {
     public datarows: Record<string, any>[];
@@ -55,9 +57,9 @@ export class UDataFile extends UEncodedFile {
 
 function loadSingleValue(readable: UDataFile, type: ValidTypes_T<any> | IDatContainerType | ValueTypeNames_T | "ASCF", values: Record<string, any>) {
     if (typeof type === "string") {
-        if (type === "ASCF") return new ASCFType().read(readable);
+        if (type === "ASCF") return tmpASCF.read(readable);
 
-        const schemaValue = type === "utf16" ? readable.read(new BufferValue(BufferValue.utf16)).value : readable.read(type as any);
+        const schemaValue = type === "utf16" ? readUTF16(readable) : readable.read(type as any);
         const value = schemaValue;
 
         return value as any;

@@ -60,15 +60,18 @@ export class NetworkSession {
             void this.network.actors.loadNpcNames();
             void this.network.community.loadRadar();
 
-            const arrPending = ["interface textures", "login scene", "character assets"];
+            const arrPending = ["interface textures", "login scene"];
 
             setLoadingProgress(0.2, `Loading ${arrPending.join(", ")}…`, true);
-            await Promise.all([this.network.ui.createScreens(), this.lobby.enter(this.network.ui.getStrings().logonSpots), asset.precacheCharacters()].map(async (task, i) => {
+            const arrTasks = [this.network.ui.createScreens(), this.lobby.enter(this.network.ui.getStrings().logonSpots)];
+
+            void asset.precacheCharacters();
+            await Promise.all(arrTasks.map(async (task, i) => {
                 await task;
                 arrPending[i] = null;
                 const remaining = arrPending.filter(Boolean);
 
-                setLoadingProgress(0.2 + (3 - remaining.length) * 0.2, remaining.length ? `Loading ${remaining.join(", ")}…` : "Preparing login scene…", true);
+                setLoadingProgress(0.2 + (arrPending.length - remaining.length) * 0.3, remaining.length ? `Loading ${remaining.join(", ")}…` : "Preparing login scene…", true);
             }));
         } else await this.lobby.enter(this.network.ui.getStrings().logonSpots);
 
