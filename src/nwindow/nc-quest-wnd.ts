@@ -254,6 +254,14 @@ export class NCQuestWnd {
             node.expanded = !node.expanded;
             if (node.expanded) node.selected = true;
             if (layer.toUI(event.clientX - rect.left) === 0 && layer.toUI(event.clientY - rect.top) === 0) node.expanded = !node.expanded;
+            if (node.kind === 1 && node.expanded) {
+                siblings.forEach(sibling => {
+                    if (sibling !== node) sibling.expanded = false;
+                });
+                const progress = node.children[node.children.length - 1];
+
+                progress.expanded = progress.selected = true;
+            }
             this.current = node;
             this.paint();
             this.list.focus();
