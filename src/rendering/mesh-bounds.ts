@@ -26,14 +26,19 @@ export class MeshBounds {
         let cached = this.cacheSway.get(geometry);
         if (cached && cached.position === position && cached.sway === sway && cached.positionVersion === positionVersion && cached.swayVersion === swayVersion) return cached;
         cached = { position, sway, positionVersion, swayVersion, margin: new Vector3(), bounds: new Box3(), bounded: true };
+        let lastAngle = NaN, lastPhase = NaN, tangent = 0, x = 0, y = 0;
         for (let i = 0; i < position.count; i++) {
             tmpVertex.fromBufferAttribute(position, i);
             cached.bounds.expandByPoint(tmpVertex);
-            if (!sway || sway.getY(i) <= 0 || sway.getZ(i) === 0) continue;
-            if (Math.abs(sway.getZ(i)) >= 90) { cached.bounded = false; continue; }
-            const distance = Math.abs(Math.tan(sway.getZ(i) * Math.PI / 180)) * Math.max(tmpVertex.z - sway.getX(i), 0);
-            cached.margin.x = Math.max(cached.margin.x, Math.abs(Math.cos(sway.getW(i))) * distance);
-            cached.margin.y = Math.max(cached.margin.y, Math.abs(Math.sin(sway.getW(i))) * distance);
+            if (!sway || sway.getY(i) <= 0) continue;
+            const angle = sway.getZ(i), phase = sway.getW(i);
+            if (angle === 0) continue;
+            if (Math.abs(angle) >= 90) { cached.bounded = false; continue; }
+            if (angle !== lastAngle) { tangent = Math.abs(Math.tan(angle * Math.PI / 180)); lastAngle = angle; }
+            if (phase !== lastPhase) { x = Math.abs(Math.cos(phase)); y = Math.abs(Math.sin(phase)); lastPhase = phase; }
+            const distance = tangent * Math.max(tmpVertex.z - sway.getX(i), 0);
+            cached.margin.x = Math.max(cached.margin.x, x * distance);
+            cached.margin.y = Math.max(cached.margin.y, y * distance);
         }
         this.cacheSway.set(geometry, cached);
         return cached;

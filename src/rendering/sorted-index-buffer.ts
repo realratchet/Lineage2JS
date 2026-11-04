@@ -44,12 +44,12 @@ export class SortedIndexBuffer {
             if (state) state.near = false;
         }
 
-        let changed = false;
         for (let i = 0; i < this.count; i++) {
-            const value = source[start + i];
-            if (target[offset + i] !== value) { target[offset + i] = value; changed = true; }
+            if (target[offset + i] === source[start + i]) continue;
+            target.set(source.subarray(start + i, start + this.count), offset + i);
+            return true;
         }
-        return changed;
+        return false;
     }
 
     public dispose(): void {
