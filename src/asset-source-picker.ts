@@ -80,7 +80,14 @@ async function selectAssetSource(): Promise<void> {
     errors.textContent = storedError;
 
     await new Promise<void>(resolve => {
+        const controls = viewport.querySelectorAll<HTMLButtonElement | HTMLInputElement>("button, input");
+        let selecting = false;
+
         async function select(selectFiles: () => Promise<void>) {
+            if (selecting) return;
+
+            selecting = true;
+            controls.forEach(control => control.disabled = true);
             errors.textContent = "";
 
             try {
@@ -88,6 +95,9 @@ async function selectAssetSource(): Promise<void> {
                 resolve();
             } catch (e) {
                 if ((e as Error).name !== "AbortError") errors.textContent = (e as Error).message;
+            } finally {
+                selecting = false;
+                controls.forEach(control => control.disabled = false);
             }
         }
 

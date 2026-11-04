@@ -4,9 +4,11 @@ import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contra
 import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
-import { refreshSoundBlobUris } from "./decode-cache";
+import { refreshSoundBlobUris, isCacheEnabled, hasCachedLibrary } from "./decode-cache";
 import getNpcBundleName from "./npc-bundle";
-import { getAssetFiles, getServedAssets } from "../asset-source";
+import requestWebLock from "../web-lock";
+import { getAssetSourceId, getAssetFiles, getServedAssets } from "../asset-source";
+import { beginLoadingProfile, assignLoadingProfile, updateLoadingProfile, finishLoadingProfile, printLoadingProfile } from "../../loading-profile";
 
 const cacheScript = { scriptClasses: new Map<string, any>(), scriptFunctions: new Map<string, any>(), scriptStates: new Map<string, any>(), scriptObjects: new Map<string, any>() };
 type SharedSound_T = { key: string, data: Uint8Array | Blob, mimeType: string, refs: number };
@@ -15,6 +17,7 @@ const cacheTextureBuffers = new Map<string, ArrayBuffer>();
 const cacheTextureIds = new WeakMap<ArrayBuffer, Set<string>>();
 const clients = new Set<DecodeWorkerClient>();
 const DECODE_PACKAGE_SWEEP_MS = 5000;
+let nextProfileWorker = 1;
 const pendingTextureDisposals = new Set<ArrayBuffer>();
 const pendingSoundDisposals = new Set<SharedSound_T>();
 const soundFinalizer = new FinalizationRegistry<SharedSound_T>(sound => {
@@ -161,6 +164,9 @@ function shareScript(library: any): void {
 }
 
 type PendingRequest_T = {
+    packagesReady?: (packages: string[]) => void;
+    isPackageDiscovery?: boolean;
+    loadingId?: number;
     resolve(value: any): void;
     reject(error: Error): void;
     workerIndex: number;
@@ -171,16 +177,19 @@ type PendingRequest_T = {
 };
 
 type WorkerSlot_T = {
+    loadingName: string;
+    loadingId: number;
     worker: Worker;
     isDead: boolean;
     isReady: boolean;
+    isReserved: boolean;
     inFlight: number;
     readyResolve(): void;
     readyReject(error: Error): void;
 };
 
 type BinaryDecodeRequest_T = { buffer?: ArrayBuffer, library?: DecodeLibrary, request: PendingRequest_T };
-type SectorRequest_T = { message: any, reserveScriptWorker: boolean, isStreaming: boolean, resolve(value: any): void, reject(error: Error): void };
+type SectorRequest_T = { message: any, packagesReady?: (packages: string[]) => void, loadingId: number, reserveScriptWorker: boolean, isStreaming: boolean, resolve(value: any): void, reject(error: Error): void };
 
 async function waitForWorkers(promises: Promise<void>[]): Promise<void> {
     await Promise.all(promises);
@@ -196,11 +205,22 @@ export class DecodeWorkerClient {
     protected readonly pendingSkillRequests = new Map<string, { requestId: number, request: PendingRequest_T }>();
     protected readonly cacheSkillLibraries = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheScriptLibraries = new Map<string, Promise<DecodeLibrary>>();
+    protected readonly packageBuildAbort = new AbortController();
+    protected packageBuildCount = 0;
+    protected readonly cachePackagePrebuilds = new Map<string, Promise<void>>();
     protected nextRequestId = 1;
     protected sectorWorker = new Map<string, number>();
     protected readonly cacheSectorHits = new Map<string, boolean>();
     protected npcWorker = new Map<string, number>();
     protected mainThreadEngine: DecodeEngine = null;
+    protected characterPrecache: Promise<void> = null;
+    protected precacheWorker: DecodeWorkerClient = null;
+    protected precacheCount = 0;
+    protected characterGroups: Promise<ICharacterGroup[]> = null;
+    protected readonly cacheNpcPrebuilds = new Map<string, Promise<void>>();
+    protected loadingWorker: DecodeWorkerClient = null;
+    protected loadingSectorCount = 0;
+    protected isWorldLoading = false;
     protected characterAnimationSets = new Set<number>();
     protected npcAnimationSets = new Set<string>();
     protected readonly cacheNpcDefinitions = new Map<number, INpcDefinition>();
@@ -223,7 +243,9 @@ export class DecodeWorkerClient {
         const readyPromises: Promise<void>[] = [];
 
         for (let i = 0; i < poolSize; i++) {
-            const slot = { isDead: false, isReady: false, inFlight: 0 } as WorkerSlot_T;
+            const slot = { isDead: false, isReady: false, isReserved: false, inFlight: 0, loadingName: `worker-${nextProfileWorker++}` } as WorkerSlot_T;
+            slot.loadingId = beginLoadingProfile("Initialize", slot.loadingName);
+            updateLoadingProfile(slot.loadingId, performance.timeOrigin + performance.now(), "Initializing", {});
 
             readyPromises.push(new Promise<void>((resolve, reject) => {
                 slot.readyResolve = resolve;
@@ -250,7 +272,7 @@ export class DecodeWorkerClient {
         const now = performance.now();
 
         for (const client of clients) {
-            if (client.sectorQueue.length || client.binaryDecodeQueue.length || client.decodingBinaryCount || now - client.lastAssetActivity < DECODE_PACKAGE_SWEEP_MS) return;
+            if (client.packageBuildCount || client.sectorQueue.length || client.binaryDecodeQueue.length || client.decodingBinaryCount || now - client.lastAssetActivity < DECODE_PACKAGE_SWEEP_MS) return;
             for (const request of client.pending.values())
                 if (request.isAsset) return;
         }
@@ -280,13 +302,13 @@ export class DecodeWorkerClient {
         // head-of-line blocking a boundary crossing needs the pool to avoid
         if (stickyIndex !== undefined && stickyIndex < count) {
             const slot = this.slots[stickyIndex];
-            if (slot && !slot.isDead && slot.inFlight === 0 && (!idleOnly || slot.isReady)) return stickyIndex;
+            if (slot && !slot.isDead && !slot.isReserved && slot.inFlight === 0 && (!idleOnly || slot.isReady)) return stickyIndex;
         }
 
         let best = -1, bestLoad = Infinity;
 
         for (let i = 0; i < count; i++) {
-            if (this.slots[i].isDead) continue;
+            if (this.slots[i].isDead || this.slots[i].isReserved) continue;
             if (idleOnly && (!this.slots[i].isReady || this.slots[i].inFlight > 0)) continue;
             if (this.slots[i].inFlight < bestLoad) { best = i; bestLoad = this.slots[i].inFlight; }
         }
@@ -316,6 +338,7 @@ export class DecodeWorkerClient {
     }
 
     public cancelQueuedSectors(requiredSectors: readonly string[] = [], origin: string = null): void {
+        if (this.loadingWorker) this.loadingWorker.cancelQueuedSectors(requiredSectors, origin);
         let cancelled = false;
 
         for (let i = this.sectorQueue.length - 1; i >= 0; i--) {
@@ -325,6 +348,7 @@ export class DecodeWorkerClient {
             if (!request.isStreaming || name === origin || requiredSectors.includes(name)) continue;
 
             this.sectorQueue.splice(i, 1);
+            finishLoadingProfile(request.loadingId);
             request.reject(new DOMException(`Sector '${name}' is no longer needed.`, "AbortError"));
             cancelled = true;
         }
@@ -336,14 +360,16 @@ export class DecodeWorkerClient {
         this.scheduleSectorQueue();
     }
 
-    protected queueSector(message: any, reserveScriptWorker: boolean, isStreaming: boolean = false): Promise<any> {
+    protected queueSector(message: any, reserveScriptWorker: boolean, isStreaming: boolean = false, packagesReady: (packages: string[]) => void = null, queuedLoadingId: number = null): Promise<any> {
         return new Promise((resolve, reject) => {
             if (this.isTerminated || this.isDead()) {
                 reject(new Error(`Decode worker is dead.`));
                 return;
             }
 
-            this.sectorQueue.push({ message, reserveScriptWorker, isStreaming, resolve, reject });
+            const loadingId = queuedLoadingId ?? beginLoadingProfile(`${message.type} ${message.sectorName ?? message.path ?? message.packageName ?? message.charIndex ?? ""}`.trim(), "queued");
+
+            this.sectorQueue.push({ message, packagesReady, loadingId, reserveScriptWorker, isStreaming, resolve, reject });
             this.scheduleSectorQueue();
         });
     }
@@ -362,7 +388,10 @@ export class DecodeWorkerClient {
         if (this.isTerminated) return;
 
         if (this.isDead()) {
-            for (const request of this.sectorQueue.splice(0)) request.reject(new Error(`Decode worker is dead.`));
+            for (const request of this.sectorQueue.splice(0)) {
+                finishLoadingProfile(request.loadingId);
+                request.reject(new Error(`Decode worker is dead.`));
+            }
             return;
         }
 
@@ -371,7 +400,8 @@ export class DecodeWorkerClient {
 
             for (let i = 0; i < this.sectorQueue.length; i++) {
                 const request = this.sectorQueue[i];
-                const requestPriority = request.message.sectorName === this.activeSector ? 2 : request.reserveScriptWorker ? 0 : 1;
+                if ((request.message.type === "sectorPackages" || request.message.type === "packageDependencies") && [...this.pending.values()].filter(entry => entry.isPackageDiscovery).length >= Math.max(1, Math.floor(this.slots.length / 2))) continue;
+                const requestPriority = request.message.sectorName === this.activeSector ? 3 : request.message.type === "precachePackage" ? 2 : request.reserveScriptWorker ? 0 : 1;
 
                 if (requestPriority <= priority) continue;
 
@@ -394,10 +424,32 @@ export class DecodeWorkerClient {
     }
 
     protected async dispatchSector(request: SectorRequest_T, workerIndex: number): Promise<void> {
+        const slot = this.slots[workerIndex];
+        let reserved = false, queued = false;
         try {
-            request.resolve(await this.dispatch(workerIndex, request.message));
+            if (request.message.type === "precachePackage" && request.message.lockHeld) {
+                const lockName = `package-conversion:${getAssetSourceId()}:${request.message.path}`;
+                slot.isReserved = reserved = true;
+                const dispatched = await requestWebLock(lockName, async lock => {
+                    slot.isReserved = reserved = false;
+                    if (!lock) return false;
+                    request.resolve(await this.dispatch(workerIndex, request.message, false, request.loadingId, request.packagesReady));
+                    return true;
+                }, { ifAvailable: true });
+                if (!dispatched) {
+                    this.scheduleSectorQueue();
+                    await requestWebLock(lockName, async () => { }, { signal: this.packageBuildAbort.signal });
+                    if (this.isTerminated) throw new Error(`Decode worker terminated.`);
+                    this.sectorQueue.unshift(request);
+                    queued = true;
+                    this.scheduleSectorQueue();
+                }
+            } else request.resolve(await this.dispatch(workerIndex, request.message, false, request.loadingId, request.packagesReady));
         } catch (error) {
             request.reject(error as Error);
+        } finally {
+            if (reserved) slot.isReserved = false;
+            if (!queued) finishLoadingProfile(request.loadingId);
         }
     }
 
@@ -409,7 +461,88 @@ export class DecodeWorkerClient {
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
 
+        if (isWorldLoading && (this.loadingWorker || !await hasCachedLibrary(sectorName, settings)))
+            return this.decodeLoadingSector(sectorName, settings, isStreaming);
+
         return this.queueSector({ type: "decode", sectorName, settings }, !isWorldLoading, isStreaming);
+    }
+
+    public getLoadingWorkerPoolSize(): number { return Math.max(1, Math.floor((navigator.hardwareConcurrency || 6) / 2)); }
+
+    public setWorldLoading(isLoading: boolean): void {
+        this.isWorldLoading = isLoading;
+        if (isLoading || this.loadingSectorCount || !this.loadingWorker || this.precacheWorker === this.loadingWorker) return;
+
+        this.loadingWorker.terminate();
+        this.loadingWorker = null;
+        printLoadingProfile(true);
+    }
+
+    protected async decodeLoadingSector(sectorName: string, settings: LoadSettings_T, isStreaming: boolean): Promise<DecodeLibrary> {
+        if (this.isTerminated) throw new Error(`Decode worker terminated.`);
+        const worker = this.loadingWorker || (this.loadingWorker = this.precacheWorker || new DecodeWorkerClient(this.getLoadingWorkerPoolSize()));
+
+        this.loadingSectorCount++;
+        this.sectorWorker.delete(sectorName);
+
+        try {
+            await worker.ready;
+            if (isCacheEnabled(settings) && settings._packageCache !== false) await worker.prepareSectorPackages(sectorName, settings);
+            return await worker.queueSector({ type: "decode", sectorName, settings, flushAssets: true }, false, isStreaming);
+        } finally {
+            const cached = worker.cacheSectorHits.get(sectorName);
+
+            if (cached !== undefined) this.cacheSectorHits.set(sectorName, cached);
+            this.loadingSectorCount--;
+            if (!this.isWorldLoading) this.setWorldLoading(false);
+        }
+    }
+
+    protected async prepareSectorPackages(sectorName: string, settings: LoadSettings_T): Promise<void> {
+        return this.preparePackageDependencies({ type: "sectorPackages", sectorName, settings }, settings);
+    }
+
+    protected async preparePackageDependencies(message: any, settings: LoadSettings_T): Promise<void> {
+        const requests: Promise<Error | null>[] = [], scheduled = new Set<string>(), client = this;
+
+        function ready(packages: string[]): void {
+            for (const path of packages) {
+                if (scheduled.has(path)) continue;
+                scheduled.add(path);
+                requests.push(build(path));
+            }
+        }
+
+        async function build(path: string): Promise<Error | null> {
+            let request = client.cachePackagePrebuilds.get(path);
+            if (!request) client.cachePackagePrebuilds.set(path, request = client.buildPackage(path, settings));
+            try {
+                await request;
+                return null;
+            } catch (error) {
+                if (client.cachePackagePrebuilds.get(path) === request) client.cachePackagePrebuilds.delete(path);
+                return error as Error;
+            }
+        }
+
+        try {
+            ready(await this.queueSector(message, false, false, ready));
+        } finally {
+            const errors = await Promise.all(requests);
+            const error = errors.find(error => error !== null);
+            if (error) throw error;
+        }
+    }
+
+    protected async buildPackage(path: string, settings: LoadSettings_T): Promise<void> {
+        const loadingId = beginLoadingProfile(`precachePackage ${path}`, "queued");
+        this.packageBuildCount++;
+        try {
+            await this.queueSector({ type: "precachePackage", path, settings, lockHeld: true }, false, false, null, loadingId);
+        } finally {
+            this.packageBuildCount--;
+            finishLoadingProfile(loadingId);
+        }
     }
 
     public precacheSector(sectorName: string, settings: LoadSettings_T): Promise<PrecacheResult_T> {
@@ -419,9 +552,10 @@ export class DecodeWorkerClient {
         return this.queueSector({ type: "precache", sectorName, settings }, true);
     }
 
-    public isBuildingSector(sectorName: string): boolean { return this.cacheSectorHits.get(sectorName) === false; }
+    public isBuildingSector(sectorName: string): boolean { return this.loadingWorker?.isBuildingSector(sectorName) || this.cacheSectorHits.get(sectorName) === false; }
 
     public freeSector(sectorName: string) {
+        if (this.loadingWorker) this.loadingWorker.freeSector(sectorName);
         this.cacheSectorHits.delete(sectorName);
         if (this.mainThreadEngine) {
             this.mainThreadEngine.freeSector(sectorName);
@@ -486,6 +620,8 @@ export class DecodeWorkerClient {
         const bundleName = npcId === null || !packageName ? null : getNpcBundleName(packageName);
         const animationSet = `${packageName}.${meshName}`.toLowerCase();
         const includeAnimations = npcId === null || !this.npcAnimationSets.has(animationSet);
+
+        if (bundleName !== null && isCacheEnabled(settings)) await this.precacheNpcBundle(settings, packageName);
 
         if (this.mainThreadEngine) {
             const library = await this.mainThreadEngine.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, includeAnimations, equipment);
@@ -662,38 +798,82 @@ export class DecodeWorkerClient {
         return this.pickScriptWorker();
     }
 
-    public async precacheNpcBundle(settings: LoadSettings_T, packageName: string): Promise<void> {
+    public precacheNpcBundle(settings: LoadSettings_T, packageName: string): Promise<void> {
+        const bundleName = getNpcBundleName(packageName);
+        let request = this.cacheNpcPrebuilds.get(bundleName);
+
+        if (!request) this.cacheNpcPrebuilds.set(bundleName, request = this.precacheNpcAssets(settings, packageName));
+        return request;
+    }
+
+    protected async precacheNpcAssets(settings: LoadSettings_T, packageName: string): Promise<void> {
+        if (!isCacheEnabled(settings)) return;
         if (this.mainThreadEngine) return this.mainThreadEngine.precacheNpcBundle(settings, packageName);
 
         const bundleName = getNpcBundleName(packageName);
-        const workerIndex = this.pickNpcWorker(bundleName);
+        if (await hasCachedLibrary(bundleName, settings)) return;
 
-        if (workerIndex < 0) throw new Error("Decode worker is dead");
+        await this.precacheAssets(async worker => {
+            const paths = bundleName === "npc_monsters" ? ["system/LineageMonster.u", "system/LineageMonster2.u"] : ["system/LineageNpc.u", "system/LineageDeco.u"];
 
-        this.npcWorker.set(bundleName, workerIndex);
-
-        return this.dispatch(workerIndex, { type: "precacheNpcBundle", settings, packageName });
+            await Promise.all(paths.map(path => worker.preparePackageDependencies({ type: "packageDependencies", path, settings }, settings)));
+            await worker.queueSector({ type: "precacheNpcBundle", settings, packageName }, false);
+        });
     }
 
-    public async precacheCharacters(settings: LoadSettings_T): Promise<void> {
+    protected async precacheAssets(prepare: (worker: DecodeWorkerClient) => Promise<void>): Promise<void> {
+        if (this.isTerminated) throw new Error(`Decode worker terminated.`);
+
+        const worker = this.precacheWorker || (this.precacheWorker = this.loadingWorker || new DecodeWorkerClient(this.getLoadingWorkerPoolSize()));
+        this.precacheCount++;
+
+        try {
+            await Promise.all([worker.ready, prepare(worker)]);
+        } finally {
+            if (--this.precacheCount === 0) {
+                if (worker !== this.loadingWorker) worker.terminate();
+                this.precacheWorker = null;
+                if (worker === this.loadingWorker) this.setWorldLoading(this.isWorldLoading);
+            }
+        }
+    }
+
+    public precacheCharacters(settings: LoadSettings_T): Promise<void> {
+        if (!this.characterPrecache) this.characterPrecache = this.precacheCharacterGroups(settings);
+
+        return this.characterPrecache;
+    }
+
+    protected async precacheCharacterGroups(settings: LoadSettings_T): Promise<void> {
+        if (!isCacheEnabled(settings)) return;
         if (this.mainThreadEngine) return this.mainThreadEngine.precacheCharacters(settings);
 
-        const workerIndex = this.pickScriptWorker();
+        await this.precacheAssets(async worker => {
+            if (!this.characterGroups) this.characterGroups = worker.queueSector({ type: "charGroups", settings }, false);
 
-        if (workerIndex < 0) throw new Error("Decode worker is dead");
+            const [groups] = await Promise.all([this.characterGroups, worker.preparePackageDependencies({ type: "packageDependencies", path: "system/LineageWarrior.u", settings }, settings)]);
+            let cursor = 0;
 
-        for (const group of await this.getCharGroups(settings))
-            await this.dispatch(workerIndex, { type: "precacheCharacters", settings, charIndex: group.index });
+            await Promise.all(worker.slots.map(async () => {
+                while (cursor < groups.length) {
+                    const group = groups[cursor++];
+
+                    await worker.queueSector({ type: "precacheCharacters", settings, charIndex: group.index }, false);
+                }
+            }));
+            printLoadingProfile(true);
+        });
     }
 
     public async getCharGroups(settings: LoadSettings_T = {}): Promise<ICharacterGroup[]> {
+        if (this.characterGroups) return this.characterGroups;
         if (this.mainThreadEngine) return this.mainThreadEngine.decodeCharGroups(settings);
 
         const workerIndex = this.pickScriptWorker();
 
         if (workerIndex < 0) throw new Error("Decode worker is dead");
 
-        return this.dispatch(workerIndex, { type: "charGroups", settings });
+        return this.characterGroups = this.dispatch(workerIndex, { type: "charGroups", settings });
     }
 
     public getMusicInfo(): Promise<Record<number, string[]>> {
@@ -756,7 +936,7 @@ export class DecodeWorkerClient {
         return this.dispatch(workerIndex, { type: "l2Text", name });
     }
 
-    protected dispatch(workerIndex: number, message: any, isRaw: boolean = false): Promise<any> {
+    protected dispatch(workerIndex: number, message: any, isRaw: boolean = false, queuedLoadingId: number = null, packagesReady: (packages: string[]) => void = null): Promise<any> {
         if (this.isTerminated || this.slots[workerIndex].isDead) return Promise.reject(new Error(`Decode worker is dead.`));
 
         const isAsset = message.type !== "memoryStats";
@@ -764,9 +944,12 @@ export class DecodeWorkerClient {
         const requestId = this.nextRequestId++;
 
         this.slots[workerIndex].inFlight++;
+        const name = message.sectorName ?? message.path ?? message.packageName ?? message.charIndex ?? "";
+        const loadingId = queuedLoadingId ?? (isAsset ? beginLoadingProfile(`${message.type} ${name}`.trim(), this.slots[workerIndex].loadingName) : null);
+        assignLoadingProfile(loadingId, this.slots[workerIndex].loadingName);
 
         return new Promise((resolve, reject) => {
-            this.pending.set(requestId, { resolve, reject, workerIndex, isAsset, isRaw, copyChunks: true, urgent: message.type === "decodeCharacterEquipment" || message.type === "decodeSkill" && message.urgent });
+            this.pending.set(requestId, { resolve, reject, workerIndex, loadingId, packagesReady, isPackageDiscovery: message.type === "sectorPackages" || message.type === "packageDependencies", isAsset, isRaw, copyChunks: true, urgent: message.type === "decodeCharacterEquipment" || message.type === "decodeSkill" && message.urgent });
 
             try {
                 this.slots[workerIndex].worker.postMessage({ ...message, requestId });
@@ -778,13 +961,14 @@ export class DecodeWorkerClient {
         });
     }
 
-    protected settlePending(requestId: number): PendingRequest_T | undefined {
+    protected settlePending(requestId: number, keepProfile: boolean = false): PendingRequest_T | undefined {
         const request = this.pending.get(requestId);
 
         if (!request) return undefined;
 
         this.pending.delete(requestId);
         this.slots[request.workerIndex].inFlight--;
+        if (!keepProfile) finishLoadingProfile(request.loadingId);
         if (request.isAsset) this.lastAssetActivity = performance.now();
 
         return request;
@@ -792,7 +976,13 @@ export class DecodeWorkerClient {
 
     protected onMessage(workerIndex: number, msg: WorkerToMainMessage_T) {
         switch (msg.type) {
+            case "loadingProgress": {
+                const request = this.pending.get(msg.profile.requestId);
+                if (request) updateLoadingProfile(request.loadingId, msg.profile.started, msg.profile.active, msg.profile.steps, msg.profile.packages);
+                break;
+            }
             case "ready": {
+                finishLoadingProfile(this.slots[workerIndex].loadingId);
                 this.slots[workerIndex].isReady = true;
                 this.slots[workerIndex].readyResolve();
                 break;
@@ -806,7 +996,7 @@ export class DecodeWorkerClient {
                 break;
             }
             case "decoded": {
-                const request = this.settlePending(msg.requestId);
+                const request = this.settlePending(msg.requestId, true);
                 if (!request) break;
 
                 this.binaryDecodeQueue.push({ buffer: msg.buffer, library: msg.library, request });
@@ -853,11 +1043,22 @@ export class DecodeWorkerClient {
                 break;
             }
             case "npcBundlePrecached":
+            case "packagePrecached":
             case "charactersPrecached": {
                 const request = this.settlePending(msg.requestId);
                 if (!request) break;
 
                 request.resolve(undefined);
+                break;
+            }
+            case "sectorPackagesReady": {
+                const request = this.pending.get(msg.ready.requestId);
+                if (request?.packagesReady) request.packagesReady(msg.ready.packages);
+                break;
+            }
+            case "sectorPackagesListed": {
+                const request = this.settlePending(msg.requestId);
+                if (request) request.resolve(msg.packages);
                 break;
             }
             case "clientConfigDecoded": {
@@ -961,6 +1162,7 @@ export class DecodeWorkerClient {
             } catch (e) {
                 request.reject(e as Error);
             } finally {
+                finishLoadingProfile(request.loadingId);
                 this.decodingBinaryCount--;
                 this.lastAssetActivity = performance.now();
             }
@@ -987,6 +1189,7 @@ export class DecodeWorkerClient {
             } catch (e) {
                 request.reject(e as Error);
             } finally {
+                finishLoadingProfile(request.loadingId);
                 this.decodingBinaryCount--;
             }
         }
@@ -995,6 +1198,7 @@ export class DecodeWorkerClient {
     protected onWorkerDead(workerIndex: number, error: Error) {
         const slot = this.slots[workerIndex];
 
+        finishLoadingProfile(slot.loadingId);
         slot.isDead = true;
         slot.inFlight = 0;
         slot.readyReject(error); // no-op if already resolved
@@ -1003,6 +1207,7 @@ export class DecodeWorkerClient {
             if (request.workerIndex !== workerIndex) continue;
 
             this.pending.delete(requestId);
+            finishLoadingProfile(request.loadingId);
             request.reject(error);
         }
 
@@ -1010,7 +1215,7 @@ export class DecodeWorkerClient {
         this.scheduleSectorQueue();
     }
 
-    public getPendingAssetCount(): number { return this.pending.size + this.sectorQueue.length + this.binaryDecodeQueue.length + this.decodingBinaryCount; }
+    public getPendingAssetCount(): number { return this.pending.size + this.sectorQueue.length + this.binaryDecodeQueue.length + this.decodingBinaryCount + this.loadingSectorCount + this.packageBuildCount + this.precacheCount; }
     public hasPendingAssets(): boolean { return this.getPendingAssetCount() > 0; }
 
     public forgetSharedSounds(keys: string[]): void {
@@ -1044,13 +1249,27 @@ export class DecodeWorkerClient {
     }
 
     public terminate() {
+        if (this.isTerminated) return;
         this.isTerminated = true;
+        this.packageBuildAbort.abort();
+        this.isWorldLoading = false;
+        if (this.precacheWorker) this.precacheWorker.terminate();
+        if (this.loadingWorker) {
+            this.loadingWorker.terminate();
+            this.loadingWorker = null;
+        }
         clearInterval(this.maintenanceTimer);
         clients.delete(this);
         const error = new Error(`Decode worker terminated.`);
 
-        for (const request of this.sectorQueue.splice(0)) request.reject(error);
-        for (const entry of this.binaryDecodeQueue.splice(0)) entry.request.reject(error);
+        for (const request of this.sectorQueue.splice(0)) {
+            finishLoadingProfile(request.loadingId);
+            request.reject(error);
+        }
+        for (const entry of this.binaryDecodeQueue.splice(0)) {
+            finishLoadingProfile(entry.request.loadingId);
+            entry.request.reject(error);
+        }
         this.slots.forEach((slot, index) => this.onWorkerDead(index, error));
     }
 }

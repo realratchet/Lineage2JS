@@ -227,6 +227,66 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
         return this.load(pkg);
     }
 
+    public async preparePackages(pkg: APackage, concurrency: number, ready: (packages: APackage[]) => Promise<void>): Promise<void> {
+        const queue = [pkg], discovered = new Set([pkg]), pending = new Map<APackage, Promise<void>>(), waiting = new Set<APackage>();
+        const loader = this, nativePath = this.getNativePackage().path;
+
+        async function prepare(entry: APackage): Promise<void> {
+            await entry.decode();
+            if (!loader.pkgDependencies.has(entry.path)) {
+                const dependencies: string[] = [];
+                for (const imp of entry.imports.filter(imp => imp.className !== "Package")) {
+                    let root = entry.getImportEntry(imp.idPackage);
+                    while (root.idPackage !== 0) root = entry.getImportEntry(root.idPackage);
+                    if (!loader.hasPackage(root.objectName, imp.className)) {
+                        console.warn(`Package '${root.objectName}' for type '${imp.className}' does not exist, skipping dependency.`);
+                        continue;
+                    }
+                    const dependency = loader.getPackage(root.objectName, imp.className);
+                    if (!dependencies.includes(dependency.path)) dependencies.push(dependency.path);
+                }
+                loader.pkgDependencies.set(entry.path, dependencies);
+            }
+            for (const path of loader.pkgDependencies.get(entry.path)) {
+                if (path === nativePath) continue;
+                const dependency = loader.getPackage(path);
+                if (discovered.has(dependency)) continue;
+                discovered.add(dependency);
+                queue.push(dependency);
+            }
+            waiting.add(entry);
+        }
+
+        function isReady(entry: APackage): boolean {
+            const paths = [entry.path], checked = new Set<string>();
+            while (paths.length) {
+                const path = paths.pop();
+                if (path === nativePath || checked.has(path)) continue;
+                checked.add(path);
+                if (!loader.getPackage(path).isDecoded() || !loader.pkgDependencies.has(path)) return false;
+                paths.push(...loader.pkgDependencies.get(path));
+            }
+            return true;
+        }
+
+        try {
+            while (queue.length || pending.size) {
+                while (queue.length && pending.size < concurrency) {
+                    const entry = queue.shift();
+                    pending.set(entry, prepare(entry));
+                }
+                const entries = [...pending.keys()];
+                const entry = entries[await Promise.race(entries.map(async (entry, index) => { await pending.get(entry); return index; }))];
+                pending.delete(entry);
+                const packages = [...waiting].filter(isReady);
+                packages.forEach(entry => waiting.delete(entry));
+                if (packages.length) await ready(packages);
+            }
+        } finally {
+            await Promise.allSettled(pending.values());
+        }
+    }
+
     public async retainPackageSources(pkg: APackage): Promise<void> {
         for (const path of this.getDependencies(pkg)) {
             if (!/\.(usx|utx|uax)$/i.test(path)) continue;

@@ -56,6 +56,8 @@ export class LoginClient {
     protected loginOk1 = 0;
     protected loginOk2 = 0;
     protected url: URL;
+    protected serverPingsCanceled = false;
+    protected cancelServerPing: () => void = null;
 
     public servers: GameServerInfo_T[] = [];
     public lastServerId = 0;
@@ -80,6 +82,7 @@ export class LoginClient {
     }
 
     protected fail(error: Error) {
+        this.stopServerPings();
         this.failure = error;
 
         if (!this.waiting) return;
@@ -182,6 +185,7 @@ export class LoginClient {
     }
 
     public async selectServer(serverId: number): Promise<SessionKey_T> {
+        this.stopServerPings();
         this.send(new PacketWriter().c(LoginClientPacket_T.RequestServerLogin).d(this.loginOk1).d(this.loginOk2).c(serverId));
 
         const [, packet] = await this.expect(LoginServerPacket_T.PlayOk);
@@ -193,6 +197,47 @@ export class LoginClient {
 
     public getGameServerUrl(server: GameServerInfo_T): string { // WS uses the login host and the advertised game port.
         return `${this.url.protocol}//${this.url.hostname}:${server.port}${this.url.pathname}`;
+    }
+
+    public async pingServers(onPing: (serverId: number, ping: number) => void) {
+        for (const server of this.servers) {
+            if (this.serverPingsCanceled) return;
+            if (server.port === 0) {
+                onPing(server.id, 9999);
+                continue;
+            }
+
+            const ping = await new Promise<number>(resolve => {
+                const started = performance.now();
+                const socket = new WebSocket(this.getGameServerUrl(server));
+                const finish = (ping: number) => {
+                    clearTimeout(timer);
+                    socket.onopen = socket.onerror = socket.onclose = null;
+                    socket.close();
+                    this.cancelServerPing = null;
+                    resolve(ping);
+                };
+                const timer = window.setTimeout(() => finish(9999), 10000);
+
+                this.cancelServerPing = () => finish(9999);
+                socket.onopen = () => {
+                    const ping = Math.trunc(performance.now() - started);
+
+                    // Retail 0x6e062c..0x6e06e1 times connect(), then sends ProtocolVersion(-2).
+                    socket.send(new PacketWriter().h(7).c(0).d(-2).toBytes());
+                    finish(ping);
+                };
+                socket.onerror = socket.onclose = () => finish(9999);
+            });
+
+            if (this.serverPingsCanceled) return;
+            onPing(server.id, ping);
+        }
+    }
+
+    protected stopServerPings() {
+        this.serverPingsCanceled = true;
+        if (this.cancelServerPing) this.cancelServerPing();
     }
 
     public close() { this.socket.close(); this.fail(new Error(`Login connection canceled.`)); }

@@ -97,6 +97,7 @@ export class NetworkSession {
 
             if (this.login !== login) return;
             this.network.ui.showServers(servers, login.lastServerId);
+            void login.pingServers((serverId, ping) => this.network.ui.setServerPing(serverId, ping));
         } catch (e) {
             if (this.login !== login) return;
             this.network.ui.showLogin();

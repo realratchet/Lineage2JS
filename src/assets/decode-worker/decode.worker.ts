@@ -2,6 +2,7 @@ import DecodeEngine from "./decode-engine";
 import type { MainToWorkerMessage_T, WorkerToMainMessage_T } from "./decode-protocol";
 import { selectAssetFiles, setServedAssets } from "../asset-source";
 import { withAssetSources, releaseAssetSources } from "../unreal/asset-handle";
+import { setLoadingStepHandler } from "../../loading-profile";
 
 const ctx = self as any;
 
@@ -11,9 +12,56 @@ if (typeof ctx.location.reload !== "function") {
 }
 
 const engine = new DecodeEngine();
+const loadingLabels: Record<string, string> = { read: "Reading", dependencies: "Loading package", convert: "Converting", cache: "Writing cache", load: "Loading built package" };
+let flushLoadingProgress: (requestId: number) => void = null;
 
 function post(message: WorkerToMainMessage_T, transfer?: Transferable[]) {
+    if (flushLoadingProgress && "requestId" in message && message.type !== "sectorCache") flushLoadingProgress(message.requestId);
     ctx.postMessage(message, transfer ?? []);
+}
+
+async function handleProfiledMessage(message: MainToWorkerMessage_T): Promise<void> {
+    if (!("requestId" in message) || message.type === "memoryStats") return handleMessage(message);
+
+    const requestId = message.requestId, started = performance.timeOrigin + performance.now(), steps: Record<string, { ms: number, count: number }> = {}, active = new Map<number, { kind: string, name: string }>();
+    let lastUpdate = 0, progressTimer = 0;
+
+    function updateProgress(id: number = requestId) {
+        if (id !== requestId) return;
+
+        clearTimeout(progressTimer);
+        progressTimer = 0;
+        lastUpdate = performance.now();
+        ctx.postMessage({ type: "loadingProgress", profile: { requestId, started, active: [...active.values()].map(step => step.kind === "lock" ? "Waiting for cache access" : `${loadingLabels[step.kind] || step.kind} ${step.name}`).slice(-1)[0] || message.type, steps, packages: [...active.values()].filter(step => step.kind !== "lock") } });
+    }
+
+    flushLoadingProgress = updateProgress;
+    setLoadingStepHandler((id, kind, name, start, elapsed) => {
+        if (elapsed < 0) active.set(id, { kind, name: name.replace(/^assets\//, "") });
+        else {
+            active.delete(id);
+            const row = steps[kind] || (steps[kind] = { ms: 0, count: 0 });
+
+            row.ms += elapsed;
+            row.count++;
+            if (kind === "lock") {
+                const lock = steps[`lock:${name}`] || (steps[`lock:${name}`] = { ms: 0, count: 0 });
+                lock.ms += elapsed;
+                lock.count++;
+            }
+        }
+        if (performance.now() - lastUpdate >= 250) updateProgress();
+        else if (!progressTimer) progressTimer = setTimeout(updateProgress, 250 - (performance.now() - lastUpdate)) as any;
+    });
+    updateProgress();
+
+    try {
+        await handleMessage(message);
+    } finally {
+        clearTimeout(progressTimer);
+        setLoadingStepHandler(null);
+        flushLoadingProgress = null;
+    }
 }
 
 async function handleMessage(msg: MainToWorkerMessage_T) {
@@ -35,6 +83,8 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             try {
                 const { library, buffers } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings, fromCache => post({ type: "sectorCache", requestId: msg.requestId, sectorName: msg.sectorName, fromCache }));
 
+                if (msg.flushAssets) await engine.flushStoredAssets();
+
                 post({ type: "decoded", requestId: msg.requestId, library }, buffers);
             } catch (e) {
                 console.error(`[decode-worker] failed to decode sector '${msg.sectorName}':`, e);
@@ -48,6 +98,32 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
             } catch (e) {
                 console.error(`[decode-worker] failed to precache sector '${msg.sectorName}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
+            }
+            break;
+        }
+        case "sectorPackages": {
+            try {
+                post({ type: "sectorPackagesListed", requestId: msg.requestId, packages: await engine.getSectorPackages(msg.sectorName, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } })) });
+            } catch (error) {
+                post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
+            }
+            break;
+        }
+        case "packageDependencies": {
+            try {
+                const packages = await engine.getPackageDependencies(msg.path, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } }));
+                post({ type: "sectorPackagesListed", requestId: msg.requestId, packages });
+            } catch (error) {
+                post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
+            }
+            break;
+        }
+        case "precachePackage": {
+            try {
+                await engine.precachePackage(msg.path, msg.settings, false, msg.lockHeld);
+                post({ type: "packagePrecached", requestId: msg.requestId });
+            } catch (error) {
+                post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
             }
             break;
         }
@@ -70,6 +146,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         case "precacheCharacters": {
             try {
                 await engine.precacheCharacters(msg.settings, msg.charIndex);
+                await engine.flushStoredAssets();
                 post({ type: "charactersPrecached", requestId: msg.requestId });
             } catch (e) {
                 console.error("[decode-worker] failed to precache characters:", e);
@@ -80,6 +157,7 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         case "precacheNpcBundle": {
             try {
                 await engine.precacheNpcBundle(msg.settings, msg.packageName);
+                await engine.flushStoredAssets();
                 post({ type: "npcBundlePrecached", requestId: msg.requestId });
             } catch (e) {
                 console.error(`[decode-worker] failed to precache npc bundle '${msg.packageName}':`, e);
@@ -333,7 +411,7 @@ async function processMessages(): Promise<void> {
 
     await withAssetSources(async () => {
         while (arrMessages.length > 0)
-            await handleMessage(arrMessages.shift()!);
+            await handleProfiledMessage(arrMessages.shift()!);
     });
 
     isProcessingMessages = false;

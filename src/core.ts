@@ -18,7 +18,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
     // await ensureWasmInitialized();
 
     if (globalThis.isSecureContext && "storage" in navigator && !await navigator.storage.persisted()) {
-        setLoadingProgress(null, "Allow persistent storage to keep cached game files. You can continue without it.", true);
+        setLoadingProgress(null, "Allow persistent storage to keep cached game files. You can continue without it.", true, false);
         document.querySelector<HTMLElement>(".storage-warning").hidden = await navigator.storage.persist();
         hideLoadingProgress();
     }
@@ -107,7 +107,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
 
     // debugger;
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
-    if (loginServer) setLoadingProgress(0, "Loading game data…", true);
+    if (loginServer) setLoadingProgress(null, "Loading game data…", true);
     const assetList = await (await fetchAsset("asset-list.json")).json();
     const engine = await GameManager.initialize(viewport, assetList, loadSettings);
     const assetManager = engine.getComponent("asset"), renderManager = engine.getComponent("render"), uiManager = engine.getComponent("ui");

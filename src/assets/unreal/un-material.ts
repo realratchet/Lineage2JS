@@ -192,7 +192,7 @@ abstract class UBaseMaterial extends UObject {
         });
     }
 
-    public abstract getTextureSize(): { width: number, height: number } | null;
+    public abstract getTextureSize(builder?: DecodeLibraryBuilder): { width: number, height: number } | null;
 }
 
 export abstract class UBaseModifier extends UBaseMaterial {
@@ -208,8 +208,8 @@ export abstract class UBaseModifier extends UBaseMaterial {
         });
     }
 
-    public getTextureSize(): { width: number; height: number; } | null {
-        return this.material?.loadSelf?.().getTextureSize() || null;
+    public getTextureSize(builder?: DecodeLibraryBuilder): { width: number; height: number; } | null {
+        return builder ? builder.getMaterialTextureSize(this.material) : this.material?.loadSelf?.().getTextureSize() || null;
     }
 }
 export abstract class UMaterial extends UBaseMaterial { }
@@ -543,8 +543,8 @@ export abstract class UShader extends UMaterial {
         } as IShaderDecodeInfo;
     }
 
-    public getTextureSize(): { width: number; height: number; } | null {
-        return this.diffuse?.loadSelf?.().getTextureSize() || this.opacity?.loadSelf?.().getTextureSize() || null;
+    public getTextureSize(builder?: DecodeLibraryBuilder): { width: number; height: number; } | null {
+        return builder ? builder.getMaterialTextureSize(this.diffuse) || builder.getMaterialTextureSize(this.opacity) : this.diffuse?.loadSelf?.().getTextureSize() || this.opacity?.loadSelf?.().getTextureSize() || null;
     }
 }
 
@@ -615,8 +615,8 @@ export abstract class UColorModifier extends UBaseMaterial {
         } as IColorModifierDecodeInfo;
     }
 
-    public getTextureSize(): { width: number; height: number; } | null {
-        return this.material?.loadSelf?.().getTextureSize() || null;
+    public getTextureSize(builder?: DecodeLibraryBuilder): { width: number; height: number; } | null {
+        return builder ? builder.getMaterialTextureSize(this.material) : this.material?.loadSelf?.().getTextureSize() || null;
     }
 
     protected getPropertyMap() {

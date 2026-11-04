@@ -16,9 +16,16 @@ export type DecodeMessage_T = {
     requestId: number;
     sectorName: string;
     settings: LoadSettings_T;
+    flushAssets?: boolean;
 };
 
 export type PrecacheMessage_T = { type: "precache"; requestId: number; sectorName: string; settings: LoadSettings_T; };
+export type PackageDependenciesMessage_T = { type: "packageDependencies"; requestId: number; path: string; settings: LoadSettings_T; };
+export type SectorPackagesMessage_T = { type: "sectorPackages"; requestId: number; sectorName: string; settings: LoadSettings_T; };
+export type SectorPackagesReadyMessage_T = { type: "sectorPackagesReady"; ready: { requestId: number, packages: string[] }; };
+export type SectorPackagesListedMessage_T = { type: "sectorPackagesListed"; requestId: number; packages: string[]; };
+export type PrecachePackageMessage_T = { type: "precachePackage"; requestId: number; path: string; settings: LoadSettings_T; lockHeld?: boolean; };
+export type PackagePrecachedMessage_T = { type: "packagePrecached"; requestId: number; };
 export type FreeMessage_T = { type: "free"; sectorName: string; };
 export type DecodeEnvMessage_T = { type: "decodeEnv"; requestId: number; settings: LoadSettings_T; };
 export type DecodeSkillMessage_T = { type: "decodeSkill"; requestId: number; settings: LoadSettings_T; id: number; level: number; urgent?: boolean; record?: NpcSkillAttack_T; };
@@ -100,8 +107,12 @@ export type ScriptLocalizationMessage_T = { type: "scriptLocalization"; requestI
 export type L2TextMessage_T = { type: "l2Text"; requestId: number; name: string; }
 export type MemoryStatsMessage_T = { type: "memoryStats"; requestId: number; }
 export type WorkerMemoryStats_T = { buffers: number; packages: number; };
+export type LoadingProgressMessage_T = { type: "loadingProgress"; profile: { requestId: number, started: number, active: string, packages: { kind: string, name: string }[], steps: Record<string, { ms: number, count: number }> } };
 
 export type MainToWorkerMessage_T =
+    | PackageDependenciesMessage_T
+    | SectorPackagesMessage_T
+    | PrecachePackageMessage_T
     | { type: "maintenance"; }
     | { type: "promoteSkill"; requestId: number; }
     | ForgetSharedTexturesMessage_T
@@ -168,6 +179,10 @@ export type L2TextDecodedMessage_T = { type: "l2TextDecoded"; requestId: number;
 export type MemoryStatsDecodedMessage_T = { type: "memoryStatsDecoded"; requestId: number; stats: WorkerMemoryStats_T; };
 
 export type WorkerToMainMessage_T =
+    | SectorPackagesReadyMessage_T
+    | LoadingProgressMessage_T
+    | SectorPackagesListedMessage_T
+    | PackagePrecachedMessage_T
     | ReadyMessage_T
     | InitErrorMessage_T
     | DecodedMessage_T

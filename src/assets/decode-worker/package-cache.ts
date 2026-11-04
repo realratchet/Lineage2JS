@@ -6,6 +6,7 @@ import { getAssetSourceId } from "../asset-source";
 import { capturePackageResolver, packageIdentity, validatePackageResolver, canReleasePackageSource } from "../unreal/package-resolver";
 import { queueConvertedAssetRelease } from "../unreal/asset-handle";
 import { convertDDSTextureInfo } from "@l2js/engine/dds/dxt-decode";
+import { startLoadingStep } from "../../loading-profile";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import { hydrateLibraryFile, hydrateLibraryFileSync, type SeekableLibrary_T } from "./library-serializer";
 import { loadCachedPackage, getCachedPackageFile, storeCachedPackage, isCacheEnabled } from "./decode-cache";
@@ -59,68 +60,94 @@ export class PackageCache {
         if (!pkg.header) return;
         const dependencies = pkg.loader.getDependencies(pkg).filter(path => path !== pkg.loader.getNativePackage().path).map(path => pkg.loader.getPackage(path)).filter(dependency => !!dependency.header);
         const identity = packageIdentity(dependencies);
-        const cached = await loadCachedPackage(pkg.path, this.settings);
-        const data: PackageData_T = cached && cached.library.complete && cached.library.identity === identity ? cached.library : { path: pkg.path, identity, complete: false, entries: {} };
-        if (data === cached?.library) {
-            if (typeof (globalThis as any).FileReaderSync === "function") this.seekable.set(pkg.path, cached);
-            else await hydrateLibraryFile(cached);
-        }
+        const finish = startLoadingStep("load", pkg.path);
+        try {
+            const cached = await loadCachedPackage(pkg.path, this.settings);
+            const data: PackageData_T = cached && cached.library.complete && cached.library.identity === identity ? cached.library : { path: pkg.path, identity, complete: false, entries: {} };
+            if (data === cached?.library) {
+                if (typeof (globalThis as any).FileReaderSync === "function") this.seekable.set(pkg.path, cached);
+                else await hydrateLibraryFile(cached);
+            }
 
-        this.packages.set(pkg.path, data);
-        for (const [key, entry] of Object.entries(data.entries)) {
-            this.entries.set(key, entry);
-            this.owners.set(key, pkg.path);
+            this.packages.set(pkg.path, data);
+            for (const [key, entry] of Object.entries(data.entries)) {
+                this.entries.set(key, entry);
+                this.owners.set(key, pkg.path);
+            }
+        } finally {
+            finish();
         }
     }
 
-    public async build(packages: APackage[]): Promise<void> {
+    public async build(packages: APackage[], lockedPath: string = null): Promise<void> {
         if (!isCacheEnabled(this.settings) || this.settings._packageCache === false) return;
         packages = packages.filter(pkg => /\.(usx|utx|uax)$/i.test(pkg.path) && !!pkg.exportGroups && Object.keys(pkg.exportGroups).some(kind => kind === "StaticMesh" || kind === "Sound" || materialTypes.has(kind)));
         if (packages.every(pkg => !this.packages.has(pkg.path) || this.packages.get(pkg.path).complete)) return;
-        await requestWebLock(`package-conversion:${getAssetSourceId()}`, async () => {
-            for (const pkg of packages) if (!this.packages.get(pkg.path)?.complete) this.packages.delete(pkg.path);
-            await this.open(packages);
-            for (const pkg of packages) {
-                const data = this.packages.get(pkg.path);
-                if (!data || data.complete) continue;
-                data.unsupported = {};
-                let count = 0;
-                const converted = new Set<number>();
-                for (const [kind, entries] of Object.entries(pkg.exportGroups)) {
-                    if (kind !== "StaticMesh" && kind !== "Sound" && !materialTypes.has(kind)) {
-                        data.unsupported[kind] = entries.length;
-                        continue;
-                    }
-                    for (const entry of entries) {
-                        const library = new DecodeLibrary();
-                        const builder = new DecodeLibraryBuilder(library, this.settings, this);
-                        try {
-                            const object = pkg.fetchObject(entry.index + 1);
-                            if (kind === "StaticMesh") builder.pullStaticMesh(object as any);
-                            else if (kind === "Sound") builder.pullSound(object as any);
-                            else builder.pullMaterial(object as any);
-                        } catch (error) {
-                            throw new Error(`Package '${pkg.path}', export '${pkg.getObjectPath(entry.export)}' (${kind}, #${entry.index + 1}, ${entry.export.size} bytes): ${error.message}`, { cause: error });
-                        }
-                        const cacheKind = kind === "StaticMesh" ? "mesh" : kind === "Sound" ? "sound" : "material";
-                        if (!data.entries[`${pkg.path}:${entry.index}:${cacheKind}`]) throw new Error(`Package '${pkg.path}' export '${entry.export.objectName}' has no converted entry.`);
-                        converted.add(entry.index);
-                        count++;
-                        if (count % 16 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0));
-                    }
-                }
-                data.resolver = capturePackageResolver(pkg, converted);
-                if (!data.resolver.rawSafe) {
-                    (pkg as any).requiresRawDependencies = true;
-                    await (pkg.loader as any).retainPackageSources(pkg);
-                }
-                data.complete = true;
-                if (count) this.dirty.add(pkg.path);
+        for (const pkg of packages) {
+            const finishBuild = startLoadingStep("build", pkg.path);
+            try {
+                if (pkg.path === lockedPath) await this.buildPackage(pkg);
+                else await requestWebLock(`package-conversion:${getAssetSourceId()}:${pkg.path}`, async () => this.buildPackage(pkg));
+            } finally {
+                finishBuild();
             }
-            await this.flush();
-            for (const pkg of packages) if (this.packages.get(pkg.path)?.complete && !(pkg as any).keepRawSource) (pkg as any).rawOnly = false;
-        });
+        }
     }
+
+    protected async buildPackage(pkg: APackage): Promise<void> {
+        if (!this.packages.get(pkg.path)?.complete) {
+            for (const key of Object.keys(this.packages.get(pkg.path)?.entries || {})) {
+                this.entries.delete(key);
+                this.owners.delete(key);
+            }
+            this.packages.delete(pkg.path);
+        }
+        await this.open([pkg]);
+        const data = this.packages.get(pkg.path);
+        if (!data || data.complete) return;
+        const finish = startLoadingStep("convert", pkg.path);
+        try {
+            data.unsupported = {};
+            let count = 0;
+            const converted = new Set<number>();
+            for (const [kind, entries] of Object.entries(pkg.exportGroups)) {
+                if (kind !== "StaticMesh" && kind !== "Sound" && !materialTypes.has(kind)) {
+                    data.unsupported[kind] = entries.length;
+                    continue;
+                }
+                for (const entry of entries) {
+                    const library = new DecodeLibrary();
+                    const builder = new DecodeLibraryBuilder(library, this.settings, this);
+                    try {
+                        const object = pkg.fetchObject(entry.index + 1);
+                        if (kind === "StaticMesh") builder.pullStaticMesh(object as any);
+                        else if (kind === "Sound") builder.pullSound(object as any);
+                        else builder.pullMaterial(object as any);
+                    } catch (error) {
+                        throw new Error(`Package '${pkg.path}', export '${pkg.getObjectPath(entry.export)}' (${kind}, #${entry.index + 1}, ${entry.export.size} bytes): ${error.message}`, { cause: error });
+                    }
+                    const cacheKind = kind === "StaticMesh" ? "mesh" : kind === "Sound" ? "sound" : "material";
+                    if (!data.entries[`${pkg.path}:${entry.index}:${cacheKind}`]) throw new Error(`Package '${pkg.path}' export '${entry.export.objectName}' has no converted entry.`);
+                    converted.add(entry.index);
+                    count++;
+                    if (count % 16 === 0) await new Promise<void>(resolve => setTimeout(resolve, 0));
+                }
+            }
+            data.resolver = capturePackageResolver(pkg, converted);
+            if (!data.resolver.rawSafe) {
+                (pkg as any).requiresRawDependencies = true;
+                await (pkg.loader as any).retainPackageSources(pkg);
+            }
+            data.complete = true;
+            if (count) this.dirty.add(pkg.path);
+            await this.flush();
+            if (!(pkg as any).keepRawSource) (pkg as any).rawOnly = false;
+        } finally {
+            finish();
+        }
+    }
+
+    public isComplete(path: string): boolean { return this.packages.get(path)?.complete === true; }
 
     public key(object: any, kind: string): string | null { return object.pkg && this.packages.has(object.pkg.path) && object.exportIndex !== null && object.exportIndex !== undefined && object.exportIndex >= 0 ? `${object.pkg.path}:${object.exportIndex}:${kind}` : null; }
 

@@ -7,6 +7,7 @@ import { SKIN_SLOTS } from "./skin-textures";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import SysString_T from "./sys-string";
 
+const TEX_BACK = "L2UI_ch3.OptionWnd.option3_back";
 const TEX_TAB_BACK = "L2UI_ch3.SSQWnd.ssq_back";
 const TEX_TAB = "L2UI_ch3.TabButton.normal_tab_on";
 const TEX_TAB_SELECTED = "L2UI_ch3.TabButton.normal_tab";
@@ -20,7 +21,7 @@ export const PAWN_RANGES = [3, 2.5, 2, 1.5, 1];
 export const PAWN_LIMITS = [50, 100, 200, 300, 400, 10000];
 
 export class NCOptionWnd {
-    public static getTextures() { return [TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
     public readonly element: HTMLDivElement;
     public getOptions: () => GameConfig_T = null;
     public onApply: (options: GameConfig_T) => void = null;
@@ -55,6 +56,7 @@ export class NCOptionWnd {
     protected readonly renderDeco: NDomCheckBox_T;
     protected readonly useTrilinear: NDomCheckBox_T;
     protected uiScales = UI_SCALES;
+    protected readonly background: HTMLCanvasElement;
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly audioCombos: NCComboBox[] = [];
     protected readonly audioKeys: (keyof AudioConfig_T)[] = ["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"];
@@ -82,6 +84,9 @@ export class NCOptionWnd {
         this.element = layer.createWindow(0, 0, 256, 480);
         this.element.classList.add("ndom-options");
         this.element.hidden = true;
+        this.background = document.createElement("canvas");
+        this.background.className = "ndom-tile ndom-options-background";
+        this.element.appendChild(this.background);
         layer.tile(this.element, 0, 20, 256, 28, 0, 0, 256, 28, TEX_TAB_BACK);
         NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.Options), false, () => this.setVisible(false));
         [SysString_T.Video, SysString_T.Audio, SysString_T.Game].forEach((id, index) => {
@@ -330,6 +335,7 @@ export class NCOptionWnd {
                 press();
             });
         });
+        new ResizeObserver(() => this.updateBackground()).observe(this.element);
     }
 
     public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 128), Math.max(0, Math.trunc((height - (this.element.offsetHeight || 480)) * 0.5))); }
@@ -441,6 +447,33 @@ export class NCOptionWnd {
             tab.setTextures(i === index ? TEX_TAB_SELECTED : TEX_TAB, TEX_TAB_SELECTED);
             tab.setAttribute("aria-selected", String(i === index));
         });
+        this.updateBackground();
+    }
+
+    protected updateBackground() {
+        if (!this.element.offsetWidth) return;
+
+        const width = this.element.offsetWidth, height = this.element.offsetHeight - 48;
+        const image = this.layer.getManager().canvas.getTexture(TEX_BACK);
+        const canvas = this.background, context = canvas.getContext("2d");
+
+        canvas.width = width;
+        canvas.height = height;
+        context.imageSmoothingEnabled = false;
+        context.drawImage(image, 0, 400, 256, 1, 0, 0, width, height - 4);
+        context.drawImage(image, 0, 428, 256, 4, 0, height - 4, width, 4);
+
+        const panel = [this.video, this.audio, this.game][this.selectedTab];
+
+        for (const section of Array.from(panel.children) as HTMLElement[]) {
+            const x = panel.offsetLeft + section.offsetLeft, y = panel.offsetTop + section.offsetTop - 48;
+            const w = section.offsetWidth, h = section.offsetHeight;
+
+            context.clearRect(x, y, w, h);
+            for (let row = 0; row < 3; row++)
+                for (let col = 0; col < 3; col++)
+                    context.drawImage(image, [11, 12, 244][col], [6, 7, 34][row], [1, 232, 1][col], [1, 27, 1][row], x + [0, 1, w - 1][col], y + [0, 1, h - 1][row], [1, w - 2, 1][col], [1, h - 2, 1][row]);
+        }
     }
 
     protected updateNameControls() {

@@ -297,8 +297,6 @@ export class NetworkActors {
         physics.setPawnZone(render.player, false, true);
         physics.setPawnVolumes(render.player);
 
-        const startTime = performance.now();
-
         while (generation === this.teleportGeneration) {
             const progress = asset.getAreaLoadProgress(render, render.player.position);
 
@@ -308,7 +306,7 @@ export class NetworkActors {
             const action = progress.building > 0 ? "Building" : "Loading";
             const stage = progress.decoded < progress.total ? `${action} region packages (${progress.decoded}/${progress.total})` : progress.built < progress.total ? `${action} scenery (${progress.built}/${progress.total} regions)` : `${action} textures and lighting (${progress.ready}/${progress.total} regions)`;
 
-            setLoadingProgress(value || null, `${stage} · ${Math.round(value * 100)}% · ${Math.floor((performance.now() - startTime) / 1000)}s elapsed`);
+            setLoadingProgress(value || null, stage);
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 

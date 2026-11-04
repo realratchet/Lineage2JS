@@ -1450,6 +1450,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.show("servers");
     }
 
+    public setServerPing(serverId: number, ping: number) { this.loginServerWnd.serverSelect.setServerPing(serverId, ping); }
+
     public showCharacters(characters: GamePackets.CharSelectEntry_T[]) {
         this.characterNames = characters.map(character => character.name);
         this.messageWnd.hide();

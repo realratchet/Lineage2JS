@@ -4,6 +4,7 @@ import { getAssetSourceId } from "../asset-source";
 import { openAssetCatalog, storeAssetCatalog } from "./asset-catalog";
 import { restorePackageAssets } from "./package-cache";
 import requestWebLock from "../web-lock";
+import { startLoadingStep } from "../../loading-profile";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
@@ -145,23 +146,28 @@ export function storeCachedLibrary(sectorName: string, settings: LoadSettings_T,
 
 export async function storeCachedLibraryDurable(sectorName: string, settings: LoadSettings_T, library: any, seekable: SeekableLibrary_T = null): Promise<number> {
     if (!isCacheEnabled(settings)) return 0;
+    const finish = startLoadingStep("cache", sectorName);
+    try {
 
-    if (isAssetCatalog(sectorName)) {
-        const dir = await getCacheDir(true);
-        const handle = await dir.getFileHandle(cacheFileName(sectorName, settings), { create: true });
+        if (isAssetCatalog(sectorName)) {
+            const dir = await getCacheDir(true);
+            const handle = await dir.getFileHandle(cacheFileName(sectorName, settings), { create: true });
 
-        return requestWebLock(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
+            return await requestWebLock(cacheFileName(sectorName, settings), () => storeAssetCatalog(handle, library.entries, seekable));
+        }
+
+        return await requestWebLock(cacheFileName(sectorName, settings), async () => {
+            if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
+
+            const bytes = /Firefox\//.test(navigator.userAgent) ? serializeLibraryParts(library, seekable) : serializeLibraryBlob(library, seekable);
+
+            await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
+
+            return bytes instanceof Blob ? bytes.size : bytes.byteLength;
+        });
+    } finally {
+        finish();
     }
-
-    return requestWebLock(cacheFileName(sectorName, settings), async () => {
-        if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
-
-        const bytes = /Firefox\//.test(navigator.userAgent) ? serializeLibraryParts(library, seekable) : serializeLibraryBlob(library, seekable);
-
-        await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
-
-        return bytes instanceof Blob ? bytes.size : bytes.byteLength;
-    });
 }
 
 export async function storeCachedLibraryBufferDurable(sectorName: string, settings: LoadSettings_T, buffer: ArrayBuffer): Promise<void> {
@@ -327,7 +333,7 @@ async function readCachedPackage(path: string, settings: LoadSettings_T, read: (
         return await requestWebLock(`package:${path}:${hashPackageSettings(settings)}`, async () => {
             const file = await handle.getFile();
             return file.size ? read(file) : null;
-        });
+        }, { mode: "shared" });
     } catch (error) {
         if (error instanceof DOMException && error.name === "NotFoundError") return null;
         throw error;
@@ -336,29 +342,34 @@ async function readCachedPackage(path: string, settings: LoadSettings_T, read: (
 
 export async function storeCachedPackage(path: string, settings: LoadSettings_T, data: any): Promise<void> {
     if (!isCacheEnabled(settings) || settings._packageCache === false) return;
-    const sourcePixels = [];
-    const entries: Record<string, any> = {};
-    for (const [key, entry] of Object.entries(data.entries) as [string, any][]) {
-        const source = entry.result?.source;
-        if (!source) { entries[key] = entry; continue; }
-        const pixelIndex = sourcePixels.length;
-        const pixels = source.pixelIndex === undefined ? source : data.sourcePixels[source.pixelIndex];
-        sourcePixels.push({ data: pixels.data, paletteRed: pixels.paletteRed });
-        entries[key] = { ...entry, result: { ...entry.result, source: { ...source, data: null, paletteRed: null, pixelIndex } } };
-    }
-    const stored = { ...data, entries, sourcePixels };
-    const bytes = serializeLibraryBlob(stored);
-    await requestWebLock(`package:${path}:${hashPackageSettings(settings)}`, async () => {
-        const dir = await getPackageCacheDir(settings, true, path);
-        const name = packageFileName(path);
-        const handle = await dir.getFileHandle(name, { create: true });
-        const writable = await handle.createWritable();
-        try {
-            await writeCacheBytes(writable, bytes);
-            await writable.close();
-        } catch (error) {
-            try { await writable.abort(); } catch { }
-            throw error;
+    const finish = startLoadingStep("cache", path);
+    try {
+        const sourcePixels = [];
+        const entries: Record<string, any> = {};
+        for (const [key, entry] of Object.entries(data.entries) as [string, any][]) {
+            const source = entry.result?.source;
+            if (!source) { entries[key] = entry; continue; }
+            const pixelIndex = sourcePixels.length;
+            const pixels = source.pixelIndex === undefined ? source : data.sourcePixels[source.pixelIndex];
+            sourcePixels.push({ data: pixels.data, paletteRed: pixels.paletteRed });
+            entries[key] = { ...entry, result: { ...entry.result, source: { ...source, data: null, paletteRed: null, pixelIndex } } };
         }
-    });
+        const stored = { ...data, entries, sourcePixels };
+        const bytes = serializeLibraryBlob(stored);
+        await requestWebLock(`package:${path}:${hashPackageSettings(settings)}`, async () => {
+            const dir = await getPackageCacheDir(settings, true, path);
+            const name = packageFileName(path);
+            const handle = await dir.getFileHandle(name, { create: true });
+            const writable = await handle.createWritable();
+            try {
+                await writeCacheBytes(writable, bytes);
+                await writable.close();
+            } catch (error) {
+                try { await writable.abort(); } catch { }
+                throw error;
+            }
+        });
+    } finally {
+        finish();
+    }
 }

@@ -1,6 +1,7 @@
 import { cyrb53 } from "./unreal/utils/hash-cyrb";
 import InstallShieldCabinet from "./install-shield-cabinet";
 import type CabinetFileReader from "./cabinet-file-reader";
+import { startLoadingStep } from "../loading-profile";
 
 export type AssetFiles_T = [string, File][];
 export type ServedAssets_T = { files: Record<string, string>; version: string; };
@@ -120,7 +121,14 @@ export async function fetchAsset(path: string): Promise<Response> {
     if (!entry) return new Response(null, { status: 404, statusText: "Not Found" });
 
     const startTime = performance.now();
-    const data = await entry.read();
+    const finish = startLoadingStep("read", entry.path);
+    let data: Blob | Uint8Array;
+
+    try {
+        data = await entry.read();
+    } finally {
+        finish();
+    }
     const size = data instanceof Blob ? data.size : data.byteLength;
 
     console.log(`[asset-source] ${entry.path} (${(size / 1024).toFixed(1)} kB, ${(performance.now() - startTime).toFixed(0)} ms)`);

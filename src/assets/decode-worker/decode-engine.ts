@@ -9,6 +9,7 @@ import * as SchemasC4 from "@l2js/engine/datafile/schema/schema-types";
 import { buildStaticMeshBatchData } from "../decoders/batch-data";
 import { convertDDSMaterialsToRGBA, dxt1ToRgba, dxt3ToRgba, dxt5ToRgba } from "@l2js/engine/dds/dxt-decode";
 import PackageCache from "./package-cache";
+import { startLoadingStep } from "../../loading-profile";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer, { collectTransferables } from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
@@ -800,18 +801,39 @@ export class DecodeEngine {
         return new DecodeLibraryBuilder(library, settings, packageCache);
     }
 
-    protected async openPackageCache(pkg: APackage, settings: LoadSettings_T): Promise<PackageCache> {
+    protected async openPackageCache(pkg: APackage, settings: LoadSettings_T, buildDependencies: boolean = true, lockedPath: string = null): Promise<PackageCache> {
         const cache = new PackageCache(settings);
         const packages = this.assetLoader.getDependencies(pkg).filter(path => path !== this.assetLoader.getNativePackage().path).map(path => this.assetLoader.getPackage(path));
         await cache.open(packages);
-        await cache.build(packages);
+        await cache.build(buildDependencies ? packages : [pkg], lockedPath);
         return cache;
     }
 
-    public async precachePackage(path: string, settings: LoadSettings_T): Promise<{ exports: number, hits: number, misses: number }> {
+    public async getSectorPackages(sectorName: string, settings: LoadSettings_T, ready: (packages: string[]) => void = null): Promise<string[]> {
+        return this.getPackageDependencies(this.assetLoader.getPackage(sectorName, "Level").path, settings, ready);
+    }
+
+    public async getPackageDependencies(path: string, settings: LoadSettings_T, ready: (packages: string[]) => void = null): Promise<string[]> {
+        this.setLoadSettings(settings);
+        const pkg = this.assetLoader.getPackage(path), packages: string[] = [];
+        const cache = new PackageCache(settings);
+
+        await this.assetLoader.preparePackages(pkg, 4, async entries => {
+            const convertible = entries.filter(entry => /\.(usx|utx|uax)$/i.test(entry.path));
+            for (const entry of convertible) await this.assetLoader.load(entry);
+            await cache.open(convertible);
+            const paths = convertible.filter(entry => !cache.isComplete(entry.path)).map(entry => entry.path);
+            packages.push(...paths);
+            if (ready && paths.length) ready(paths);
+        });
+        await this.usingDecodePackage(pkg);
+        return packages;
+    }
+
+    public async precachePackage(path: string, settings: LoadSettings_T, buildDependencies: boolean = true, lockHeld: boolean = false): Promise<{ exports: number, hits: number, misses: number }> {
         this.setLoadSettings(settings);
         const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(path));
-        const cache = await this.openPackageCache(pkg, settings);
+        const cache = await this.openPackageCache(pkg, settings, buildDependencies, lockHeld ? pkg.path : null);
         return { exports: Object.keys((cache as any).packages.get(pkg.path)?.entries || {}).filter(key => !key.endsWith(":frame")).length, hits: cache.hits, misses: cache.misses };
     }
 
@@ -846,23 +868,28 @@ export class DecodeEngine {
 
     // one counted ref per package, handed back once nothing decoded from it for a while
     protected async usingDecodePackage<T extends APackage>(pkg: T): Promise<T> {
-        if (!this.cacheDecodePackages.has(pkg)) {
-            let pending = this.cacheDecodePackageLoads.get(pkg);
+        const finish = startLoadingStep("dependencies", pkg.path);
+        try {
+            if (!this.cacheDecodePackages.has(pkg)) {
+                let pending = this.cacheDecodePackageLoads.get(pkg);
 
-            if (!pending) this.cacheDecodePackageLoads.set(pkg, pending = this.assetLoader.using(pkg));
+                if (!pending) this.cacheDecodePackageLoads.set(pkg, pending = this.assetLoader.using(pkg));
 
-            try {
-                await pending;
-            } finally {
-                if (this.cacheDecodePackageLoads.get(pkg) === pending) this.cacheDecodePackageLoads.delete(pkg);
+                try {
+                    await pending;
+                } finally {
+                    if (this.cacheDecodePackageLoads.get(pkg) === pending) this.cacheDecodePackageLoads.delete(pkg);
+                }
             }
+
+            else await this.assetLoader.load(pkg);
+
+            this.cacheDecodePackages.set(pkg, performance.now());
+
+            return pkg;
+        } finally {
+            finish();
         }
-
-        else await this.assetLoader.load(pkg);
-
-        this.cacheDecodePackages.set(pkg, performance.now());
-
-        return pkg;
     }
 
     public releaseDecodePackages(idleMs: number): void {

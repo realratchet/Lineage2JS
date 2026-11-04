@@ -1,5 +1,7 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
 import loginServer from "../network/login-server";
+import { setLoadingProgress } from "../loading-progress";
+import { printLoadingProfile } from "../loading-profile";
 import decodeCursors from "./decoders/cursor-decoder";
 import UConfigBigHead from "./unreal/conf-files/un-conf-bighead";
 import fetchAssetHandle from "./unreal/asset-handle";
@@ -332,12 +334,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
         this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
+        if (loginServer) setLoadingProgress(null, "Starting game data workers…", true);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
         const isLogin = !!loginServer;
 
         if (isLogin) setPawnComponents(manRender, new DecodeLibrary(), manRender.player);
+
+        if (isLogin) void this.precacheCharacters();
 
         const clientConfigLoad = this.decodeWorker.getClientConfig(this.loadSettings);
         const playerControllerLoad = (async () => {
@@ -346,15 +351,39 @@ export class AssetManager implements IEngineComponent<GameManager> {
             UnScriptVM.setConfig(new ConfigCache(config.scriptConfig, "l2.ini", "user.ini", localStorage, `unrealConfig:${getAssetSourceId()}`));
             return new PlayerController(library);
         })();
+        const arrPending = ["settings", "character data", "environment", "music", "player model", "player scripts", "effects", "sky", "game text", "login scene"];
+        if (isLogin) arrPending[4] = null;
+        const total = arrPending.filter(Boolean).length;
+        let completed = 0;
+        function updateProgress() {
+            if (isLogin) setLoadingProgress(null, completed < total ? `Loading game data (${completed}/${total}): ${arrPending.filter(Boolean).join(", ")}…` : `Loaded game data (${completed}/${total})`, true);
+        }
+        async function loadStartup<T>(i: number, task: Promise<T>): Promise<T> {
+            const result = await task;
+
+            if (arrPending[i]) {
+                arrPending[i] = null;
+                completed++;
+                updateProgress();
+            }
+
+            return result;
+        }
+
+        updateProgress();
         const startup = Promise.all([
-            clientConfigLoad,
-            this.decodeWorker.getCharGroups(this.loadSettings),
-            this.decodeWorker.decodeEnv(this.loadSettings),
-            this.decodeWorker.getMusicInfo(),
-            isLogin ? null : this.decodeWorker.decodeCharacter(this.loadSettings),
-            playerControllerLoad,
-            playerControllerLoad.then(controller => this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"], [controller.getUnderWaterLoopSound()], [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"])),
-            this.decodeWorker.decodeSector("skylevel", {
+            loadStartup(0, clientConfigLoad),
+            loadStartup(1, this.decodeWorker.getCharGroups(this.loadSettings)),
+            loadStartup(2, this.decodeWorker.decodeEnv(this.loadSettings)),
+            loadStartup(3, this.decodeWorker.getMusicInfo()),
+            isLogin ? null : loadStartup(4, this.decodeWorker.decodeCharacter(this.loadSettings)),
+            loadStartup(5, playerControllerLoad),
+            loadStartup(6, (async () => {
+                const controller = await playerControllerLoad;
+
+                return await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"], [controller.getUnderWaterLoopSound()], [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"]);
+            })()),
+            loadStartup(7, this.decodeWorker.decodeSector("skylevel", {
                 ...this.loadSettings, isSkyLevel: true,
                 loadTerrain: true,
                 loadBaseModel: true,
@@ -363,14 +392,14 @@ export class AssetManager implements IEngineComponent<GameManager> {
                 loadStaticModelList: undefined,
                 loadAudio: false,
                 batching: { staticMeshes: false, terrain: false }
-            }),
-            isLogin ? this.decodeWorker.getGameStrings(this.loadSettings) : null,
-            isLogin ? this.decodeWorker.decodeSector("lobby", this.loadSettings) : null
+            })),
+            isLogin ? loadStartup(8, this.decodeWorker.getGameStrings(this.loadSettings)) : null,
+            isLogin ? loadStartup(9, this.decodeWorker.decodeSector("lobby", this.loadSettings)) : null
         ]);
 
-        if (isLogin) void this.precacheCharacters();
-
         const [clientConfig, charGroups, envInfo, musicInfo, characterLibrary, playerController, effectLibrary, skyLibrary, gameStrings, startupLevelLibrary] = await startup;
+        printLoadingProfile(true);
+        if (isLogin) setLoadingProgress(null, "Preparing game effects and sky…", true);
         const underwaterLoopSound = playerController.getUnderWaterLoopSound();
 
         this.startupLevelLibrary = startupLevelLibrary;
@@ -1017,9 +1046,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected async precacheCharacterAssets(): Promise<void> {
-        if (loginServer) await this.prefetchCharacterScripts();
-
-        await this.decodeWorker.precacheCharacters(this.loadSettings);
+        await Promise.all([this.decodeWorker.precacheCharacters(this.loadSettings), loginServer ? this.prefetchCharacterScripts() : null]);
 
         if (loginServer) return;
 
@@ -1047,6 +1074,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     public setStreaming(renderManager: RenderManager, isStreaming: boolean) {
         if (this.isStreaming !== isStreaming) this.streamingGeneration++;
         this.isStreaming = isStreaming;
+        if (!isStreaming && this.decodeWorker) this.decodeWorker.setWorldLoading(false);
 
         if (isStreaming) return;
 
@@ -1272,7 +1300,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
             const network = this.gameManager.getComponent("network");
             const isWorldLoading = network.isWorldLoading();
             const teleportPosition = network.movement.getPendingTeleportPosition();
-            const maxConcurrentDecodes = isWorldLoading || teleportPosition ? Math.max(this.maxConcurrentDecodes, this.decodeWorkerPoolSize) : this.maxConcurrentDecodes;
+            this.decodeWorker.setWorldLoading(isWorldLoading || !!teleportPosition);
+            const maxConcurrentDecodes = isWorldLoading || teleportPosition ? Math.max(this.maxConcurrentDecodes, this.decodeWorker.getLoadingWorkerPoolSize()) : this.maxConcurrentDecodes;
             const cameraPosition = input.isFollowingPlayer() || isWorldLoading ? tmpCameraPosition.copy(renderManager.player.position) : renderManager.camera.getWorldPosition(tmpCameraPosition); // orbiting the player must not read as movement, it prefetched the whole 3x3 ring
             const [sx, sy] = renderManager.getSectorId(cameraPosition);
             const originIdx = `${sx}_${sy}`;

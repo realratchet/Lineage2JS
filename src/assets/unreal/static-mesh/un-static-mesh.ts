@@ -85,7 +85,7 @@ export abstract class UStaticMesh extends UPrimitive {
             ["bStaticMeshLod", "BoolProperty"],
             ["bStaticMeshLodBlend", "BoolProperty"],
             ["bMakeTwoSideMesh", "BoolProperty"],
-            ["bUseBillBoard", "FloatProperty"],
+            ["bUseBillBoard", "BoolProperty"],
         ];
     }
 

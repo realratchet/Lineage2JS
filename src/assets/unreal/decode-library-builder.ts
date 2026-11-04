@@ -109,7 +109,7 @@ export class DecodeLibraryBuilder {
         const info = material.getDecodeInfo(this);
         if (this.packageCache && typeof (material as any).getTextureFrameDecodeInfo === "function" && !this.textureFrames.has(material.uuid))
             (material as UTexture).getTextureFrameDecodeInfo(this);
-        const textureSize = typeof material.getTextureSize === "function" ? material.getTextureSize() : null;
+        const textureSize = typeof material.getTextureSize === "function" ? material.getTextureSize(this) : null;
         const source = this.packageCache && typeof (material as any).getSourceDecodeInfo === "function" ? (material as UTexture).getSourceDecodeInfo(this) : null;
         this.materialSizes.set(material.uuid, textureSize);
 
@@ -186,7 +186,7 @@ export class DecodeLibraryBuilder {
     public getMaterialTextureSize(material: UMaterial): { width: number, height: number } | null {
         if (!material) return null;
         if (!this.materialSizes.has(material.uuid)) this.pullMaterial(material);
-        return this.materialSizes.has(material.uuid) ? this.materialSizes.get(material.uuid) : material.loadSelf().getTextureSize();
+        return this.materialSizes.has(material.uuid) ? this.materialSizes.get(material.uuid) : material.loadSelf().getTextureSize(this);
     }
 
     public pullStaticLightmap(lightmap: FStaticLightmapTexture): string {

@@ -132,8 +132,6 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 .ndom-options {
     height: auto !important;
     padding-top: 56px;
-    background: #343b3e;
-    border: 1px solid #596165;
     box-sizing: border-box;
 
     .ndom-options-pages > .ndom-options-content {
@@ -151,8 +149,7 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 .ndom-options-section {
     padding: 8px;
     margin-bottom: 8px;
-    background: #20282b;
-    border: 1px solid #444e52;
+    border: 1px solid transparent;
 }
 
 .ndom-options-row {
@@ -216,4 +213,10 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
         visibility: hidden;
         pointer-events: none;
     }
+}
+
+.ndom-options-background {
+    left: 0;
+    top: 48px;
+    pointer-events: none;
 }
