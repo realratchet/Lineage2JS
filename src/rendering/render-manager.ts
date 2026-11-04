@@ -2082,7 +2082,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (sector) {
             const zoneIndex = sector.findPositionZone(fogPosition);
-            const cameraZoneMask = 1n << BigInt(zoneIndex);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
 
             // FLevelSceneNode::Render: direct zone fog (0x8f327c); outdoor world fog (0x8f3077-0x8f31b2).
@@ -2136,11 +2135,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
             let maxHArrLen = 0;
             const activeInfos: { fogInfo: any, weight: number, hArr: ColorByte[] }[] = [];
 
+            // FLevelSceneNode::Render (0x8f2e20): nearest in-range fog, independent of BSP zone.
             fogInfos.forEach(fogInfo => {
-                if (fogInfo.zoneMask && !(fogInfo.zoneMask & cameraZoneMask)) {
-                    return;
-                }
-
                 const affectRange = fogInfo.affectRange;
                 if (!affectRange) return;
 

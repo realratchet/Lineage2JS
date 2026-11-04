@@ -165,20 +165,22 @@ export class NCPawnSelectWnd { // NCPawnSelectWnd OnCreate 0x1009ccc0, OnPaint 0
         const manager = layer.getManager();
 
         this.layer = layer;
-        this.element = layer.createWindow(24, 27, 256, 108, parent);
+        this.element = layer.createWindow(24, 27, 270, 108, parent);
         this.element.style.pointerEvents = "auto";
 
-        layer.tile(this.element, 0, 0, 256, 108, 0, 0, 256, 108, TEX_SELECT_BACK);
+        layer.tile(this.element, 0, 0, 153, 108, 0, 0, 153, 108, TEX_SELECT_BACK);
+        layer.tile(this.element, 153, 0, 14, 108, 152, 0, 1, 108, TEX_SELECT_BACK);
+        layer.tile(this.element, 167, 0, 103, 108, 153, 0, 103, 108, TEX_SELECT_BACK);
         layer.text(this.element, manager.getSysString(SysString_T.Name), LABEL_COLOR, FontType_T.SMALL, 15, 16);
         layer.text(this.element, manager.getSysString(SysString_T.Level), LABEL_COLOR, FontType_T.SMALL, 15, 39);
         layer.text(this.element, manager.getSysString(SysString_T.Karma), TEXT_COLOR, FontType_T.SMALL, 131, 69);
 
-        this.values = layer.createWindow(0, 0, 256, 108, this.element);
+        this.values = layer.createWindow(0, 0, 270, 108, this.element);
         this.values.hidden = true;
         this.hpBar = layer.tile(this.values, 35, 55, 85, 12, 0, 0, 8, 12, TEX_HPBAR);
         this.mpBar = layer.tile(this.values, 35, 69, 85, 12, 0, 0, 8, 12, TEX_MPBAR);
-        this.expBar = layer.tile(this.values, 35, 83, 206, 12, 0, 0, 8, 12, TEX_EXPBAR);
-        this.digits = layer.createWindow(0, 0, 256, 108, this.values);
+        this.expBar = layer.tile(this.values, 35, 83, 220, 12, 0, 0, 8, 12, TEX_EXPBAR);
+        this.digits = layer.createWindow(0, 0, 270, 108, this.values);
         this.digits.style.pointerEvents = "none";
         this.levelText = layer.text(this.values, "", VALUE_COLOR, FontType_T.SMALL, 32, 39);
         this.spText = layer.text(this.values, "", VALUE_COLOR, FontType_T.SMALL, 0, 56);
@@ -209,14 +211,14 @@ export class NCPawnSelectWnd { // NCPawnSelectWnd OnCreate 0x1009ccc0, OnPaint 0
 
         this.setBar(this.hpBar, 55, character.maxHp ? Math.trunc(character.curHp * 85 / character.maxHp) : 0, 85, TEX_HPBAR);
         this.setBar(this.mpBar, 69, character.maxMp ? Math.trunc(character.curMp * 85 / character.maxMp) : 0, 85, TEX_MPBAR);
-        this.setBar(this.expBar, 83, levelEnd ? Math.trunc((character.exp - levelStart) * 206 / (levelEnd - levelStart)) : 0, 206, TEX_EXPBAR);
+        this.setBar(this.expBar, 83, levelEnd ? Math.trunc((character.exp - levelStart) * 220 / (levelEnd - levelStart)) : 0, 220, TEX_EXPBAR);
 
         const layer = this.layer, digits = this.digits;
         const percent = `${((character.exp - levelStart) * 100 / (levelEnd - levelStart)).toFixed(2)}%`;
         const hp = String(character.curHp), mp = String(character.curMp);
 
         digits.replaceChildren();
-        layer.digits(digits, percent, TEXT_COLOR, DigitFont_T.NORMAL, 138 - Math.trunc(this.layer.measureText(percent) / 2), 85); // digit strings are positioned with the regular-font extent 0x10012960, not the 8px cell width
+        layer.digits(digits, percent, TEXT_COLOR, DigitFont_T.NORMAL, 145 - Math.trunc(this.layer.measureText(percent) / 2), 85); // digit strings are positioned with the regular-font extent 0x10012960, not the 8px cell width
         layer.digits(digits, "/", TEXT_COLOR, DigitFont_T.NORMAL, 77 - Math.trunc(this.layer.measureText("/") / 2), 57); // 0x10013350 font 1 -> UCanvas::DrawSpecialDigit: cell k is (k*8, 0, 8, 8), characters outside the strip skip without advancing.
         layer.digits(digits, hp, TEXT_COLOR, DigitFont_T.NORMAL, 67 - this.layer.measureText(hp), 57);
         layer.digits(digits, String(character.maxHp), TEXT_COLOR, DigitFont_T.NORMAL, 83, 57);
@@ -228,9 +230,9 @@ export class NCPawnSelectWnd { // NCPawnSelectWnd OnCreate 0x1009ccc0, OnPaint 0
 
         this.layer.renderText(this.levelText, `${character.level} ${character.className}`, VALUE_COLOR);
         this.layer.renderText(this.spText, String(character.sp), VALUE_COLOR);
-        this.layer.place(this.spText, 236 - this.layer.measureText(String(character.sp)), 56);
+        this.layer.place(this.spText, 250 - this.layer.measureText(String(character.sp)), 56);
         this.layer.renderText(this.karmaText, karma, VALUE_COLOR);
-        this.layer.place(this.karmaText, 236 - this.layer.measureText(karma), 70);
+        this.layer.place(this.karmaText, 250 - this.layer.measureText(karma), 70);
     }
 }
 
