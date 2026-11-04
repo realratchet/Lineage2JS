@@ -5,6 +5,23 @@ import type { Vector3Arr } from "./library-types";
 import type { SkillVisualDefinition_T } from "./skills/skill-visual-definition";
 import type { UClass } from "@l2js/core";
 
+export enum PawnMeshType_T {
+    MFighter,
+    FFighter,
+    MDarkElf,
+    FDarkElf,
+    MDwarf,
+    FDwarf,
+    MElf,
+    FElf,
+    MMagic,
+    FMagic,
+    MOrc,
+    FOrc,
+    MShaman,
+    FShaman
+}
+
 export enum WeaponType {
     WT_HAND,
     WT_1HS,
@@ -71,7 +88,7 @@ export type NpcSkillAttack_T = {
     sounds: NpcSkillSound_T[];
 };
 
-export type NpcSkillSound_T = { phase: NpcSkillEffectPhase_T, sound: string, volume: number, radius: number, charClassId?: number };
+export type NpcSkillSound_T = { phase: NpcSkillEffectPhase_T, sound: string, volume: number, radius: number, charClassId?: PawnMeshType_T };
 
 export type NpcSkillEffectPhase_T = "casting" | "preshot" | "shot" | "explosion";
 

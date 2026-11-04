@@ -1,6 +1,7 @@
 import { Object3D, Vector3 } from "three";
 import BaseActor from "../base-actor";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
+import { PawnMeshType_T } from "../assets/unreal/un-pawn";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import MatineePlayer from "../rendering/camera/matinee-player";
 import type GameManager from "../game/game-manager";
@@ -205,7 +206,7 @@ export class L2Lobby {
 
             tmpLabelPosition.copy(pawn.position);
             tmpLabelPosition.z += pawn.getCollisionHeight() * 1.5 + 7; // NWindow 0x1009c885: Location.Z (cylinder centre, CollisionHeight above the feet) + CollisionHeight * 0.5 + 7.
-            if (pawn.charClassId === 0) tmpLabelPosition.z += 4;
+            if (pawn.charClassId === PawnMeshType_T.MFighter) tmpLabelPosition.z += 4;
             tmpLabelPosition.project(camera);
 
             if (tmpLabelPosition.z >= 1) continue;

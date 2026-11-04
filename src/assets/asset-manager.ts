@@ -939,7 +939,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return effect;
     }
 
-    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
+    public async spawnNpc(renderManager: RenderManager, selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, actor: BaseActor = new BaseActor(renderManager), preloadSkills: boolean = true, collisionSize: readonly [number, number] = null, beginPlay: boolean = true): Promise<BaseActor> {
         const npc = await this.resolveNpc(selector);
         const index = npc.mesh.indexOf(".");
 
@@ -975,7 +975,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         try {
             if (collisionSize) actor.setCollisionSize(collisionSize[0], collisionSize[1]);
-            renderManager.addPawn(actor);
+            renderManager.addPawn(actor, beginPlay);
 
             if (isEntering && npc.enterEvent) actor.spawnEnterEvent(npc.enterEvent);
         } catch (e) {

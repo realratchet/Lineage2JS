@@ -92,6 +92,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected currAnimations = new WeakMap<Mesh, AnimationAction>();
     protected prevAnimations = new WeakMap<Mesh, AnimationAction[]>();
     protected actorAnimations: Record<string, AnimationClip> = {};
+    protected readonly cacheAnimationNames = new Map<string, string>();
     protected animationNotifyAction: AnimationAction = null;
     protected animationNotifyTime = 0;
     protected animationTweenEndTime = 0;
@@ -220,7 +221,13 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public getMeshes(): readonly Mesh[] { return this.meshes; }
     public getAction(): AnimationAction { return this.animationNotifyAction; }
     public getAnimationNames(): string[] { return Object.keys(this.actorAnimations); }
-    public getAnimationClip(name: string): AnimationClip { return this.actorAnimations[Object.keys(this.actorAnimations).find(key => key.toLowerCase() === name.toLowerCase())]; }
+    public getAnimationClip(name: string): AnimationClip { return this.actorAnimations[this.findAnimationName(name)]; }
+    protected findAnimationName(name: string): string {
+        const lowerName = name.toLowerCase();
+        if (!this.cacheAnimationNames.has(lowerName))
+            this.cacheAnimationNames.set(lowerName, Object.keys(this.actorAnimations).find(key => key.toLowerCase() === lowerName));
+        return this.cacheAnimationNames.get(lowerName);
+    }
     public isAnimating(): boolean {
         const action = this.animationNotifyAction;
 
@@ -354,6 +361,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public setMeshAnimations(mesh: LitSkinnedMesh): void {
         this.meshes = [mesh];
         this.actorAnimations = (mesh as any).meshAnimations;
+        this.cacheAnimationNames.clear();
         this.isAnimationsInit = true;
         (mesh as any).hasStartedAnimation = true;
     }
@@ -362,10 +370,11 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.stop();
         this.getComponent<any>("pawnMovement").resetAnimationState();
         this.actorAnimations = animations;
+        this.cacheAnimationNames.clear();
     }
 
     public setBasicAnimation(key: PawnMovementState_T, animationName: string): void {
-        const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+        const resolvedName = this.findAnimationName(animationName);
 
         if (!resolvedName) throw new Error(`'${animationName}' is not available.`);
         if (!(key in this.basicActorAnimations)) throw new Error(`'${key}' is not a valid basic actor animation`);
@@ -506,7 +515,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         if (!this.isAnimationsInit) return;
         if (!isDeathAnimation && this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.isDead()) return;
 
-        const resolvedName = Object.keys(this.actorAnimations).find(name => name.toLowerCase() === animationName.toLowerCase());
+        const resolvedName = this.findAnimationName(animationName);
 
         if (!resolvedName) return; // USkeletalMeshInstance::PlayAnim 0x10673a68 returns false for missing sequences.
 

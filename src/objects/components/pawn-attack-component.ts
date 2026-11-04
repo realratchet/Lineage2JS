@@ -9,6 +9,7 @@ import SkillEffectHost from "./skill-effect-host";
 import NProjectileComponent, { type ProjectileActor_T } from "../../physics/components/projectile-component";
 import getSkillAnimation from "../../skills/skill-animation";
 import type BaseActor from "../../base-actor";
+import type MovableObject from "../movable-object";
 import type RenderManager from "../../rendering/render-manager";
 import type AnimationComponent from "./animation-component";
 import type { ScriptComponent } from "../../game/script-component";
@@ -34,9 +35,11 @@ export type PawnAttack_T = {
 
 export type PawnAttackSelection_T = number | "random";
 
+export type AttackTarget_T = BaseActor | MovableObject;
+
 export type NAttackActionParam_T = {
     targetObjectId: number;
-    actionTarget: BaseActor;
+    actionTarget: AttackTarget_T;
     damage: number;
     isMiss: boolean;
     isCritical: boolean;
@@ -53,12 +56,12 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     protected readonly skillEffects: SkillVisualEffect;
     protected readonly transientSkillEffects: SkillVisualEffect;
     protected readonly transientEffects: Object3D[] = [];
-    protected target: BaseActor = null;
-    protected requestedTarget: BaseActor = null;
+    protected target: AttackTarget_T = null;
+    protected requestedTarget: AttackTarget_T = null;
     protected nextAttack: PawnAttack_T = null;
     protected locList: readonly Vector3Arr[] = [];
-    protected readonly associatedActors: BaseActor[] = [];
-    protected requestedAssociatedActors: readonly BaseActor[] = null;
+    protected readonly associatedActors: AttackTarget_T[] = [];
+    protected requestedAssociatedActors: readonly AttackTarget_T[] = null;
     protected targetExcepted = false;
     protected selection: PawnAttackSelection_T = "random";
     protected currentAttack: PawnAttack_T = null;
@@ -496,7 +499,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.isServerAction = true;
     }
 
-    public castFromServer(target: BaseActor, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly BaseActor[], targetExcepted: boolean, elapsed: number = 0): void {
+    public castFromServer(target: AttackTarget_T, skill: NpcSkillAttack_T, hitTime: number, associatedActors: readonly AttackTarget_T[], targetExcepted: boolean, elapsed: number = 0): void {
         if (!Number.isFinite(hitTime)) throw new Error(`Invalid server cast time '${hitTime}'.`);
 
         skill = { ...skill, previewTarget: undefined };
@@ -506,7 +509,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.isServerAction = true;
     }
 
-    public attachSkillVisual(skill: NpcSkillAttack_T, target: BaseActor, hitTime: number, associatedActors: readonly BaseActor[], elapsed: number): void {
+    public attachSkillVisual(skill: NpcSkillAttack_T, target: AttackTarget_T, hitTime: number, associatedActors: readonly AttackTarget_T[], elapsed: number): void {
         skill = { ...skill, previewTarget: undefined };
         const remaining = Math.max(0, hitTime - elapsed);
         const cast: SkillCast_T = { skill, caster: this.getParent(), target, associatedActors, locList: [], targetExcepted: associatedActors.length > 0, stageShot: 1, stagePreShot: 0, finalShot: true, shotTime: remaining, firstShotTime: remaining };
@@ -543,7 +546,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         if (!projectile) this.transientSkillEffects.notify("explosion", this.lastTime, cast);
     }
 
-    public setSkillTargets(skillId: number, actors: readonly BaseActor[], target: BaseActor = undefined): void {
+    public setSkillTargets(skillId: number, actors: readonly AttackTarget_T[], target: AttackTarget_T = undefined): void {
         this.skillEffects.setSkillTargets(skillId, actors);
         this.transientSkillEffects.setSkillTargets(skillId, actors);
         const attack = this.currentAttack || (this.selection !== "random" ? this.attacks[this.selection] : null);
@@ -560,12 +563,12 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.targetExcepted = actors.length > 0; // AddAssociatedActorNotify 0x79821a..0x798239.
     }
 
-    public attack(target: BaseActor, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly BaseActor[] = null, targetExcepted: boolean = false, isServerAction: boolean = false): void {
+    public attack(target: AttackTarget_T, selection: PawnAttackSelection_T, locList: readonly Vector3Arr[] = [], associatedActors: readonly AttackTarget_T[] = null, targetExcepted: boolean = false, isServerAction: boolean = false): void {
         if (!target && (!isServerAction || selection === "random" || !this.attacks[selection]?.skill)) throw new Error("NPC attack has no target.");
         if (this.attacks.length === 0) throw new Error(`${this.getParent().name || "NPC"} has no attacks.`);
         if (selection !== "random" && !this.attacks[selection]) throw new Error(`NPC attack '${selection}' does not exist.`);
         if (!Array.isArray(locList) || locList.some(location => !Array.isArray(location) || location.length !== 3 || !location.every(Number.isFinite))) throw new Error(`NPC skill locations must be XYZ triples of finite numbers.`);
-        if (associatedActors !== null && (!Array.isArray(associatedActors) || associatedActors.some(actor => actor !== null && !actor?.isActor))) throw new Error(`NPC skill associated actors must be pawns or null.`);
+        if (associatedActors !== null && (!Array.isArray(associatedActors) || associatedActors.some(actor => actor !== null && !(actor as BaseActor)?.isActor && !(actor as MovableObject)?.isMovableObject))) throw new Error(`NPC skill associated actors must be pawns, movers or null.`);
         if (typeof targetExcepted !== "boolean") throw new Error(`NPC skill targetExcepted must be a boolean.`);
 
         const parent = this.getParent();
@@ -726,7 +729,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
                 arrow.updateWorldMatrix(true, false);
                 tmpArrowWorld.copy(arrow.matrixWorld);
 
-                if (param?.isSpirit || !param?.isShieldDefense) {
+                if (target.isActor && (param?.isSpirit || !param?.isShieldDefense)) {
                     if (!target.attachObjectToBone(arrow, target.getUnrealScriptProperty("EffectSpawnBoneIdx") as number)) throw new Error(`Pawn '${target.name}' cannot attach its hit arrow.`);
 
                     arrow.parent.updateWorldMatrix(true, false);
@@ -820,8 +823,8 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         this.shotTriggered = this.stageShot === this.maxAtkShotNum;
     }
 
-    protected actionAttack(target: BaseActor, param: NAttackActionParam_T = null): void {
-        if (!target || !target.parent || param?.isMiss) return;
+    protected actionAttack(target: AttackTarget_T, param: NAttackActionParam_T = null): void {
+        if (!target || !target.parent || param?.isMiss || !(target as BaseActor).isActor) return;
 
         // Engine.dll Action_Attack 0x8bda4e / 0x8bdb40 / 0x8bde50.
         target.getComponent<SoundComponent>("sound").playAttackSounds(param?.isCritical, param?.isShieldDefense, param?.isSpirit);
@@ -851,7 +854,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
         return { skill, caster: this.getParent(), target: this.target, associatedActors: this.associatedActors, locList: this.locList, targetExcepted: this.targetExcepted, stageShot: this.stageShot, stagePreShot: this.stagePreShot, finalShot: this.shotTriggered, shotTime: this.skillShotTime, firstShotTime: skill.castStyle === 0 ? 0 : this.getFirstShotTime() } as SkillCast_T;
     }
 
-    protected triggerPhase(phase: NpcSkillEffectPhase_T, phaseTime: number, skill: NpcSkillAttack_T = this.currentAttack?.skill, source: Object3D = this.getParent(), target: BaseActor = this.target, hitActor: boolean = !!target, associatedActors: readonly BaseActor[] = this.associatedActors, impactActor: Object3D = hitActor ? target : null): boolean {
+    protected triggerPhase(phase: NpcSkillEffectPhase_T, phaseTime: number, skill: NpcSkillAttack_T = this.currentAttack?.skill, source: Object3D = this.getParent(), target: AttackTarget_T = this.target, hitActor: boolean = !!target, associatedActors: readonly AttackTarget_T[] = this.associatedActors, impactActor: Object3D = hitActor ? target : null): boolean {
         if (!skill) return false;
 
         return this.skillEffects.notify(phase, phaseTime, this.getSkillCast(skill), source as any, target, hitActor, associatedActors, impactActor as any);

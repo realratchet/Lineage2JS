@@ -2,6 +2,7 @@ import { ENetMode_T } from "@l2js/engine/un-level-info";
 import { AnimationAction, AnimationClip, Mesh, Object3D, Sphere, Vector3 } from "three";
 import RAPIER from "@dimforge/rapier3d";
 import { EDrawType_T, EPhysics_T } from "./assets/unreal/un-aactor";
+import type { PawnMeshType_T } from "./assets/unreal/un-pawn";
 import { getScriptActor, type ActorCollisionProfile_T, type CollisionPrimitive_T, type ICollidable } from "./objects/objects";
 import RenderManager from "./rendering/render-manager";
 import type { CheckResult_T } from "./physics/collision-world";
@@ -28,7 +29,7 @@ export class BaseActor extends GameObject implements ICollidable {
     declare public readonly isCollidable: boolean;
     public readonly type: string = "Actor";
     public effectSpawnBoneIndex: number = null;
-    public charClassId = -1;
+    public charClassId: PawnMeshType_T | -1 = -1;
     public ridePawn: BaseActor = null;
     public scriptBase: BaseActor = null;
     public npcMovementAnimationRate = 1;

@@ -285,7 +285,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly lastSize = new Vector2();
     public needsUpdate: boolean = true;
     public isPersistentRendering: boolean = true;
-    public keepMinFrameRate: boolean = false; // GL2KeepMinFrameRate; preview uses full detail without adaptive throttling.
+    public keepMinFrameRate: boolean = false; // GL2KeepMinFrameRate.
     public readonly mixer = new SkeletalAnimationMixer(this.scene);
     public readonly skyRenderer = new SkyRenderer();
 
@@ -323,6 +323,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected pawnLimit = 10000;
     protected readonly arrVisiblePawns: PawnRenderableComponent[] = [];
     protected pawnShadow = true;
+    protected pawnShadowLimited = false;
+    protected pawnShadowFrameTime = 1000 / 60;
+    protected pawnShadowRecoveryTime = 0;
+    protected pawnShadowLastTickTime = 0;
     protected sortTransparent = true;
     protected renderDeco = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
@@ -1293,11 +1297,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if (sector !== this.level) sector.levelInfoActor.setUnrealScriptProperty("TimeSeconds", timeSeconds);
     }
 
-    public addPawn(pawn: BaseActor): void {
+    public addPawn(pawn: BaseActor, beginPlay: boolean = true): void {
         this.scene.add(pawn);
         pawn.updateMatrixWorld(true);
         this.getPhysicsManager().addPawn(pawn);
-        pawn.beginPlay();
+        if (beginPlay) pawn.beginPlay();
         this.queueShaderCompile(pawn);
         this.needsUpdate = true;
     }
@@ -1467,7 +1471,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
     }
 
-    public setRetainedSkillTargets(caster: BaseActor, skillId: number, actors: readonly BaseActor[]): void {
+    public setRetainedSkillTargets(caster: BaseActor, skillId: number, actors: readonly (BaseActor | MovableObject)[]): void {
         for (const [visual, entry] of this.retainedSkillVisuals)
             if (entry.caster === caster) visual.setSkillTargets(skillId, actors);
     }
@@ -1488,8 +1492,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.deferredMixerOperations.length = 0;
     }
 
-    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true, collisionSize: readonly [number, number] = null): Promise<BaseActor> {
-        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering, undefined, preloadSkills, collisionSize);
+    public spawnNpc(selector: string | number, position: Vector3 = null, equipment: INpcEquipment | null = null, isEntering: boolean = true, preloadSkills: boolean = true, collisionSize: readonly [number, number] = null, beginPlay: boolean = true): Promise<BaseActor> {
+        return this.manGame.getComponent("asset").spawnNpc(this, selector, position, equipment, isEntering, undefined, preloadSkills, collisionSize, beginPlay);
     }
 
     public listNpcs(): Promise<INpcDefinition[]> {
@@ -1681,7 +1685,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
 
         arrShadowCasters.length = 0;
-        if (this.pawnShadow) {
+        if (this.pawnShadow && !this.pawnShadowLimited) {
             arrShadowCasters.push(this.player);
 
             const gui = this.manGame.getComponent("gui");
@@ -1806,10 +1810,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         while (arrLightingObjects.length > 0) {
             const object = arrLightingObjects.pop()!;
+            if ((object as any).isBone && !object.visible) continue;
 
             for (const child of object.children) if (!(child as BaseActor).isActor) arrLightingObjects.push(child);
 
-            if ((object as LitSkinnedMesh).isLitSkinnedMesh)
+            if (object.layers.mask !== 0 && (object as LitSkinnedMesh).isLitSkinnedMesh)
                 (object as LitSkinnedMesh).updateActorLighting(ambientZone || zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined, lightingSphere);
         }
 
@@ -2365,7 +2370,30 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
+        const tickTime = performance.now();
+        const frameTime = this.pawnShadowLastTickTime > 0 ? tickTime - this.pawnShadowLastTickTime : 0;
+        this.pawnShadowLastTickTime = tickTime;
         this.updateLevelTime(deltaTime);
+        if (this.manGame.getComponent("network").isInWorld() && frameTime > 0) {
+            this.pawnShadowFrameTime += (Math.min(frameTime, 100) - this.pawnShadowFrameTime) * Math.min(frameTime / 500, 1);
+            if (!this.pawnShadowLimited && this.pawnShadowFrameTime > 1000 / 60) {
+                this.pawnShadowLimited = true;
+                this.keepMinFrameRate = true;
+                this.pawnShadowRecoveryTime = 0;
+            } else if (this.pawnShadowLimited && this.pawnShadowFrameTime < 1000 / 90) {
+                this.pawnShadowRecoveryTime += frameTime;
+                if (this.pawnShadowRecoveryTime >= 5000) {
+                    this.pawnShadowLimited = false;
+                    this.keepMinFrameRate = false;
+                    this.pawnShadowRecoveryTime = 0;
+                }
+            } else this.pawnShadowRecoveryTime = 0;
+        } else {
+            this.pawnShadowLimited = false;
+            this.keepMinFrameRate = false;
+            this.pawnShadowFrameTime = 1000 / 60;
+            this.pawnShadowRecoveryTime = 0;
+        }
         for (const [visual, { effects }] of this.retainedSkillVisuals) {
             visual.update(currentTime);
             if (visual.hasActiveEffects() || effects.some(effect => effect.parent && (effect as Object3D & IObject).findComponent("nProjectile"))) continue;
@@ -2845,6 +2873,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getLoadedSectors(): readonly SectorObject[] { return this.arrLoadedSectors; }
+
+    public findLevelActorByRealId(realId: number): ScriptHost_T | null {
+        for (const sector of this.arrLoadedSectors) {
+            const actor = sector.findLevelActorByRealId(realId);
+
+            if (actor) return actor;
+        }
+        return null;
+    }
 
     public findMovableByRealId(realId: number): MovableObject | null {
         for (const sector of this.arrLoadedSectors) {

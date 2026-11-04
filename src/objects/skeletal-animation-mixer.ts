@@ -1,18 +1,25 @@
 import { AnimationMixer, AnimationAction, KeyframeTrack, Object3D, NormalAnimationBlendMode, AdditiveAnimationBlendMode, InterpolateLinear, LinearInterpolant, Quaternion, QuaternionLinearInterpolant } from "three";
 
-type RootState_T = { object: Object3D, frame: number, count: number, checkedFrame: number, deferredFrame: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindingVersion: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazyDurations: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
+type RootState_T = { object: Object3D, poseRequirements: PoseRequirements_T, frame: number, count: number, checkedFrame: number, deferredFrame: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindingVersion: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazyDurations: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
+type PoseRequirements_T = { version: number };
 type BindingState_T = { root: RootState_T, property: any, target: Object3D, frame: number, value: ArrayLike<number>, x: number, y: number, z: number, w: number, wasFast: boolean, isLazyBone: boolean, lazyVersion: number };
 type TrackResult_T = { frame: number, time: number, value: ArrayLike<number> };
 type ChannelState_T = { binding: BindingState_T, interpolant: any, constant: Float32Array, linearConstant: boolean, result: TrackResult_T, kind: number, index: number };
 type ActionState_T = { root: RootState_T, channels: ChannelState_T[], activeChannels: ChannelState_T[], activeVersion: number };
 
 const cacheDeferredRoots = new WeakMap<Object3D, SkeletalAnimationMixer>();
+const cachePoseRequirements = new WeakMap<Object3D, PoseRequirements_T>();
 
-let poseRequirementVersion = 0;
+function getPoseRequirements(object: Object3D): PoseRequirements_T {
+    let requirements = cachePoseRequirements.get(object);
+    if (!requirements) cachePoseRequirements.set(object, requirements = { version: 0 });
+    return requirements;
+}
 
-export function invalidatePoseRequirements(): void { poseRequirementVersion++; }
+export function invalidatePoseRequirements(object: Object3D): void { getPoseRequirements(object).version++; }
 
 function isLazyBone(state: BindingState_T): boolean { // cached so the binding pass never touches the bones themselves
+    const poseRequirementVersion = state.root.poseRequirements.version;
     if (state.lazyVersion !== poseRequirementVersion) {
         state.isLazyBone = (state.target as any).isPoseRequired === false;
         state.lazyVersion = poseRequirementVersion;
@@ -165,7 +172,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         const root = action.getRoot() as Object3D;
         let rootState = this.rootStates.get(root);
-        if (!rootState) this.rootStates.set(root, rootState = { object: root, frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, fastActions: [], fastTimes: [], slowActions: [], bindingCount: 0, bindingVersion: -1, bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazyDurations: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
+        if (!rootState) this.rootStates.set(root, rootState = { object: root, poseRequirements: getPoseRequirements(root), frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, fastActions: [], fastTimes: [], slowActions: [], bindingCount: 0, bindingVersion: -1, bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazyDurations: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
         const channels: ChannelState_T[] = [], tracks = action.getClip().tracks;
 
         for (let i = 0; i < tracks.length; i++) {
@@ -358,7 +365,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     }
 
     protected evaluateChannels(state: ActionState_T, clipTime: number, duration: number, frame: number): void {
-        const weight1 = clipTime / duration, weight0 = 1 - weight1, root = state.root;
+        const weight1 = clipTime / duration, weight0 = 1 - weight1, root = state.root, poseRequirementVersion = root.poseRequirements.version;
         if (state.activeVersion !== poseRequirementVersion) {
             state.activeChannels = state.channels.filter(channel => !isLazyBone(channel.binding)); // bones that skin nothing are posed only when something asks for them
             state.activeVersion = poseRequirementVersion;

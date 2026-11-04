@@ -297,7 +297,7 @@ export class LocalSpaceSkeleton extends Skeleton {
 
             this.activeBones = Array.from(active).sort((a, b) => a - b);
             for (let i = 0; i < bones.length; i++) (bones[i] as any).isPoseRequired = active.has(i);
-            invalidatePoseRequirements();
+            invalidatePoseRequirements(this.mesh);
         }
 
         for (let j = 0, len = this.activeBones.length; j < len; j++) {

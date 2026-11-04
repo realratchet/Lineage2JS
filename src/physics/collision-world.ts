@@ -792,15 +792,18 @@ export class CollisionWorld {
             tmpEncroachmentBounds.copy(primitive.bounds).translate(tmpEncroachmentCenter);
         }
 
-        for (const entry of this.analyticalEntries) {
+        for (const entry of this.getOverlapEntries(tmpEncroachmentBounds)) {
             if (!entry.active || entry.primitive.kind === "terrain") continue;
+            if (!entry.dynamic && !tmpEncroachmentBounds.intersectsBox(entry.bounds)) continue;
             const actor = ((entry.actor as any).scriptActor || entry.actor) as ICollidable & ScriptHost_T;
             if (entry.primitive.kind === "bsp" && !(actor as any).isVolume) continue;
 
             const records = (actor as any).collisionActors;
             if (records && records.length) {
-                for (const record of records) {
-                    if (vm && !tmpEncroachmentBounds.intersectsBox(record.primitive.bounds)) continue;
+                const candidates = (actor as CollidingMesh).getCollisionActorCandidates(tmpEncroachmentBounds);
+                for (let i = 0; i < candidates.length; i++) {
+                    const record = records[candidates[i]];
+                    if (!tmpEncroachmentBounds.intersectsBox(record.primitive.bounds)) continue;
 
                     const target = record.object || (vm ? (actor as CollidingMesh).getCollisionActor(record.firstTriangle) : record.actor), targetProfile = record.object ? record.object.getCollisionProfile() : record.actor.collision;
                     const targetPhysics = getTraceProperty(target, "Physics");
@@ -812,7 +815,10 @@ export class CollisionWorld {
                 continue;
             }
 
-            const targetProfile = actor.getCollisionProfile(), targetPrimitive = actor.getCollisionPrimitive();
+            const targetPrimitive = actor.getCollisionPrimitive();
+            if (!tmpEncroachmentBounds.intersectsBox(targetPrimitive.bounds)) continue;
+
+            const targetProfile = actor.getCollisionProfile();
             if (targetPrimitive.kind === "cylinder") tmpEncroachmentCenter.copy(targetPrimitive.center);
             else actor.getWorldPosition(tmpEncroachmentCenter);
 
@@ -823,9 +829,9 @@ export class CollisionWorld {
 
         for (const entries of this.volumeActors.values()) {
             for (const entry of entries) {
-                if (getTraceProperty(source, "bOnlyAffectPawns")) continue;
-
                 const actor = entry.actor, primitive = entry.primitive;
+                if (primitive.kind === "bsp" && primitive.model.rootOutside && !tmpEncroachmentBounds.intersectsBox(primitive.bounds)) continue;
+                if (getTraceProperty(source, "bOnlyAffectPawns")) continue;
                 if (!entry.active || getTraceProperty(actor, "bDeleteMe") || !getTraceProperty(actor, "bCollideActors") || !getTraceProperty(actor, "bBlockNonZeroExtentTraces")) continue;
                 if (isJoinedTo(actor, source) || isJoinedTo(source, actor)) continue;
                 if (getTraceProperty(actor, "bOnlyAffectPawns") && !profile.isPawn) continue;
@@ -973,8 +979,9 @@ export class CollisionWorld {
         bounds.min.copy(query.location).sub(query.extent);
         bounds.max.copy(query.location).add(query.extent);
 
-        for (const entry of this.analyticalEntries) {
-            if (!entry.active || this.shouldIgnoreActor(entry.actor, query)) continue;
+        for (const entry of this.getOverlapEntries(bounds)) {
+            if (!entry.active || !entry.dynamic && !bounds.intersectsBox(entry.bounds)) continue;
+            if (this.shouldIgnoreActor(entry.actor, query)) continue;
             const records = (entry.actor as any).collisionActors;
             const individual = records && records.length && this.hasIgnoredCollisionActors(entry.actor, query);
 
@@ -1019,6 +1026,35 @@ export class CollisionWorld {
         if (unsupported) this.stats.unsupportedQueries++;
 
         return null;
+    }
+
+    protected getOverlapEntries(bounds: Box3): AnalyticalEntry_T[] {
+        const minX = Math.floor(bounds.min.x / CELL_SIZE), minY = Math.floor(bounds.min.y / CELL_SIZE), minZ = Math.floor(bounds.min.z / CELL_SIZE);
+        const maxX = Math.floor(bounds.max.x / CELL_SIZE), maxY = Math.floor(bounds.max.y / CELL_SIZE), maxZ = Math.floor(bounds.max.z / CELL_SIZE);
+        const cellCount = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        if (!Number.isFinite(cellCount) || cellCount > MAX_QUERY_CELLS) return this.analyticalEntries;
+
+        const entries = new Set<AnalyticalEntry_T>(this.dynamicEntries);
+
+        for (let x = minX; x <= maxX; x++) {
+            const cellsY = this.cells.get(x);
+            if (!cellsY) continue;
+
+            for (let y = minY; y <= maxY; y++) {
+                const cellsZ = cellsY.get(y);
+                if (!cellsZ) continue;
+
+                for (let z = minZ; z <= maxZ; z++) {
+                    const cell = cellsZ.get(z);
+                    if (!cell) continue;
+
+                    for (const entry of cell) if (!entry.dynamic) entries.add(entry);
+                }
+            }
+        }
+        for (const entry of this.largeEntries) if (!entry.dynamic) entries.add(entry);
+
+        return [...entries].sort((a, b) => a.order - b.order);
     }
 
     protected analyticalLineCheck(query: CollisionQuery_T, testDelta: Vector3, testDistance: number, requestedDistance: number, zeroExtent: boolean): CheckResult_T | null {

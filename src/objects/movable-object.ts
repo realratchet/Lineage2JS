@@ -1,6 +1,7 @@
 import { RigidBodyDesc } from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import type BaseActor from "../base-actor";
+import type { ScriptComponent } from "../game/script-component";
 import CollidingMesh from "./colliding-mesh";
 import { MeshLight_T } from "./lit-actor";
 import { getRotatorQuaternionElements } from "../assets/unreal/utils/rotator";
@@ -170,6 +171,11 @@ export class MovableObject extends CollidingMesh {
         if (!this.matrixAutoUpdate) this.invalidateDoorPortals();
         this.matrixAutoUpdate = true;
         this.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
+    }
+
+    public getEffectTargetLocation(target: Vector3): Vector3 {
+        this.getComponent<ScriptComponent>("script").call("GetEffTargetLocation", [{ get: () => target.toArray(), set: value => target.fromArray(value as Vector3Arr) } as any]);
+        return target;
     }
 
     public isServerControlled(): boolean { return (this.getUnrealScriptProperty("L2ServerObjectRealID") as number) > 0; }

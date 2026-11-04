@@ -8,6 +8,9 @@ import PawnAttackComponent from "../objects/components/pawn-attack-component";
 import type PawnAppendixComponent from "../objects/components/pawn-appendix-component";
 import Vehicle from "../objects/vehicle";
 import { sinRotator } from "../assets/unreal/utils/rotator";
+import { EL2ObjectType_T } from "../assets/unreal/un-aactor";
+import { PawnMeshType_T } from "../assets/unreal/un-pawn";
+import type { CollisionQuery_T } from "../physics/collision-world";
 import * as GamePackets from "./game-packets";
 import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
 import { getProperty, type ScriptHost_T } from "../ue-script/vm";
@@ -23,6 +26,9 @@ export const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
 const tmpTeleportPosition = new Vector3();
 
 const tmpVehicleLocation = new Vector3();
+const tmpChairPosition = new Vector3();
+const tmpChairDirection = new Vector3();
+const tmpChairQuery: CollisionQuery_T = { location: new Vector3(), delta: new Vector3(), extent: new Vector3(), sourceIsPlayer: false, traceWorld: true, ignorePawns: true };
 
 export const tmpVehicleOrigin = new Vector3();
 
@@ -369,9 +375,59 @@ export class NetworkMovement {
         if (!actor) return;
 
         actor.stopMoving();
+        this.placeInChair(object, staticObjectId);
         const animation = (actor.getUnrealScriptProperty("ChairSitAnimName") as string[])[actor.getUnrealScriptProperty("CurWeaponType") as number];
 
         if (animation.toLowerCase() !== "none") actor.playAnimation(animation, 0.1, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnChairSitPacket 0x10481e38..0x10481e8e.
+    }
+
+    protected placeInChair(object: NetObject_T, staticObjectId: number): void {
+        const render = this.network.getParent().getComponent("render"), chair = render.findLevelActorByRealId(staticObjectId);
+
+        if (!chair || getProperty(chair, "L2ServerObjectType") !== EL2ObjectType_T.EL2_CHAIR) return;
+
+        const actor = object.actor, rotation = getProperty(chair, "Rotation") as Vector3Arr;
+        const heading = (rotation[1] - 0x4000) & 65535;
+        let distance = 17, adjustment = 0;
+
+        // UGameEngine::OnChairSitPacket 0x751a95..0x751e2f.
+        switch (actor.charClassId) {
+            case PawnMeshType_T.MFighter: case PawnMeshType_T.MDwarf: break;
+            case PawnMeshType_T.FFighter: adjustment = 1.5; break;
+            case PawnMeshType_T.FDwarf: distance = 13; break;
+            case PawnMeshType_T.FMagic: distance = 14; break;
+            case PawnMeshType_T.MOrc: distance = 20; adjustment = 1.5; break;
+            case PawnMeshType_T.MDarkElf: case PawnMeshType_T.FDarkElf: case PawnMeshType_T.MElf: case PawnMeshType_T.FElf: case PawnMeshType_T.MMagic: case PawnMeshType_T.FOrc: case PawnMeshType_T.MShaman: distance = 15; break;
+            case PawnMeshType_T.FShaman: distance = 16; break;
+        }
+
+        tmpChairDirection.set(sinRotator(rotation[0] + 0x4000) * sinRotator(heading + 0x4000), sinRotator(rotation[0] + 0x4000) * sinRotator(heading), sinRotator(rotation[0]));
+        tmpChairPosition.fromArray(getProperty(chair, "Location") as Vector3Arr).addScaledVector(tmpChairDirection, distance);
+        const height = actor.getCollisionHeight(), centerZ = actor.position.z + height, query = tmpChairQuery;
+        tmpChairPosition.z = actor.position.z;
+        query.sourceActor = actor;
+        query.extent.set(actor.getCollisionRadius(), actor.getCollisionRadius(), height);
+
+        for (let i = 1; i <= 30; i++) {
+            query.location.set(tmpChairPosition.x, tmpChairPosition.y, centerZ + i * 30);
+            query.delta.set(0, 0, -i * 60);
+            const hit = render.getPhysicsManager().singleLineCheck(query);
+
+            if (!hit || hit.location.z === 0) continue;
+
+            tmpChairPosition.copy(hit.location);
+            tmpChairPosition.z -= height;
+            const floorDistance = hit.time * 12;
+            if (floorDistance < 1.9) tmpChairPosition.z += (2.4 + 1.9) * 0.5 - floorDistance;
+            break;
+        }
+
+        tmpChairPosition.addScaledVector(tmpChairDirection, -adjustment);
+        actor.teleportTo(tmpChairPosition);
+        actor.setRotationYaw(heading);
+        object.position.copy(tmpChairPosition);
+        object.heading = heading;
+        object.pendingRotation = null;
     }
 
     public onStaticObject(packet: PacketReader) {

@@ -21,7 +21,7 @@ import getNpcBundleName, { isNpcMeshPackage } from "./npc-bundle";
 import UConfigAudio, { SwimSoundConfig_T, SwimSoundSet_T } from "@l2js/engine/conf-files/un-conf-audio";
 import decodeSkillVisuals, { validatePlayerSkillSource } from "../unreal/skills/skill-visual-decoder";
 import mobSkillTable from "./mob-skill-table";
-import { WeaponType, type UPawn } from "@l2js/engine/un-pawn";
+import { WeaponType, PawnMeshType_T, type UPawn } from "@l2js/engine/un-pawn";
 import UConfigHair from "@l2js/engine/conf-files/un-conf-hair";
 import UConfigWarrior, { WarriorAnimations_T } from "@l2js/engine/conf-files/un-conf-warrior";
 import UConfigLocalization, { LocalizationProperty_T } from "@l2js/engine/conf-files/un-conf-localization";
@@ -68,7 +68,22 @@ type StoredAssets_T = { entries: Record<string, any>, seekable: SeekableLibrary_
 
 const dynamicHairTypes = new Set([2, 5, 6, 7, 9]);
 const SCRIPT_KEYS = ["scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects"] as const;
-const SKILL_VOICE_GROUPS = ["mfighter", "ffighter", "mdarkelf", "fdarkelf", "mdwarf", "fdwarf", "melf", "felf", "mmagic", "fmagic", "morc", "forc", "mshaman", "fshaman"];
+const SKILL_VOICE_GROUPS: [PawnMeshType_T, string][] = [
+    [PawnMeshType_T.MFighter, "mfighter"],
+    [PawnMeshType_T.FFighter, "ffighter"],
+    [PawnMeshType_T.MDarkElf, "mdarkelf"],
+    [PawnMeshType_T.FDarkElf, "fdarkelf"],
+    [PawnMeshType_T.MDwarf, "mdwarf"],
+    [PawnMeshType_T.FDwarf, "fdwarf"],
+    [PawnMeshType_T.MElf, "melf"],
+    [PawnMeshType_T.FElf, "felf"],
+    [PawnMeshType_T.MMagic, "mmagic"],
+    [PawnMeshType_T.FMagic, "fmagic"],
+    [PawnMeshType_T.MOrc, "morc"],
+    [PawnMeshType_T.FOrc, "forc"],
+    [PawnMeshType_T.MShaman, "mshaman"],
+    [PawnMeshType_T.FShaman, "fshaman"]
+];
 
 async function hydrateLibraryAssets(seekable: SeekableLibrary_T, library: DecodeLibrary = seekable.library): Promise<DecodeLibrary> {
     if (library === null) return null;
@@ -1187,9 +1202,11 @@ export class DecodeEngine {
         for (const path of materials)
             if (!library.scriptMaterials[path.toLowerCase()]) {
                 const material = await this.fetchCharacterMaterial(path, builder);
+                const object = dumpObjectClass(material), uuid = builder.pullMaterial(material);
 
-                library.scriptMaterials[path.toLowerCase()] = builder.pullMaterial(material);
-                if (!library.scriptObjects[path.toLowerCase()]?.properties) library.scriptObjects[path.toLowerCase()] = dumpObjectClass(material);
+                library.scriptMaterials[path.toLowerCase()] = uuid;
+                library.scriptMaterials[object.path.toLowerCase()] = uuid;
+                if (!library.scriptObjects[path.toLowerCase()]?.properties) library.scriptObjects[path.toLowerCase()] = object;
             }
         for (const path of sounds)
             if (!(path in library.sounds)) {
@@ -2160,7 +2177,7 @@ export class DecodeEngine {
                 }
 
                 if (phase === "casting" || phase === "shot") // Engine.dll PlaySkillSound 0x797f3c: after the phase sounds, the _sub (casting) or _throw (shot) voice of the pawn's CharClassID.
-                    SKILL_VOICE_GROUPS.forEach((group, charClassId) => {
+                    SKILL_VOICE_GROUPS.forEach(([charClassId, group]) => {
                         const sound = sounds[`${group}_${phase === "casting" ? "sub" : "throw"}`] as string;
 
                         if (sound && sound.toLowerCase() !== "none") attack.sounds.push({ phase, sound, volume: sounds.sound_vol as number, radius: sounds.sound_rad as number, charClassId });

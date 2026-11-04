@@ -5,6 +5,7 @@ import type { IScriptFunctionDecodeInfo } from "@l2js/engine/script-dump-loader"
 import { ScriptComponent } from "../../game/script-component";
 import type { IObject } from "../../game/components";
 import type BaseActor from "../../base-actor";
+import type { AttackTarget_T } from "./pawn-attack-component";
 import type RenderManager from "../../rendering/render-manager";
 import type AnimationComponent from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
@@ -121,7 +122,8 @@ export class SkillEffectHost implements SkillEffectHost_T {
     public getCollisionHeight(actor: SkillActor_T): number { return actor.isActor ? this.actor(actor).getCollisionHeight() : Number(actor.scriptProperties.get("CollisionHeight")); }
 
     public getEffectTargetLocation(actor: SkillActor_T, out: Vector3Arr): Vector3Arr {
-        this.actor(actor).getEffectTargetLocation(tmpPosition);
+        if (!actor.isActor) tmpPosition.set(0, 0, 0);
+        (actor as unknown as AttackTarget_T).getEffectTargetLocation(tmpPosition);
         tmpPosition.toArray(out);
         return out;
     }
@@ -175,7 +177,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public attachToBone(actor: SkillActor_T, effect: SkillActor_T, bone: string | number, absolute: boolean = false): boolean {
-        return this.actor(actor).attachObjectToBone(this.object(effect), bone, absolute);
+        return actor.isActor && this.actor(actor).attachObjectToBone(this.object(effect), bone, absolute);
     }
 
     public getDesiredRotationYaw(actor: SkillActor_T): number { return this.actor(actor).getComponent<PawnMovementComponent>("pawnMovement").getDesiredRotationYaw(); }
@@ -294,7 +296,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
     public initProjectile(actor: SkillActor_T, caster: SkillActor_T, target: SkillActor_T, onHit: (actor: SkillActor_T, hit: boolean, impact: SkillActor_T) => void, path?: Vector3Arr[], speed: number = 0, acceleration: number = 0): SkillProjectile_T {
         const object = this.object(actor) as ProjectileActor_T;
         const source = this.actor(caster);
-        const destination = this.actor(target);
+        const destination = target as unknown as AttackTarget_T;
         destination.getWorldPosition(tmpPosition);
         tmpPosition.z += destination.getCollisionHeight();
         const mover = path ? new NMover(object.position, tmpPosition, path as [number, number, number][], speed, acceleration) : null;
@@ -324,7 +326,7 @@ export class SkillEffectHost implements SkillEffectHost_T {
     protected actor(actor: SkillActor_T): BaseActor { return actor as unknown as BaseActor; }
     protected vector(value: Vector3Arr, out: Vector3 = tmpPosition): Vector3 { return out.fromArray(value); }
     protected animation(actor: SkillActor_T): AnimationComponent { return this.actor(actor).getComponent<AnimationComponent>("animation"); }
-    protected mesh(actor: SkillActor_T): LitSkinnedMesh | null { return this.actor(actor).getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh || null; }
+    protected mesh(actor: SkillActor_T): LitSkinnedMesh | null { return actor.isActor ? this.actor(actor).getComponent<AnimationComponent>("animation").getMeshes().find(mesh => (mesh as any).isLitSkinnedMesh) as LitSkinnedMesh || null : null; }
 }
 
 export default SkillEffectHost;

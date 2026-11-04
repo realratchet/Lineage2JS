@@ -71,10 +71,10 @@ export class NetworkCombat {
     }
 
     protected readAttackHit(packet: PacketReader): NAttackActionParam_T {
-        const targetObjectId = packet.d(), target = this.network.actors.objects.get(targetObjectId);
+        const targetObjectId = packet.d(), target = this.network.actors.getActionTarget(targetObjectId);
         const damage = packet.d(), flags = packet.c();
 
-        return { targetObjectId, actionTarget: target ? target.actor : null, damage, isMiss: !!(flags & GamePackets.AttackFlags_T.MISS), isCritical: !!(flags & GamePackets.AttackFlags_T.CRITICAL), isShieldDefense: !!(flags & GamePackets.AttackFlags_T.SHIELD), isSpirit: !!(flags & GamePackets.AttackFlags_T.SOULSHOT), soulshotGrade: flags & GamePackets.AttackFlags_T.GRADE };
+        return { targetObjectId, actionTarget: target, damage, isMiss: !!(flags & GamePackets.AttackFlags_T.MISS), isCritical: !!(flags & GamePackets.AttackFlags_T.CRITICAL), isShieldDefense: !!(flags & GamePackets.AttackFlags_T.SHIELD), isSpirit: !!(flags & GamePackets.AttackFlags_T.SOULSHOT), soulshotGrade: flags & GamePackets.AttackFlags_T.GRADE };
     }
 
     protected startServerAttack(attacker: NetObject_T, hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T) {
@@ -101,9 +101,7 @@ export class NetworkCombat {
             if (!pending || targetObjectId !== undefined && !pending.hits.some(hit => hit.targetObjectId === targetObjectId)) continue;
 
             const hits = pending.hits.map(hit => {
-                const target = this.network.actors.objects.get(hit.targetObjectId);
-
-                return { ...hit, actionTarget: target ? target.actor : null };
+                return { ...hit, actionTarget: this.network.actors.getActionTarget(hit.targetObjectId) };
             });
 
             if (!hits[0].actionTarget) continue;
@@ -114,7 +112,7 @@ export class NetworkCombat {
     public onMagicSkillUse(packet: PacketReader) {
         const receivedTime = this.network.getParent().getCurrentTime();
         const caster = this.network.actors.objects.get(packet.d());
-        const targetObjectId = packet.d(), target = this.network.actors.objects.get(targetObjectId);
+        const targetObjectId = packet.d(), target = this.network.actors.objects.get(targetObjectId), targetActor = this.network.actors.getActionTarget(targetObjectId);
         const id = packet.d(), level = packet.d(), hitTime = Math.max(0, packet.d());
 
         const reuseDelay = packet.d();
@@ -137,10 +135,10 @@ export class NetworkCombat {
             if (caster.actor) caster.actor.stopMoving();
         }
 
-        if (caster.actor === this.network.getParent().getComponent("render").player && !caster.isDead && (target ? target.actor : this.network.actors.doors.has(targetObjectId)) && this.network.ui.getStrings().skillInfos[`${id}:${level}`])
+        if (caster.actor === this.network.getParent().getComponent("render").player && !caster.isDead && targetActor && this.network.ui.getStrings().skillInfos[`${id}:${level}`])
             this.network.macroExecutor.notifySkill(id, hitTime);
 
-        if (!caster.actor || !target) {
+        if (!caster.actor || !target && !targetActor) {
             if (!isTransient) this.stopSkill(caster.objectId);
             const pending = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
 
@@ -149,18 +147,18 @@ export class NetworkCombat {
             return;
         }
 
-        this.startServerSkill(caster, target, id, level, hitTime / 1000, position, isTransient, receivedTime);
+        this.startServerSkill(caster, targetObjectId, id, level, hitTime / 1000, position, isTransient, receivedTime);
     }
 
-    protected startServerSkill(caster: NetObject_T, target: NetObject_T, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
+    protected startServerSkill(caster: NetObject_T, targetObjectId: number, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
         if (caster.isDead) return;
 
         const skill: NetSkill_T = { id, level, hitTime, receivedTime, associatedActors: [], associatedObjectIds: [...associatedObjectIds] }; // OnReceiveMagicSkillUse 0x7507f7..0x750831.
 
         for (const objectId of skill.associatedObjectIds) {
-            const object = this.network.actors.objects.get(objectId);
+            const actor = this.network.actors.getActionTarget(objectId);
 
-            if (object?.actor) skill.associatedActors.push(object.actor);
+            if (actor) skill.associatedActors.push(actor);
         }
 
         this.network.movement.adjustPawnLocation(caster, position);
@@ -174,36 +172,36 @@ export class NetworkCombat {
             caster.pendingSkill = null;
         }
 
-        void this.castSkill(caster, target, skill, isTransient);
+        void this.castSkill(caster, targetObjectId, skill, isTransient);
     }
 
-    protected async castSkill(caster: NetObject_T, target: NetObject_T, cast: NetSkill_T, isTransient: boolean) {
-        const actor = caster.actor;
+    protected async castSkill(caster: NetObject_T, targetObjectId: number, cast: NetSkill_T, isTransient: boolean) {
+        const actor = caster.actor, target = this.network.actors.objects.get(targetObjectId), targetActor = this.network.actors.getActionTarget(targetObjectId);
 
         const asset = this.network.getParent().getComponent("asset");
         const skill = asset.getPawnSkillRecord(actor, cast.id, cast.level);
         const attack = actor.getComponent<PawnAttackComponent>("pawnAttack");
         const visual = skill.visual, request = asset.getPawnSkillRequest(actor);
 
-        if (!target.actor) skill.visual = null;
+        if (!targetActor) skill.visual = null;
 
-        if (!isTransient && caster.skill !== cast || caster.isRemoved || target.isRemoved) return;
+        if (!isTransient && caster.skill !== cast || caster.isRemoved || target?.isRemoved) return;
 
-        attack.castFromServer(target.actor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
+        attack.castFromServer(targetActor, skill, cast.hitTime, cast.associatedActors, cast.associatedActors.length > 0, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
         if (isTransient && visual?.transientRejected) this.stopSkill(caster.objectId);
 
         if (!skill.visual) {
-            const [loaded, targetActor] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), target.actor || target.actorReady]);
+            const [loaded, loadedTarget] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), targetActor || target?.actorReady]);
 
-            if (!loaded || !targetActor || !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) || caster.isRemoved || target.isRemoved || caster.actor !== actor || !attack.isAttached()) return;
+            if (!loaded || !loadedTarget || this.network.actors.getActionTarget(targetObjectId) !== loadedTarget || !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) || caster.isRemoved || target?.isRemoved || caster.actor !== actor || !attack.isAttached()) return;
 
             if (isTransient && loaded.visual.transientRejected && request === asset.getPawnSkillRequest(actor)) this.stopSkill(caster.objectId);
 
             Object.assign(skill, { visual: loaded.visual, flyingTime: loaded.flyingTime, sounds: loaded.sounds, assets: loaded.assets });
-            attack.setSkillTargets(cast.id, cast.associatedActors, target.actor);
-            attack.attachSkillVisual(skill, target.actor, cast.hitTime, cast.associatedActors, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
+            attack.setSkillTargets(cast.id, cast.associatedActors, loadedTarget);
+            attack.attachSkillVisual(skill, loadedTarget, cast.hitTime, cast.associatedActors, (this.network.getParent().getCurrentTime() - cast.receivedTime) / 1000);
         }
-        if (target.actor) this.network.ui.notifyOlympiadSkill(caster.objectId, cast.id);
+        if (target?.actor) this.network.ui.notifyOlympiadSkill(caster.objectId, cast.id);
     }
 
     public onMagicSkillLaunched(packet: PacketReader) {
@@ -241,19 +239,19 @@ export class NetworkCombat {
             if (pending && (targetObjectId === undefined || pending.targetObjectId === targetObjectId)) {
                 const target = this.network.actors.objects.get(pending.targetObjectId);
 
-                if (target) {
+                if (target || this.network.actors.getActionTarget(pending.targetObjectId)) {
                     caster.pendingSkill = null;
-                    this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
+                    this.startServerSkill(caster, pending.targetObjectId, pending.id, pending.level, pending.hitTime, pending.position, pending.isTransient, pending.receivedTime, pending.associatedObjectIds);
                 }
             }
 
             for (let i = 0; i < caster.pendingTransientSkills.length;) {
                 const pending = caster.pendingTransientSkills[i], target = this.network.actors.objects.get(pending.targetObjectId);
 
-                if (!target || targetObjectId !== undefined && pending.targetObjectId !== targetObjectId) { i++; continue; }
+                if (!target && !this.network.actors.getActionTarget(pending.targetObjectId) || targetObjectId !== undefined && pending.targetObjectId !== targetObjectId) { i++; continue; }
 
                 caster.pendingTransientSkills.splice(i, 1);
-                this.startServerSkill(caster, target, pending.id, pending.level, pending.hitTime, pending.position, true, pending.receivedTime, pending.associatedObjectIds);
+                this.startServerSkill(caster, pending.targetObjectId, pending.id, pending.level, pending.hitTime, pending.position, true, pending.receivedTime, pending.associatedObjectIds);
             }
         }
     }
@@ -273,9 +271,9 @@ export class NetworkCombat {
 
         skill.associatedActors.length = 0;
         for (const targetId of skill.associatedObjectIds) {
-            const target = this.network.actors.objects.get(targetId);
+            const target = this.network.actors.getActionTarget(targetId);
 
-            if (target?.actor) skill.associatedActors.push(target.actor);
+            if (target) skill.associatedActors.push(target);
         }
         caster.actor.getComponent<PawnAttackComponent>("pawnAttack").setSkillTargets(skill.id, skill.associatedActors);
         this.network.getParent().getComponent("render").setRetainedSkillTargets(caster.actor, skill.id, skill.associatedActors);
@@ -463,7 +461,7 @@ export class NetworkCombat {
 
         switch (waitType) {
             case GamePackets.WaitType_T.WT_SITTING: field = object.chairStaticObjectId ? "ChairSitAnimName" : "SitAnimName"; rateField = "SitAnimRate"; break;
-            case GamePackets.WaitType_T.WT_STANDING: field = "StandAnimName"; rateField = "StandAnimRate"; object.chairStaticObjectId = 0; break;
+            case GamePackets.WaitType_T.WT_STANDING: field = object.chairStaticObjectId ? "ChairStandAnimName" : "StandAnimName"; rateField = object.chairStaticObjectId ? "NonAttackSpeedRate" : "StandAnimRate"; object.chairStaticObjectId = 0; break;
             case GamePackets.WaitType_T.WT_START_FAKEDEATH: field = "DeathAnimName"; break;
             case GamePackets.WaitType_T.WT_STOP_FAKEDEATH: field = "DeathStandAnimName"; object.chairStaticObjectId = 0; break;
             default: throw new Error(`Unknown wait type '${waitType}'.`);

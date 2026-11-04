@@ -18,6 +18,12 @@ import type { UModel } from "./model/un-model";
 import type { Matrix4Arr, Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
+export enum EL2ObjectType_T {
+    EL2_NORMAL,
+    EL2_DOOR,
+    EL2_CHAIR
+}
+
 export enum EActorViewType_T {
     EAVT_None,
     EAVT_InSight,

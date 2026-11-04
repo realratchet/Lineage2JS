@@ -3,7 +3,7 @@ import { setLoadingProgress } from "../loading-progress";
 import type NetworkManager from "./network-manager";
 import { Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
-import type { NAttackActionParam_T } from "../objects/components/pawn-attack-component";
+import type { NAttackActionParam_T, AttackTarget_T } from "../objects/components/pawn-attack-component";
 import type { Nameplate_T } from "../nwindow/nconsole-wnd";
 import { CommandType_T } from "./command-parser";
 import GroundPickup from "../objects/ground-pickup";
@@ -16,12 +16,13 @@ import type { ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/cont
 import type MovableObject from "../objects/movable-object";
 import { setVector } from "./network-location";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
+import { PawnMeshType_T } from "../assets/unreal/un-pawn";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import type { CollisionQuery_T } from "../physics/collision-world";
 
 type NetObjectKind_T = "user" | "player" | "npc";
 
-export type NetSkill_T = { id: number, level: number, hitTime: number, receivedTime: number, associatedActors: BaseActor[], associatedObjectIds: number[] };
+export type NetSkill_T = { id: number, level: number, hitTime: number, receivedTime: number, associatedActors: AttackTarget_T[], associatedObjectIds: number[] };
 
 type PendingAttack_T = { hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T };
 
@@ -153,6 +154,16 @@ export class NetworkActors {
         for (const npc of await this.network.getParent().getComponent("render").listNpcs()) this.npcNames.set(npc.id, npc.name);
     }
 
+    public getActionTarget(objectId: number): AttackTarget_T {
+        const object = this.objects.get(objectId);
+
+        if (object) return object.actor;
+
+        const doorId = this.doors.get(objectId);
+
+        return doorId ? this.network.getParent().getComponent("render").findMovableByRealId(doorId) : null;
+    }
+
     public findObjectByActor(actor: Object3D): NetObject_T {
         for (const object of this.objects.values())
             if (object.actor === actor) return object;
@@ -160,22 +171,22 @@ export class NetworkActors {
         return null;
     }
 
-    protected getMeshType(appearance: GamePackets.Appearance_T): number { // User::GetMeshType 0x736020, stored as Pawn.CharClassID.
+    protected getMeshType(appearance: GamePackets.Appearance_T): PawnMeshType_T { // User::GetMeshType 0x736020, stored as Pawn.CharClassID.
         const { race, classId } = appearance, sex = appearance.sex !== 0 ? 1 : 0;
 
         switch (race) {
             case GamePackets.Race_T.HUMAN:
-                if (classId <= 9 || classId >= 88 && classId <= 93) return sex;
-                if (classId <= 17 || classId >= 94 && classId <= 98) return 8 + sex;
-                return 5;
-            case GamePackets.Race_T.ELF: return 6 + sex;
-            case GamePackets.Race_T.DARK_ELF: return 2 + sex;
+                if (classId <= 9 || classId >= 88 && classId <= 93) return sex ? PawnMeshType_T.FFighter : PawnMeshType_T.MFighter;
+                if (classId <= 17 || classId >= 94 && classId <= 98) return sex ? PawnMeshType_T.FMagic : PawnMeshType_T.MMagic;
+                return PawnMeshType_T.FDwarf;
+            case GamePackets.Race_T.ELF: return sex ? PawnMeshType_T.FElf : PawnMeshType_T.MElf;
+            case GamePackets.Race_T.DARK_ELF: return sex ? PawnMeshType_T.FDarkElf : PawnMeshType_T.MDarkElf;
             case GamePackets.Race_T.ORC:
-                if (classId >= 44 && classId <= 48 || classId >= 113 && classId <= 114) return 10 + sex;
-                if (classId >= 49 && classId <= 52 || classId >= 115 && classId <= 116) return 12 + sex;
-                return 5;
-            case GamePackets.Race_T.DWARF: return 4 + sex;
-            default: return 5;
+                if (classId >= 44 && classId <= 48 || classId >= 113 && classId <= 114) return sex ? PawnMeshType_T.FOrc : PawnMeshType_T.MOrc;
+                if (classId >= 49 && classId <= 52 || classId >= 115 && classId <= 116) return sex ? PawnMeshType_T.FShaman : PawnMeshType_T.MShaman;
+                return PawnMeshType_T.FDwarf;
+            case GamePackets.Race_T.DWARF: return sex ? PawnMeshType_T.FDwarf : PawnMeshType_T.MDwarf;
+            default: return PawnMeshType_T.FDwarf;
         }
     }
 
@@ -766,7 +777,7 @@ export class NetworkActors {
 
         try {
             npc = await this.network.getParent().getComponent("asset").resolveNpc(npcId);
-            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, false, false, [info.collisionRadius, info.collisionHeight]);
+            actor = await render.spawnNpc(npcId, object.position.clone(), info.rightHand || info.leftHand || info.chest ? { rightHand: info.rightHand, leftHand: info.leftHand, chest: info.chest, attackRange: NETWORK_BOW_RANGE } : null, false, false, [info.collisionRadius, info.collisionHeight], false);
         } catch (e) {
             object.resolveActor(null);
             this.npcSpawnCount--;
@@ -859,6 +870,7 @@ export class NetworkActors {
         actor.setRotationYaw(object.heading);
 
         actor.teleportTo(object.pendingFly ? object.pendingFly.origin : position || object.position, !position);
+        actor.beginPlay();
         const vehicle = this.network.movement.vehicles.get(this.network.movement.getVehicleIdOf(object.objectId));
 
         if (vehicle) {

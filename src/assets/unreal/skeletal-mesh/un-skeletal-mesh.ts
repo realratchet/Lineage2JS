@@ -275,8 +275,8 @@ class FStaticModelLOD implements Constructable_T {
     public wedges = new FArrayLazy(FMeshWedge);
     public faces = new FArrayLazy(FTriangleLOD);
     public points = new FArrayLazy(FVector.class());
+    public displayFactor: number;
     public lodHysteresis: number;
-    public numSharedVertices: number;
     public lodMaxInfluences: number;
     public maxInfluences: number;
     public isUniqueSubset: boolean;
@@ -297,8 +297,9 @@ class FStaticModelLOD implements Constructable_T {
         this.faces.load(pkg);
         this.points.load(pkg);
 
+        // Engine.dll 0x9716e8..0x971704 serializes DisplayFactor and LODHysteresis before the integer fields.
+        this.displayFactor = pkg.read("float");
         this.lodHysteresis = pkg.read("float");
-        this.numSharedVertices = pkg.read("uint32");
         this.lodMaxInfluences = pkg.read("uint32");
         this.maxInfluences = pkg.read("uint32");
         this.isUniqueSubset = pkg.read("uint32") !== 0;

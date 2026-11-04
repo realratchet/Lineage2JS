@@ -449,6 +449,15 @@ export class SectorObject extends GameObject {
         return actor;
     }
 
+    public findLevelActorByRealId(realId: number): ScriptHost_T | null {
+        for (let i = 0; i < this.arrLevelActors.length; i++) {
+            const actor = this.arrLevelActors[i], info = actor === undefined ? this.arrLevelActorRecords[i] : actor;
+
+            if (info && getProperty(info as ScriptHost_T, "L2ServerObjectRealID") === realId) return this.getLevelActor(i);
+        }
+        return null;
+    }
+
     public getLevelActor(index: number): ScriptHost_T | null {
         if (!Number.isInteger(index) || index < 0 || index >= this.arrLevelActors.length) throw new Error(`Invalid actor slot '${index}' in '${this.name}'`);
         if (this.arrLevelActors[index] !== undefined) return this.arrLevelActors[index];

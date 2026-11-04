@@ -14,7 +14,7 @@ const arrNodes: number[] = [];
 
 type Part_T = { item: any, state: State_T, actor: Owner_T, emitter: EmitterOwner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split: boolean };
 type Owner_T = { center: Vector3, radius: number, path: number, leaves: number[], parts: Part_T[], count: number, ordinals: Map<number, number> };
-type State_T = { sector: SectorObject, nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], actorCount: number, leaves: number[][], leafCounts: number[], dynamicLeaves: Set<number>, meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], cursor: number, cullBackfaces: boolean };
+type State_T = { sector: SectorObject, nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], actorCount: number, leaves: number[][], leafCounts: number[], dynamicLeaves: Set<number>, meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], partCount: number, cursor: number, cullBackfaces: boolean };
 type BatchRange_T = { starts: Uint32Array, stamp: number };
 type EmitterOwner_T = { owner: Owner_T, state: State_T, stamp: number, distance: number, key: number, items: any[] };
 
@@ -90,7 +90,7 @@ export class TranslucentRenderList {
             leaves[leaf].push(indices.get(entry.owner));
         }
         for (const section of sector.getTranslucentBSP()) surfaces.set(section.mesh, section);
-        const state: State_T = { sector, nodes: sector.bspNodes, list: new TranslucentDrawList(sector.bspNodes, actors, leaves), actors, actorCount: actors.length, leaves, leafCounts: leaves.map(leaf => leaf.length), dynamicLeaves: new Set(), meshes, surfaces, visibleNodes: new Uint8Array(sector.bspNodes.length), visibleActors: new Uint8Array(actors.length), nodeParts: [], nodeCounts: new Uint32Array(sector.bspNodes.length), sorted: [], cursor: 0, cullBackfaces: false };
+        const state: State_T = { sector, nodes: sector.bspNodes, list: new TranslucentDrawList(sector.bspNodes, actors, leaves), actors, actorCount: actors.length, leaves, leafCounts: leaves.map(leaf => leaf.length), dynamicLeaves: new Set(), meshes, surfaces, visibleNodes: new Uint8Array(sector.bspNodes.length), visibleActors: new Uint8Array(actors.length), nodeParts: [], nodeCounts: new Uint32Array(sector.bspNodes.length), sorted: [], partCount: 0, cursor: 0, cullBackfaces: false };
         for (const mesh of meshes.keys()) this.cacheObjects.set(mesh, state);
         for (const mesh of surfaces.keys()) this.cacheObjects.set(mesh, state);
         this.cacheStates.set(sector, state);
@@ -172,6 +172,7 @@ export class TranslucentRenderList {
         part.start = start; part.count = count; part.materialIndex = materialIndex; part.ordinal = ordinal;
         part.split = split;
         part.emitter = emitter;
+        if (state) state.partCount++;
 
         if (actor) {
             let index = actor.count++;
@@ -196,7 +197,7 @@ export class TranslucentRenderList {
             state.dynamicLeaves.clear();
             state.actors.length = state.actorCount;
             state.visibleNodes.fill(0); state.visibleActors.fill(0); state.nodeCounts.fill(0);
-            state.sorted.length = 0; state.cursor = 0;
+            state.sorted.length = 0; state.partCount = 0; state.cursor = 0;
             state.cullBackfaces = sector.findPositionZone(camera.position) !== 0;
             for (const actor of state.actors) actor.count = 0;
             this.arrStates.push(state);
@@ -242,6 +243,7 @@ export class TranslucentRenderList {
             }
         }
         for (const state of this.arrStates) {
+            if (!state.partCount) continue;
             if (state.visibleActors.length < state.actors.length) state.visibleActors = new Uint8Array(Math.max(state.actors.length, state.visibleActors.length * 2));
             for (let i = 0; i < state.actors.length; i++) state.visibleActors[i] = Number(state.actors[i].count > 0);
             state.list.sort(camera.position, state.visibleNodes, state.visibleActors);
