@@ -7,9 +7,6 @@ import { SKIN_SLOTS } from "./skin-textures";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import SysString_T from "./sys-string";
 
-const TEX_BACK = "L2UI_ch3.OptionWnd.option1_back";
-const TEX_AUDIO_BACK = "L2UI_ch3.OptionWnd.option2_back";
-const TEX_GAME_BACK = "L2UI_ch3.OptionWnd.option3_back";
 const TEX_TAB_BACK = "L2UI_ch3.SSQWnd.ssq_back";
 const TEX_TAB = "L2UI_ch3.TabButton.normal_tab_on";
 const TEX_TAB_SELECTED = "L2UI_ch3.TabButton.normal_tab";
@@ -23,7 +20,7 @@ export const PAWN_RANGES = [3, 2.5, 2, 1.5, 1];
 export const PAWN_LIMITS = [50, 100, 200, 300, 400, 10000];
 
 export class NCOptionWnd {
-    public static getTextures() { return [TEX_BACK, TEX_AUDIO_BACK, TEX_GAME_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
+    public static getTextures() { return [TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
     public readonly element: HTMLDivElement;
     public getOptions: () => GameConfig_T = null;
     public onApply: (options: GameConfig_T) => void = null;
@@ -52,13 +49,12 @@ export class NCOptionWnd {
     protected readonly terrainRange: NCComboBox;
     protected readonly pawnLimit: NCComboBox;
     protected readonly pawnRange: NCComboBox;
+    protected readonly skillEffectLighting: NDomCheckBox_T;
     protected readonly sortTransparent: NDomCheckBox_T;
     protected readonly pawnShadow: NDomCheckBox_T;
     protected readonly renderDeco: NDomCheckBox_T;
     protected readonly useTrilinear: NDomCheckBox_T;
-    protected readonly language: NCComboBox;
     protected uiScales = UI_SCALES;
-    protected readonly background: HTMLDivElement;
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly audioCombos: NCComboBox[] = [];
     protected readonly audioKeys: (keyof AudioConfig_T)[] = ["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"];
@@ -84,9 +80,9 @@ export class NCOptionWnd {
         const manager = layer.getManager();
 
         this.element = layer.createWindow(0, 0, 256, 480);
+        this.element.classList.add("ndom-options");
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 28, 0, 0, 256, 28, TEX_TAB_BACK);
-        this.background = layer.tile(this.element, 0, 48, 256, 432, 0, 0, 256, 432, TEX_GAME_BACK);
         NCFrameCtrl.createDOM(layer, this.element, 256, manager.getSysString(SysString_T.Options), false, () => this.setVisible(false));
         [SysString_T.Video, SysString_T.Audio, SysString_T.Game].forEach((id, index) => {
             const tab = layer.tab(this.element, 12 + index * 75, 25, 74, 23, TEX_TAB, TEX_TAB_SELECTED, manager.getSysString(id), null, () => this.selectTab(index));
@@ -95,14 +91,18 @@ export class NCOptionWnd {
             tab.tabIndex = 0;
             this.tabs.push(tab);
         });
-        const game = this.game = layer.createWindow(0, 48, 256, 400, this.element);
-        this.audio = layer.createWindow(0, 48, 256, 400, this.element);
+        const content = document.createElement("div");
+
+        content.className = "ndom-options-pages";
+        this.element.appendChild(content);
+        const game = this.game = layer.createWindow(0, 48, 256, 400, content);
+        this.audio = layer.createWindow(0, 48, 256, 400, content);
         this.audio.hidden = true;
-        this.video = layer.createWindow(0, 48, 256, 400, this.element);
+        this.video = layer.createWindow(0, 48, 256, 400, content);
         this.video.hidden = true;
         const gammaLabel = manager.getSysString(SysString_T.Gamma);
 
-        layer.text(this.video, gammaLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(gammaLabel), 52);
+        const gammaText = layer.text(this.video, gammaLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(gammaLabel), 52);
         this.gamma = new NCComboBox(layer, this.video, 107, 49, 125, 17);
         this.gamma.setItems([SysString_T.VeryHigh, SysString_T.High, SysString_T.Average, SysString_T.Low, SysString_T.VeryLow, SysString_T.Off].map(id => manager.getSysString(id)));
         this.gamma.element.tabIndex = 0;
@@ -117,7 +117,7 @@ export class NCOptionWnd {
         });
         const textureLabel = manager.getSysString(SysString_T.Texture);
 
-        layer.text(this.video, textureLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(textureLabel), 71);
+        const textureText = layer.text(this.video, textureLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(textureLabel), 71);
         this.textureDetail = new NCComboBox(layer, this.video, 107, 68, 125, 17);
         this.textureDetail.setItems([SysString_T.TextureHigh, SysString_T.TextureAverage, SysString_T.TextureLow].map(id => manager.getSysString(id)));
         this.textureDetail.element.tabIndex = 0;
@@ -132,7 +132,7 @@ export class NCOptionWnd {
         });
         const antiAliasingLabel = manager.getSysString(SysString_T.AntiAliasing);
 
-        layer.text(this.video, antiAliasingLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(antiAliasingLabel), 251);
+        const antiAliasingText = layer.text(this.video, antiAliasingLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(antiAliasingLabel), 251);
         this.antiAliasing = new NCComboBox(layer, this.video, 107, 248, 125, 17);
         this.antiAliasing.element.tabIndex = 0;
         this.antiAliasing.element.setAttribute("role", "combobox");
@@ -148,7 +148,8 @@ export class NCOptionWnd {
         this.renderDeco = layer.checkbox(this.video, 135, 270, 109, 17, manager.getSysString(SysString_T.GroundDetail));
         this.useTrilinear = layer.checkbox(this.video, 135, 287, 100, 17, manager.getSysString(SysString_T.TextureFilter));
         this.sortTransparent = layer.checkbox(this.video, 25, 287, 109, 17, "Sort transparent");
-        [this.pawnShadow, this.renderDeco, this.useTrilinear, this.sortTransparent].forEach(checkbox => {
+        this.skillEffectLighting = layer.checkbox(this.video, 25, 304, 207, 17, "Skill effect lighting");
+        [this.pawnShadow, this.renderDeco, this.useTrilinear, this.sortTransparent, this.skillEffectLighting].forEach(checkbox => {
             checkbox.tabIndex = 0;
             checkbox.addEventListener("keydown", event => {
                 if (event.repeat || event.key !== " " && event.key !== "Enter") return;
@@ -159,7 +160,7 @@ export class NCOptionWnd {
         });
         const rangeLabel = manager.getSysString(SysString_T.PCNPCRange);
 
-        layer.text(this.video, rangeLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(rangeLabel), 161);
+        const rangeText = layer.text(this.video, rangeLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(rangeLabel), 161);
         this.pawnRange = new NCComboBox(layer, this.video, 107, 158, 125, 17);
         this.pawnRange.setItems([SysString_T.VeryWide, SysString_T.Wide, SysString_T.RangeAverage, SysString_T.Narrow, SysString_T.VeryNarrow].map(id => manager.getSysString(id)));
         this.pawnRange.element.tabIndex = 0;
@@ -167,11 +168,11 @@ export class NCOptionWnd {
         this.pawnRange.element.setAttribute("aria-label", rangeLabel);
         const terrainLabel = manager.getSysString(SysString_T.TerrainRange), limitLabel = manager.getSysString(SysString_T.PCNPCLimit);
 
-        layer.text(this.video, terrainLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(terrainLabel), 142);
+        const terrainText = layer.text(this.video, terrainLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(terrainLabel), 142);
         this.terrainRange = new NCComboBox(layer, this.video, 107, 139, 125, 17);
         this.terrainRange.setItems([SysString_T.VeryWide, SysString_T.Wide, SysString_T.RangeAverage, SysString_T.Narrow, SysString_T.VeryNarrow].map(id => manager.getSysString(id)));
         this.terrainRange.element.setAttribute("aria-label", terrainLabel);
-        layer.text(this.video, limitLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(limitLabel), 180);
+        const limitText = layer.text(this.video, limitLabel, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(limitLabel), 180);
         this.pawnLimit = new NCComboBox(layer, this.video, 107, 177, 125, 17);
         this.pawnLimit.setItems([SysString_T.None, SysString_T.VeryHigh, SysString_T.High, SysString_T.Average, SysString_T.Low, SysString_T.VeryLow].map(id => manager.getSysString(id)));
         this.pawnLimit.element.setAttribute("aria-label", limitLabel);
@@ -186,7 +187,7 @@ export class NCOptionWnd {
                 combo.setOpen(false);
             });
         });
-        layer.text(this.video, "UI Scale", 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText("UI Scale"), 377);
+        const scaleText = layer.text(this.video, "UI Scale", 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText("UI Scale"), 377);
         this.uiScale = new NCComboBox(layer, this.video, 107, 374, 125, 17);
         this.uiScale.element.tabIndex = 0;
         this.uiScale.element.setAttribute("role", "combobox");
@@ -198,7 +199,7 @@ export class NCOptionWnd {
             this.uiScale.setSelected(Math.max(0, Math.min(this.uiScales.length - 1, this.uiScale.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
             this.uiScale.setOpen(false);
         });
-        layer.text(game, manager.getSysString(SysString_T.Interface), 0xffdcdcdc, FontType_T.SMALL, 24, 15);
+        const interfaceText = layer.text(game, manager.getSysString(SysString_T.Interface), 0xffdcdcdc, FontType_T.SMALL, 24, 15);
         const initialize = layer.button(game, 88, 11, 66, 21, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, null, manager.getSysString(SysString_T.Initialize), () => this.onInitialize());
 
         initialize.tabIndex = 0;
@@ -211,25 +212,14 @@ export class NCOptionWnd {
             manager.playButtonSound(true);
             this.onInitialize();
         });
-        layer.text(game, manager.getSysString(SysString_T.Language), 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText(manager.getSysString(SysString_T.Language)), 49); // NCGameOptionWnd::OnPaint 0x100c7940..0x100c794c.
-        this.language = new NCComboBox(layer, game, 87, 46, 125, 17);
-        this.language.setItems(["English"]);
-        this.language.setSelected(0);
-        this.language.element.tabIndex = 0;
-        this.language.element.setAttribute("role", "combobox");
-        this.language.element.setAttribute("aria-label", manager.getSysString(SysString_T.Language));
-        this.language.element.addEventListener("keydown", event => {
-            if (!["Enter", " ", "ArrowUp", "ArrowDown", "Escape"].includes(event.key)) return;
+        const displayText = layer.text(game, manager.getSysString(SysString_T.Display), 0xffdcdcdc, FontType_T.SMALL, 76 - layer.measureText(manager.getSysString(SysString_T.Display)), 82);
+        const audioRows: HTMLElement[][] = [];
 
-            event.preventDefault();
-            this.language.setOpen(event.key === "Escape" ? false : event.key === "Enter" || event.key === " " ? !this.language.isOpen() : true);
-        });
-        layer.text(game, manager.getSysString(SysString_T.Display), 0xffdcdcdc, FontType_T.SMALL, 76 - layer.measureText(manager.getSysString(SysString_T.Display)), 82);
         [SysString_T.SFXVol, SysString_T.MusicVol, SysString_T.SystemVoice, SysString_T.TutorialVoice].forEach((id, index) => {
             const label = manager.getSysString(id);
             const combo = new NCComboBox(layer, this.audio, 107, 11 + index * 19, 125, 17);
 
-            layer.text(this.audio, label, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(label), 14 + index * 19);
+            const text = layer.text(this.audio, label, 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText(label), 14 + index * 19);
             combo.setItems([SysString_T.VeryHigh, SysString_T.High, SysString_T.Average, SysString_T.Low, SysString_T.VeryLow, SysString_T.Off].map(id => manager.getSysString(id)));
             combo.element.tabIndex = 0;
             combo.element.setAttribute("role", "combobox");
@@ -242,6 +232,7 @@ export class NCOptionWnd {
                 combo.setOpen(false);
             });
             this.audioCombos.push(combo);
+            audioRows.push([text, combo.element]);
         });
 
         [SysString_T.Player, SysString_T.Monsters, SysString_T.OtherPCs, SysString_T.Clan, SysString_T.PartyNames, SysString_T.GeneralNames].forEach((id, index) => {
@@ -279,7 +270,7 @@ export class NCOptionWnd {
         });
         const lootLabel = manager.getSysString(SysString_T.PartyLoot);
 
-        layer.text(game, lootLabel, 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText(lootLabel), 377);
+        const lootText = layer.text(game, lootLabel, 0xffdcdcdc, FontType_T.SMALL, 79 - layer.measureText(lootLabel), 377);
         this.partyLooting = new NCComboBox(layer, game, 87, 374, 125, 17);
         this.partyLooting.setItems([SysString_T.FindersKeepers, SysString_T.Random, SysString_T.RandomIncludingSpoil, SysString_T.ByTurn, SysString_T.ByTurnIncludingSpoil].map(id => manager.getSysString(id)));
         this.partyLooting.onChange = index => { this.lootType = index; };
@@ -294,12 +285,39 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
             this.partyLooting.setOpen(false);
         });
+        layoutSections(this.video, [
+            [[gammaText, this.gamma.element], [textureText, this.textureDetail.element]],
+            [[terrainText, this.terrainRange.element], [rangeText, this.pawnRange.element], [limitText, this.pawnLimit.element]],
+            [[antiAliasingText, this.antiAliasing.element], [this.pawnShadow, this.renderDeco], [this.sortTransparent, this.useTrilinear], [this.skillEffectLighting]],
+            [[scaleText, this.uiScale.element]]
+        ]);
+        layoutSections(this.audio, [audioRows]);
+        const names = document.createElement("div");
+
+        names.className = "ndom-options-names";
+        this.nameChecks.forEach((checkbox, index) => {
+            if (index >= 3) checkbox.style.marginLeft = "12px";
+            names.appendChild(checkbox);
+        });
+        this.systemMsgWndDamage.style.marginLeft = "12px";
+        layoutSections(game, [
+            [[interfaceText, initialize, this.transparencyMode]],
+            [[displayText, names]],
+            [[this.enterChatting, this.oldChatting], [keySecurity], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle]],
+            [[this.systemMsgWnd], [this.systemMsgWndDamage, this.systemMsgWndExpendableItem]],
+            [[lootText, this.partyLooting.element]]
+        ]);
+        names.parentElement.classList.add("ndom-options-tree");
+        const footer = document.createElement("div");
+
+        footer.className = "ndom-options-footer";
+        this.element.appendChild(footer);
         [SysString_T.OK, SysString_T.Cancel, SysString_T.Apply].forEach((id, index) => {
             const press = () => {
                 if (index !== 1) this.apply();
                 if (index !== 2) this.setVisible(false);
             };
-            const button = layer.button(this.element, 11 + index * 80, 450, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(id), press);
+            const button = layer.button(footer, 11 + index * 80, 450, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(id), press);
 
             button.tabIndex = 0;
             button.setAttribute("role", "button");
@@ -314,7 +332,7 @@ export class NCOptionWnd {
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 128), Math.trunc(height * 0.5 - 240)); }
+    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 128), Math.max(0, Math.trunc((height - (this.element.offsetHeight || 480)) * 0.5))); }
     public isVisible() { return !this.element.hidden; }
 
     public setVisible(isVisible: boolean) {
@@ -324,7 +342,6 @@ export class NCOptionWnd {
         this.pawnLimit.setOpen(false);
         this.textureDetail.setOpen(false);
         this.antiAliasing.setOpen(false);
-        this.language.setOpen(false);
         this.partyLooting.setOpen(false);
         this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
@@ -347,6 +364,7 @@ export class NCOptionWnd {
 
             this.pawnShadow.setChecked(options.pawnShadow);
             this.sortTransparent.setChecked(options.sortTransparent);
+            this.skillEffectLighting.setChecked(options.skillEffectLighting);
             this.renderDeco.setChecked(options.renderDeco);
             this.useTrilinear.setChecked(options.useTrilinear);
             this.textureDetail.setSelected(options.textureDetail);
@@ -416,7 +434,6 @@ export class NCOptionWnd {
         this.game.hidden = index !== 2;
         this.audio.hidden = index !== 1;
         this.video.hidden = index !== 0;
-        this.language.setOpen(false);
         this.partyLooting.setOpen(false);
         this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
@@ -424,7 +441,6 @@ export class NCOptionWnd {
             tab.setTextures(i === index ? TEX_TAB_SELECTED : TEX_TAB, TEX_TAB_SELECTED);
             tab.setAttribute("aria-selected", String(i === index));
         });
-        this.layer.setTile(this.background, 256, 432, 0, 0, 256, 432, index === 0 ? TEX_BACK : index === 1 ? TEX_AUDIO_BACK : TEX_GAME_BACK);
     }
 
     protected updateNameControls() {
@@ -462,8 +478,37 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
         }
         this.onApplyAudio(Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])) as AudioConfig_T);
-        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
+        this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLighting.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
     }
+}
+
+function layoutSections(parent: HTMLElement, sections: HTMLElement[][][]) {
+    parent.classList.add("ndom-options-content");
+    sections.forEach(rows => {
+        const section = document.createElement("div");
+
+        section.className = "ndom-options-section";
+        const columnWidth = Math.max(0, ...rows.filter(elements => elements.length === 2 && elements.every(element => element.getAttribute("role") === "checkbox")).map(elements => 16 + parseFloat(elements[0].querySelector<HTMLElement>(".ndom-text").style.width)));
+
+        rows.forEach(elements => {
+            const row = document.createElement("div");
+
+            row.className = "ndom-options-row";
+            elements.forEach(element => {
+                if (element.getAttribute("role") === "checkbox") {
+                    const label = element.querySelector<HTMLElement>(".ndom-text");
+
+                    element.style.width = `${16 + parseFloat(label.style.width)}px`;
+                }
+                if (elements.length === 2 && elements.every(element => element.getAttribute("role") === "checkbox") && element === elements[0])
+                    element.style.minWidth = `${columnWidth}px`;
+
+                row.appendChild(element);
+            });
+            section.appendChild(row);
+        });
+        parent.appendChild(section);
+    });
 }
 
 export default NCOptionWnd;

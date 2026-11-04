@@ -101,6 +101,8 @@ export class SkillViewerRenderManager extends RenderManager {
         this.getPhysicsManager().setTriggerPosition(this.camera.position);
         this.updatePawnVisibility();
 
+        this.skillLightProbe.update(this.renderer);
+
         for (const component of this.pawnRenderables) this.updateViewerLighting(component.getParent());
         for (const component of this.actorMeshes) this.updateViewerLighting(component.getParent());
 
@@ -150,7 +152,11 @@ export class SkillViewerRenderManager extends RenderManager {
     protected updateViewerLighting(actor: Object3D): void {
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
 
-        if (pawnLights) pawnLights.updateLighting((actor as BaseActor).getComponent<PawnRenderableComponent>("pawnRenderable").getLightingSphere());
+        const renderable = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<PawnRenderableComponent>("pawnRenderable") : null;
+        const sphere = renderable && (pawnLights || this.skillLightProbe.hasLights) ? renderable.getLightingSphere() : null;
+        const skillLights = renderable && (!pawnLights || !pawnLights.getLights().length) ? this.skillLightProbe.sample(actor, sphere) : null;
+
+        if (pawnLights) pawnLights.updateLighting(sphere);
 
         arrLightingObjects.length = 0;
         arrLightingObjects.push(actor);
@@ -161,7 +167,7 @@ export class SkillViewerRenderManager extends RenderManager {
             for (const child of object.children) if (!(child as BaseActor).isActor) arrLightingObjects.push(child);
 
             if ((object as LitSkinnedMesh).isLitSkinnedMesh)
-                (object as LitSkinnedMesh).updateActorLighting(viewerZone, [], tmpSunAmbient, pawnLights ? pawnLights.getLights() : undefined);
+                (object as LitSkinnedMesh).updateActorLighting(viewerZone, [], tmpSunAmbient, skillLights ? skillLights.getLights() : pawnLights ? pawnLights.getLights() : undefined, skillLights ? sphere : undefined);
         }
     }
 

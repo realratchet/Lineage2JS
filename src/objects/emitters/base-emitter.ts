@@ -1,4 +1,4 @@
-import { Box3, Matrix3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
+import { Box3, Color, Texture, Matrix3, Matrix4, Object3D, Quaternion, Vector3, Vector4 } from "three";
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
 import type InstancedMeshParticles from "./instanced-mesh-particles";
@@ -436,6 +436,48 @@ export abstract class BaseEmitter extends Object3D {
 
     public setStartVelocityRangeX(velocity: number): void {
         this.initialSettings.velocity.min.x = this.initialSettings.velocity.max.x = velocity;
+    }
+
+    public getLightTexture(): Texture | null {
+        const mesh = this.instancedMesh || this.particlePool[0];
+        const material = mesh ? (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as any : null;
+
+        if (material && material.isShaderMaterial && material.uniforms.map) return material.uniforms.map.value;
+        if (!this.material) return null;
+
+        return this.material.type === "sprite" ? this.material.sprites[0].uniforms.map.texture : this.material.map?.uniforms.map.texture ?? null;
+    }
+
+    public sampleLight(position: Vector3, color: Color): number {
+        position.set(0, 0, 0);
+        color.setRGB(0, 0, 0);
+        if (!this.visible || this.drawStyle === "modulate" || this.drawStyle === "darken" || (!this.material && !this.isMeshEmitter)) return 0;
+
+        let weight = 0, count = 0, extent = 0;
+        const stride = Math.max(1, Math.ceil(this.particles.length / 32));
+
+        for (let i = 0; i < this.particles.length; i += stride) {
+            const particle = this.particles[i];
+
+            if (!(particle.flags & EParticleFlags_T.PTF_Active)) continue;
+
+            const alpha = this.drawStyle === "alpha" || this.drawStyle === "alphaModulate" ? particle.color.w : 1;
+            const brightness = Math.max(particle.color.x, particle.color.y, particle.color.z) * alpha;
+
+            position.addScaledVector(particle.position, brightness);
+            color.r += particle.color.x * alpha;
+            color.g += particle.color.y * alpha;
+            color.b += particle.color.z * alpha;
+            weight += brightness;
+            extent = Math.max(extent, particle.scale.length() * this.particleGeometryRadius);
+            count++;
+        }
+        if (weight <= 0 || count === 0) return 0;
+
+        position.divideScalar(weight);
+        this.particleSpace.localToWorld(position);
+        color.multiplyScalar(1 / count);
+        return Math.min(400, Math.max(120, extent * this.matrixWorld.getMaxScaleOnAxis() * 2));
     }
 
     public constructor(config: EmitterConfig_T) {

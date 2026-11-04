@@ -128,3 +128,92 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
     0%, 100% { opacity: 0; }
     50% { opacity: 1; }
 }
+
+.ndom-options {
+    height: auto !important;
+    padding-top: 56px;
+    background: #343b3e;
+    border: 1px solid #596165;
+    box-sizing: border-box;
+
+    .ndom-options-pages > .ndom-options-content {
+        grid-area: 1 / 1;
+        align-self: start;
+        position: relative;
+        left: auto !important;
+        top: auto !important;
+        width: auto !important;
+        height: auto !important;
+        padding: 0 10px;
+    }
+}
+
+.ndom-options-section {
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #20282b;
+    border: 1px solid #444e52;
+}
+
+.ndom-options-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+
+    + .ndom-options-row { margin-top: 4px; }
+
+    > * {
+        position: relative;
+        left: auto !important;
+        top: auto !important;
+        flex-shrink: 0;
+    }
+
+    > .ndom-text:first-child:nth-last-child(2) {
+        flex: 1;
+        text-align: right;
+        min-width: 0;
+    }
+}
+
+.ndom-options-footer {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 0 8px;
+
+    > .ndom-button {
+        position: relative;
+        left: auto !important;
+        top: auto !important;
+    }
+}
+
+.ndom-options-names {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    > .ndom-window {
+        position: relative;
+        left: auto !important;
+        top: auto !important;
+    }
+}
+
+.ndom-options-row.ndom-options-tree {
+    align-items: flex-start;
+
+    > .ndom-text { flex: none !important; }
+}
+
+.ndom-options-pages {
+    display: grid;
+
+    > .ndom-options-content[hidden] {
+        display: block;
+        visibility: hidden;
+        pointer-events: none;
+    }
+}

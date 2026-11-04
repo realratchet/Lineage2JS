@@ -1,3 +1,4 @@
+import SkillLightProbe from "./skill-light-probe";
 import { disposeStaticLighting, pollStaticLighting } from "./static-lighting";
 import NameplateDepth from "./nameplate-depth";
 import TranslucentRenderList from "./translucent-render-list";
@@ -139,6 +140,7 @@ type PawnLightingState_T = {
     envVersion: number,
     ambientZoneVersion: number,
     pawnLightVersion: number,
+    skillLightVersion: number,
     ambientR: number,
     ambientG: number,
     ambientB: number,
@@ -325,8 +327,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected pawnShadow = true;
     protected pawnShadowLimited = false;
     protected pawnShadowFrameTime = 1000 / 60;
+    protected pawnShadowLowFrameRateTime = 0;
     protected pawnShadowRecoveryTime = 0;
     protected pawnShadowLastTickTime = 0;
+    public readonly skillLightProbe = new SkillLightProbe();
     protected sortTransparent = true;
     protected renderDeco = true;
     protected readonly pawnFishing = new Set<PawnFishingComponent>();
@@ -463,6 +467,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const dispose = this.renderer.dispose;
         this.renderer.dispose = () => {
+            this.skillLightProbe.dispose();
             disposeStaticLighting(this.renderer);
             this.nameplateDepth.dispose();
             this.sectorOcclusion.dispose();
@@ -1334,6 +1339,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public removeTransientEffect(effect: Object3D): void {
+        this.skillLightProbe.remove(effect);
         this.retainTransientResources(effect);
 
         const base = (effect as any).scriptBase as BaseActor;
@@ -1685,9 +1691,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
             tmpShadowDirection.z = tmpShadowDirection.z < 0 ? -minVertical : minVertical;
 
         arrShadowCasters.length = 0;
-        if (this.pawnShadow && !this.pawnShadowLimited) {
-            arrShadowCasters.push(this.player);
+        if (this.pawnShadow) arrShadowCasters.push(this.player);
 
+        if (this.pawnShadow && !this.pawnShadowLimited) {
             const gui = this.manGame.getComponent("gui");
             for (const component of this.pawnRenderables)
                 if (component.getParent() !== this.player && (gui.getScreen() !== "world" || gui.hasNameplate(component.getParent()))) arrShadowCasters.push(component.getParent());
@@ -1720,6 +1726,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             envVersion: -1,
             ambientZoneVersion: -1,
             pawnLightVersion: -1,
+            skillLightVersion: -1,
             ambientR: -1,
             ambientG: -1,
             ambientB: -1,
@@ -1773,6 +1780,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const ambientChanged = state.envVersion !== envVersion || renderLeavesChanged || state.ambientR !== sunAmbient.r || state.ambientG !== sunAmbient.g || state.ambientB !== sunAmbient.b;
         const pawnLights = (actor as BaseActor).isActor ? (actor as BaseActor).findComponent<NPawnLightComponent>("nPawnLight") : null;
         const pawnLightVersion = pawnLights ? pawnLights.version : -1;
+        const skillLights = (actor as BaseActor).isActor && (!pawnLights || !pawnLights.getLights().length) ? this.skillLightProbe.sample(actor, lightingSphere) : null;
+        const skillLightVersion = skillLights ? this.skillLightProbe.version : -1;
         let relevantLightsChanged = false;
         let relevantLightUpdated = false;
 
@@ -1801,7 +1810,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             state.lightingSpecialLit = isSpecialLit;
         }
 
-        if (!moved && !boundsChanged && !rootChanged && !locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion) return;
+        if (!moved && !boundsChanged && !rootChanged && !locationChanged && !ambientChanged && !relevantLightsChanged && !relevantLightUpdated && state.pawnLightVersion === pawnLightVersion && state.skillLightVersion === skillLightVersion) return;
 
         if (pawnLights) pawnLights.updateLighting(lightingSphere);
 
@@ -1815,13 +1824,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (const child of object.children) if (!(child as BaseActor).isActor) arrLightingObjects.push(child);
 
             if (object.layers.mask !== 0 && (object as LitSkinnedMesh).isLitSkinnedMesh)
-                (object as LitSkinnedMesh).updateActorLighting(ambientZone || zoneInfo, state.lights, sunAmbient, pawnLights ? pawnLights.getLights() : undefined, lightingSphere);
+                (object as LitSkinnedMesh).updateActorLighting(ambientZone || zoneInfo, state.lights, sunAmbient, skillLights ? skillLights.getLights() : pawnLights ? pawnLights.getLights() : undefined, lightingSphere);
         }
 
         state.lightingRootPosition.copy(lightingSphere ? lightingSphere.center : center);
         state.envVersion = envVersion;
         state.ambientZoneVersion = ambientZoneVersion;
         state.pawnLightVersion = pawnLightVersion;
+        state.skillLightVersion = skillLightVersion;
         state.ambientR = sunAmbient.r;
         state.ambientG = sunAmbient.g;
         state.ambientB = sunAmbient.b;
@@ -1963,6 +1973,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.overHeadAlarm.clear();
         this.manGame.getComponent("gui").updateNameplates();
+        this.skillLightProbe.update(this.renderer);
         this.updatePawnLighting(true, currentTime);
 
         for (const emitter of this.getPhysicsManager().getParticleEmitters()) {
@@ -2372,7 +2383,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updateLevelTime(deltaTime);
         if (this.manGame.getComponent("network").isInWorld() && frameTime > 0) {
             this.pawnShadowFrameTime += (Math.min(frameTime, 100) - this.pawnShadowFrameTime) * Math.min(frameTime / 500, 1);
-            if (!this.pawnShadowLimited && this.pawnShadowFrameTime > 1000 / 60) {
+            this.pawnShadowLowFrameRateTime = !this.pawnShadowLimited && frameTime > 1000 / 30 ? this.pawnShadowLowFrameRateTime + Math.min(frameTime, 100) : 0;
+            if (!this.pawnShadowLimited && this.pawnShadowLowFrameRateTime >= 3000) {
                 this.pawnShadowLimited = true;
                 this.keepMinFrameRate = true;
                 this.pawnShadowRecoveryTime = 0;
@@ -2388,6 +2400,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.pawnShadowLimited = false;
             this.keepMinFrameRate = false;
             this.pawnShadowFrameTime = 1000 / 60;
+            this.pawnShadowLowFrameRateTime = 0;
             this.pawnShadowRecoveryTime = 0;
         }
         for (const [visual, { effects }] of this.retainedSkillVisuals) {

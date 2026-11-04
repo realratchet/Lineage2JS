@@ -65,7 +65,10 @@ export class SkillEffectHost implements SkillEffectHost_T {
         return effect;
     }
 
-    public addEffect(effect: SkillActor_T, owner: SkillActor_T | null): void { this.addEffectCallback(this.object(effect), owner); }
+    public addEffect(effect: SkillActor_T, owner: SkillActor_T | null): void {
+        this.addEffectCallback(this.object(effect), owner);
+        this.renderManager.skillLightProbe.add(this.object(effect));
+    }
     public removeEffect(effect: SkillActor_T, fadeOut: number = 0): void {
         const object = this.object(effect);
 
