@@ -2,6 +2,7 @@ import type { ILazyAssetHandle, IReadyAssetHandle } from "@l2js/core";
 import fetchAsset, { getAssetFiles, getAssetFile, openAssetReader, getRawAssetSourceId, isServedAsset } from "../asset-source";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import requestWebLock from "../web-lock";
+import { isFirefox } from "../../browser";
 
 type FileSystemSyncAccessHandle_T = {
     read(buffer: BufferSource, options?: { at: number }): number;
@@ -487,7 +488,7 @@ class LazyFileSystemHandle implements ILazyAssetHandle {
 
     protected async openSource(): Promise<FileAssetSource> {
         // Firefox has exclusive sync handles; file slices keep package reads bounded across workers.
-        if (/Firefox\//.test(navigator.userAgent)) return new FileAssetSource(await this.fh.getFile(), this.release);
+        if (isFirefox) return new FileAssetSource(await this.fh.getFile(), this.release);
 
         if (!this.fh.createSyncAccessHandle) return null;
 

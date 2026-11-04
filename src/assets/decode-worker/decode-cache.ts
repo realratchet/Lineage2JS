@@ -5,6 +5,7 @@ import { openAssetCatalog, storeAssetCatalog } from "./asset-catalog";
 import { restorePackageAssets } from "./package-cache";
 import requestWebLock from "../web-lock";
 import { startLoadingStep } from "../../loading-profile";
+import { isFirefox } from "../../browser";
 
 const CACHE_TTL_DAYS = 7;
 const CACHE_DIR = "decode-cache";
@@ -159,7 +160,7 @@ export async function storeCachedLibraryDurable(sectorName: string, settings: Lo
         return await requestWebLock(cacheFileName(sectorName, settings), async () => {
             if ((sectorName === "npc_npcs" || sectorName === "npc_monsters" || /^character_\d+_/.test(sectorName)) && await getCachedFile(sectorName, settings)) return 0;
 
-            const bytes = /Firefox\//.test(navigator.userAgent) ? serializeLibraryParts(library, seekable) : serializeLibraryBlob(library, seekable);
+            const bytes = isFirefox ? serializeLibraryParts(library, seekable) : serializeLibraryBlob(library, seekable);
 
             await writeCacheFile(cacheFileName(sectorName, settings), sectorName, bytes, seekable);
 
@@ -229,7 +230,7 @@ async function writeCacheBytes(writable: FileSystemWritableFileStream, bytes: Ui
         return;
     }
 
-    if (bytes instanceof Blob && /Firefox\//.test(navigator.userAgent)) {
+    if (bytes instanceof Blob && isFirefox) {
         for (let offset = 0; offset < bytes.size; offset += 4 * 1024 * 1024)
             await writable.write(await bytes.slice(offset, offset + 4 * 1024 * 1024).arrayBuffer());
         return;

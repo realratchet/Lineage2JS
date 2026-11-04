@@ -46,6 +46,7 @@ import type { UStaticMesh } from "@l2js/engine/static-mesh/un-static-mesh";
 import type { USkeletalMesh } from "@l2js/engine/skeletal-mesh/un-skeletal-mesh";
 import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/engine/un-scene-manager";
 import fetchAsset from "../asset-source";
+import { isFirefox } from "../../browser";
 
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type SoundPath_T = { name: string, scriptObject: DecodeLibrary["scriptObjects"][string], sound: { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } };
@@ -2363,7 +2364,7 @@ export class DecodeEngine {
         }
 
         this.cacheNpcBundles.clear();
-        if (/Firefox\//.test(navigator.userAgent)) this.cacheCharacterBundles.clear();
+        if (isFirefox) this.cacheCharacterBundles.clear();
     }
 
     protected async decodeCharacterFromSource(settings: LoadSettings_T, charIndex: number, meshPaths: string[], texturePaths: string[], includeAnimations: boolean, chestId: number, equipment: ICharacterEquipment, hairVariant: number): Promise<DecodeLibrary> {
