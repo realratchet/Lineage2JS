@@ -7,7 +7,6 @@ import type { SpriteDirections_T, EmitterConfig_T } from "@l2js/engine/contracts
 
 const geometry = new PlaneGeometry(2, 2);
 
-// scratch vectors for onBeforeRender, reused per particle per frame to avoid allocating
 const tmpProjUp = new Vector3();
 const tmpProjFront = new Vector3();
 const tmpProjRight = new Vector3();
@@ -42,11 +41,7 @@ export class SpriteEmitter extends BaseEmitter {
         if (this.spriteDirection === "camera") this.isUniformScale = true;
         this.projectionNormal = new Vector3().fromArray(config.projectionNormal ?? [0, 0, 1]);
 
-        // Both camera-facing sprites and PTDU_Normal use one basis for the whole
-        // emitter, so neither needs a mesh/draw call per particle. Velocity-driven
-        // modes still require a per-particle basis and stay on the legacy path.
-        // Animated textures select a frame per particle age.
-        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal" || this.spriteDirection === "up"); // except PTDU_Up, its basis is built in the shader
+        this.isInstancedRendering = this.material !== null && this.material.type !== "sprite" && (this.spriteDirection === "camera" || this.spriteDirection === "normal" || this.spriteDirection === "up");
     }
 
     protected initParticleMesh() {
@@ -84,23 +79,15 @@ class ParticleMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParti
         super(geometry, material);
     }
 
-    onBeforeRender = (_renderer: WebGLRenderer, _scene: Scene, camera: Camera) => {
+    public onBeforeRender = (_renderer: WebGLRenderer, _scene: Scene, camera: Camera) => {
 
-        // UE2 math equivalent:
         // FVector ProjUp        = SceneNode->Deproject(FPlane(0,-1000,0,1)) - ProjBase;
         // FVector ProjRight     = SceneNode->Deproject(FPlane(1000,0,0,1)) - ProjBase;
         // FVector ProjFront     = ProjRight ^ ProjUp;
-        
-        // In Three.js:
-        // ProjUp is the camera's up vector
-        // ProjFront is the negative look direction (since camera looks down -Z)
-        // ProjRight is the cross product of Front and Up
-        
+
         const projUp = tmpProjUp.copy(camera.up).normalize();
         const projFront = tmpProjFront.set(0, 0, 1).applyQuaternion(camera.quaternion).normalize();
 
-        // In Left-Handed UE: ProjRight = Up x Front
-        // In Right-Handed ThreeJS: Right = Front x Up
         const projRight = tmpProjRight.crossVectors(projFront, projUp).normalize();
 
         projUp.crossVectors(projRight, projFront).normalize();
@@ -114,23 +101,13 @@ class ParticleMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParti
         if (this.spriteDirection === "normal") {
             direction.set(this.projectionNormal.x, this.projectionNormal.y, this.projectionNormal.z).normalize();
 
-            // PTDU_Normal:
             // Up    = (Direction ^ Direction.GetNonParallel()) * Size.Y;
             // Right = (Direction ^ Up).SafeNormal() * Size.X;
-            // GetNonParallel: returns a vector not parallel to this
             const nonParallel = tmpNonParallel.set(1, 0, 0);
             if (Math.abs(direction.x) >= 0.5) nonParallel.set(0, 1, 0);
 
-            // UE uses left-handed cross product (A ^ B)
-            // Three.js cross product is right-handed, so the order is reversed: B x A = Right-handed Cross(A, B)
             up.crossVectors(nonParallel, direction).normalize();
             right.crossVectors(up, direction).normalize();
-
-            // But wait, Three.js right is X, up is Y. UE is X forward, Y right, Z up.
-            // When translating:
-            // - UE +Right maps to Threejs +X
-            // - UE +Up maps to Threejs +Y
-            // Let's just follow UE math directly but reverse the cross product order due to handedness.
 
         } else if (particle && (this.spriteDirection === "up" || this.spriteDirection === "upNormal" ||
                    this.spriteDirection === "right" || this.spriteDirection === "rightNormal" ||
@@ -180,13 +157,10 @@ class ParticleMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParti
             const origRight = tmpOrigRight.copy(right);
             const origUp = tmpOrigUp.copy(up);
 
-            // Rotate Right/Up vectors around the Normal axis
-            // In RH: NewRight = Right*cos + Up*sin; NewUp = Up*cos - Right*sin;
             right.copy(origRight).multiplyScalar(cos).add(tmpSpinScaled.copy(origUp).multiplyScalar(sin));
             up.copy(origUp).multiplyScalar(cos).sub(tmpSpinScaled.copy(origRight).multiplyScalar(sin));
         }
 
-        // ...
         right.negate();
         up.negate();
 

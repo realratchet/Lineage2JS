@@ -1,4 +1,4 @@
-import { DoubleSide, FrontSide, ShaderMaterial, UniformsUtils, UniformsLib, Vector3 } from "three";
+import { DoubleSide, ShaderMaterial, UniformsUtils, UniformsLib, Vector3 } from "three";
 import VERTEX_SHADER from "./shader/shader-particle-instanced.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle-instanced.fs";
 import { appendGlobalUniforms } from "../global-uniforms";
@@ -8,7 +8,7 @@ import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine/cont
 export class InstancedParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
     
-    constructor({ map, blendingMode, name, usesSubdivision, blendBetweenSubdivisions, spriteDirection, projectionNormal }: InstancedParticleMaterialInitSettings_T) {
+    public constructor({ map, blendingMode, name, usesSubdivision, blendBetweenSubdivisions, spriteDirection, projectionNormal }: InstancedParticleMaterialInitSettings_T) {
         
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.fog
@@ -46,9 +46,7 @@ export class InstancedParticleMaterial extends ShaderMaterial {
             defines,
             transparent: true,
             depthWrite: false,
-            // Camera billboards continuously face the viewer, so rendering their
-            // back face only duplicates every transparent draw in three r143.
-            side: spriteDirection === "camera" ? FrontSide : DoubleSide,
+            side: DoubleSide,
             ...blendingSettings
         });
 

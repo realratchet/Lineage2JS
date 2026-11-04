@@ -1667,13 +1667,7 @@ export abstract class BaseEmitter extends Object3D {
             p.visible = (settings.flags & EParticleFlags_T.PTF_Active) !== 0;
             p.matrixAutoUpdate = p.visible; // hidden pool entries skip matrix composition
 
-            // matrixAutoUpdate alone only skips composing this particle's own local
-            // matrix - three's per-frame scene walk still recurses into it (and its
-            // visualizer child) regardless. A pool is typically 2x oversized, so half
-            // its entries are inactive at any moment; skip the walk into them
-            // entirely while hidden. Active particles are untouched - restoring the
-            // prototype method keeps onBeforeRender-driven behavior (billboarding,
-            // beam meshes) exactly as before.
+            // Inactive particles must also skip three's child traversal.
             p.updateMatrixWorld = p.visible ? Object3D.prototype.updateMatrixWorld : frozenUpdateMatrixWorld;
 
             if (!p.visible) return;
@@ -1884,8 +1878,6 @@ export abstract class BaseEmitter extends Object3D {
     protected abstract initSettings(info: EmitterConfig_T): void;
     protected abstract initParticleMesh(): THREE.Mesh<THREE.BufferGeometry, ParticleMaterial> | null;
 
-    // Default: no instanced path. Subclasses that set isInstancedRendering=true
-    // (from initSettings) must override this to build their own instanced mesh.
     protected createInstancedMesh(_capacity: number): InstancedSpriteMesh | InstancedMeshParticles | null { return null; }
 }
 
@@ -1914,8 +1906,6 @@ class ParticleSpace extends Object3D {
 
 class Particle extends Object3D {
     protected readonly particleSystem: BaseEmitter;
-    // null for instanced-rendering emitters - there's no per-particle mesh/material,
-    // rendering goes through the emitter's single shared InstancedSpriteMesh instead.
     protected readonly visualizer: THREE.Mesh<THREE.BufferGeometry, ParticleMaterial> | null;
 
     public isAlive: boolean = false;
@@ -1951,7 +1941,7 @@ class Particle extends Object3D {
         this.visualizer = visualizer;
 
         if (visualizer) {
-            if ('particleRef' in visualizer) {
+            if ("particleRef" in visualizer) {
                 (visualizer as any).particleRef = this;
             }
 
@@ -1959,7 +1949,7 @@ class Particle extends Object3D {
         }
     }
 
-    static init(particleSystem: BaseEmitter, visualizer: THREE.Mesh<THREE.BufferGeometry, ParticleMaterial> | null): Particle {
+    public static init(particleSystem: BaseEmitter, visualizer: THREE.Mesh<THREE.BufferGeometry, ParticleMaterial> | null): Particle {
         return new Particle(particleSystem, visualizer);
     }
 
@@ -2100,8 +2090,7 @@ function randVector(dst: THREE.Vector3, min: THREE.Vector3, max: THREE.Vector3) 
 function buildChangeRanges(ranges: { values: [number, number][], repeats: number }): { times: number[], values: number[] } {
     if (!ranges) return null;
 
-    // repeats comes straight from level data - garbage values would blow up the
-    // arrays below (and the loop), so clamp to a sane whole number
+    // Invalid level repeats can exhaust the particle range arrays.
     const repeats = Math.min(Math.max(Math.floor(ranges.repeats) || 1, 1), 1000);
     const totalSegments = ranges.values.length * repeats;
 
@@ -2130,14 +2119,7 @@ type Range3_T = { min: THREE.Vector3, max: THREE.Vector3 };
 type ChangesOverTime_T = { scale?: { times: number[], values: number[] }; };
 type PendingEmitterSound_T = { soundName: string, dataUri?: string, position: [number, number, number], volume: number, pitch: number, refDistance: number, maxDistance: number };
 
-const __warnedBreaks = new Set<string>();
 function __break__(): boolean {
-    const site = new Error().stack?.split("\n")[2]?.trim() ?? "unknown";
-
-    if (!__warnedBreaks.has(site)) {
-        __warnedBreaks.add(site);
-        console.warn("[emitter] unimplemented particle feature hit at", site);
-    }
-
-    return false;
+    debugger;
+    throw new Error(`Unimplemented particle feature.`);
 }

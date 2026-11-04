@@ -6,8 +6,7 @@ import { appendGlobalUniforms } from "../global-uniforms";
 import type { ParticleBlendModes_T } from "@l2js/engine/contracts/emitter";
 import type { IDecodedParameter } from "@l2js/engine/contracts/material";
 
-// Billboard quads never need to tile, so always clamp. Mip-disable is opt-in
-// (atlas-cropped textures only) since low mips blend neighboring atlas cells.
+// Atlas cells need clamping; cropped textures disable mips to avoid neighboring cells.
 export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean = false) {
     if (!texture) return;
     let changed = false;
@@ -26,7 +25,7 @@ export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean
 export class ParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
 
-    constructor({ map, blendingMode, opacity, name, usesSubdivision, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
+    public constructor({ map, blendingMode, opacity, name, usesSubdivision, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -83,7 +82,7 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
     protected sprites: IDecodedParameter[];
     public readonly isUpdatable = true;
 
-    constructor({ blendingMode, opacity, name, framerate, sprites, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
+    public constructor({ blendingMode, opacity, name, framerate, sprites, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -144,10 +143,7 @@ export default ParticleMaterial;
 
 // Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
 export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) {
-    // UE2 renders these modes into a backbuffer whose alpha is irrelevant. Our
-    // transparent intermediate target uses alpha for later compositing, so custom
-    // RGB blends must leave destination alpha alone. Applying e.g. Darken's
-    // ZERO/ONE_MINUS_SRC_COLOR to alpha punches a rectangular transparent hole.
+    // Preserve destination alpha for later transparent compositing.
     const preserveDestinationAlpha = {
         blendSrcAlpha: ZeroFactor,
         blendDstAlpha: OneFactor

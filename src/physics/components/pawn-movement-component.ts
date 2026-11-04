@@ -86,11 +86,7 @@ const WALK_SPEED = GROUND_SPEED * 78 / 120; // l2j-lisvus classTemplates.xml Arc
 const WATER_SPEED = GROUND_SPEED * 50 / 120; // l2j-lisvus PcStat unmounted swimming base/run ratio.
 const AIR_SPEED = 118.09999084472656; // Live retail wyvern APawn+5232.
 const ACCEL_RATE = 2048; // Live retail player APawn+5240; Engine.u Pawn default.
-const DEFAULT_VOLUME_GRAVITY_Z = -1500; // Engine.u PhysicsVolume default Gravity.Z.
-const YAW_RATE = 65000; // Live retail FMagic RotationRate.Yaw.
-const PLAYER_YAW_RATE = 45000 * 2; // Live Controller.EnemyTurnSpeed; APawn::physicsRotation doubles it.
 const SPAWN_FLOOR_PROBE = 1000;
-const DEFAULT_VOLUME_TERMINAL_VELOCITY = 2500; // Engine.u PhysicsVolume default TerminalVelocity.
 const WATERLINE_DEPTH = 13; // Retail APawn::findWaterLine 0x8d2959.
 // APawn::SpawnEnterEvent (0x8b47e0): rise moves 5/9 of its full offset per second.
 const ENTER_RISE_RATE = 5 / 9;
@@ -923,8 +919,12 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (!(this.getBaseActor() as Vehicle)?.isVehicle || !this.getParent().getUnrealScriptProperty("bGetOnVehicle"))
             this.setBase(null);
+        const volume = this.getParent().getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
+        const gravityZ = (volume.getUnrealScriptProperty("Gravity") as Vector3Arr)[2];
+        const terminalVelocity = volume.getUnrealScriptProperty("TerminalVelocity") as number;
+
         tmpOldVelocity.copy(this.velocity);
-        this.velocity.z = Math.max(-DEFAULT_VOLUME_TERMINAL_VELOCITY, this.velocity.z + DEFAULT_VOLUME_GRAVITY_Z * deltaTime);
+        this.velocity.z = Math.max(-terminalVelocity, this.velocity.z + gravityZ * deltaTime);
         tmpMovement.addVectors(tmpOldVelocity, this.velocity).multiplyScalar(0.5 * deltaTime);
 
         const start = tmpSwimStart.copy(position);
@@ -1277,7 +1277,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         if (this.keyboardRotationDirection !== null || this.keyboardRotationYaw !== null) this.updateKeyboardRotation(deltaTime);
         if (!this.hasDesiredRotation) return;
 
-        const deltaRate = (this.getParent() as any).isPlayer ? Math.round(PLAYER_YAW_RATE * deltaTime) : Math.trunc(YAW_RATE * deltaTime);
+        const parent = this.getParent();
+        const controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+        const deltaRate = (parent as any).isPlayer ? Math.round((getProperty(controller, "EnemyTurnSpeed") as number) * 2 * deltaTime) : Math.trunc((parent.getUnrealScriptProperty("RotationRate") as Vector3Arr)[1] * deltaTime);
 
         this.rotationYaw = fixedTurn(this.rotationYaw, this.desiredRotationYaw, deltaRate);
         this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);

@@ -1,6 +1,6 @@
 import { Object3D } from "three";
 import { ObjectComponent, type IObject } from "../../game/components";
-import { ScriptComponent } from "../../game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent } from "../../game/script-component";
 import { getProperty, updateLevelActor, type ScriptHost_T, type ScriptValue_T } from "../../ue-script/vm";
 
 export type OwnedActor_T = Object3D & IObject;
@@ -36,16 +36,10 @@ export function setScriptObjectProperty(object: Object3D, field: string, value: 
     const properties = (object as any).scriptProperties as Map<string, ScriptValue_T>;
 
     if (!properties) return;
-    const name = field.slice(field.lastIndexOf(".") + 1).toLowerCase();
+    const name = getScriptPropertyName(field);
+    const key = findScriptPropertyKey(properties, name) ?? field;
 
-    for (const key of properties.keys())
-        if (key.slice(key.lastIndexOf(".") + 1).toLowerCase() === name) {
-            properties.set(key, value);
-            if (name === "level") updateLevelActor(object as any);
-            return;
-        }
-
-    properties.set(field, value);
+    properties.set(key, value);
     if (name === "level") updateLevelActor(object as any);
 }
 
@@ -77,32 +71,18 @@ export class ActorOwnershipComponent extends ObjectComponent<OwnedActor_T> {
 
     public gainScriptChild(object: Object3D): void {
         const parent = this.getParent();
-        const owner = (object as any).scriptOwner as OwnedActor_T;
 
-        if (owner === parent) return;
-        if (owner) owner.getComponent<ActorOwnershipComponent>("actorOwnership").loseScriptChild(object);
+        if (getProperty(object as any, "Owner") === parent) return;
 
-        (object as any).scriptOwner = parent;
-        setScriptObjectProperty(object, "Owner", parent as unknown as ScriptHost_T);
-        this.scriptChildren.add(object);
-
-        const script = this.findComponent<ScriptComponent>("script");
-
-        if (script?.hasFunction("GainedChild")) script.call("GainedChild", [object as unknown as ScriptHost_T]);
+        setActorOwner(object as OwnedActor_T, parent);
     }
 
     public loseScriptChild(object: Object3D): void {
         const parent = this.getParent();
 
-        if ((object as any).scriptOwner !== parent) return;
+        if (getProperty(object as any, "Owner") !== parent) return;
 
-        (object as any).scriptOwner = null;
-        setScriptObjectProperty(object, "Owner", null);
-        this.scriptChildren.delete(object);
-
-        const script = this.findComponent<ScriptComponent>("script");
-
-        if (script?.hasFunction("LostChild")) script.call("LostChild", [object as unknown as ScriptHost_T]);
+        setActorOwner(object as OwnedActor_T, null);
     }
 }
 

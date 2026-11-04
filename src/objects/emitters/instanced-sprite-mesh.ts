@@ -17,7 +17,7 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
     protected readonly directionAttr: InstancedBufferAttribute;
     protected renderCount = 0;
 
-    constructor(material: InstancedParticleMaterial, capacity: number) {
+    public constructor(material: InstancedParticleMaterial, capacity: number) {
         const geometry = new InstancedBufferGeometry();
         geometry.setIndex(baseGeometry.index);
         geometry.setAttribute("position", baseGeometry.attributes.position);
@@ -120,9 +120,8 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
         this.geometry.instanceCount = 0;
     }
 
-    // Nothing raycasts individual particle visualizers today, and per-instance
-    // picking against a shader-driven billboard offset isn't implemented.
-    raycast() { }
+    // Shader billboard offsets have no per-instance raycast geometry.
+    public raycast() { }
 }
 
 function onGeometryDispose(event: Event): void {

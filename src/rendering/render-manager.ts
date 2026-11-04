@@ -2644,6 +2644,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.drawCameraSceneNode();
 
         const viewShakeActive = this.applyViewShake(currentTime);
+        if (viewShakeActive) {
+            this.updateViewBillboards(this.camera);
+            this.particleBatcher.update(this.visibleWorldBatchEmitters, this.camera);
+        }
 
         // // Redirect to Main Target for Bloom
         // i think bloom pass is only enabled when shader rendering used which is off by default

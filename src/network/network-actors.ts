@@ -88,8 +88,6 @@ export type NetObject_T = {
 
 type PetRemainTime_T = { maxTime: number, remainingTime: number };
 
-const MYSTIC_BODY_CLASS_IDS = new Set([10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 38, 39, 40, 41, 42, 43, 49, 50, 51, 52, 94, 95, 96, 97, 98, 103, 104, 105, 110, 111, 112, 115, 116]); // ClassId.isMage excludes orcMage (49), which uses the Shaman body.
-
 const NAMEPLATE_DISTANCE = 1000;
 
 const CHAT_BALLOON_TIME = 6000; // NCConsole 0x1005f070: 1 s timer, the balloon is cleared on the sixth tick.
@@ -190,20 +188,8 @@ export class NetworkActors {
         }
     }
 
-    protected getCharacterIndex(appearance: GamePackets.Appearance_T): number {
-        const isMystic = MYSTIC_BODY_CLASS_IDS.has(appearance.classId);
-        let body: string;
-
-        switch (appearance.race) {
-            case GamePackets.Race_T.HUMAN: body = isMystic ? "Magic" : "Fighter"; break;
-            case GamePackets.Race_T.ELF: body = "Elf"; break;
-            case GamePackets.Race_T.DARK_ELF: body = "DarkElf"; break;
-            case GamePackets.Race_T.ORC: body = isMystic ? "Shaman" : "Orc"; break;
-            case GamePackets.Race_T.DWARF: body = "Dwarf"; break;
-            default: throw new Error(`Unknown race '${appearance.race}'.`);
-        }
-
-        const name = (appearance.sex === 0 ? "M" : "F") + body;
+    protected getCharacterIndex(meshType: PawnMeshType_T): number {
+        const name = PawnMeshType_T[meshType];
         const group = this.network.session.charGroups.find(group => group.name === name);
 
         if (!group) throw new Error(`No character group named '${name}'.`);
@@ -241,10 +227,11 @@ export class NetworkActors {
         if (!isEquipmentOnly) this.bodyKeys.delete(actor);
         if (!this.network.session.charGroups) this.network.session.charGroups = await asset.getCharGroups();
 
-        const index = this.getCharacterIndex(appearance);
+        const meshType = this.getMeshType(appearance);
+        const index = this.getCharacterIndex(meshType);
         const group = this.network.session.charGroups.find(group => group.index === index);
 
-        actor.charClassId = this.getMeshType(appearance);
+        actor.charClassId = meshType;
         const hairStyle = group.hairStyles.includes(appearance.hairStyle) ? appearance.hairStyle : group.hairStyles[0];
         const colours = group.hairColours[hairStyle];
 
