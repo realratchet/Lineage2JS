@@ -12,11 +12,13 @@ import PawnAbnormalComponent from "../objects/components/pawn-abnormal-component
 import PawnAppendixComponent, { APPENDIX_TEAM_RED, APPENDIX_TEAM_BLUE } from "../objects/components/pawn-appendix-component";
 import { PStopType_T, type NpcLifecycleComponent } from "../objects/components/npc-lifecycle-component";
 import PacketReader from "./packet-reader";
+import NPawnLightComponent from "../rendering/components/pawn-light-component";
 import type { NetSkill_T, NetObject_T } from "./network-actors";
 
 const CUBIC_SKILLS = new Set([4049, 4050, 4051, 4052, 4053, 4054, 4055, 4164, 4165, 4166]);
 
 const tmpEarthquakePosition = new Vector3();
+const tmpSpoilLightPosition = new Vector3();
 
 const tmpEarthquakeRotationAmplitude = new Vector3(0, 0.1, 0);
 
@@ -294,7 +296,7 @@ export class NetworkCombat {
         const objectId = packet.d();
         const options = [packet.d() !== 0, packet.d() !== 0, packet.d() !== 0, packet.d() !== 0];
 
-        packet.d();
+        const isSweepable = packet.d() !== 0;
         options.push(packet.d() !== 0);
 
         const object = this.network.actors.objects.get(objectId);
@@ -314,7 +316,18 @@ export class NetworkCombat {
         object.pendingTeam = null;
         this.updateAppendixState(object, 0);
 
-        if (object.actor) object.actor.playDeathAnimation(() => { });
+        if (object.actor) {
+            object.actor.playDeathAnimation(() => { });
+            if (isSweepable) {
+                const actor = object.actor;
+                const lights = actor.findComponent<NPawnLightComponent>("nPawnLight") || actor.addComponent(new NPawnLightComponent());
+
+                // UGameEngine::OnDie 0x744fd6..0x7450be: world-space blue pulse, period 25, phase 192.
+                tmpSpoilLightPosition.fromArray(actor.getUnrealScriptProperty("Location") as number[]);
+                tmpSpoilLightPosition.z += 2 * actor.getCollisionHeight();
+                lights.setPulse(lights.add(null, [0, 0, 1], 30, 10, tmpSpoilLightPosition), 25, 192);
+            }
+        }
         if (object.kind !== "user") return;
 
         this.updateTarget();
