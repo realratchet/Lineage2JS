@@ -2,7 +2,7 @@ import { Matrix4, Vector3 } from "three";
 import { SortedIndexBuffer as WasmSortedIndexBuffer } from "three-wasm/SortedIndexBuffer";
 
 type IndexArray_T = Uint8Array | Uint16Array | Uint32Array;
-type SortedIndexState_T = { camera: Vector3, sorter: ReturnType<WasmSortedIndexBuffer["createState"]>, near: boolean };
+type SortedIndexState_T = { camera: Vector3, sorter: ReturnType<WasmSortedIndexBuffer["createState"]>, indices: Uint32Array };
 
 const tmpVec = new Vector3();
 
@@ -18,35 +18,45 @@ export class SortedIndexBuffer {
         const cameraX = Math.fround(camera.x), cameraY = Math.fround(camera.y), cameraZ = Math.fround(camera.z);
         const x = Math.fround(this.center.x - cameraX), y = Math.fround(this.center.y - cameraY), z = Math.fround(this.center.z - cameraZ);
         const near = Math.fround(x * x + y * y + z * z) < 8192 * 8192;
-        let state = auxiliary ? this.auxiliary : this.main, source = this.source, start = this.start;
+        let state = auxiliary ? this.auxiliary : this.main, written = false;
+        const entering = !state;
 
-        if (near) {
-            if (!state) {
-                if (!this.buffer) this.buffer = new WasmSortedIndexBuffer(this.positions, this.source.subarray(this.start, this.start + this.count), this.firstVertex);
-                state = { camera: new Vector3(), sorter: this.buffer.createState(), near: false };
-                if (auxiliary) this.auxiliary = state;
-                else this.main = state;
-            }
+        if (entering || near) {
             tmpVec.set(cameraX, cameraY, cameraZ).applyMatrix4(this.inverse);
             tmpVec.set(Math.fround(tmpVec.x), Math.fround(tmpVec.y), Math.fround(tmpVec.z));
-            const entering = !state.near;
-            let written = false;
 
-            if (entering || !state.camera.equals(tmpVec)) {
-                written = state.sorter.apply(tmpVec.x, tmpVec.y, tmpVec.z, entering);
+            if (entering || !state.sorter) {
+                let buffer = this.buffer;
+                if (!buffer) {
+                    buffer = new WasmSortedIndexBuffer(this.positions, this.source.subarray(this.start, this.start + this.count), this.firstVertex);
+                    if (near) this.buffer = buffer;
+                }
+                const sorter = buffer.createState();
+                sorter.apply(tmpVec.x, tmpVec.y, tmpVec.z, true);
+                if (!state) {
+                    state = { camera: new Vector3(), sorter: null, indices: null };
+                    if (auxiliary) this.auxiliary = state;
+                    else this.main = state;
+                }
+                state.sorter = near ? sorter : null;
+                state.indices = near ? sorter.indices : sorter.indices.slice();
+                state.camera.copy(tmpVec);
+                if (!near) {
+                    if (buffer === this.buffer) sorter.dispose();
+                    else buffer.dispose();
+                }
+                written = true;
+            } else if (!state.camera.equals(tmpVec)) {
+                written = state.sorter.apply(tmpVec.x, tmpVec.y, tmpVec.z, false);
                 state.camera.copy(tmpVec);
             }
-            state.near = true;
-            if (!written && !repacked && !entering) return false;
-            source = state.sorter.indices; start = 0;
-        } else {
-            if (!repacked && (!state || !state.near)) return false;
-            if (state) state.near = false;
         }
+        if (!written && !repacked && !entering) return false;
+        const source = state.indices;
 
         for (let i = 0; i < this.count; i++) {
-            if (target[offset + i] === source[start + i]) continue;
-            target.set(source.subarray(start + i, start + this.count), offset + i);
+            if (target[offset + i] === source[i]) continue;
+            target.set(source.subarray(i, this.count), offset + i);
             return true;
         }
         return false;

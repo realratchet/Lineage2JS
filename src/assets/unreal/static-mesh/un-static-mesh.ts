@@ -5,6 +5,7 @@ import FStaticMeshVertexStream from "./un-static-vertex-stream";
 // import FRawColorStream from "../un-raw-color-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
+import FRawColorStream from "../un-raw-color-stream";
 import { BufferValue, type APackage, type UExport, type UnserializedProperty_T, FArray, FArrayLazy } from "@l2js/core";
 import UObject from "../un-object";
 import { FStaticMeshCollisionData } from "./un-static-mesh-collision";
@@ -39,7 +40,7 @@ export abstract class UStaticMesh extends UPrimitive {
     declare protected sections: FArray<FStaticMeshSection>;
     declare protected vertexStream: FStaticMeshVertexStream;
     // declare protected colorStream: FRawColorStream;
-    // declare protected alphaStream: FRawColorStream;
+    declare protected alphaStream: FRawColorStream;
     declare protected uvStream: FArray<FStaticMeshUVStream>;
     declare protected indexStream: FRawIndexBuffer; // triangle indices
     // declare protected wireframeIndexBuffer: FRawIndexBuffer; // triangle edge indices
@@ -123,7 +124,7 @@ export abstract class UStaticMesh extends UPrimitive {
         this.sections = new FArray(FStaticMeshSection);
         this.vertexStream = new FStaticMeshVertexStream();
         // this.colorStream = new FRawColorStream();
-        // this.alphaStream = new FRawColorStream();
+        this.alphaStream = new FRawColorStream();
         this.uvStream = new FArray(FStaticMeshUVStream);
         this.indexStream = new FRawIndexBuffer(); // triangle indices
         // this.wireframeIndexBuffer = new FRawIndexBuffer(); // triangle edge indices
@@ -136,8 +137,7 @@ export abstract class UStaticMesh extends UPrimitive {
         this.vertexStream.load(pkg);
         // this.colorStream.load(pkg);
         pkg.seek(pkg.read("compat32") * 4 + 4);
-        // this.alphaStream.load(pkg);
-        pkg.seek(pkg.read("compat32") * 4 + 4);
+        this.alphaStream.load(pkg);
         this.uvStream.load(pkg);
         this.indexStream.load(pkg);
         // this.wireframeIndexBuffer.load(pkg);
@@ -331,6 +331,10 @@ export abstract class UStaticMesh extends UPrimitive {
         const normals = new Float32Array(countVerts * 3);
         const uvs = Array.from({ length: countUvs }, () => new Float32Array(countVerts * 2));
         const indices = new TypedIndicesArray(countIndices);
+        const alphaCount = this.alphaStream.getElemCount();
+        if (alphaCount && alphaCount !== countVerts) throw new Error(`Static mesh '${this.objectName}' has ${alphaCount} alpha values for ${countVerts} vertices.`);
+        const vertexAlpha = alphaCount ? new Uint8Array(countVerts) : null;
+        if (vertexAlpha) for (let i = 0; i < countVerts; i++) vertexAlpha[i] = this.alphaStream.getColor(i)[3];
 
         // if (countVerts === 0x42)
         //     debugger;
@@ -365,6 +369,7 @@ export abstract class UStaticMesh extends UPrimitive {
                 positions,
                 colors,
                 normals,
+                ...(vertexAlpha ? { vertexAlpha } : {}),
                 uvs
             },
             indices,

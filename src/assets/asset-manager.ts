@@ -231,6 +231,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected failedSectors = new Map<string, number>();
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>();
     protected inFlightSectors = new Map<string, number>();
+    protected readonly requiredSectors = new Set<string>();
     protected nextSectorRequest = 0;
 
     protected readonly pendingStaticMeshBuilds: PendingStaticMeshBuild_T[] = [];
@@ -1078,6 +1079,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         if (isStreaming) return;
 
+        this.requiredSectors.clear();
         this.decodeWorker?.setActiveSector(null);
         this.decodeWorker?.cancelQueuedSectors();
 
@@ -1184,7 +1186,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             while (network.movement.getPendingTeleportPosition()) await network.waitNextTick();
 
-            if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request) {
+            if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request || !this.requiredSectors.has(sectorIdx)) {
                 if (this.inFlightSectors.get(sectorIdx) === request) this.decodeWorker.freeSector(sectorIdx);
                 return;
             }
@@ -1367,6 +1369,10 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             neighbours.sort((a, b) => a.prefetchDist - b.prefetchDist || a.dist - b.dist);
             sectorsToLoad.push(...neighbours.map(n => n.idx));
+
+            this.requiredSectors.clear();
+            this.requiredSectors.add(originIdx);
+            for (const sectorIdx of sectorsToLoad) this.requiredSectors.add(sectorIdx);
 
             this.decodeWorker?.cancelQueuedSectors(sectorsToLoad, originIdx);
 

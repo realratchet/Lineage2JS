@@ -78,6 +78,7 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
         geometry.setAttribute(`uv${i === 0 ? "" : i}`, new BufferAttribute(arrUv, 2));
     });
 
+    if (info.attributes.vertexAlpha) geometry.setAttribute("vertexAlpha", new BufferAttribute(info.attributes.vertexAlpha, 1, true));
     if (info.attributes.normals) geometry.setAttribute("normal", new BufferAttribute(info.attributes.normals, 3));
     if (info.attributes.positions) geometry.setAttribute("position", new BufferAttribute(info.attributes.positions, 3));
     if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3, info.attributes.colors instanceof Uint8Array || info.attributes.colors instanceof Uint8ClampedArray));
@@ -286,7 +287,8 @@ class EmitterActor extends GameObject {
     }
 
     public adjustParticleLife(lifetime: number): void {
-        if (!Number.isFinite(lifetime) || lifetime < 0) throw new Error(`Invalid emitter lifetime '${lifetime}'.`);
+        if (!Number.isFinite(lifetime)) throw new Error(`Invalid emitter lifetime '${lifetime}'.`);
+        lifetime = Math.max(0, lifetime);
 
         const emitters = this.scriptProperties.get("Emitters") as unknown as BaseEmitter[];
         let maxLifetime = 0;

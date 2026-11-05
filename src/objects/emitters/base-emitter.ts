@@ -27,7 +27,6 @@ const tmpSprayVelocityTransform = new Matrix3();
 const tmpFadeColor = new Vector4();
 const tmpParticleQuaternion = new Quaternion();
 const tmpParticleRotator = new Rotator();
-const tmpBoxExpand = new Vector3();
 const tmpSoundWorldPos = new Vector3();
 const tmpVelocityLossRange: Range3_T = { min: new Vector3(), max: new Vector3() };
 
@@ -1088,6 +1087,7 @@ export abstract class BaseEmitter extends Object3D {
         // debugger;
 
         this.boundingBox.makeEmpty();
+        const boundsMin = this.boundingBox.min, boundsMax = this.boundingBox.max;
         let deadParticles = 0;
         let maxParticleExtent = 0;
 
@@ -1248,6 +1248,16 @@ export abstract class BaseEmitter extends Object3D {
         // Engine.dll SpawnParticle 0x89ee60 / UpdateParticles 0x8a03d5: acceleration is not divided by DrawScale.
         currentAcceleration.multiplyScalar(deltaTime);
 
+        const drawStyle = this.drawStyle, maxAbsVelocity = this.maxAbsVelocity, sizeScale = this.sizeScale, opacity = this.opacity;
+        const velocityScale = this.velocityScale, scaleSizeByVelocityMultiplier = this.scaleSizeByVelocityMultiplier, revolutionScale = this.revolutionScale, colorScale = this.colorScale;
+        const fadeOutStartTime = this.fadeOutStartTime, scaleSizeXByVelocity = this.scaleSizeXByVelocity, scaleSizeYByVelocity = this.scaleSizeYByVelocity, scaleSizeZByVelocity = this.scaleSizeZByVelocity;
+        const fadeInEndTime = this.fadeInEndTime, fadeFactor = this.fadeFactor, isUsingSizeScale = this.isUsingSizeScale, isScaleSizeRegular = this.isScaleSizeRegular;
+        const useAbsoluteTimeForSizeScale = this.useAbsoluteTimeForSizeScale, sizeScaleRepeats = this.sizeScaleRepeats, isUsingVelocityScale = this.isUsingVelocityScale, velocityScaleRepeats = this.velocityScaleRepeats;
+        const isUsingRevolution = this.isUsingRevolution, isFadingOut = this.isFadingOut, isFadingIn = this.isFadingIn, fadeOutFactor = this.fadeOutFactor;
+        const fadeInFactor = this.fadeInFactor, isUsingRevolutionScale = this.isUsingRevolutionScale, revolutionScaleRepeats = this.revolutionScaleRepeats, isUsingColorScale = this.isUsingColorScale;
+        const colorScaleRepeats = this.colorScaleRepeats, determineVelocityByLocationDifference = this.determineVelocityByLocationDifference, isUsingCollision = this.isUsingCollision, particleGeometryRadius = this.particleGeometryRadius;
+        const realVelocityLossRange = this.realVelocityLossRange, minSquaredVelocity = this.minSquaredVelocity;
+
         for (let index = 0; index < Math.min(this.maxActiveParticles, this.activeParticles); index++) {
             let particle = this.particles[index];
 
@@ -1280,7 +1290,7 @@ export abstract class BaseEmitter extends Object3D {
                     particle.oldMeshLocation.copy(newMeshLocation);
                 }
 
-                if (this.isUsingRevolution) {
+                if (isUsingRevolution) {
                     // Engine.dll 0x8a05cd..0x8a0693; Core RotateAngleAxis 0x10110e3e quantizes the angle table index.
                     const revCenter = particle.revolutionCenter;
                     const loc = this.tmpVec.copy(particle.position).sub(revCenter);
@@ -1297,7 +1307,7 @@ export abstract class BaseEmitter extends Object3D {
             let collided = false;
 
             if (tickParticle && (coordinateSystem !== "relative")) {
-                if (this.isUsingCollision) {
+                if (isUsingCollision) {
                     __break__();
                 }
             }
@@ -1316,19 +1326,19 @@ export abstract class BaseEmitter extends Object3D {
             else
                 relativeTime = 0;
 
-            if (this.isUsingSizeScale) {
-                if (this.isScaleSizeRegular)
+            if (isUsingSizeScale) {
+                if (isScaleSizeRegular)
                     timeFactor = timeFactor / (1 + particle.time);
                 else {
-                    let sizeRelativeTime = ((this.useAbsoluteTimeForSizeScale ? time : relativeTime) * (this.sizeScaleRepeats + 1)) % 1;
-                    for (let n = 0; n < this.sizeScale.length; n++) {
-                        if (this.sizeScale[n].relTime >= sizeRelativeTime) {
+                    let sizeRelativeTime = ((useAbsoluteTimeForSizeScale ? time : relativeTime) * (sizeScaleRepeats + 1)) % 1;
+                    for (let n = 0; n < sizeScale.length; n++) {
+                        if (sizeScale[n].relTime >= sizeRelativeTime) {
                             let s1, r1;
-                            let s2 = this.sizeScale[n].relSize;
-                            let r2 = this.sizeScale[n].relTime;
+                            let s2 = sizeScale[n].relSize;
+                            let r2 = sizeScale[n].relTime;
                             if (n) {
-                                s1 = this.sizeScale[n - 1].relSize;
-                                r1 = this.sizeScale[n - 1].relTime;
+                                s1 = sizeScale[n - 1].relSize;
+                                r1 = sizeScale[n - 1].relTime;
                             }
                             else {
                                 s1 = 1;
@@ -1349,18 +1359,18 @@ export abstract class BaseEmitter extends Object3D {
             }
             particle.scale.copy(particle.startSize).multiplyScalar(timeFactor);
 
-            if (this.isUsingVelocityScale) {
+            if (isUsingVelocityScale) {
                 if (particle.maxLifetime) {
-                    let velocityRelativeTime = (relativeTime * (this.velocityScaleRepeats + 1)) % 1;
-                    for (let n = 0; n < this.velocityScale.length; n++) {
-                        if (this.velocityScale[n].relativeTime >= velocityRelativeTime) {
+                    let velocityRelativeTime = (relativeTime * (velocityScaleRepeats + 1)) % 1;
+                    for (let n = 0; n < velocityScale.length; n++) {
+                        if (velocityScale[n].relativeTime >= velocityRelativeTime) {
                             let v1,
-                                v2 = this.velocityScale[n].relativeVelocity;
+                                v2 = velocityScale[n].relativeVelocity;
                             let r1,
-                                r2 = this.velocityScale[n].relativeTime;
+                                r2 = velocityScale[n].relativeTime;
                             if (n) {
-                                v1 = this.velocityScale[n - 1].relativeVelocity;
-                                r1 = this.velocityScale[n - 1].relativeTime;
+                                v1 = velocityScale[n - 1].relativeVelocity;
+                                r1 = velocityScale[n - 1].relativeTime;
                             }
                             else {
                                 v1 = ONE_VECTOR3;
@@ -1380,32 +1390,32 @@ export abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
-                let velocitySize = this.determineVelocityByLocationDifference
+            if (scaleSizeXByVelocity || scaleSizeYByVelocity || scaleSizeZByVelocity) {
+                let velocitySize = determineVelocityByLocationDifference
                     ? tmpPhysicsVector.copy(particle.position).sub(particle.oldLocation).length() * oneOverDeltaTime
                     : tmpPhysicsVector.copy(particle.velocity).multiply(particle.velocityMultiplier).length();
                 maxVelocityScale = Math.max(maxVelocityScale, velocitySize);
-                if (this.scaleSizeXByVelocity)
-                    particle.scale.x *= velocitySize * this.scaleSizeByVelocityMultiplier.x;
-                if (this.scaleSizeYByVelocity)
-                    particle.scale.y *= velocitySize * this.scaleSizeByVelocityMultiplier.y;
-                if (this.scaleSizeZByVelocity)
-                    particle.scale.z *= velocitySize * this.scaleSizeByVelocityMultiplier.z;
+                if (scaleSizeXByVelocity)
+                    particle.scale.x *= velocitySize * scaleSizeByVelocityMultiplier.x;
+                if (scaleSizeYByVelocity)
+                    particle.scale.y *= velocitySize * scaleSizeByVelocityMultiplier.y;
+                if (scaleSizeZByVelocity)
+                    particle.scale.z *= velocitySize * scaleSizeByVelocityMultiplier.z;
             }
 
-            if (this.isUsingRevolutionScale) {
+            if (isUsingRevolutionScale) {
                 // Engine.dll UParticleEmitter::UpdateParticles 0x8a1058..0x8a1200.
                 if (particle.maxLifetime > 0) {
-                    let revolutionRelativeTime = (relativeTime * (this.revolutionScaleRepeats + 1)) % 1;
-                    for (let n = 0; n < this.revolutionScale.length; n++) {
-                        if (this.revolutionScale[n].relativeTime >= revolutionRelativeTime) {
+                    let revolutionRelativeTime = (relativeTime * (revolutionScaleRepeats + 1)) % 1;
+                    for (let n = 0; n < revolutionScale.length; n++) {
+                        if (revolutionScale[n].relativeTime >= revolutionRelativeTime) {
                             let v1,
-                                v2 = this.revolutionScale[n].relativeRevolution;
+                                v2 = revolutionScale[n].relativeRevolution;
                             let r1,
-                                r2 = this.revolutionScale[n].relativeTime;
+                                r2 = revolutionScale[n].relativeTime;
                             if (n) {
-                                v1 = this.revolutionScale[n - 1].relativeRevolution;
-                                r1 = this.revolutionScale[n - 1].relativeTime;
+                                v1 = revolutionScale[n - 1].relativeRevolution;
+                                r1 = revolutionScale[n - 1].relativeTime;
                             }
                             else {
                                 v1 = ONE_VECTOR3;
@@ -1425,17 +1435,17 @@ export abstract class BaseEmitter extends Object3D {
                 }
             }
 
-            if (this.isUsingColorScale && particle.maxLifetime) {
-                let colorRelativeTime = (relativeTime * (this.colorScaleRepeats + 1)) % 1;
-                for (let n = 0; n < this.colorScale.length; n++) {
-                    if (this.colorScale[n].relativeTime >= colorRelativeTime) {
+            if (isUsingColorScale && particle.maxLifetime) {
+                let colorRelativeTime = (relativeTime * (colorScaleRepeats + 1)) % 1;
+                for (let n = 0; n < colorScale.length; n++) {
+                    if (colorScale[n].relativeTime >= colorRelativeTime) {
                         let r1;
-                        let r2 = this.colorScale[n].relativeTime;
+                        let r2 = colorScale[n].relativeTime;
                         let c1;
-                        let c2 = this.colorScale[n].color;
+                        let c2 = colorScale[n].color;
                         if (n) {
-                            c1 = this.colorScale[n - 1].color;
-                            r1 = this.colorScale[n - 1].relativeTime;
+                            c1 = colorScale[n - 1].color;
+                            r1 = colorScale[n - 1].relativeTime;
                         }
                         else {
                             c1 = WHITE_COLOR;
@@ -1453,7 +1463,7 @@ export abstract class BaseEmitter extends Object3D {
                             Math.trunc(color.x) / 255,
                             Math.trunc(color.y) / 255,
                             Math.trunc(color.z) / 255,
-                            this.drawStyle === "alpha" ? Math.trunc(color.w) / 255 : 1
+                            drawStyle === "alpha" ? Math.trunc(color.w) / 255 : 1
                         );
                         break;
                     }
@@ -1463,9 +1473,9 @@ export abstract class BaseEmitter extends Object3D {
 
             if (!this.isRespawningDeadParticles) {
                 if (this.generalSettings.particlesPerSecond === 0 && this.initialParticlesPerSecond === 0) {
-                    color.x *= this.opacity;
-                    color.y *= this.opacity;
-                    color.z *= this.opacity;
+                    color.x *= opacity;
+                    color.y *= opacity;
+                    color.z *= opacity;
                 }
             }
 
@@ -1473,23 +1483,23 @@ export abstract class BaseEmitter extends Object3D {
             color.y *= particle.colorMultiplier.y;
             color.z *= particle.colorMultiplier.z;
 
-            if ((this.isFadingOut && (time > this.fadeOutStartTime) && (particle.maxLifetime != this.fadeOutStartTime))
-                || (this.isFadingIn && (time < this.fadeInEndTime) && this.fadeInEndTime)
+            if ((isFadingOut && (time > fadeOutStartTime) && (particle.maxLifetime != fadeOutStartTime))
+                || (isFadingIn && (time < fadeInEndTime) && fadeInEndTime)
             ) {
                 let fadeFactor;
                 let maxFade: THREE.Vector4;
 
-                if (this.isFadingOut && (time > this.fadeOutStartTime)) {
-                    fadeFactor = time - this.fadeOutStartTime;
-                    fadeFactor /= (particle.maxLifetime - this.fadeOutStartTime);
-                    maxFade = this.fadeOutFactor;
+                if (isFadingOut && (time > fadeOutStartTime)) {
+                    fadeFactor = time - fadeOutStartTime;
+                    fadeFactor /= (particle.maxLifetime - fadeOutStartTime);
+                    maxFade = fadeOutFactor;
                 } else {
-                    fadeFactor = this.fadeInEndTime - time;
-                    fadeFactor /= this.fadeInEndTime;
-                    maxFade = this.fadeInFactor;
+                    fadeFactor = fadeInEndTime - time;
+                    fadeFactor /= fadeInEndTime;
+                    maxFade = fadeInFactor;
                 }
 
-                if (this.drawStyle === "modulate") {
+                if (drawStyle === "modulate") {
                     color.set(
                         0.5,
                         0.5,
@@ -1497,7 +1507,7 @@ export abstract class BaseEmitter extends Object3D {
                         1 - fadeFactor * maxFade.w
                     );
                 }
-                else if (this.drawStyle === "alpha") {
+                else if (drawStyle === "alpha") {
                     color.w -= fadeFactor * maxFade.w;
                 } else {
                     color.sub(tmpFadeColor.copy(maxFade).multiplyScalar(fadeFactor));
@@ -1507,60 +1517,68 @@ export abstract class BaseEmitter extends Object3D {
             }
 
             // Laurent -- Global Opacity
-            if (this.opacity < 1 && this.drawStyle !== "normal") //don't do Opacity for Regular blend mode
+            if (opacity < 1 && drawStyle !== "normal") //don't do Opacity for Regular blend mode
             {
-                if (this.drawStyle === "alpha" ||
-                    this.drawStyle === "modulate" ||
-                    this.drawStyle === "alphaModulate") {
-                    color.w *= this.opacity;
+                if (drawStyle === "alpha" ||
+                    drawStyle === "modulate" ||
+                    drawStyle === "alphaModulate") {
+                    color.w *= opacity;
                 }
                 else {
-                    color.x *= this.opacity;
-                    color.y *= this.opacity;
-                    color.z *= this.opacity;
+                    color.x *= opacity;
+                    color.y *= opacity;
+                    color.z *= opacity;
                 }
             }
 
-            if (this.fadeFactor < 1) {
-                if (this.drawStyle === "alpha" || this.drawStyle === "modulate" || this.drawStyle === "alphaModulate") color.w *= this.fadeFactor;
-                else color.multiplyScalar(this.fadeFactor);
+            if (fadeFactor < 1) {
+                if (drawStyle === "alpha" || drawStyle === "modulate" || drawStyle === "alphaModulate") color.w *= fadeFactor;
+                else color.multiplyScalar(fadeFactor);
             }
 
-            const particleExtent = Math.max(particle.scale.x, particle.scale.y, particle.scale.z) * this.particleGeometryRadius;
-            this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(particleExtent));
-            this.boundingBox.expandByPoint(tmpBoxExpand.copy(particle.position).addScalar(-particleExtent));
+            const particleExtent = Math.max(particle.scale.x, particle.scale.y, particle.scale.z) * particleGeometryRadius;
+            const position = particle.position;
+            boundsMin.x = Math.min(boundsMin.x, position.x + particleExtent, position.x - particleExtent);
+            boundsMin.y = Math.min(boundsMin.y, position.y + particleExtent, position.y - particleExtent);
+            boundsMin.z = Math.min(boundsMin.z, position.z + particleExtent, position.z - particleExtent);
+            boundsMax.x = Math.max(boundsMax.x, position.x + particleExtent, position.x - particleExtent);
+            boundsMax.y = Math.max(boundsMax.y, position.y + particleExtent, position.y - particleExtent);
+            boundsMax.z = Math.max(boundsMax.z, position.z + particleExtent, position.z - particleExtent);
             if (particleExtent > maxParticleExtent) maxParticleExtent = particleExtent;
 
-            if (this.maxAbsVelocity.x)
-                particle.velocity.x = clamp(particle.velocity.x, -this.maxAbsVelocity.x, this.maxAbsVelocity.x);
-            if (this.maxAbsVelocity.y)
-                particle.velocity.y = clamp(particle.velocity.y, -this.maxAbsVelocity.y, this.maxAbsVelocity.y);
-            if (this.maxAbsVelocity.z)
-                particle.velocity.z = clamp(particle.velocity.z, -this.maxAbsVelocity.z, this.maxAbsVelocity.z);
+            if (maxAbsVelocity.x)
+                particle.velocity.x = clamp(particle.velocity.x, -maxAbsVelocity.x, maxAbsVelocity.x);
+            if (maxAbsVelocity.y)
+                particle.velocity.y = clamp(particle.velocity.y, -maxAbsVelocity.y, maxAbsVelocity.y);
+            if (maxAbsVelocity.z)
+                particle.velocity.z = clamp(particle.velocity.z, -maxAbsVelocity.z, maxAbsVelocity.z);
 
-            particle.velocity.sub(tmpPhysicsVector.copy(particle.velocity).multiply(randVector(this.tmpVec, this.realVelocityLossRange.min, this.realVelocityLossRange.max)).multiplyScalar(deltaTime));
+            const loss = randVector(this.tmpVec, realVelocityLossRange.min, realVelocityLossRange.max), velocity = particle.velocity;
+            velocity.x -= velocity.x * loss.x * deltaTime;
+            velocity.y -= velocity.y * loss.y * deltaTime;
+            velocity.z -= velocity.z * loss.z * deltaTime;
 
-            if (collided && particle.velocity.lengthSq() < this.minSquaredVelocity)
+            if (collided && particle.velocity.lengthSq() < minSquaredVelocity)
                 particle.flags |= EParticleFlags_T.PTF_NoTick;
 
             this.updateParticle(deltaTime, index);
         }
 
         let maxScale = 1;
-        if (this.isUsingSizeScale && !this.isScaleSizeRegular) {
-            for (let i = 0; i < this.sizeScale.length; i++)
-                maxScale = Math.max(this.sizeScale[i].relSize, maxScale);
+        if (isUsingSizeScale && !isScaleSizeRegular) {
+            for (let i = 0; i < sizeScale.length; i++)
+                maxScale = Math.max(sizeScale[i].relSize, maxScale);
         }
 
         let maxScaleSizeByVelocityMultiplier = 1;
-        if (this.scaleSizeXByVelocity || this.scaleSizeYByVelocity || this.scaleSizeZByVelocity) {
+        if (scaleSizeXByVelocity || scaleSizeYByVelocity || scaleSizeZByVelocity) {
             maxScaleSizeByVelocityMultiplier = 0;
-            if (this.scaleSizeXByVelocity)
-                maxScaleSizeByVelocityMultiplier = Math.max(maxScaleSizeByVelocityMultiplier, this.scaleSizeByVelocityMultiplier.x);
-            if (this.scaleSizeYByVelocity)
-                maxScaleSizeByVelocityMultiplier = Math.max(maxScaleSizeByVelocityMultiplier, this.scaleSizeByVelocityMultiplier.y);
-            if (this.scaleSizeZByVelocity)
-                maxScaleSizeByVelocityMultiplier = Math.max(maxScaleSizeByVelocityMultiplier, this.scaleSizeByVelocityMultiplier.z);
+            if (scaleSizeXByVelocity)
+                maxScaleSizeByVelocityMultiplier = Math.max(maxScaleSizeByVelocityMultiplier, scaleSizeByVelocityMultiplier.x);
+            if (scaleSizeYByVelocity)
+                maxScaleSizeByVelocityMultiplier = Math.max(maxScaleSizeByVelocityMultiplier, scaleSizeByVelocityMultiplier.y);
+            if (scaleSizeZByVelocity)
+                maxScaleSizeByVelocityMultiplier = Math.max(maxScaleSizeByVelocityMultiplier, scaleSizeByVelocityMultiplier.z);
         }
 
         this.maxSizeScale = maxScale * maxVelocityScale * maxScaleSizeByVelocityMultiplier;

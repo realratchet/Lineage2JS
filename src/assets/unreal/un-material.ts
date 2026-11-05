@@ -142,6 +142,7 @@ export type ICombinerDecodeInfo = IBaseMaterialDecodeInfo & {
     material1: string,
     material2: string,
     mask: string,
+    maskIsVertexColor?: boolean,
     invertMask: boolean,
     alphaFrom1: boolean,
     alphaFrom2: boolean
@@ -347,6 +348,7 @@ export abstract class UCombiner extends UBaseModifier {
             material1: builder.pullMaterial(this.material1),
             material2: builder.pullMaterial(this.material2),
             mask: builder.pullMaterial(this.mask),
+            maskIsVertexColor: !!(this.mask as any)?.isVertexColor,
             invertMask: this.invertMask,
             alphaFrom1: this.alphaOperation.valueOf() === EAlphaOperation_T.AO_Use_Alpha_From_Material1,
             alphaFrom2: this.alphaOperation.valueOf() === EAlphaOperation_T.AO_Use_Alpha_From_Material2
@@ -816,6 +818,7 @@ export abstract class UTexCoordSource extends UBaseModifier {
 }
 
 export abstract class UVertexColor extends UBaseModifier {
+    public readonly isVertexColor = true;
     // vertex color modulation isn't supported - combiners treat a null material as absent
     public getDecodeInfo(builder: DecodeLibraryBuilder): string {
         return builder.pullMaterial(this.material);

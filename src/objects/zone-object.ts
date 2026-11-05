@@ -41,13 +41,17 @@ const EMPTY_EMITTER_LIST: THREE.Object3D[] = [];
 // Portal recursion depth limit (matches UE2's MAX_RECURSION_DEPTH)
 const MAX_RECURSION_DEPTH = 4;
 
+type BatchBoundsNode_T = { min: number[], max: number[], start: number, end: number, left: number, right: number };
+type BatchVisibility_T = { version: number, visible: Uint8Array, centers: Float64Array, nodes: BatchBoundsNode_T[], order: number[], frustumVisible: Uint8Array };
 type StaticMeshVisibilityEntry_T = { object: THREE.Object3D; uuid: string; actorIndex: number };
 type TranslucentBSPSection_T = { mesh: THREE.Mesh; source: Uint8Array | Uint16Array | Uint32Array; nodes: Int32Array; starts: Uint32Array; counts: Uint32Array; order: Int32Array; previous: Int32Array };
-type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number };
+type BatchGroup_T = { elementIndex: number; start: number; count: number; materialIndex: number; distance: number; transparent: number; ordinal: number };
 type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, version: number, source: Uint8Array | Uint16Array | Uint32Array, ranges: Map<number, { count: number, bounds: Box3 }> };
+type BatchPacking_T = { source: BatchBounds_T["source"], index: THREE.BufferAttribute, indexVersion: number, stamp: number, ranges: Map<number, { offset: number, count: number, stamp: number, copied: boolean }> };
 const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
+const cacheBatchPacking = new WeakMap<BufferGeometry, BatchPacking_T>();
 
-function getBatchBounds(geometry: BufferGeometry, source: BatchBounds_T["source"], group: BatchGroup_T): Box3 {
+export function getBatchBounds(geometry: BufferGeometry, source: BatchBounds_T["source"], group: BatchGroup_T): Box3 {
     const position = geometry.getAttribute("position");
     const version = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
     let cache = cacheBatchBounds.get(geometry);
@@ -114,7 +118,7 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
 
     visibleGroups.sort((a, b) => {
         if (a.transparent !== b.transparent) return a.transparent - b.transparent;
-        if (a.transparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex);
+        if (a.transparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex) || (a.ordinal - b.ordinal);
 
         return (a.materialIndex - b.materialIndex) || (a.start - b.start);
     });
@@ -143,19 +147,44 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
     const position = geometry.getAttribute("position");
     const positionVersion = (position as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (position as THREE.InterleavedBufferAttribute).data.version : (position as THREE.BufferAttribute).version;
     const groups: BatchRenderGroup_T[] = object.batchRenderGroups || (object.batchRenderGroups = []);
+    let packing = cacheBatchPacking.get(geometry);
+    if (!packing || packing.source !== source || packing.index !== index || packing.indexVersion !== index.version) {
+        packing = { source, index, indexVersion: index.version, stamp: 0, ranges: new Map() };
+        cacheBatchPacking.set(geometry, packing);
+    }
+    const stamp = packing.stamp + 1;
+    const ranges = index.updateRanges;
+    if (ranges.length > 1) {
+        let start = ranges[0].start, end = start + ranges[0].count;
+        for (let i = 1; i < ranges.length; i++) { start = Math.min(start, ranges[i].start); end = Math.max(end, ranges[i].start + ranges[i].count); }
+        ranges[0].start = start; ranges[0].count = end - start;
+        ranges.length = 1;
+    }
     let offset = 0;
     let copyStart = 0, copyCount = 0;
+    let dirtyStart = 0, dirtyCount = 0, copied = false;
     let run: BatchRenderGroup_T = null;
     let groupCount = 0;
 
     for (const group of visibleGroups) {
-        if (copyCount && copyStart + copyCount !== group.start) {
+        const packed = packing.ranges.get(group.start);
+        const unchanged = packed && packed.stamp === packing.stamp && packed.offset === offset && packed.count === group.count;
+        if (copyCount && (unchanged || copyStart + copyCount !== group.start)) {
             target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+            copied = true;
             copyCount = 0;
         }
 
-        if (!copyCount) copyStart = group.start;
-        copyCount += group.count;
+        if (unchanged) {
+            if (dirtyCount) { index.addUpdateRange(dirtyStart, dirtyCount); dirtyCount = 0; }
+        } else {
+            if (!copyCount) copyStart = group.start;
+            if (!dirtyCount) dirtyStart = offset;
+            copyCount += group.count;
+            dirtyCount += group.count;
+        }
+        if (packed) { packed.offset = offset; packed.count = group.count; packed.stamp = stamp; packed.copied = !unchanged; }
+        else packing.ranges.set(group.start, { offset, count: group.count, stamp, copied: true });
 
         if (run && run.materialIndex === group.materialIndex) {
             run.count += group.count;
@@ -168,7 +197,7 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
             run.position = position;
             run.index = index;
             run.positionVersion = positionVersion;
-            run.indexVersion = index.version + 1;
+            run.indexVersion = index.version;
             run.bounds.makeEmpty();
             geometry.groups.push(run);
             groupCount++;
@@ -181,11 +210,13 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
         offset += group.count;
     }
 
-    if (copyCount) target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+    if (copyCount) { target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount); copied = true; }
+    if (dirtyCount) index.addUpdateRange(dirtyStart, dirtyCount);
 
-    index.clearUpdateRanges();
-    index.addUpdateRange(0, offset);
-    index.needsUpdate = true;
+    if (copied) index.needsUpdate = true;
+    for (const group of geometry.groups) (group as BatchRenderGroup_T).indexVersion = index.version;
+    packing.indexVersion = index.version;
+    packing.stamp = stamp;
 }
 
 export class FogInfoObject extends Object3D {
@@ -200,6 +231,67 @@ export class FogInfoObject extends Object3D {
     public zoneMask: bigint = 0n;
 }
 
+
+function intersectsActorBounds(min: number[], max: number[], frustum: THREE.Frustum, ignoreRange = false): boolean {
+    for (let i = 0; i < 6; i++) {
+        if (ignoreRange && i === 4) continue;
+        const plane = frustum.planes[i], normal = plane.normal;
+        if (normal.x * (normal.x > 0 ? max[0] : min[0]) + normal.y * (normal.y > 0 ? max[1] : min[1]) + normal.z * (normal.z > 0 ? max[2] : min[2]) + plane.constant < 0) return false;
+    }
+    return true;
+}
+
+function isActorInRange(min: number[], max: number[], position: Vector3, rangeSq: number): boolean {
+    const x = Math.max(min[0] - position.x, 0, position.x - max[0]);
+    const y = Math.max(min[1] - position.y, 0, position.y - max[1]);
+    const z = Math.max(min[2] - position.z, 0, position.z - max[2]);
+    return x * x + y * y + z * z <= rangeSq;
+}
+
+function buildBatchBounds(elements: any[], centers: Float64Array, order: number[], nodes: BatchBoundsNode_T[], start: number, end: number): number {
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (let i = start; i < end; i++) {
+        const elem = elements[order[i]];
+        for (let axis = 0; axis < 3; axis++) {
+            min[axis] = Math.min(min[axis], elem.boundsMin[axis]);
+            max[axis] = Math.max(max[axis], elem.boundsMax[axis]);
+        }
+    }
+    const index = nodes.length, node = { min, max, start, end, left: -1, right: -1 };
+    nodes.push(node);
+    if (end - start > 8) {
+        let axis = 0;
+        if (max[1] - min[1] > max[axis] - min[axis]) axis = 1;
+        if (max[2] - min[2] > max[axis] - min[axis]) axis = 2;
+        const sorted = order.slice(start, end).sort((a, b) => centers[a * 3 + axis] - centers[b * 3 + axis]);
+        for (let i = 0; i < sorted.length; i++) order[start + i] = sorted[i];
+        const middle = (start + end) >>> 1;
+        node.left = buildBatchBounds(elements, centers, order, nodes, start, middle);
+        node.right = buildBatchBounds(elements, centers, order, nodes, middle, end);
+    }
+    return index;
+}
+
+function updateBatchFrustum(cache: BatchVisibility_T, elements: any[], frustum: THREE.Frustum, index: number, mask: number): void {
+    const node = cache.nodes[index], min = node.min, max = node.max;
+    for (let i = 0; i < 6; i++) {
+        if (!(mask & (1 << i))) continue;
+        const plane = frustum.planes[i], normal = plane.normal;
+        if (normal.x * (normal.x > 0 ? max[0] : min[0]) + normal.y * (normal.y > 0 ? max[1] : min[1]) + normal.z * (normal.z > 0 ? max[2] : min[2]) + plane.constant < 0) return;
+        if (normal.x * (normal.x > 0 ? min[0] : max[0]) + normal.y * (normal.y > 0 ? min[1] : max[1]) + normal.z * (normal.z > 0 ? min[2] : max[2]) + plane.constant >= 0) mask &= ~(1 << i);
+    }
+    if (!mask) {
+        for (let i = node.start; i < node.end; i++) cache.frustumVisible[cache.order[i]] = 1;
+    } else if (node.left >= 0) {
+        updateBatchFrustum(cache, elements, frustum, node.left, mask);
+        updateBatchFrustum(cache, elements, frustum, node.right, mask);
+    } else {
+        for (let i = node.start; i < node.end; i++) {
+            const ei = cache.order[i], elem = elements[ei];
+            cache.frustumVisible[ei] = intersectsActorBounds(elem.boundsMin, elem.boundsMax, frustum) ? 1 : 0;
+        }
+    }
+}
 
 type StaticMeshActorDecodeInfo_T = {
     uuid: string;
@@ -341,7 +433,12 @@ export class SectorObject extends GameObject {
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
+    protected readonly cacheStaticVisibleLeaves = new Set<number>();
+    protected readonly cacheBatchVisibility = new WeakMap<object, BatchVisibility_T>();
+    protected staticLeafVisibilityVersion = 0;
     protected readonly arrBSPStack: number[] = [];
+    protected rangeIgnoredNodes?: Uint8Array;
+    protected rangeIgnoredBatches?: DecodeLibrary["staticMeshBatches"];
     protected staticActorCandidateStamps = new Uint32Array(256);
     protected staticActorVisibleStamps = new Uint32Array(256);
     protected staticActorDistances = new Float64Array(256);
@@ -736,6 +833,7 @@ export class SectorObject extends GameObject {
         this.bspZones = bspZones.map(BSPZoneData.fromInfo);
         this.bspNodes = bspNodes.map(BSPNodeData.fromInfo);
         this.bspLeaves = bspLeaves.map(BSPLeafData.fromInfo);
+        this.rangeIgnoredNodes = null;
         this.invalidateDoorPortals();
 
         let outdoorMask = 1n << 0n;
@@ -747,6 +845,36 @@ export class SectorObject extends GameObject {
         if (outdoorMask === (1n << 0n)) outdoorMask |= 1n << 1n;
 
         this.outdoorZoneMask = outdoorMask;
+    }
+
+    protected getRangeIgnoredNodes(library: DecodeLibrary): Uint8Array {
+        if (this.rangeIgnoredNodes && this.rangeIgnoredBatches === library.staticMeshBatches) return this.rangeIgnoredNodes;
+
+        const leaves = new Uint8Array(this.bspLeaves.length), nodes = new Uint8Array(this.bspNodes.length);
+        for (let i = 0; i < library.leafActors.length; i++)
+            for (const actor of library.leafActors[i])
+                if (actor.type === "StaticMeshActor" && (actor as any).isRangeIgnored) { leaves[i] = 1; break; }
+
+        for (const batch of library.staticMeshBatches?.batches || [])
+            for (const element of batch.batchElements)
+                if (element.isRangeIgnored && element.leaves)
+                    for (const leaf of element.leaves) leaves[leaf] = 1;
+
+        const stack = this.bspNodes.length ? [0] : [], order: number[] = [];
+        while (stack.length) {
+            const index = stack.pop()!, node = this.bspNodes[index];
+            order.push(index);
+            if (node.front >= 0) stack.push(node.front);
+            if (node.back >= 0) stack.push(node.back);
+        }
+        for (let i = order.length - 1; i >= 0; i--) {
+            const index = order[i], node = this.bspNodes[index];
+            nodes[index] = (node.front >= 0 ? nodes[node.front] : leaves[node.leaves[1]]) || (node.back >= 0 ? nodes[node.back] : leaves[node.leaves[0]]) ? 1 : 0;
+        }
+
+        this.rangeIgnoredNodes = nodes;
+        this.rangeIgnoredBatches = library.staticMeshBatches;
+        return nodes;
     }
 
     public invalidateDoorPortals(): void {
@@ -1025,6 +1153,8 @@ export class SectorObject extends GameObject {
         }
 
         const cameraPos = tmpVec4.set(cameraPosition.x, cameraPosition.y, cameraPosition.z, -1);
+        const library = (this as any).decodeLibrary as DecodeLibrary;
+        const rangeIgnoredNodes = library ? this.getRangeIgnoredNodes(library) : null;
         let currentZoneMask = activeZoneMask;
 
         const cameraZone = this.findPositionZone(cameraPosition);
@@ -1050,7 +1180,6 @@ export class SectorObject extends GameObject {
                 }
 
                 // Model->Bounds(Node.iRenderBound), UnRenderVisibility.cpp lines 1800-1819.
-                const library = (this as any).decodeLibrary as DecodeLibrary;
                 if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
                     const renderBound = library.bspRenderBounds[node.iRenderBound];
                     if (renderBound && renderBound.isValid) {
@@ -1058,7 +1187,7 @@ export class SectorObject extends GameObject {
                         if (frustumCullingEnabled) {
                             tmpActorBox.min.fromArray(renderBound.min);
                             tmpActorBox.max.fromArray(renderBound.max);
-                            if (!cameraFrustum.intersectsBox(tmpActorBox)) continue;
+                            if (!cameraFrustum.intersectsBox(tmpActorBox) && (!rangeIgnoredNodes[nodeIndex] || !intersectsActorBounds(renderBound.min, renderBound.max, cameraFrustum, true))) continue;
                         }
                     }
                 }
@@ -1336,6 +1465,7 @@ export class SectorObject extends GameObject {
             const mesh = object as LitActorMesh;
             if (!mesh.sortedIndexBuffers) return;
 
+            cacheBatchPacking.delete(mesh.geometry);
             if (mesh.elemVisibility) mesh.elemVisibility.fill(2);
             if (!enabled) mesh.sortedIndexBuffers.forEach(buffer => buffer.dispose());
         });
@@ -1594,6 +1724,7 @@ export class SectorObject extends GameObject {
 
         if (library && this.staticMeshGroup && this.staticMeshMap.size > 0) {
             const stamp = ++this.staticVisibilityStamp;
+            this.updateStaticVisibleLeaves(visibleLeaves);
 
             for (const leafIndex of visibleLeaves) {
                 const actors = library.leafActors[leafIndex];
@@ -1608,13 +1739,13 @@ export class SectorObject extends GameObject {
                         tmpActorBox.min.fromArray(actor.bounds.min);
                         tmpActorBox.max.fromArray(actor.bounds.max);
 
-                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
+                        const isRangeIgnored = !!(actor as any).isRangeIgnored;
+                        const isFrustumVisible = !frustumCullingEnabled || (isRangeIgnored ? intersectsActorBounds(actor.bounds.min, actor.bounds.max, cameraFrustum, true) : cameraFrustum.intersectsBox(tmpActorBox));
                         const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
                         const actorCenter = tmpActorBox.getCenter(tmpVec3);
                         const distSq = cameraPosition.distanceToSquared(actorCenter);
-                        const isRangeIgnored = !!(actor as any).isRangeIgnored;
-                        const isInRange = isRangeIgnored || distSq <= staticMeshCullDistanceSq;
+                        const isInRange = isRangeIgnored || isActorInRange(actor.bounds.min, actor.bounds.max, cameraPosition, staticMeshCullDistanceSq);
 
                         if (isFrustumVisible && isZoneVisible && isInRange) {
                             this.staticActorVisibleStamps[actorIndex] = stamp;
@@ -1664,7 +1795,12 @@ export class SectorObject extends GameObject {
                         for (let ei = 0; ei < batchElements.length; ei++) elemActorIndices[ei] = this.getStaticActorIndex(batchElements[ei].uuid);
                     }
                     const candidateStamps = this.staticActorCandidateStamps, visibleStamps = this.staticActorVisibleStamps, actorDistances = this.staticActorDistances;
+                    const batchVisibility = this.getBatchVisibility(batchElements), leafVisibility = batchVisibility.visible, centers = batchVisibility.centers;
                     let visibilityChanged = false;
+                    if (frustumCullingEnabled && batchVisibility.nodes.length) {
+                        batchVisibility.frustumVisible.fill(0);
+                        updateBatchFrustum(batchVisibility, batchElements, cameraFrustum, 0, 63);
+                    }
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
                         const elem = batchElements[ei];
@@ -1674,24 +1810,24 @@ export class SectorObject extends GameObject {
                         let distSq = elemVisible ? actorDistances[actorIndex] : 0;
 
                         if (!elemVisible && candidateStamps[actorIndex] !== stamp) {
-                            let inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
-                            if (!inVisibleLeaves) {
-                                for (const li of elem.leaves) {
-                                    if (visibleLeaves.has(li)) { inVisibleLeaves = true; break; }
+                            let inVisibleLeaves = leafVisibility[ei] === 1;
+                            if (leafVisibility[ei] === 2) {
+                                inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
+                                if (!inVisibleLeaves) {
+                                    for (const li of elem.leaves) {
+                                        if (visibleLeaves.has(li)) { inVisibleLeaves = true; break; }
+                                    }
                                 }
+                                leafVisibility[ei] = inVisibleLeaves ? 1 : 0;
                             }
 
                             if (inVisibleLeaves) {
-                                tmpActorBox.min.fromArray(elem.boundsMin);
-                                tmpActorBox.max.fromArray(elem.boundsMax);
+                                const isFrustumVisible = !frustumCullingEnabled || (elem.isRangeIgnored ? intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum, true) : batchVisibility.nodes.length ? batchVisibility.frustumVisible[ei] === 1 : intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum));
+                                const offset = ei * 3, x = cameraPosition.x - centers[offset], y = cameraPosition.y - centers[offset + 1], z = cameraPosition.z - centers[offset + 2];
+                                distSq = x * x + y * y + z * z;
+                                const isInRange = elem.isRangeIgnored || isActorInRange(elem.boundsMin, elem.boundsMax, cameraPosition, staticMeshCullDistanceSq);
 
-                                const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
-                                const isZoneVisible = !frustumCullingEnabled || !elem.zoneMask || !!(elem.zoneMask & finalZoneMask);
-                                const actorCenter = tmpActorBox.getCenter(tmpVec3);
-                                distSq = cameraPosition.distanceToSquared(actorCenter);
-                                const isInRange = elem.isRangeIgnored || distSq <= staticMeshCullDistanceSq;
-
-                                elemVisible = isFrustumVisible && isZoneVisible && isInRange;
+                                elemVisible = isFrustumVisible && (!frustumCullingEnabled || !elem.zoneMask || elem.zoneMask === finalZoneMask || !!(elem.zoneMask & finalZoneMask)) && isInRange;
                             }
                         }
 
@@ -1733,9 +1869,9 @@ export class SectorObject extends GameObject {
                         let visibleGroups = (object as any).visibleBatchGroups as BatchGroup_T[];
                         if (!visibleGroups) visibleGroups = (object as any).visibleBatchGroups = [];
 
-                        let groupCount = 0;
+                        let groupCount = visibilityChanged ? 0 : visibleGroups.length;
 
-                        for (let ei = 0; ei < batchElements.length; ei++) {
+                        if (visibilityChanged) for (let ei = 0; ei < batchElements.length; ei++) {
                             if (!elemVisibility[ei]) continue;
 
                             const distance = elemDistances[ei];
@@ -1744,17 +1880,18 @@ export class SectorObject extends GameObject {
                                 if (!g.count) continue;
 
                                 let entry = groupPool[groupCount];
-                                if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0 };
+                                if (!entry) entry = groupPool[groupCount] = { elementIndex: 0, start: 0, count: 0, materialIndex: 0, distance: 0, transparent: 0, ordinal: 0 };
 
                                 entry.elementIndex = ei;
                                 entry.start = g.start;
                                 entry.count = g.count;
                                 entry.materialIndex = g.materialIndex;
                                 entry.distance = distance;
+                                entry.ordinal = groupCount;
 
                                 visibleGroups[groupCount++] = entry;
                             }
-                        }
+                        } else for (const group of visibleGroups) group.distance = elemDistances[group.elementIndex];
 
                         visibleGroups.length = groupCount;
 
@@ -1769,19 +1906,33 @@ export class SectorObject extends GameObject {
 
                     if (this.sortTransparent && object.visible && (object as any).sortedIndexBuffers) {
                         const mesh = object as LitActorMesh, index = geometry.index;
+                        const packing = cacheBatchPacking.get(geometry), repacked = visibilityChanged || sortChanged;
+                        const ranges = packing && packing.index === index && packing.indexVersion === index.version ? packing.ranges : null;
                         let offset = 0, changed = false;
 
                         for (const group of mesh.visibleBatchGroups) {
                             const sorted = mesh.sortedIndexBuffers.get(group.start);
-                            if (sorted && sorted.apply(index.array as Uint8Array | Uint16Array | Uint32Array, offset, cameraPosition, auxiliary, visibilityChanged || sortChanged)) changed = true;
+                            if (sorted) {
+                                const packed = ranges && ranges.get(group.start);
+                                const restored = repacked && (!packed || packed.stamp !== packing.stamp || packed.copied);
+                                if (sorted.apply(index.array as Uint8Array | Uint16Array | Uint32Array, offset, cameraPosition, auxiliary, auxiliary || restored)) {
+                                    index.addUpdateRange(offset, group.count);
+                                    changed = true;
+                                }
+                            }
                             offset += group.count;
                         }
                         if (changed) {
-                            mesh.sortedIndexRange.count = offset;
-                            index.clearUpdateRanges();
-                            index.updateRanges.push(mesh.sortedIndexRange);
+                            const previousVersion = index.version;
+                            if (index.updateRanges.length > 64) {
+                                let start = index.updateRanges[0].start, end = start + index.updateRanges[0].count;
+                                for (const range of index.updateRanges) { start = Math.min(start, range.start); end = Math.max(end, range.start + range.count); }
+                                index.clearUpdateRanges();
+                                index.addUpdateRange(start, end - start);
+                            }
                             index.needsUpdate = true;
                             for (const group of mesh.batchRenderGroups) group.indexVersion = index.version;
+                            if (packing && packing.index === index && packing.indexVersion === previousVersion) packing.indexVersion = index.version;
                         }
                     }
 
@@ -1794,12 +1945,12 @@ export class SectorObject extends GameObject {
                         tmpActorBox.min.fromArray((object as any).actorBoundsMin);
                         tmpActorBox.max.fromArray((object as any).actorBoundsMax);
 
-                        const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(tmpActorBox);
+                        const isFrustumVisible = !frustumCullingEnabled || ((object as any).actorRangeIgnored ? intersectsActorBounds((object as any).actorBoundsMin, (object as any).actorBoundsMax, cameraFrustum, true) : cameraFrustum.intersectsBox(tmpActorBox));
                         const zoneMask = (object as any).actorZoneMask as bigint;
                         const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
                         const actorCenter = tmpActorBox.getCenter(tmpVec3);
                         const distSq = cameraPosition.distanceToSquared(actorCenter);
-                        const isInRange = (object as any).actorRangeIgnored || distSq <= staticMeshCullDistanceSq;
+                        const isInRange = (object as any).actorRangeIgnored || isActorInRange((object as any).actorBoundsMin, (object as any).actorBoundsMax, cameraPosition, staticMeshCullDistanceSq);
 
                         isVisible = isFrustumVisible && isZoneVisible && isInRange;
                     }
@@ -1860,6 +2011,48 @@ export class SectorObject extends GameObject {
 
         const terrainZoneVisible = !frustumCullingEnabled || (finalZoneMask & this.outdoorZoneMask) !== 0n;
         this.updateTerrainSectors(environment, cameraPosition, cameraFrustum, frustumCullingEnabled, terrainZoneVisible);
+    }
+
+    protected updateStaticVisibleLeaves(visibleLeaves: Set<number>): void {
+        const previous = this.cacheStaticVisibleLeaves;
+        if (previous.size === visibleLeaves.size) {
+            let unchanged = true;
+            for (const leaf of visibleLeaves) if (!previous.has(leaf)) { unchanged = false; break; }
+            if (unchanged) return;
+        }
+        previous.clear();
+        for (const leaf of visibleLeaves) previous.add(leaf);
+        this.staticLeafVisibilityVersion++;
+    }
+
+    protected getBatchVisibility(elements: any[]): BatchVisibility_T {
+        let cached = this.cacheBatchVisibility.get(elements);
+        if (!cached || cached.visible.length !== elements.length) {
+            const centers = new Float64Array(elements.length * 3);
+            for (let i = 0; i < elements.length; i++) {
+                const min = elements[i].boundsMin, max = elements[i].boundsMax;
+                if (max[0] < min[0] || max[1] < min[1] || max[2] < min[2]) continue;
+                centers[i * 3] = (min[0] + max[0]) * .5;
+                centers[i * 3 + 1] = (min[1] + max[1]) * .5;
+                centers[i * 3 + 2] = (min[2] + max[2]) * .5;
+            }
+            const order = [], nodes: BatchBoundsNode_T[] = [];
+            let finiteBounds = elements.length >= 32;
+            for (let i = 0; i < elements.length; i++) {
+                order.push(i);
+                for (let axis = 0; axis < 3; axis++) {
+                    if (!Number.isFinite(elements[i].boundsMin[axis]) || !Number.isFinite(elements[i].boundsMax[axis]) || elements[i].boundsMax[axis] < elements[i].boundsMin[axis]) finiteBounds = false;
+                }
+            }
+            if (finiteBounds) buildBatchBounds(elements, centers, order, nodes, 0, elements.length);
+            cached = { version: -1, visible: new Uint8Array(elements.length), centers, nodes, order, frustumVisible: new Uint8Array(elements.length) };
+            this.cacheBatchVisibility.set(elements, cached);
+        }
+        if (cached.version !== this.staticLeafVisibilityVersion) {
+            cached.visible.fill(2);
+            cached.version = this.staticLeafVisibilityVersion;
+        }
+        return cached;
     }
 
     protected getStaticActorIndex(uuid: string): number { // string-keyed sets dominated the per-frame visibility pass while the camera turns

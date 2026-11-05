@@ -241,6 +241,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
         if (info.combiner) {
             defines["USE_COMBINER"] = "";
+            if (info.combiner.maskIsVertexColor) defines["USE_VERTEX_ALPHA_MASK"] = "";
             apply("shMaterial2", info.combiner.material2);
             uniforms["combiner"] = new Uniform({
                 combineMode: info.combiner.combineMode,
@@ -309,6 +310,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
             wireframe: false
         });
 
+        (this.defaultAttributeValues as any).vertexAlpha = [1];
         this.sprites = sprites;
         this.shadowOpacity = info.shadowOpacity || null;
         this.spriteEntries = Object.entries(sprites);
@@ -740,6 +742,7 @@ type MeshStaticMaterialParameters_T = {
     selfIllumination?: boolean,
     combiner?: {
         combineMode: number,
+        maskIsVertexColor?: boolean,
         material1: IDecodedParameter,
         material2: IDecodedParameter,
         invertMask: boolean,

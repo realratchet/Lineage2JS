@@ -1,6 +1,7 @@
 type Plane_T = { x: number, y: number, z: number, w: number };
 type Point_T = { x: number, y: number, z: number };
 type Node_T = { plane: Plane_T, front: number, back: number, iPlane: number, leaves: number[] };
+type Block_T = { items: Int32Array, count: number, minimum: number, following: Block_T };
 type Actor_T = { center: Point_T, radius: number, path: number, leaves: number[] };
 
 function planeDot(plane: Plane_T, x: number, y: number, z: number) {
@@ -19,6 +20,8 @@ export class TranslucentDrawList {
     protected readonly planeDistances: Float64Array;
     protected readonly leafNodes: number[][] = [];
     protected stamp = 0;
+    protected readonly blocks: Block_T[] = [];
+    protected blockCount = 0;
 
     public constructor(protected readonly nodes: Node_T[], protected readonly actors: Actor_T[], protected readonly leaves: number[][]) {
         this.order = new Int32Array(nodes.length + actors.length);
@@ -42,6 +45,35 @@ export class TranslucentDrawList {
                 this.leafNodes[leaf].push(i);
             }
         }
+    }
+
+    protected getBlock(): Block_T {
+        let block = this.blocks[this.blockCount];
+        if (!block) block = this.blocks[this.blockCount] = { items: new Int32Array(64), count: 0, minimum: Infinity, following: null };
+        this.blockCount++;
+        block.count = 0; block.minimum = Infinity; block.following = null;
+        return block;
+    }
+
+    protected insertBlock(block: Block_T, index: number, entry: number, distance: number): void {
+        if (block.count === 64) {
+            const following = this.getBlock();
+            following.items.set(block.items.subarray(32));
+            following.count = block.count = 32;
+            following.following = block.following;
+            block.following = following;
+            block.minimum = following.minimum = Infinity;
+            for (let i = 0; i < 32; i++) {
+                const a = block.items[i], b = following.items[i];
+                block.minimum = Math.min(block.minimum, a < this.nodes.length ? -Infinity : this.distances[a - this.nodes.length]);
+                following.minimum = Math.min(following.minimum, b < this.nodes.length ? -Infinity : this.distances[b - this.nodes.length]);
+            }
+            if (index >= 32) { block = following; index -= 32; }
+        }
+        for (let i = block.count; i > index; i--) block.items[i] = block.items[i - 1];
+        block.items[index] = entry;
+        block.count++;
+        block.minimum = Math.min(block.minimum, distance);
     }
 
     protected markActive(node: number): void {
@@ -68,14 +100,19 @@ export class TranslucentDrawList {
         if (!this.stamp) { this.stamps.fill(0); this.active.fill(0); this.stamp = 1; }
 
         for (let i = 0; i < this.nodes.length; i++) if (visibleNodes[i]) this.markActive(i);
+        let visibleActorCount = 0;
         for (let i = 0; i < this.actors.length; i++) {
             if (!visibleActors[i]) continue;
+            visibleActorCount++;
             for (const leaf of this.actors[i].leaves) {
                 const nodes = this.leafNodes[leaf];
                 if (nodes) for (const node of nodes) this.markActive(node);
             }
         }
 
+        let useBlocks = false, firstBlock: Block_T = null, insertionSteps = 0;
+        const blockThreshold = Math.max(256, visibleActorCount * 2);
+        this.blockCount = 0;
         const { nodes, actors, next, stack, distances, planeDistances } = this;
         const x = Math.fround(camera.x), y = Math.fround(camera.y), z = Math.fround(camera.z);
         let top = 2, head = -1;
@@ -99,7 +136,23 @@ export class TranslucentDrawList {
                     const distance = distances[actorIndex] = (dx * dx + dy * dy) + dz * dz, key = Math.fround(distance);
                     let previous = -1, item = head;
 
-                    while (item >= 0) {
+                    let block = firstBlock, offset = 0;
+                    if (useBlocks) {
+                        search: while (true) {
+                            if (block.minimum > key && block.count) previous = block.items[block.count - 1];
+                            else for (offset = 0; offset < block.count; offset++) {
+                                item = block.items[offset];
+                                if (item < nodes.length) {
+                                    const plane = nodes[item].plane, height = actor.path ? cz - actor.radius : cz;
+                                    if (!(planeDistances[item] * planeDot(plane, cx, cy, height) > 0)) break search;
+                                } else if (!(distances[item - nodes.length] > key)) break search;
+                                previous = item;
+                            }
+                            if (!block.following) { offset = block.count; item = -1; break; }
+                            block = block.following;
+                        }
+                    } else while (item >= 0) {
+                        insertionSteps++;
                         if (item < nodes.length) {
                             const plane = nodes[item].plane, height = actor.path ? cz - actor.radius : cz;
                             if (!(planeDistances[item] * planeDot(plane, cx, cy, height) > 0)) break;
@@ -109,15 +162,27 @@ export class TranslucentDrawList {
                     }
 
                     const entry = nodes.length + actorIndex;
+                    if (useBlocks) this.insertBlock(block, offset, entry, distance);
                     next[entry] = item;
                     if (previous < 0) head = entry;
                     else next[previous] = entry;
+
+                    if (!useBlocks && visibleActorCount >= 64 && insertionSteps >= blockThreshold) {
+                        useBlocks = true;
+                        let block = firstBlock = this.getBlock();
+                        for (let item = head; item >= 0; item = next[item]) {
+                            if (block.count === 64) { block.following = this.getBlock(); block = block.following; }
+                            block.items[block.count++] = item;
+                            block.minimum = Math.min(block.minimum, item < nodes.length ? -Infinity : distances[item - nodes.length]);
+                        }
+                    }
                 }
             } else if (kind === 1) {
                 for (let node = index; node >= 0; node = nodes[node].iPlane) {
                     if (!visibleNodes[node]) continue;
                     planeDistances[node] = planeDot(nodes[node].plane, x, y, z);
                     next[node] = head; head = node;
+                    if (useBlocks) this.insertBlock(firstBlock, 0, node, -Infinity);
                 }
             } else {
                 if (this.active[index] !== this.stamp) continue;

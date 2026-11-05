@@ -474,7 +474,15 @@ float oscillateAxis(float val, float rate, float phase, float amplitude, float o
     }
 #endif
 
+#ifdef USE_VERTEX_ALPHA_MASK
+    attribute float vertexAlpha;
+    varying float vVertexAlpha;
+#endif
+
 void main() {
+    #ifdef USE_VERTEX_ALPHA_MASK
+        vVertexAlpha = vertexAlpha;
+    #endif
     #ifdef USE_PAWN_MATERIALS
         vPawnPart = int(pawnPart);
         bindMatrix = pawnBindMatrices[vPawnPart];

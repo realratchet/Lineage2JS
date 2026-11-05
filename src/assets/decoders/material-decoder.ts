@@ -539,6 +539,7 @@ function decodeCombiner(library: DecodeLibrary, info: MaterialContracts.ICombine
             material1,
             material2,
             invertMask: info.invertMask,
+            maskIsVertexColor: info.maskIsVertexColor,
             alphaFrom1: info.alphaFrom1,
             alphaFrom2: info.alphaFrom2
         }
@@ -593,7 +594,7 @@ function decodeShader(library: DecodeLibrary, info: MaterialContracts.IShaderDec
         modulateStaticLighting2X: info.modulateStaticLighting2X,
         modulateSpecular2X: info.modulateSpecular2X,
         selfIllumination: useSelfIllumination,
-        combiner: combiner?.materialType === "combiner" && !combiner.mask ? { combineMode: combiner.combineMode, material1: diffuse, material2: decodeParameter(library, library.materials[combiner.material2]), invertMask: combiner.invertMask, alphaFrom1: combiner.alphaFrom1, alphaFrom2: combiner.alphaFrom2 } : null
+        combiner: combiner?.materialType === "combiner" && !combiner.mask ? { maskIsVertexColor: combiner.maskIsVertexColor, combineMode: combiner.combineMode, material1: diffuse, material2: decodeParameter(library, library.materials[combiner.material2]), invertMask: combiner.invertMask, alphaFrom1: combiner.alphaFrom1, alphaFrom2: combiner.alphaFrom2 } : null
     });
 }
 

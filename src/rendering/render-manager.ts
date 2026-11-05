@@ -147,7 +147,7 @@ type PawnLightingState_T = {
     lights: DynamicLight[]
 };
 type Disposable_T = { dispose(): void };
-type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[] };
+type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[], program?: { isReady(): boolean } };
 type SectorWarmup_T = {
     sector: SectorObject,
     materialQueue: SectorMaterialBinding_T[],
@@ -176,9 +176,11 @@ function unfreezeAncestors(node: THREE.Object3D): void {
             n.updateMatrixWorld = Object3D.prototype.updateMatrixWorld;
 }
 
-function findVisibleMaterialBinding(bindings: SectorMaterialBinding_T[], cacheVisibleMaterials: WeakMap<THREE.Mesh, Set<number>>): number {
+function findVisibleMaterialBinding(bindings: SectorMaterialBinding_T[], cacheVisibleMaterials: WeakMap<THREE.Mesh, Set<number>>, visibleOnly = true): number {
     for (let i = bindings.length - 1; i >= 0; i--) {
         const binding = bindings[i];
+        if (binding.program && !binding.program.isReady()) continue;
+        if (!visibleOnly) return i;
         if (!binding.object.visible) continue;
         if (binding.materialIndex < 0) return i;
 
@@ -454,6 +456,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
         };
         this.nameplateDepth = new NameplateDepth(this.renderer);
         this.sectorOcclusion = new SectorOcclusion(this.renderer, this.meshBounds);
+        this.renderer.domElement.addEventListener("webglcontextrestored", () => {
+            for (const job of this.pendingSectorWarmups)
+                for (const binding of job.materialQueue) binding.program = null;
+        });
         this.setBatchAngleCulling(5);
         this.setPortalCulling(true);
         const renderBufferDirect = this.renderer.renderBufferDirect;
@@ -2424,7 +2430,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
             if (root.parent) tmpShaderCompileGroup.children.push(root);
 
         tmpShaderCompileGroup.fog = this.scene.fog;
-        if (tmpShaderCompileGroup.children.length) this.renderer.compileAsync(tmpShaderCompileGroup, this.camera); // the world has no three lights, so only fog has to match the real scene; roots stay parented where they are
+        if (tmpShaderCompileGroup.children.length) {
+            const reversed = this.renderer.state.buffers.depth.getReversed();
+            setReversedDepth(this.renderer, this.camera.reversedDepth);
+            try {
+                this.renderer.compileAsync(tmpShaderCompileGroup, this.camera); // the world has no three lights, so only fog has to match the real scene; roots stay parented where they are
+            } finally { setReversedDepth(this.renderer, reversed); }
+        }
         tmpShaderCompileGroup.children.length = 0;
         this.pendingShaderCompiles.clear();
         this.processShaderDiagnostics();
@@ -3036,7 +3048,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         const deadline = performance.now() + (this.manGame.getComponent("network").isWorldLoading() ? 8 : RenderManager.TEXTURE_WARMUP_FRAME_MS);
         while (job.materialQueue.length > 0) {
-            const bindingIndex = visibleOnly ? findVisibleMaterialBinding(job.materialQueue, cacheVisibleMaterials) : job.materialQueue.length - 1;
+            const bindingIndex = findVisibleMaterialBinding(job.materialQueue, cacheVisibleMaterials, visibleOnly);
             if (bindingIndex < 0) return;
 
             const binding = job.materialQueue[bindingIndex];
@@ -3050,6 +3062,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 job.warmedTextures.add(texture);
 
                 if (binding.textureQueue.length > 0 && performance.now() >= deadline) return;
+            }
+
+            if (!binding.program) this.compileSectorMaterial(binding);
+            if (!binding.program.isReady()) {
+                if (performance.now() >= deadline) return;
+                continue;
             }
 
             job.materialQueue.splice(bindingIndex, 1);
@@ -3082,6 +3100,25 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         job.sector.invalidateDoorPortals();
         this.sectorOcclusion.add(job.sector);
+    }
+
+    protected compileSectorMaterial(binding: SectorMaterialBinding_T): void {
+        const object = binding.object, material = object.material;
+        object.material = binding.material;
+
+        const reversed = this.renderer.state.buffers.depth.getReversed();
+        tmpShaderCompileGroup.fog = this.scene.fog;
+        tmpShaderCompileGroup.children.push(object);
+        setReversedDepth(this.renderer, this.camera.reversedDepth);
+        try {
+            this.renderer.compile(tmpShaderCompileGroup, this.camera);
+            binding.program = this.renderer.properties.get(binding.material).currentProgram;
+            if (!binding.program) throw new Error(`Missing warmed shader program for '${object.name}'.`);
+        } finally {
+            tmpShaderCompileGroup.children.length = 0;
+            setReversedDepth(this.renderer, reversed);
+            object.material = material;
+        }
     }
 
     protected queueSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEmitters: boolean) {

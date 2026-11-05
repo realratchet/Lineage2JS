@@ -1,7 +1,7 @@
 import { Box3, Matrix4, NormalBlending, Quaternion, Vector3 } from "three";
 import TranslucentDrawList from "./translucent-draw-list";
 import { PolyFlags_T } from "../assets/unreal/un-polys";
-import type { SectorObject } from "../objects/zone-object";
+import { getBatchBounds, type SectorObject } from "../objects/zone-object";
 
 const tmpMatrix = new Matrix4();
 const tmpPosition = new Vector3();
@@ -12,7 +12,7 @@ const tmpEmitterBounds = new Box3();
 const tmpExtent = new Vector3();
 const arrNodes: number[] = [];
 
-type Part_T = { item: any, state: State_T, actor: Owner_T, emitter: EmitterOwner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split: boolean };
+type Part_T = { item: any, state: State_T, actor: Owner_T, emitter: EmitterOwner_T, bounds: Box3, node: number, start: number, count: number, materialIndex: number, ordinal: number, split: boolean };
 type Owner_T = { center: Vector3, radius: number, path: number, leaves: number[], parts: Part_T[], count: number, ordinals: Map<number, number> };
 type State_T = { sector: SectorObject, nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], actorCount: number, leaves: number[][], leafCounts: number[], dynamicLeaves: Set<number>, meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], partCount: number, cursor: number, cullBackfaces: boolean };
 type BatchRange_T = { starts: Uint32Array, stamp: number };
@@ -166,12 +166,13 @@ export class TranslucentRenderList {
 
     protected add(item: any, state: State_T, actor: Owner_T, node: number, start: number, count: number, materialIndex: number, ordinal: number, split = !!state, emitter: EmitterOwner_T = null) {
         let part = this.arrParts[this.partCount];
-        if (!part) part = this.arrParts[this.partCount] = { item: null, state: null, actor: null, emitter: null, node: -1, start: 0, count: 0, materialIndex: 0, ordinal: 0, split: false };
+        if (!part) part = this.arrParts[this.partCount] = { item: null, state: null, actor: null, emitter: null, bounds: null, node: -1, start: 0, count: 0, materialIndex: 0, ordinal: 0, split: false };
         this.partCount++;
         part.item = item; part.state = state; part.actor = actor; part.node = node;
         part.start = start; part.count = count; part.materialIndex = materialIndex; part.ordinal = ordinal;
         part.split = split;
         part.emitter = emitter;
+        part.bounds = null;
         if (state) state.partCount++;
 
         if (actor) {
@@ -182,6 +183,7 @@ export class TranslucentRenderList {
             const parts = state.nodeParts[node] || (state.nodeParts[node] = []);
             parts[state.nodeCounts[node]++] = part;
         }
+        return part;
     }
 
     public sort(items: any[], camera: THREE.Camera, sectors: SectorObject[]): void {
@@ -232,7 +234,8 @@ export class TranslucentRenderList {
                     if (end <= first) continue;
 
                     const owner = owners[group.elementIndex];
-                    this.add(item, state, owner, -1, first, end - first, item.group.materialIndex, owner.ordinals.get(group.start));
+                    const part = this.add(item, state, owner, -1, first, end - first, item.group.materialIndex, owner.ordinals.get(group.start));
+                    if (object.batchIndices && first === start && end === start + group.count) part.bounds = getBatchBounds(item.geometry, object.batchIndices, group);
                 }
             } else if (owners && owners[0].leaves.length) {
                 const start = item.group ? item.group.start : 0, count = item.group ? item.group.count : item.geometry.index.count;
@@ -260,15 +263,28 @@ export class TranslucentRenderList {
             const item = part.item, previous = count ? this.arrOutput[count - 1] : null;
             if (previous && previous.group && (part.split || item.group) && previous.object === item.object && previous.material === item.material && previous.groupOrder === item.groupOrder && previous.renderOrder === item.renderOrder && previous.group.start + previous.group.count === part.start) {
                 previous.group.count += part.count;
+                if (previous.range.position && part.bounds) {
+                    previous.range.bounds.union(part.bounds);
+                    previous.range.boundsCount = previous.range.count;
+                } else previous.range.position = null;
                 continue;
             }
             let output = this.arrOutput[count];
-            if (!output) output = this.arrOutput[count] = { group: null, range: { start: 0, count: 0, materialIndex: 0 } };
+            if (!output) output = this.arrOutput[count] = { group: null, range: { start: 0, count: 0, materialIndex: 0, bounds: new Box3(), position: null, index: null, positionVersion: -1, indexVersion: -1, boundsStart: 0, boundsCount: 0 } };
             output.id = item.id; output.object = item.object; output.geometry = item.geometry; output.material = item.material; output.materialVariant = item.materialVariant;
             output.groupOrder = item.groupOrder; output.renderOrder = item.renderOrder; output.z = item.z;
             output.emitter = part.emitter;
             output.group = part.split || item.group ? output.range : null;
             output.range.start = part.start; output.range.count = part.count; output.range.materialIndex = part.materialIndex;
+            if (part.bounds) {
+                const position = item.geometry.attributes.position;
+                output.range.bounds.copy(part.bounds);
+                output.range.position = position;
+                output.range.index = item.geometry.index;
+                output.range.positionVersion = position.isInterleavedBufferAttribute ? position.data.version : position.version;
+                output.range.indexVersion = item.geometry.index.version;
+                output.range.boundsStart = part.start; output.range.boundsCount = part.count;
+            } else output.range.position = output.range.index = null;
             items[count++] = output;
         }
         items.length = count;
@@ -291,8 +307,8 @@ export class TranslucentRenderList {
         for (const emitter of this.arrSortedDeferred) for (const item of emitter.items) items[worldCount++] = item;
         for (const item of this.arrNameplates) items[worldCount++] = item;
         this.arrDeferred.length = this.arrSortedDeferred.length = this.arrNameplates.length = 0;
-        for (let i = count; i < this.previousOutputCount; i++) { const item = this.arrOutput[i]; item.object = item.geometry = item.material = item.emitter = null; }
-        for (let i = this.partCount; i < oldPartCount; i++) { const part = this.arrParts[i]; part.item = part.state = part.actor = part.emitter = null; }
+        for (let i = count; i < this.previousOutputCount; i++) { const item = this.arrOutput[i]; item.object = item.geometry = item.material = item.emitter = null; item.range.position = item.range.index = null; }
+        for (let i = this.partCount; i < oldPartCount; i++) { const part = this.arrParts[i]; part.item = part.state = part.actor = part.emitter = part.bounds = null; }
         this.previousOutputCount = count;
     }
 }

@@ -91,6 +91,7 @@ export type IGeometryDecodeInfo = {
         positions?: Float32Array;
         normals?: Float32Array;
         colors?: Float32Array | Uint8Array | Uint8ClampedArray,
+        vertexAlpha?: Uint8Array,
         colorsInstance?: Float32Array | Uint8Array | Uint8ClampedArray,
         sway?: Float32Array,
         uvs?: Float32Array | Float32Array[];

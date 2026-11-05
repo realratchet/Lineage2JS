@@ -1,5 +1,6 @@
 
 import type { IStaticMeshActorDecodeInfo } from "./static-mesh/un-static-mesh-actor";
+import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
 export type BatchElementGroup_T = {
     start: number;
@@ -35,7 +36,7 @@ export type StaticMeshBatchInfo_T = {
     actors: IStaticMeshActorDecodeInfo[];
     colliderIndices: Uint32Array | null;
     actorColliderIndices: Uint32Array | null;
-    actorColliders: { actor: IStaticMeshActorDecodeInfo; indexCount: number }[];
+    actorColliders: { actor: IStaticMeshActorDecodeInfo; indexCount: number; collisionIndex: CollisionTriangleIndex_T | null }[];
     lights: { scene: BatchLightEntry_T[]; environment: BatchLightEntry_T[] } | null;
     staticLighting?: { offsets: Uint32Array, indices: Uint16Array | Uint32Array, lights: string[], glow: Float32Array };
     perActorAmbient: { startVertex: number, count: number, ambient: any, scaledGlow: number, isSunAffected: boolean, hardware: BatchHardwareLighting_T | null }[];

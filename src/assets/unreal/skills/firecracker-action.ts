@@ -60,6 +60,7 @@ export class FireCrackerAction {
         this.lastTime = currentTime;
         if (!this.host.isAlive(this.caster)) { this.clear(); return false; }
 
+        const origin = this.getOrigin();
         let finished = 0;
 
         // Engine.dll FireCrackerAction tick 0x104970e0..0x104974cc.
@@ -72,7 +73,6 @@ export class FireCrackerAction {
                 if (this.type === 2)
                     for (let j = i + 1; j < this.crackers.length; j++) this.crackers[j].delay = 1e5;
 
-                const origin = this.getOrigin();
                 cracker.origin = [origin[0] + cracker.offset[0], origin[1] + cracker.offset[1], origin[2] + cracker.offset[2] + (this.type === 3 || this.type === 2 && i > 0 ? 0 : this.host.getCollisionHeight(this.caster))];
                 cracker.height += cracker.origin[2];
                 cracker.seed = this.spawn(`LineageEffect.e_u519_fireseed_${cracker.color}`, cracker.origin, random(65536));

@@ -576,6 +576,10 @@ vec3 getFadeColor(FadeData fade) {
     #include <projector_receiver>
 #endif
 
+#ifdef USE_VERTEX_ALPHA_MASK
+    varying float vVertexAlpha;
+#endif
+
 void main() {
     #include <clipping_planes_fragment>
     vec4 diffuseColor = vec4( diffuse, opacity );
@@ -665,6 +669,9 @@ void main() {
         #endif
         
         float maskVal = 1.0;
+        #ifdef USE_VERTEX_ALPHA_MASK
+            maskVal = vVertexAlpha;
+        #endif
         #ifdef USE_SPECULAR
             #ifdef USE_MAP_SPECULAR
                  maskVal = texture2D(shSpecularMap, UV_SPECULAR).g;
@@ -684,7 +691,7 @@ void main() {
         } else if (combiner.combineMode == 5) { // Subtract
             diffuseColor.rgb = color1 - color2.rgb;
         } else if (combiner.combineMode == 6) { // AlphaBlend
-            diffuseColor.rgb = mix(color2.rgb, color1, maskVal);
+            diffuseColor.rgb = mix(color1, color2.rgb, maskVal);
         } else if (combiner.combineMode == 7) { // Use Color From Material2
             diffuseColor.rgb = color2.rgb;
         }

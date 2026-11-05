@@ -17,6 +17,7 @@ type PreparedActorGeometryData_T = {
     normals: Float32Array;
     uvs: Float32Array | null;
     colors: ColorTypedArray_T | null;
+    vertexAlpha: Uint8Array | null;
     colorsInstance: ColorTypedArray_T | null;
     sway: IStaticMeshSwayDecodeInfo | null;
     swayPhase: number;
@@ -203,6 +204,7 @@ function prepareActorGeometriesData(
             normals: meshGeo.attributes.normals as Float32Array,
             uvs: (uvs as Float32Array) ?? null,
             colors: (meshGeo.attributes.colors as ColorTypedArray_T) ?? null,
+            vertexAlpha: meshGeo.attributes.vertexAlpha ?? null,
             colorsInstance: ((info.attributes as any)?.colors as ColorTypedArray_T) ?? null,
             sway: info.mesh.sway ?? null,
             swayPhase: info.swayPhase ?? 0,
@@ -280,6 +282,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     let totalColliderIndices = 0;
     let hasColors = false;
     let hasColorsInstance = false;
+    let hasVertexAlpha = false;
     let hasSway = false;
     let hasUVs = false;
     let ColorArrayConstructor: any = Float32Array;
@@ -297,12 +300,14 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             hasColorsInstance = true;
             ColorInstanceConstructor = geo.colorsInstance.constructor;
         }
+        if (geo.vertexAlpha) hasVertexAlpha = true;
         if (geo.sway) hasSway = true;
         if (geo.uvs) hasUVs = true;
     }
 
     const mergedPositions = new Float32Array(totalVertices * 3);
     const mergedNormals = new Float32Array(totalVertices * 3);
+    const mergedVertexAlpha = hasVertexAlpha ? new Uint8Array(totalVertices).fill(255) : null;
     const mergedUVs = hasUVs ? new Float32Array(totalVertices * 2) : null;
     const mergedColors = hasColors ? new ColorArrayConstructor(totalVertices * 3) : null;
     const mergedColorsInstance = hasColorsInstance ? new ColorInstanceConstructor(totalVertices * 3).fill(127) : null; // 127 = 1.0 in the halved Modulate2X
@@ -325,7 +330,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const tmpN = new Vector3();
 
     for (let ai = 0; ai < actorGeometries.length; ai++) {
-        const { positions, normals, uvs, colors, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, hardware, collider, collision } = actorGeometries[ai];
+        const { positions, normals, uvs, colors, vertexAlpha, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, hardware, collider, collision } = actorGeometries[ai];
 
         for (let vi = 0; vi < vertexCount; vi++) {
             tmpV.fromArray(positions, vi * 3);
@@ -341,6 +346,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             mergedNormals[(vertexOffset + vi) * 3 + 2] = tmpN.z;
         }
 
+        if (mergedVertexAlpha && vertexAlpha) mergedVertexAlpha.set(vertexAlpha.subarray(0, vertexCount), vertexOffset);
         if (mergedUVs && uvs) mergedUVs.set(uvs.subarray(0, vertexCount * 2), vertexOffset * 2);
         if (mergedColors && colors) mergedColors.set(colors.subarray(0, vertexCount * 3), vertexOffset * 3);
         if (mergedColorsInstance && colorsInstance) mergedColorsInstance.set(colorsInstance.subarray(0, vertexCount * 3), vertexOffset * 3);
@@ -435,6 +441,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
             normals: mergedNormals,
             uvs: mergedUVs,
             colors: mergedColors,
+            vertexAlpha: mergedVertexAlpha,
             colorsInstance: mergedColorsInstance,
             sway: mergedSway
         },
@@ -673,6 +680,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     normals: attributes.normals,
                     ...(attributes.uvs ? { uvs: attributes.uvs } : {}),
                     ...(attributes.colors ? { colors: attributes.colors } : {}),
+                    ...(attributes.vertexAlpha ? { vertexAlpha: attributes.vertexAlpha } : {}),
                     ...(attributes.colorsInstance ? { colorsInstance: attributes.colorsInstance } : {}),
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
@@ -705,7 +713,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 actors,
                 colliderIndices,
                 actorColliderIndices: mergedColliderIndices,
-                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length }] : []),
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < 384 ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index]) }] : []),
                 lights: mergedLights,
                 staticLighting,
                 perActorAmbient,

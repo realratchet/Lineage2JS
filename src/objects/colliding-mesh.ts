@@ -85,14 +85,15 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         for (const record of this.collisionActors) if (record.object) record.object.release();
         this.collisionActors.length = 0;
         this.hasChangedCollisionActors = false;
-        for (const { actor, indexCount } of actors) {
+        for (const { actor, indexCount, collisionIndex } of actors) {
             if (!Number.isSafeInteger(indexCount) || indexCount <= 0 || indexCount % 3 || !source || indexOffset + indexCount > source.length) throw new Error(`Actor '${actor.name}' has invalid collision triangles.`);
+            if (indexCount >= 384 && !collisionIndex) throw new Error(`Actor '${actor.name}' has no collision triangle index.`);
             const indices = source.subarray(indexOffset, indexOffset + indexCount);
 
             const bounds = new Box3();
             for (let i = 0; i < indices.length; i++) bounds.expandByPoint(tmpPosition.fromArray(vertices, indices[i] * 3));
 
-            this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: indices.length < 384 ? null : buildTriangleIndex(vertices, indices), matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
+            this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: collisionIndex, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
             indexOffset += indices.length;
         }
 

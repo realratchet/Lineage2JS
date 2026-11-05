@@ -20,7 +20,7 @@ function getCacheVersion(settings: LoadSettings_T): number {
 }
 
 function hashSettings(settings: LoadSettings_T): string {
-    const json = JSON.stringify({ ...settings, formatVersion: FORMAT_VERSION, scriptVersion: 14, packageVersion: 8, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
+    const json = JSON.stringify({ ...settings, formatVersion: FORMAT_VERSION, scriptVersion: 14, packageVersion: 8, staticMeshBatchVersion: 2, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)

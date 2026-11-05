@@ -3,6 +3,7 @@ import type { MainToWorkerMessage_T, WorkerToMainMessage_T } from "./decode-prot
 import { selectAssetFiles, setServedAssets } from "../asset-source";
 import { withAssetSources, releaseAssetSources } from "../unreal/asset-handle";
 import { setLoadingStepHandler } from "../../loading-profile";
+import { serializeLibraryBlob } from "./library-serializer";
 
 const ctx = self as any;
 
@@ -81,11 +82,12 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "decode": {
             try {
-                const { library, buffers } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings, fromCache => post({ type: "sectorCache", requestId: msg.requestId, sectorName: msg.sectorName, fromCache }));
+                const { library } = await engine.decodeSectorTransfer(msg.sectorName, msg.settings, fromCache => post({ type: "sectorCache", requestId: msg.requestId, sectorName: msg.sectorName, fromCache }));
 
                 if (msg.flushAssets) await engine.flushStoredAssets();
 
-                post({ type: "decoded", requestId: msg.requestId, library }, buffers);
+                const buffer = await serializeLibraryBlob(library).arrayBuffer();
+                post({ type: "decoded", requestId: msg.requestId, buffer }, [buffer]);
             } catch (e) {
                 console.error(`[decode-worker] failed to decode sector '${msg.sectorName}':`, e);
                 post({ type: "decodeError", requestId: msg.requestId, message: (e as Error)?.message ?? String(e), stack: (e as Error)?.stack });
