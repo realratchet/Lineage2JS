@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, StreamDrawUsage, Vector3 } from "three";
 
 const tmpControl = new Vector3();
 const tmpPoint = new Vector3();
@@ -10,8 +10,8 @@ export class NLineGeometry extends BufferGeometry {
     public alpha = 0;
     protected readonly restLength: number;
     protected readonly arrPoints = new Float32Array(31 * 3);
-    protected readonly positions = new BufferAttribute(new Float32Array(62 * 3), 3).setUsage(DynamicDrawUsage);
-    protected readonly colors = new BufferAttribute(new Uint8Array(62 * 4), 4, true).setUsage(DynamicDrawUsage);
+    protected readonly positions = new BufferAttribute(new Float32Array(62 * 3), 3).setUsage(StreamDrawUsage);
+    protected readonly colors = new BufferAttribute(new Uint8Array(62 * 4), 4, true).setUsage(StreamDrawUsage);
 
     public constructor(floatPosition: Vector3, weaponPosition: Vector3) {
         super();

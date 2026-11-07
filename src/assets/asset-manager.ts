@@ -1268,7 +1268,10 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!job) return;
 
         try {
-            if (!job.decodeJob) job.decodeJob = createSectorStaticMeshDecodeJob(job.library, job.sector);
+            if (!job.decodeJob) {
+                job.decodeJob = createSectorStaticMeshDecodeJob(job.library, job.sector);
+                job.decodeJob.prepareBounds = root => renderManager.prepareStaticMeshBounds(root);
+            }
 
             const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : STATIC_MESH_BUILD_FRAME_MS);
             let complete = false;

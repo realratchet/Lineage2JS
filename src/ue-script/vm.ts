@@ -2586,9 +2586,29 @@ export class UnScriptVM {
         }
     }
 
+    protected isA(context: ScriptHost_T, className: string): boolean {
+        className = className.toLowerCase();
+        const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
+        const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
+        let classId = context.scriptClassId.toLowerCase();
+
+        classId = vm.classAliases.get(classId) || classId;
+
+        // UObject::execIsA (Core.dll 0x10137eb9..0x10137edd) compares class names up the superclass chain.
+        while (classId) {
+            if (!vm.classParents.has(classId)) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
+            if (getFieldName(classId) === className) return true;
+            classId = vm.classParents.get(classId);
+        }
+
+        return false;
+    }
+
     public invokeNative(self: ScriptHost_T, context: ScriptHost_T, index: number, name: string, args: ScriptArgument_T[]): ScriptValue_T {
         if (context.handlesUnrealNative && context.handlesUnrealNative(index, name))
             return context.callUnrealNative!({ index, name, args, self, context });
+
+        if (index === 303 && name === "IsA") return this.isA(context, args[0] as string);
 
         if (name.toLowerCase() === "getpropertytext") return this.getPropertyText(context, args[0] as string);
         if (name.toLowerCase() === "setpropertytext") return this.setPropertyText(context, args[0] as string, args[1] as string);
@@ -2717,23 +2737,7 @@ export class UnScriptVM {
 
         if (index === 258) return this.isClassChildOf(args[0] as string, args[1] as string);
 
-        if (index === 303) {
-            const className = (args[0] as string).toLowerCase();
-            const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
-            const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
-            let classId = context.scriptClassId.toLowerCase();
-
-            classId = vm.classAliases.get(classId) || classId;
-
-            // UObject::execIsA (Core.dll 0x10137eb9..0x10137edd) compares class names up the superclass chain.
-            while (classId) {
-                if (!vm.classParents.has(classId)) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
-                if (getFieldName(classId) === className) return true;
-                classId = vm.classParents.get(classId);
-            }
-
-            return false;
-        }
+        if (index === 303) return this.isA(context, args[0] as string);
 
         if (index === 278) {
             if (args[0] === null || args[0] === undefined) return null;

@@ -1,5 +1,5 @@
-import { batchStaticMeshTextures } from "./static-mesh-texture-batching";
-import { BufferGeometry, BufferAttribute, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
+import { createStaticMeshTextureBatchJob } from "./static-mesh-texture-batching";
+import { BufferGeometry, BufferAttribute, DynamicDrawUsage, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import SortedIndexBuffer from "../../rendering/sorted-index-buffer";
 import Terrain from "../../objects/terrain";
@@ -23,7 +23,10 @@ export type StaticMeshBatchJob_T = {
     manifest: StaticMeshBatchManifest_T,
     batchIndex: number,
     actorIndex: number,
-    indexCopy: StaticMeshIndexCopy_T
+    indexCopy: StaticMeshIndexCopy_T,
+    batchBuild: Generator<void, void, unknown>,
+    prepareBounds: (root: Object3D) => Generator<void, void, unknown>,
+    boundsBuild: Generator<void, void, unknown>
 };
 
 const INDEX_COPY_CHUNK_BYTES = 256 * 1024;
@@ -73,6 +76,7 @@ function createBatchObject(
     mergedObject.batchElements = batchElements;
     mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
     mergedObject.batchIndices = null;
+    mergedGeometry.index.setUsage(DynamicDrawUsage);
 
     // Transparent actor indices are depth-sorted during visibility updates.
     const matList = materials instanceof Array ? materials : [materials];
@@ -180,7 +184,57 @@ export function createStaticMeshBatchJob(
 ): StaticMeshBatchJob_T {
     const manifest: StaticMeshBatchManifest_T = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
 
-    return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, indexCopy: null };
+    return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, indexCopy: null, batchBuild: null, prepareBounds: null, boundsBuild: null };
+}
+
+function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatchManifest_T["batches"][number]): Generator<void, void, unknown> {
+    const { library, sector, staticMeshGroup, fetchGeometry } = job;
+
+    try {
+        const geometry = fetchGeometry(library.geometries[batch.geometry]);
+        yield;
+        const geometryInfo = library.geometries[batch.geometry];
+        const materialInfo = library.materials[batch.materials];
+        const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance, !!geometryInfo.attributes.sway)
+            || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
+        yield;
+        // The merged light matrix has always been identity (see mergeBatchGeometriesData)
+        const lightInfo: MeshLight_T | null = batch.lights
+            ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment, staticLighting: batch.staticLighting }
+            : null;
+
+        const batchObject = createBatchObject(
+            batch.name,
+            geometry,
+            materials,
+            lightInfo,
+            batch.colliderIndices,
+            (geometryInfo as any).collisionIndex,
+            batch.actors,
+            batch.perActorAmbient,
+            batch.batchElements
+        );
+
+        yield;
+        const source = geometry.index?.array as StaticMeshIndexArray_T;
+        batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
+        yield;
+        yield* createStaticMeshTextureBatchJob(batchObject, source);
+        if (source) {
+            const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
+            batchObject.batchIndices = target;
+            job.indexCopy = { source, target, offset: 0 };
+            makeSortedIndexBuffers(library, batchObject, batch);
+        }
+
+        yield;
+        staticMeshGroup.add(batchObject);
+        for (const actor of batch.actors) (sector as any).staticMeshMap.set(actor.uuid, batchObject);
+        (sector as any).staticMeshMap.set(batch.uuid, batchObject);
+
+    } catch (e) {
+        console.warn(`[Batch] Failed to instantiate batch '${batch.name}':`, e);
+    }
 }
 
 export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
@@ -197,50 +251,13 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
         return false;
     }
 
+    if (job.batchBuild) {
+        if (job.batchBuild.next().done) job.batchBuild = null;
+        return false;
+    }
+
     if (job.batchIndex < manifest.batches.length) {
-        const batch = manifest.batches[job.batchIndex++];
-
-        try {
-            const geometry = fetchGeometry(library.geometries[batch.geometry]);
-            const geometryInfo = library.geometries[batch.geometry];
-            const materialInfo = library.materials[batch.materials];
-            const materials = decodeStaticMeshMaterial(library, materialInfo, !!geometryInfo.attributes.colors, !!geometryInfo.attributes.colorsInstance, !!geometryInfo.attributes.sway)
-                || (new MeshBasicMaterial({ color: 0xff00ff }) as Material);
-            // The merged light matrix has always been identity (see mergeBatchGeometriesData)
-            const lightInfo: MeshLight_T | null = batch.lights
-                ? { matrix: new Matrix4(), scene: batch.lights.scene, environment: batch.lights.environment, staticLighting: batch.staticLighting }
-                : null;
-
-            const batchObject = createBatchObject(
-                batch.name,
-                geometry,
-                materials,
-                lightInfo,
-                batch.colliderIndices,
-                (geometryInfo as any).collisionIndex,
-                batch.actors,
-                batch.perActorAmbient,
-                batch.batchElements
-            );
-
-            const source = geometry.index?.array as StaticMeshIndexArray_T;
-            batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
-            batchStaticMeshTextures(batchObject, source);
-            if (source) {
-                const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
-                batchObject.batchIndices = target;
-                job.indexCopy = { source, target, offset: 0 };
-                makeSortedIndexBuffers(library, batchObject, batch);
-            }
-
-            staticMeshGroup.add(batchObject);
-            for (const actor of batch.actors) (sector as any).staticMeshMap.set(actor.uuid, batchObject);
-            (sector as any).staticMeshMap.set(batch.uuid, batchObject);
-
-        } catch (e) {
-            console.warn(`[Batch] Failed to instantiate batch '${batch.name}':`, e);
-        }
-
+        job.batchBuild = buildStaticMeshBatch(job, manifest.batches[job.batchIndex++]);
         return false;
     }
 
@@ -268,6 +285,13 @@ export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
         }
 
         return false;
+    }
+
+    if (job.prepareBounds) {
+        if (!job.boundsBuild) job.boundsBuild = job.prepareBounds(staticMeshGroup);
+        if (!job.boundsBuild.next().done) return false;
+        job.prepareBounds = null;
+        job.boundsBuild = null;
     }
 
     sector.add(staticMeshGroup);
@@ -398,7 +422,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
     const mergedGeometry = new BufferGeometry();
     mergedGeometry.setAttribute("position", new BufferAttribute(mergedPositions, 3));
     mergedGeometry.setAttribute("normal", new BufferAttribute(mergedNormals, 3));
-    mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, true));
+    mergedGeometry.setAttribute("color", new BufferAttribute(mergedColors, 3, true).setUsage(DynamicDrawUsage));
     mergedGeometry.setAttribute("terrainIndex", new BufferAttribute(mergedTerrainIndices, 1));
     mergedGeometry.setIndex(new BufferAttribute(mergedIndices, 1));
 

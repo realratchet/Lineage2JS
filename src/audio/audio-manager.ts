@@ -13,7 +13,7 @@ const arrNoAmbientSounds: AmbientSoundComponent[] = [];
 function getAmbientCellKey(x: number, y: number): number { return (x + 32768) * 65536 + (y + 32768); }
 
 type AmbientInfo_T = {
-    dataUri: string,
+    dataUri: string | Uint8Array | Blob,
     soundName: string,
     position: [number, number, number],
     volume: number,
@@ -537,6 +537,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly ambientSlotAnchors = new Map<string, number>();
     protected readonly pendingAmbientBuffers = new Map<string, Promise<AudioBuffer | null>>();
     protected readonly cacheSoundBuffers = new WeakMap<Uint8Array | Blob, Promise<AudioBuffer | null>>();
+    protected readonly cacheDecodedSoundBuffers = new WeakMap<Uint8Array | Blob, AudioBuffer>();
 
     public registerAmbientSound(component: AmbientSoundComponent): void {
         this.ambientSounds.add(component);
@@ -611,7 +612,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
                 active.isAudible = true;
                 continue;
             }
-            if (!info.looping && !this.rollAmbientTrigger(info.uuid, component.dataUri, info.randomChance, currentTime)) continue;
+            if (!info.looping && !this.rollAmbientTrigger(info.uuid, component.soundData, info.randomChance, currentTime)) continue;
 
             candidates.push({ component, priority });
             maxPriority = Math.max(maxPriority, priority);
@@ -632,15 +633,15 @@ export class AudioManager implements IEngineComponent<GameManager> {
         for (const candidate of candidates) {
             const component = candidate.component;
             const info = component.info;
-            const placed = this.playAmbientSound(info.uuid, info.soundName, component.dataUri, info.position, info.volume, info.pitch, info.refDistance, info.maxDistance, info.looping, candidate.priority);
+            const placed = this.playAmbientSound(info.uuid, info.soundName, component.soundData, info.position, info.volume, info.pitch, info.refDistance, info.maxDistance, info.looping, candidate.priority);
 
             if (!placed) break;
         }
     }
 
     // alaudio.dll 0x1000cb5f: a non-looping ambient is rerolled once per Sound->Duration slot counted from AmbientSoundStartTime, and enters the candidate list when appRand()%100 < AmbientRandom
-    public rollAmbientTrigger(id: string, dataUri: string, randomChance: number, currentTime: number): boolean {
-        const buffer = this.ambientBufferCache.get(dataUri);
+    public rollAmbientTrigger(id: string, dataUri: string | Uint8Array | Blob, randomChance: number, currentTime: number): boolean {
+        const buffer = typeof dataUri === "string" ? this.ambientBufferCache.get(dataUri) : this.cacheDecodedSoundBuffers.get(dataUri);
 
         if (!buffer) {
             this.loadAmbientBuffer(dataUri);
@@ -669,7 +670,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     public playAmbientSound(
         id: string,
         soundName: string,
-        dataUri: string,
+        dataUri: string | Uint8Array | Blob,
         position: [number, number, number],
         volume: number,
         pitch: number,
@@ -690,7 +691,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         this.activeAmbientSounds.set(id, entry);
 
-        const buffer = this.ambientBufferCache.get(dataUri);
+        const buffer = typeof dataUri === "string" ? this.ambientBufferCache.get(dataUri) : this.cacheDecodedSoundBuffers.get(dataUri);
         if (buffer) this.startAmbientSource(id, buffer, entry);
         else this.startAmbientSoundAsync(id, entry);
 
@@ -731,7 +732,9 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.startAmbientSource(id, buffer, entry);
     }
 
-    protected async loadAmbientBuffer(dataUri: string, soundType: string = "ambient"): Promise<AudioBuffer | null> {
+    protected async loadAmbientBuffer(dataUri: string | Uint8Array | Blob, soundType: string = "ambient"): Promise<AudioBuffer | null> {
+        if (typeof dataUri !== "string") return this.loadSoundBuffer(dataUri);
+
         const cached = this.ambientBufferCache.get(dataUri);
         if (cached) return cached;
 
@@ -766,7 +769,11 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         pending = (async () => {
             try {
-                return await this.audioContext.decodeAudioData(data instanceof Blob ? await data.arrayBuffer() : data.slice().buffer);
+                const buffer = await this.audioContext.decodeAudioData(data instanceof Blob ? await data.arrayBuffer() : data.slice().buffer);
+
+                this.cacheDecodedSoundBuffers.set(data, buffer);
+
+                return buffer;
             } catch (e) {
                 this.cacheSoundBuffers.delete(data);
                 console.warn(`Failed to decode one-shot sound`, e);

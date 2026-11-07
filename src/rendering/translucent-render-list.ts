@@ -13,8 +13,8 @@ const tmpExtent = new Vector3();
 const arrNodes: number[] = [];
 
 type Part_T = { item: any, state: State_T, actor: Owner_T, emitter: EmitterOwner_T, bounds: Box3, node: number, start: number, count: number, materialIndex: number, ordinal: number, split: boolean };
-type Owner_T = { center: Vector3, radius: number, path: number, leaves: number[], parts: Part_T[], count: number, ordinals: Map<number, number> };
-type State_T = { sector: SectorObject, nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], actorCount: number, leaves: number[][], leafCounts: number[], dynamicLeaves: Set<number>, meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], partCount: number, cursor: number, cullBackfaces: boolean };
+type Owner_T = { index: number, center: Vector3, radius: number, path: number, leaves: number[], parts: Part_T[], count: number, ordinals: Map<number, number> };
+type State_T = { sector: SectorObject, nodes: SectorObject["bspNodes"], list: TranslucentDrawList, actors: Owner_T[], actorCount: number, leaves: number[][], leafCounts: number[], dynamicLeaves: Set<number>, meshes: Map<THREE.Object3D, Owner_T[]>, surfaces: Map<THREE.Object3D, any>, visibleNodes: Uint8Array, visibleActors: Uint8Array, arrVisibleNodes: number[], arrVisibleActors: number[], nodeParts: Part_T[][], nodeCounts: Uint32Array, sorted: Part_T[], partCount: number, cursor: number, cullBackfaces: boolean };
 type BatchRange_T = { starts: Uint32Array, stamp: number };
 type EmitterOwner_T = { owner: Owner_T, state: State_T, stamp: number, distance: number, key: number, items: any[] };
 
@@ -65,7 +65,7 @@ export class TranslucentRenderList {
                 const actor = batch.actors[i], source = library.geometries[actor.instance.mesh.geometry];
                 tmpMatrix.compose(tmpPosition.fromArray(actor.position), tmpQuaternion.fromArray(actor.quaternion), tmpScale.fromArray(actor.scale));
                 const center = new Vector3().fromArray(source.bounds.sphere.center).applyMatrix4(tmpMatrix), element = batch.batchElements[i];
-                const owner: Owner_T = { center, radius: 0, path: 0, leaves: element.leaves || [], parts: [], count: 0, ordinals: new Map(element.groups.map((group: any, index: number) => [group.start, index])) };
+                const owner: Owner_T = { index: actors.length, center, radius: 0, path: 0, leaves: element.leaves || [], parts: [], count: 0, ordinals: new Map(element.groups.map((group: any, index: number) => [group.start, index])) };
                 center.set(Math.fround(center.x), Math.fround(center.y), Math.fround(center.z));
                 owners.push(owner); actors.push(owner); rosters.push({ owner, uuid: actor.uuid });
             }
@@ -79,7 +79,7 @@ export class TranslucentRenderList {
             const source = library.geometries[actor.instance.mesh.geometry];
             const center = new Vector3().fromArray(source.bounds.sphere.center).applyMatrix4(mesh.matrixWorld), memberships: number[] = [];
             library.leafActors.forEach((entries: any[], leaf: number) => { if (entries.some(entry => entry.uuid === actor.uuid)) memberships.push(leaf); });
-            const owner: Owner_T = { center, radius: 0, path: 0, leaves: memberships, parts: [], count: 0, ordinals: new Map(mesh.geometry.groups.map((group, index) => [group.start, index])) };
+            const owner: Owner_T = { index: actors.length, center, radius: 0, path: 0, leaves: memberships, parts: [], count: 0, ordinals: new Map(mesh.geometry.groups.map((group, index) => [group.start, index])) };
             center.set(Math.fround(center.x), Math.fround(center.y), Math.fround(center.z));
             meshes.set(mesh, [owner]); actors.push(owner); rosters.push({ owner, uuid: actor.uuid });
         }
@@ -90,7 +90,7 @@ export class TranslucentRenderList {
             leaves[leaf].push(indices.get(entry.owner));
         }
         for (const section of sector.getTranslucentBSP()) surfaces.set(section.mesh, section);
-        const state: State_T = { sector, nodes: sector.bspNodes, list: new TranslucentDrawList(sector.bspNodes, actors, leaves), actors, actorCount: actors.length, leaves, leafCounts: leaves.map(leaf => leaf.length), dynamicLeaves: new Set(), meshes, surfaces, visibleNodes: new Uint8Array(sector.bspNodes.length), visibleActors: new Uint8Array(actors.length), nodeParts: [], nodeCounts: new Uint32Array(sector.bspNodes.length), sorted: [], partCount: 0, cursor: 0, cullBackfaces: false };
+        const state: State_T = { sector, nodes: sector.bspNodes, list: new TranslucentDrawList(sector.bspNodes, actors, leaves), actors, actorCount: actors.length, leaves, leafCounts: leaves.map(leaf => leaf.length), dynamicLeaves: new Set(), meshes, surfaces, visibleNodes: new Uint8Array(sector.bspNodes.length), visibleActors: new Uint8Array(actors.length), arrVisibleNodes: [], arrVisibleActors: [], nodeParts: [], nodeCounts: new Uint32Array(sector.bspNodes.length), sorted: [], partCount: 0, cursor: 0, cullBackfaces: false };
         for (const mesh of meshes.keys()) this.cacheObjects.set(mesh, state);
         for (const mesh of surfaces.keys()) this.cacheObjects.set(mesh, state);
         this.cacheStates.set(sector, state);
@@ -105,7 +105,7 @@ export class TranslucentRenderList {
         let entry = this.cacheEmitters.get(emitter);
         if (entry && entry.stamp === this.stamp) return entry;
         if (!entry) {
-            entry = { owner: { center: new Vector3(), radius: 0, path: 1, leaves: [], parts: [], count: 0, ordinals: new Map() }, state: null, stamp: -1, distance: 0, key: 0, items: [] };
+            entry = { owner: { index: -1, center: new Vector3(), radius: 0, path: 1, leaves: [], parts: [], count: 0, ordinals: new Map() }, state: null, stamp: -1, distance: 0, key: 0, items: [] };
             this.cacheEmitters.set(emitter, entry);
         }
         entry.state = null;
@@ -151,7 +151,7 @@ export class TranslucentRenderList {
             }
             if (!owner.leaves.length) return entry;
 
-            const index = state.actors.length;
+            const index = owner.index = state.actors.length;
             state.actors.push(owner);
             for (const leaf of owner.leaves) {
                 if (!state.leaves[leaf]) state.leaves[leaf] = [];
@@ -176,10 +176,23 @@ export class TranslucentRenderList {
         if (state) state.partCount++;
 
         if (actor) {
+            if (!actor.count && state) {
+                if (state.visibleActors.length <= actor.index) {
+                    const visibleActors = new Uint8Array(Math.max(actor.index + 1, state.visibleActors.length * 2));
+                    visibleActors.set(state.visibleActors);
+                    state.visibleActors = visibleActors;
+                }
+                state.visibleActors[actor.index] = 1;
+                state.arrVisibleActors.push(actor.index);
+            }
             let index = actor.count++;
             while (index && actor.parts[index - 1].ordinal > ordinal) { actor.parts[index] = actor.parts[index - 1]; index--; }
             actor.parts[index] = part;
         } else if (state && node >= 0) {
+            if (!state.nodeCounts[node]) {
+                state.visibleNodes[node] = 1;
+                state.arrVisibleNodes.push(node);
+            }
             const parts = state.nodeParts[node] || (state.nodeParts[node] = []);
             parts[state.nodeCounts[node]++] = part;
         }
@@ -197,11 +210,17 @@ export class TranslucentRenderList {
             const state = this.cacheStates.get(sector) || this.makeState(sector);
             for (const leaf of state.dynamicLeaves) state.leaves[leaf].length = state.leafCounts[leaf] || 0;
             state.dynamicLeaves.clear();
+            for (const index of state.arrVisibleActors) {
+                state.actors[index].count = 0;
+                state.visibleActors[index] = 0;
+            }
+            for (const index of state.arrVisibleNodes) {
+                state.visibleNodes[index] = state.nodeCounts[index] = 0;
+            }
+            state.arrVisibleActors.length = state.arrVisibleNodes.length = 0;
             state.actors.length = state.actorCount;
-            state.visibleNodes.fill(0); state.visibleActors.fill(0); state.nodeCounts.fill(0);
             state.sorted.length = 0; state.partCount = 0; state.cursor = 0;
             state.cullBackfaces = sector.findPositionZone(camera.position) !== 0;
-            for (const actor of state.actors) actor.count = 0;
             this.arrStates.push(state);
         }
         for (const item of items) {
@@ -215,7 +234,6 @@ export class TranslucentRenderList {
                     if (state.cullBackfaces && !(bsp.surfFlags & (PolyFlags_T.PF_TwoSided | PolyFlags_T.PF_Portal | PolyFlags_T.PF_Unused5)) && !((y * plane.y + z * plane.z) + x * plane.x - plane.w > 0)) continue;
 
                     this.add(item, state, null, node, start, count, 0, 0);
-                    state.visibleNodes[node] = 1;
                 }
                 continue;
             }
@@ -247,9 +265,7 @@ export class TranslucentRenderList {
         }
         for (const state of this.arrStates) {
             if (!state.partCount) continue;
-            if (state.visibleActors.length < state.actors.length) state.visibleActors = new Uint8Array(Math.max(state.actors.length, state.visibleActors.length * 2));
-            for (let i = 0; i < state.actors.length; i++) state.visibleActors[i] = Number(state.actors[i].count > 0);
-            state.list.sort(camera.position, state.visibleNodes, state.visibleActors);
+            state.list.sort(camera.position, state.visibleNodes, state.visibleActors, state.arrVisibleNodes, state.arrVisibleActors);
             for (let i = 0; i < state.list.count; i++) {
                 const entry = state.list.order[i], parts = entry < 0 ? state.actors[~entry].parts : state.nodeParts[entry], count = entry < 0 ? state.actors[~entry].count : state.nodeCounts[entry];
                 for (let part = 0; part < count; part++) state.sorted.push(parts[part]);

@@ -26,8 +26,8 @@ const GLOBAL_UNIFORM_NAMES = new Set(Object.keys(GLOBAL_UNIFORMS));
 export function getLocalUniforms(uniforms: UniformMap_T): UniformMap_T {
     const local: UniformMap_T = {};
 
-    for (const [k, v] of Object.entries(uniforms))
-        if (!GLOBAL_UNIFORM_NAMES.has(k)) local[k] = v;
+    for (const k of Object.keys(uniforms))
+        if (!GLOBAL_UNIFORM_NAMES.has(k)) local[k] = uniforms[k];
 
     return local;
 }

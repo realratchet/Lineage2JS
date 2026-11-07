@@ -552,16 +552,20 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     staticTriangleBounds = cacheTriangleBounds.get(primitive.index);
 
     if (!staticTriangleBounds) {
-        const vertices = primitive.vertices, indices = primitive.indices;
-        staticTriangleBounds = new Float32Array(indices.length * 2);
+        staticTriangleBounds = primitive.index.triangleBounds;
+        if (!staticTriangleBounds) {
+            const vertices = primitive.vertices, indices = primitive.indices;
+            staticTriangleBounds = new Float32Array(indices.length * 2);
 
-        for (let i = 0; i < indices.length; i += 3) {
-            const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
+            for (let i = 0; i < indices.length; i += 3) {
+                const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
 
-            for (let axis = 0; axis < 3; axis++) {
-                staticTriangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
-                staticTriangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+                for (let axis = 0; axis < 3; axis++) {
+                    staticTriangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+                    staticTriangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+                }
             }
+
         }
 
         cacheTriangleBounds.set(primitive.index, staticTriangleBounds);

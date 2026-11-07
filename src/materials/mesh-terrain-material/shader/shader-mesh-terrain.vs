@@ -12,6 +12,11 @@
 
 #ifdef USE_PROJECTOR_RECEIVER
 uniform mat4 shadowMatrix;
+#ifdef NUM_PROJECTOR_INSTANCES
+uniform mat4 shadowMatrices[NUM_PROJECTOR_INSTANCES];
+flat varying int vShadowInstance;
+#define shadowMatrix shadowMatrices[gl_InstanceID]
+#endif
 varying vec4 vShadowCoord;
 #endif
 
@@ -126,6 +131,9 @@ void main() {
     #include <morphtarget_vertex>
     #include <skinning_vertex>
     #ifdef USE_PROJECTOR_RECEIVER
+        #ifdef NUM_PROJECTOR_INSTANCES
+        vShadowInstance = gl_InstanceID;
+        #endif
         vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
         vProjectorNormal = normalize(normalMatrix * normal);
     #endif

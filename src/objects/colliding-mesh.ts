@@ -91,7 +91,14 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             const indices = source.subarray(indexOffset, indexOffset + indexCount);
 
             const bounds = new Box3();
-            for (let i = 0; i < indices.length; i++) bounds.expandByPoint(tmpPosition.fromArray(vertices, indices[i] * 3));
+            let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+            for (let i = 0; i < indices.length; i++) {
+                const offset = indices[i] * 3, x = vertices[offset], y = vertices[offset + 1], z = vertices[offset + 2];
+                minX = Math.min(minX, x); minY = Math.min(minY, y); minZ = Math.min(minZ, z);
+                maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); maxZ = Math.max(maxZ, z);
+            }
+            bounds.min.set(minX, minY, minZ);
+            bounds.max.set(maxX, maxY, maxZ);
 
             this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: collisionIndex, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
             indexOffset += indices.length;
@@ -328,7 +335,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
                 indices: this.colliderIndices,
                 collisionNodes: this.collisionNodes,
                 collisionBounds: this.collisionBounds,
-                index: this.collisionIndex || (this.colliderIndices.length < 384 ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices)),
+                index: this.collisionIndex || (this.colliderIndices.length < 384 ? null : buildTriangleIndex(this.colliderVertices, this.colliderIndices, true)),
                 collisionModel,
                 useSimpleLineCollision: !!collisionModel && this.staticMeshCollision.useSimpleLineCollision,
                 useSimpleBoxCollision: !!collisionModel && this.staticMeshCollision.useSimpleBoxCollision,

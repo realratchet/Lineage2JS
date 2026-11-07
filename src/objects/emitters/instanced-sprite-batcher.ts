@@ -1,4 +1,4 @@
-import { Camera, CustomBlending, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix3, Matrix4, Mesh, Object3D, OneFactor, PlaneGeometry, ShaderMaterial, Vector3, ZeroFactor } from "three";
+import { Camera, CustomBlending, StreamDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix3, Matrix4, Mesh, Object3D, OneFactor, PlaneGeometry, ShaderMaterial, Vector3, ZeroFactor } from "three";
 import { copyShaderMaterial } from "../../materials/global-uniforms";
 import { EParticleFlags_T } from "./base-emitter";
 
@@ -7,6 +7,7 @@ const DEPTH_BUCKET_SIZE = 2048;
 const BATCH_IDLE_MS = 5000;
 
 type BatchGroup_T = { material: ShaderMaterial; renderOrder: number; actor: Object3D; emitters: any[]; lastUsed: number };
+type BatchMaterial_T = { refs: number, material: ShaderMaterial, disposed: boolean, dispose: () => void };
 
 const tmpAnchor = new Vector3();
 const tmpViewPosition = new Vector3();
@@ -60,10 +61,14 @@ function materialKey(material: ShaderMaterial): string {
 
 class SpriteParticleBatchMesh extends Mesh<InstancedBufferGeometry, ShaderMaterial> {
     public emitterActor: Object3D;
+    public isRendered = false;
+
+    public onAfterRender() { this.isRendered = true; }
 }
 
 class SpriteParticleBatch {
     public readonly mesh: SpriteParticleBatchMesh;
+    public readonly sourceMaterial: ShaderMaterial;
     protected capacity = 0;
     protected readonly fixedNormal: boolean;
     protected positionAttr: InstancedBufferAttribute;
@@ -85,6 +90,7 @@ class SpriteParticleBatch {
     protected readonly sortCenter = new Vector3();
 
     public constructor(sourceMaterial: ShaderMaterial, renderOrder: number) {
+        this.sourceMaterial = sourceMaterial;
         const fixedNormal = sourceMaterial.defines?.USE_FIXED_NORMAL !== undefined;
         const geometry = new InstancedBufferGeometry();
         geometry.setIndex(baseGeometry.index);
@@ -115,7 +121,7 @@ class SpriteParticleBatch {
         this.mesh.geometry.instanceCount = 0;
     }
 
-    public dispose() {
+    public dispose(keepMaterial = false) {
         const geometry = this.mesh.geometry;
 
         // Drop shared attributes before dispose so other batches keep their buffers.
@@ -123,7 +129,7 @@ class SpriteParticleBatch {
         geometry.deleteAttribute("uv");
         geometry.setIndex(null);
         geometry.dispose();
-        this.mesh.material.dispose();
+        if (!keepMaterial) this.mesh.material.dispose();
     }
 
     public update(emitters: any[], cameraRight: Vector3, cameraUp: Vector3) {
@@ -256,7 +262,7 @@ class SpriteParticleBatch {
         this.capacity = Math.pow(2, Math.ceil(Math.log2(required)));
         const geometry = this.mesh?.geometry;
 
-        const make = (size: number) => new InstancedBufferAttribute(new Float32Array(this.capacity * size), size).setUsage(DynamicDrawUsage);
+        const make = (size: number) => new InstancedBufferAttribute(new Float32Array(this.capacity * size), size).setUsage(StreamDrawUsage);
         this.positionAttr = make(3);
         this.rightAttr = make(3);
         this.upAttr = make(3);
@@ -282,9 +288,52 @@ export class InstancedSpriteBatcher {
     public readonly root = new Group();
     protected readonly batches = new Map<string, SpriteParticleBatch>();
     protected readonly groups = new Map<string, BatchGroup_T>();
+    protected readonly cacheMaterials = new Map<ShaderMaterial, BatchMaterial_T>();
 
     public constructor() {
         this.root.name = "InstancedSpriteBatches";
+    }
+
+    protected retainMaterial(source: ShaderMaterial) {
+        let entry = this.cacheMaterials.get(source);
+        if (!entry) {
+            entry = { refs: 0, material: null, disposed: false, dispose: null };
+            entry.dispose = () => {
+                entry.disposed = true;
+                source.removeEventListener("dispose", entry.dispose);
+                if (entry.material) entry.material.dispose();
+                entry.material = null;
+                if (!entry.refs) this.cacheMaterials.delete(source);
+            };
+            source.addEventListener("dispose", entry.dispose);
+            this.cacheMaterials.set(source, entry);
+        }
+        entry.refs++;
+    }
+
+    protected releaseBatch(batch: SpriteParticleBatch) {
+        const source = batch.sourceMaterial, entry = this.cacheMaterials.get(source)!;
+        entry.refs--;
+        // Keep one program reference while its source material is alive.
+        const keepMaterial = batch.mesh.isRendered && !entry.disposed && !entry.material;
+        if (keepMaterial) entry.material = batch.mesh.material;
+        batch.dispose(keepMaterial);
+        if (!entry.refs && !entry.material) {
+            source.removeEventListener("dispose", entry.dispose);
+            this.cacheMaterials.delete(source);
+        }
+    }
+
+    public dispose() {
+        for (const batch of this.batches.values()) this.releaseBatch(batch);
+        for (const [source, entry] of this.cacheMaterials) {
+            source.removeEventListener("dispose", entry.dispose);
+            if (entry.material) entry.material.dispose();
+        }
+        this.cacheMaterials.clear();
+        this.batches.clear();
+        this.groups.clear();
+        this.root.clear();
     }
 
     public update(emitters: any[], camera: Camera) {
@@ -335,7 +384,7 @@ export class InstancedSpriteBatcher {
 
                 if (idle) {
                     this.root.remove(idle.mesh);
-                    idle.dispose();
+                    this.releaseBatch(idle);
                     this.batches.delete(key);
                 }
 
@@ -348,6 +397,7 @@ export class InstancedSpriteBatcher {
             let batch = this.batches.get(key);
             if (!batch) {
                 batch = new SpriteParticleBatch(group.material, group.renderOrder);
+                this.retainMaterial(group.material);
                 batch.mesh.emitterActor = group.actor;
                 this.batches.set(key, batch);
                 this.root.add(batch.mesh);

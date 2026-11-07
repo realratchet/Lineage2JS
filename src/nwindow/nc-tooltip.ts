@@ -130,18 +130,21 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
 
     public createDOM(layer: NDomLayer, parent: HTMLElement, anchorX: number, anchorY: number, info: string | TooltipInfo_T, topOffset = 32) {
         const layout = this.layout(layer.getManager().canvas, info);
-        const parentRect = parent.getBoundingClientRect();
+        const scale = layer.getManager().canvas.cssScale;
         const x = Math.max(0, Math.min(anchorX, layer.getManager().canvas.width - layout.width));
         let y = anchorY - layout.height;
 
         if (y < 0) y = anchorY + topOffset;
-        const tooltip = layer.createWindow(x - layer.toUI(parentRect.left), y - layer.toUI(parentRect.top), layout.width, layout.height, parent);
+        const tooltip = layer.createWindow(x * scale, y * scale, layout.width, layout.height, parent);
         tooltip.classList.add("ndom-opaque", "ndom-tooltip");
         tooltip.setAttribute("role", "tooltip");
         tooltip.setAttribute("aria-label", typeof info === "string" ? info : [info.title, ...info.lines.map(line => `${line.label} ${line.value}`), info.description].join("\n"));
         tooltip.style.zIndex = "2147483647";
         tooltip.style.pointerEvents = "none";
+        tooltip.style.transform = `scale(${scale})`;
+        tooltip.popover = "manual";
         this.draw(layout, (x, y, w, h, texture) => layer.tile(tooltip, x, y, w, h, 0, 0, 8, 8, texture), (x, y, color, text) => layer.text(tooltip, text, color, undefined, x, y));
+        tooltip.showPopover();
 
         return tooltip;
     }

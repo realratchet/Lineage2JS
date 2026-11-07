@@ -1,7 +1,7 @@
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
 import type { L2Environment } from "../rendering/l2-env";
-import { Box3, Vector3 } from "three";
+import { Box3, DynamicDrawUsage, Vector3 } from "three";
 import type { CollisionPrimitive_T, ICollidable } from "./objects";
 import RAPIER, { ColliderDesc, RigidBodyDesc } from "@dimforge/rapier3d";
 import { ColorByte } from "../utils/color-byte";
@@ -96,6 +96,7 @@ export class Terrain extends GameMesh implements ICollidable {
 
         this.hasTerrainPasses = this.material !== material;
         this.lightingInfo = lightingInfo;
+        if (lightingInfo) geometry.getAttribute("color").setUsage(DynamicDrawUsage);
 
         if (fieldInfo) this.setTerrainField(fieldInfo);
 

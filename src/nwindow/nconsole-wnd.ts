@@ -1775,7 +1775,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                     tmpAlarmDelta.subVectors(tmpAlarmPosition, camera.position);
                     const hit = this.manRender.getPhysicsManager().singleLineCheck({ location: camera.position, delta: tmpAlarmDelta, extent: tmpAlarmExtent, sourceActor: player, sourceIsPlayer: true, sourceProfile: player.getCollisionProfile(), ignorePawns: true, traceWorld: true });
 
-                    if (!hit) this.manRender.overHeadAlarm.add(sx, sy - canvas.getLineHeight(NAMEPLATE_FONT) * (plate.title ? 2 : 1) - 34, tmpAlarmDelta.length());
+                    if (!hit) {
+                        tmpAlarmPosition.project(camera);
+                        tmpAlarmPosition.x = tmpAlarmPosition.x * 0.5 + 0.5;
+                        tmpAlarmPosition.y = tmpAlarmPosition.y * 0.5 + 0.5;
+                        if (!camera.reversedDepth) tmpAlarmPosition.z = tmpAlarmPosition.z * 0.5 + 0.5;
+                        this.manRender.overHeadAlarm.add(sx, sy - canvas.getLineHeight(NAMEPLATE_FONT) * (plate.title ? 2 : 1) - 34, tmpAlarmDelta.length(), tmpAlarmPosition);
+                    }
                 }
             }
 

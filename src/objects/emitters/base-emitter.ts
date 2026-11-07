@@ -84,10 +84,13 @@ type StartLocationShape_T = "box" | "sphere" | "polar" | "all";
 type DrawStyle_T = "normal" | "alpha" | "modulate" | "translucent" | "alphaModulate" | "darken" | "brighten";
 
 export abstract class BaseEmitter extends Object3D {
+    protected static warmupDeadline: number = Infinity;
+    protected static warmupOwner: Object3D = null;
     protected readonly isUpdatable = true;
     public scriptClassId: string;
 
     public warmupGate: boolean = true; // set false by PhysicsManager while a sector's higher-priority tiers are still loading
+    public budgetWarmup: boolean = false;
     public readonly pendingSounds: PendingEmitterSound_T[] = []; // spawning-sound requests queued by spawnParticle(), drained by RenderManager each frame
 
     protected fadingSettings: FadeSettings_T;
@@ -699,6 +702,27 @@ export abstract class BaseEmitter extends Object3D {
                 break;
             default: throw new Error(`Unknown particle velocity direction '${this.getVelocityDirectionFrom}'.`);
         }
+    }
+
+    public static beginWarmupFrame(): void {
+        BaseEmitter.warmupDeadline = 0;
+        BaseEmitter.warmupOwner = null;
+    }
+
+    public static endWarmupFrame(): void {
+        BaseEmitter.warmupDeadline = Infinity;
+        BaseEmitter.warmupOwner = null;
+    }
+
+    protected canWarmUp(): boolean {
+        if (!this.budgetWarmup || BaseEmitter.warmupDeadline === Infinity || BaseEmitter.warmupOwner === this.parent) return true;
+
+        const time = performance.now();
+        if (BaseEmitter.warmupDeadline === 0) BaseEmitter.warmupDeadline = time + 2;
+        if (time >= BaseEmitter.warmupDeadline) return false;
+
+        BaseEmitter.warmupOwner = this.parent;
+        return true;
     }
 
     public warmUp(relativeTime: number, ticksPerSecond: number) {
@@ -1667,7 +1691,7 @@ export abstract class BaseEmitter extends Object3D {
 
         if (owner?.isEmitterActor) this.globalOffset.copy(owner.globalOffset);
 
-        if (!this.warmedUp && this.parent && this.warmupGate) {
+        if (!this.warmedUp && this.parent && this.warmupGate && (this.warmupTime <= 0 || this.canWarmUp())) {
             this.oldOwnerLocation.copy(this.parent.position);
             
             // Engine.dll AEmitter::Tick 0x8a5297..0x8a5322: only explicit warmup precedes normal emission.
@@ -1835,6 +1859,7 @@ export abstract class BaseEmitter extends Object3D {
         // shared material for the whole pool - driven off the emitter's own clock, no per-particle Time
         if (this.instancedMesh.material.isUpdatable) this.instancedMesh.material.update(currentTime);
         this.instancedMesh.commit();
+        this.instancedMesh.visible = this.instancedMesh.geometry.instanceCount > 0;
     }
 
     // public update(currentTime: number) {

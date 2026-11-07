@@ -80,6 +80,17 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 
 .ndom-layer > .ndom-tooltip { pointer-events: none; }
 
+.ndom-tooltip[popover] {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: transparent;
+    transform-origin: 0 0;
+}
+
 .ndom-item-drag *, .nwindow-cursor * { cursor: inherit !important; }
 
 .ndom-inactive .ndom-tile { opacity: calc(var(--alpha, 1) * 0.502); } // NWindow 0x10012dbd: the +0x70 flag swaps texture alpha 0xff for 0x80; text keeps its alpha.

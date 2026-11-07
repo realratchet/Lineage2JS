@@ -525,7 +525,15 @@ export class UIManager implements IEngineComponent<GameManager> {
             this.followPlayer = value;
             this.manGame.getComponent("input").setFollowPlayer(value);
         });
-        this.addButton(section, "Simulate Pawns", () => physics.simulatePawns());
+        const pawnCount = this.addText(section, "Pawn Count", "100", () => {});
+        pawnCount.type = "number"; pawnCount.min = "1"; pawnCount.step = "1"; pawnCount.required = true;
+        const simulate = this.addButton(section, "Simulate Pawns", async () => {
+            if (!pawnCount.reportValidity()) return;
+            simulate.disabled = true;
+            try { await physics.simulatePawns(pawnCount.valueAsNumber); }
+            finally { simulate.disabled = false; }
+        });
+        this.addButton(section, "Clear Simulated Pawns", () => physics.clearSimulatedPawns());
 
         const applyCharacter = (): Promise<void> => asset.loadCharacter(render, this.characterGroup, this.characterFace, this.characterHair, this.characterHairColour, this.characterArmor);
         const addArmorControls = (group: typeof groups[number]): void => {

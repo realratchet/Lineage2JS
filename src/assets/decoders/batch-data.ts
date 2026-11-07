@@ -685,7 +685,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                     ...(attributes.sway ? { sway: attributes.sway } : {})
                 },
                 indices: mergedIndices,
-                collisionIndex: colliderIndices && colliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, colliderIndices) : null,
+                collisionIndex: colliderIndices && colliderIndices.length >= 384 ? buildTriangleIndex(attributes.positions, colliderIndices, true) : null,
                 groups: finalGroups
             } as IGeometryDecodeInfo;
             library.materials[batchUuid] = {
@@ -713,7 +713,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 actors,
                 colliderIndices,
                 actorColliderIndices: mergedColliderIndices,
-                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < 384 ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index]) }] : []),
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < 384 ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index], true) }] : []),
                 lights: mergedLights,
                 staticLighting,
                 perActorAmbient,

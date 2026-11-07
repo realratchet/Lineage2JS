@@ -556,6 +556,13 @@ export class NetworkActors {
         void this.spawnPlayer(object, info);
     }
 
+    public spawnSimulatedPlayer(info: GamePackets.CharInfo_T): NetObject_T {
+        const object = this.createObject(info.objectId, "player", info);
+        this.appearances.set(info.objectId, info);
+        void this.spawnPlayer(object, info);
+        return object;
+    }
+
     protected async spawnPlayer(object: NetObject_T, info: GamePackets.CreatureInfo_T & GamePackets.Appearance_T) {
         const render = this.network.getParent().getComponent("render");
         const actor = new BaseActor(render);
@@ -1066,6 +1073,7 @@ export class NetworkActors {
     }
 
     public clearKnownObjects() {
+        this.network.pawnSimulation.clear();
         this.clearDisappearNpcActions();
         for (const objectId of this.objects.keys()) if (objectId !== this.userId) this.removeObject(objectId);
         for (const objectId of this.pickups.keys()) this.removeObject(objectId);

@@ -474,6 +474,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const dispose = this.renderer.dispose;
         this.renderer.dispose = () => {
             this.skillLightProbe.dispose();
+            this.particleBatcher.dispose();
             disposeStaticLighting(this.renderer);
             this.nameplateDepth.dispose();
             this.sectorOcclusion.dispose();
@@ -2809,12 +2810,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         // Render World
         updateEmitterRenderState(this.scene, this.getPhysicsManager().getParticleEmitters());
         this.drawWorld();
+        this.questArrow.draw();
 
         this.getWaterEffects().underWaterEffect.renderCellophane(this.renderer);
         this.renderer.getSize(tmpSize);
         if (this.getInputManager().isRenderingWide()) this.wideScreenBars.render(this.renderer, tmpSize);
-        this.overHeadAlarm.draw(this.renderer);
-        this.questArrow.draw();
+        this.overHeadAlarm.draw(this.renderer, this.nameplateDepth.getTexture(), this.camera.reversedDepth);
         this.radar.render(this.renderer, this.camera, this.player.position, tmpSize.x, tmpSize.y);
 
         // // Apply Native Bloom (Sun/Glow) -> Screen
@@ -3177,6 +3178,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
     }
 
+    public prepareStaticMeshBounds(root: THREE.Object3D) { return this.meshBounds.prepare(root); }
+
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
         this.shadowProjector.attachReceivers(sector.staticMeshGroup);
@@ -3360,6 +3363,8 @@ function releaseResource(resource: Disposable_T): void {
 }
 
 function collectMaterialResources(material: THREE.Material, target: Set<Disposable_T>) {
+    if (target.has(material)) return;
+
     // Uniform textures may be nested under transform chains and sprite-sheet slots.
     const textures = new Set<THREE.Texture>();
 

@@ -1,4 +1,4 @@
-import { CustomBlending, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, Vector3, ZeroFactor, type Vector4, type Event, type Camera, type Scene, type WebGLRenderer } from "three";
+import { CustomBlending, StreamDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, OneFactor, PlaneGeometry, Vector3, ZeroFactor, type Vector4, type Event, type Camera, type Scene, type WebGLRenderer } from "three";
 import InstancedParticleMaterial from "../../materials/particle-material/instanced-particle-material";
 
 // shared per-vertex quad data - only instance attributes differ per emitter
@@ -27,15 +27,15 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
 
         super(geometry, material);
 
-        this.positionAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
-        this.scaleAttr = new InstancedBufferAttribute(new Float32Array(capacity * 2), 2).setUsage(DynamicDrawUsage);
-        this.spinAttr = new InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(DynamicDrawUsage);
-        this.colorAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(DynamicDrawUsage);
+        this.positionAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(StreamDrawUsage);
+        this.scaleAttr = new InstancedBufferAttribute(new Float32Array(capacity * 2), 2).setUsage(StreamDrawUsage);
+        this.spinAttr = new InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(StreamDrawUsage);
+        this.colorAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(StreamDrawUsage);
 
         // default to the identity cell - an all-zero buffer would collapse every UV sample onto one texel
         const uvData = new Float32Array(capacity * 4);
         for (let i = 0; i < capacity; i++) { uvData[i * 4 + 2] = 1; uvData[i * 4 + 3] = 1; }
-        this.uvAttr = new InstancedBufferAttribute(uvData, 4).setUsage(DynamicDrawUsage);
+        this.uvAttr = new InstancedBufferAttribute(uvData, 4).setUsage(StreamDrawUsage);
 
         geometry.setAttribute("instancePosition", this.positionAttr);
         geometry.setAttribute("instanceScale", this.scaleAttr);
@@ -43,11 +43,11 @@ export class InstancedSpriteMesh extends Mesh<InstancedBufferGeometry, Instanced
         geometry.setAttribute("instanceColor", this.colorAttr);
         geometry.setAttribute("instanceUV", this.uvAttr);
         if (material.defines.USE_SUBDIVISION_BLEND !== undefined) {
-            this.uvBlendAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
+            this.uvBlendAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(StreamDrawUsage);
             geometry.setAttribute("instanceUVBlend", this.uvBlendAttr);
         }
         if (material.defines.USE_VELOCITY_UP !== undefined) {
-            this.directionAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
+            this.directionAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(StreamDrawUsage);
             geometry.setAttribute("instanceDirection", this.directionAttr);
         }
 

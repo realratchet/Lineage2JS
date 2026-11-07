@@ -43,6 +43,7 @@ import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T } from "@l2js/engine/
 const cacheGeometries = new WeakMap<IGeometryDecodeInfo, THREE.BufferGeometry>();
 const cacheGeometriesByName = new Map<string, WeakRef<THREE.BufferGeometry>>();
 const cacheAnimationSets = new Map<string, Record<string, AnimationClip>>();
+const cacheAnimationBuffers = new WeakSet<IKeyframeDecodeInfo_T[]>();
 const tmpScriptLocation = new Vector3();
 
 
@@ -541,6 +542,19 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
 
     (Array.isArray(materials) ? materials : [materials]).forEach(m => {
         if (!m) return;
+        const material = m as any;
+        if (sectionInfo.isOutdoor && material.uniforms?.ambient?.value?.color && material.defines) {
+            if (material.defines.USE_LIGHTMAP !== undefined) {
+                if (!sectionInfo.isUnlit && material.defines.USE_BSP_AMBIENT === undefined) {
+                    material.defines.USE_BSP_AMBIENT = "";
+                    material.defines.USE_AMBIENT = "";
+                    material.needsUpdate = true;
+                }
+            } else if (material.defines.USE_AMBIENT === undefined) {
+                material.defines.USE_AMBIENT = "";
+                material.needsUpdate = true;
+            }
+        }
         if (sectionInfo.depthWrite !== undefined) m.depthWrite = sectionInfo.depthWrite;
         if (sectionInfo.depthTest !== undefined) m.depthTest = sectionInfo.depthTest;
         if (sectionInfo.side !== undefined) m.side = sectionInfo.side;
@@ -997,6 +1011,24 @@ function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
 }
 
 function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], sequence: IAnimationSequenceDecodeInfo, notifications: IAnimationNotifyDecodeInfo[], skinNotify: ISkinNotifyDecodeInfo) {
+    if (!cacheAnimationBuffers.has(info)) {
+        let size = 0, offset = 0;
+        for (const track of info) size += track.times.length + track.values.length;
+        const buffer = new ArrayBuffer(size * 4);
+
+        for (const track of info) {
+            const times = new Float32Array(buffer, offset, track.times.length);
+            offset += times.byteLength;
+            const values = new Float32Array(buffer, offset, track.values.length);
+            offset += values.byteLength;
+            times.set(track.times);
+            values.set(track.values);
+            track.times = times;
+            track.values = values;
+        }
+        cacheAnimationBuffers.add(info);
+    }
+
     const tracks = info.map(info => {
         let KeyframeTrackConstructor: typeof KeyframeTrack;
 

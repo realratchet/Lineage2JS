@@ -385,6 +385,11 @@
 
 #if defined(USE_PROJECTOR_RECEIVER) && !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
     uniform mat4 shadowMatrix;
+#ifdef NUM_PROJECTOR_INSTANCES
+uniform mat4 shadowMatrices[NUM_PROJECTOR_INSTANCES];
+flat varying int vShadowInstance;
+#define shadowMatrix shadowMatrices[gl_InstanceID]
+#endif
     varying vec4 vShadowCoord;
 #endif
 
@@ -750,6 +755,9 @@ void main() {
         vLitColor = clamp( actorLighting, 0.0, 1.0 );
     #endif
     #if defined(USE_PROJECTOR_RECEIVER) && !defined(USE_ACTOR_LIGHTS) && !defined(NO_SHADOW_RECEIVE)
+        #ifdef NUM_PROJECTOR_INSTANCES
+        vShadowInstance = gl_InstanceID;
+        #endif
         vShadowCoord = shadowMatrix * modelMatrix * vec4( transformed, 1.0 );
     #ifdef USE_PROJECTOR_RECEIVER
         vProjectorNormal = normalize(normalMatrix * normal);

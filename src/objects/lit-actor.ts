@@ -1,7 +1,7 @@
 
 import DynamicLight from "./dynamic-light";
 import { SectorObject } from "./zone-object";
-import { Box3, BufferAttribute, Color, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
+import { Box3, BufferAttribute, Color, DynamicDrawUsage, Matrix4, Vector2, Vector3, WebGLRenderer, type InterleavedBufferAttribute } from "three";
 import { cancelStaticLighting, computeStaticLighting } from "../rendering/static-lighting";
 import SortedIndexBuffer from "../rendering/sorted-index-buffer";
 import VertexLighting, { getAffectedVertices } from "../rendering/vertex-lighting";
@@ -24,6 +24,8 @@ const arrPermeatingLights: string[] = [];
 const tmpHardwareBox = new Box3();
 
 type AugmentedLight_T = { light: string, flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
+type LightSets_T = { all: AugmentedLight_T[], staticScene: AugmentedLight_T[], staticEnv: AugmentedLight_T[], dynamicScene: AugmentedLight_T[], dynamicEnv: AugmentedLight_T[] };
+
 export type BatchRenderGroup_T = { start: number, count: number, materialIndex: number, bounds: Box3, boundsStart: number, boundsCount: number, position: BufferAttribute | InterleavedBufferAttribute, index: BufferAttribute, positionVersion: number, indexVersion: number };
 
 export class LitActorMesh extends GameMesh {
@@ -107,7 +109,7 @@ export class LitActorMesh extends GameMesh {
                     new Uint8ClampedArray(attrPositions.count * 3),
                     3,
                     true
-                )
+                ).setUsage(DynamicDrawUsage)
             );
 
             const sunAffected = new Uint8Array(attrPositions.count);
@@ -129,7 +131,7 @@ export class LitActorMesh extends GameMesh {
             if (actor.isSunAffected)
                 arrSunAffected.fill(255, actor.startVertex, actor.startVertex + actor.count);
 
-        if (perActorAmbient.some(actor => actor.hardware)) this.geometry.setAttribute("hardwareSun", new BufferAttribute(new Float32Array(arrSunAffected.length), 1));
+        if (perActorAmbient.some(actor => actor.hardware)) this.geometry.setAttribute("hardwareSun", new BufferAttribute(new Float32Array(arrSunAffected.length), 1).setUsage(DynamicDrawUsage));
     }
 
     protected perVertexGlow?: Float32Array;
@@ -327,14 +329,24 @@ export class LitActorMesh extends GameMesh {
 
     public lightingGate: boolean = true; // set false by RenderManager while a sector's higher-priority tiers are still loading
 
-    protected lightSets?: {
-        all: AugmentedLight_T[],
-        staticScene: AugmentedLight_T[], staticEnv: AugmentedLight_T[],
-        dynamicScene: AugmentedLight_T[], dynamicEnv: AugmentedLight_T[]
-    };
+    protected lightSets?: LightSets_T;
+    protected pendingLightSets?: LightSets_T;
+    protected pendingDynamicLights?: boolean[];
 
     protected resolveLightSets(sector: SectorObject) {
         if (this.lightSets) return this.lightSets;
+
+        if (this.pendingLightSets) {
+            let unchanged = true;
+            const lights = this.pendingLightSets.all;
+
+            for (let i = 0; i < lights.length; i++) {
+                const light = sector.lights[lights[i].light];
+                if (light !== lights[i].instance || !!light && (light.isDynamic || light.isTimeBased) !== this.pendingDynamicLights[i]) { unchanged = false; break; }
+            }
+
+            if (unchanged) return this.pendingLightSets;
+        }
 
         const scene: AugmentedLight_T[] = this.lightInfo?.scene.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
         const environment: AugmentedLight_T[] = this.lightInfo?.environment.map(l => ({ ...l, instance: sector.lights[l.light] })) || [];
@@ -350,7 +362,14 @@ export class LitActorMesh extends GameMesh {
             dynamicEnv: environment.filter(isDynamic)
         };
 
-        if (sets.all.every(l => l.instance)) this.lightSets = sets;
+        if (sets.all.every(l => l.instance)) {
+            this.lightSets = sets;
+            this.pendingLightSets = undefined;
+            this.pendingDynamicLights = undefined;
+        } else {
+            this.pendingLightSets = sets;
+            this.pendingDynamicLights = sets.all.map(l => !!l.instance && (l.instance.isDynamic || l.instance.isTimeBased));
+        }
 
         return sets;
     }

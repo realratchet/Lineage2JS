@@ -79,7 +79,7 @@ export class NetworkCombat {
         return { targetObjectId, actionTarget: target, damage, isMiss: !!(flags & GamePackets.AttackFlags_T.MISS), isCritical: !!(flags & GamePackets.AttackFlags_T.CRITICAL), isShieldDefense: !!(flags & GamePackets.AttackFlags_T.SHIELD), isSpirit: !!(flags & GamePackets.AttackFlags_T.SOULSHOT), soulshotGrade: flags & GamePackets.AttackFlags_T.GRADE };
     }
 
-    protected startServerAttack(attacker: NetObject_T, hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T) {
+    public startServerAttack(attacker: NetObject_T, hits: readonly NAttackActionParam_T[], position: GamePackets.Location_T) {
         if (!attacker.actor || !hits[0].actionTarget || attacker.actor === hits[0].actionTarget || attacker.isDead) return;
 
         attacker.pendingAttack = null;
@@ -152,7 +152,7 @@ export class NetworkCombat {
         this.startServerSkill(caster, targetObjectId, id, level, hitTime / 1000, position, isTransient, receivedTime);
     }
 
-    protected startServerSkill(caster: NetObject_T, targetObjectId: number, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
+    public startServerSkill(caster: NetObject_T, targetObjectId: number, id: number, level: number, hitTime: number, position: GamePackets.Location_T, isTransient: boolean, receivedTime: number, associatedObjectIds: readonly number[] = []) {
         if (caster.isDead) return;
 
         const skill: NetSkill_T = { id, level, hitTime, receivedTime, associatedActors: [], associatedObjectIds: [...associatedObjectIds] }; // OnReceiveMagicSkillUse 0x7507f7..0x750831.

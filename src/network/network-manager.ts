@@ -1,3 +1,4 @@
+import PawnSimulation from "./pawn-simulation";
 import NetworkSession, { GMTransferPhase_T } from "./network-session";
 import NetworkActors, { type NetObject_T } from "./network-actors";
 import NetworkMovement, { tmpVehicleOrigin } from "./network-movement";
@@ -38,6 +39,7 @@ const STOP_SNAP_DISTANCE = 32;
 export class NetworkManager implements IEngineComponent<GameManager> {
     public readonly session = new NetworkSession(this);
     public readonly actors = new NetworkActors(this);
+    public readonly pawnSimulation = new PawnSimulation(this);
     public readonly movement = new NetworkMovement(this);
     public readonly monRace = new NetworkMonRace(this);
     public readonly combat = new NetworkCombat(this);
@@ -471,6 +473,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     }
 
     public leaveWorld() {
+        this.pawnSimulation.clear();
         this.movement.cancelTeleport();
         const render = this.manGame.getComponent("render");
 

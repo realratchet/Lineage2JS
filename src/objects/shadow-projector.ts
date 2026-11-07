@@ -1,4 +1,4 @@
-import { Box3, Camera, Color, CubeTexture, CustomBlending, DataTexture, FramebufferTexture, FrontSide, LinearFilter, LinearMipmapLinearFilter, Material, Matrix3, Matrix4, Mesh, MeshBasicMaterial, NoBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PerspectiveCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, SrcAlphaFactor, Texture, Uniform, Vector2, Vector3, WebGLRenderTarget, ZeroFactor } from "three";
+import { Box3, Camera, Color, CubeTexture, CustomBlending, DataTexture, FramebufferTexture, FrontSide, InstancedBufferGeometry, LinearFilter, LinearMipmapLinearFilter, Material, Matrix3, Matrix4, Mesh, MeshBasicMaterial, NoBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PerspectiveCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, SrcAlphaFactor, Texture, Uniform, Vector2, Vector3, WebGLRenderTarget, ZeroFactor } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 import { sinRotator } from "../assets/unreal/utils/rotator";
 import type BaseActor from "../base-actor";
@@ -42,7 +42,7 @@ void main() {
 type PawnProjector_T = { actor: BaseActor, origin: Vector3, matrix: Matrix4, view: Matrix4, projection: Matrix4, normals: Matrix3, bounds: Box3, depth: Vector2, fov: number, slot: number, revision: number, frame: number };
 type ShadowTarget_T = { target: WebGLRenderTarget, revision: number };
 type ShadowTexture_T = { texture: FramebufferTexture, frame: number };
-type ReceiverMaterial_T = { material: ShaderMaterial, version: number };
+type ReceiverMaterial_T = { material: ShaderMaterial, version: number, instanced?: ShaderMaterial };
 type ReceiverBounds_T = { geometry: THREE.BufferGeometry, position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, index: THREE.BufferAttribute, positionVersion: number, indexVersion: number, start: number, count: number, bounds: Box3 };
 
 const tmpFocusPos = new Vector3();
@@ -62,6 +62,7 @@ const arrHiddenAttachments: Object3D[] = [];
 const arrTraverse: Object3D[] = [];
 const arrPawnMeshes: PawnMesh[] = [];
 const arrPausedSkeletons: LocalSpaceSkeleton[] = [];
+const arrReceiverProjectors: number[] = [];
 
 export class ShadowProjector {
     public readonly target = new WebGLRenderTarget(SHADOW_SIZE, SHADOW_SIZE, { minFilter: LinearFilter, magFilter: LinearFilter, format: RGBAFormat, depthBuffer: false });
@@ -233,11 +234,28 @@ export class ShadowProjector {
         const bounds = group && !("USE_SWAY" in source.defines) && !(mesh as any).isSkinnedMesh && !mesh.morphTargetInfluences ? this.getReceiverBounds(mesh.geometry, group) : mesh.geometry.boundingBox;
         tmpReceiverBounds.copy(bounds).applyMatrix4(mesh.matrixWorld);
         let material: ShaderMaterial = null;
+        let drawInstances = false, count = 0, projectorCount = 0;
         for (let i = 0; i < this.projectors.length; i++) {
-            const projector = this.projectors[i];
-            if (!projector.bounds.intersectsBox(tmpReceiverBounds)) continue;
+            if (this.projectors[i].bounds.intersectsBox(tmpReceiverBounds)) arrReceiverProjectors[projectorCount++] = i;
+        }
+        const instanced = projectorCount > 1 && !(mesh as any).isInstancedMesh && !(mesh as any).isBatchedMesh && !(mesh.geometry as InstancedBufferGeometry).isInstancedBufferGeometry;
+        for (let j = 0; j < projectorCount; j++) {
+            const i = arrReceiverProjectors[j], projector = this.projectors[i];
             const texture = this.getShadowTexture(renderer, projector, i);
-            if (!material) material = this.getReceiverMaterial(source);
+            if (!material) {
+                material = this.getReceiverMaterial(source, instanced ? renderer : null);
+                drawInstances = "NUM_PROJECTOR_INSTANCES" in material.defines;
+            }
+            if (drawInstances) {
+                const uniforms = material.uniforms;
+                uniforms.shadowMaps.value[count] = texture;
+                projector.matrix.toArray(uniforms.shadowMatrices.value, count * 16);
+                tmpNormalMatrix.setFromMatrix4(camera.matrixWorld);
+                tmpNormalMatrix.multiplyMatrices(projector.normals, tmpNormalMatrix).toArray(uniforms.shadowNormalMatrices.value, count * 9);
+                projector.depth.toArray(uniforms.shadowDepthRanges.value, count * 2);
+                if (++count === 4) { this.drawInstances(renderer, scene, camera, mesh, material, group, count); count = 0; }
+                continue;
+            }
             material.uniforms.shadowMap.value = texture;
             material.uniforms.shadowMatrix.value = projector.matrix;
             material.uniforms.shadowDepthRange.value = projector.depth;
@@ -246,6 +264,19 @@ export class ShadowProjector {
             material.uniformsNeedUpdate = true;
             renderer.renderBufferDirect(camera, scene, mesh.geometry, material, mesh, group);
         }
+        if (count) this.drawInstances(renderer, scene, camera, mesh, material, group, count);
+    }
+
+    protected drawInstances(renderer: THREE.WebGLRenderer, scene: Scene, camera: Camera, mesh: Mesh, material: ShaderMaterial, group: THREE.BufferGeometry["groups"][number], count: number): void {
+        // Keep receiver VAOs under the source geometry's disposal.
+        const maps = material.uniforms.shadowMaps.value as Texture[], geometry = mesh.geometry as InstancedBufferGeometry;
+        const instanced = geometry.isInstancedBufferGeometry, previousCount = geometry.instanceCount;
+        for (let i = count; i < 4; i++) maps[i] = maps[count - 1];
+        (geometry as any).isInstancedBufferGeometry = true;
+        geometry.instanceCount = count;
+        material.uniformsNeedUpdate = true;
+        try { renderer.renderBufferDirect(camera, scene, geometry, material, mesh, group); }
+        finally { (geometry as any).isInstancedBufferGeometry = instanced; geometry.instanceCount = previousCount; }
     }
 
     public getReceiverBounds(geometry: THREE.BufferGeometry, group: THREE.BufferGeometry["groups"][number]): Box3 {
@@ -267,9 +298,13 @@ export class ShadowProjector {
         return bounds;
     }
 
-    protected getReceiverMaterial(source: ShaderMaterial): ShaderMaterial {
+    protected getReceiverMaterial(source: ShaderMaterial, renderer: THREE.WebGLRenderer = null): ShaderMaterial {
         const cached = this.cacheReceivers.get(source);
-        if (cached && cached.version === source.version) return cached.material;
+        if (cached && cached.version === source.version) {
+            if (!renderer) return cached.material;
+            if (cached.instanced === undefined) cached.instanced = this.createInstancedReceiver(cached.material, renderer.capabilities.maxTextures);
+            return cached.instanced || cached.material;
+        }
         if (cached) cached.material.dispose();
         // Trace7334112 presents X8R8G8B8; preserve canvas coverage while blending shadow RGB.
         const material = new ShaderMaterial({ vertexShader: source.vertexShader, fragmentShader: source.fragmentShader, defines: { ...source.defines, USE_PROJECTOR_RECEIVER: "" }, uniforms: { ...source.uniforms, shadowMatrix: new Uniform(new Matrix4()), shadowMap: new Uniform(null), shadowNormalMatrix: new Uniform(new Matrix3()), shadowDepthRange: new Uniform(new Vector2()), shadowAttenuation: new Uniform(this.attenuation) }, side: FrontSide, transparent: true, depthWrite: false, blending: CustomBlending, blendSrc: SrcAlphaFactor, blendSrcAlpha: ZeroFactor, blendDst: OneMinusSrcAlphaFactor, blendDstAlpha: OneFactor });
@@ -280,10 +315,26 @@ export class ShadowProjector {
         delete material.defines.USE_LIT_ATTRIBUTES;
         material.vertexColors = source.vertexColors;
         const dispose = () => material.dispose();
+        const entry: ReceiverMaterial_T = { material, version: source.version };
         source.addEventListener("dispose", dispose);
-        material.addEventListener("dispose", () => { source.removeEventListener("dispose", dispose); this.receiverMaterials.delete(material); this.cacheReceivers.delete(source); });
+        material.addEventListener("dispose", () => { source.removeEventListener("dispose", dispose); this.receiverMaterials.delete(material); this.cacheReceivers.delete(source); if (entry.instanced) entry.instanced.dispose(); });
         this.receiverMaterials.add(material);
-        this.cacheReceivers.set(source, { material, version: source.version });
+        this.cacheReceivers.set(source, entry);
+        return this.getReceiverMaterial(source, renderer);
+    }
+
+    protected createInstancedReceiver(source: ShaderMaterial, maxTextures: number): ShaderMaterial {
+        let textures = 4;
+        for (const uniform of Object.values(source.uniforms)) {
+            const value = uniform.value;
+            if (value && value.isTexture) textures++;
+            else if (Array.isArray(value)) for (const texture of value) if (texture && texture.isTexture) textures++;
+        }
+        if (textures > maxTextures) return null;
+        const material = source.clone();
+        material.defines.NUM_PROJECTOR_INSTANCES = 4;
+        material.uniforms = { ...source.uniforms, shadowMatrices: new Uniform(new Float32Array(64)), shadowNormalMatrices: new Uniform(new Float32Array(36)), shadowDepthRanges: new Uniform(new Float32Array(8)), shadowMaps: new Uniform(new Array(4)) };
+        delete material.uniforms.shadowMatrix; delete material.uniforms.shadowNormalMatrix; delete material.uniforms.shadowDepthRange; delete material.uniforms.shadowMap;
         return material;
     }
 

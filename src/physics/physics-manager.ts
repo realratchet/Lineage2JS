@@ -3,7 +3,6 @@ import RAPIER from "@dimforge/rapier3d";
 import { Object3D, Quaternion, Vector3 } from "three";
 import { IEngineComponent, IObject } from "../game/components";
 import CollisionWorld, { CheckResult_T, CollisionQuery_T, RayCheckResult_T, PhysicsVolumeHit_T, ActorLineHit_T, CollisionActor_T } from "./collision-world";
-import Player from "../player";
 import { ColliderComponent, IPhysicsComponent } from "./components/physics-component";
 import NpcSimulationComponent from "./components/npc-simulation-component";
 import PawnMovementComponent from "./components/pawn-movement-component";
@@ -19,12 +18,12 @@ import type MusicVolume from "../objects/music-volume";
 import type GameManager from "../game/game-manager";
 import type { ICollidable } from "../objects/objects";
 import type { SectorObject } from "../objects/zone-object";
-import type { ICharacterGroup, ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import type { default as UnScriptVM, ScriptHost_T, ScriptValue_T } from "../ue-script/vm";
 import type RenderManager from "../rendering/render-manager";
 import type TransformComponent from "../objects/components/transform-component";
 import Rotator from "../utils/rotator";
 import { EPhysics_T } from "../assets/unreal/un-aactor";
+import BaseEmitter from "../objects/emitters/base-emitter";
 import type { Vector3Arr } from "@l2js/engine";
 
 const arrMoverPawns: BaseActor[] = [];
@@ -52,11 +51,9 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     protected static readonly PHYSICS_HZ = 30;
     protected static readonly PHYSICS_INTERVAL_MS = 1000 / PhysicsManager.PHYSICS_HZ;
     protected static readonly MAX_PHYSICS_TICKS = 8;
-    protected static readonly PAWN_DECODE_CONCURRENCY = 3;
     protected manGame: GameManager;
 
     protected readonly simEmitters = new EmitterSimulation();
-    protected simCharGroups: ICharacterGroup[] = null;
 
     protected readonly physicsWorld = new RAPIER.World(new Vector3(0, 0, -9.8 * 100));
     protected readonly collisionWorld = new CollisionWorld();
@@ -87,9 +84,14 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         let physicsTicks = 0;
 
-        while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
-            this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), manRender);
-            this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
+        BaseEmitter.beginWarmupFrame();
+        try {
+            while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
+                this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), manRender);
+                this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
+            }
+        } finally {
+            BaseEmitter.endWarmupFrame();
         }
 
         if (physicsTicks > 0) this.simEmitters.syncParticles();
@@ -136,44 +138,11 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         return true;
     }
 
-    public async simulatePawns(count: number = NpcSimulationComponent.DEFAULT_COUNT): Promise<void> {
-        const this_ = this, manAsset = this.manGame.getComponent("asset"), manRender = this.manGame.getComponent("render");
-        const groups = this.simCharGroups || (this.simCharGroups = await manAsset.getCharGroups());
-        const arrWorkers: Promise<void>[] = [];
-        let next = 0;
-
-        // Ten character decodes at once starve the fucking worker pool.
-        async function worker(): Promise<void> {
-            while (next < count) {
-                const index = next++;
-                const group = groups[Math.floor(Math.random() * groups.length)];
-                const hair = group.hairStyles[Math.floor(Math.random() * group.hairStyles.length)];
-                const colours = group.hairColours[hair];
-                const armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 };
-                const pawn = new Player(manRender);
-
-                for (const slot of Object.keys(armor) as (keyof ICharacterArmorSelection)[]) {
-                    const items = group.armor[slot];
-
-                    armor[slot] = items.length > 0 && Math.random() < 0.75 ? items[Math.floor(Math.random() * items.length)].id : 0;
-                }
-
-                pawn.name = `SimPawn${index}`;
-
-                await manAsset.loadCharacter(manRender, group.index, Math.floor(Math.random() * group.faceVariants), hair, colours[Math.floor(Math.random() * colours.length)], armor, pawn);
-
-                manRender.scene.add(pawn);
-                pawn.position.copy(this_.manGame.getComponent("input").getOrbitTarget());
-                pawn.updateMatrixWorld(true);
-                this_.addPawn(pawn, this_.manGame.getCurrentTime() + NpcSimulationComponent.LIFETIME, 0, true);
-                manRender.needsUpdate = true;
-            }
-        }
-
-        for (let i = 0; i < PhysicsManager.PAWN_DECODE_CONCURRENCY; i++) arrWorkers.push(worker());
-
-        await Promise.all(arrWorkers);
+    public async simulatePawns(count: number = 100): Promise<void> {
+        await this.manGame.getComponent("network").pawnSimulation.spawn(count, this.manGame.getComponent("input").getOrbitTarget());
     }
+
+    public clearSimulatedPawns(): void { this.manGame.getComponent("network").pawnSimulation.clear(); }
 
     public getColliders(): RAPIER.Collider[] {
         const colliders: RAPIER.Collider[] = [];
@@ -753,7 +722,10 @@ class EmitterSimulation {
 
     public static setWarmupGate(root: Object3D, allowed: boolean): void {
         root.traverse(child => {
-            if ((child as any).particlePool) (child as any).warmupGate = allowed;
+            if ((child as any).particlePool) {
+                (child as any).warmupGate = allowed;
+                (child as any).budgetWarmup = true;
+            }
         });
     }
 

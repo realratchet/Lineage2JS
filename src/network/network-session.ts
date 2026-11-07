@@ -50,12 +50,13 @@ export class NetworkSession {
         asset.setStreaming(render, false);
         setLoadingProgress(0.1, "Loading interface and game text…", true);
 
-        if (!this.network.ui) {
-            this.network.ui = this.network.getParent().getComponent("gui");
-            this.network.ui.create();
+        if (!this.lobby) {
+            if (!this.network.ui) {
+                this.network.ui = this.network.getParent().getComponent("gui");
+                this.network.ui.create();
+                await this.network.ui.setStrings(await asset.getGameStrings());
+            }
             this.lobby = new L2Lobby(this.network.getParent(), (appearance, actor) => this.network.actors.loadAppearance(appearance, actor));
-
-            await this.network.ui.setStrings(await asset.getGameStrings());
 
             void this.network.actors.loadNpcNames();
             void this.network.community.loadRadar();

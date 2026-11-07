@@ -12,6 +12,7 @@ import { beginLoadingProfile, assignLoadingProfile, updateLoadingProfile, finish
 
 const cacheScript = { scriptClasses: new Map<string, any>(), scriptFunctions: new Map<string, any>(), scriptStates: new Map<string, any>(), scriptObjects: new Map<string, any>() };
 type SharedSound_T = { key: string, data: Uint8Array | Blob, mimeType: string, refs: number };
+type CharacterAnimationSet_T = { library: WeakRef<DecodeLibrary>, pending: Promise<void> };
 const cacheSounds = new Map<string, SharedSound_T>();
 const cacheTextureBuffers = new Map<string, ArrayBuffer>();
 const cacheTextureIds = new WeakMap<ArrayBuffer, Set<string>>();
@@ -112,7 +113,9 @@ function shareSounds(library: any): void {
     for (const [name, sound] of library.soundBlobCache) {
         const id = library.sharedSounds[name];
 
-        if (!cacheSounds.has(id)) cacheSounds.set(id, { key: id, data: sound.data.slice(), mimeType: sound.mimeType, refs: 0 });
+        const data = sound.data instanceof ArrayBuffer ? new Uint8Array(sound.data) : sound.data;
+
+        if (!cacheSounds.has(id)) cacheSounds.set(id, { key: id, data: data.slice(), mimeType: sound.mimeType, refs: 0 });
     }
 
     for (const [name, id] of Object.entries(library.sharedSounds) as [string, string][]) {
@@ -221,7 +224,7 @@ export class DecodeWorkerClient {
     protected loadingWorker: DecodeWorkerClient = null;
     protected loadingSectorCount = 0;
     protected isWorldLoading = false;
-    protected characterAnimationSets = new Set<number>();
+    protected characterAnimationSets = new Map<number, CharacterAnimationSet_T>();
     protected npcAnimationSets = new Set<string>();
     protected readonly cacheNpcDefinitions = new Map<number, INpcDefinition>();
     protected cacheScriptLocalizations: Map<string, Map<string, LocalizationProperty_T[]>> = null;
@@ -584,12 +587,39 @@ export class DecodeWorkerClient {
     }
 
     public async decodeCharacter(settings: LoadSettings_T, charIndex: number = 1, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: ICharacterEquipment = null): Promise<DecodeLibrary> {
-        const includeAnimations = !this.characterAnimationSets.has(charIndex);
+        for (;;) {
+            const cached = this.characterAnimationSets.get(charIndex);
+            if (cached) {
+                const source = cached.library && cached.library.deref();
+                if (source) {
+                    const library = await this.decodeCharacterLibrary(settings, charIndex, faceVariant, hairVariant, hairColour, armor, false, equipment);
+                    const info = library.pawnActors[0], animations = source.pawnActors[0];
+                    if (!info.animationSet || info.animationSet !== animations.animationSet) throw new Error(`Character '${charIndex}' animation set does not match its source.`);
+                    info.animations = animations.animations;
+                    info.animationSequences = animations.animationSequences;
+                    library.sourceLibrary = source;
+                    return library;
+                }
+                if (!cached.library) { await cached.pending; continue; }
+            }
 
+            let complete: () => void;
+            const entry: CharacterAnimationSet_T = { library: null, pending: new Promise(resolve => complete = resolve) };
+            this.characterAnimationSets.set(charIndex, entry);
+            try {
+                const library = await this.decodeCharacterLibrary(settings, charIndex, faceVariant, hairVariant, hairColour, armor, true, equipment);
+                entry.library = new WeakRef(library);
+                return library;
+            } catch (error) {
+                this.characterAnimationSets.delete(charIndex);
+                throw error;
+            } finally { complete(); }
+        }
+    }
+
+    protected async decodeCharacterLibrary(settings: LoadSettings_T, charIndex: number, faceVariant: number, hairVariant: number, hairColour: number, armor: ICharacterArmorSelection, includeAnimations: boolean, equipment: ICharacterEquipment): Promise<DecodeLibrary> {
         if (this.mainThreadEngine) {
             const library = await this.mainThreadEngine.decodeCharacter(settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment);
-
-            this.characterAnimationSets.add(charIndex);
 
             return Object.setPrototypeOf(library, DecodeLibrary.prototype) as DecodeLibrary;
         }
@@ -600,8 +630,6 @@ export class DecodeWorkerClient {
 
 
         const library = await this.dispatch(workerIndex, { type: "decodeCharacter", settings, charIndex, faceVariant, hairVariant, hairColour, armor, includeAnimations, equipment });
-
-        this.characterAnimationSets.add(charIndex);
 
         return library;
     }

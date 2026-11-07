@@ -1,5 +1,5 @@
 import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
-import { BufferAttribute, BufferGeometry, Mesh, Quaternion, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Mesh, Quaternion, StreamDrawUsage, Vector3 } from "three";
 import BaseEmitter from "./base-emitter";
 import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 
@@ -104,8 +104,8 @@ export class BeamEmitter extends BaseEmitter {
         const vertexCount = 2 * hf * sheets;
         const geometry = new BufferGeometry();
 
-        geometry.setAttribute("position", new BufferAttribute(new Float32Array(vertexCount * 3), 3));
-        geometry.setAttribute("uv", new BufferAttribute(new Float32Array(vertexCount * 2), 2));
+        geometry.setAttribute("position", new BufferAttribute(new Float32Array(vertexCount * 3), 3).setUsage(StreamDrawUsage));
+        geometry.setAttribute("uv", new BufferAttribute(new Float32Array(vertexCount * 2), 2).setUsage(StreamDrawUsage));
 
         // uvs never change: u = t * UScale (filled at spawn), v alternates 0 / VScale
         const uvs = geometry.getAttribute("uv").array as Float32Array;

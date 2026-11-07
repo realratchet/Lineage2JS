@@ -152,6 +152,11 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
         }];
 
 
+        if (!isWorker) rules.push({
+            test: /three[\\/]src[\\/]renderers[\\/]webgl[\\/]WebGLBindingStates\.js$/,
+            loader: path.resolve(__dirname, "webgl-binding-states-loader.js")
+        });
+
         rules.unshift({
             test: /\.vue$/,
             exclude: /(node_modules|submodules)/,

@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Matrix4, Mesh, Quaternion, Vector3 } from "three";
+import { BufferAttribute, BufferGeometry, Matrix4, Mesh, Quaternion, StreamDrawUsage, Vector3 } from "three";
 import ParticleMaterial, { AnimatedParticleMaterial, type ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import BaseEmitter, { EParticleFlags_T } from "./base-emitter";
 import { getPawnRotation } from "../../utils/rotator";
@@ -62,10 +62,10 @@ export class RibbonEmitter extends BaseEmitter {
         this.points = points;
         this.pointCapacity = capacity;
         const previous = this.ribbonGeometry, geometry = this.ribbonGeometry = new BufferGeometry();
-        geometry.setAttribute("position", new BufferAttribute(new Float32Array((capacity - 1) * 6), 3));
-        geometry.setAttribute("uv", new BufferAttribute(new Float32Array((capacity - 1) * 4), 2));
+        geometry.setAttribute("position", new BufferAttribute(new Float32Array((capacity - 1) * 6), 3).setUsage(StreamDrawUsage));
+        geometry.setAttribute("uv", new BufferAttribute(new Float32Array((capacity - 1) * 4), 2).setUsage(StreamDrawUsage));
         const indexCount = (capacity - 2) * 6 * this.sheetsUsed;
-        geometry.setIndex(new BufferAttribute(capacity * 2 > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount), 1));
+        geometry.setIndex(new BufferAttribute(capacity * 2 > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount), 1).setUsage(StreamDrawUsage));
         geometry.setDrawRange(0, 0);
         if (previous) {
             this.traverse((child: any) => { if (child.geometry === previous) child.geometry = geometry; });

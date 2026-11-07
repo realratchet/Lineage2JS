@@ -108,6 +108,8 @@ export class NameplateDepth {
         this.copied = true;
     }
 
+    public getTexture() { return this.copied ? this.texture : null; }
+
     public render(scene: Scene, camera: Camera) {
         if (!this.active) return;
 

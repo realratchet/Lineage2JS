@@ -23,6 +23,10 @@ uniform float opacity;
 
 #ifdef USE_PROJECTOR_RECEIVER
 uniform sampler2D shadowMap;
+#ifdef NUM_PROJECTOR_INSTANCES
+uniform sampler2D shadowMaps[NUM_PROJECTOR_INSTANCES];
+flat varying int vShadowInstance;
+#endif
 uniform float shadowDarkness;
 uniform float shadowActive;
 varying vec4 vShadowCoord;

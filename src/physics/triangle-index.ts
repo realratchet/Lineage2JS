@@ -1,6 +1,6 @@
 import type { CollisionTriangleIndex_T } from "../objects/objects";
 
-export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array): CollisionTriangleIndex_T {
+export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array, buildBounds: boolean = false): CollisionTriangleIndex_T {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
     for (let i = 0, len = indices.length; i < len; i++) {
@@ -16,11 +16,22 @@ export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array)
     const cellSizeX = (maxX - minX) / size || 1;
     const cellSizeY = (maxY - minY) / size || 1;
     const counts = new Uint32Array(size * size);
+    const triangleBounds = buildBounds ? new Float32Array(indices.length * 2) : undefined;
 
     for (let i = 0, len = indices.length; i < len; i += 3) {
         const ax = vertices[indices[i] * 3], ay = vertices[indices[i] * 3 + 1];
         const bx = vertices[indices[i + 1] * 3], by = vertices[indices[i + 1] * 3 + 1];
         const cx = vertices[indices[i + 2] * 3], cy = vertices[indices[i + 2] * 3 + 1];
+
+        if (triangleBounds) {
+            const az = vertices[indices[i] * 3 + 2], bz = vertices[indices[i + 1] * 3 + 2], cz = vertices[indices[i + 2] * 3 + 2];
+            triangleBounds[i * 2] = Math.min(ax, bx, cx);
+            triangleBounds[i * 2 + 1] = Math.min(ay, by, cy);
+            triangleBounds[i * 2 + 2] = Math.min(az, bz, cz);
+            triangleBounds[i * 2 + 3] = Math.max(ax, bx, cx);
+            triangleBounds[i * 2 + 4] = Math.max(ay, by, cy);
+            triangleBounds[i * 2 + 5] = Math.max(az, bz, cz);
+        }
         const x0 = Math.max(0, Math.min(size - 1, Math.floor((Math.min(ax, bx, cx) - minX) / cellSizeX)));
         const y0 = Math.max(0, Math.min(size - 1, Math.floor((Math.min(ay, by, cy) - minY) / cellSizeY)));
         const x1 = Math.max(0, Math.min(size - 1, Math.floor((Math.max(ax, bx, cx) - minX) / cellSizeX)));
@@ -54,7 +65,7 @@ export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array)
             }
     }
 
-    return { minX, minY, cellSizeX, cellSizeY, sizeX: size, sizeY: size, offsets, triangleIndices, marks: new Uint32Array(indices.length / 3), queryTag: 0 };
+    return { minX, minY, cellSizeX, cellSizeY, sizeX: size, sizeY: size, offsets, triangleIndices, triangleBounds, marks: new Uint32Array(indices.length / 3), queryTag: 0 };
 }
 
 export default buildTriangleIndex;

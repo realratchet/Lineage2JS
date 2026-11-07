@@ -84,7 +84,7 @@ export class TranslucentDrawList {
     }
 
     // Engine ProcessLeaf 1064a878/1064adcb/1064b29a, ProcessBspNode 106500e0.
-    public sort(camera: Point_T, visibleNodes: Uint8Array, visibleActors: Uint8Array): void {
+    public sort(camera: Point_T, visibleNodes: Uint8Array, visibleActors: Uint8Array, arrVisibleNodes?: number[], arrVisibleActors?: number[]): void {
         this.count = 0;
         if (!this.nodes.length) return;
 
@@ -99,12 +99,16 @@ export class TranslucentDrawList {
         this.stamp = (this.stamp + 1) >>> 0;
         if (!this.stamp) { this.stamps.fill(0); this.active.fill(0); this.stamp = 1; }
 
-        for (let i = 0; i < this.nodes.length; i++) if (visibleNodes[i]) this.markActive(i);
+        for (let i = 0, count = arrVisibleNodes ? arrVisibleNodes.length : this.nodes.length; i < count; i++) {
+            const index = arrVisibleNodes ? arrVisibleNodes[i] : i;
+            if (visibleNodes[index]) this.markActive(index);
+        }
         let visibleActorCount = 0;
-        for (let i = 0; i < this.actors.length; i++) {
-            if (!visibleActors[i]) continue;
+        for (let i = 0, count = arrVisibleActors ? arrVisibleActors.length : this.actors.length; i < count; i++) {
+            const index = arrVisibleActors ? arrVisibleActors[i] : i;
+            if (!visibleActors[index]) continue;
             visibleActorCount++;
-            for (const leaf of this.actors[i].leaves) {
+            for (const leaf of this.actors[index].leaves) {
                 const nodes = this.leafNodes[leaf];
                 if (nodes) for (const node of nodes) this.markActive(node);
             }
@@ -115,13 +119,13 @@ export class TranslucentDrawList {
         this.blockCount = 0;
         const { nodes, actors, next, stack, distances, planeDistances } = this;
         const x = Math.fround(camera.x), y = Math.fround(camera.y), z = Math.fround(camera.z);
-        let top = 2, head = -1;
+        let top = 2, head = -1, remainingActors = visibleActorCount;
         stack[0] = 0; stack[1] = 0;
 
         while (top) {
             const index = stack[--top], kind = stack[--top];
             if (kind === 2) {
-                if (index < 0) continue;
+                if (index < 0 || !remainingActors) continue;
                 const roster = this.leaves[index];
                 if (!roster) continue;
 
@@ -129,6 +133,7 @@ export class TranslucentDrawList {
                     const actorIndex = roster[i];
                     if (!visibleActors[actorIndex] || this.stamps[actorIndex] === this.stamp) continue;
                     this.stamps[actorIndex] = this.stamp;
+                    remainingActors--;
 
                     const actor = actors[actorIndex], center = actor.center;
                     const cx = Math.fround(center.x), cy = Math.fround(center.y), cz = Math.fround(center.z);
@@ -176,6 +181,7 @@ export class TranslucentDrawList {
                             block.minimum = Math.min(block.minimum, item < nodes.length ? -Infinity : distances[item - nodes.length]);
                         }
                     }
+                    if (!remainingActors) break;
                 }
             } else if (kind === 1) {
                 for (let node = index; node >= 0; node = nodes[node].iPlane) {

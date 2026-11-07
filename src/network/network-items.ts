@@ -421,6 +421,8 @@ export class NetworkItems {
             this.skills.set(id, { id, level, isPassive });
         }
         this.network.ui.setSkills([...this.skills.values()]);
+        for (const shortcut of this.shortcuts.values())
+            if (shortcut.type === GamePackets.ShortCutType_T.TYPE_SKILL && shortcut.characterType !== 2 && this.skills.has(shortcut.id)) this.setShortCut(shortcut);
         void this.preloadSkills();
 
         if (this.resolveSkillList) this.resolveSkillList();
@@ -679,6 +681,7 @@ export class NetworkItems {
     protected getShortCutItem(shortcut: GamePackets.ShortCut_T) { return (shortcut.characterType === 2 ? this.petInventory : this.inventory).get(shortcut.id); }
 
     public setShortCut(shortcut: GamePackets.ShortCut_T) {
+        if (shortcut.type === GamePackets.ShortCutType_T.TYPE_SKILL && shortcut.characterType !== 2 && this.skills.has(shortcut.id)) shortcut.level = this.skills.get(shortcut.id).level;
         const item = this.getShortCutItem(shortcut);
 
         if (shortcut.type === GamePackets.ShortCutType_T.TYPE_ITEM && shortcut.characterType === 2 && !item) return;

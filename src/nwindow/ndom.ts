@@ -119,6 +119,7 @@ export class NDomLayer {
     public resize() {
         const canvas = this.manager.canvas;
 
+        this.root.querySelectorAll<HTMLElement>(".ndom-tooltip:popover-open").forEach(tooltip => tooltip.hidePopover());
         this.root.style.width = `${canvas.width}px`;
         this.root.style.height = `${canvas.height}px`;
         this.root.style.transform = `scale(${canvas.cssScale})`;
@@ -202,6 +203,9 @@ export class NDomLayer {
 
     protected activateVisibleWindows(records: MutationRecord[]) {
         if (records.length) this.updateInputAdmission();
+        for (const { target } of records)
+            if (target instanceof HTMLElement && target.hidden)
+                target.querySelectorAll<HTMLElement>(".ndom-tooltip:popover-open").forEach(tooltip => tooltip.hidePopover());
         for (const { target } of records)
             if (target instanceof HTMLElement && target !== this.consoleRoot && (target.parentElement === this.root || target.parentElement === this.consoleRoot) && !target.hidden && !target.classList.contains("ndom-opaque")) this.activate(target);
     }
