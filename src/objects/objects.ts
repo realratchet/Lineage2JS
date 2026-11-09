@@ -57,7 +57,7 @@ export type CollisionTriangleIndex_T = {
     offsets: Uint32Array;
     triangleIndices: Uint32Array;
     triangleBounds?: Float32Array;
-    marks: Uint32Array;
+    marks: Uint16Array | Uint32Array;
     queryTag: number;
 };
 

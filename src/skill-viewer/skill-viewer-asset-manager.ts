@@ -31,6 +31,7 @@ export class SkillViewerAssetManager extends AssetManager {
         const [clientConfig, charGroups] = await Promise.all([this.decodeWorker.getClientConfig(this.loadSettings), this.decodeWorker.getCharGroups(this.loadSettings)]);
 
         this.userConfig = clientConfig.userConfig;
+        manRender.audioManager.setSubsystemConfig(this.userConfig.alAudio);
         this.warriorAnimations = clientConfig.warriorAnimations;
         this.charGroups = charGroups;
 

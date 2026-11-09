@@ -55,6 +55,14 @@ export class MeshEmitter extends BaseEmitter {
         });
     }
 
+    public getLightTexture(): THREE.Texture | null {
+        const settings = this.materials[0] as ParticleMaterialInitSettings_T;
+
+        if ((settings as any).isMaterial) return super.getLightTexture();
+
+        return (settings.type === "sprite" ? settings.sprites[0]?.uniforms.map.texture : settings.map?.uniforms.map.texture) ?? null;
+    }
+
     protected createInstancedMesh(capacity: number): any { return new InstancedMeshParticles(this.geometry, this.createMaterial(this.materials[0] as ParticleMaterialInitSettings_T, true), capacity); }
 
     protected initParticleMesh() {

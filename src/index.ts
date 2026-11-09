@@ -1,13 +1,13 @@
 import "../style/style.scss";
 import startCore from "./core";
 import runSkillViewer from "./skill-viewer/skill-viewer";
-import { setLoadingProgress } from "./loading-progress";
+import { setLoadingProgress, loadingTexts } from "./loading-progress";
 
 const params = new URLSearchParams(location.search);
 
 async function start(): Promise<void> {
     if (params.has("clearCache")) {
-        setLoadingProgress(null, "Clearing cached game files", true, false);
+        setLoadingProgress(null, loadingTexts.clearCache(), true, false);
         const root = await navigator.storage.getDirectory();
         for await (const name of root.keys()) await root.removeEntry(name, { recursive: true });
 

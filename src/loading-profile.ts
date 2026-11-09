@@ -71,7 +71,7 @@ export function getLoadingDetail(): string {
     }
     for (const stage of packages.values()) counts[stage]++;
 
-    return [0, 2, 1, 3, 4, 5].filter(stage => counts[stage]).map(stage => `${labels[stage]} ${counts[stage]}`).join(" | ");
+    return [0, 2, 1, 3, 4, 5].filter(stage => counts[stage]).map(stage => `${labels[stage]} ${counts[stage]}`).join(", ");
 }
 
 function getLoadingLock(row: LoadingProfile_T): string {

@@ -252,12 +252,6 @@ export class NCOptionWnd {
         this.showZoneTitle = layer.checkbox(game, 135, 257, 100, 12, manager.getSysString(SysString_T.ShowRegion));
         this.enterChatting = layer.checkbox(game, 25, 200, 100, 12, manager.getSysString(SysString_T.EnterChat));
         this.oldChatting = layer.checkbox(game, 135, 200, 100, 12, manager.getSysString(SysString_T.AutoCode));
-        const keySecurity = layer.checkbox(game, 25, 217, 100, 12, manager.getSysString(SysString_T.KeySecurity));
-
-        keySecurity.inert = true;
-        keySecurity.setAttribute("aria-disabled", "true");
-        keySecurity.tabIndex = -1;
-        keySecurity.style.opacity = "0.5";
         this.transparencyMode = layer.checkbox(game, 164, 15, 100, 12, manager.getSysString(SysString_T.Transparent));
         this.systemMsgWnd = layer.checkbox(game, 25, 327, 150, 12, manager.getSysString(SysString_T.SystemMessageWindow), () => this.updateSystemMessageControls());
         this.systemMsgWndDamage = layer.checkbox(game, 36, 344, 70, 12, manager.getSysString(SysString_T.Damage));
@@ -308,7 +302,7 @@ export class NCOptionWnd {
         layoutSections(game, [
             [[interfaceText, initialize, this.transparencyMode]],
             [[displayText, names]],
-            [[this.enterChatting, this.oldChatting], [keySecurity], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle]],
+            [[this.enterChatting, this.oldChatting], [this.autoTrackingPawn, this.useColorCursor], [this.arrowMode, this.showZoneTitle]],
             [[this.systemMsgWnd], [this.systemMsgWndDamage, this.systemMsgWndExpendableItem]],
             [[lootText, this.partyLooting.element]]
         ]);

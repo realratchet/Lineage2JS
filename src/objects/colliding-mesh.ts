@@ -4,7 +4,7 @@ import LitActorMesh, { MeshLight_T } from "./lit-actor";
 import { Box3, BufferGeometry, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3 } from "three";
 import MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import { EActorViewType_T } from "../assets/unreal/un-aactor";
-import buildTriangleIndex from "../physics/triangle-index";
+import buildTriangleIndex, { prepareTriangleIndex } from "../physics/triangle-index";
 import { ColliderComponent } from "../physics/components/physics-component";
 import type { IStaticMeshActorDecodeInfo, IStaticMeshCollisionDecodeInfo, StaticMeshBatchInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
@@ -69,7 +69,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
         this.collisionProfile = props.collision && { ...props.collision };
         this.staticMeshCollision = props.staticMeshCollision;
-        this.collisionIndex = props.collisionIndex;
+        this.collisionIndex = prepareTriangleIndex(props.collisionIndex);
 
         if (props.colliderIndices && props.geometry.hasAttribute("position") && props.colliderIndices.length > 0)
             this.makeCollider(props.colliderIndices, props.geometry.getAttribute("position").array as Float32Array);
@@ -80,6 +80,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
     public setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"], source: Uint32Array): void {
         const vertices = this.geometry.getAttribute("position").array as Float32Array;
+        const triangleBounds = this.colliderIndices === source ? this.collisionIndex?.triangleBounds : null;
         let indexOffset = 0;
 
         for (const record of this.collisionActors) if (record.object) record.object.release();
@@ -88,7 +89,9 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         for (const { actor, indexCount, collisionIndex } of actors) {
             if (!Number.isSafeInteger(indexCount) || indexCount <= 0 || indexCount % 3 || !source || indexOffset + indexCount > source.length) throw new Error(`Actor '${actor.name}' has invalid collision triangles.`);
             if (indexCount >= 384 && !collisionIndex) throw new Error(`Actor '${actor.name}' has no collision triangle index.`);
+            prepareTriangleIndex(collisionIndex);
             const indices = source.subarray(indexOffset, indexOffset + indexCount);
+            if (collisionIndex && triangleBounds) collisionIndex.triangleBounds = triangleBounds.subarray(indexOffset * 2, (indexOffset + indexCount) * 2);
 
             const bounds = new Box3();
             let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;

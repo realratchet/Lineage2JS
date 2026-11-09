@@ -1,5 +1,5 @@
 import { loginExitUrl } from "../build-settings";
-import { setLoadingProgress, hideLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "../loading-progress";
 import * as GamePackets from "../network/game-packets";
 import { EDrawType_T } from "../assets/unreal/un-aactor";
 import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
@@ -1481,7 +1481,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     }
 
     public showLoading(isTeleport = false) {
-        setLoadingProgress(0, isTeleport ? "Loading destination…" : "Waiting for world data…");
+        setLoadingProgress(0, isTeleport ? loadingTexts.destination() : loadingTexts.worldData());
         this.prepareWorld();
         this.loadingWnd.setBlack(isTeleport);
         this.show("loading");

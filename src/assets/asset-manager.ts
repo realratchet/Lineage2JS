@@ -1,6 +1,6 @@
 import DecodeLibrary from "@l2js/engine/decode-library";
 import loginServer from "../network/login-server";
-import { setLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
 import { printLoadingProfile } from "../loading-profile";
 import decodeCursors from "./decoders/cursor-decoder";
 import UConfigBigHead from "./unreal/conf-files/un-conf-bighead";
@@ -335,7 +335,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
         this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
-        if (loginServer) setLoadingProgress(null, "Starting game data workers…", true);
+        if (loginServer) setLoadingProgress(null, loadingTexts.gameDataWorkers(), true);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
@@ -357,7 +357,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const total = arrPending.filter(Boolean).length;
         let completed = 0;
         function updateProgress() {
-            if (isLogin) setLoadingProgress(null, completed < total ? `Loading game data (${completed}/${total}): ${arrPending.filter(Boolean).join(", ")}…` : `Loaded game data (${completed}/${total})`, true);
+            if (isLogin) setLoadingProgress(null, loadingTexts.gameDataParts(completed, total, arrPending.filter(Boolean)), true);
         }
         async function loadStartup<T>(i: number, task: Promise<T>): Promise<T> {
             const result = await task;
@@ -400,7 +400,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         const [clientConfig, charGroups, envInfo, musicInfo, characterLibrary, playerController, effectLibrary, skyLibrary, gameStrings, startupLevelLibrary] = await startup;
         printLoadingProfile(true);
-        if (isLogin) setLoadingProgress(null, "Preparing game effects and sky…", true);
+        if (isLogin) setLoadingProgress(null, loadingTexts.gameEffects(), true);
         const underwaterLoopSound = playerController.getUnderWaterLoopSound();
 
         this.startupLevelLibrary = startupLevelLibrary;
@@ -411,6 +411,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if ((playerController.scriptProperties.get("MinZoomingDist") as number) > (playerController.scriptProperties.get("MaxZoomingDist") as number)) throw new Error(`Invalid camera zoom limits.`);
         // The comparison client's User.ini allows 10000; stock C4 CABs restrict it to 250.
         playerController.scriptProperties.set("MaxZoomingDist", Math.max(10000, playerController.scriptProperties.get("MaxZoomingDist") as number));
+        manRender.audioManager.setSubsystemConfig(this.userConfig.alAudio);
         manRender.audioManager.setSoundVolume(this.userConfig.audio.soundVolume);
         manRender.audioManager.setMusicVolume(this.userConfig.audio.musicVolume);
         manRender.audioManager.setWavVoiceVolume(this.userConfig.audio.wavVoiceVolume);

@@ -65,7 +65,16 @@ export function buildTriangleIndex(vertices: Float32Array, indices: Uint32Array,
             }
     }
 
-    return { minX, minY, cellSizeX, cellSizeY, sizeX: size, sizeY: size, offsets, triangleIndices, triangleBounds, marks: new Uint32Array(indices.length / 3), queryTag: 0 };
+    return { minX, minY, cellSizeX, cellSizeY, sizeX: size, sizeY: size, offsets, triangleIndices, triangleBounds, marks: new Uint16Array(indices.length / 3), queryTag: 0 };
+}
+
+export function prepareTriangleIndex(index: CollisionTriangleIndex_T): CollisionTriangleIndex_T {
+    if (index && index.marks.BYTES_PER_ELEMENT !== 2 && index.marks.byteLength === index.marks.buffer.byteLength) {
+        index.marks = new Uint16Array(index.marks.length);
+        index.queryTag = 0;
+    }
+
+    return index;
 }
 
 export default buildTriangleIndex;

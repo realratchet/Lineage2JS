@@ -17,7 +17,7 @@ import { getProperty, type ScriptHost_T } from "../ue-script/vm";
 import PacketReader from "./packet-reader";
 import type { NetObject_T } from "./network-actors";
 import { setVector } from "./network-location";
-import { setLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
 
 type NetVehicle_T = { actor: Vehicle, actorReady: Promise<void>, objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 
@@ -275,10 +275,8 @@ export class NetworkMovement {
                 if (progress.ready === progress.total) break;
 
                 const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
-                const action = progress.building > 0 ? "Building" : "Loading";
-                const stage = progress.decoded < progress.total ? `${action} region packages (${progress.decoded}/${progress.total})` : progress.built < progress.total ? `${action} scenery (${progress.built}/${progress.total} regions)` : `${action} textures and lighting (${progress.ready}/${progress.total} regions)`;
 
-                setLoadingProgress(value || null, stage);
+                setLoadingProgress(value || null, loadingTexts.areaParts(progress));
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
 
@@ -291,9 +289,7 @@ export class NetworkMovement {
         // Lisvus Appearing sends the destination known list before UserInfo.
         while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (this.network.actors.teleportInfoPending || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) {
             if (this.teleportLoading) {
-                const stage = this.network.actors.teleportInfoPending ? "Waiting for destination server response" : `Loading nearby characters (${this.network.actors.npcSpawnCount} loading, ${this.network.actors.npcSpawnWaiters.length} queued)`;
-
-                setLoadingProgress(0.9, stage);
+                setLoadingProgress(0.9, this.network.actors.teleportInfoPending ? loadingTexts.destinationResponse() : loadingTexts.nearbyCharacters(this.network.actors.npcSpawnCount + this.network.actors.npcSpawnWaiters.length));
             }
             await new Promise(resolve => setTimeout(resolve, 100));
         }

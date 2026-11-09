@@ -72,6 +72,7 @@ export type HTMLViewportElement_T = HTMLDivElement;
 
 const tmpBox = new Box3();
 const tmpShaderCompileGroup = new Scene();
+const tmpShaderCompileFog = new Fog(0);
 const tmpCamDir = new Vector3();
 const tmpSize = new Vector2();
 const tmpFarPoint = new Vector3();
@@ -147,7 +148,7 @@ type PawnLightingState_T = {
     lights: DynamicLight[]
 };
 type Disposable_T = { dispose(): void };
-type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[], program?: { isReady(): boolean } };
+type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[], program?: { isReady(): boolean }, shadowPrograms?: { isReady(): boolean }[] };
 type SectorWarmup_T = {
     sector: SectorObject,
     materialQueue: SectorMaterialBinding_T[],
@@ -546,7 +547,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.camera.up.set(0, 0, 1);
         this.camera.position.set(0, 15, 5);
         this.camera.lookAt(0, 0, 0);
-        this.scene.add(new Mesh(new BoxGeometry()));
+        const box = new Mesh(new BoxGeometry());
+        this.scene.add(box);
+        this.queueShaderCompile(box);
         this.scene.matrixAutoUpdate = false;
         this.objectGroup.matrixAutoUpdate = false;
 
@@ -1857,7 +1860,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const bspCullingPosition = camera.position;
 
         const fogFar = (this.scene.fog as Fog)?.far || DEFAULT_FAR;
-        const fogSphere = tmpViewSphere.set(bspCullingPosition, fogFar);
+        const tanHalfFov = Math.tan(camera.fov * Math.PI / 360);
+        const fogSphere = tmpViewSphere.set(bspCullingPosition, fogFar * Math.sqrt(1 + tanHalfFov * tanHalfFov * (1 + camera.aspect * camera.aspect))); // fog is planar view depth, frustum corners reach further
 
         frustum.setFromProjectionMatrix(tmpViewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse), WebGLCoordinateSystem, camera.reversedDepth);
 
@@ -2427,16 +2431,22 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.manGame.getComponent("asset").tick(this);
         this.processSectorWarmups();
-        for (const root of this.pendingShaderCompiles)
-            if (root.parent) tmpShaderCompileGroup.children.push(root);
+        for (const root of this.pendingShaderCompiles) {
+            if (!root.parent) continue;
+            tmpShaderCompileGroup.children.push(root);
+            this.particleBatcher.prepare(root, tmpShaderCompileGroup);
+        }
 
-        tmpShaderCompileGroup.fog = this.scene.fog;
+        tmpShaderCompileGroup.fog = this.scene.fog || tmpShaderCompileFog;
         if (tmpShaderCompileGroup.children.length) {
             const reversed = this.renderer.state.buffers.depth.getReversed();
             setReversedDepth(this.renderer, this.camera.reversedDepth);
             try {
                 this.renderer.compileAsync(tmpShaderCompileGroup, this.camera); // the world has no three lights, so only fog has to match the real scene; roots stay parented where they are
-            } finally { setReversedDepth(this.renderer, reversed); }
+            } finally {
+                this.particleBatcher.finishPrepare();
+                setReversedDepth(this.renderer, reversed);
+            }
         }
         tmpShaderCompileGroup.children.length = 0;
         this.pendingShaderCompiles.clear();
@@ -3066,7 +3076,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             }
 
             if (!binding.program) this.compileSectorMaterial(binding);
-            if (!binding.program.isReady()) {
+            if (!binding.program.isReady() || binding.shadowPrograms.some(program => !program.isReady())) {
                 if (performance.now() >= deadline) return;
                 continue;
             }
@@ -3108,13 +3118,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
         object.material = binding.material;
 
         const reversed = this.renderer.state.buffers.depth.getReversed();
-        tmpShaderCompileGroup.fog = this.scene.fog;
+        tmpShaderCompileGroup.fog = this.scene.fog || tmpShaderCompileFog;
         tmpShaderCompileGroup.children.push(object);
         setReversedDepth(this.renderer, this.camera.reversedDepth);
         try {
             this.renderer.compile(tmpShaderCompileGroup, this.camera);
             binding.program = this.renderer.properties.get(binding.material).currentProgram;
             if (!binding.program) throw new Error(`Missing warmed shader program for '${object.name}'.`);
+            binding.shadowPrograms = this.shadowProjector.compileReceiver(this.renderer, tmpShaderCompileGroup, this.camera, object);
         } finally {
             tmpShaderCompileGroup.children.length = 0;
             setReversedDepth(this.renderer, reversed);
@@ -3168,6 +3179,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const ext = this.parallelShaderCompileExt;
         if (!ext) return; // no non-blocking way to know when it's safe to check - leave queued
 
+        const deadline = performance.now() + 1;
         for (let i = this.pendingShaderChecks.length - 1; i >= 0; i--) {
             const program = this.pendingShaderChecks[i];
 
@@ -3175,6 +3187,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             this.pendingShaderChecks.splice(i, 1);
             reportShaderErrors(gl, program);
+            program.getUniforms();
+            if (performance.now() >= deadline) return;
         }
     }
 

@@ -12,7 +12,6 @@ import type { StaticMeshBatchManifest_T, BatchElement_T, IStaticMeshSwayDecodeIn
 import type { CollisionTriangleIndex_T } from "../../objects/objects";
 
 type StaticMeshIndexArray_T = Uint8Array | Uint16Array | Uint32Array;
-type StaticMeshIndexCopy_T = { source: StaticMeshIndexArray_T, target: StaticMeshIndexArray_T, offset: number };
 
 export type StaticMeshBatchJob_T = {
     library: DecodeLibrary,
@@ -23,13 +22,10 @@ export type StaticMeshBatchJob_T = {
     manifest: StaticMeshBatchManifest_T,
     batchIndex: number,
     actorIndex: number,
-    indexCopy: StaticMeshIndexCopy_T,
     batchBuild: Generator<void, void, unknown>,
     prepareBounds: (root: Object3D) => Generator<void, void, unknown>,
     boundsBuild: Generator<void, void, unknown>
 };
-
-const INDEX_COPY_CHUNK_BYTES = 256 * 1024;
 
 export function makeSwayAttribute(vertexCount: number, info: IStaticMeshSwayDecodeInfo, phase: number = 0): Float32Array {
     const sway = new Float32Array(vertexCount * 4);
@@ -184,7 +180,7 @@ export function createStaticMeshBatchJob(
 ): StaticMeshBatchJob_T {
     const manifest: StaticMeshBatchManifest_T = (library as any).staticMeshBatches ?? buildStaticMeshBatchData(library);
 
-    return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, indexCopy: null, batchBuild: null, prepareBounds: null, boundsBuild: null };
+    return { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest, batchIndex: 0, actorIndex: 0, batchBuild: null, prepareBounds: null, boundsBuild: null };
 }
 
 function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatchManifest_T["batches"][number]): Generator<void, void, unknown> {
@@ -221,9 +217,7 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
         yield;
         yield* createStaticMeshTextureBatchJob(batchObject, source);
         if (source) {
-            const target = new (source.constructor as any)(source.length) as StaticMeshIndexArray_T;
-            batchObject.batchIndices = target;
-            job.indexCopy = { source, target, offset: 0 };
+            batchObject.batchIndices = geometryInfo.indices;
             makeSortedIndexBuffers(library, batchObject, batch);
         }
 
@@ -239,17 +233,6 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
 
 export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
     const { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest } = job;
-
-    if (job.indexCopy) {
-        const { source, target, offset } = job.indexCopy;
-        const count = Math.min(source.length - offset, Math.max(1, Math.floor(INDEX_COPY_CHUNK_BYTES / source.BYTES_PER_ELEMENT)));
-
-        target.set(source.subarray(offset, offset + count), offset);
-        job.indexCopy.offset += count;
-        if (job.indexCopy.offset >= source.length) job.indexCopy = null;
-
-        return false;
-    }
 
     if (job.batchBuild) {
         if (job.batchBuild.next().done) job.batchBuild = null;

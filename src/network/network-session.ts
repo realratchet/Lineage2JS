@@ -13,7 +13,7 @@ import PacketReader from "./packet-reader";
 import type { PawnCreateSelection_T } from "../nwindow/nc-pawn-create-wnd";
 import type { ICharacterGroup } from "@l2js/engine/contracts/pawn";
 import { setVector } from "./network-location";
-import { setLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
 
 export enum GMTransferPhase_T { Idle, Queued, Restart, Reconnect, Login, SelectServer, SelectCharacter, Complete }
 
@@ -48,7 +48,7 @@ export class NetworkSession {
         const asset = this.network.getParent().getComponent("asset"), render = this.network.getParent().getComponent("render");
 
         asset.setStreaming(render, false);
-        setLoadingProgress(0.1, "Loading interface and game text…", true);
+        setLoadingProgress(0.1, loadingTexts.loginInterface(), true);
 
         if (!this.lobby) {
             if (!this.network.ui) {
@@ -63,7 +63,7 @@ export class NetworkSession {
 
             const arrPending = ["interface textures", "login scene"];
 
-            setLoadingProgress(0.2, `Loading ${arrPending.join(", ")}…`, true);
+            setLoadingProgress(0.2, loadingTexts.loginScreens(0, arrPending.length, arrPending), true);
             const arrTasks = [this.network.ui.createScreens(), this.lobby.enter(this.network.ui.getStrings().logonSpots)];
 
             void asset.precacheCharacters();
@@ -72,12 +72,12 @@ export class NetworkSession {
                 arrPending[i] = null;
                 const remaining = arrPending.filter(Boolean);
 
-                setLoadingProgress(0.2 + (arrPending.length - remaining.length) * 0.3, remaining.length ? `Loading ${remaining.join(", ")}…` : "Preparing login scene…", true);
+                setLoadingProgress(0.2 + (arrPending.length - remaining.length) * 0.3, loadingTexts.loginScreens(arrPending.length - remaining.length, arrPending.length, remaining), true);
             }));
         } else await this.lobby.enter(this.network.ui.getStrings().logonSpots);
 
         this.lobby.showLogin();
-        setLoadingProgress(0.9, "Preparing login textures and lighting…", true);
+        setLoadingProgress(0.9, loadingTexts.loginLighting(), true);
         while (!render.isSectorWarm(render.getLevel())) await new Promise(resolve => setTimeout(resolve, 50));
         this.network.ui.showLogin();
     }
@@ -136,7 +136,7 @@ export class NetworkSession {
             game.onClose = (code, reason) => { if (this.game === game) void this.onDisconnected(`Game server closed the connection (${code}${reason ? ` ${reason}` : ""}).`); };
 
             this.gameServerUrl = login.getGameServerUrl(server);
-            await game.connect(this.gameServerUrl);
+            await game.connect(this.gameServerUrl, login.takeSelectedServerSocket());
         } catch (e) {
             if (this.login !== login || this.gmTransfer !== transfer) return;
             if (transfer) transfer.error = (e as Error).message;

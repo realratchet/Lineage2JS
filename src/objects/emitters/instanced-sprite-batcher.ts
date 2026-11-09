@@ -288,6 +288,7 @@ export class InstancedSpriteBatcher {
     public readonly root = new Group();
     protected readonly batches = new Map<string, SpriteParticleBatch>();
     protected readonly groups = new Map<string, BatchGroup_T>();
+    protected readonly preparedBatches: SpriteParticleBatch[] = [];
     protected readonly cacheMaterials = new Map<ShaderMaterial, BatchMaterial_T>();
 
     public constructor() {
@@ -324,7 +325,28 @@ export class InstancedSpriteBatcher {
         }
     }
 
+    public prepare(root: Object3D, scene: Object3D) {
+        root.traverse(object => {
+            const mesh = object as any, source = mesh.material as ShaderMaterial;
+            if (!mesh.isWorldBatchCandidate || !isOrderIndependentAdditive(source) || this.cacheMaterials.has(source)) return;
+
+            const batch = new SpriteParticleBatch(source, mesh.renderOrder);
+            this.retainMaterial(source);
+            const entry = this.cacheMaterials.get(source)!;
+            entry.refs--;
+            entry.material = batch.mesh.material;
+            this.preparedBatches.push(batch);
+            scene.children.push(batch.mesh);
+        });
+    }
+
+    public finishPrepare() {
+        for (const batch of this.preparedBatches) batch.dispose(true);
+        this.preparedBatches.length = 0;
+    }
+
     public dispose() {
+        this.finishPrepare();
         for (const batch of this.batches.values()) this.releaseBatch(batch);
         for (const [source, entry] of this.cacheMaterials) {
             source.removeEventListener("dispose", entry.dispose);

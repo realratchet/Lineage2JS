@@ -112,6 +112,23 @@ export class ShadowProjector {
         });
     }
 
+    public compileReceiver(renderer: THREE.WebGLRenderer, scene: Scene, camera: Camera, mesh: Mesh): { isReady(): boolean }[] {
+        const source = mesh.material as ShaderMaterial;
+        if (!source.isShaderMaterial || !source.colorWrite || !(source as any).isStaticMeshMaterial && !(source as any).isTerrainMaterial || "USE_ACTOR_LIGHTS" in source.defines || "NO_SHADOW_RECEIVE" in source.defines) return [];
+
+        const material = this.getReceiverMaterial(source), instanced = this.getReceiverMaterial(source, renderer), programs: { isReady(): boolean }[] = [];
+        try {
+            for (const receiver of material === instanced ? [material] : [material, instanced]) {
+                mesh.material = receiver;
+                renderer.compile(scene, camera);
+                const program = renderer.properties.get(receiver).currentProgram;
+                if (!program) throw new Error(`Missing shadow receiver program for '${mesh.name}'.`);
+                programs.push(program);
+            }
+        } finally { mesh.material = source; }
+        return programs;
+    }
+
     public update(_renderer: THREE.WebGLRenderer, focus: Object3D, casters: Iterable<Object3D>, lightDirection: Vector3): void {
         this.frame++;
         focus.getWorldPosition(tmpFocusPos);
@@ -331,8 +348,8 @@ export class ShadowProjector {
             else if (Array.isArray(value)) for (const texture of value) if (texture && texture.isTexture) textures++;
         }
         if (textures > maxTextures) return null;
-        const material = source.clone();
-        material.defines.NUM_PROJECTOR_INSTANCES = 4;
+        const material = new ShaderMaterial({ vertexShader: source.vertexShader, fragmentShader: source.fragmentShader, defines: { ...source.defines, NUM_PROJECTOR_INSTANCES: 4 } });
+        Material.prototype.copy.call(material, source);
         material.uniforms = { ...source.uniforms, shadowMatrices: new Uniform(new Float32Array(64)), shadowNormalMatrices: new Uniform(new Float32Array(36)), shadowDepthRanges: new Uniform(new Float32Array(8)), shadowMaps: new Uniform(new Array(4)) };
         delete material.uniforms.shadowMatrix; delete material.uniforms.shadowNormalMatrix; delete material.uniforms.shadowDepthRange; delete material.uniforms.shadowMap;
         return material;

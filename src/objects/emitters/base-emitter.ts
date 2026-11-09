@@ -463,13 +463,12 @@ export abstract class BaseEmitter extends Object3D {
 
             if (!(particle.flags & EParticleFlags_T.PTF_Active)) continue;
 
-            const alpha = this.drawStyle === "alpha" || this.drawStyle === "alphaModulate" ? particle.color.w : 1;
-            const brightness = Math.max(particle.color.x, particle.color.y, particle.color.z) * alpha;
+            const brightness = Math.max(particle.color.x, particle.color.y, particle.color.z);
 
             position.addScaledVector(particle.position, brightness);
-            color.r += particle.color.x * alpha;
-            color.g += particle.color.y * alpha;
-            color.b += particle.color.z * alpha;
+            color.r += particle.color.x;
+            color.g += particle.color.y;
+            color.b += particle.color.z;
             weight += brightness;
             extent = Math.max(extent, particle.scale.length() * this.particleGeometryRadius);
             count++;

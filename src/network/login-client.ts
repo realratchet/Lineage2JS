@@ -4,6 +4,7 @@ import PacketWriter from "./packet-writer";
 import { L2Blowfish, LOGIN_STATIC_KEY, LOGIN_RSA_BLOCK_SIZE, buildLoginCredentials, encryptRSANoPadding, openLoginPacket, sealLoginPacket, unscrambleModulus } from "./l2-crypt";
 
 const LOGIN_PROTOCOL_REVISION = 0xc621;
+const PING_SOCKET_KEEP_MS = 45000;
 
 export enum LoginServerPacket_T {
     Init = 0x00,
@@ -58,6 +59,8 @@ export class LoginClient {
     protected url: URL;
     protected serverPingsCanceled = false;
     protected cancelServerPing: () => void = null;
+    protected readonly pingSockets = new Map<number, { socket: WebSocket, timer: number }>();
+    protected selectedServerSocket: WebSocket = null;
 
     public servers: GameServerInfo_T[] = [];
     public lastServerId = 0;
@@ -83,6 +86,7 @@ export class LoginClient {
 
     protected fail(error: Error) {
         this.stopServerPings();
+        this.closePingSockets();
         this.failure = error;
 
         if (!this.waiting) return;
@@ -186,13 +190,57 @@ export class LoginClient {
 
     public async selectServer(serverId: number): Promise<SessionKey_T> {
         this.stopServerPings();
-        this.send(new PacketWriter().c(LoginClientPacket_T.RequestServerLogin).d(this.loginOk1).d(this.loginOk2).c(serverId));
 
-        const [, packet] = await this.expect(LoginServerPacket_T.PlayOk);
-        const playOk1 = packet.d();
-        const playOk2 = packet.d();
+        // Before RequestServerLogin: the login server may close after PlayOk, and fail() closes parked sockets
+        const parked = this.pingSockets.get(serverId);
 
-        return { loginOk1: this.loginOk1, loginOk2: this.loginOk2, playOk1, playOk2 };
+        if (parked) {
+            clearTimeout(parked.timer);
+            this.pingSockets.delete(serverId);
+            this.selectedServerSocket = parked.socket;
+        }
+        this.closePingSockets();
+
+        try {
+            this.send(new PacketWriter().c(LoginClientPacket_T.RequestServerLogin).d(this.loginOk1).d(this.loginOk2).c(serverId));
+
+            const [, packet] = await this.expect(LoginServerPacket_T.PlayOk);
+            const playOk1 = packet.d();
+            const playOk2 = packet.d();
+
+            return { loginOk1: this.loginOk1, loginOk2: this.loginOk2, playOk1, playOk2 };
+        } catch (e) {
+            this.closeSelectedServerSocket();
+            throw e;
+        }
+    }
+
+    public takeSelectedServerSocket(): WebSocket {
+        const socket = this.selectedServerSocket;
+
+        this.selectedServerSocket = null;
+        if (socket) socket.onclose = null;
+
+        return socket?.readyState === WebSocket.OPEN ? socket : null;
+    }
+
+    protected closeSelectedServerSocket() {
+        const socket = this.selectedServerSocket;
+
+        this.selectedServerSocket = null;
+        if (socket) {
+            socket.onclose = null;
+            socket.close(1000);
+        }
+    }
+
+    protected closePingSockets() {
+        for (const { socket, timer } of this.pingSockets.values()) {
+            clearTimeout(timer);
+            socket.onclose = null;
+            socket.close(1000);
+        }
+        this.pingSockets.clear();
     }
 
     public getGameServerUrl(server: GameServerInfo_T): string { // WS uses the login host and the advertised game port.
@@ -210,24 +258,20 @@ export class LoginClient {
             const ping = await new Promise<number>(resolve => {
                 const started = performance.now();
                 const socket = new WebSocket(this.getGameServerUrl(server));
-                const finish = (ping: number) => {
+                const finish = (ping: number, keep: boolean) => {
                     clearTimeout(timer);
                     socket.onopen = socket.onerror = socket.onclose = null;
-                    socket.close();
+                    if (keep) this.parkPingSocket(server.id, socket);
+                    else socket.close();
                     this.cancelServerPing = null;
                     resolve(ping);
                 };
-                const timer = window.setTimeout(() => finish(9999), 10000);
+                const timer = window.setTimeout(() => finish(9999, false), 10000);
 
-                this.cancelServerPing = () => finish(9999);
-                socket.onopen = () => {
-                    const ping = Math.trunc(performance.now() - started);
-
-                    // Retail 0x6e062c..0x6e06e1 times connect(), then sends ProtocolVersion(-2).
-                    socket.send(new PacketWriter().h(7).c(0).d(-2).toBytes());
-                    finish(ping);
-                };
-                socket.onerror = socket.onclose = () => finish(9999);
+                this.cancelServerPing = () => finish(9999, false);
+                // Retail 0x6e062c..0x6e06e1 sends ProtocolVersion(-2) here, which makes the server close; kept open for reuse instead.
+                socket.onopen = () => finish(Math.trunc(performance.now() - started), true);
+                socket.onerror = socket.onclose = () => finish(9999, false);
             });
 
             if (this.serverPingsCanceled) return;
@@ -235,12 +279,33 @@ export class LoginClient {
         }
     }
 
+    protected parkPingSocket(serverId: number, socket: WebSocket) {
+        // Game server drops unauthenticated connections after 60 s
+        const timer = window.setTimeout(() => {
+            if (this.pingSockets.get(serverId)?.socket !== socket) return;
+            this.pingSockets.delete(serverId);
+            socket.onclose = null;
+            socket.close(1000);
+        }, PING_SOCKET_KEEP_MS);
+
+        socket.onclose = () => {
+            if (this.pingSockets.get(serverId)?.socket !== socket) return;
+            clearTimeout(timer);
+            this.pingSockets.delete(serverId);
+        };
+        this.pingSockets.set(serverId, { socket, timer });
+    }
+
     protected stopServerPings() {
         this.serverPingsCanceled = true;
         if (this.cancelServerPing) this.cancelServerPing();
     }
 
-    public close() { this.socket.close(); this.fail(new Error(`Login connection canceled.`)); }
+    public close() {
+        this.socket.close();
+        this.fail(new Error(`Login connection canceled.`));
+        this.closeSelectedServerSocket();
+    }
 }
 
 export default LoginClient;

@@ -15,24 +15,38 @@ export class L2Socket { // Legacy packet lengths include the header; WS messages
 
             const socket = new WebSocket(url);
 
-            this.pending = new Uint8Array(0);
-            this.isClosedByUs = false;
-
-            socket.binaryType = "arraybuffer";
+            this.attach(socket);
             socket.onopen = () => resolve(this);
             socket.onerror = () => reject(new Error(`Could not connect to '${url}'.`));
-            socket.onmessage = event => { if (this.socket === socket) this.receive(event.data); };
-            socket.onclose = event => {
-                if (this.socket !== socket) return;
-
-                this.socket = null;
-                this.pending = new Uint8Array(0);
-
-                if (!this.isClosedByUs && this.onClose) this.onClose(event.code, event.reason);
-            };
-
-            this.socket = socket;
         });
+    }
+
+    public adopt(socket: WebSocket): this {
+        if (socket.readyState !== WebSocket.OPEN) throw new Error(`Cannot adopt a WebSocket that is not open.`);
+
+        this.close();
+        this.attach(socket);
+        socket.onopen = socket.onerror = null;
+
+        return this;
+    }
+
+    protected attach(socket: WebSocket) {
+        this.pending = new Uint8Array(0);
+        this.isClosedByUs = false;
+
+        socket.binaryType = "arraybuffer";
+        socket.onmessage = event => { if (this.socket === socket) this.receive(event.data); };
+        socket.onclose = event => {
+            if (this.socket !== socket) return;
+
+            this.socket = null;
+            this.pending = new Uint8Array(0);
+
+            if (!this.isClosedByUs && this.onClose) this.onClose(event.code, event.reason);
+        };
+
+        this.socket = socket;
     }
 
     public isOpen() { return !!this.socket && this.socket.readyState === WebSocket.OPEN; }

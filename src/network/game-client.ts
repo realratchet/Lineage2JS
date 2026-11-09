@@ -56,14 +56,18 @@ export class GameClient {
 
     protected write(opcode: GamePackets.GameClientPacket_T): PacketWriter { return new PacketWriter().c(opcode); }
 
-    public async connect(url: string) {
+    public async connect(url: string, openSocket: WebSocket = null) {
         if (this.replayPlayback) throw new Error(`Cannot connect during replay playback.`);
         if (this.isConnecting) throw new Error(`Game connection is already pending.`);
 
         this.isConnecting = true;
         try {
             this.crypt = new GameCrypt();
-            await this.socket.connect(url);
+            if (openSocket?.readyState === WebSocket.OPEN) this.socket.adopt(openSocket);
+            else {
+                if (openSocket) openSocket.close(1000);
+                await this.socket.connect(url);
+            }
             this.send(this.write(GamePackets.GameClientPacket_T.ProtocolVersion).d(GamePackets.PROTOCOL_REVISION));
         } finally { this.isConnecting = false; }
     }

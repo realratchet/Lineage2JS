@@ -270,6 +270,16 @@ function intersectsActorBounds(min: number[], max: number[], frustum: THREE.Frus
     return true;
 }
 
+function intersectsBoxIgnoringRange(box: THREE.Box3, frustum: THREE.Frustum): boolean {
+    const min = box.min, max = box.max;
+    for (let i = 0; i < 6; i++) {
+        if (i === 4) continue;
+        const plane = frustum.planes[i], normal = plane.normal;
+        if (normal.x * (normal.x > 0 ? max.x : min.x) + normal.y * (normal.y > 0 ? max.y : min.y) + normal.z * (normal.z > 0 ? max.z : min.z) + plane.constant < 0) return false;
+    }
+    return true;
+}
+
 function isActorInRange(min: number[], max: number[], position: Vector3, rangeSq: number): boolean {
     const x = Math.max(min[0] - position.x, 0, position.x - max[0]);
     const y = Math.max(min[1] - position.y, 0, position.y - max[1]);
@@ -447,6 +457,8 @@ export class SectorObject extends GameObject {
     public staticMeshMap: Map<string, THREE.Object3D> = new Map();
     public visibleEmitterUuids: Set<string> = new Set();
     public visibleLeaves: Set<number> = new Set();
+    protected cachedLeafZoneMask: bigint = null;
+    protected readonly cacheLeafZoneVisibility = new Map<number, boolean>();
     protected arrTranslucentBSP: TranslucentBSPSection_T[] = null;
     protected arrBSPRanks: Int32Array = null;
     protected arrTranslucentBSPNodes: TranslucentBSPNode_T[] = null;
@@ -472,7 +484,6 @@ export class SectorObject extends GameObject {
     protected rangeIgnoredBatches?: DecodeLibrary["staticMeshBatches"];
     protected staticActorCandidateStamps = new Uint32Array(256);
     protected staticActorVisibleStamps = new Uint32Array(256);
-    protected staticActorDistances = new Float64Array(256);
     protected staticVisibilityStamp = 0;
     protected topLevelBSPResult?: { visibleNodes: Set<number>, visibleLeaves: Set<number>, finalZoneMask: bigint, zonesAddedThroughPortals: Set<number> };
     protected visibilityCacheInitialized = false;
@@ -1204,6 +1215,9 @@ export class SectorObject extends GameObject {
         const nodeStack = this.arrBSPStack;
         let stackCount = 1;
         nodeStack[0] = 0;
+        let previousNodeZoneMask: bigint = null;
+        let previousZoneMask: bigint = null;
+        let nodeZoneVisible = false;
 
         while (stackCount > 0) {
             const entry = nodeStack[--stackCount];
@@ -1212,8 +1226,13 @@ export class SectorObject extends GameObject {
 
             if (entry >= 0) {
                 const nodeZoneMask = this.nodeZoneMasks[nodeIndex];
+                if (hasViewZone && (previousNodeZoneMask !== nodeZoneMask || previousZoneMask !== currentZoneMask)) {
+                    previousNodeZoneMask = nodeZoneMask;
+                    previousZoneMask = currentZoneMask;
+                    nodeZoneVisible = !!nodeZoneMask && currentZoneMask !== 0n && (nodeZoneMask === currentZoneMask || !!(nodeZoneMask & currentZoneMask));
+                }
                 if (hasViewZone && nodeZoneMask && nodeZoneMask !== 0n && currentZoneMask !== 0n) {
-                    if (nodeZoneMask !== currentZoneMask && !(nodeZoneMask & currentZoneMask)) {
+                    if (!nodeZoneVisible) {
                         continue;
                     }
                 }
@@ -1222,7 +1241,7 @@ export class SectorObject extends GameObject {
                 if (hasViewZone && this.bspGroup && node.iRenderBound !== undefined && node.iRenderBound >= 0 && library?.bspRenderBounds) {
                     const renderBound = library.bspRenderBounds[node.iRenderBound];
                     if (renderBound && renderBound.isValid) {
-                        if (!nodeZoneMask || (nodeZoneMask !== currentZoneMask && !(nodeZoneMask & currentZoneMask))) continue;
+                        if (!nodeZoneVisible) continue;
                         if (frustumCullingEnabled) {
                             tmpActorBox.min.fromArray(renderBound.min);
                             tmpActorBox.max.fromArray(renderBound.max);
@@ -1341,11 +1360,21 @@ export class SectorObject extends GameObject {
             }
         }
 
-        for (const leafIndex of visibleLeaves) {
-            const leaf = this.bspLeaves[leafIndex];
-            if (!leaf || leaf.zone < 0 || !(currentZoneMask & (1n << BigInt(leaf.zone))))
-                visibleLeaves.delete(leafIndex);
+        if (this.cachedLeafZoneMask !== currentZoneMask) {
+            this.cacheLeafZoneVisibility.clear();
+            this.cachedLeafZoneMask = currentZoneMask;
         }
+        visibleLeaves.forEach(leafIndex => {
+            const leaf = this.bspLeaves[leafIndex];
+            if (!leaf || leaf.zone < 0) { visibleLeaves.delete(leafIndex); return; }
+
+            let visible = this.cacheLeafZoneVisibility.get(leaf.zone);
+            if (visible === undefined) {
+                visible = !!(currentZoneMask & (1n << BigInt(leaf.zone)));
+                this.cacheLeafZoneVisibility.set(leaf.zone, visible);
+            }
+            if (!visible) visibleLeaves.delete(leafIndex);
+        });
 
         this.lastZoneMask = currentZoneMask;
         return { visibleNodes, visibleLeaves, finalZoneMask: currentZoneMask, zonesAddedThroughPortals };
@@ -1770,7 +1799,8 @@ export class SectorObject extends GameObject {
             for (const leafIndex of visibleLeaves) {
                 const actors = library.leafActors[leafIndex];
                 if (actors) {
-                    for (const actorBase of actors) {
+                    for (let i = 0; i < actors.length; i++) {
+                        const actorBase = actors[i];
                         if (actorBase.type !== "StaticMeshActor") continue;
                         const actor = actorBase as StaticMeshActorDecodeInfo_T;
                         const actorIndex = this.getStaticActorIndex(actor.uuid);
@@ -1784,11 +1814,8 @@ export class SectorObject extends GameObject {
                         const isFrustumVisible = !frustumCullingEnabled || (isRangeIgnored ? intersectsActorBounds(actor.bounds.min, actor.bounds.max, cameraFrustum, true) : cameraFrustum.intersectsBox(tmpActorBox));
                         const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
-                        const actorCenter = tmpActorBox.getCenter(tmpVec3);
-                        const distSq = cameraPosition.distanceToSquared(actorCenter);
                         if (isFrustumVisible && isZoneVisible && (isRangeIgnored || isActorInRange(actor.bounds.min, actor.bounds.max, cameraPosition, staticMeshCullDistanceSq))) {
                             this.staticActorVisibleStamps[actorIndex] = stamp;
-                            this.staticActorDistances[actorIndex] = distSq;
                         }
                     }
                 }
@@ -1828,12 +1855,6 @@ export class SectorObject extends GameObject {
                     let elemRelight = (object as any).elemRelight as Uint8Array;
                     if (!elemRelight || elemRelight.length !== batchElements.length)
                         elemRelight = (object as any).elemRelight = new Uint8Array(batchElements.length);
-                    let elemActorIndices = (object as any).elemActorIndices as Int32Array;
-                    if (!elemActorIndices || elemActorIndices.length !== batchElements.length) {
-                        elemActorIndices = (object as any).elemActorIndices = new Int32Array(batchElements.length);
-                        for (let ei = 0; ei < batchElements.length; ei++) elemActorIndices[ei] = this.getStaticActorIndex(batchElements[ei].uuid);
-                    }
-                    const candidateStamps = this.staticActorCandidateStamps, visibleStamps = this.staticActorVisibleStamps, actorDistances = this.staticActorDistances;
                     const batchVisibility = this.getBatchVisibility(batchElements), leafVisibility = batchVisibility.visible, centers = batchVisibility.centers;
                     let visibilityChanged = false;
                     if (frustumCullingEnabled && batchVisibility.nodes.length) {
@@ -1843,29 +1864,23 @@ export class SectorObject extends GameObject {
 
                     for (let ei = 0; ei < batchElements.length; ei++) {
                         const elem = batchElements[ei];
-                        const actorIndex = elemActorIndices[ei];
-
-                        let elemVisible = visibleStamps[actorIndex] === stamp;
-                        let distSq = elemVisible ? actorDistances[actorIndex] : 0;
-
-                        if (!elemVisible && candidateStamps[actorIndex] !== stamp) {
-                            let inVisibleLeaves = leafVisibility[ei] === 1;
-                            if (leafVisibility[ei] === 2) {
-                                inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
-                                if (!inVisibleLeaves) {
-                                    for (const li of elem.leaves) {
-                                        if (visibleLeaves.has(li)) { inVisibleLeaves = true; break; }
-                                    }
+                        let elemVisible = false, distSq = 0;
+                        let inVisibleLeaves = leafVisibility[ei] === 1;
+                        if (leafVisibility[ei] === 2) {
+                            inVisibleLeaves = !elem.leaves || elem.leaves.length === 0;
+                            if (!inVisibleLeaves) {
+                                for (const li of elem.leaves) {
+                                    if (visibleLeaves.has(li)) { inVisibleLeaves = true; break; }
                                 }
-                                leafVisibility[ei] = inVisibleLeaves ? 1 : 0;
                             }
+                            leafVisibility[ei] = inVisibleLeaves ? 1 : 0;
+                        }
 
-                            if (inVisibleLeaves) {
-                                const isFrustumVisible = !frustumCullingEnabled || (elem.isRangeIgnored ? intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum, true) : batchVisibility.nodes.length ? batchVisibility.frustumVisible[ei] === 1 : intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum));
-                                const offset = ei * 3, x = cameraPosition.x - centers[offset], y = cameraPosition.y - centers[offset + 1], z = cameraPosition.z - centers[offset + 2];
-                                distSq = x * x + y * y + z * z;
-                                elemVisible = isFrustumVisible && (!frustumCullingEnabled || !elem.zoneMask || elem.zoneMask === finalZoneMask || !!(elem.zoneMask & finalZoneMask)) && (elem.isRangeIgnored || isActorInRange(elem.boundsMin, elem.boundsMax, cameraPosition, staticMeshCullDistanceSq));
-                            }
+                        if (inVisibleLeaves) {
+                            const isFrustumVisible = !frustumCullingEnabled || (elem.isRangeIgnored ? intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum, true) : batchVisibility.nodes.length ? batchVisibility.frustumVisible[ei] === 1 : intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum));
+                            const offset = ei * 3, x = cameraPosition.x - centers[offset], y = cameraPosition.y - centers[offset + 1], z = cameraPosition.z - centers[offset + 2];
+                            distSq = x * x + y * y + z * z;
+                            elemVisible = isFrustumVisible && (!frustumCullingEnabled || !elem.zoneMask || elem.zoneMask === finalZoneMask || !!(elem.zoneMask & finalZoneMask)) && (elem.isRangeIgnored || isActorInRange(elem.boundsMin, elem.boundsMax, cameraPosition, staticMeshCullDistanceSq));
                         }
 
                         elemDistances[ei] = distSq;
@@ -1985,8 +2000,6 @@ export class SectorObject extends GameObject {
                         const isFrustumVisible = !frustumCullingEnabled || ((object as any).actorRangeIgnored ? intersectsActorBounds((object as any).actorBoundsMin, (object as any).actorBoundsMax, cameraFrustum, true) : cameraFrustum.intersectsBox(tmpActorBox));
                         const zoneMask = (object as any).actorZoneMask as bigint;
                         const isZoneVisible = !frustumCullingEnabled || !zoneMask || !!(zoneMask & finalZoneMask);
-                        const actorCenter = tmpActorBox.getCenter(tmpVec3);
-                        const distSq = cameraPosition.distanceToSquared(actorCenter);
                         isVisible = isFrustumVisible && isZoneVisible && ((object as any).actorRangeIgnored || isActorInRange((object as any).actorBoundsMin, (object as any).actorBoundsMax, cameraPosition, staticMeshCullDistanceSq));
                     }
 
@@ -2100,14 +2113,12 @@ export class SectorObject extends GameObject {
 
         if (index >= this.staticActorVisibleStamps.length) {
             const size = this.staticActorVisibleStamps.length * 2;
-            const candidates = new Uint32Array(size), visible = new Uint32Array(size), distances = new Float64Array(size);
+            const candidates = new Uint32Array(size), visible = new Uint32Array(size);
 
             candidates.set(this.staticActorCandidateStamps);
             visible.set(this.staticActorVisibleStamps);
-            distances.set(this.staticActorDistances);
             this.staticActorCandidateStamps = candidates;
             this.staticActorVisibleStamps = visible;
-            this.staticActorDistances = distances;
         }
 
         return index;
@@ -2167,7 +2178,7 @@ export class SectorObject extends GameObject {
             let visibleCount = 0;
             for (let i = 0; i < sectors.length; i++) {
                 const sector = sectors[i];
-                const isVisible = zoneVisible && (!frustumCullingEnabled || cameraFrustum.intersectsBox(sector.bounds));
+                const isVisible = zoneVisible && (!frustumCullingEnabled || intersectsBoxIgnoringRange(sector.bounds, cameraFrustum)); // bIgnoredRange meshes draw past the fog plane, terrain must still occlude them
                 if (isVisible) {
                     if (cached.visible[visibleCount] !== i) { changed = true; cached.visible[visibleCount] = i; }
                     visibleCount++;

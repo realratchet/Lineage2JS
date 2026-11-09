@@ -19,7 +19,6 @@ const tmpLocalStart = new Vector3();
 const tmpLocalEnd = new Vector3();
 const tmpLocalExtent = new Vector3();
 const tmpIndexBounds = new Box3();
-const cacheTriangleBounds = new WeakMap<CollisionTriangleIndex_T, Float32Array>();
 const tmpMatrix = new Matrix4();
 const tmpNormalMatrix = new Matrix3();
 const tmpModelNormalMatrix = new Matrix3();
@@ -43,7 +42,6 @@ let staticWorldEnd: Vector3 = null;
 let staticWorldExtent: Vector3 = null;
 let staticBestTime = 1;
 let staticBestItem = -1;
-let staticTriangleBounds: Float32Array = null;
 let bspModel: CollisionModel_T = null;
 let bspMatrix: Matrix4 = null;
 let bspPlaneX = 0;
@@ -376,7 +374,7 @@ function walkIndexCells(index: CollisionTriangleIndex_T, visit: GridCellVisitor_
 function beginIndexQuery(index: CollisionTriangleIndex_T) {
     index.queryTag++;
 
-    if (index.queryTag === 0xffffffff) {
+    if (index.queryTag === 0xffff) {
         index.queryTag = 1;
         index.marks.fill(0);
     }
@@ -516,6 +514,7 @@ function queryStaticTree(primitive: Extract<CollisionPrimitive_T, { kind: "stati
     staticBestTime = maxTime;
     staticBestItem = -1;
     queryStaticNode(0);
+    staticPrimitive = null;
 
     if (staticBestItem < 0) return null;
 
@@ -530,7 +529,7 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     tmpLocalStart.copy(start).applyMatrix4(tmpMatrix);
     tmpLocalEnd.copy(end).applyMatrix4(tmpMatrix);
 
-    const elements = tmpMatrix.elements;
+    const elements = tmpMatrix.elements, index = primitive.index;
 
     tmpLocalExtent.set(
         Math.abs(elements[0]) * extent.x + Math.abs(elements[4]) * extent.y + Math.abs(elements[8]) * extent.z,
@@ -538,7 +537,7 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
         Math.abs(elements[2]) * extent.x + Math.abs(elements[6]) * extent.y + Math.abs(elements[10]) * extent.z
     );
 
-    beginIndexQuery(primitive.index);
+    beginIndexQuery(index);
 
     staticPrimitive = primitive;
     staticStart = tmpLocalStart;
@@ -549,31 +548,27 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
     staticWorldExtent = extent;
     staticBestTime = maxTime;
     staticBestItem = -1;
-    staticTriangleBounds = cacheTriangleBounds.get(primitive.index);
 
-    if (!staticTriangleBounds) {
-        staticTriangleBounds = primitive.index.triangleBounds;
-        if (!staticTriangleBounds) {
-            const vertices = primitive.vertices, indices = primitive.indices;
-            staticTriangleBounds = new Float32Array(indices.length * 2);
+    if (!index.triangleBounds) {
+        const vertices = primitive.vertices, indices = primitive.indices;
+        const triangleBounds = new Float32Array(indices.length * 2);
 
-            for (let i = 0; i < indices.length; i += 3) {
-                const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
+        for (let i = 0; i < indices.length; i += 3) {
+            const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
 
-                for (let axis = 0; axis < 3; axis++) {
-                    staticTriangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
-                    staticTriangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
-                }
+            for (let axis = 0; axis < 3; axis++) {
+                triangleBounds[i * 2 + axis] = Math.min(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
+                triangleBounds[i * 2 + axis + 3] = Math.max(vertices[a + axis], vertices[b + axis], vertices[c + axis]);
             }
-
         }
 
-        cacheTriangleBounds.set(primitive.index, staticTriangleBounds);
+        index.triangleBounds = triangleBounds;
     }
 
     sweptBounds(staticStart, staticEnd, staticExtent, tmpIndexBounds);
 
-    walkIndexCells(primitive.index, visitStaticIndexCell);
+    walkIndexCells(index, visitStaticIndexCell);
+    staticPrimitive = null;
 
     if (staticBestItem < 0) return null;
 
@@ -584,7 +579,7 @@ function queryStaticIndex(primitive: Extract<CollisionPrimitive_T, { kind: "stat
 }
 
 function visitStaticIndexCell(x: number, y: number) {
-    const index = staticPrimitive.index;
+    const index = staticPrimitive.index, bounds = index.triangleBounds;
     const cell = y * index.sizeX + x;
 
     for (let i = index.offsets[cell]; i < index.offsets[cell + 1]; i++) {
@@ -594,7 +589,7 @@ function visitStaticIndexCell(x: number, y: number) {
 
         index.marks[triangle] = index.queryTag;
 
-        const offset = triangle * 6, bounds = staticTriangleBounds;
+        const offset = triangle * 6;
         if (bounds[offset] > tmpIndexBounds.max.x || bounds[offset + 3] < tmpIndexBounds.min.x
             || bounds[offset + 1] > tmpIndexBounds.max.y || bounds[offset + 4] < tmpIndexBounds.min.y
             || bounds[offset + 2] > tmpIndexBounds.max.z || bounds[offset + 5] < tmpIndexBounds.min.z) continue;

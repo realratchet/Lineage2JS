@@ -1,5 +1,5 @@
 import PawnHeroComponent from "../objects/components/pawn-hero-component";
-import { setLoadingProgress } from "../loading-progress";
+import { setLoadingProgress, loadingTexts } from "../loading-progress";
 import type NetworkManager from "./network-manager";
 import { Vector3, type Object3D } from "three";
 import BaseActor from "../base-actor";
@@ -87,8 +87,6 @@ export type NetObject_T = {
 };
 
 type PetRemainTime_T = { maxTime: number, remainingTime: number };
-
-const NAMEPLATE_DISTANCE = 1000;
 
 const CHAT_BALLOON_TIME = 6000; // NCConsole 0x1005f070: 1 s timer, the balloon is cleared on the sixth tick.
 
@@ -303,10 +301,8 @@ export class NetworkActors {
             if (progress.ready === progress.total) break;
 
             const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
-            const action = progress.building > 0 ? "Building" : "Loading";
-            const stage = progress.decoded < progress.total ? `${action} region packages (${progress.decoded}/${progress.total})` : progress.built < progress.total ? `${action} scenery (${progress.built}/${progress.total} regions)` : `${action} textures and lighting (${progress.ready}/${progress.total} regions)`;
 
-            setLoadingProgress(value || null, stage);
+            setLoadingProgress(value || null, loadingTexts.areaParts(progress));
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
@@ -459,11 +455,11 @@ export class NetworkActors {
         const asset = this.network.getParent().getComponent("asset");
         const generation = this.teleportGeneration;
 
-        setLoadingProgress(0.1, "Loading player appearance…");
+        setLoadingProgress(0.1, loadingTexts.playerAppearance());
         await this.userAppearanceLoad;
         if (!this.inWorld || generation !== this.teleportGeneration) return;
 
-        setLoadingProgress(0.3, "Loading skills…");
+        setLoadingProgress(0.3, loadingTexts.skills());
         await this.network.items.skillListLoad;
 
         while (this.inWorld && generation === this.teleportGeneration) {
@@ -471,7 +467,7 @@ export class NetworkActors {
 
             if (isAreaLoaded && this.npcSpawnCount === 0 && this.npcSpawnWaiters.length === 0) break;
 
-            setLoadingProgress(isAreaLoaded ? 0.9 : 0.5, isAreaLoaded ? `Loading nearby characters (${this.npcSpawnCount} remaining)…` : "Loading terrain, textures and lighting…");
+            setLoadingProgress(isAreaLoaded ? 0.9 : 0.5, isAreaLoaded ? loadingTexts.nearbyCharacters(this.npcSpawnCount + this.npcSpawnWaiters.length) : loadingTexts.area());
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
@@ -1093,6 +1089,7 @@ export class NetworkActors {
         const mouseTarget = this.network.getParent().getComponent("input").getMouseTarget();
         const plates: Nameplate_T[] = [];
         const now = this.network.getParent().getCurrentTime();
+        const display = this.network.getParent().getComponent("asset").userConfig.characterDisplay;
         const clanId = this.objects.get(this.userId)?.clanId || 0;
 
         for (const object of this.objects.values()) {
@@ -1108,11 +1105,11 @@ export class NetworkActors {
             const isTarget = object.objectId === this.network.getTargetId(), isMouseTarget = actor === mouseTarget;
             const distance = Math.trunc(actor.position.distanceTo(player.position));
 
-            if (!isTarget && !isMouseTarget && distance >= NAMEPLATE_DISTANCE) continue; // FDynamicActor::Render branch C: retail l2.ini [CharacterDisplay] Name=true, Dist=1000.
+            if (!isTarget && !isMouseTarget && (!display.name || distance >= display.dist)) continue; // FDynamicActor::Render branch C
 
             const storeMessages = object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_BUY ? this.network.items.privateStoreBuyMsgs : object.privateStoreType === GamePackets.PrivateStoreType_T.STORE_PRIVATE_MANUFACTURE ? this.network.items.recipeShopMessages : this.network.items.privateStoreSellMsgs;
 
-            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", hasQuestMark: object.hasQuestMark, isSummon: object.isSummon, isAttackable: object.isAttackable, isSelf: object.objectId === this.userId, isPartyMember: this.network.community.partyMembers.has(object.objectId), isPledgeMember: clanId !== 0 && object.clanId === clanId, isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0, abnormalState: object.abnormalState, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, clanCrestId: object.clanCrestId, allyCrestId: object.allyCrestId, isTarget, isMouseTarget, isChatRange: distance <= NAMEPLATE_DISTANCE, privateStoreType: object.privateStoreType, matchedStoreType: object.matchedStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
+            plates.push({ actor, name: object.name, title: object.title, isNpc: object.kind === "npc", hasQuestMark: object.hasQuestMark, isSummon: object.isSummon, isAttackable: object.isAttackable, isSelf: object.objectId === this.userId, isPartyMember: this.network.community.partyMembers.has(object.objectId), isPledgeMember: clanId !== 0 && object.clanId === clanId, isDead: object.isDead || object.waitType === GamePackets.WaitType_T.WT_START_FAKEDEATH, isSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING, isChairSitting: object.waitType === GamePackets.WaitType_T.WT_SITTING && object.chairStaticObjectId > 0, abnormalState: object.abnormalState, karma: object.karma, pvpFlag: object.pvpFlag, recommendations: object.recommendations, nameColor: object.nameColor, titleColor: object.titleColor, clanCrestId: object.clanCrestId, allyCrestId: object.allyCrestId, isTarget, isMouseTarget, isChatRange: distance <= display.dist, privateStoreType: object.privateStoreType, matchedStoreType: object.matchedStoreType, storeMessage: storeMessages.get(object.objectId) || "", chatMessage: now - object.chatTime < CHAT_BALLOON_TIME ? object.chatMessage : null });
         }
 
         return plates;

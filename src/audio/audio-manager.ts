@@ -3,9 +3,10 @@ import type GameManager from "../game/game-manager";
 import { randInt } from "three/src/math/MathUtils";
 import type AmbientSoundComponent from "./components/ambient-sound-component";
 import fetchAsset from "../assets/asset-source";
+import MusicSource from "./music-source";
+import type { ALAudioConfig_T } from "../assets/unreal/conf-files/un-conf-system";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
-const MAX_AUDIOCHANNELS = 32, ROLLOFF = 0.5; // hardcoded from l2.ini
 const AL_SOURCE_RADIUS_FALLBACK = 10; // ALAudioSubsystem::PlaySound uses 10 when Radius is zero.
 const AMBIENT_CELL_SIZE = 4096;
 const arrNoAmbientSounds: AmbientSoundComponent[] = [];
@@ -34,6 +35,7 @@ type AmbientChannel_T = {
 
 type AmbientCandidate_T = { component: AmbientSoundComponent, priority: number };
 type VoiceRequest_T = { path: string, isStream: boolean, id: number };
+type MusicBuffer_T = { path: string, pending: Promise<Blob | null> };
 
 export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly musicFiles: Record<number, string[]> = {};
@@ -46,9 +48,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected wavVoiceGainNode: GainNode;
     protected oggVoiceGainNode: GainNode;
     protected unlocked = false;
-    protected currentSource?: AudioBufferSourceNode;
+    protected currentSource?: MusicSource;
     protected currentGain?: GainNode;
-    protected musicSources = new Map<AudioBufferSourceNode, GainNode>();
+    protected musicSources = new Map<MusicSource, GainNode>();
+    protected readonly preparedMusicSources = new Set<MusicSource>();
     protected currentIndex?: number | string;
     protected playingIndex?: number | string;
     protected voiceSource: AudioBufferSourceNode = null;
@@ -59,7 +62,8 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected oggVoiceSources = new Set<AudioBufferSourceNode>();
     protected voiceIsStream = false;
     protected currentIsLooped = false;
-    protected nextBuffer?: AudioBuffer;
+    protected nextBuffer?: MusicSource;
+    protected cacheMusicBuffer: MusicBuffer_T = null;
     protected nextMusicTrackTime?: number;
     protected nextMusicPlayId?: number;
     protected fadeEndTime?: number;
@@ -70,6 +74,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected underwaterGain: GainNode = null;
     protected underwaterPlayId = 0;
     protected isUnderwater = false;
+    protected alAudio: ALAudioConfig_T = null;
 
     protected currentPlayId = 0;
 
@@ -110,6 +115,8 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         this.setupUnlock();
     }
+
+    public setSubsystemConfig(config: ALAudioConfig_T) { this.alAudio = config; }
 
     public getMusicVolume(): number { return this.musicGainNode.gain.value; }
     public setMusicVolume(v: number) { this.musicGainNode.gain.value = v; }
@@ -212,6 +219,13 @@ export class AudioManager implements IEngineComponent<GameManager> {
         if (this.playingIndex === index && (this.currentSource || this.nextMusicTrackTime !== undefined)) {
             this.currentIndex = index;
             this.currentIsLooped = isLooped;
+            if (this.currentSource) {
+                this.currentSource.element.loop = typeof index === "string" && isLooped;
+                if (this.currentSource.element.loop) {
+                    this.disposePreparedMusic();
+                    this.nextBuffer = undefined;
+                }
+            }
             return;
         }
 
@@ -219,6 +233,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             // console.log(`[Music] Queuing track ${index} (not forced)`);
             this.currentIndex = index;
             this.currentIsLooped = isLooped;
+            if (this.currentSource) this.currentSource.element.loop = false;
             this.preloadNext(index);
             return;
         }
@@ -248,18 +263,20 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const buffer = await this.fetchRandomBuffer(index);
         if (this.currentPlayId !== playId || !buffer) return;
 
-        this.playBuffer(buffer, time);
-        if (typeof index === "number") this.preloadNext(index);
+        await this.playBuffer(buffer, time);
+        if (this.currentPlayId === playId && this.currentIndex === index && typeof index === "number") this.preloadNext(index);
     }
 
     public async stopMusic(incrementPlayId = true, currentTime?: number) {
         if (incrementPlayId) {
             this.currentPlayId++;
         }
+        this.cacheMusicBuffer = null;
         await this.stopMusicInternal(incrementPlayId, currentTime ?? this.lastTime);
     }
 
     protected async stopMusicInternal(_incrementPlayId: boolean, currentTime: number) {
+        this.disposePreparedMusic();
         this.nextMusicTrackTime = undefined;
         this.nextMusicPlayId = undefined;
         this.currentIndex = undefined;
@@ -296,6 +313,8 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     public cancelMusic() {
+        this.disposePreparedMusic();
+        this.cacheMusicBuffer = null;
         this.currentPlayId++;
         this.currentIndex = undefined;
         this.playingIndex = undefined;
@@ -316,32 +335,38 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     public letTrackFinish() {
+        if (this.currentSource) this.currentSource.element.loop = false;
+        this.disposePreparedMusic();
+        this.cacheMusicBuffer = null;
         this.currentPlayId++;
         this.currentIndex = undefined;
         this.currentIsLooped = false;
         this.nextBuffer = undefined;
     }
 
-    protected playBuffer(buffer: AudioBuffer, _startTime: number) {
-        const source = this.audioContext.createBufferSource();
-        source.buffer = buffer;
+    protected async playBuffer(source: MusicSource, _startTime: number) {
+        if (source.isDisposed || source.hasStarted) throw new Error(`Invalid prepared music source.`);
+        if (this.nextBuffer === source) this.nextBuffer = undefined;
+        source.element.loop = typeof this.currentIndex === "string" && this.currentIsLooped;
 
         const gain = this.audioContext.createGain();
         gain.connect(this.musicGainNode);
         source.connect(gain);
 
         this.musicSources.set(source, gain);
+        const onended = source.onended;
         source.onended = () => {
             source.disconnect();
             gain.disconnect();
             this.musicSources.delete(source);
+            if (onended) onended();
             if (this.currentSource === source) this.handleTrackEnd(this.lastTime);
         };
-        source.start(0);
 
         this.currentSource = source;
         this.currentGain = gain;
         this.fadeEndTime = undefined;
+        await source.start();
     }
 
     protected async handleTrackEnd(endTime: number) {
@@ -351,6 +376,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         if (typeof this.currentIndex === "string" && !this.currentIsLooped) this.currentIndex = undefined; // ALineagePlayerController::Tick 0x867ed2 clears the server music request.
 
         if (this.currentIndex === undefined) {
+            this.cacheMusicBuffer = null;
             this.playingIndex = undefined;
             return;
         }
@@ -388,8 +414,8 @@ export class AudioManager implements IEngineComponent<GameManager> {
             }
 
             if (buffer && targetIndex !== undefined && (playId === undefined || this.currentPlayId === playId)) {
-                this.playBuffer(buffer, currentTime);
-                if (typeof targetIndex === "number") this.preloadNext(targetIndex);
+                await this.playBuffer(buffer, currentTime);
+                if ((playId === undefined || this.currentPlayId === playId) && this.currentIndex === targetIndex && typeof targetIndex === "number") this.preloadNext(targetIndex);
             }
         }
     }
@@ -398,10 +424,29 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const playId = this.currentPlayId;
         const buffer = await this.fetchRandomBuffer(index);
 
-        if (this.currentPlayId === playId && this.currentIndex === index) this.nextBuffer = buffer;
+        if (this.currentPlayId === playId && this.currentIndex === index) {
+            this.disposeMusicSource(this.nextBuffer);
+            this.nextBuffer = buffer;
+        } else this.disposeMusicSource(buffer);
+    }
+
+    protected disposeMusicSource(source: MusicSource): void {
+        if (!source) return;
+        this.preparedMusicSources.delete(source);
+        source.dispose();
+    }
+
+    protected disposePreparedMusic(): void {
+        for (const source of this.preparedMusicSources)
+            if (!source.hasStarted) this.disposeMusicSource(source);
     }
 
     protected async loadStream(path: string): Promise<AudioBuffer | null> {
+        const data = await this.loadStreamData(path);
+        return data ? this.audioContext.decodeAudioData(data) : null;
+    }
+
+    protected async loadStreamData(path: string): Promise<ArrayBuffer | null> {
         const res = await fetchAsset(path);
 
         if (res.status === 404) {
@@ -415,7 +460,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         binary.set(replaceBytes, 0); // patch the "encrypted" l2 oggs
 
-        return this.audioContext.decodeAudioData(binary.buffer);
+        return binary.buffer;
     }
 
     public async playVoice(path: string): Promise<void> { this.requestedVoice = { path, isStream: true, id: ++this.voicePlayId }; }
@@ -490,8 +535,52 @@ export class AudioManager implements IEngineComponent<GameManager> {
         return this.loadAmbientBuffer(uri, "voice");
     }
 
-    protected async fetchRandomBuffer(index: number | string): Promise<AudioBuffer | null> {
-        if (typeof index === "string") return this.loadStream(index);
+    protected async loadMusicBuffer(path: string): Promise<Blob | null> {
+        if (this.cacheMusicBuffer?.path === path) return this.cacheMusicBuffer.pending;
+
+        const pending = (async () => {
+            const data = await this.loadStreamData(path);
+            return data ? new Blob([data], { type: "audio/ogg" }) : null;
+        })();
+        const entry = { path, pending };
+        this.cacheMusicBuffer = entry;
+
+        try {
+            const buffer = await entry.pending;
+            if (!buffer && this.cacheMusicBuffer === entry) this.cacheMusicBuffer = null;
+            return buffer;
+        } catch (error) {
+            if (this.cacheMusicBuffer === entry) this.cacheMusicBuffer = null;
+            throw error;
+        }
+    }
+
+    protected async loadMusicSource(path: string): Promise<MusicSource | null> {
+        const playId = this.currentPlayId, buffer = await this.loadMusicBuffer(path);
+        if (!buffer || playId !== this.currentPlayId) return null;
+
+        const source = new MusicSource(this.audioContext, path, buffer);
+        this.preparedMusicSources.add(source);
+        source.onended = () => {
+            this.preparedMusicSources.delete(source);
+            if (this.nextBuffer === source) this.nextBuffer = undefined;
+            if (source.error && playId === this.currentPlayId && this.cacheMusicBuffer?.path === path) this.cacheMusicBuffer = null;
+        };
+        try {
+            const ready = await source.ready;
+            if (!ready || playId !== this.currentPlayId) {
+                this.disposeMusicSource(source);
+                return null;
+            }
+            return source;
+        } catch (error) {
+            this.disposeMusicSource(source);
+            throw error;
+        }
+    }
+
+    protected async fetchRandomBuffer(index: number | string): Promise<MusicSource | null> {
+        if (typeof index === "string") return this.loadMusicSource(index);
         if (!(index in this.musicFiles)) return null;
 
         const files = this.musicFiles[index];
@@ -499,7 +588,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const path = files[rand];
 
         try {
-            return await this.loadStream(path);
+            return await this.loadMusicSource(path);
         } catch (e) {
             console.error(`Audio fetch/decode error: ${path}`, e);
             return null;
@@ -604,7 +693,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             if (distSq > maxDistSq) continue;
 
             // SoundPriority: Volume * Clamp(1 - distSq / Square(GAudioMaxRadiusMultiplier*Radius), 0.01, 1)
-            const priority = info.volume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
+            const priority = info.volume * this.alAudio.ambientVolume * Math.min(Math.max(1 - distSq / maxDistSq, 0.01), 1);
 
             const active = this.activeAmbientSounds.get(info.uuid);
             if (active) {
@@ -622,7 +711,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         for (const [id, entry] of this.activeAmbientSounds)
             if (!entry.isAudible) this.stopAmbientSound(id);
 
-        if (this.activeAmbientSounds.size >= MAX_AUDIOCHANNELS) {
+        if (this.activeAmbientSounds.size >= this.alAudio.channels) {
             let minPriority = Infinity;
             for (const entry of this.activeAmbientSounds.values()) minPriority = Math.min(minPriority, entry.priority);
             if (maxPriority <= minPriority) return;
@@ -633,7 +722,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         for (const candidate of candidates) {
             const component = candidate.component;
             const info = component.info;
-            const placed = this.playAmbientSound(info.uuid, info.soundName, component.soundData, info.position, info.volume, info.pitch, info.refDistance, info.maxDistance, info.looping, candidate.priority);
+            const placed = this.playAmbientSound(info.uuid, info.soundName, component.soundData, info.position, info.volume * this.alAudio.ambientVolume, info.pitch, info.refDistance, info.maxDistance, info.looping, candidate.priority);
 
             if (!placed) break;
         }
@@ -681,7 +770,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     ): boolean {
         if (this.activeAmbientSounds.has(id)) return true;
 
-        if (this.activeAmbientSounds.size >= MAX_AUDIOCHANNELS && !this.stealAmbientChannel(priority)) return false;
+        if (this.activeAmbientSounds.size >= this.alAudio.channels && !this.stealAmbientChannel(priority)) return false;
 
         const entry: AmbientChannel_T = {
             priority,
@@ -794,7 +883,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         panner.distanceModel = "inverse";
         panner.refDistance = info.refDistance;
         panner.maxDistance = info.maxDistance;
-        panner.rolloffFactor = ROLLOFF;
+        panner.rolloffFactor = this.alAudio.rollOff;
         panner.positionX.value = info.position[0];
         panner.positionY.value = info.position[1];
         panner.positionZ.value = info.position[2];
@@ -865,7 +954,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             panner.distanceModel = "inverse";
             panner.refDistance = sourceRadius;
             panner.maxDistance = sourceMaxDistance;
-            panner.rolloffFactor = ROLLOFF;
+            panner.rolloffFactor = this.alAudio.rollOff;
             panner.positionX.value = x;
             panner.positionY.value = y;
             panner.positionZ.value = z;
