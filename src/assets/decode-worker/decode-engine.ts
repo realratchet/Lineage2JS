@@ -2096,7 +2096,7 @@ export class DecodeEngine {
             staticObjectNames: Object.fromEntries(staticObjectNames.datarows.map((row: any) => [row.id, row.name])),
             npcTitles: Object.fromEntries(npcNames.datarows.filter((row: any) => row.description).map((row: any) => [row.id, row.description])),
             npcTitleColors: Object.fromEntries(npcNames.datarows.map((row: any) => [row.id, (row.reserved << 24 | row.blue << 16 | row.green << 8 | row.red) >>> 0])), // Engine.dll 0x718eae: npcname colour is a verbatim four-byte dword.
-            obsceneWords: obscene.datarows.map((row: any) => row.text),
+            obsceneWords: [], // obscene.datarows.map((row: any) => row.text), // don't care tbh
             residences: Object.fromEntries(residences.datarows.slice().reverse().filter((row: any) => row.tag).map((row: any) => [row.id, row.castle_name])),
             recipes: recipes.datarows.map((row: any) => ({ id: row.id_mk, itemId: row.id_recipe, level: row.level, productId: row.id_item, count: row.count, mpCost: row.mp_cost, successRate: row.success_rate, materials: row.materials })),
             hennas: Object.fromEntries(hennas.datarows.map((row: any) => [row.id, { dyeItemId: row.dye_id, name: row.name, icon: row.icon, addName: row.symbol_add_name, description: row.symbol_add_desc.replace(/\\n/g, "\n") }])),
