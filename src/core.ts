@@ -122,8 +122,10 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
     if (loginServer) void engine.getComponent("network").showLogin(loginServer);
 
     if (interactive) {
-        uiManager.addClippingRangeControls();
-        uiManager.addDisplayGammaControls();
+        if (!loginServer) {
+            uiManager.addClippingRangeControls();
+            uiManager.addDisplayGammaControls();
+        }
         uiManager.addNpcControls();
         await uiManager.addCharacterControls();
 

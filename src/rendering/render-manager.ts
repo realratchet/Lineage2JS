@@ -303,6 +303,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public bspHelperCamera: PerspectiveCamera | null = null;
     public bspHelperCameraHelper: CameraHelper | null = null;
     public bspHelperActive: boolean = false;
+    protected usePawnCullingCamera = false;
     public frustumCullingEnabled: boolean = true;
     public readonly visualizer: Visualizer;
     public readonly radar = new Radar();
@@ -1884,7 +1885,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const activeSector = this.getSector(bspCullingPosition);
 
         if (!auxiliary) {
-            this.getPhysicsManager().setTriggerPosition(this.camera.position);
+            this.getPhysicsManager().setTriggerPosition(this.usePawnCullingCamera ? this.player.position : this.camera.position);
         }
 
         for (const sector of this.arrSceneSectors) {
@@ -1953,6 +1954,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.updateViewBillboards(this.camera);
 
+        if (this.usePawnCullingCamera) {
+            this.bspHelperCamera.position.copy(this.player.position);
+            this.bspHelperCamera.updateMatrixWorld(true);
+        }
+
         if (this.bspHelperCamera) {
             if (!this.bspHelperActive) {
                 this.bspHelperCamera.position.copy(this.camera.position);
@@ -1963,7 +1969,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 }
             } else {
                 if (this.bspHelperCameraHelper) {
-                    this.bspHelperCameraHelper.visible = true;
+                    this.bspHelperCameraHelper.visible = !this.usePawnCullingCamera;
                 }
             }
             if (this.bspHelperCameraHelper) {
@@ -3280,6 +3286,20 @@ export class RenderManager implements IEngineComponent<GameManager> {
         sector.releaseLevelActors();
     }
 
+    public setPawnCullingCamera(enabled: boolean): void {
+        if (enabled) {
+            if (!this.bspHelperCamera) this.toggleBSPHelperCamera();
+            this.bspHelperCamera.position.copy(this.player.position);
+            this.bspHelperCamera.quaternion.copy(this.camera.quaternion);
+            this.bspHelperCamera.updateMatrixWorld(true);
+        }
+
+        this.usePawnCullingCamera = enabled;
+        this.bspHelperActive = enabled;
+        if (this.bspHelperCameraHelper) this.bspHelperCameraHelper.visible = false;
+        this.needsUpdate = true;
+    }
+
     public toggleBSPHelperCamera() {
         if (!this.bspHelperCamera) {
             this.bspHelperCamera = new PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.1, DEFAULT_FAR);
@@ -3301,7 +3321,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             if (this.bspHelperActive) {
                 if (this.bspHelperCameraHelper) {
-                    this.bspHelperCameraHelper.visible = true;
+                    this.bspHelperCameraHelper.visible = !this.usePawnCullingCamera;
                 }
             } else {
                 // Resume following main camera and hide helper

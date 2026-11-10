@@ -316,6 +316,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         window.addEventListener("keydown", event => {
             const target = event.target as HTMLElement;
 
+            if (event.code === "Backquote" || !this.manGame.getComponent("input").isUsingOrbitControls()) return;
             if (asset.playerController.isEnterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
             if (this.chatWnd.isInputFocused() || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
             if (event.key === " " && target.closest('[role="checkbox"], [role="tab"], [role="button"], [role="combobox"]')) return;

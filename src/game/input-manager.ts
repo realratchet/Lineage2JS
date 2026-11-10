@@ -1,4 +1,5 @@
 import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
+import loginServer from "../network/login-server";
 import { Box3, Camera, Raycaster, Vector2, Vector3 } from "three";
 import { IEngineComponent } from "./components";
 import { getProperty, setProperty } from "../ue-script/vm";
@@ -103,6 +104,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected hasMouseDragged = false;
     protected followPlayer = false;
     protected isCameraLocked = false;
+    protected isPawnFreeCamera = false;
     protected isCameraHeightAdjusted = false;
     protected replayCameraState: ReplayCameraState_T = null;
     protected readonly specialView = new SpecialView(this);
@@ -199,6 +201,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     public getOrbitTarget(): Vector3 { return this.controls.orbit.target; }
     public isUsingOrbitControls(): boolean { return this.isOrbitControls; }
     public isFollowingPlayer(): boolean { return this.followPlayer; }
+    public isCameraInputLocked(): boolean { return this.isCameraLocked; }
 
     public setCameraLocked(isLocked: boolean): void {
         if (isLocked) this.specialView.reset();
@@ -206,7 +209,10 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.isCameraLocked = isLocked;
         this.controls.orbit.enabled = !isLocked;
 
-        if (isLocked) this.setFollowPlayer(false);
+        if (isLocked) {
+            if (this.controls.fps.isLocked) this.controls.fps.unlock();
+            this.setFollowPlayer(false);
+        }
     }
 
     public resetFollowCamera(): void {
@@ -542,6 +548,11 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onPointerControlsLocked(): void {
+        if (this.manGame.getComponent("network").isInWorld()) {
+            this.isPawnFreeCamera = true;
+            this.setFollowPlayer(true);
+            this.renderManager.setPawnCullingCamera(true);
+        }
         this.isOrbitControls = false;
         this.controls.orbit.enabled = false;
         this.clearDirectionKeys();
@@ -549,7 +560,16 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onPointerControlsUnlocked(): void {
         this.isOrbitControls = true;
-        this.controls.orbit.enabled = true;
+        this.controls.orbit.enabled = !this.isCameraLocked;
+        if (this.isPawnFreeCamera) {
+            this.isPawnFreeCamera = false;
+            this.renderManager.setPawnCullingCamera(false);
+            if (this.manGame.getComponent("network").isInWorld() && !this.isCameraLocked) {
+                this.resetFollowCamera();
+                this.clearDirectionKeys();
+                return;
+            }
+        }
         this.controls.fps.getDirection(this.controls.orbit.target).multiplyScalar(100).add(this.renderManager.camera.position);
         this.controls.orbit.update();
         this.clearDirectionKeys();
@@ -560,7 +580,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         const target = event.target as HTMLElement;
 
         if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
-        if (this.followPlayer && this.manGame.getComponent("network").isInWorld() && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
+        if (loginServer && /^F([1-9]|1[0-2])$/.test(event.code || event.key)) return;
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
         if (event.code === "PageUp" || event.code === "PageDown" || event.code === "Home") {
@@ -592,6 +612,8 @@ export class InputManager implements IEngineComponent<GameManager> {
             renderManager.toggleFrustumCulling();
             return;
         }
+
+        if (loginServer && /^[1-6+\-t]$/i.test(event.key)) return;
 
         switch (event.key.toLowerCase()) {
             case "1": this.setBookmark(1); break;
@@ -691,6 +713,7 @@ export class InputManager implements IEngineComponent<GameManager> {
                 const target = event.target as HTMLElement;
 
                 if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+                if (loginServer) return;
                 if (this.isOrbitControls) this.controls.fps.lock();
                 else this.controls.fps.unlock();
                 break;
