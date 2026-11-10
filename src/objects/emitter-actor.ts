@@ -83,6 +83,14 @@ export class EmitterActor extends GameObject {
         this.scriptProperties.set("AutoDestroy", true);
     }
 
+    public l2EventShow(value: number): void {
+        // AEmitter::L2EventShow 0x8a4150: SetDisabled(!value, 1, 0).
+        for (const emitter of this.scriptProperties.get("Emitters") as BaseEmitter[])
+            if (emitter) emitter.setDisabled(value === 0);
+    }
+
+    public l2EventPlay(_value: number): void { }
+
     public getSpeedRate(): number {
         const speedRate = (this as any).scriptProperties?.get("SpeedRate") ?? this.speedRate;
 

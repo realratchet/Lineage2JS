@@ -1140,6 +1140,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected setSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): void {
         sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
         sector.traverse((object: any) => {
+            if (object.isEmitterActor) {
+                sector.scriptVM.initializeHost(object);
+                // AActor::PostBeginPlay 0x8583f0..0x858424.
+                Actor.prototype.postBeginPlay.call(object);
+            }
             if (object.isTerrain) object.terrainInfoActor = sector.getTerrainInfoActor(object.terrainInfoUuid);
             if (object.isTerrainBatch)
                 for (const terrain of object.sectors) terrain.terrainInfoActor = sector.getTerrainInfoActor(terrain.terrainInfoUuid);

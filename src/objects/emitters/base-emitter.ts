@@ -293,6 +293,7 @@ export abstract class BaseEmitter extends Object3D {
 
     public getCurrentTime() { return this.currentTime; }
     public isFinished() { return this.isDisabled || this.allParticlesDead; }
+    public setDisabled(disabled: boolean): void { this.isDisabled = disabled; }
     public kill() {
         this.isRespawningDeadParticles = false;
         this.initialParticlesPerSecond = 0;
