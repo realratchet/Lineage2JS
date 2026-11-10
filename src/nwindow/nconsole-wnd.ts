@@ -164,7 +164,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     protected heroTowerWnd: HeroTowerWndView_T = null;
     protected commandInfoWnd: CommandInfoWndView_T = null;
     protected trainWnd: TrainWndView_T = null;
-    protected options: AssetManager["userConfig"];
+    protected options: AssetManager["userConfig"] & { audio: AudioConfig_T };
     protected privateShopWnd: PrivateShopWndView_T = null;
     protected privateBuyWnd: PrivateBuyWndView_T = null;
     protected vipShopWnd: VIPShopWndView_T = null;
@@ -246,7 +246,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const network = this.manGame.getComponent("network"), asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
 
         this.manNetwork = network;
-        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game }, audio: { ...asset.userConfig.audio }, display: { ...asset.userConfig.display } };
+        this.options = { ...asset.userConfig, game: { ...asset.userConfig.game }, audio: { ...asset.userConfig.audio, backgroundAudio: "notices" }, display: { ...asset.userConfig.display } };
         this.manRender = render;
         this.nwindow = new NWindowManager(asset, this.skin.textures);
         this.layer = new NDomLayer(this.nwindow);
@@ -2642,14 +2642,19 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error(`Invalid audio options.`);
 
         for (const [key, value] of Object.entries(options)) {
+            if (key === "backgroundAudio") {
+                if (!["all", "combat", "notices", "none"].includes(value as string)) throw new Error(`Invalid background audio '${value}'.`);
+                continue;
+            }
             if (!["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"].includes(key)) throw new Error(`Unknown audio option '${key}'.`);
             if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new Error(`Invalid audio option '${key}'.`);
         }
-        this.options.audio = { ...this.manNetwork.getParent().getComponent("asset").userConfig.audio, ...options };
+        this.options.audio = { ...this.manNetwork.getParent().getComponent("asset").userConfig.audio, backgroundAudio: "notices", ...options };
         const audio = this.manNetwork.getParent().getComponent("audio");
 
         const wasMusicOff = audio.getMusicVolume() === 0;
 
+        audio.setBackgroundAudio(this.options.audio.backgroundAudio);
         audio.setSoundVolume(this.options.audio.soundVolume);
         audio.setMusicVolume(this.options.audio.musicVolume);
         audio.setWavVoiceVolume(this.options.audio.wavVoiceVolume);
@@ -2668,7 +2673,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public getAudioOptions() {
         const audio = this.manNetwork.getParent().getComponent("audio");
 
-        return { soundVolume: audio.getSoundVolume(), musicVolume: audio.getMusicVolume(), wavVoiceVolume: audio.getWavVoiceVolume(), oggVoiceVolume: audio.getOggVoiceVolume() };
+        return { backgroundAudio: audio.getBackgroundAudio(), soundVolume: audio.getSoundVolume(), musicVolume: audio.getMusicVolume(), wavVoiceVolume: audio.getWavVoiceVolume(), oggVoiceVolume: audio.getOggVoiceVolume() };
     }
 
     public saveInventoryOrder() { this.inventoryWnd.saveOrder(); }

@@ -1330,10 +1330,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
-    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null, instigator?: ScriptHost_T): void {
+    public addTransientEffect(effect: Object3D, owner: Object3D & IObject = null, instigator?: ScriptHost_T, isCombat: boolean = false): void {
         if (!(effect as any).isGameObject) throw new Error(`Transient effect '${effect.name}' is not a game object.`);
 
         const object = effect as Object3D & IObject;
+
+        if (isCombat || owner && this.audioManager.hasCombatSounds(owner)) this.audioManager.markCombatSounds(effect);
 
         const lifetime = object.findComponent<EffectLifetimeComponent>("effectLifetime") || object.addComponent(new EffectLifetimeComponent(this));
 
@@ -2009,7 +2011,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 if (parent.isSectorObject) { sector = parent; break; }
 
             for (const sound of emitter.pendingSounds)
-                if (sound.dataUri || sector) this.audioManager.playOneShotSound(sound.dataUri || sector.getSoundUri(sound.soundName), sound.position, sound.volume, sound.pitch, sound.refDistance, sound.maxDistance);
+                if (sound.dataUri || sector) this.audioManager.playOneShotSound(sound.dataUri || sector.getSoundUri(sound.soundName), sound.position, sound.volume, sound.pitch, sound.refDistance, sound.maxDistance, true, undefined, this.audioManager.hasCombatSounds(emitter));
             emitter.pendingSounds.length = 0;
         }
 

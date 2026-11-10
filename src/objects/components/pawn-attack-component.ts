@@ -104,7 +104,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             for (let i = this.transientEffects.length - 1; i >= 0; i--)
                 if (!this.transientEffects[i].parent) this.transientEffects.splice(i, 1);
             this.transientEffects.push(effect as any);
-            renderManager.addTransientEffect(effect as any, owner as any);
+            renderManager.addTransientEffect(effect as any, owner as any, undefined, true);
         }, effect => renderManager.removeTransientEffect(effect as any)));
 
         for (const skill of skills) {
@@ -880,7 +880,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
             if (!this.attackEffects[i].parent) this.attackEffects.splice(i, 1);
 
         this.attackEffects.push(effect);
-        this.renderManager.addTransientEffect(effect, owner);
+        this.renderManager.addTransientEffect(effect, owner, undefined, true);
     }
 }
 

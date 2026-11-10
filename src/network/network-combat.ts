@@ -595,7 +595,7 @@ export class NetworkCombat {
         const name = duration <= 7 ? "MonSound3.antaras_earthquake" : "MonSound3.antaras_earthquake_2";
         const uri = await this.network.getParent().getComponent("asset").loadSound(name);
 
-        await this.network.getParent().getComponent("audio").playOneShotSound(uri, render.player.position, 1, 1, 80, 8000);
+        await this.network.getParent().getComponent("audio").playOneShotSound(uri, render.player.position, 1, 1, 80, 8000, true, undefined, true);
     }
 
     public setTarget(objectId: number, levelDifference: number = 0) {

@@ -16,10 +16,12 @@ export type ClippingRangeConfig_T = {
 
 export type DisplayConfig_T = { brightness: number; contrast: number; gamma: number; };
 export type GameConfig_T = { renderActorLimitOpt: number; antiAliasing: number; textureDetail: number; useTrilinear: boolean; renderDeco: boolean; pawnShadow: boolean; sortTransparent: boolean; skillEffectLighting: boolean; useColorCursor: boolean; autoTrackingPawn: boolean; arrowMode: boolean; showZoneTitle: boolean; systemMsgWnd: boolean; systemMsgWndDamage: boolean; systemMsgWndExpendableItem: boolean; transparencyMode: boolean; partyLooting: number; enterChatting: boolean; oldChatting: boolean; myName: boolean; npcName: boolean; groupName: boolean; pledgeMemberName: boolean; partyMemberName: boolean; otherPCName: boolean; };
-export type AudioConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
+export type BackgroundAudio_T = "all" | "combat" | "notices" | "none";
+export type AudioVolumeConfig_T = { soundVolume: number; musicVolume: number; wavVoiceVolume: number; oggVoiceVolume: number; };
+export type AudioConfig_T = AudioVolumeConfig_T & { backgroundAudio: BackgroundAudio_T; };
 export type ALAudioConfig_T = { channels: number; ambientVolume: number; rollOff: number; };
 export type CharacterDisplayConfig_T = { name: boolean; dist: number; };
-export type UserConfig_T = { audio: AudioConfig_T; alAudio: ALAudioConfig_T; characterDisplay: CharacterDisplayConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; minZoomingDist: number; maxZoomingDist: number; fixedDefaultCamera: Record<string, number | number[]>; };
+export type UserConfig_T = { audio: AudioVolumeConfig_T; alAudio: ALAudioConfig_T; characterDisplay: CharacterDisplayConfig_T; clippingRange: ClippingRangeConfig_T; display: DisplayConfig_T; game: GameConfig_T; cameraViewHeightAdjust: number; useAutoTrackingPawn: boolean; autoTrackingPawnSpeed: number; minZoomingDist: number; maxZoomingDist: number; fixedDefaultCamera: Record<string, number | number[]>; };
 
 export class UConfigSystem extends BaseConfigFile {
     public clippingRange: ClippingRangeConfig_T = {
@@ -40,7 +42,7 @@ export class UConfigSystem extends BaseConfigFile {
         gamma: 0.8
     };
 
-    public audio: AudioConfig_T = { soundVolume: 0.8, musicVolume: 1, wavVoiceVolume: 0.6, oggVoiceVolume: 0.6 }; // ALAudio.dll Init 0x1000a1b4/0x1000a1e0/0x1000a20c/0x1000a238.
+    public audio: AudioVolumeConfig_T = { soundVolume: 0.8, musicVolume: 1, wavVoiceVolume: 0.6, oggVoiceVolume: 0.6 }; // ALAudio.dll Init 0x1000a1b4/0x1000a1e0/0x1000a20c/0x1000a238.
 
     public alAudio: ALAudioConfig_T = { channels: 32, ambientVolume: 1, rollOff: 0.5 };
     public characterDisplay: CharacterDisplayConfig_T = { name: true, dist: 1000 };

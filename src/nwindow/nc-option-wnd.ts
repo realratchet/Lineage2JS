@@ -2,7 +2,7 @@ import type { default as NDomLayer, NDomButton_T, NDomCheckBox_T } from "./ndom"
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
-import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
+import type { AudioConfig_T, BackgroundAudio_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
 import { SKIN_SLOTS } from "./skin-textures";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import SysString_T from "./sys-string";
@@ -59,7 +59,9 @@ export class NCOptionWnd {
     protected readonly background: HTMLCanvasElement;
     protected readonly tabs: NDomButton_T[] = [];
     protected readonly audioCombos: NCComboBox[] = [];
-    protected readonly audioKeys: (keyof AudioConfig_T)[] = ["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"];
+    protected readonly backgroundAudio: NCComboBox;
+    protected readonly backgroundAudioModes: BackgroundAudio_T[] = ["all", "notices", "combat", "none"];
+    protected readonly audioKeys: (keyof Omit<AudioConfig_T, "backgroundAudio">)[] = ["soundVolume", "musicVolume", "wavVoiceVolume", "oggVoiceVolume"];
     protected readonly audioGains = [1, 0.8, 0.6, 0.4, 0.2, 0];
     protected selectedTab = 2;
     protected readonly nameKeys: (keyof GameConfig_T)[] = ["myName", "npcName", "groupName", "pledgeMemberName", "partyMemberName", "otherPCName"];
@@ -240,6 +242,20 @@ export class NCOptionWnd {
             audioRows.push([text, combo.element]);
         });
 
+        this.backgroundAudio = new NCComboBox(layer, this.audio, 107, 87, 125, 17);
+        this.backgroundAudio.setItems(["All", "No Music", "Combat", "None"]);
+        this.backgroundAudio.element.tabIndex = 0;
+        this.backgroundAudio.element.setAttribute("role", "combobox");
+        this.backgroundAudio.element.setAttribute("aria-label", "Background Audio");
+        this.backgroundAudio.element.addEventListener("keydown", event => {
+            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+
+            event.preventDefault();
+            this.backgroundAudio.setSelected(Math.max(0, Math.min(3, this.backgroundAudio.getSelected() + (event.key === "ArrowDown" ? 1 : -1))));
+            this.backgroundAudio.setOpen(false);
+        });
+        audioRows.push([layer.text(this.audio, "Background Audio", 0xffdcdcdc, FontType_T.SMALL, 98 - layer.measureText("Background Audio"), 90), this.backgroundAudio.element]);
+
         [SysString_T.Player, SysString_T.Monsters, SysString_T.OtherPCs, SysString_T.Clan, SysString_T.PartyNames, SysString_T.GeneralNames].forEach((id, index) => {
             const x = index < 3 ? 84 : 95, y = index < 3 ? [85, 99, 116][index] : 133 + (index - 3) * 17;
             const checkbox = layer.checkbox(game, x, y, 100, 12, manager.getSysString(id), index === 2 ? () => this.updateNameControls() : null);
@@ -345,6 +361,7 @@ export class NCOptionWnd {
         this.partyLooting.setOpen(false);
         this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
+        this.backgroundAudio.setOpen(false);
         this.element.hidden = !isVisible;
 
         if (isVisible) {
@@ -389,6 +406,7 @@ export class NCOptionWnd {
             this.partyLooting.setSelected(this.lootType);
             const audio = this.getAudioOptions();
 
+            this.backgroundAudio.setSelected(this.backgroundAudioModes.indexOf(audio.backgroundAudio));
             this.updatePartyLootControl();
             this.audioCombos.forEach((combo, index) => {
                 const value = audio[this.audioKeys[index]];
@@ -437,6 +455,7 @@ export class NCOptionWnd {
         this.partyLooting.setOpen(false);
         this.uiScale.setOpen(false);
         this.audioCombos.forEach(combo => combo.setOpen(false));
+        this.backgroundAudio.setOpen(false);
         this.tabs.forEach((tab, i) => {
             tab.setTextures(i === index ? TEX_TAB_SELECTED : TEX_TAB, TEX_TAB_SELECTED);
             tab.setAttribute("aria-selected", String(i === index));
@@ -504,7 +523,7 @@ export class NCOptionWnd {
             this.lootType = this.getOptions().partyLooting;
             this.partyLooting.setSelected(this.lootType);
         }
-        this.onApplyAudio(Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])) as AudioConfig_T);
+        this.onApplyAudio({ ...Object.fromEntries(this.audioKeys.map((key, index) => [key, this.audioGains[this.audioCombos[index].getSelected()]])), backgroundAudio: this.backgroundAudioModes[this.backgroundAudio.getSelected()] } as AudioConfig_T);
         this.onApply({ renderActorLimitOpt: 6 - this.pawnLimit.getSelected(), antiAliasing: this.antiAliasingLevels[this.antiAliasing.getSelected()], textureDetail: this.textureDetail.getSelected(), useTrilinear: this.useTrilinear.getChecked(), renderDeco: this.renderDeco.getChecked(), pawnShadow: this.pawnShadow.getChecked(), sortTransparent: this.sortTransparent.getChecked(), skillEffectLighting: this.skillEffectLighting.getChecked(), ...Object.fromEntries(this.nameKeys.map((key, index) => [key, this.nameChecks[index].getChecked()])), autoTrackingPawn: this.autoTrackingPawn.getChecked(), useColorCursor: this.useColorCursor.getChecked(), arrowMode: this.arrowMode.getChecked(), showZoneTitle: this.showZoneTitle.getChecked(), enterChatting: this.enterChatting.getChecked(), oldChatting: this.oldChatting.getChecked(), transparencyMode: this.transparencyMode.getChecked(), systemMsgWnd: this.systemMsgWnd.getChecked(), systemMsgWndDamage: this.systemMsgWndDamage.getChecked(), systemMsgWndExpendableItem: this.systemMsgWndExpendableItem.getChecked(), partyLooting: this.lootType } as GameConfig_T);
     }
 }

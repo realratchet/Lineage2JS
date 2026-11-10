@@ -1,10 +1,11 @@
 import { IEngineComponent } from "../game/components";
 import type GameManager from "../game/game-manager";
+import type { Object3D } from "three";
 import { randInt } from "three/src/math/MathUtils";
 import type AmbientSoundComponent from "./components/ambient-sound-component";
 import fetchAsset from "../assets/asset-source";
 import MusicSource from "./music-source";
-import type { ALAudioConfig_T } from "../assets/unreal/conf-files/un-conf-system";
+import type { ALAudioConfig_T, BackgroundAudio_T } from "../assets/unreal/conf-files/un-conf-system";
 
 const replaceBytes = new Uint8Array("OggS".split("").map(x => x.charCodeAt(0)));
 const AL_SOURCE_RADIUS_FALLBACK = 10; // ALAudioSubsystem::PlaySound uses 10 when Radius is zero.
@@ -41,6 +42,11 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly musicFiles: Record<number, string[]> = {};
     protected audioContext: AudioContext;
     protected masterGain: GainNode;
+    protected backgroundMusicGainNode: GainNode;
+    protected backgroundSoundGainNode: GainNode;
+    protected combatGainNode: GainNode;
+    protected backgroundAudio: BackgroundAudio_T = "notices";
+    protected readonly combatSoundObjects = new WeakSet<Object3D>();
     protected soundscapeGainNode: GainNode;
     protected musicGainNode: GainNode;
     protected ambientGainNode: GainNode;
@@ -89,8 +95,16 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.masterGain.connect(this.audioContext.destination);
         this.masterGain.gain.value = 1;
 
+        this.backgroundMusicGainNode = this.audioContext.createGain();
+        this.backgroundMusicGainNode.connect(this.masterGain);
+        this.backgroundSoundGainNode = this.audioContext.createGain();
+        this.backgroundSoundGainNode.connect(this.masterGain);
+        this.combatGainNode = this.audioContext.createGain();
+        this.combatGainNode.connect(this.masterGain);
+        this.combatGainNode.gain.value = 0.3;
+
         this.soundscapeGainNode = this.audioContext.createGain();
-        this.soundscapeGainNode.connect(this.masterGain);
+        this.soundscapeGainNode.connect(this.backgroundMusicGainNode);
         this.soundscapeGainNode.gain.value = 1;
 
         this.musicGainNode = this.audioContext.createGain();
@@ -98,23 +112,48 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.musicGainNode.gain.value = 0.1;
 
         this.ambientGainNode = this.audioContext.createGain();
-        this.ambientGainNode.connect(this.masterGain);
+        this.ambientGainNode.connect(this.backgroundSoundGainNode);
         this.ambientGainNode.gain.value = 0.3;
 
         this.effectsGainNode = this.audioContext.createGain();
-        this.effectsGainNode.connect(this.masterGain);
+        this.effectsGainNode.connect(this.backgroundSoundGainNode);
         this.effectsGainNode.gain.value = 0.3;
 
         this.wavVoiceGainNode = this.audioContext.createGain();
-        this.wavVoiceGainNode.connect(this.masterGain);
+        this.wavVoiceGainNode.connect(this.backgroundSoundGainNode);
         this.wavVoiceGainNode.gain.value = 0.3;
 
         this.oggVoiceGainNode = this.audioContext.createGain();
-        this.oggVoiceGainNode.connect(this.masterGain);
+        this.oggVoiceGainNode.connect(this.backgroundSoundGainNode);
         this.oggVoiceGainNode.gain.value = 0.3;
 
+        const updateBackground = () => this.updateBackgroundAudio();
+
+        document.addEventListener("visibilitychange", updateBackground);
+        window.addEventListener("focus", updateBackground);
+        window.addEventListener("blur", updateBackground);
+        this.updateBackgroundAudio();
         this.setupUnlock();
     }
+
+    public getBackgroundAudio(): BackgroundAudio_T { return this.backgroundAudio; }
+    public setBackgroundAudio(value: BackgroundAudio_T): void {
+        if (!["all", "combat", "notices", "none"].includes(value)) throw new Error(`Invalid background audio '${value}'.`);
+
+        this.backgroundAudio = value;
+        this.updateBackgroundAudio();
+    }
+
+    protected updateBackgroundAudio(): void {
+        const active = !document.hidden && document.hasFocus();
+
+        this.masterGain.gain.value = active || this.backgroundAudio !== "none" ? 1 : 0;
+        this.backgroundMusicGainNode.gain.value = active || this.backgroundAudio === "all" ? 1 : 0;
+        this.backgroundSoundGainNode.gain.value = active || this.backgroundAudio === "all" || this.backgroundAudio === "notices" ? 1 : 0;
+    }
+
+    public markCombatSounds(object: Object3D): void { object.traverse(child => this.combatSoundObjects.add(child)); }
+    public hasCombatSounds(object: Object3D): boolean { return this.combatSoundObjects.has(object); }
 
     public setSubsystemConfig(config: ALAudioConfig_T) { this.alAudio = config; }
 
@@ -128,6 +167,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     public setAmbientVolume(v: number) {
         this.ambientGainNode.gain.value = v;
         this.effectsGainNode.gain.value = v;
+        this.combatGainNode.gain.value = v;
     }
 
     public getWavVoiceVolume(): number { return this.wavVoiceGainNode.gain.value; }
@@ -921,7 +961,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         await this.playOneShotSound(uri, [0, 0, 0], 1, 1, 0, 0, false); // Engine.dll OnInterfacePlaySound 0x74711b: SOUND_No3D, pitch 1.
     }
 
-    public async playOneShotSound(dataUri: string | Uint8Array | Blob, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true, onStarted?: (duration: number) => void) {
+    public async playOneShotSound(dataUri: string | Uint8Array | Blob, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true, onStarted?: (duration: number) => void, isCombat: boolean = false) {
         const sourcePosition = position as any;
         const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
         const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
@@ -946,6 +986,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         source.connect(gain);
 
+        const output = isCombat ? this.combatGainNode : this.effectsGainNode;
         let panner: PannerNode = null;
 
         if (attenuate) {
@@ -959,8 +1000,8 @@ export class AudioManager implements IEngineComponent<GameManager> {
             panner.positionY.value = y;
             panner.positionZ.value = z;
             gain.connect(panner);
-            panner.connect(this.effectsGainNode);
-        } else gain.connect(this.effectsGainNode);
+            panner.connect(output);
+        } else gain.connect(output);
 
         source.onended = () => {
             source.disconnect();
