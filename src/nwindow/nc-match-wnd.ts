@@ -1,7 +1,7 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl from "./nc-list-ctrl";
 import NCMinimizedWnd from "./nc-minimized-wnd";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import NDomLayer, { type NDomButton_T } from "./ndom";
 import type { PartyMatchList_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -20,7 +20,7 @@ export function getPartyLocation(layer: NDomLayer, location: number) {
 }
 
 export class NCMatchWnd {
-    public static getTextures() { return [TEX_BACK, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_SMALL, TEX_SMALL_DOWN, ...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), ...NCMinimizedWnd.getTextures(), ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down"]; }
+    public static getTextures() { return [TEX_BACK, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_SMALL, TEX_SMALL_DOWN, ...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), ...NCMinimizedWnd.getTextures(), ...NCComboBox.getTextures()]; }
     public readonly element: HTMLDivElement;
     public readonly table: NCListCtrl;
     public readonly location: NCComboBox;

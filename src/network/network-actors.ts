@@ -1,3 +1,4 @@
+import waitForAreaLoad from "./world-loading";
 import PawnHeroComponent from "../objects/components/pawn-hero-component";
 import { setLoadingProgress, loadingTexts } from "../loading-progress";
 import type NetworkManager from "./network-manager";
@@ -295,16 +296,7 @@ export class NetworkActors {
         physics.setPawnZone(render.player, false, true);
         physics.setPawnVolumes(render.player);
 
-        while (generation === this.teleportGeneration) {
-            const progress = asset.getAreaLoadProgress(render, render.player.position);
-
-            if (progress.ready === progress.total) break;
-
-            const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
-
-            setLoadingProgress(value || null, loadingTexts.areaParts(progress));
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
+        await waitForAreaLoad(asset, render, () => generation === this.teleportGeneration);
 
         if (generation !== this.teleportGeneration) return;
 

@@ -213,7 +213,7 @@ export class AssetLoader extends AAssetLoader<APackage, UCorePackage, UEnginePac
         const restored = packages.filter((entry: any) => !!entry.cachedResolver);
         if (!restored.length) return pkg;
         const { packageIdentity } = await import("./unreal/package-resolver");
-        const { isCacheEnabled } = await import("./decode-worker/decode-cache");
+        const { isCacheEnabled } = await import("./decode-worker/cache-storage");
         const stale = restored.filter((entry: any) => (entry.cachedResolver.version !== (this.packageCacheSettings.cache === false ? 0 : this.packageCacheSettings.cache?.version ?? 0) || !isCacheEnabled(this.packageCacheSettings) || this.packageCacheSettings._packageCache === false || entry.cachedResolver.identity !== packageIdentity(this.getDependencies(entry).filter(path => path !== this.getNativePackage().path).map(path => this.getPackage(path)))));
         if (!stale.length) {
             for (const entry of packages as any[]) if (entry.cachedResolver) queueConvertedAssetRelease(entry.path, this.packageCacheSettings, entry.cachedResolver.identity);

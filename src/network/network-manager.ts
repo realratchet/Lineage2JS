@@ -1,7 +1,7 @@
 import PawnSimulation from "./pawn-simulation";
 import NetworkSession, { GMTransferPhase_T } from "./network-session";
 import NetworkActors, { type NetObject_T } from "./network-actors";
-import NetworkMovement, { tmpVehicleOrigin } from "./network-movement";
+import NetworkMovement from "./network-movement";
 import NetworkMonRace from "./network-mon-race";
 import NetworkCombat from "./network-combat";
 import NetworkItems from "./network-items";
@@ -27,14 +27,6 @@ import type GameManager from "../game/game-manager";
 import type MovableObject from "../objects/movable-object";
 import type { ICollidable } from "../objects/objects";
 import { getDistance } from "./network-location";
-
-const VALIDATE_POSITION_INTERVAL = 1000;
-
-const STUCK_INTERVAL = 600;
-
-const STUCK_DISTANCE = 2;
-
-const STOP_SNAP_DISTANCE = 32;
 
 export class NetworkManager implements IEngineComponent<GameManager> {
     public readonly session = new NetworkSession(this);
@@ -1373,42 +1365,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.movement.updateVehicles(deltaTime);
         this.monRace.tick(deltaTime / 1000);
 
-        const player = this.manGame.getComponent("render").player;
-        const isMoving = player.isLocomoting();
-
-        if ((isMoving || this.movement.wasMoving) && currentTime - this.movement.lastValidateAt >= VALIDATE_POSITION_INTERVAL) {
-            this.movement.lastValidateAt = currentTime;
-            this.movement.wasMoving = isMoving;
-            const base = player.getBaseActor() as Vehicle;
-
-            if (base && base.isVehicle) {
-                tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]);
-                base.getLocalLocation(tmpVehicleOrigin, tmpVehicleOrigin);
-                this.session.game.validatePosition(tmpVehicleOrigin, player.getRotationYaw(), base.getUnrealScriptProperty("L2ServerObjectID") as number);
-            } else this.session.game.validatePosition(player.position, player.getRotationYaw());
-        }
-
-        if (!isMoving || !player.isInteractive()) this.movement.stuckCheckAt = 0;
-        else if (this.movement.stuckCheckAt === 0) {
-            this.movement.stuckCheckAt = currentTime;
-            this.movement.stuckPosition.copy(player.position);
-        } else if (currentTime - this.movement.stuckCheckAt >= STUCK_INTERVAL) { // Server walks straight through whatever blocked us; CannotMoveAnymore makes it adopt our stop point.
-            if (player.position.distanceTo(this.movement.stuckPosition) < STUCK_DISTANCE) this.cannotMoveAnymore();
-            else {
-                this.movement.stuckCheckAt = currentTime;
-                this.movement.stuckPosition.copy(player.position);
-            }
-        }
+        this.movement.tick(currentTime);
     }
 
-    public cannotMoveAnymore(isHitWall = false) {
-        const player = this.manGame.getComponent("render").player, base = player.getBaseActor() as Vehicle;
-
-        if (!isHitWall) player.stopMoving();
-        if (base && base.isVehicle) this.movement.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
-        else if (!isHitWall) this.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
-        if (!isHitWall) this.movement.stuckCheckAt = 0;
-    }
+    public cannotMoveAnymore(isHitWall = false) { return this.movement.cannotMoveAnymore(isHitWall); }
 
     public getNameplates(): Nameplate_T[] { return this.actors.getNameplates(); }
 }

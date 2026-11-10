@@ -2,7 +2,7 @@ import VERTEX_SHADER from "./shader/shader-mesh-static.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import HIGHLIGHT_SHADER from "./shader/highlight.fs";
 import { appendGlobalUniforms, getLocalUniforms } from "../global-uniforms";
-import { padTransformStages } from "./transform-stage";
+import { MAX_TRANSFORM_STAGES, padTransformStages } from "./transform-stage";
 import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide, DoubleSide, Texture } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
@@ -154,7 +154,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
         const sprites = {};
 
-        const defines: Record<string, any> = { USE_FOG: "" };
+        const defines: Record<string, any> = { USE_FOG: "", MAX_TRANSFORM_STAGES };
 
         if (info.modulateStaticLighting2X !== false) defines["USE_STATIC_LIGHTING_2X"] = "";
         if (info.modulateSpecular2X === true) defines["USE_MODULATE_SPECULAR_2X"] = "";

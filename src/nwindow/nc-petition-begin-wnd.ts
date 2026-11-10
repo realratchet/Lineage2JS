@@ -2,7 +2,7 @@ import type { GameStrings_T } from "../assets/decode-worker/decode-protocol";
 import CHtmlMultiEdit from "./c-html-multi-edit";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCHtmlViewer from "./nc-html-viewer";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -12,7 +12,7 @@ import SysString_T from "./sys-string";
 const TEX_BACK = "L2UI_ch3.PetitionWnd.petition1_back";
 
 export class NCPetitionBeginWnd {
-    public static getTextures() { return [TEX_BACK, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, ...NCFrameCtrl.getTextures(), ...NCHtmlViewer.getTextures(), ...CHtmlMultiEdit.getTextures()]; }
+    public static getTextures() { return [...NCComboBox.getTextures(), TEX_BACK, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, ...NCFrameCtrl.getTextures(), ...NCHtmlViewer.getTextures(), ...CHtmlMultiEdit.getTextures()]; }
     public readonly element: HTMLDivElement;
     public readonly category: NCComboBox;
     public readonly message: CHtmlMultiEdit;

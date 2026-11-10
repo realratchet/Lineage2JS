@@ -1,6 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl, { type ListRow_T } from "./nc-list-ctrl";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import { NDOM_EDIT_TEXTURES, type default as NDomLayer, type NDomEdit_T } from "./ndom";
 import { createTextButton, getManorName, getRewardTooltip } from "./nc-manor-info-wnd";
 import type { ManorProcureCropDetail_T, ManorSellCropList_T, ProcureCropRequest_T } from "../network/game-packets";
@@ -103,7 +103,7 @@ export class NCManorCropSellChangeWnd { // NCManorCropSellChangeWnd: NConsole 0x
 }
 
 export class NCManorCropSellWnd { // NCManorCropSellWnd: NConsole 0x10063dfb (W*0.5-300, H*0.5-163, 600x326, sys1152), OnCreate 0x10135230, paint 0x10135020
-    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, TEX_SELL_BACK, TEX_CHANGE_BACK, TEX_SMALL_BUTTON, TEX_SMALL_BUTTON_DOWN, "L2UI_ch3.button.btn1_normal", "L2UI_ch3.button.btn1_normalon", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down"]; }
+    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, TEX_SELL_BACK, TEX_CHANGE_BACK, TEX_SMALL_BUTTON, TEX_SMALL_BUTTON_DOWN, "L2UI_ch3.button.btn1_normal", "L2UI_ch3.button.btn1_normalon", ...NCComboBox.getTextures()]; }
 
     public readonly element: HTMLDivElement;
     public readonly changeWnd: NCManorCropSellChangeWnd;

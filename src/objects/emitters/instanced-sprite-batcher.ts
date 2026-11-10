@@ -1,4 +1,5 @@
-import { Camera, CustomBlending, StreamDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix3, Matrix4, Mesh, Object3D, OneFactor, PlaneGeometry, ShaderMaterial, Vector3, ZeroFactor } from "three";
+import { isOrderIndependentAdditive } from "../../materials/particle-blending";
+import { Camera, StreamDrawUsage, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix3, Matrix4, Mesh, Object3D, PlaneGeometry, ShaderMaterial, Vector3 } from "three";
 import { copyShaderMaterial } from "../../materials/global-uniforms";
 import { EParticleFlags_T } from "./base-emitter";
 
@@ -18,15 +19,6 @@ const tmpProjUp = new Vector3();
 const tmpProjFront = new Vector3();
 const tmpProjRight = new Vector3();
 const cacheMaterialKey = new WeakMap<ShaderMaterial, { textureUuid: string; key: string }>();
-
-export function isOrderIndependentAdditive(material: any): material is ShaderMaterial {
-    return material?.isInstancedParticleMaterial === true
-        && material.blending === CustomBlending
-        && material.blendSrc === OneFactor
-        && material.blendDst === OneFactor
-        && material.blendSrcAlpha === ZeroFactor
-        && material.blendDstAlpha === OneFactor;
-}
 
 function materialKey(material: ShaderMaterial): string {
     const map = material.uniforms?.map?.value;

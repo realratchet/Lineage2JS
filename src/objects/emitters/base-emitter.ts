@@ -2,7 +2,7 @@ import { Box3, Color, Texture, Matrix3, Matrix4, Object3D, Quaternion, Vector3, 
 import { clamp, lerp, mapLinear } from "three/src/math/MathUtils";
 import InstancedSpriteMesh from "./instanced-sprite-mesh";
 import type InstancedMeshParticles from "./instanced-mesh-particles";
-import { isOrderIndependentAdditive } from "./instanced-sprite-batcher";
+import { isOrderIndependentAdditive } from "../../materials/particle-blending";
 import Rotator from "../../utils/rotator";
 import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";

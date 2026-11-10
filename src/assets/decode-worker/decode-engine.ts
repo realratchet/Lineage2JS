@@ -1,3 +1,5 @@
+import { isCacheEnabled } from "./cache-storage";
+import { refreshSoundBlobUris } from "../sound-uris";
 import { DDSConstants } from "../unreal/dds/dds-constants";
 import type { APackage, UClass } from "@l2js/core";
 import { generateUUID } from "three/src/math/MathUtils";
@@ -742,7 +744,7 @@ export class DecodeEngine {
         if (onCache) onCache(!!cached);
 
         if (cached) {
-            if (withSoundUris) DecodeCache.refreshSoundBlobUris(cached);
+            if (withSoundUris) refreshSoundBlobUris(cached);
 
             return { library: cached, fromCache: true };
         }
@@ -762,7 +764,7 @@ export class DecodeEngine {
         if (cacheable) await DecodeCache.storeCachedLibraryDurable(sectorName, settings, await packageCache.externalize(library));
 
         // Main-thread decode owns these blob URLs.
-        if (withSoundUris) DecodeCache.refreshSoundBlobUris(library);
+        if (withSoundUris) refreshSoundBlobUris(library);
 
         return { library, fromCache: false };
     }
@@ -2863,7 +2865,7 @@ export class DecodeEngine {
 
     public async precacheCharacters(settings: LoadSettings_T, charIndex: number = null): Promise<void> {
         this.setLoadSettings(settings);
-        if (!DecodeCache.isCacheEnabled(settings)) return;
+        if (!isCacheEnabled(settings)) return;
 
         await this.sweepCache(settings);
 

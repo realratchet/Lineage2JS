@@ -1,6 +1,6 @@
 import AssetManager, { type AssetList_T } from "../assets/asset-manager";
 import SkillViewerDecodeWorkerClient from "./skill-viewer-decode-worker-client";
-import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
+import { getMintedSoundUri } from "../assets/sound-uris";
 import type RenderManager from "../rendering/render-manager";
 import type { INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
@@ -14,26 +14,16 @@ export class SkillViewerAssetManager extends AssetManager {
         super(settings, assets);
     }
 
+    protected createDecodeWorker(): SkillViewerDecodeWorkerClient { return new SkillViewerDecodeWorkerClient(this.decodeWorkerPoolSize); }
+
     public async onInit(): Promise<this> {
-        const manRender = this.getParent().getComponent("render");
-        const textureMode = (this.loadSettings as any).textures ?? "auto";
-
-        this.glCapabilities = manRender.renderer.capabilities;
-        this.hasS3TC = !!manRender.renderer.extensions.get("WEBGL_compressed_texture_s3tc");
-        this.preferCompressedTextures = textureMode === "compressed" || (textureMode === "auto" && this.hasS3TC);
-
-        (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
-
-        this.decodeWorker = new SkillViewerDecodeWorkerClient(this.decodeWorkerPoolSize);
+        this.prepareDecodeWorker();
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
 
         const [clientConfig, charGroups] = await Promise.all([this.decodeWorker.getClientConfig(this.loadSettings), this.decodeWorker.getCharGroups(this.loadSettings)]);
 
-        this.userConfig = clientConfig.userConfig;
-        manRender.audioManager.setSubsystemConfig(this.userConfig.alAudio);
-        this.warriorAnimations = clientConfig.warriorAnimations;
-        this.charGroups = charGroups;
+        this.applyClientConfig(clientConfig, charGroups);
 
         this.decodeWorker.preloadCharacters(this.loadSettings, this.characterPoolSize);
 

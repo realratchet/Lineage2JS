@@ -1,7 +1,6 @@
 import { Matrix3, Vector2 } from "three";
 
-// must match MAX_TRANSFORM_STAGES in shader-mesh-static.vs/.fs
-const MAX_TRANSFORM_STAGES = 2;
+export const MAX_TRANSFORM_STAGES = 2;
 
 const TRANSFORM_TYPE_CODE: Record<"pan" | "rotate" | "oscillate", number> = { pan: 0, rotate: 1, oscillate: 2 };
 

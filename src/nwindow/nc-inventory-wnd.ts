@@ -1,3 +1,4 @@
+import getCrystalGradeSymbol from "./item-symbol";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, type NDomButton_T, type NDomScrollPane_T } from "./ndom";
 import { DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type { ItemInfo_T } from "../assets/decode-worker/decode-protocol";
@@ -31,7 +32,6 @@ const TEX_TRASH = "L2UI_CH3.InventoryWnd.Inventory_trash";
 const TEX_CRYSTAL = "L2UI_CH3.InventoryWnd.Inventory_recipe";
 const arrWeightBars = [1, 2, 3, 4, 5].map(index => `L2UI_CH3.PlayerStatusWnd.PS_weightbar${index}`);
 const arrTooltipSlices = Array.from({ length: 9 }, (_, i) => `L2UI_ch3.Tooltip.Tooltip${i + 1}`);
-const arrGradeSymbols = ["", "graded", "gradec", "gradeb", "gradea", "grades"]; // 0x1006b440, table 0x10242504.
 const arrWeaponPAtk = [[0, 2, 3, 3, 4, 5], [0, 2, 4, 4, 5, 6], [0, 4, 6, 6, 8, 10]]; // 0x100741b0: one-handed 0x101af218, two-handed 0x101af248, bow 0x101af278.
 const arrWeaponMAtk = [0, 2, 3, 3, 3, 4]; // 0x10074250: 0x10242790, 0x102427c0 and 0x102427f0 are identical.
 const arrDefenceBonus = [0, 1, 1, 1, 1, 1]; // 0x100742f0: 0x101af2a8.
@@ -515,7 +515,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         if (isFull) this.restoreOrder();
         const symbols = this.layer.getManager().strings.symbols;
 
-        const textures = [...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[arrGradeSymbols[item.info.crystalType]]] : [])]).filter(path => path && path.toLowerCase() !== "none"))];
+        const textures = [...new Set(items.flatMap(item => [item.icon, ...(item.slot >= 0 ? item.info.equipmentIcons : []), ...(item.info.crystalType > 0 ? [symbols[getCrystalGradeSymbol(item.info.crystalType)]] : [])]).filter(path => path && path.toLowerCase() !== "none"))];
 
         if (textures.some(path => !this.layer.hasTexture(path))) this.paintItems(!isFull);
         await this.layer.loadTextures(textures);
@@ -832,7 +832,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         runs.push([item.name, 0xffdcdcdc]);
 
         if (item.info.addName) runs.push([` ${item.info.addName}`, 0xffffd969]);
-        if (item.info.crystalType > 0) runs.push([" ", 0xffdcdcdc], [`\`${arrGradeSymbols[item.info.crystalType]}`, 0]);
+        if (item.info.crystalType > 0) runs.push([" ", 0xffdcdcdc], [`\`${getCrystalGradeSymbol(item.info.crystalType)}`, 0]);
         if (!(context & 2) && item.info.consumeType >= 1 && item.info.consumeType <= 3) runs.push([` (${item.count.toLocaleString("en-US")})`, 0xffdcdcdc]); // 0x1002ea70
 
         return runs;

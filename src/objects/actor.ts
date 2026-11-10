@@ -1,13 +1,15 @@
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../game/components";
 import UnScriptVM, { unregisterLevelActor, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
-import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
+import { ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/script-properties";
 import type { ICollidable } from "./objects";
 import type BaseActor from "../base-actor";
-import { setActorOwner, setScriptObjectProperty, type OwnedActor_T } from "./components/actor-ownership-component";
+import { setActorOwner, type OwnedActor_T } from "./components/actor-ownership-component";
+import { setScriptObjectProperty } from "./actor-properties";
 import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./components/transform-component";
 import { EL2EventCmd_T } from "../assets/unreal/un-aactor";
 
-type ActorInfo_T = { uuid: string; name: string; scriptClassId: string; scriptProperties: Record<string, ScriptValue_T>; sharedScriptProperties?: Record<string, ScriptValue_T> };
+type ActorInfo_T = { uuid: string; name: string; scriptClassId: string; scriptProperties: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
 
 export class Actor extends GameObject {
     public readonly actorUuid: string;
@@ -24,9 +26,14 @@ export class Actor extends GameObject {
         this.actorUuid = info.uuid;
         this.scriptClassId = info.scriptClassId;
         this.isLevelActor = isLevelActor;
-        this.scriptProperties = new Map(Object.entries(structuredClone(info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties)));
-        // UGameEngine::LoadMap (0x831cbf..0x831cd3) clears serialized Touching.
-        setScriptObjectProperty(this, "Touching", []);
+        this.scriptProperties = new Map();
+        if (info.scriptProperties !== null) {
+            const properties = structuredClone(info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties);
+
+            for (const [key, value] of Object.entries(properties)) this.scriptProperties.set(key, value);
+            // UGameEngine::LoadMap (0x831cbf..0x831cd3) clears serialized Touching.
+            setScriptObjectProperty(this, "Touching", []);
+        }
     }
 
     public setScriptRuntime(vm: UnScriptVM, objectFactory: ScriptObjectFactory_T, beginPlay: boolean = true): void {

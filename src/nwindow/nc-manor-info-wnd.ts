@@ -1,6 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl, { type ListColumn_T, type ListRow_T } from "./nc-list-ctrl";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import type { default as NDomLayer, NDomButton_T } from "./ndom";
 import type { ManorCropInfo_T, ManorDefaultInfo_T, ManorEntry_T, ManorRewards_T, ManorSeedInfo_T } from "../network/game-packets";
 import SystemMessage_T from "./system-message";
@@ -127,7 +127,7 @@ class NCManorDefaultInfoWnd extends NCManorInfoDownWnd { // NCManorDefaultInfoWn
 }
 
 export class NCManorInfoWnd { // NCManorInfoWnd: NConsole 0x10063b7f (W*0.5-300, H*0.5-163, 600x326, sys738), OnCreate 0x10137a20
-    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), TEX_UP_BACK, TEX_DOWN_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down"]; }
+    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), TEX_UP_BACK, TEX_DOWN_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, ...NCComboBox.getTextures()]; }
 
     public readonly element: HTMLDivElement;
     public onBypass: (command: string) => void = null;

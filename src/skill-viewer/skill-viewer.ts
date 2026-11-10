@@ -1,5 +1,5 @@
+import { DECODE_CACHE_VERSION } from "../assets/decode-version";
 import GameManager from "../game/game-manager";
-import AudioManager from "../audio/audio-manager";
 import PhysicsManager from "../physics/physics-manager";
 import SkillViewerAssetManager from "./skill-viewer-asset-manager";
 import SkillViewerRenderManager from "./skill-viewer-render-manager";
@@ -24,7 +24,7 @@ export class SkillViewerGame extends GameManager {
 
         game.manAsset = new SkillViewerAssetManager(loadSettings, assets, characterPoolSize);
         game.manRender = new SkillViewerRenderManager(viewport);
-        game.manAudio = new AudioManager();
+        game.manAudio = game.manRender.audioManager;
         game.manPhysics = new PhysicsManager();
 
         game.attach(game.manPhysics);
@@ -49,7 +49,7 @@ export class SkillViewerGame extends GameManager {
 }
 
 export async function runSkillViewer(isPlayer: boolean = false): Promise<void> {
-    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: 181 }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
+    const loadSettings: LoadSettings_T = { textures: "auto", cache: { enabled: true, version: DECODE_CACHE_VERSION }, decodeWorkerPoolSize: isPlayer ? 1 : 3, loadExtendedBoneInfluences: true, loadEmitters: true, loadAudio: true };
 
     await pickAssetSource();
 

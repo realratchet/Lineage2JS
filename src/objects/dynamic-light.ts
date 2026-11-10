@@ -1,4 +1,3 @@
-import { SectorObject } from "./zone-object";
 import type { L2Environment } from "../rendering/l2-env";
 import { Color, Object3D, Vector2, Vector3 } from "three";
 import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";

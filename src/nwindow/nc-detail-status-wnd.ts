@@ -1,6 +1,6 @@
 import type NDomLayer from "./ndom";
 import { FontType_T } from "./nwindow-canvas";
-import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
+import EXPERIENCE_TABLE from "../game/experience";
 import type { UserInfo_T, ClanInfo_T, HennaStatus_T } from "../network/game-packets";
 import SysString_T from "./sys-string";
 

@@ -1,6 +1,6 @@
 import type { default as NDomLayer, NDomButton_T, NDomCheckBox_T } from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
 import type { AudioConfig_T, GameConfig_T } from "../assets/unreal/conf-files/un-conf-system";
 import { SKIN_SLOTS } from "./skin-textures";
@@ -21,7 +21,7 @@ export const PAWN_RANGES = [3, 2.5, 2, 1.5, 1];
 export const PAWN_LIMITS = [50, 100, 200, 300, 400, 10000];
 
 export class NCOptionWnd {
-    public static getTextures() { return [TEX_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...["textbox1", "textbox2", "textbox3"].map(name => `L2UI_CH3.Etc.${name}`), "L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down", ...NCFrameCtrl.getTextures()]; }
+    public static getTextures() { return [TEX_BACK, TEX_TAB_BACK, TEX_TAB, TEX_TAB_SELECTED, TEX_BUTTON, TEX_BUTTON_DOWN, TEX_INITIALIZE, TEX_INITIALIZE_DOWN, "L2UI.Control.CheckBox", "L2UI.ActionWnd.CheckBox_checked", ...NCComboBox.getTextures(), ...NCFrameCtrl.getTextures()]; }
     public readonly element: HTMLDivElement;
     public getOptions: () => GameConfig_T = null;
     public onApply: (options: GameConfig_T) => void = null;

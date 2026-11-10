@@ -4,7 +4,7 @@ import RAPIER from "@dimforge/rapier3d";
 import { EDrawType_T, EPhysics_T } from "./assets/unreal/un-aactor";
 import type { PawnMeshType_T } from "./assets/unreal/un-pawn";
 import { getScriptActor, type ActorCollisionProfile_T, type CollisionPrimitive_T, type ICollidable } from "./objects/objects";
-import RenderManager from "./rendering/render-manager";
+import type RenderManager from "./rendering/render-manager";
 import type { CheckResult_T } from "./physics/collision-world";
 import UnScriptVM, { unregisterLevelActor, updateLevelActor, ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
 import { GameObject, COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
@@ -17,7 +17,8 @@ import ActorOwnershipComponent from "./objects/components/actor-ownership-compon
 import NpcLifecycleComponent from "./objects/components/npc-lifecycle-component";
 import PawnAttackComponent, { type PawnAttackSelection_T, type PawnAttack_T } from "./objects/components/pawn-attack-component";
 import PawnRenderableComponent from "./rendering/components/pawn-renderable-component";
-import { findScriptPropertyKey, getScriptPropertyName, ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
+import { ScriptComponent, ScriptObjectFactory_T } from "./game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName } from "./ue-script/script-properties";
 import type { Vector3Arr } from "@l2js/engine";
 import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 

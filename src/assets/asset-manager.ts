@@ -19,8 +19,9 @@ import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
 import { createSectorStaticMeshDecodeJob, decodeAnimations, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "./decoders/object3d-decoder";
 import decodeEnv from "./decoders/env-decoder";
 import DecodeWorkerClient from "./decode-worker/decode-worker-client";
-import type { GameStrings_T, MatineeScene_T, PlayerSkillInfo_T, UITexture_T } from "./decode-worker/decode-protocol";
-import { hasCachedLibrary, refreshSoundBlobUris, revokeSoundUri } from "./decode-worker/decode-cache";
+import type { ClientConfig_T, GameStrings_T, MatineeScene_T, PlayerSkillInfo_T, UITexture_T } from "./decode-worker/decode-protocol";
+import { hasCachedLibrary } from "./decode-worker/decode-cache";
+import { refreshSoundBlobUris, revokeSoundUri } from "./sound-uris";
 import { AnimationClip, MathUtils, Matrix4, Vector3 } from "three";
 import type { SectorObject } from "../objects/zone-object";
 import UnScriptVM, { getProperty, type ScriptHost_T } from "../ue-script/vm";
@@ -324,7 +325,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         return progress;
     }
 
-    public async onInit(): Promise<this> {
+    protected prepareDecodeWorker(): void {
         const manRender = this.getParent().getComponent("render");
         const textureMode = (this.loadSettings as any).textures ?? "auto";
 
@@ -334,7 +335,22 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
-        this.decodeWorker = new DecodeWorkerClient(this.decodeWorkerPoolSize);
+        this.decodeWorker = this.createDecodeWorker();
+    }
+
+    protected createDecodeWorker(): DecodeWorkerClient { return new DecodeWorkerClient(this.decodeWorkerPoolSize); }
+
+    protected applyClientConfig(clientConfig: ClientConfig_T, charGroups: ICharacterGroup[]): void {
+        this.userConfig = clientConfig.userConfig;
+        this.warriorAnimations = clientConfig.warriorAnimations;
+        this.charGroups = charGroups;
+        this.getParent().getComponent("render").audioManager.setSubsystemConfig(this.userConfig.alAudio);
+    }
+
+    public async onInit(): Promise<this> {
+        const manRender = this.getParent().getComponent("render");
+
+        this.prepareDecodeWorker();
         if (loginServer) setLoadingProgress(null, loadingTexts.gameDataWorkers(), true);
         await this.decodeWorker.ready;
         this.isWorkerReady = true;
@@ -406,18 +422,15 @@ export class AssetManager implements IEngineComponent<GameManager> {
         this.startupLevelLibrary = startupLevelLibrary;
         if (gameStrings) this.gameStrings = gameStrings;
         UnScriptVM.setLocalization(clientConfig.scriptLocalization);
-        this.userConfig = clientConfig.userConfig;
         this.playerController = playerController;
         if ((playerController.scriptProperties.get("MinZoomingDist") as number) > (playerController.scriptProperties.get("MaxZoomingDist") as number)) throw new Error(`Invalid camera zoom limits.`);
         // The comparison client's User.ini allows 10000; stock C4 CABs restrict it to 250.
         playerController.scriptProperties.set("MaxZoomingDist", Math.max(10000, playerController.scriptProperties.get("MaxZoomingDist") as number));
-        manRender.audioManager.setSubsystemConfig(this.userConfig.alAudio);
+        this.applyClientConfig(clientConfig, charGroups);
         manRender.audioManager.setSoundVolume(this.userConfig.audio.soundVolume);
         manRender.audioManager.setMusicVolume(this.userConfig.audio.musicVolume);
         manRender.audioManager.setWavVoiceVolume(this.userConfig.audio.wavVoiceVolume);
         manRender.audioManager.setOggVoiceVolume(this.userConfig.audio.oggVoiceVolume);
-        this.warriorAnimations = clientConfig.warriorAnimations;
-        this.charGroups = charGroups;
 
         skyLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
         (skyLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
@@ -906,9 +919,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     public createScriptActor(vm: UnScriptVM, classId: string, outer: ScriptHost_T, template: ScriptHost_T = null): Actor {
-        const actor = new Actor({ uuid: MathUtils.generateUUID(), name: "", scriptClassId: vm.getDefaultObject(classId).scriptClassId, scriptProperties: {} });
+        const actor = new Actor({ uuid: MathUtils.generateUUID(), name: "", scriptClassId: vm.getDefaultObject(classId).scriptClassId, scriptProperties: null });
 
-        actor.scriptProperties.delete("Touching");
         vm.constructActor(actor, outer, template);
         actor.name = getProperty(actor, "Name") as string;
         return actor;

@@ -1,3 +1,4 @@
+import getCrystalGradeSymbol from "./item-symbol";
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_EDIT_TEXTURES, NDOM_SCROLL_TEXTURES, type NDomEdit_T, type NDomScrollPane_T } from "./ndom";
 import type { InventoryEntry_T } from "./nc-inventory-wnd";
@@ -217,7 +218,7 @@ export class NCVIPShopWnd {
         name.dataset.itemName = String(item.itemId);
         const baseName = (item.enchant > 0 && item.itemClass < 4 ? `+${item.enchant} ` : "") + item.name;
         const extra = item.info.addName, count = item.count > 0 ? `x${item.count}` : "";
-        const grade = item.info.crystalType > 0 && item.info.crystalType < 5 ? this.inventory.getItemTitle(item, 2).find(run => run[1] === 0)[0] : "";
+        const grade = item.info.crystalType > 0 && item.info.crystalType < 5 ? getCrystalGradeSymbol(item.info.crystalType) : "";
         const baseWidth = this.layer.measureText(baseName), extraWidth = baseWidth + (extra ? this.layer.measureText(extra) + 2 : 0), gradeWidth = extraWidth + (grade ? 14 : 0);
         const overflow = gradeWidth + (count ? this.layer.measureText(count) + 2 : 0) - width;
         let reduction = 0, text = baseName;
@@ -237,7 +238,7 @@ export class NCVIPShopWnd {
         }
         this.layer.text(name, text, 0xffdcdcdc, FontType_T.SMALL, 0, 0);
         if (extra) this.layer.text(name, extra, 0xffffd969, FontType_T.SMALL, baseWidth - reduction + 2, 0);
-        if (grade) this.layer.tile(name, extraWidth - reduction + 2, 0, 12, 12, 0, 0, 12, 12, this.layer.getManager().strings.symbols[grade.slice(1)]);
+        if (grade) this.layer.tile(name, extraWidth - reduction + 2, 0, 12, 12, 0, 0, 12, 12, this.layer.getManager().strings.symbols[grade]);
         if (count) this.layer.text(name, count, 0xffdcdcdc, FontType_T.SMALL, gradeWidth - reduction + 2, 0);
         name.addEventListener("mouseenter", () => this.inventory.showTooltip(item, name, false));
         name.addEventListener("mouseleave", () => this.inventory.hideTooltip());

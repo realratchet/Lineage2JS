@@ -86,7 +86,6 @@ uniform float opacity;
     uniform sampler2D shDetailMap;
     uniform sampler2D shMaterial2Map;
 
-    #define MAX_TRANSFORM_STAGES 2
 
     struct TransformStage {
         int type; // PAN/ROTATE/OSCILLATE

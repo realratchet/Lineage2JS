@@ -1,3 +1,4 @@
+import { DECODE_CACHE_VERSION } from "./assets/decode-version";
 import RenderManager, { type HTMLViewportElement_T } from "./rendering/render-manager";
 import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
 
@@ -33,7 +34,7 @@ export async function startCore(interactive: boolean = true): Promise<RenderMana
         },
         cache: {
             enabled: true,
-            version: 181 // bump when decode logic changes, invalidates all previously cached assets
+            version: DECODE_CACHE_VERSION
         },
         decodeWorkerPoolSize: 3, // num workers, 0 will run on main thread
         textures: "auto",

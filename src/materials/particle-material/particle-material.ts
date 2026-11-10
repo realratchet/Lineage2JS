@@ -1,5 +1,5 @@
 import { Color, ClampToEdgeWrapping, CustomBlending, DoubleSide, LinearFilter, NoBlending, NormalBlending, OneFactor, OneMinusSrcAlphaFactor, OneMinusSrcColorFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, ShaderMaterial, UniformsUtils, UniformsLib, Vector3, Vector4 } from "three";
-import { updateTextureFiltering } from "../../assets/decoders/texture-decoder";
+import { updateTextureFiltering } from "../texture-settings";
 import VERTEX_SHADER from "./shader/shader-particle.vs";
 import FRAGMENT_SHADER from "./shader/shader-particle.fs";
 import { appendGlobalUniforms } from "../global-uniforms";

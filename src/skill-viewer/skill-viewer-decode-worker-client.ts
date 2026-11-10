@@ -1,5 +1,5 @@
 import DecodeWorkerClient from "../assets/decode-worker/decode-worker-client";
-import { revokeSoundUri } from "../assets/decode-worker/decode-cache";
+import { revokeSoundUri } from "../assets/sound-uris";
 import type DecodeLibrary from "../assets/unreal/decode-library";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterArmorSelection, INpcDefinition, INpcEquipment } from "@l2js/engine/contracts/pawn";

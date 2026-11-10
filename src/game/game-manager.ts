@@ -117,6 +117,7 @@ export class GameManager implements IEngineComponent<GameManager> {
     public setParent(_parent: GameManager): this { return this; } // this is the root
     public getParent() { return this; }
     public getCurrentTime() { return this.currentTime; }
+    public isWorldLoading(): boolean { return this.manNetwork ? this.manNetwork.isWorldLoading() : false; }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onBeforeEngineTick?.(currentTime, deltaTime); }
     public onEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onEngineTick?.(currentTime, deltaTime); }

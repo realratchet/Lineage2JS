@@ -25,8 +25,9 @@ import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
 import AudioManager from "../audio/audio-manager";
 import type AssetManager from "../assets/asset-manager";
-import { getMintedSoundUri } from "../assets/decode-worker/decode-cache";
-import { retainSharedTextureBuffer, setUseTrilinear, setTextureDetail } from "../assets/decoders/texture-decoder";
+import { getMintedSoundUri } from "../assets/sound-uris";
+import { retainSharedTextureBuffer } from "../assets/decoders/texture-decoder";
+import { setUseTrilinear, setTextureDetail } from "../materials/texture-settings";
 import InstancedSpriteBatcher from "../objects/emitters/instanced-sprite-batcher";
 import type MovableObject from "../objects/movable-object";
 import type AgitStaticMeshActor from "../objects/agit-static-mesh-actor";
@@ -53,7 +54,8 @@ import type { ScriptComponent } from "../game/script-component";
 import type AnimationComponent from "../objects/components/animation-component";
 import type NpcLifecycleComponent from "../objects/components/npc-lifecycle-component";
 import { getProperty, setProperty, unregisterLevelActor, type ScriptHost_T } from "../ue-script/vm";
-import ActorOwnershipComponent, { setScriptObjectProperty } from "../objects/components/actor-ownership-component";
+import ActorOwnershipComponent from "../objects/components/actor-ownership-component";
+import { setScriptObjectProperty } from "../objects/actor-properties";
 import type PawnAttackComponent from "../objects/components/pawn-attack-component";
 import type SkillVisualEffect from "@l2js/engine/skills/skill-visual-effect";
 import NPawnLightComponent from "./components/pawn-light-component";
@@ -452,6 +454,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.camera.updateProjectionMatrix();
         const render = this.renderer.render;
         this.renderer.render = (scene, camera) => {
+            if (scene === this.scene) this.worldCamera = camera;
             setReversedDepth(this.renderer, camera.reversedDepth);
             render.call(this.renderer, scene, camera);
         };
@@ -2639,7 +2642,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 if (emitter.instancedMesh?.visible && emitter.instancedMesh.isWorldBatchCandidate) this.arrViewportBatchEmitters.push(emitter);
             });
             this.particleBatcher.update(this.arrViewportBatchEmitters, viewport.camera);
-            this.worldCamera = viewport.camera;
             renderer.render(this.scene, viewport.camera);
             if (this.viewportSceneCanvas) {
                 const canvas = this.viewportSceneCanvas, ratio = renderer.getPixelRatio(), scale = Math.max(1, Math.floor(ratio));
@@ -2860,7 +2862,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         LocalSpaceSkeleton.renderFrame = ++LocalSpaceSkeleton.nextRenderFrame;
         this.nameplateDepth.begin(this.nameplateScene);
         try {
-            this.worldCamera = this.camera;
             const camera = this.bspHelperCamera && this.bspHelperActive ? this.bspHelperCamera : this.camera;
             this.sectorOcclusion.begin(this.camera, camera, this.getSector(camera.position));
             this.renderer.render(this.scene, this.camera);

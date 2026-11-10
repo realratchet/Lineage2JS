@@ -1,6 +1,7 @@
 import TexOscillatorTriggered from "../../materials/mesh-static-material/tex-oscillator-triggered";
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
-import _decodeTexture, { copyTextureFiltering, copyTextureLOD, updateTextureFiltering } from "./texture-decoder";
+import _decodeTexture from "./texture-decoder";
+import { copyTextureFiltering, copyTextureLOD, updateTextureFiltering } from "../../materials/texture-settings";
 import { restoreSharedTextureBuffer } from "../decode-worker/decode-worker-client";
 import { Color, CompressedCubeTexture, CubeTexture, DoubleSide, FrontSide, Matrix3, MeshBasicMaterial, Vector2, Vector3, DataTexture, RGBAFormat } from "three";
 import MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";

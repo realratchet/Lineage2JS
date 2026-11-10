@@ -246,7 +246,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
 
         const wasPlaying = !!this.currentSource || (this.fadeEndTime !== undefined && time < this.fadeEndTime);
 
-        await this.stopMusicInternal(false, time);
+        await this.stopMusicInternal(time);
 
         this.currentIndex = index;
         this.playingIndex = index;
@@ -263,7 +263,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         const buffer = await this.fetchRandomBuffer(index);
         if (this.currentPlayId !== playId || !buffer) return;
 
-        await this.playBuffer(buffer, time);
+        await this.playBuffer(buffer);
         if (this.currentPlayId === playId && this.currentIndex === index && typeof index === "number") this.preloadNext(index);
     }
 
@@ -272,10 +272,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
             this.currentPlayId++;
         }
         this.cacheMusicBuffer = null;
-        await this.stopMusicInternal(incrementPlayId, currentTime ?? this.lastTime);
+        await this.stopMusicInternal(currentTime ?? this.lastTime);
     }
 
-    protected async stopMusicInternal(_incrementPlayId: boolean, currentTime: number) {
+    protected async stopMusicInternal(currentTime: number) {
         this.disposePreparedMusic();
         this.nextMusicTrackTime = undefined;
         this.nextMusicPlayId = undefined;
@@ -344,7 +344,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.nextBuffer = undefined;
     }
 
-    protected async playBuffer(source: MusicSource, _startTime: number) {
+    protected async playBuffer(source: MusicSource) {
         if (source.isDisposed || source.hasStarted) throw new Error(`Invalid prepared music source.`);
         if (this.nextBuffer === source) this.nextBuffer = undefined;
         source.element.loop = typeof this.currentIndex === "string" && this.currentIsLooped;
@@ -392,7 +392,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         this.prevTime = this.lastTime;
         this.lastTime = currentTime;
 
-        if (this.requestedVoice && !this.gameManager.getComponent("network").isWorldLoading()) {
+        if (this.requestedVoice && !this.gameManager.isWorldLoading()) {
             const request = this.requestedVoice;
 
             this.requestedVoice = null;
@@ -414,7 +414,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             }
 
             if (buffer && targetIndex !== undefined && (playId === undefined || this.currentPlayId === playId)) {
-                await this.playBuffer(buffer, currentTime);
+                await this.playBuffer(buffer);
                 if ((playId === undefined || this.currentPlayId === playId) && this.currentIndex === targetIndex && typeof targetIndex === "number") this.preloadNext(targetIndex);
             }
         }
@@ -664,7 +664,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     public updateAmbientSounds(currentTime: number, px: number, py: number, pz: number, isSoundDay: boolean, isSoundNight: boolean, isSubmerged: boolean): void {
-        if (this.gameManager.getComponent("network").isWorldLoading()) {
+        if (this.gameManager.isWorldLoading()) {
             for (const id of this.activeAmbientSounds.keys()) this.stopAmbientSound(id);
             return;
         }
@@ -935,7 +935,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         // SpawnNTransientEffect 0x104ca91e uses USound.Duration independently of playback.
         if (buffer && onStarted) onStarted(buffer.duration);
         await pendingUnlock;
-        if (!buffer || this.gameManager.getComponent("network").isWorldLoading()) return;
+        if (!buffer || this.gameManager.isWorldLoading()) return;
 
         const gain = this.audioContext.createGain();
         gain.gain.value = volume;

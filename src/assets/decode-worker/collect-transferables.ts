@@ -1,7 +1,3 @@
-// prepares a decoded library for postMessage: sanitizes in place (values structured clone rejects or that
-// would drag the package graph along are normalized/nulled with path-tagged warnings) and collects every
-// reachable ArrayBuffer as the transfer list - `exclude` buffers skip transfer, they would detach worker-side
-
 const indexKeyPattern = /^\d+$/;
 
 function isNonIndexKey(key: string): boolean { return !indexKeyPattern.test(key); }
@@ -69,9 +65,6 @@ export function prepareLibraryForTransfer(root: any, exclude?: Set<ArrayBuffer>,
         buffers.add(buffer);
     }
 
-    /**
-     * Returns the clone-safe replacement for a value (the value itself when already safe).
-     */
     function sanitize(value: any, path: string): any {
         if (value === null || typeof value !== "object") {
             if (typeof value === "function") {

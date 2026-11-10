@@ -1,3 +1,4 @@
+import waitForAreaLoad from "./world-loading";
 import type NetworkManager from "./network-manager";
 import type PawnMovementComponent from "../physics/components/pawn-movement-component";
 import type NProjectileComponent from "../physics/components/projectile-component";
@@ -21,7 +22,11 @@ import { setLoadingProgress, loadingTexts } from "../loading-progress";
 
 type NetVehicle_T = { actor: Vehicle, actorReady: Promise<void>, objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 
-export const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
+const VALIDATE_POSITION_INTERVAL = 1000;
+const STUCK_INTERVAL = 600;
+const STUCK_DISTANCE = 2;
+
+const tmpLocation: GamePackets.Location_T = { x: 0, y: 0, z: 0 };
 
 const tmpTeleportPosition = new Vector3();
 
@@ -30,26 +35,64 @@ const tmpChairPosition = new Vector3();
 const tmpChairDirection = new Vector3();
 const tmpChairQuery: CollisionQuery_T = { location: new Vector3(), delta: new Vector3(), extent: new Vector3(), sourceIsPlayer: false, traceWorld: true, ignorePawns: true };
 
-export const tmpVehicleOrigin = new Vector3();
+const tmpVehicleOrigin = new Vector3();
 
 export class NetworkMovement {
     public isMounted = false;
     public isRunning = true;
-    public lastValidateAt = 0;
-    public wasMoving = false;
-    public readonly stuckPosition = new Vector3();
+    protected lastValidateAt = 0;
+    protected wasMoving = false;
+    protected readonly stuckPosition = new Vector3();
     public readonly vehicles = new Map<number, NetVehicle_T>();
     public readonly mounts = new Map<number, GamePackets.Ride_T>();
     public readonly riders = new Map<number, BaseActor>();
     public observation: GamePackets.Location_T = null;
     public specialCamera: GamePackets.SpecialCamera_T = null;
     public cameraMode = 0;
-    public stuckCheckAt = 0;
+    protected stuckCheckAt = 0;
     protected readonly teleportPosition = new Vector3();
     protected teleportPending = false;
     protected teleportLoading = false;
 
     public constructor(protected readonly network: NetworkManager) {}
+
+    public tick(currentTime: number): void {
+        const player = this.network.getParent().getComponent("render").player;
+        const isMoving = player.isLocomoting();
+
+        if ((isMoving || this.wasMoving) && currentTime - this.lastValidateAt >= VALIDATE_POSITION_INTERVAL) {
+            this.lastValidateAt = currentTime;
+            this.wasMoving = isMoving;
+            const base = player.getBaseActor() as Vehicle;
+
+            if (base && base.isVehicle) {
+                tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]);
+                base.getLocalLocation(tmpVehicleOrigin, tmpVehicleOrigin);
+                this.network.session.game.validatePosition(tmpVehicleOrigin, player.getRotationYaw(), base.getUnrealScriptProperty("L2ServerObjectID") as number);
+            } else this.network.session.game.validatePosition(player.position, player.getRotationYaw());
+        }
+
+        if (!isMoving || !player.isInteractive()) this.stuckCheckAt = 0;
+        else if (this.stuckCheckAt === 0) {
+            this.stuckCheckAt = currentTime;
+            this.stuckPosition.copy(player.position);
+        } else if (currentTime - this.stuckCheckAt >= STUCK_INTERVAL) { // Server walks straight through whatever blocked us; CannotMoveAnymore makes it adopt our stop point.
+            if (player.position.distanceTo(this.stuckPosition) < STUCK_DISTANCE) this.cannotMoveAnymore();
+            else {
+                this.stuckCheckAt = currentTime;
+                this.stuckPosition.copy(player.position);
+            }
+        }
+    }
+
+    public cannotMoveAnymore(isHitWall = false) {
+        const player = this.network.getParent().getComponent("render").player, base = player.getBaseActor() as Vehicle;
+
+        if (!isHitWall) player.stopMoving();
+        if (base && base.isVehicle) this.cannotMoveInVehicle(base, tmpVehicleOrigin.fromArray(player.getUnrealScriptProperty("Location") as number[]));
+        else if (!isHitWall) this.network.session.game.cannotMoveAnymore(player.position, player.getRotationYaw());
+        if (!isHitWall) this.stuckCheckAt = 0;
+    }
 
     public getPendingTeleportPosition(): Vector3 { return this.teleportPending ? this.teleportPosition : null; }
 
@@ -269,16 +312,7 @@ export class NetworkMovement {
             render.setZoneMusicEnabled(false);
             this.network.ui.showLoading(true);
 
-            while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration) {
-                const progress = asset.getAreaLoadProgress(render, render.player.position);
-
-                if (progress.ready === progress.total) break;
-
-                const value = 0.85 * (progress.decoded + progress.built + progress.ready) / (3 * progress.total);
-
-                setLoadingProgress(value || null, loadingTexts.areaParts(progress));
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+            await waitForAreaLoad(asset, render, () => this.network.actors.inWorld && generation === this.network.actors.teleportGeneration);
 
             if (!this.network.actors.inWorld || generation !== this.network.actors.teleportGeneration) return;
         } else if ((sector.getMusicIdAt(render.player.position).musicId ?? -1) !== render.getActiveMusicId()) render.cancelMusic();

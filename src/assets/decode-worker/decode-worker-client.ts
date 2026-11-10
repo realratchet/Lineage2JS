@@ -4,7 +4,9 @@ import type { LocalizationProperty_T, LoadSettings_T } from "@l2js/engine/contra
 import type { ICharacterArmorSelection, INpcDefinition, ICharacterGroup, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type DecodeEngine from "./decode-engine";
 import { deserializeLibraryAsync } from "./library-serializer";
-import { refreshSoundBlobUris, isCacheEnabled, hasCachedLibrary } from "./decode-cache";
+import { hasCachedLibrary } from "./decode-cache";
+import { isCacheEnabled } from "./cache-storage";
+import { refreshSoundBlobUris } from "../sound-uris";
 import getNpcBundleName from "./npc-bundle";
 import requestWebLock from "../web-lock";
 import { getAssetSourceId, getAssetFiles, getServedAssets } from "../asset-source";

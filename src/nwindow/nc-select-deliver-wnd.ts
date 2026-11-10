@@ -1,6 +1,6 @@
 import type NDomLayer from "./ndom";
 import NCFrameCtrl from "./nc-frame-ctrl";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import { FontType_T } from "./nwindow-canvas";
 import type { PackageTarget_T } from "../network/game-packets";
 import SystemMessage_T from "./system-message";
@@ -9,7 +9,7 @@ import SysString_T from "./sys-string";
 const TEX_BACK = "L2UI_ch3.DeliverWnd.Warehouse_back";
 
 export class NCSelectDeliverWnd {
-    public static getTextures() { return [TEX_BACK]; }
+    public static getTextures() { return [...NCComboBox.getTextures(), TEX_BACK]; }
     public readonly element: HTMLDivElement;
     public onConfirm: (objectId: number) => void = null;
     protected readonly combo: NCComboBox;

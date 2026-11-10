@@ -2,7 +2,7 @@ import { BufferValue, ObjectFlags_T, UExport, UImport, UName, type APackage } fr
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import { isAssetSourceRetained } from "./asset-handle";
 import { getAssetFiles, getServedAssets, isServedAsset } from "../asset-source";
-import { loadCachedPackage } from "../decode-worker/decode-cache";
+import { loadCachedPackage } from "../decode-worker/cache-storage";
 import { hydrateLibraryFile, hydrateLibraryFileSync, type SeekableLibrary_T } from "../decode-worker/library-serializer";
 
 export function packageIdentity(packages: APackage[]): string {

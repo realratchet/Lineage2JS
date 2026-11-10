@@ -1,6 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NDomLayer, { NDOM_SCROLL_TEXTURES, NDomScrollPane_T } from "./ndom";
-import { EXPERIENCE_TABLE } from "./nc-lobby-wnd";
+import EXPERIENCE_TABLE from "../game/experience";
 import { FontType_T } from "./nwindow-canvas";
 import type { EnchantSkill_T, EnchantSkillInfo_T, AquireSkillEntry_T, AquireSkillInfo_T } from "../network/game-packets";
 import { SKIN_SLOTS } from "./skin-textures";

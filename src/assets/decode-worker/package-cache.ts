@@ -9,7 +9,7 @@ import { convertDDSTextureInfo } from "@l2js/engine/dds/dxt-decode";
 import { startLoadingStep } from "../../loading-profile";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
 import { hydrateLibraryFile, hydrateLibraryFileSync, type SeekableLibrary_T } from "./library-serializer";
-import { loadCachedPackage, getCachedPackageFile, storeCachedPackage, isCacheEnabled } from "./decode-cache";
+import { loadCachedPackage, getCachedPackageFile, storeCachedPackage, isCacheEnabled } from "./cache-storage";
 
 type PackageEntry_T = { result: any, dependencies: string[], assets: Record<string, Record<string, any>> };
 type PackageData_T = { path: string, identity: string, complete: boolean, unsupported?: Record<string, number>, resolver?: any, sourcePixels?: { data: Uint8Array, paletteRed: Uint8Array }[], entries: Record<string, PackageEntry_T> };

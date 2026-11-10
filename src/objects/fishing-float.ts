@@ -1,6 +1,6 @@
 import { AnimationAction, Sphere, Vector3 } from "three";
 import { GameObject } from "../game/components";
-import { findScriptPropertyKey, getScriptPropertyName } from "../game/script-component";
+import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/script-properties";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import ActorOwnershipComponent from "./components/actor-ownership-component";
 import AnimationComponent from "./components/animation-component";

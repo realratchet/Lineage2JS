@@ -50,7 +50,7 @@ async function releaseConvertedAssets(): Promise<void> {
 }
 
 async function releaseConvertedFiles(): Promise<void> {
-    const { loadCachedPackage } = await import("../decode-worker/decode-cache");
+    const { loadCachedPackage } = await import("../decode-worker/cache-storage");
     const { validatePackageResolver, canReleasePackageSource } = await import("./package-resolver");
     for (const [path, converted] of convertedAssets) {
         const cachePath = `asset-cache/${getRawAssetSourceId()}/${path.toLowerCase()}`;

@@ -1,6 +1,6 @@
 import NCFrameCtrl from "./nc-frame-ctrl";
 import NCListCtrl, { type ListColumn_T, type ListRow_T } from "./nc-list-ctrl";
-import { NCComboBox } from "./nc-lobby-wnd";
+import NCComboBox from "./nc-combo-box";
 import { type default as NDomLayer, type NDomEdit_T, NDOM_EDIT_TEXTURES } from "./ndom";
 import { createTextButton, getManorName, getRewardTooltip } from "./nc-manor-info-wnd";
 import type { CropSettingRequest_T, ManorCropSetting_T, ManorCropSettings_T, ManorSeedSetting_T, ManorSeedSettings_T, SeedSettingRequest_T } from "../network/game-packets";
@@ -14,7 +14,6 @@ const TEX_SETTING_BACK = "L2UI_CH3.Manor.manor2_back";
 const TEX_CHANGE_BACK = "L2UI_CH3.Manor.manor4_back";
 const TEX_ADENA = "L2UI.WindowIcon.WindowIconAdena";
 const arrTextBoxes = [1, 2, 3].map(index => `L2UI_CH3.Etc.textbox${index}`);
-const arrComboTextures = ["L2UI_CH3.ListCtrl.TextSelect", "L2UI_CH3.ListCtrl.TextSelect2", "L2UI_CH3.Button.downbutton", "L2UI_CH3.Button.downbutton_down"];
 const WIDTH = 600;
 const HEIGHT = 326;
 const CHANGE_WIDTH = 256;
@@ -192,7 +191,7 @@ class NCManorInfoSettingWnd { // NCManorInfoSettingWnd: OnCreate 0x10136ce0, pai
 }
 
 export class NCManorSeedInfoSettingWnd extends NCManorInfoSettingWnd { // NConsole 0x10063c53 (W*0.5-300, H*0.5-163, 600x326, sys1136), OnCreate 0x10139300
-    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, ...arrTextBoxes, ...arrComboTextures, TEX_SETTING_BACK, TEX_CHANGE_BACK, TEX_ADENA, "L2UI_ch3.button.btn1_normal", "L2UI_ch3.button.btn1_normalon"]; }
+    public static getTextures(): string[] { return [...NCFrameCtrl.getTextures(), ...NCListCtrl.getTextures(), ...NDOM_EDIT_TEXTURES, ...arrTextBoxes, ...NCComboBox.getTextures(), TEX_SETTING_BACK, TEX_CHANGE_BACK, TEX_ADENA, "L2UI_ch3.button.btn1_normal", "L2UI_ch3.button.btn1_normalon"]; }
 
     public readonly changeWnd: NCManorSeedInfoChangeWnd;
     public onSubmit: (manorId: number, items: SeedSettingRequest_T[]) => void = null;

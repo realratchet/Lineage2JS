@@ -4,7 +4,7 @@ import { SCRIPT_NATIVE_EVENT, ScriptComponent } from "../../game/script-componen
 import { getProperty, setProperty, ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import Rotator from "../../utils/rotator";
 import LocalSpaceSkeleton from "../local-space-skeleton";
-import { setScriptObjectProperty } from "./actor-ownership-component";
+import { setScriptObjectProperty } from "../actor-properties";
 import type AnimationComponent from "./animation-component";
 import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
 import type BaseActor from "../../base-actor";

@@ -1,6 +1,6 @@
 import { BufferAttribute, CompressedArrayTexture, CompressedTexture, Material } from "three";
 import { getCanonicalStaticMaterialKey } from "./material-decoder";
-import { copyTextureFiltering, copyTextureLOD, getTextureLODBounds } from "./texture-decoder";
+import { copyTextureFiltering, copyTextureLOD, getTextureLODBounds } from "../../materials/texture-settings";
 
 type TextureEntry_T = { index: number; material: Material; texture: CompressedTexture };
 

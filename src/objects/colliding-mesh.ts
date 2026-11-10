@@ -13,7 +13,7 @@ import Actor from "./actor";
 import type BaseActor from "../base-actor";
 import type { default as UnScriptVM, ScriptNativeCall_T, ScriptValue_T } from "../ue-script/vm";
 import { ScriptComponent, type ScriptObjectFactory_T } from "../game/script-component";
-import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import { setScriptObjectProperty } from "./actor-properties";
 import { releaseTouching, type TouchActor_T, type TransformComponent } from "./components/transform-component";
 
 const tmpPosition = new Vector3();

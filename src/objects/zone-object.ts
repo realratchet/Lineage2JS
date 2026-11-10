@@ -1,4 +1,4 @@
-import DynamicLight from "./dynamic-light";
+import type DynamicLight from "./dynamic-light";
 import type { L2Environment } from "../rendering/l2-env";
 import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
 import type { Terrain } from "./terrain";
@@ -11,7 +11,7 @@ import { isPortalBlocked } from "../rendering/door-portals";
 import MusicVolume from "./music-volume";
 import Actor from "./actor";
 import type { BatchRenderGroup_T, LitActorMesh } from "./lit-actor";
-import { setScriptObjectProperty } from "./components/actor-ownership-component";
+import { setScriptObjectProperty } from "./actor-properties";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
