@@ -4,7 +4,7 @@ import { EPhysics_T } from "../../assets/unreal/un-aactor";
 import Rotator from "../../utils/rotator";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, type IObject } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT } from "../../game/script-component";
-import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
+import type { ScriptHost_T, ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type BaseActor from "../../base-actor";
 import type { AttackTarget_T } from "../../objects/components/pawn-attack-component";
 import type RenderManager from "../../rendering/render-manager";
@@ -12,7 +12,7 @@ import type { CollisionQuery_T } from "../collision-world";
 import type NMover from "../mover";
 import type { ICollidable } from "../../objects/objects";
 
-export type ProjectileActor_T = Object3D & IObject & { scriptProperties: Map<string, any> };
+export type ProjectileActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, any> };
 
 const tmpDirection = new Vector3();
 const tmpOldPosition = new Vector3();
@@ -70,7 +70,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         };
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         if (type !== SCRIPT_NATIVE_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
 
         const call = data as ScriptNativeCall_T;

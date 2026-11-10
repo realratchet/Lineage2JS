@@ -72,7 +72,7 @@ export class NCFishViewportWnd {
     public getViewportCanvas() { return this.viewport; }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
-    public placeOnScreen(width: number, height: number) {}
+    public placeOnScreen(_width: number, _height: number) {}
 
     public reset() {
         this.maxHp = this.hp = this.maxTime = this.time = 0;

@@ -69,7 +69,7 @@ export class NCMatchWnd {
         }));
     }
 
-    public placeOnScreen(width: number, height: number) {}
+    public placeOnScreen(_width: number, _height: number) {}
     public isVisible() { return !this.element.hidden; }
     public getPage() { return this.page; }
     public getLocation() { return arrLocations[this.locationIndex]; }

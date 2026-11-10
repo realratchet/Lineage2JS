@@ -1,4 +1,4 @@
-import { ExprToken_T, ObjectFlags_T, type ScriptBytecodeEntry_T, type UClass, type UFunction, type UObject, type UState, type UStruct, type UProperty, type UStructProperty, type UArrayProperty, type UByteProperty, type UObjectProperty, type UClassProperty, type PropertyTypes_T } from "@l2js/core";
+import { ExprToken_T, ObjectFlags_T, type ScriptBytecodeEntry_T, type UClass, type UFunction, type UObject, type UState, type UStruct, type UProperty, type UStructProperty, type UArrayProperty, type UByteProperty, type UObjectProperty, type UClassProperty } from "@l2js/core";
 import type { DecodeLibrary } from "./decode-library";
 import type { Vector3Arr } from "./library-types";
 
@@ -11,7 +11,7 @@ export type IScriptProgramDecodeInfo = { virtualSize: number, entries: IScriptBy
 export type IScriptFieldDecodeInfo = {
     id: string,
     name: string,
-    type: PropertyTypes_T,
+    type: ReturnType<UProperty["getTypeName"]>,
     arrayDimensions: number,
     flags: number,
     isPublic: boolean,
@@ -74,7 +74,7 @@ const cacheFunctions = new WeakMap<UFunction, IScriptFunctionDecodeInfo>();
 const cacheScriptObjects = new WeakMap<UObject, DecodeLibrary["scriptObjects"][string]>();
 const cacheObjectClassParents = new WeakMap<UClass, Record<string, string | null>>();
 const cachePackageObjects = new WeakMap<object, Map<string, DecodeLibrary["scriptObjects"][string]>>();
-const packageClassParents = { "core.Package": "core.Object", "core.Object": null };
+const packageClassParents: Record<string, string | null> = { "core.Package": "core.Object", "core.Object": null };
 const cacheScriptClasses = new WeakMap<DecodeLibrary, WeakSet<IScriptClassDecodeInfo>>();
 const cacheScriptReferences = new WeakMap<UStruct, { references: ScriptReferences_T, objects: DecodeLibrary["scriptObjects"] }>();
 
@@ -118,7 +118,7 @@ export function dumpObjectClass(object: UObject) {
         cacheObjectClassParents.set(cls, classParents);
     }
     // Core.dll registers Class in Core at 0x10183d40..0x10183d8e.
-    const path = object.isClass && object.name === "__native__.Class" ? "core.Class" : getObjectId(object), info: DecodeLibrary["scriptObjects"][string] = { path, classId: getObjectId(cls), classParents, outer: null };
+    const path = (object as UClass).isClass && object.name === "__native__.Class" ? "core.Class" : getObjectId(object), info: DecodeLibrary["scriptObjects"][string] = { path, classId: getObjectId(cls), classParents, outer: null };
     cacheScriptObjects.set(object, info);
     const pkg = (object as any).pkg, end = path.indexOf(".");
 

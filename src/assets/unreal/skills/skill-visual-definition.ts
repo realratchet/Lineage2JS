@@ -19,7 +19,7 @@ export type SkillVisualDefinition_T = {
 };
 
 const programs = Object.fromEntries((["casting", "preshot", "shot", "explosion"] as NpcSkillEffectPhase_T[]).map(phase => [phase, {
-    id: `SkillVisualEffect.${phase}`, owner: "SkillVisualEffect", name: phase, nativeIndex: 0, operatorPrecedence: 0, flags: 0, replicationOffset: 0, fields: [],
+    id: `SkillVisualEffect.${phase}`, owner: "SkillVisualEffect", name: phase, nativeIndex: 0, operatorPrecedence: 0, flags: 0, replicationOffset: 0, fields: [] as IScriptFunctionDecodeInfo["fields"],
     program: compile([
         if_(call("BeginPhase", phase), [
             while_(call("NextAction"), [

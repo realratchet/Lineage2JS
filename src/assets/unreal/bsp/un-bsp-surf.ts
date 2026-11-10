@@ -1,5 +1,5 @@
 import { FPlane } from "../un-plane";
-import { BufferValue, type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
+import { type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { PolyFlags_T } from "../un-polys";
 import type { UShader } from "../un-material";
 import type { UBrush } from "../un-brush";

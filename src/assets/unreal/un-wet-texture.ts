@@ -1,5 +1,5 @@
 import UObject from "./un-object";
-import UTexture, { type ITextureDecodeInfo, type IDataTextureDecodeInfo } from "./un-texture";
+import UTexture, { ETexClampMode, type ITextureDecodeInfo, type IDataTextureDecodeInfo } from "./un-texture";
 import { convertDDSTextureInfo } from "./dds/dxt-decode";
 import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { IBaseMaterialDecodeInfo } from "./un-material";
@@ -102,8 +102,8 @@ export abstract class UWetTexture extends UTexture {
             height: info.height,
             buffer: info.buffer,
             format: "rgba",
-            wrapS: this.wrapS,
-            wrapT: this.wrapT,
+            wrapS: this.wrapS === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
+            wrapT: this.wrapT === ETexClampMode.TC_Clamp ? "clamp" : "wrap",
             waveAmp: this.waveAmp ?? 128,
             dropsX: this.width ? this.width >> 1 : info.width >> 1,
             dropsY: this.height ? this.height >> 1 : info.height >> 1,

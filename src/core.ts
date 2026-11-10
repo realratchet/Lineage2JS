@@ -1,6 +1,6 @@
 import { DECODE_CACHE_VERSION } from "./assets/decode-version";
 import RenderManager, { type HTMLViewportElement_T } from "./rendering/render-manager";
-import { Box3, Object3D, BoxHelper, PlaneGeometry, Mesh, SphereGeometry, MeshBasicMaterial, Box3Helper, Color, BoxGeometry, AxesHelper, DirectionalLight, PointLight, DirectionalLightHelper, PointLightHelper, Euler, SpotLight, SpotLightHelper, AmbientLight, SkeletonHelper } from "three";
+import { BoxHelper } from "three";
 
 import AssetManager from "./assets/asset-manager";
 import runSectorPrecache, { preloadStartupSectors } from "./sector-precache";

@@ -75,7 +75,7 @@ export class MeshEmitter extends BaseEmitter {
                 return (m as THREE.Material).clone();
             }
 
-            return this.createMaterial(m, false);
+            return this.createMaterial(m as ParticleMaterialInitSettings_T, false);
         });
 
         return new ParticleMesh(

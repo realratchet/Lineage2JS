@@ -6,6 +6,7 @@ import type { PawnLight_T } from "../rendering/components/pawn-light-component";
 import type MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import type LocalSpaceSkeleton from "./local-space-skeleton";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
+import type { Vector3Arr } from "@l2js/engine";
 
 const tmpColorByte = new ColorByte();
 const arrEmptyLights: DynamicLight[] = [];
@@ -14,6 +15,7 @@ const arrNoAmbient = [0, 0, 0];
 
 export class LitSkinnedMesh extends SkinnedMesh {
     declare public readonly isLitSkinnedMesh: boolean;
+    declare public skeleton: LocalSpaceSkeleton;
 
     public scaledGlow: number = 1;
     public ambientGlow: number = 0;

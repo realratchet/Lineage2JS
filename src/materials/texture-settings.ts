@@ -68,7 +68,7 @@ function updateTextureLOD(texture: THREE.Texture): void {
     const bounds = cacheTextureLOD.get(texture);
     if (!bounds || !textureRenderer) return;
 
-    const object = textureRenderer.properties.get(texture).__webglTexture;
+    const object = (textureRenderer.properties.get(texture) as { __webglTexture: WebGLTexture }).__webglTexture;
     if (!object) return;
 
     const gl = textureRenderer.getContext() as WebGL2RenderingContext;

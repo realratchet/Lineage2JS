@@ -272,7 +272,7 @@ export class NCInventoryWnd { // NCConsole 0x10060bc2, NCInventoryWnd::OnCreate 
         window.addEventListener("mouseup", event => {
             if (event.button !== 0 || this.element.hidden) return;
 
-            const source = this.arrInput.findIndex((input, index) => !this.getInputPane(index).hidden && document.activeElement === this.getInputPane(index));
+            const source = this.arrInput.findIndex((_input, index) => !this.getInputPane(index).hidden && document.activeElement === this.getInputPane(index));
 
             this.heldSource = -1;
             this.endDrag();

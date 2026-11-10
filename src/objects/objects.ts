@@ -14,8 +14,9 @@ export function getScriptActor(actor: ICollidable | null): ScriptHost_T | null {
     return actor as unknown as ScriptHost_T;
 }
 
-export type ICollidable = THREE.Object3D<THREE.Event> & {
+export type ICollidable = THREE.Object3D & {
     readonly isCollidable: boolean;
+    scriptClassId?: string;
 
     createCollider(physicsWorld: RAPIER.World): RAPIER.Collider;
     releaseCollider?(): void;

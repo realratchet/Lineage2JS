@@ -76,7 +76,7 @@ export class NCNPCHtmlViewer { // NCNPCHtmlViewer (vtable 0x101a8b70): NCConsole
         this.layer.dragWindow(this.element, event);
     }
 
-    public placeOnScreen(screenWidth: number, screenHeight: number) { this.layer.place(this.element, 0, Math.trunc(screenHeight * 0.5 - 252)); } // NCConsole 0x100608f4: SetWindowPos(0, int(H*0.5 - 252), 310, 401).
+    public placeOnScreen(_screenWidth: number, screenHeight: number) { this.layer.place(this.element, 0, Math.trunc(screenHeight * 0.5 - 252)); } // NCConsole 0x100608f4: SetWindowPos(0, int(H*0.5 - 252), 310, 401).
 
     public async show(html: string) {
         this.element.hidden = false;

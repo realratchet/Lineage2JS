@@ -67,7 +67,7 @@ export async function writeCacheBytes(writable: FileSystemWritableFileStream, by
         return;
     }
 
-    await writable.write(bytes);
+    await writable.write(bytes as FileSystemWriteChunkType);
 }
 
 function hashPackageSettings(settings: LoadSettings_T): string {

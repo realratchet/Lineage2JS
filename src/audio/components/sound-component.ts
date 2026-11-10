@@ -77,7 +77,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition, library, onStarted);
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         switch (type) {
             case ANIMATION_NOTIFY_EVENT: return this.onAnimationNotify(data as IAnimationNotifyDecodeInfo);
             case NPC_ENTER_EVENT: return this.onNpcEnter(data as INpcEnterEvent);
@@ -162,7 +162,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, event.soundVolume / 255, 1, event.soundRadius, event.soundRadius * 100, true, `NPC enter sound '${event.sound}'`);
     }
 
-    protected onScriptNative(call: ScriptNativeCall_T): ComponentEventResult_T<ScriptValue_T> {
+    protected onScriptNative(call: ScriptNativeCall_T): ComponentEventResult_T<ScriptValue_T | void> {
         const name = call.name.toLowerCase();
 
         if (call.index !== 264 && name !== "playsound" && name !== "playownedsound" && name !== "demoplaysound" && name !== "playsoundonvehicle") return COMPONENT_EVENT_NOT_HANDLED;

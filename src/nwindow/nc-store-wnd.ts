@@ -22,7 +22,7 @@ export class NCStoreWnd extends NCShopWnd {
         this.counter = layer.text(this.element, "", 0xffb09b79, FontType_T.SMALL, 246, 198);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 80, 156); }
+    public placeOnScreen(_width: number, _height: number) { this.layer.place(this.element, 80, 156); }
     public setLimit(limit: number) { this.maxCount = limit; this.drawTotal(); }
     public setDestination(side: number, wnd: StoreWndView_T | GMStoreWndView_T, targetSide: number) { this.arrDestinations[this.getLogicalSide(side)] = [wnd, wnd.getLogicalSide(targetSide)]; }
     public updateFee() { this.drawTotal(); }

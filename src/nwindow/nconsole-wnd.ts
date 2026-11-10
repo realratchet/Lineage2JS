@@ -953,7 +953,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.selectDeliverWnd.onConfirm = objectId => network.requestPackageSendableItemList(objectId);
         for (const wnd of [this.shopWnd, this.previewShopWnd, this.storeWnd, this.deliverWnd, this.privateShopWnd, this.privateBuyWnd, this.manorShopWnd, this.gmStoreWnd]) {
             wnd.onHideTooltip = () => this.inventoryWnd.hideTooltip();
-            wnd.onTooltip = (item, button, isDetailed, context) => this.inventoryWnd.showTooltip({ maxCount: wnd === this.privateBuyWnd ? this.privateBuyWnd.getMaxCount(item) : 0, objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: wnd === this.privateBuyWnd ? this.privateBuyWnd.getTooltipCount(item) : item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY }, button, isDetailed, context, item.price);
+            wnd.onTooltip = (item, button, isDetailed, context) => this.inventoryWnd.showTooltip({ maxCount: wnd === this.privateBuyWnd ? this.privateBuyWnd.getMaxCount(item) : 0, objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: wnd === this.privateBuyWnd ? this.privateBuyWnd.getTooltipCount(item) : item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 as number : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY }, button, isDetailed, context, item.price);
             wnd.onSelect = () => { if (this.dialogBox.isOpen() && !this.dialogBox.isYesNo()) this.dialogBox.hide(); };
             wnd.onFocusDialog = () => { if (this.dialogBox.isOpen()) this.dialogBox.focus(); };
             wnd.onHide = () => { if (this.dialogBox.owner === wnd.element || this.dialogBox.owner === wnd.getGrid(0) || this.dialogBox.owner === wnd.getGrid(1)) this.dialogBox.hide(); };
@@ -1133,7 +1133,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.tradeWnd.onConfirm = isConfirmed => network.confirmTrade(isConfirmed);
         this.tradeWnd.onHideTooltip = () => this.inventoryWnd.hideTooltip();
         this.tradeWnd.onTooltip = (item, button, isDetailed) => {
-            this.inventoryWnd.showTooltip({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY }, button, isDetailed);
+            this.inventoryWnd.showTooltip({ objectId: item.objectId, itemId: item.itemId, name: this.strings.itemNames[item.itemId], icon: this.strings.itemIcons[item.itemId], count: item.count, enchant: item.enchantLevel, customType1: "customType1" in item ? item.customType1 as number : 0, customType2: item.customType2, itemClass: item.type2, bodyPart: item.bodyPart, info: this.strings.itemInfos[item.itemId], slot: -1, isQuest: item.type2 === GamePackets.ItemType2_T.TYPE2_QUEST, isMoney: item.type2 === GamePackets.ItemType2_T.TYPE2_MONEY }, button, isDetailed);
         };
         this.tradeWnd.onSelect = () => { if (this.dialogBox.isOpen() && !this.dialogBox.isYesNo()) this.dialogBox.hide(); };
         this.tradeWnd.onFocusDialog = () => { if (this.dialogBox.isOpen()) this.dialogBox.focus(); };
@@ -1373,7 +1373,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
     public showCommandChannelInvite(name: string, onAnswer: (isAccepted: boolean) => void) { this.yesNoDialogBox.show(this.formatSystemMessage(SystemMessage_T.CommandChannelInvitation, name), DialogType_T.YES_NO, onAnswer, true, 0, SystemMessage_T.CommandChannelInvitation); }
 
     protected formatSystemMessage(id: number, ...params: string[]): string {
-        return this.nwindow.getSystemMessage(id).replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? "");
+        return this.nwindow.getSystemMessage(id).replace(/\$[sc](\d)/g, (_match, index) => params[Number(index) - 1] ?? "");
     }
 
     protected async showServerHelp(name: string) { await this.loginServerWnd.serverInfo.viewer.setHtml(await this.manNetwork.getParent().getComponent("asset").getL2Text(name)); }
@@ -2577,13 +2577,13 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                     break;
                 case "antiAliasing":
                 case "textureDetail":
-                    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`Invalid game option '${key}'.`);
+                    if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 2) throw new Error(`Invalid game option '${key}'.`);
                     break;
                 case "renderActorLimitOpt":
-                    if (!Number.isInteger(value) || value < 1 || value > 6) throw new Error(`Invalid game option '${key}'.`);
+                    if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 6) throw new Error(`Invalid game option '${key}'.`);
                     break;
                 case "partyLooting":
-                    if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`Invalid game option '${key}'.`);
+                    if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 4) throw new Error(`Invalid game option '${key}'.`);
                     break;
                 default: throw new Error(`Unknown game option '${key}'.`);
             }

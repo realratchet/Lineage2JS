@@ -6,7 +6,7 @@ import { ENetRole_T } from "../assets/unreal/un-aactor";
 import type { DecodeLibrary } from "@l2js/engine";
 import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo, IScriptStateDecodeInfo } from "@l2js/engine/contracts/script";
 
-export type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | undefined;
+export type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | ScriptValue_T[] | { [key: string]: ScriptValue_T } | undefined;
 export type ScriptProperties_T = Map<string, ScriptValue_T> | Record<string, ScriptValue_T>;
 
 export type ScriptNativeCall_T = {
@@ -825,7 +825,7 @@ class ScriptExecutor {
                 } else value = cloneScriptValue(value as ScriptValue_T);
             }
 
-            args.push(value === undefined ? fallback : isTransform ? cloneScriptValue(value) : value);
+            args.push(value === undefined ? fallback : isTransform ? cloneScriptValue(value as ScriptValue_T) : value);
         }
     }
 
@@ -994,7 +994,7 @@ class ScriptExecutor {
             case ExprToken_T.DelegateProperty: {
                 const name = this.next().value as string;
 
-                return name.toLowerCase() === "none" ? null : { object: this.frame.context, functionName: name } as ScriptValue_T;
+                return name.toLowerCase() === "none" ? null : { object: this.frame.context, functionName: name };
             }
             case ExprToken_T.DelegateFunction: return this.evalDelegateCall();
             case ExprToken_T.ClassContext:
@@ -1091,7 +1091,7 @@ class ScriptExecutor {
         }
     }
 
-    protected evalLValueFromEntry(entry: IScriptBytecodeEntryDecodeInfo): ScriptSlot_T {
+    protected evalLValueFromEntry(_entry: IScriptBytecodeEntryDecodeInfo): ScriptSlot_T {
         this.pc--;
 
         return this.evalLValue();
@@ -1293,9 +1293,9 @@ export class UnScriptVM {
     protected getConstructorZero(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], value: ScriptValue_T, path: string, index: number = -1): ScriptValue_T {
         if (!field) throw new Error(`Missing constructor property metadata for '${path}'.`);
         if (index < 0 && field.arrayDimensions > 1)
-            return Array.from({ length: field.arrayDimensions }, (_, i) => this.getConstructorZero(fields, field, value[i], `${path}[${i}]`, i)) as ScriptValue_T;
+            return Array.from({ length: field.arrayDimensions }, (_, i) => this.getConstructorZero(fields, field, (value as ScriptValue_T[])[i], `${path}[${i}]`, i)) as ScriptValue_T;
 
-        switch (field.type) {
+        switch (field.type as string) {
             case "Object":
             case "Class":
             case "Delegate": return null;
@@ -1320,7 +1320,7 @@ export class UnScriptVM {
                     const child = fields[id];
 
                     if (!child) throw new Error(`Missing constructor property metadata '${id}'.`);
-                    result[child.name] = this.getConstructorZero(fields, child, value[child.name], `${path}.${child.name}`);
+                    result[child.name] = this.getConstructorZero(fields, child, (value as Record<string, ScriptValue_T>)[child.name], `${path}.${child.name}`);
                 }
                 return result as ScriptValue_T;
             }
@@ -1333,18 +1333,18 @@ export class UnScriptVM {
         if (index < 0 && field.arrayDimensions > 1) {
             const result = target as ScriptValue_T[];
 
-            for (let i = 0; i < field.arrayDimensions; i++) result[i] = this.copyConstructorProperty(fields, field, value[i], result[i], context, `${path}[${i}]`, i);
+            for (let i = 0; i < field.arrayDimensions; i++) result[i] = this.copyConstructorProperty(fields, field, (value as ScriptValue_T[])[i], result[i], context, `${path}[${i}]`, i);
             return result as ScriptValue_T;
         }
 
-        if (field.type === "Delegate") {
+        if ((field.type as string) === "Delegate") {
             if (value === null) return null;
             const delegate = value as ScriptDelegate_T;
             const cls = context ? this.metaCast(delegate.object, "core.Object") as string : null;
 
             return { object: cls && this.dynamicCast(context, cls) ? context : delegate.object, functionName: delegate.functionName } as ScriptValue_T;
         }
-        if ((field.type === "Object" || field.type === "Class") && field.flags & PropertyFlags_T.CPF_NeedCtorLink && context) {
+        if (((field.type as string) === "Object" || (field.type as string) === "Class") && field.flags & PropertyFlags_T.CPF_NeedCtorLink && context) {
             if (value === null) return null;
             const template = value as ScriptHost_T;
 
@@ -1359,7 +1359,7 @@ export class UnScriptVM {
             if (!outer || typeof outer !== "object" || typeof outer.scriptClassId !== "string" || !outer.scriptClassId) throw new Error(`Constructor-linked object '${path}' has invalid outer.`);
             return this.constructObject(cls.id, outer, "", 0, template, context);
         }
-        if (field.type === "Array") {
+        if ((field.type as string) === "Array") {
             const inner = fields[field.innerId], source = value as ScriptValue_T[], result = target as ScriptValue_T[];
 
             if (!inner) throw new Error(`Missing constructor array metadata for '${path}'.`);
@@ -1372,7 +1372,7 @@ export class UnScriptVM {
             }
             return result as ScriptValue_T;
         }
-        if (field.type === "Struct") {
+        if ((field.type as string) === "Struct") {
             if (Array.isArray(value)) {
                 const result = target as ScriptValue_T[];
 
@@ -1384,7 +1384,7 @@ export class UnScriptVM {
             for (const id of field.structFieldIds) {
                 const child = fields[id];
 
-                result[child.name] = this.copyConstructorProperty(fields, child, value[child.name], result[child.name], context, `${path}.${child.name}`);
+                result[child.name] = this.copyConstructorProperty(fields, child, (value as Record<string, ScriptValue_T>)[child.name], result[child.name], context, `${path}.${child.name}`);
             }
             return result as ScriptValue_T;
         }
@@ -2326,8 +2326,9 @@ export class UnScriptVM {
                 return { value: Math.fround(match ? parseFloat(match[0]) : 0), offset: end ? end.index : text.length, isWritten: true };
             }
             case "Str":
-                if (!isDelimited) return { value: text, offset: 0, isWritten: true };
             case "Name": {
+                if ((field.type as string) === "Str" && !isDelimited) return { value: text, offset: 0, isWritten: true };
+
                 const token = this.readPropertyTextToken(text, (field.type as string) === "Str" ? 4096 : 1024);
 
                 if (!token) return null;
@@ -2611,16 +2612,16 @@ export class UnScriptVM {
         if (index === 303 && name === "IsA") return this.isA(context, args[0] as string);
 
         if (name.toLowerCase() === "getpropertytext") return this.getPropertyText(context, args[0] as string);
-        if (name.toLowerCase() === "setpropertytext") return this.setPropertyText(context, args[0] as string, args[1] as string);
+        if (name.toLowerCase() === "setpropertytext") return this.setPropertyText(context, args[0] as string, args[1] as string) as undefined;
         if (name.toLowerCase() === "findobject") return this.findObject(args[0] as string, args[1] as string);
         if (name.toLowerCase() === "localize") return this.localize(args[0] as string, args[1] as string, args[2] as string);
-        if (name.toLowerCase() === "saveconfig" || index === 536) return this.saveConfig(context);
-        if (name.toLowerCase() === "resetconfig") return this.resetConfig(context);
+        if (name.toLowerCase() === "saveconfig" || index === 536) return this.saveConfig(context) as undefined;
+        if (name.toLowerCase() === "resetconfig") return this.resetConfig(context) as undefined;
         if (name.toLowerCase() === "staticsaveconfig") {
             const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
             const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
 
-            return vm.saveConfig(vm.getDefaultObject(context.scriptClassId));
+            return vm.saveConfig(vm.getDefaultObject(context.scriptClassId)) as undefined;
         }
 
         if (name.toLowerCase() === "getenum") {
@@ -2632,12 +2633,12 @@ export class UnScriptVM {
         if (name.toLowerCase() === "onlyaffectpawns") {
             const value = !!args[0];
 
-            if (!getProperty(context, "bCollideActors") || value === !!getProperty(context, "bOnlyAffectPawns")) return;
+            if (!getProperty(context, "bCollideActors") || value === !!getProperty(context, "bOnlyAffectPawns")) return undefined;
 
             this.invokeNative(self, context, 262, "SetCollision", [false, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
             setProperty(context, "bOnlyAffectPawns", value);
             this.invokeNative(self, context, 262, "SetCollision", [true, getProperty(context, "bBlockActors"), getProperty(context, "bBlockPlayers")]);
-            return;
+            return undefined;
         }
 
         if (index === 113) {

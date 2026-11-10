@@ -68,9 +68,9 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
         if (!info) return COMPONENT_EVENT_NOT_HANDLED;
 
         switch (info.type) {
-            case "effect": this.onAnimationEffect(info); return;
-            case "screenFade": this.renderManager.screenFadeBlink(info); return;
-            case "viewShake": this.renderManager.addViewShake(this.getParent(), info); return;
+            case "effect": this.onAnimationEffect(info); return undefined;
+            case "screenFade": this.renderManager.screenFadeBlink(info); return undefined;
+            case "viewShake": this.renderManager.addViewShake(this.getParent(), info); return undefined;
             default: return COMPONENT_EVENT_NOT_HANDLED;
         }
     }
@@ -161,6 +161,8 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             if (typeof emitter.setSizeScale === "function") emitter.setSizeScale(collisionRadius * ENTER_EFFECT_RADIUS_SCALE);
         });
         this.renderManager.addTransientEffect(actor);
+
+        return undefined;
     }
 
     protected onScriptNative(call: ScriptNativeCall_T): ComponentEventResult_T<ScriptValue_T> {
@@ -175,7 +177,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
                 if (child.particlePool) child.kill();
             });
 
-            return;
+            return undefined;
         }
 
         if (call.index === 278 || name === "spawn") {

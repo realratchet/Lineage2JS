@@ -58,7 +58,7 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
             if (context !== this.getParent()) throw new Error(`SetCollision for '${context.scriptClassId}' is not implemented by '${this.getParent().name}'.`);
 
             this.renderManager.getPhysicsManager().setCollision(context, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
-            return;
+            return undefined;
         }
 
         if (call.index === 298 || name === "setbase") {
@@ -73,7 +73,7 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
                 if (context.scriptProperties instanceof Map) context.scriptProperties.set("Base", base);
             }
 
-            return;
+            return undefined;
         }
 
         switch (name) {

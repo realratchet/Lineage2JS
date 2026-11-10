@@ -3,7 +3,7 @@ import StringSet from "./utils/string-set";
 import type PackageCache from "../decode-worker/package-cache";
 import FBox from "./un-box";
 import FVector from "./un-vector";
-import type UTexture from "./un-texture";
+import type { UTexture, ITextureDecodeInfo } from "./un-texture";
 import type { UClass, APackage } from "@l2js/core";
 import type { UObject } from "./un-object";
 import DecodeLibrary, { type IBaseObjectDecodeInfo } from "./decode-library";
@@ -44,7 +44,7 @@ export type LoadSettings_T = {
     loadEmitters?: boolean,
     loadEmitterList?: { name: string, emitters?: string[] }[],
     loadAudio?: boolean,
-    textures: "auto" | "rgba" | "compressed",
+    textures?: "auto" | "rgba" | "compressed",
     rgbaTextures?: boolean,
     helpersZoneBounds?: boolean,
     isSkyLevel?: boolean,
@@ -117,7 +117,7 @@ export class DecodeLibraryBuilder {
 
         if (typeof info === "string" || !info) {
             this.packageCache?.end(material, this.library, { uuid: info || null, textureSize, source });
-            return info || null;
+            return (info as string) || null;
         }
 
         this.library.materials[material.uuid] = info;
@@ -169,7 +169,7 @@ export class DecodeLibraryBuilder {
         if (!material) return;
         const textures = material.materialType === "sprite" ? material.sprites : [material];
         let changed = false;
-        const result = textures.map(texture => {
+        const result = textures.map((texture: ITextureDecodeInfo) => {
             if (!this.alphaPalettes.has(source.palettes[texture.name]) || texture.textureType !== "rgba") return texture;
             const data = new Uint8Array(texture.buffer);
             let differs = false;

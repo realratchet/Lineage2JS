@@ -54,7 +54,7 @@ export class NCChatFilterWnd {
         layer.button(this.element, 131, 160, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, manager.getSysString(SysString_T.Cancel), () => this.setVisible(false));
     }
 
-    public placeOnScreen(width: number, height: number) { }
+    public placeOnScreen(_width: number, _height: number) { }
     public isVisible() { return !this.element.hidden; }
     public setVisible(isVisible: boolean) {
         this.element.hidden = !isVisible;

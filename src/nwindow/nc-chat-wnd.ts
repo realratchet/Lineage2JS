@@ -80,7 +80,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
         const saved = localStorage.getItem("chatFilters");
 
         this.filters = saved === null ? DEFAULT_CHAT_FILTERS.map(filter => ({ ...filter })) : JSON.parse(saved);
-        if (!Array.isArray(this.filters) || this.filters.length !== TABS.length || this.filters.some(filter => !filter || Object.keys(DEFAULT_CHAT_FILTERS[0]).some(key => typeof filter[key] !== "boolean"))) throw new Error(`Invalid chat filters.`);
+        if (!Array.isArray(this.filters) || this.filters.length !== TABS.length || this.filters.some(filter => !filter || Object.keys(DEFAULT_CHAT_FILTERS[0]).some(key => typeof filter[key as keyof ChatFilter_T] !== "boolean"))) throw new Error(`Invalid chat filters.`);
 
         this.element = layer.createWindow(0, 0, W, H);
         this.element.hidden = true;

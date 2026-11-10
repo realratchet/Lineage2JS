@@ -43,7 +43,7 @@ export class UIManager implements IEngineComponent<GameManager> {
     protected statisticsElement: HTMLElement;
     protected statisticsCanvas: HTMLCanvasElement;
     protected statisticsContext: CanvasRenderingContext2D;
-    protected statisticsHistory = { fps: [], frameTime: [], calls: [], triangles: [], heap: [], vram: [] };
+    protected statisticsHistory: Record<string, number[]> = { fps: [], frameTime: [], calls: [], triangles: [], heap: [], vram: [] };
     protected workerMemory: (WorkerMemoryStats_T | null)[] = [];
     protected workerMemoryPolledAt = 0;
     protected frameStartedAt = 0;
@@ -225,7 +225,7 @@ export class UIManager implements IEngineComponent<GameManager> {
     public attachVisualizerDebugElements(visualizer: Visualizer): void {
         for (const mode of [VisualizerMode.Fogs, VisualizerMode.Audio, VisualizerMode.Emitters]) {
             const element = visualizer.getDebugElement(mode);
-            const panel = this.debugTabs.get(mode)!.panel;
+            const panel = this.debugTabs.get(mode as DebugTab)!.panel;
             if (element && element.parentNode !== panel) panel.appendChild(element);
         }
     }

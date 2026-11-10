@@ -11,6 +11,7 @@ import { pointPrimitive } from "../physics/collision-primitive";
 import { MoverComponent } from "../physics/components/physics-component";
 import type { SectorObject } from "./zone-object";
 import type { IMoverDecodeInfo } from "@l2js/engine/contracts/mesh";
+import type { Vector3Arr } from "@l2js/engine";
 
 const frozenUpdateMatrixWorld = function () { };
 const tmpOldPosition = new Vector3();
@@ -57,7 +58,7 @@ export class MovableObject extends CollidingMesh {
             case 3970:
                 if (call.args[0] !== EPhysics_T.PHYS_MovingBrush) throw new Error(`Mover physics '${call.args[0]}' is not implemented.`);
                 this.setUnrealScriptProperty("Physics", call.args[0]);
-                return;
+                return undefined;
             case 266: {
                 const delta = call.args[0] as number[];
 
@@ -174,7 +175,7 @@ export class MovableObject extends CollidingMesh {
     }
 
     public getEffectTargetLocation(target: Vector3): Vector3 {
-        this.getComponent<ScriptComponent>("script").call("GetEffTargetLocation", [{ get: () => target.toArray(), set: value => target.fromArray(value as Vector3Arr) } as any]);
+        this.getComponent<ScriptComponent>("script").call("GetEffTargetLocation", [{ get: () => target.toArray(), set: (value: ScriptValue_T) => target.fromArray(value as Vector3Arr) } as any]);
         return target;
     }
 

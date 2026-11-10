@@ -254,7 +254,7 @@ export class BeamEmitter extends BaseEmitter {
         (particle as any).beamDirty = true;
     }
 
-    protected updateParticle(deltaTime: number, index: number): void {
+    protected updateParticle(_deltaTime: number, index: number): void {
         const points = (this.particlePool[index] as any)?.beamPoints as Float32Array | undefined;
         if (!points) return;
 

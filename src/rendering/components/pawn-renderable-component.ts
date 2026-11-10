@@ -247,7 +247,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         }
         else return COMPONENT_EVENT_NOT_HANDLED;
 
-        return;
+        return undefined;
     }
 
     protected setMeshes(meshes: Mesh[]): void {

@@ -13,8 +13,8 @@ const diceProfile: ActorCollisionProfile_T = { collideActors: true, collideWorld
 
 export class L2Dice extends GroundPickup {
     public readonly number: number;
-    protected collisionRadius: number;
-    protected collisionHeight: number;
+    declare protected collisionRadius: number;
+    declare protected collisionHeight: number;
     protected actionTime = -1;
 
     public constructor(renderManager: RenderManager, itemId: number, number: number, origin: Vector3) {

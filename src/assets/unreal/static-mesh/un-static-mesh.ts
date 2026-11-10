@@ -6,7 +6,7 @@ import FStaticMeshVertexStream from "./un-static-vertex-stream";
 import FStaticMeshUVStream from "./un-static-mesh-uv-stream";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FRawColorStream from "../un-raw-color-stream";
-import { BufferValue, type APackage, type UExport, type UnserializedProperty_T, FArray, FArrayLazy } from "@l2js/core";
+import { type APackage, type UExport, type UnserializedProperty_T, FArray, FArrayLazy } from "@l2js/core";
 import UObject from "../un-object";
 import { FStaticMeshCollisionData } from "./un-static-mesh-collision";
 import { generateUUID } from "three/src/math/MathUtils";
@@ -381,7 +381,7 @@ export abstract class UStaticMesh extends UPrimitive {
                 nodes: collisionNodes,
                 bounds: collisionBounds
             },
-            groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index]),
+            groups: this.sections.map((section, index) => [section.firstIndex, section.numFaces * 3, index] as [number, number, number]),
             bounds: this.decodeBoundsInfo()
         };
 
@@ -447,7 +447,7 @@ export abstract class UStaticMesh extends UPrimitive {
         return this.collisionModel ? bounds.addBox(this.collisionModel.loadSelf().getCollisionBoundingBox(owner)) : bounds;
     }
 
-    public getRenderBoundingBox(owner?: UAActor): FBox {
+    public getRenderBoundingBox(_owner?: UAActor): FBox {
         return this.boundingBox;
     }
 }

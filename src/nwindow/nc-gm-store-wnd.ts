@@ -33,7 +33,7 @@ export class NCGMStoreWnd extends NCStoreWnd {
         };
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 209, 100); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, width - 209, 100); }
     public toggle(targetName: string) {
         if (this.isVisible()) { this.setVisible(false); return; }
 

@@ -1,11 +1,12 @@
 import { AbnormalEffect_T } from "../../network/game-packets";
-import type { DecodeLibrary } from "@l2js/engine";
+import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
 import type { Material, Mesh } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T, GameObject, ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import { MESHES_CHANGED_EVENT, type default as AnimationComponent } from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type EmitterActor from "../emitter-actor";
 import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
 
 type AbnormalSize_T = { phase: number, radius: number, height: number, weaponScale: number };
@@ -239,12 +240,12 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
         if (stat.effect && stat.effect.parent) this.renderManager.removeTransientEffect(stat.effect);
 
         const asset = this.renderManager.getParent().getComponent("asset");
-        const effect = asset.createScriptObject(this.renderManager, this.library, ABNORMAL_EFFECTS[stat.state]) as GameObject;
+        const effect = asset.createScriptObject(this.renderManager, this.library, ABNORMAL_EFFECTS[stat.state]) as EmitterActor;
 
         stat.effect = effect;
         effect.position.copy(parent.position);
         if (stat.state === AbnormalEffect_T.ABNORMAL_EFFECT_ROOT)
-            effect.scriptProperties.get("TrailerPrePivot")[2] = Math.fround(-(parent.getUnrealScriptProperty("DrawScale") as number) * mesh.meshOrigin.z);
+            (effect.scriptProperties.get("TrailerPrePivot") as Vector3Arr)[2] = Math.fround(-(parent.getUnrealScriptProperty("DrawScale") as number) * mesh.meshOrigin.z);
         this.renderManager.addTransientEffect(effect, parent);
 
         switch (stat.state) {

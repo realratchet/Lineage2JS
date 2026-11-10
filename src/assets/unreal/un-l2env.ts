@@ -259,26 +259,26 @@ export abstract class UL2NEnvLight extends UL2NTimeLight {
     }
 }
 
-function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
-    r /= 255, g /= 255, b /= 255;
-    let v = Math.max(r, g, b);
-    let diff = v - Math.min(r, g, b);
-    let h = 0, s = 0;
+// function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+    // r /= 255, g /= 255, b /= 255;
+    // let v = Math.max(r, g, b);
+    // let diff = v - Math.min(r, g, b);
+    // let h = 0, s = 0;
 
-    if (diff === 0) {
-        h = s = 0;
-    } else {
-        s = diff / v;
-        if (r === v) h = (g - b) / diff + (g < b ? 6 : 0);
-        else if (g === v) h = (b - r) / diff + 2;
-        else h = (r - g) / diff + 4;
-        h /= 6;
-    }
+    // if (diff === 0) {
+        // h = s = 0;
+    // } else {
+        // s = diff / v;
+        // if (r === v) h = (g - b) / diff + (g < b ? 6 : 0);
+        // else if (g === v) h = (b - r) / diff + 2;
+        // else h = (r - g) / diff + 4;
+        // h /= 6;
+    // }
 
 
-    // Value correction: hsvToRgb applies a brightening curve (~sqrt). We square V to compensate and preserve linear intensity.
-    return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
-}
+    // // Value correction: hsvToRgb applies a brightening curve (~sqrt). We square V to compensate and preserve linear intensity.
+    // return [Math.round(h * 255), Math.round((1 - s) * 255), Math.round(v * v * 255)];
+// }
 
 function getEnvType(fileContents: string): EEnvCycle {
     let readOffset = findSection(fileContents, "EnvType");

@@ -115,7 +115,7 @@ export class NCPrivateShopWnd extends NCShopWnd {
     }
     protected getTransferCount(item: ShopItem_T, count: number) { return this.isOwn ? count : super.getTransferCount(item, count); }
     protected getLabelIds() { return this.isOwn ? [138, 137, 143] : [137, 139, 142]; }
-    protected getTooltipContext(side: number) { return this.isOwn ? side ? 4 : 0 : this.isPackage || side === 0 ? 4 : 0; }
+    protected getTooltipContext(side: number): number { return this.isOwn ? side ? 4 : 0 : this.isPackage || side === 0 ? 4 : 0; }
     protected drawTotal() {
         super.drawTotal();
         if (!this.counter) return;

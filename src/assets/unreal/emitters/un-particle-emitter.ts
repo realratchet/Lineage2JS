@@ -31,6 +31,7 @@ export type IEmitterDecodeInfo = IBaseObjectDecodeInfo & {
     blendingMode: ParticleBlendModes_T,
     opacity: number,
     drawScale?: number,
+    rotationOffset?: QuaternionArr,
     changesOverLifetime: {
         scale: { values: [number, number][], repeats: number }
     },
@@ -706,7 +707,7 @@ export abstract class UParticleTimeScale extends UObject {
         });
     }
 
-    public getDecodeInfo(library: DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
+    public getDecodeInfo(_library: DecodeLibrary): [number, number] { return [this.relTime, this.relSize]; }
 
     public toString() { return `ParticleTimeScale=(time=${this.relTime.toFixed(2)}, size=${this.relSize})`; }
 };

@@ -31,7 +31,7 @@ export class NCObserverWnd {
         layer.button(this.element, 19, 5, 76, 23, SKIN_SLOTS.button, SKIN_SLOTS.buttonDown, null, label, () => { if (this.onReturn) this.onReturn(); }).setAttribute("aria-label", label);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 51), 0); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, Math.trunc(width * 0.5 - 51), 0); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
     public focus() {

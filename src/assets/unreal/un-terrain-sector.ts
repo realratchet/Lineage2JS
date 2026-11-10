@@ -136,7 +136,7 @@ export abstract class UTerrainSector extends UObject {
 
         const v = FVector.make();
 
-        let iii = 0;
+        // let iii = 0;
 
         normals.set(this.normals)
 
@@ -333,7 +333,7 @@ export abstract class UTerrainSector extends UObject {
             terrainMaterial: info.uuid,
             uvs: {
                 textureType: "float",
-                buffer: uvs,
+                buffer: uvs.buffer,
                 materialType: "texture",
                 width: 17 * 17,
                 height: layerCount + 2,
@@ -646,16 +646,16 @@ export abstract class UTerrainSector extends UObject {
     protected getLocalVertex(x: number, y: number): number { return x + y * (this.quadsX + 1); }
 
     // Get appropriate shadow map based on time of day
-    protected getShadowMapForTime(timeOfDay: number): FPrimitiveArray<"uint8"> {
-        if (!this.hasShadows || !this.shadowMaps || this.shadowMaps.length === 0) {
-            return null;
-        }
+    // protected getShadowMapForTime(timeOfDay: number): FPrimitiveArray<"uint8"> {
+    //     if (!this.hasShadows || !this.shadowMaps || this.shadowMaps.length === 0) {
+    //         return null;
+    //     }
 
-        // Use generic time-to-index conversion (works with explicit times or evenly distributed slots)
-        const shadowIndex = timeToIndex(timeOfDay, this.shadowMapTimes);
+    //     // Use generic time-to-index conversion (works with explicit times or evenly distributed slots)
+    //     const shadowIndex = timeToIndex(timeOfDay, this.shadowMapTimes);
 
-        return this.shadowMaps[shadowIndex];
-    }
+    //     return this.shadowMaps[shadowIndex];
+    // }
 
     protected triangulateLayer(passIndex: number) {
         const info = this.info;
@@ -743,7 +743,7 @@ export abstract class UTerrainSector extends UObject {
 
             return true;
         } else {
-
+            return undefined;
         }
     }
 

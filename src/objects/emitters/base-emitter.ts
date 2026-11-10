@@ -441,7 +441,7 @@ export abstract class BaseEmitter extends Object3D {
     }
 
     public getLightTexture(): Texture | null {
-        const mesh = this.instancedMesh || this.particlePool[0];
+        const mesh = (this.instancedMesh || this.particlePool[0]) as { material?: THREE.Material | THREE.Material[] };
         const material = mesh ? (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as any : null;
 
         if (material && material.isShaderMaterial && material.uniforms.map) return material.uniforms.map.value;
@@ -740,7 +740,7 @@ export abstract class BaseEmitter extends Object3D {
         }
     }
 
-    protected updateParticle(deltaTime: number, index: number) {
+    protected updateParticle(_deltaTime: number, _index: number) {
     }
 
     protected spawnParticle(index: number, spawnTime: number, flags: number = 0, spawnFlags: number = 0, localLocationOffset = ZERO_VECTOR3) {
@@ -965,7 +965,7 @@ export abstract class BaseEmitter extends Object3D {
 
 
         if (this.addVelocityFromOwner && this.coordinateSystem !== "relative")
-            __break__() && particle.velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).clone().multiply(owner.AbsoluteVelocity));
+            __break__(); // && particle.velocity.add(randVector(this.tmpVec, this.addVelocityMultiplierRange.min, this.addVelocityMultiplierRange.max).clone().multiply(owner.AbsoluteVelocity));
 
         if (this.addVelocityFromOtherEmitter >= 0) {
             const otherEmitter = owner.children[this.addVelocityFromOtherEmitter] as BaseEmitter;
@@ -2116,7 +2116,7 @@ class Particle extends Object3D {
         this.visible = false;
     }
 
-    public spawn({ lifetime, fading: { fadeIn, fadeOut }, acceleration, velocity, scale, position, changesOverLifetime, opacity, colorMultiplierRange }: {
+    public spawn({ lifetime, fading: { fadeIn, fadeOut }, acceleration, changesOverLifetime, opacity }: {
         lifetime: Range_T, fading: FadeSettings_T,
         acceleration: THREE.Vector3,
         velocity: Range3_T,

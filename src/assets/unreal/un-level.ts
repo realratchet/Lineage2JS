@@ -1,5 +1,5 @@
 import FURL from "./un-url";
-import { BufferValue, type APackage, type UExport, FObjectArray, ObjectFlags_T } from "@l2js/core";
+import { type APackage, type UExport, FObjectArray, ObjectFlags_T } from "@l2js/core";
 import UObject from "./un-object";
 import type { UAActor } from "./un-aactor";
 import type { UModel } from "./model/un-model";
@@ -21,15 +21,15 @@ export abstract class ULevelBase extends UObject {
         const verLicense = pkg.header.getLicenseeVersion();
 
         if (verLicense >= 23) {
-            let dbNum = 0, dbMax = 0;
+            let dbNum = 0;
 
             dbNum = pkg.read("int32");
-            dbMax = pkg.read("int32");
+            pkg.read("int32");
 
             this.ambientActors = FObjectArray.loadOfSize(dbNum, pkg);
 
             dbNum = pkg.read("int32");
-            dbMax = pkg.read("int32");
+            pkg.read("int32");
 
             this.actors = FObjectArray.loadOfSize(dbNum, pkg);
         } else {

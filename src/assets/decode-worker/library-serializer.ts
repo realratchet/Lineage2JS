@@ -41,7 +41,7 @@ const enum Tag {
 }
 
 type LibraryChunkEntry_T = { offset: number, length: number };
-type LibraryChunkRef_T = { isLibraryChunk: true, index: number, kind: number, byteLength: number };
+export type LibraryChunkRef_T = { isLibraryChunk: true, index: number, kind: number, byteLength: number };
 type LibraryChunkSource_T = { kind: number, bytes: Uint8Array | Blob, offset?: number, length?: number };
 type LibraryBlobRange_T = { file: Blob, offset: number, end: number, padding: number };
 type LibraryChunkRange_T = { offset: number, end: number, refs: LibraryChunkRef_T[] };
@@ -194,7 +194,7 @@ export function serializeLibrary(root: any): Uint8Array {
 }
 
 export function serializeLibraryBlob(root: any, seekable: SeekableLibrary_T = null): Blob {
-    return new Blob(serializeLibraryParts(root, seekable).parts);
+    return new Blob(serializeLibraryParts(root, seekable).parts as BlobPart[]);
 }
 
 export function serializeLibraryParts(root: any, seekable: SeekableLibrary_T = null): LibraryBytes_T {
@@ -695,7 +695,7 @@ export async function openLibraryFile(file: Blob): Promise<SeekableLibrary_T> {
 function collectChunkRefs(root: any, values: Map<number, any>, containers: any[]): LibraryChunkRef_T[] {
     const refs = new Map<number, LibraryChunkRef_T>();
     const seen = new Set<any>();
-    const stack = [];
+    const stack: object[] = [];
 
     function visit(value: any): boolean {
         if (!value || typeof value !== "object" || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return false;
@@ -830,7 +830,7 @@ function hydrateLibraryRange(seekable: SeekableLibrary_T, range: LibraryChunkRan
 }
 
 export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any = seekable.library): Promise<any> {
-    const containers = [];
+    const containers: object[] = [];
     const refs = collectChunkRefs(root, seekable.values, containers);
     const ranges = buildChunkRanges(seekable, refs);
 
@@ -844,7 +844,7 @@ export async function hydrateLibraryFile(seekable: SeekableLibrary_T, root: any 
 
 export function hydrateLibraryFileSync(seekable: SeekableLibrary_T, root: any = seekable.library): any {
     if (!fileReader) throw new Error(`Synchronous package cache reads require a decode worker.`);
-    const containers = [];
+    const containers: object[] = [];
     const refs = collectChunkRefs(root, seekable.values, containers);
     const ranges = buildChunkRanges(seekable, refs);
     for (const range of ranges) {

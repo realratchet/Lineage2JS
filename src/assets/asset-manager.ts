@@ -12,6 +12,7 @@ import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import type { WarriorAnimations_T, LocalizationProperty_T, UserConfig_T, LoadSettings_T } from "@l2js/engine/contracts/config";
 import type { ICharacterGroup, ICharacterArmorSelection, INpcDefinition, ICharacterEquipment, INpcEquipment } from "@l2js/engine/contracts/pawn";
 import type { IScriptFieldDecodeInfo, ScriptPropertyValue_T } from "@l2js/engine/contracts/script";
+import type { ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
 import { PropertyFlags_T } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
@@ -209,7 +210,7 @@ function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
     for (const [id, value] of Object.entries(source.materials)) {
         const material = Object.assign({}, value) as any;
 
-        if (material.materialType === "sprite") material.sprites = material.sprites.map(texture => Object.assign({}, texture));
+        if (material.materialType === "sprite") material.sprites = material.sprites.map((texture: ITextureDecodeInfo) => Object.assign({}, texture));
         library.materials[id] = material;
     }
 
@@ -1145,7 +1146,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             if (!object.isVolume && !object.isStaticMeshActor) return;
 
-            object.setScriptRuntime(sector.scriptVM, classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
+            object.setScriptRuntime(sector.scriptVM, (classId: string) => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
             if (object.isMovableObject && !object.findComponent("sound")) object.addComponent(new SoundComponent(renderManager.audioManager).setLibrary(library));
             if (object.isStaticMeshActor && object.scriptClassId && !object.getUnrealScriptProperty("bStatic") && object.getUnrealScriptProperty("bMovable") && !object.findComponent("transform"))
                 object.addComponent(new TransformComponent(renderManager, object.getBasedActors()));
@@ -1225,7 +1226,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         }
     }
 
-    protected retireSector(renderManager: RenderManager, sector: SectorObject) {
+    protected retireSector(_renderManager: RenderManager, sector: SectorObject) {
         if (sector.isRetired) return;
         const sectorIdx = `${sector.index.x}_${sector.index.y}`;
 

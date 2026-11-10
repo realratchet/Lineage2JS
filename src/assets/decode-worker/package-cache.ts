@@ -1,6 +1,7 @@
 import type { APackage } from "@l2js/core";
 import DecodeLibrary from "@l2js/engine/decode-library";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
+import type { ITextureDecodeInfo } from "@l2js/engine/contracts/texture";
 import requestWebLock from "../web-lock";
 import { getAssetSourceId } from "../asset-source";
 import { capturePackageResolver, packageIdentity, validatePackageResolver, canReleasePackageSource } from "../unreal/package-resolver";
@@ -8,7 +9,7 @@ import { queueConvertedAssetRelease } from "../unreal/asset-handle";
 import { convertDDSTextureInfo } from "@l2js/engine/dds/dxt-decode";
 import { startLoadingStep } from "../../loading-profile";
 import DecodeLibraryBuilder from "@l2js/engine/decode-library-builder";
-import { hydrateLibraryFile, hydrateLibraryFileSync, type SeekableLibrary_T } from "./library-serializer";
+import { hydrateLibraryFile, hydrateLibraryFileSync, type SeekableLibrary_T, type LibraryChunkRef_T } from "./library-serializer";
 import { loadCachedPackage, getCachedPackageFile, storeCachedPackage, isCacheEnabled } from "./cache-storage";
 
 type PackageEntry_T = { result: any, dependencies: string[], assets: Record<string, Record<string, any>> };
@@ -279,7 +280,7 @@ export class PackageCache {
             if (name === "materials") {
                 const textures = value.materialType === "sprite" ? value.sprites : [value];
                 const originals = base.materialType === "sprite" ? base.sprites : [base];
-                const copies = textures.map((texture, index) => {
+                const copies = textures.map((texture: ITextureDecodeInfo, index: number) => {
                     if (texture.textureType !== "rgba" || originals[index]?.textureType !== "dds") return texture;
                     rgba.push(index);
                     return { ...texture, buffer: originals[index].buffer };
@@ -287,7 +288,7 @@ export class PackageCache {
                 compared = value.materialType === "sprite" ? { ...value, sprites: copies } : copies[0];
             }
             for (const key of Object.keys(compared)) if (!equalAsset(compared[key], base[key])) overrides[key] = compared[key];
-            if (value.materialType === "sprite" && overrides.sprites) overrides.sprites = value.sprites.map((texture, index) => {
+            if (value.materialType === "sprite" && overrides.sprites) overrides.sprites = value.sprites.map((texture: Record<string, unknown>, index: number) => {
                 const changes: Record<string, any> = {};
                 for (const key of Object.keys(texture)) {
                     if (key === "buffer" && rgba.includes(index)) continue;
@@ -342,7 +343,7 @@ function equalAsset(a: any, b: any): boolean {
 }
 
 function makePackageAssetPlan(cached: SeekableLibrary_T, asset: any): any {
-    const chunks = [], copied = new Map();
+    const chunks: (Omit<LibraryChunkRef_T, "isLibraryChunk"> & { offset: number })[] = [], copied = new Map();
 
     function copy(value: any): any {
         if (!value || typeof value !== "object") return value;
@@ -403,9 +404,9 @@ export async function restorePackageAssets(library: any, settings: LoadSettings_
                 base = entry.assets[name][uuid];
             }
             let value = { ...base, ...reference.overrides };
-            if (base.materialType === "sprite" && reference.overrides.sprites) value.sprites = base.sprites.map((texture, index) => ({ ...texture, ...reference.overrides.sprites[index] }));
+            if (base.materialType === "sprite" && reference.overrides.sprites) value.sprites = base.sprites.map((texture: ITextureDecodeInfo, index: number) => ({ ...texture, ...reference.overrides.sprites[index] }));
             if (reference.rgba?.length) {
-                if (value.materialType === "sprite") value.sprites = value.sprites.map(texture => ({ ...texture }));
+                if (value.materialType === "sprite") value.sprites = value.sprites.map((texture: ITextureDecodeInfo) => ({ ...texture }));
                 const textures = value.materialType === "sprite" ? value.sprites : [value];
                 for (const index of reference.rgba) textures[index].buffer = { isPackageRGBATexture: true, byteLength: textures[index].width * textures[index].height * 4 };
             }

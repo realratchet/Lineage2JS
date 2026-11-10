@@ -32,7 +32,7 @@ export class NCGMInventoryWnd extends NCInventoryWnd {
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 201, 100); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, width - 201, 100); }
     public getItems() { return this.items; }
     public getGrid(isQuest: boolean) { return this.arrBags[Number(isQuest)]; }
     public getEquipment() { return this.equipment; }
@@ -89,8 +89,8 @@ export class NCGMInventoryWnd extends NCInventoryWnd {
 
         super.addItem(parent, x, y, item, icon, isSecondary);
     }
-    protected updateDragTargets(event: MouseEvent = null) {}
-    protected dropItem(item: InventoryEntry_T, event: MouseEvent) {}
+    protected updateDragTargets(_event: MouseEvent = null) {}
+    protected dropItem(_item: InventoryEntry_T, _event: MouseEvent) {}
     protected minimize() {}
 }
 

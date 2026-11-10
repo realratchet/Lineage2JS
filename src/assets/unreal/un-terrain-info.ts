@@ -1,4 +1,4 @@
-import { APackage, BufferValue, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray, PropertyTag } from "@l2js/core";
+import { APackage, type Constructable_T, type UExport, FArray, FObjectArray, FPrimitiveArray } from "@l2js/core";
 import type { UObject } from "./un-object";
 import AInfo from "./un-info";
 
@@ -27,8 +27,8 @@ export type IMaterialTerrainDecodeInfo = IBaseMaterialDecodeInfo & {
 
 type TerrainInfoDecodeResult_T = { object: IBaseObjectDecodeInfo & { children: IBaseObjectDecodeInfo[] }, material: IMaterialTerrainDecodeInfo, zoneUuid: string };
 
-const MAP_SIZE_X = 128 * 256;
-const MAP_SIZE_Y = 128 * 256;
+// const MAP_SIZE_X = 128 * 256;
+// const MAP_SIZE_Y = 128 * 256;
 const cacheTextureRgba = new WeakMap<object, Uint8Array>();
 const cacheTextureData = new WeakMap<object, Uint8Array>();
 
@@ -700,7 +700,7 @@ export abstract class ATerrainInfo extends AInfo {
         const vertices = new Array<FVector>(vCount);
         const faceNormals = new Float32Array(vCount * 6);
 
-        const terrain = this.getTextureSource(this.terrainMap);
+        this.getTextureSource(this.terrainMap);
 
         // debugger;
 
@@ -812,7 +812,7 @@ export abstract class ATerrainInfo extends AInfo {
         // debugger;
         // this.combineLayerWeights(); -- not used in seamless terrain
 
-        const xy = this.getSWMapXY(this.location.x, this.location.y);
+        this.getSWMapXY(this.location.x, this.location.y);
 
         // debugger;
     }

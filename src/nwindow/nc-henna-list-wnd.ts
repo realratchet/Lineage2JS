@@ -93,7 +93,7 @@ export class NCHennaListWnd {
         this.updateScroll();
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public getItems() { return this.items; }
     public getScroll() { return this.scroll; }

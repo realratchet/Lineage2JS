@@ -22,7 +22,7 @@ type ApplyParams_T = {
     name: SupportedShaderParams_T,
     sprites: Record<string, SpriteParam_T>,
     parameters: IDecodedParameter,
-    uniforms: Record<string, Uniform>,
+    uniforms: Record<string, THREE.IUniform>,
     defines: Record<string, any>
 }
 
@@ -31,7 +31,7 @@ type SpriteParam_T = {
     sprites: any[]
 }
 
-function getProceduralMaps(uniforms: Record<string, Uniform>): any[] {
+function getProceduralMaps(uniforms: Record<string, THREE.IUniform>): any[] {
     const maps = new Set<any>();
 
     for (const uniform of Object.values(uniforms)) {
@@ -43,7 +43,7 @@ function getProceduralMaps(uniforms: Record<string, Uniform>): any[] {
     return [...maps];
 }
 
-function getTriggeredTransforms(uniforms: Record<string, Uniform>): any[] {
+function getTriggeredTransforms(uniforms: Record<string, THREE.IUniform>): any[] {
     const transforms: any[] = [];
     for (const name of TRANSFORM_CHAIN_SLOTS) {
         const uniform = uniforms[name];
@@ -160,7 +160,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         if (info.modulateSpecular2X === true) defines["USE_MODULATE_SPECULAR_2X"] = "";
         // UniformsLib.lights dropped - NUM_DIR_LIGHTS/NUM_SPOT_LIGHTS/NUM_HEMI_LIGHTS are always
         // 0 here (DynamicLight isn't a THREE.Light), so those ~19 uniforms never compiled in
-        const uniforms: Record<string, Uniform> = appendGlobalUniforms(UniformsUtils.merge([
+        const uniforms: Record<string, THREE.IUniform> = appendGlobalUniforms(UniformsUtils.merge([
             {
                 alphaTest: new Uniform(1e-3),
                 diffuse: new Uniform(new Color(0xffffff)),
@@ -657,7 +657,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public copy(source: this): this {
         const copySource = Object.create(source) as this;
         const uniforms = getLocalUniforms(source.uniforms);
-        const proceduralUniforms: Record<string, Uniform> = {};
+        const proceduralUniforms: Record<string, THREE.IUniform> = {};
 
         for (const [name, uniform] of Object.entries(uniforms))
             if ((uniform.value as any)?.isTexture && (uniform.value as any).isUpdatable) {

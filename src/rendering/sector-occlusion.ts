@@ -14,7 +14,7 @@ function isStaticMesh(object: any): boolean {
     for (let parent = object; parent && !parent.isSectorObject; parent = parent.parent)
         if (parent.isMovableObject || parent.isRotatingObject || parent.isVehicleMesh || parent.isAgitStaticMeshActor || parent.particlePool) return false;
     const materials = Array.isArray(object.material) ? object.material : [object.material];
-    return materials.length > 0 && materials.every(material => material && (material.isStaticMeshMaterial || material.isTerrainMaterial));
+    return materials.length > 0 && materials.every((material: THREE.Material & { isStaticMeshMaterial?: boolean, isTerrainMaterial?: boolean }) => material && (material.isStaticMeshMaterial || material.isTerrainMaterial));
 }
 
 export class SectorOcclusion {
@@ -46,7 +46,7 @@ export class SectorOcclusion {
     protected readonly contextRestored = () => { for (const record of this.sectors.values()) record.query = null; this.invalidate(); };
 
     public constructor(protected readonly renderer: WebGLRenderer, protected readonly bounds: MeshBounds) {
-        this.gl = renderer.getContext();
+        this.gl = renderer.getContext() as WebGL2RenderingContext;
         renderer.domElement.addEventListener("webglcontextrestored", this.contextRestored);
     }
 
@@ -160,7 +160,7 @@ export class SectorOcclusion {
         for (const item of this.opaque) items[count++] = item;
     }
 
-    public afterRender(camera: THREE.Camera, scene: Scene, geometry: THREE.BufferGeometry, material: THREE.Material, object: Object3D, group: any): void {
+    public afterRender(camera: THREE.Camera, scene: Scene, _geometry: THREE.BufferGeometry, material: THREE.Material, object: Object3D, group: any): void {
         const last = this.lastItem;
         if (!last || camera !== this.camera || object !== last.object || material !== last.material || group !== last.group || scene === this.scene) return;
         this.lastItem = null;
@@ -168,9 +168,9 @@ export class SectorOcclusion {
         this.occluderCount = 0;
         for (const item of items) {
             if (!this.isOccluder(item)) break;
-            const index = this.occluderCount++, geometry = item.geometry, group = item.group;
+            const index = this.occluderCount++, geometry = item.geometry, group = item.group as unknown as THREE.GeometryGroup;
             const state = this.occluders[index] || (this.occluders[index] = { matrix: new Matrix4() } as Occluder_T);
-            state.object = item.object; state.geometry = geometry; state.material = item.material;
+            state.object = item.object as THREE.Mesh; state.geometry = geometry; state.material = item.material;
             state.matrix.copy(item.object.matrixWorld);
             state.position = geometry.attributes.position; state.positionVersion = version(state.position);
             state.index = geometry.index; state.indexVersion = version(state.index);

@@ -1,4 +1,4 @@
-import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor, PlaneGeometry, Group, BufferAttribute, Fog, Color, OneMinusSrcAlphaFactor } from "three";
+import { Scene, PerspectiveCamera, Vector3, WebGLRenderer, Mesh, MeshBasicMaterial, DoubleSide, CustomBlending, OneFactor, SrcAlphaFactor, PlaneGeometry, Group, BufferAttribute, Fog, Color } from "three";
 import L2Environment from "./l2-env";
 import { ColorByte } from "../utils/color-byte";
 import { SectorObject, ZoneObject } from "../objects/zone-object";
@@ -95,7 +95,7 @@ export default class SkyRenderer {
         });
 
         const celestials = skyLevel.celestials;
-        const setup = envInfo.setup;
+        // const setup = envInfo.setup;
 
         this.moonActors.forEach(actor => this.celestialScene.remove(actor.mesh));
         this.moonActors = [];
@@ -260,7 +260,7 @@ export default class SkyRenderer {
         this.updateSkyLayers(env, skyColor, _hazeColor, hazeColors, cloudColors, _fogColor, skyVisibility, clearColor);
     }
 
-    protected updateSkyLayers(_env: L2Environment, _skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColors: ColorByte[], fogColor: ColorByte, skyVisibility: number, _clearColor: ColorByte) {
+    protected updateSkyLayers(_env: L2Environment, _skyColor: ColorByte, _hazeColor: ColorByte, hazeColors: ColorByte[], cloudColors: ColorByte[], _fogColor: ColorByte, _skyVisibility: number, _clearColor: ColorByte) {
         if (!this.envInfo) return;
 
         function applyModifierColor(material: any, colorByte: ColorByte) {

@@ -158,7 +158,7 @@ export class RibbonEmitter extends BaseEmitter {
         this.pointCount += count;
     }
 
-    protected updateParticles(deltaTime: number): void {
+    protected updateParticles(deltaTime: number): undefined {
         super.updateParticles(deltaTime);
         const particle = this.particles[0], ribbon = this.ribbon;
         if (!this.parent || !this.activeParticles || !(particle.flags & EParticleFlags_T.PTF_Active)) return;

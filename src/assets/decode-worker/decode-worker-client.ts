@@ -103,7 +103,7 @@ function shareTextures(library: any): void {
         texture.sharedTextureKey = key;
     }
 
-    const received = [...new Set<string>(library.sharedTextures.map(([, , key]) => key))];
+    const received = [...new Set<string>(library.sharedTextures.map(([, , key]: [string, number, string]) => key))];
 
     for (const client of clients) client.confirmSharedTextures(received);
     delete library.sharedTextures;
@@ -124,7 +124,7 @@ function shareSounds(library: any): void {
         if (!cacheSounds.has(id)) throw new Error(`Shared sound '${name}' (${id}) never reached the main thread.`);
 
         const cached = cacheSounds.get(id);
-        const sound = { uri: null, data: cached.data, mimeType: cached.mimeType };
+        const sound = { uri: null as string, data: cached.data, mimeType: cached.mimeType };
 
         cached.refs++;
         soundFinalizer.register(sound, cached);
@@ -824,7 +824,7 @@ export class DecodeWorkerClient {
         return npcs;
     }
 
-    protected pickNpcWorker(bundleName: string): number {
+    protected pickNpcWorker(_bundleName: string): number {
         return this.pickScriptWorker();
     }
 
@@ -1300,7 +1300,7 @@ export class DecodeWorkerClient {
             finishLoadingProfile(entry.request.loadingId);
             entry.request.reject(error);
         }
-        this.slots.forEach((slot, index) => this.onWorkerDead(index, error));
+        this.slots.forEach((_slot, index) => this.onWorkerDead(index, error));
     }
 }
 

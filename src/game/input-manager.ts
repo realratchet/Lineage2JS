@@ -19,6 +19,7 @@ import VolumeCamera from "../rendering/camera/volume-camera";
 import BehindViewCamera from "../rendering/camera/behind-view-camera";
 import { sinRotator } from "../assets/unreal/utils/rotator";
 import type { ReplayScene_T, ReplayCameraInstruction_T } from "../network/l2-replay-file";
+import type { Vector3Arr } from "@l2js/engine";
 
 const CLICK_MAX_MOVEMENT_SQ = 16;
 const MOUSE_TARGET_INTERVAL_MS = 50;

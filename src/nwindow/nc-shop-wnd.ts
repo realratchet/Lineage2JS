@@ -141,7 +141,7 @@ export class NCShopWnd {
         window.addEventListener("pointercancel", () => this.endDrag());
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public isSellMode() { return this.isSell; }
     public isPreviewMode() { return this.isPreview; }
@@ -220,7 +220,7 @@ export class NCShopWnd {
     }
     protected moveSelected(side: number) { const item = this.getPressedItem(side); if (item && this.onMove) this.onMove(side, item, false, false); }
     protected getLabelIds() { return this.isPreview ? [811, 812, 813] : [this.isSell ? 138 : 137, this.isSell ? 137 : 139, this.isSell ? 143 : 142]; }
-    protected getTooltipContext(side: number) { return this.isStore ? 0 : this.isSell ? 8 : side ? 4 : 7; }
+    protected getTooltipContext(side: number): number { return this.isStore ? 0 : this.isSell ? 8 : side ? 4 : 7; }
     protected hoverItem(side: number, index: number, buttons: number) {
         if ((buttons & 1) && (this.heldSide !== side || document.activeElement !== this.lists[side])) index = this.hoveredIndices[side];
         else this.hoveredIndices[side] = index;

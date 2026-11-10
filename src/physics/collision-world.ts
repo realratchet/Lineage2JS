@@ -40,7 +40,7 @@ const CELL_SIZE = 1024;
 const PAWN_CELL_SIZE = 64;
 const MAX_QUERY_CELLS = 4096;
 const MAX_ENTRY_CELLS = 16384;
-const ACTORBOX_EPSILON = Math.fround(4.2);
+// const ACTORBOX_EPSILON = Math.fround(4.2);
 const DYNAMIC_CELL_MARGIN = 256; // Non-pawn movers retain a margin between dynamic re-grids.
 // ULevel::MoveActor (0x85b3b0) extends the test by 2 units and subtracts them back off the result
 const MOVE_ACTOR_EXTENSION = 2;
@@ -1412,7 +1412,7 @@ export class CollisionWorld {
             }
         }
 
-        if (query.ignorePawns && profile.isPawn && !getTraceProperty(actor, "bAsTreatWorld")) return true;
+        if (query.ignorePawns && profile.isPawn && !getTraceProperty(actor as ScriptHost_T, "bAsTreatWorld")) return true;
         if (!query.ignoreBases || !source) return false;
 
         if (profile.worldGeometry) return false;

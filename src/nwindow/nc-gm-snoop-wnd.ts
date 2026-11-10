@@ -57,7 +57,7 @@ export class NCGMSnoopWnd {
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 15, 38); }
+    public placeOnScreen(_width: number, _height: number) { this.layer.place(this.element, 15, 38); }
     public getConversationId() { return this.conversationId; }
     public isVisible() { return !this.element.hidden; }
     public setVisible(isVisible: boolean) {
@@ -122,7 +122,7 @@ export class NCGMSnoopManager {
         windows.forEach(window => this.element.appendChild(window.element));
     }
 
-    public placeOnScreen(width: number, height: number) {}
+    public placeOnScreen(_width: number, _height: number) {}
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;

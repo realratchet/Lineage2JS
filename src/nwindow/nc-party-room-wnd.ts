@@ -73,7 +73,7 @@ export class NCPartyRoomWnd {
         this.setMode(0);
     }
 
-    public placeOnScreen(width: number, height: number) {}
+    public placeOnScreen(_width: number, _height: number) {}
     public tick(deltaTime: number) { this.minimized.tick(deltaTime); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {

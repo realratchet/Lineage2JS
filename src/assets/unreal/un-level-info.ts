@@ -13,7 +13,7 @@ export abstract class ULevelInfo extends FZoneInfo implements IInfo {
     public setSkyZoneInfo(skyZone: any) { this.skyZone = skyZone; }
     public getSkyZoneInfo() { return this.skyZone; }
 
-    public getDecodeInfo(library: DecodeLibrary): IBaseZoneDecodeInfo {
+    public getDecodeInfo(_library: DecodeLibrary): IBaseZoneDecodeInfo {
         return {
             type: "Sector",
             uuid: this.uuid,

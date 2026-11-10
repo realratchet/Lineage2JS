@@ -142,7 +142,7 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
 export default ParticleMaterial;
 
 // Particle-specific blend table (SetParticleMaterial in the leaked source), separate from AActor::Style.
-export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) {
+export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T): ParticleBlendingSettings_T {
     // Preserve destination alpha for later transparent compositing.
     const preserveDestinationAlpha = {
         blendSrcAlpha: ZeroFactor,
@@ -196,6 +196,8 @@ export function getPartcileBlendingSettings(blendingMode: ParticleBlendModes_T) 
             throw new Error(`Unknown blending mode: ${blendingMode}`);
     }
 }
+
+type ParticleBlendingSettings_T = { blending: THREE.Blending, blendSrc?: THREE.BlendingDstFactor, blendDst?: THREE.BlendingDstFactor, blendSrcAlpha?: THREE.BlendingDstFactor, blendDstAlpha?: THREE.BlendingDstFactor, isAdditive?: boolean };
 
 export type ParticleMaterialInitSettings_T = {
     type: "sprite" | "texture",

@@ -19,6 +19,7 @@ import PacketReader from "./packet-reader";
 import type { NetObject_T } from "./network-actors";
 import { setVector } from "./network-location";
 import { setLoadingProgress, loadingTexts } from "../loading-progress";
+import type { Vector3Arr } from "@l2js/engine";
 
 type NetVehicle_T = { actor: Vehicle, actorReady: Promise<void>, objectId: number, position: Vector3, heading: number, destination: Vector3, moveSpeed: number, rotationSpeed: number, isStarted: boolean, riders: Map<number, Vector3> };
 

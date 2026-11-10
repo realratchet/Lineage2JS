@@ -122,7 +122,7 @@ export class NCMacroWnd {
         layer.button(this.info, 131, 132, 76, 23, TEX_BUTTON, TEX_BUTTON_DOWN, null, manager.getSysString(SysString_T.Cancel), () => { this.setInfoVisible(false); }).setAttribute("aria-label", manager.getSysString(SysString_T.Cancel));
     }
 
-    public placeOnScreen(width: number, height: number) {
+    public placeOnScreen(_width: number, height: number) {
         this.minimized.place(0, Math.trunc(height * .5 - 252));
         this.editorMinimized.place(0, Math.trunc(height * .5 - 252));
         this.layer.place(this.info, 21, Math.trunc(height * .5 - 173));

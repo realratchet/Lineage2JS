@@ -1,4 +1,5 @@
 import { Matrix3, Vector2 } from "three";
+import type TexOscillatorTriggered from "./tex-oscillator-triggered";
 
 export const MAX_TRANSFORM_STAGES = 2;
 
@@ -20,7 +21,7 @@ function emptyTransformStage() {
         amplitudeU: 0, amplitudeV: 0,
         typeU: 0, typeV: 0,
         offsetU: 0, offsetV: 0,
-        useLocalTime: false, timeSeconds: 0, triggered: null
+        useLocalTime: false, timeSeconds: 0, triggered: null as TexOscillatorTriggered
     };
 }
 

@@ -6,6 +6,7 @@ import type { PawnMeshType_T } from "./assets/unreal/un-pawn";
 import { getScriptActor, type ActorCollisionProfile_T, type CollisionPrimitive_T, type ICollidable } from "./objects/objects";
 import type RenderManager from "./rendering/render-manager";
 import type { CheckResult_T } from "./physics/collision-world";
+import type Actor from "./objects/actor";
 import UnScriptVM, { unregisterLevelActor, updateLevelActor, ScriptNativeCall_T, ScriptValue_T } from "./ue-script/vm";
 import { GameObject, COMPONENT_EVENT_NOT_HANDLED } from "./game/components";
 import { ColliderComponent } from "./physics/components/physics-component";
@@ -156,7 +157,7 @@ export class BaseActor extends GameObject implements ICollidable {
             case "physics": this.movementComponent.setPhysicsMode(Number(value)); return;
             case "level": {
                 this.renderManager.getPhysicsManager().setPawnLevel(this, value as any);
-                if (this.getStoredUnrealScriptProperty(id) !== value) this.setUnrealScriptProperty("Region", { Zone: value, iLeaf: -1, ZoneNumber: 0 });
+                if (this.getStoredUnrealScriptProperty(id) !== value) this.setUnrealScriptProperty("Region", { Zone: value, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
                 break;
             }
         }
@@ -214,7 +215,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public removeBasedActor(actor: ICollidable): void { this.movementComponent.removeBasedActor(actor); }
     public setBase(actor: ICollidable | null): void { this.movementComponent.setBase(actor); }
     public getCollisionProfile(): ActorCollisionProfile_T { return this.movementComponent.getCollisionProfile(); }
-    public getCollisionPrimitive(): CollisionPrimitive_T { return this.movementComponent.getCollisionPrimitive(); }
+    public getCollisionPrimitive(): CollisionPrimitive_T<"cylinder"> { return this.movementComponent.getCollisionPrimitive(); }
     public createCollider(physicsWorld: RAPIER.World): RAPIER.Collider { return this.movementComponent.createCollider(physicsWorld); }
     public releaseCollider(): void { this.movementComponent.releaseCollider(); }
     public ignoreOverlappingActors(actors: Iterable<ICollidable>): void { this.movementComponent.ignoreOverlappingActors(actors); }
@@ -223,7 +224,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public isInteractive(): boolean { return this.movementComponent.isInteractive(); }
 
     public checkLoadingResource(includeZero = true): boolean {
-        if (!this.scriptComponent || !this.renderManager.manGame.getComponent("network")?.isInWorld()) return false;
+        if (!this.scriptComponent || !this.renderManager.getParent().getComponent("network")?.isInWorld()) return false;
         if (this.ridePawn || this.getUnrealScriptProperty("RidePawn") || this.getUnrealScriptProperty("bRide") || this.getUnrealScriptProperty("DrawType") === EDrawType_T.DT_Custom) return false;
         // FNActorResourceLoader::CheckLoadingResource 0x769050..0x769190; browser world runs normal network-client mode.
         const count = this.getUnrealScriptProperty("LoadingResourceRef") as number;
@@ -241,7 +242,7 @@ export class BaseActor extends GameObject implements ICollidable {
         if (physics !== EPhysics_T.PHYS_None && physics !== EPhysics_T.PHYS_Rotating) return false;
 
         // AActor::Tick 0x86580f..0x865886.
-        return currentTime / 1000 - (this.getUnrealScriptProperty("LastRenderTime") as number) > 5 && (this.getUnrealScriptProperty("Level") as GameObject).getUnrealScriptProperty("NetMode") === ENetMode_T.NM_Standalone;
+        return currentTime / 1000 - (this.getUnrealScriptProperty("LastRenderTime") as number) > 5 && (this.getUnrealScriptProperty("Level") as Actor).getUnrealScriptProperty("NetMode") === ENetMode_T.NM_Standalone;
     }
 
     public updatePresentation(currentTime: number, deltaTime: number) {
@@ -260,7 +261,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
     public getEffectTargetLocation(target: Vector3): Vector3 {
         if (this.scriptComponent) {
-            this.scriptComponent.call("GetEffTargetLocation", [{ get: () => target.toArray(), set: value => target.fromArray(value as Vector3Arr) } as any]);
+            this.scriptComponent.call("GetEffTargetLocation", [{ get: () => target.toArray(), set: (value: ScriptValue_T) => target.fromArray(value as Vector3Arr) } as any]);
             return target;
         }
 

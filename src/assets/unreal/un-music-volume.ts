@@ -26,7 +26,7 @@ export abstract class UMusicVolume extends UVolume {
         })
     }
 
-    public getDecodeInfo(library: DecodeLibrary) {
+    public getDecodeInfo(_library: DecodeLibrary) {
         const region = this.getRegion()?.loadSelf();
         const decodeInfo: IMusicVolumeDecodeInfo = {
             ...super.getDecodeInfo(),

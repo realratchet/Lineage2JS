@@ -1,9 +1,10 @@
 import { GameObject, ObjectComponent } from "../../game/components";
-import type { DecodeLibrary } from "@l2js/engine";
+import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../../rendering/render-manager";
 import type AnimationComponent from "./animation-component";
 import type LitSkinnedMesh from "../lit-skinned-mesh";
+import type EmitterActor from "../emitter-actor";
 import type EffectLifetimeComponent from "../../rendering/components/effect-lifetime-component";
 
 export const APPENDIX_TEAM_RED = 4;
@@ -57,10 +58,10 @@ export class PawnAppendixComponent extends ObjectComponent<BaseActor> {
         for (const state of APPENDIX_STATES) {
             if (!(this.state & state) || this.effects.some(entry => entry.state === state)) continue;
 
-            const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, APPENDIX_EFFECTS[state]) as GameObject;
+            const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, APPENDIX_EFFECTS[state]) as EmitterActor;
 
             // FNAppendixEffect::Init 0x10492fc8: TrailerPrePivot.Z = 0.5 - DrawScale * mesh Origin.Z.
-            effect.scriptProperties.get("TrailerPrePivot")[2] = Math.fround(0.5 - (parent.getUnrealScriptProperty("DrawScale") as number) * mesh.meshOrigin.z);
+            (effect.scriptProperties.get("TrailerPrePivot") as Vector3Arr)[2] = Math.fround(0.5 - (parent.getUnrealScriptProperty("DrawScale") as number) * mesh.meshOrigin.z);
             this.renderManager.addTransientEffect(effect, parent);
             effect.getComponent<EffectLifetimeComponent>("effectLifetime").updateTrailerTransform();
             this.effects.push({ state, effect });

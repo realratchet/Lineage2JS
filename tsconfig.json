@@ -12,6 +12,9 @@
             ],
             "@l2js/engine/*": [
                 "./src/assets/unreal/*"
+            ],
+            "@l2js/core/*": [
+                "./node_modules/@l2js/core/src/*"
             ]
         },
         "noImplicitAny": true,
@@ -22,7 +25,8 @@
         "noFallthroughCasesInSwitch": true,
         "declaration": true,
         "emitDeclarationOnly": true,
-        "isolatedModules": true
+        "isolatedModules": true,
+        "skipLibCheck": true
     },
     "exclude": [
         "node_modules",

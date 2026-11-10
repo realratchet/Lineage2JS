@@ -3,7 +3,8 @@ import { sinRotator } from "../../assets/unreal/utils/rotator";
 import type PhysicsManager from "../../physics/physics-manager";
 import type { CollisionQuery_T } from "../../physics/collision-world";
 import type { ICollidable } from "../../objects/objects";
-import type { ScriptHost_T } from "../../ue-script/vm";
+import type PlayerController from "../../objects/player-controller";
+import type { Vector3Arr } from "@l2js/engine";
 
 const tmpDirection = new Vector3();
 const tmpStart = new Vector3();
@@ -39,7 +40,7 @@ export class BehindViewCamera {
         return hit.actor;
     }
 
-    public update(controller: ScriptHost_T, rotation: Vector3Arr, target: Vector3, output: Vector3): void { // ALineagePlayerController::CalcBehindView 0x105382a0..0x10538a84.
+    public update(controller: PlayerController, rotation: Vector3Arr, target: Vector3, output: Vector3): void { // ALineagePlayerController::CalcBehindView 0x105382a0..0x10538a84.
         const properties = controller.scriptProperties, pitch = rotation[0], yaw = rotation[1], cosPitch = sinRotator(pitch + 16384);
         let distance = Math.fround((properties.get("CurZoomingDist") as number) + 250);
 

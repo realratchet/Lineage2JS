@@ -2,7 +2,7 @@
 // import FRotator from "./un-rotator";
 import GMath from "./un-gmath";
 import FMatrix from "./un-matrix";
-import { APackage, UExport, type FObjectArray } from "@l2js/core";
+import type { FObjectArray } from "@l2js/core";
 import UObject from "./un-object";
 import { generateUUID } from "three/src/math/MathUtils";
 import type { UTextureModifyInfo } from "./un-texture-modify-info";

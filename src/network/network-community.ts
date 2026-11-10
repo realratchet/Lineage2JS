@@ -157,7 +157,7 @@ export class NetworkCommunity {
         return member;
     }
 
-    public applyPartyMember(member: GamePackets.PartyMember_T) {
+    public applyPartyMember(member: Pick<GamePackets.PartyMember_T, "objectId" | "name" | "curHp" | "maxHp" | "curMp" | "maxMp">) {
         const object = this.network.actors.objects.get(member.objectId);
 
         if (!object) return;
@@ -622,7 +622,7 @@ export class NetworkCommunity {
 
         const template = strings.systemMessages[messageId];
 
-        const text = template === undefined ? `SystemMessage ${messageId} ${params.join(" ")}` : template.replace(/\$[sc](\d)/g, (match, index) => params[Number(index) - 1] ?? "");
+        const text = template === undefined ? `SystemMessage ${messageId} ${params.join(" ")}` : template.replace(/\$[sc](\d)/g, (_match, index) => params[Number(index) - 1] ?? "");
 
         return { id: messageId, text };
     }

@@ -84,7 +84,7 @@ export class PlayerController implements ScriptHost_T {
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
         switch (call.name.toLowerCase()) {
             case "setviewtarget":
-                this.scriptProperties.set("ViewTarget", call.args[0]);
+                this.scriptProperties.set("ViewTarget", call.args[0] as ScriptValue_T);
                 return undefined;
             default: throw new Error(`UnrealScript native '${call.name}' (${call.index}) is not implemented for '${this.scriptClassId}'.`);
         }

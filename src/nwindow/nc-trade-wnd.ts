@@ -182,7 +182,7 @@ export class NCTradeWnd {
         this.element.hidden = !isVisible;
 
         if (isVisible)
-            this.lists.forEach((list, mode) => this.recalculateRows(mode, this.items[mode].length));
+            this.lists.forEach((_list, mode) => this.recalculateRows(mode, this.items[mode].length));
 
         if (!isVisible) {
             this.heldMode = -1;

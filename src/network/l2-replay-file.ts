@@ -65,11 +65,11 @@ function checkTime(value: number): void {
 export class L2ReplayFile {
     public version = 660;
     public format = 1;
-    public header = new Uint8Array(62);
+    public header: Uint8Array = new Uint8Array(62);
     public arrPackets: ReplayPacket_T[] = [];
     public arrCameraInstructions: ReplayCameraInstruction_T[] = [];
     public arrUserIds: number[] = [];
-    public trailer = TRAILER.slice();
+    public trailer: Uint8Array = TRAILER.slice();
     protected legacy = false;
 
     public constructor(bytes: Uint8Array = null) {

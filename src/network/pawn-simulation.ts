@@ -55,7 +55,7 @@ export class PawnSimulation {
             const pools: Record<string, number[]> = { weapon: [], weapon2h: [], shield: [], chest: [], full: [], legs: [], gloves: [], feet: [], head: [] };
             const armorSlots: Record<number, string> = { 6: "head", 9: "gloves", 10: "chest", 11: "legs", 12: "feet", 15: "full" };
             for (const key of Object.keys(strings.itemInfos)) {
-                const info = strings.itemInfos[key], id = Number(key);
+                const id = Number(key), info = strings.itemInfos[id];
                 if (info.templateClass === "armor" && armorSlots[info.bodyPart]) pools[armorSlots[info.bodyPart]].push(id);
                 if (info.templateClass !== "weapon") continue;
                 if ([1, 2, 3, 7].includes(info.weaponType)) pools.weapon.push(id);

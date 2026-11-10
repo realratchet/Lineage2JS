@@ -37,7 +37,7 @@ async function handleProfiledMessage(message: MainToWorkerMessage_T): Promise<vo
     }
 
     flushLoadingProgress = updateProgress;
-    setLoadingStepHandler((id, kind, name, start, elapsed) => {
+    setLoadingStepHandler((id, kind, name, _start, elapsed) => {
         if (elapsed < 0) active.set(id, { kind, name: name.replace(/^assets\//, "") });
         else {
             active.delete(id);

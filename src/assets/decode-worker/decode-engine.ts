@@ -2,7 +2,6 @@ import { isCacheEnabled } from "./cache-storage";
 import { refreshSoundBlobUris } from "../sound-uris";
 import { DDSConstants } from "../unreal/dds/dds-constants";
 import type { APackage, UClass } from "@l2js/core";
-import { generateUUID } from "three/src/math/MathUtils";
 import AssetLoader from "../asset-loader";
 import UConfigEnv from "@l2js/engine/conf-files/un-conf-env";
 import { ETextureFormat } from "@l2js/engine/un-tex-format";
@@ -15,7 +14,7 @@ import { startLoadingStep } from "../../loading-profile";
 import buildDecodeLibrary from "./build-decode-library";
 import prepareLibraryForTransfer, { collectTransferables } from "./collect-transferables";
 import * as DecodeCache from "./decode-cache";
-import { serializeLibrary, serializeLibraryBlob, deserializeLibrary, openLibraryFile, hydrateLibraryFile, getLibraryChunkBlob, type SeekableLibrary_T } from "./library-serializer";
+import { serializeLibrary, serializeLibraryBlob, openLibraryFile, hydrateLibraryFile, getLibraryChunkBlob, type SeekableLibrary_T } from "./library-serializer";
 import { dumpObjectClass, dumpObjectScriptProperties } from "@l2js/engine/script-dump-loader";
 import type { GameStrings_T, SkillInfo_T, ItemInfo_T, MatineeScene_T, MatineeAction_T, UITexture_T, PlayerSkillInfo_T, PrecacheResult_T, WorkerMemoryStats_T, ClientConfig_T, ConfirmSharedScriptMessage_T } from "./decode-protocol";
 import DecodeLibrary from "@l2js/engine/decode-library";
@@ -36,8 +35,8 @@ import { getUserConfig } from "@l2js/engine/conf-files/un-conf-system";
 import { getRotatorQuaternionElements } from "@l2js/engine/utils/rotator";
 import type { IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo, ISkinNotifyEntryDecodeInfo, IAnimationSwimSoundSetDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
-import type { IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
-import type { ICharacterArmorSelection, INpcDefinition, NpcSkillAttack_T, NpcSkillEffectPhase_T, ICharacterGroup, ICharacterArmorOptions, ICharacterEquipment, INpcEquipment, IPawnEquipmentDecodeInfo, IPawnSoundsDecodeInfo } from "@l2js/engine/contracts/pawn";
+import type { IBaseMaterialDecodeInfo, IMaterialGroupDecodeInfo } from "@l2js/engine/contracts/material";
+import type { ICharacterArmorSelection, INpcDefinition, NpcSkillAttack_T, NpcSkillEffectPhase_T, ICharacterGroup, ICharacterArmorOptions, ICharacterEquipment, INpcEquipment, IPawnEquipmentDecodeInfo, IPawnSoundsDecodeInfo, IPawnSoundSetDecodeInfo } from "@l2js/engine/contracts/pawn";
 import type { IKeyframeDecodeInfo_T, IAnimationSequenceDecodeInfo, ISkinnedMeshObjectDecodeInfo } from "@l2js/engine/contracts/skeletal-mesh";
 import type { UEmitter } from "@l2js/engine/un-emitter";
 import type UTexture from "@l2js/engine/un-texture";
@@ -108,7 +107,7 @@ function copyLibraryAssets(target: DecodeLibrary, source: DecodeLibrary): void {
             if (key === "materials") {
                 const material = Object.assign({}, value) as any;
 
-                if (material.materialType === "sprite") material.sprites = material.sprites.map(texture => Object.assign({}, texture));
+                if (material.materialType === "sprite") material.sprites = material.sprites.map((texture: ITextureDecodeInfo) => Object.assign({}, texture));
                 (target[key] as any)[id] = material;
             } else (target[key] as any)[id] = value;
         }
@@ -672,10 +671,10 @@ export class DecodeEngine {
     }
 
     protected prepareCachedPackageAsset(value: any, name: string, uuid: string): any {
-        if (SCRIPT_KEYS.includes(name as any) && this.sentScriptIds[name].has(uuid)) return null;
+        if (SCRIPT_KEYS.includes(name as any) && this.sentScriptIds[name as typeof SCRIPT_KEYS[number]].has(uuid)) return null;
         if (name === "soundBlobCache" && value.assetName && this.sentSoundIds.has(value.assetName.toLowerCase())) value.data = null;
         if (name !== "materials") return value;
-        if (value.materialType === "sprite") value.sprites = value.sprites.map(texture => ({ ...texture }));
+        if (value.materialType === "sprite") value.sprites = value.sprites.map((texture: ITextureDecodeInfo) => ({ ...texture }));
         this.prepareCachedMaterialTextures(uuid, value);
         return value;
     }
@@ -1032,7 +1031,7 @@ export class DecodeEngine {
             shield: shield && shield.tag === 0 ? { sounds: shield.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null
         });
 
-        if (boots && boots.tag === 1) library.pawnSounds.boots = await Promise.all(boots.item_sound.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
+        if (boots && boots.tag === 1) library.pawnSounds.boots = await Promise.all(boots.item_sound.map((path: string) => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
     }
 
     protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string, required: boolean = true, isMetadataOnly = false): Promise<string> {
@@ -1957,7 +1956,7 @@ export class DecodeEngine {
                 const frame = decodeTextureRGBA(info as ITextureDecodeInfo, useIntrinsicAlpha);
 
                 textures.push({ path, width: frame.width, height: frame.height, frames: [frame.buffer], frameTime: 0 });
-            } else throw new Error(`UI texture '${path}' decoded to unsupported material '${info.materialType}'.`);
+            } else throw new Error(`UI texture '${path}' decoded to unsupported material '${(info as IBaseMaterialDecodeInfo).materialType}'.`);
         }
 
         return textures;
@@ -2008,7 +2007,7 @@ export class DecodeEngine {
         await localization.decode();
         await localization.load();
 
-        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols, commands, npcNames, obscene, quests, residences, recipes, hennas, zoneNames, zoneNameMasks, npcGroups, staticObjectNames] = await Promise.all([
+        const [messages, sysStrings, servers, actions, logon, classes, tables, items, weapons, armor, etcItems, symbols, commands, npcNames, , quests, residences, recipes, hennas, zoneNames, zoneNameMasks, npcGroups, staticObjectNames] = await Promise.all([
             (new UDataFile(SchemasC4.SCHEMA_SYSTEMMSG_E_DAT, "assets/system/systemmsg-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SYSSTRING_E_DAT, "assets/system/sysstring-e.dat").asReadable()).decode(),
             (new UDataFile(SchemasC4.SCHEMA_SERVERNAME_E_DAT, "assets/system/servername-e.dat").asReadable()).decode(),
@@ -2066,7 +2065,7 @@ export class DecodeEngine {
         for (const row of tables.sounds) {
             if ((row.skill_id !== 20002 && row.skill_id !== 20004) || row.skill_level !== 1) continue;
 
-            const sounds = socialSounds[row.skill_id] = [];
+            const sounds: GameStrings_T["socialSounds"][number] = socialSounds[row.skill_id] = [];
 
             for (let i = 1; i <= 3; i++) {
                 const sound = row[`spelleffect_sound_${i}`];
@@ -2349,7 +2348,7 @@ export class DecodeEngine {
         for (const [name, bundle] of this.cacheStoredAssets) {
             if (!bundle.dirty) continue;
 
-            const entries = {};
+            const entries: StoredAssets_T["entries"] = {};
 
             for (const [key, library] of Object.entries(bundle.entries))
                 entries[key] = library.isLibraryChunk ? library : serializeLibraryBlob(library);
@@ -3054,7 +3053,7 @@ export class DecodeEngine {
             const sounds = new DecodeLibrary();
             const weapon = equipment.rightHand ? (await this.decodeWeaponGrp()).find(row => row.id === equipment.rightHand) : null;
             const config = (await this.getAudioConfig()).getPawnSound("ItemSound");
-            const arrSounds = weapon && weapon.tag === 0 ? await Promise.all(weapon.item_sound.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(this.createDecodeBuilder(sounds, builder.getSettings()), path, false) : null)) : [];
+            const arrSounds = weapon && weapon.tag === 0 ? await Promise.all(weapon.item_sound.map((path: string) => path && path.toLowerCase() !== "none" ? this.pullSoundPath(this.createDecodeBuilder(sounds, builder.getSettings()), path, false) : null)) : [];
 
             sounds.pawnEquipment = { weaponType: info.weaponType, items: [], attackSound: arrSounds.length ? { sounds: arrSounds, volume: config.volume, radius: config.radius } : null };
             return sounds;
@@ -3133,7 +3132,7 @@ export class DecodeEngine {
                 const rotation = location[`ints_${suffix}`];
 
                 if (!origin || !rotation) throw new Error(`Accessory '${item.mesh}' has no offsets for hairstyle '${hairVariant}'.`);
-                if (!origin.some(value => value !== 0) && !rotation.some(value => value !== 0)) continue;
+                if (!origin.some((value: number) => value !== 0) && !rotation.some((value: number) => value !== 0)) continue;
 
                 library.scriptMeshes[path] = { ...library.scriptMeshes[path], meshOrigin: origin, meshRotOrigin: rotation, meshRotOriginQuaternion: getRotatorQuaternionElements(rotation[0], rotation[1], rotation[2]) } as ISkinnedMeshObjectDecodeInfo;
             }
@@ -3387,7 +3386,7 @@ export class DecodeEngine {
             sounds: {
                 defense: { sounds: (row.sound2 as string[]).slice(0, 5), volume: row.soundVolume as number, radius: row.soundRadius as number },
                 damage: { sounds: (row.sound3 as string[]).slice(0, 3), volume: row.soundVolume as number, radius: row.soundRadius as number, random: row.soundRandom as number },
-                item: null
+                item: null as IPawnSoundSetDecodeInfo
             }
         }));
     }

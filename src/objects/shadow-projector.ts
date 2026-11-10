@@ -106,7 +106,7 @@ export class ShadowProjector {
             const after = mesh.onAfterRender;
             mesh.onAfterRender = (renderer, scene, camera, geometry, material, group) => {
                 after.call(mesh, renderer, scene, camera, geometry, material, group);
-                this.drawReceiver(renderer, scene, camera, mesh, material as ShaderMaterial, group);
+                this.drawReceiver(renderer, scene, camera, mesh, material as ShaderMaterial, group as unknown as THREE.GeometryGroup);
             };
             this.receiverMeshes.add(mesh);
         });
@@ -121,7 +121,7 @@ export class ShadowProjector {
             for (const receiver of material === instanced ? [material] : [material, instanced]) {
                 mesh.material = receiver;
                 renderer.compile(scene, camera);
-                const program = renderer.properties.get(receiver).currentProgram;
+                const program = (renderer.properties.get(receiver) as { currentProgram: { isReady(): boolean } }).currentProgram;
                 if (!program) throw new Error(`Missing shadow receiver program for '${mesh.name}'.`);
                 programs.push(program);
             }

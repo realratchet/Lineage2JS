@@ -3,7 +3,7 @@ import { BufferValue, type APackage, type UExport, FArray, FArrayLazy, FIndexArr
 import getTypedArrayConstructor from "../utils/typed-arrray-constructor";
 import { generateUUID } from "three/src/math/MathUtils";
 import ULodMesh from "../un-lod-mesh";
-import FQuaternion, { FAxis } from "../un-quaternion";
+import FQuaternion from "../un-quaternion";
 import FRawIndexBuffer from "../un-raw-index-buffer";
 import FVector from "../un-vector";
 import type { UMeshAnimation, IAnimationNotifyDecodeInfo, ISkinNotifyDecodeInfo } from "./un-mesh-animation";
@@ -1031,59 +1031,59 @@ type VertexInfo_T = {
     weights: number[]
 }
 
-class FBoneCoord {
-    public origin: FVector = FVector.make();
-    public axis: FAxis = new FAxis();
+// class FBoneCoord {
+    // public origin: FVector = FVector.make();
+    // public axis: FAxis = new FAxis();
 
-    public invert() {
-        const out = new FBoneCoord();
+    // public invert() {
+        // const out = new FBoneCoord();
 
-        // negate inverse rotated origin
-        out.origin = this.axis.transformVector(this.origin).negate();
+        // // negate inverse rotated origin
+        // out.origin = this.axis.transformVector(this.origin).negate();
 
-        // transpose axis
-        out.axis.x.x = this.axis.x.x;
-        out.axis.x.y = this.axis.y.x;
-        out.axis.x.z = this.axis.z.x;
-        out.axis.y.x = this.axis.x.y;
-        out.axis.y.y = this.axis.y.y;
-        out.axis.y.z = this.axis.z.y;
-        out.axis.z.x = this.axis.x.z;
-        out.axis.z.y = this.axis.y.z;
-        out.axis.z.z = this.axis.z.z;
+        // // transpose axis
+        // out.axis.x.x = this.axis.x.x;
+        // out.axis.x.y = this.axis.y.x;
+        // out.axis.x.z = this.axis.z.x;
+        // out.axis.y.x = this.axis.x.y;
+        // out.axis.y.y = this.axis.y.y;
+        // out.axis.y.z = this.axis.z.y;
+        // out.axis.z.x = this.axis.x.z;
+        // out.axis.z.y = this.axis.y.z;
+        // out.axis.z.z = this.axis.z.z;
 
-        return out;
-    }
+        // return out;
+    // }
 
 
-    public untransformPoint(src: FVector) {
-        let tmp = this.origin;
+    // public untransformPoint(src: FVector) {
+        // let tmp = this.origin;
 
-        tmp = this.axis.x.multiplyScalar(src.x).add(tmp);
-        tmp = this.axis.y.multiplyScalar(src.y).add(tmp);
-        tmp = this.axis.z.multiplyScalar(src.z).add(tmp);
+        // tmp = this.axis.x.multiplyScalar(src.x).add(tmp);
+        // tmp = this.axis.y.multiplyScalar(src.y).add(tmp);
+        // tmp = this.axis.z.multiplyScalar(src.z).add(tmp);
 
-        return tmp;
-    }
+        // return tmp;
+    // }
 
-    public untransformCoords(src: FBoneCoord) {
-        const out = new FBoneCoord();
+    // public untransformCoords(src: FBoneCoord) {
+        // const out = new FBoneCoord();
 
-        out.origin = this.untransformPoint(src.origin);
-        out.axis = this.axis.untransformAxis(src.axis);
+        // out.origin = this.untransformPoint(src.origin);
+        // out.axis = this.axis.untransformAxis(src.axis);
 
-        return out;
-    }
+        // return out;
+    // }
 
-    toElements() {
-        return [
-            this.axis.x.x, this.axis.x.y, this.axis.x.z, 0,
-            this.axis.y.x, this.axis.y.y, this.axis.y.z, 0,
-            this.axis.z.x, this.axis.z.y, this.axis.z.z, 0,
-            this.origin.x, this.origin.y, this.origin.z, 1
-        ];
-    }
-}
+    // toElements() {
+        // return [
+            // this.axis.x.x, this.axis.x.y, this.axis.x.z, 0,
+            // this.axis.y.x, this.axis.y.y, this.axis.y.z, 0,
+            // this.axis.z.x, this.axis.z.y, this.axis.z.z, 0,
+            // this.origin.x, this.origin.y, this.origin.z, 1
+        // ];
+    // }
+// }
 
 function makeVector(v: { x: number, y: number, z: number }) { return FVector.make(v.x, v.y, v.z); }
 function makeQuaternion(v: { x: number, y: number, z: number, w: number }) { return FQuaternion.make(v.x, v.y, v.z, v.w); }

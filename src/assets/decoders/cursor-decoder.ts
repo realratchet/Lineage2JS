@@ -1,6 +1,6 @@
 import decodeResources from "./pe-resource-decoder";
 
-type CursorDecodeInfo_T = { data: Uint8Array, x: number, y: number };
+type CursorDecodeInfo_T = { data: Uint8Array<ArrayBuffer>, x: number, y: number };
 
 function decodeCursors(buffer: ArrayBuffer): CursorDecodeInfo_T[] {
     const readResource = decodeResources(buffer);

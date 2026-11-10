@@ -394,7 +394,7 @@ export class NetworkSession {
         if (!this.network.actors.inWorld || this.game.isRecording()) return;
         const render = this.network.getParent().getComponent("render"), properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
         const file = new L2ReplayFile(), direction = render.camera.getWorldDirection(new Vector3());
-        const time = (render.environment.getTimeSeconds() % (24 * 60 * 60) + (24 * 60 * 60)) % (24 * 60 * 60);
+        const time = (render.getEnvironment().getTimeSeconds() % (24 * 60 * 60) + (24 * 60 * 60)) % (24 * 60 * 60);
         const zoom = properties.get("CurZoomingDist") as number;
         const fixedCamera = properties.get("CurFixedDefaultCameraNo") as number;
 
@@ -413,7 +413,7 @@ export class NetworkSession {
 
         try { name = await saveReplayFile(bytes); }
         finally {
-            const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" })), link = document.createElement("a");
+            const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/octet-stream" })), link = document.createElement("a");
 
             link.href = url;
             link.download = name;
@@ -440,7 +440,7 @@ export class NetworkSession {
             characters.slice(0, 7).forEach((character, index) => { if (character.isLastUsed && (character.deleteSeconds <= 0 || character.isDeletionMarked)) lastUsed = index; });
             transfer.selectedSlot = lastUsed;
         }
-        const asset = this.network.getParent().getComponent("asset");
+        // const asset = this.network.getParent().getComponent("asset");
 
         await this.lobby.showSelect(characters);
         if (this.game !== game || this.characters !== characters) return;

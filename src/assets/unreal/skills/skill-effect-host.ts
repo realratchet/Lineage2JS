@@ -18,7 +18,7 @@ export type SkillActor_T = {
     scriptClassId: string;
     scriptProperties: Map<string, any>;
     scriptOwner: SkillActor_T;
-    scriptBase: SkillActor_T;
+    scriptBase?: SkillActor_T;
     getUnrealScriptProperty(name: string): any;
 };
 

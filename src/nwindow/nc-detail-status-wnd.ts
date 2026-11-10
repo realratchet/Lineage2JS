@@ -4,6 +4,8 @@ import EXPERIENCE_TABLE from "../game/experience";
 import type { UserInfo_T, ClanInfo_T, HennaStatus_T } from "../network/game-packets";
 import SysString_T from "./sys-string";
 
+export type DetailStatus_T = Pick<UserInfo_T, "name" | "title" | "classId" | "clanId" | "level" | "exp" | "sp" | "str" | "dex" | "con" | "int" | "wit" | "men" | "curHp" | "maxHp" | "curMp" | "maxMp" | "curCp" | "maxCp" | "curLoad" | "maxLoad" | "pAtk" | "pDef" | "accuracy" | "critical" | "atkSpd" | "mAtk" | "mDef" | "evasion" | "castSpd" | "runSpd" | "walkSpd" | "moveMultiplier" | "karma" | "pkKills" | "pvpKills" | "recommendations" | "recommendationsLeft" | "isHero" | "isNoble"> & { isRunning?: boolean };
+
 const TEX_BACK = "L2UI_CH3.PlayerStatusWnd.myinfo_back";
 const TEX_HP = "L2UI_CH3.PlayerStatusWnd.ps_hpbar";
 const TEX_MP = "L2UI_CH3.PlayerStatusWnd.ps_mpbar";
@@ -21,7 +23,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
     protected readonly values: HTMLDivElement;
     protected readonly bars: HTMLDivElement[];
     protected readonly rank: HTMLDivElement;
-    protected status: UserInfo_T = null;
+    protected status: DetailStatus_T = null;
     protected clan: ClanInfo_T = null;
     protected henna: HennaStatus_T = null;
 
@@ -38,7 +40,7 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
         this.values.style.pointerEvents = "none";
     }
 
-    public setStatus(status: UserInfo_T) { this.status = status; this.paint(); }
+    public setStatus(status: DetailStatus_T) { this.status = status; this.paint(); }
     public setClan(clan: ClanInfo_T) { this.clan = clan; this.paint(); }
     public setHenna(henna: HennaStatus_T) { this.henna = henna; this.paint(); }
 

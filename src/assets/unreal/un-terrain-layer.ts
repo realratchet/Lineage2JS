@@ -21,7 +21,7 @@ export abstract class UTerrainLayer extends UObject {
     declare public readonly mapAxis: TextureMapAxis_T;
     declare public readonly mapRotation: number;
     declare public readonly layerRotation: FRotator;
-    declare public readonly terrainMatrix: FMatrix;
+    declare public terrainMatrix: FMatrix;
     declare public readonly level: number[];
     declare public readonly friction: number;
     declare public readonly restitution: number;

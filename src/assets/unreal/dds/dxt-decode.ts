@@ -271,7 +271,7 @@ export function convertDDSTextureInfo(info: ITextureDecodeInfo): boolean {
     const dataInfo = info as IDataTextureDecodeInfo;
 
     dataInfo.textureType = "rgba";
-    dataInfo.buffer = rgba.buffer;
+    dataInfo.buffer = rgba.buffer as ArrayBuffer;
     dataInfo.width = width;
     dataInfo.height = height;
     dataInfo.format = "rgba";

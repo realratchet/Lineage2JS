@@ -1,4 +1,5 @@
 import { BufferGeometry, Material, Mesh, Object3D } from "three";
+import type { ScriptHost_T, ScriptValue_T } from "../ue-script/vm";
 
 export type IEngineComponent<T extends IEngineComponent<T>> = {
     startTicking?(currentTime: number): void; // for syncing clocks
@@ -24,6 +25,8 @@ export type IObject = {
     updateComponents(currentTime: number, deltaTime: number): void;
     detachComponents(): void;
 };
+
+export type ScriptActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, ScriptValue_T>, scriptOwner: ScriptActor_T, getUnrealScriptProperty(id: string): ScriptValue_T };
 
 export type IComponent<TParent extends IObject = IObject> = {
     readonly componentName: string;
@@ -153,7 +156,7 @@ export abstract class ObjectComponent<TParent extends IObject = IObject> impleme
 
 export class GameObject extends Object3D implements IObject {
     public readonly isGameObject = true;
-    public scriptOwner: Object3D & IObject = null;
+    public scriptOwner: ScriptActor_T = null;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
     public addComponent<T extends IComponent<any>>(component: T): T { return this.componentCollection.add(component); }
@@ -168,7 +171,7 @@ export class GameObject extends Object3D implements IObject {
 
 export class GameMesh<TGeometry extends BufferGeometry = BufferGeometry, TMaterial extends Material | Material[] = Material | Material[]> extends Mesh<TGeometry, TMaterial> implements IObject {
     public readonly isGameObject = true;
-    public scriptOwner: Object3D & IObject = null;
+    public scriptOwner: ScriptActor_T = null;
     protected readonly componentCollection = new ComponentCollection<this>(this);
 
     public addComponent<T extends IComponent<any>>(component: T): T { return this.componentCollection.add(component); }

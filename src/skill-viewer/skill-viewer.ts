@@ -59,7 +59,7 @@ export async function runSkillViewer(isPlayer: boolean = false): Promise<void> {
 
     const assetList = await (await fetchAsset("asset-list.json")).json();
     const game = await SkillViewerGame.initialize(viewport, assetList, loadSettings, isPlayer ? 0 : undefined);
-    const renderManager = game.getComponent("render"), assetManager = game.getComponent("asset");
+    const renderManager = game.getComponent("render"), assetManager = game.getComponent("asset") as SkillViewerAssetManager;
     const controls = new ZUpOrbitControls(renderManager.camera, renderManager.renderer.domElement);
     const stage = isPlayer ? new PlayerSkillViewerStage(renderManager, assetManager) : new SkillViewerStage(renderManager, assetManager);
     const ui = new SkillViewerUI(stage, controls);

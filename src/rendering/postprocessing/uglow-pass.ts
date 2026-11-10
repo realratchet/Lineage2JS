@@ -1,15 +1,9 @@
 import {
     WebGLRenderTarget,
     ShaderMaterial,
-    UniformsUtils,
     Vector2,
-    Scene,
-    Camera,
-    Mesh,
-    PlaneGeometry,
     LinearFilter,
-    RGBAFormat,
-    FloatType
+    RGBAFormat
 } from "three";
 import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass";
 
@@ -169,7 +163,7 @@ export class UGlowPass extends Pass {
     }
 
     render(renderer: any, writeBuffer: any, readBuffer: any) {
-        const oldLogarithmicDepthBuffer = renderer.capabilities.logarithmicDepthBuffer;
+        // const oldLogarithmicDepthBuffer = renderer.capabilities.logarithmicDepthBuffer;
         // Post-processing doesn't need logarithmic depth
 
         // 1. Bright Pass

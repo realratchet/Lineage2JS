@@ -1,5 +1,6 @@
 import type NetworkManager from "./network-manager";
 import type AnimationComponent from "../objects/components/animation-component";
+import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import { LoopOnce, Vector3 } from "three";
 import BaseActor from "../base-actor";
 import { RACE_WINNER_EFFECT } from "../assets/asset-manager";
@@ -142,7 +143,7 @@ export class NetworkCombat {
 
         if (!caster.actor || !target && !targetActor) {
             if (!isTransient) this.stopSkill(caster.objectId);
-            const pending = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] };
+            const pending = { targetObjectId, id, level, hitTime: hitTime / 1000, receivedTime, position: { x: position.x, y: position.y, z: position.z }, isTransient, associatedObjectIds: [] as number[] };
 
             if (isTransient) caster.pendingTransientSkills.push(pending);
             else caster.pendingSkill = pending;
@@ -529,7 +530,7 @@ export class NetworkCombat {
 
         const mesh = actor.getComponent<AnimationComponent>("animation").getMeshes()[0];
 
-        if (mesh) effect.scriptProperties.get("TrailerPrePivot")[2] = -mesh.meshOrigin.z;
+        if (mesh) effect.scriptProperties.get("TrailerPrePivot")[2] = -(mesh as LitSkinnedMesh).meshOrigin.z;
 
         // Engine.dll SpawnNTransientEffect 0x79a7e1..0x79a8ee: level1 spell sounds at Pawn.Location.
         for (const sound of this.network.ui.getStrings().socialSounds[skillId] || []) {

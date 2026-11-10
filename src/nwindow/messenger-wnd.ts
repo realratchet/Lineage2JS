@@ -115,7 +115,7 @@ export class MessengerWnd {
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 384, 180); }
+    public placeOnScreen(_width: number, _height: number) { this.layer.place(this.element, 384, 180); }
     public isVisible() { return !this.element.hidden; }
     public setFriends(friends: FriendEntry_T[]) { this.arrFriends = friends; this.tree.setFriends(friends); }
     public setPlayerName(name: string) { this.playerName = name; }
@@ -186,7 +186,7 @@ export class MessengerWnd {
         } finally { this.clearLogin(); }
     }
 
-    protected loginMsn(email: string, password: string) {
+    protected loginMsn(_email: string, _password: string) {
         debugger;
         throw new Error(`MSN Messenger login is not implemented.`);
     }

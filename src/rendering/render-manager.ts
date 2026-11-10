@@ -10,21 +10,19 @@ import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
 import "../materials/shader-chunks/register-chunks";
-import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, SphereGeometry, MeshBasicMaterial, Camera, Color, Sprite, SpriteMaterial, NormalBlending, AdditiveBlending, PlaneGeometry, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion, DepthTexture, FloatType, WebGLCoordinateSystem } from "three";
+import { ColorManagement, WebGLRenderer, LinearSRGBColorSpace, PerspectiveCamera, Vector2, Scene, Mesh, BoxGeometry, Vector3, Frustum, Matrix4, Object3D, Box3, MeshBasicMaterial, Camera, Color, Sprite, NormalBlending, AnimationClip, CameraHelper, Fog, MathUtils, WebGLRenderTarget, RGBAFormat, LinearFilter, Sphere, Group, Quaternion, DepthTexture, FloatType, WebGLCoordinateSystem } from "three";
 import { UGlowPass } from "./postprocessing/uglow-pass";
 import GLOBAL_UNIFORMS, { getLocalUniforms } from "../materials/global-uniforms";
 import Player from "../player";
 import type BaseActor from "../base-actor";
 import type CollidingMesh from "../objects/colliding-mesh";
 import Visualizer, { VisualizerMode, LeafVisualizerDetail, EmitterDebugInfo_T } from "./visualizer";
-import EnvColor from "./env-color";
 import L2Environment, { FogBlendState, interpolateFogInfoColor, interpolateFogInfoSkyColor, interpolateFogInfoHazeColor, interpolateFogInfoCloudColor, interpolateFogInfoHazeColors } from "./l2-env";
 import SkyRenderer from "./sky-renderer";
 import Terrain from "../objects/terrain";
 import { ColorByte } from "../utils/color-byte";
 import EnvInfo from "./env-info";
 import AudioManager from "../audio/audio-manager";
-import type AssetManager from "../assets/asset-manager";
 import { getMintedSoundUri } from "../assets/sound-uris";
 import { retainSharedTextureBuffer } from "../assets/decoders/texture-decoder";
 import { setUseTrilinear, setTextureDetail } from "../materials/texture-settings";
@@ -72,7 +70,7 @@ import type PawnFishingComponent from "../objects/components/pawn-fishing-compon
 
 export type HTMLViewportElement_T = HTMLDivElement;
 
-const tmpBox = new Box3();
+// const tmpBox = new Box3();
 const tmpShaderCompileGroup = new Scene();
 const tmpShaderCompileFog = new Fog(0);
 const tmpCamDir = new Vector3();
@@ -487,8 +485,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.renderer.outputColorSpace = LinearSRGBColorSpace;
         this.renderer.setOpaqueSort((a, b) => {
-            const programA = this.renderer.properties.get(a.material).currentProgram?.id ?? -1;
-            const programB = this.renderer.properties.get(b.material).currentProgram?.id ?? -1;
+            const programA = (this.renderer.properties.get(a.material) as { currentProgram?: { id: number } }).currentProgram?.id ?? -1;
+            const programB = (this.renderer.properties.get(b.material) as { currentProgram?: { id: number } }).currentProgram?.id ?? -1;
 
             return a.groupOrder - b.groupOrder || a.renderOrder - b.renderOrder || programA - programB || a.material.id - b.material.id || a.materialVariant - b.materialVariant || a.z - b.z || a.id - b.id;
         });
@@ -500,7 +498,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         });
         const worldList = this.renderer.renderLists.get(this.scene, 0), sortWorldList = worldList.sort;
         worldList.sort = (opaque, transparent) => {
-            sortWorldList(opaque, transparent);
+            (sortWorldList as (a: typeof opaque, b: typeof transparent) => void)(opaque, transparent);
             // Engine 0x1065238d draws opaque actors before the translucent world list.
             let count = 0;
             for (const item of worldList.transparent) {
@@ -879,8 +877,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (!nodeIndexAttr) return;
 
-        const indexAttr = geometry.index;
-        const vertexIndex = indexAttr ? indexAttr.getX(intersection.faceIndex * 3) : intersection.faceIndex * 3;
+        // const indexAttr = geometry.index;
+        // const vertexIndex = indexAttr ? indexAttr.getX(intersection.faceIndex * 3) : intersection.faceIndex * 3;
 
         // console.log(intersection, `Node ID: ${nodeIndexAttr.getX(vertexIndex)}`);
     }
@@ -3124,7 +3122,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         setReversedDepth(this.renderer, this.camera.reversedDepth);
         try {
             this.renderer.compile(tmpShaderCompileGroup, this.camera);
-            binding.program = this.renderer.properties.get(binding.material).currentProgram;
+            binding.program = (this.renderer.properties.get(binding.material) as { currentProgram: SectorMaterialBinding_T["program"] }).currentProgram;
             if (!binding.program) throw new Error(`Missing warmed shader program for '${object.name}'.`);
             binding.shadowPrograms = this.shadowProjector.compileReceiver(this.renderer, tmpShaderCompileGroup, this.camera, object);
         } finally {

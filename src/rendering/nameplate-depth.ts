@@ -21,7 +21,7 @@ export class NameplateDepth {
 
     public constructor(renderer: WebGLRenderer) {
         this.renderer = renderer;
-        this.gl = renderer.getContext();
+        this.gl = renderer.getContext() as WebGL2RenderingContext;
         renderer.domElement.addEventListener("webglcontextrestored", this.contextRestored);
     }
 
@@ -70,7 +70,7 @@ export class NameplateDepth {
                     gl.bindRenderbuffer(gl.RENDERBUFFER, previous);
                 }
                 if (this.texture) this.texture.dispose();
-                let type: number;
+                let type: THREE.TextureDataType;
                 switch (format) {
                     case gl.DEPTH_COMPONENT16: type = UnsignedShortType; break;
                     case gl.DEPTH_COMPONENT24: type = UnsignedIntType; break;
@@ -85,7 +85,7 @@ export class NameplateDepth {
                 this.renderer.initTexture(this.texture);
                 if (!this.framebuffer) this.framebuffer = gl.createFramebuffer();
                 gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
-                gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this.renderer.properties.get(this.texture).__webglTexture, 0);
+                gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, (this.renderer.properties.get(this.texture) as { __webglTexture: WebGLTexture }).__webglTexture, 0);
                 gl.drawBuffers([gl.NONE]);
                 if (gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`Nameplate depth framebuffer is incomplete`);
                 this.source = source;

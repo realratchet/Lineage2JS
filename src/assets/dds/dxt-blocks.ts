@@ -94,7 +94,7 @@ class AlphaBlockDXT3 {
         return offset + 2 * 4;
     }
 
-    public decodeBlock(rgba: Uint8Array) {
+    public decodeBlock(_rgba: Uint8Array) {
         debugger;
     }
 }
@@ -108,7 +108,7 @@ export class BlockDXT3 {
         return this.color.read(offset, dataview);
     }
 
-    public decodeBlock(rgba: Uint8Array) {
+    public decodeBlock(_rgba: Uint8Array) {
         debugger;
     }
 }

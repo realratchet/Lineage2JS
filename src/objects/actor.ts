@@ -9,7 +9,7 @@ import { setScriptObjectProperty } from "./actor-properties";
 import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./components/transform-component";
 import { EL2EventCmd_T } from "../assets/unreal/un-aactor";
 
-type ActorInfo_T = { uuid: string; name: string; scriptClassId: string; scriptProperties: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
+type ActorInfo_T = { uuid: string; name?: string; scriptClassId?: string; scriptProperties?: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
 
 export class Actor extends GameObject {
     public readonly actorUuid: string;

@@ -5,7 +5,7 @@ import type LitSkinnedMesh from "./lit-skinned-mesh";
 import type RenderManager from "../rendering/render-manager";
 import L2NMover from "../physics/l2-nmover";
 import Rotator from "../utils/rotator";
-import type { ActorCollisionProfile_T } from "./objects";
+import type { ActorCollisionProfile_T, ICollidable } from "./objects";
 
 const tmpIdentity = new Matrix4();
 const tmpStart = new Vector3();
@@ -161,7 +161,7 @@ export class GroundPickup extends Object3D {
         const physics = this.renderManager.getParent().getComponent("physics");
 
         tmpExtent.set(this.collisionRadius, this.collisionRadius, this.collisionHeight);
-        let hit = previous && { location: previous.tracePosition, normal: previous.traceNormal, time: 1, actor: null };
+        let hit = previous && { location: previous.tracePosition, normal: previous.traceNormal, time: 1, actor: null as ICollidable };
 
         // OnSpawnItem 0x74c5e0..0x74c7dc, OnDropItem 0x74ceb0..0x74d9e8.
         for (let i = 0; i < 500; i++) {

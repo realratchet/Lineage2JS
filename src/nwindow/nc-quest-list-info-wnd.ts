@@ -43,7 +43,7 @@ export class NCQuestListInfoWnd {
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 163)); }
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 163)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;
@@ -54,7 +54,7 @@ export class NCQuestListInfoWnd {
         const strings = this.layer.getManager().strings;
 
         this.list.setStrings(strings);
-        this.list.setRows(strings.quests.slice(0, 2000).filter(quest => quest.tag !== 0 && quest.progressId === 1).map(quest => ({ id: quest.id, cells: [quest.title, quest.raceRestriction, quest.minLevel > 0 ? quest.maxLevel > 0 ? `${quest.minLevel}~${quest.maxLevel}` : `${quest.minLevel} ${strings.sysStrings[SysString_T.Abnormal]}` : strings.sysStrings[SysString_T.NoLimitExists], String(quest.classification), strings.npcNames[quest.unk3]], tooltip: { title: quest.shortDescription, lines: [], description: "" } })), true);
+        this.list.setRows(strings.quests.slice(0, 2000).filter(quest => quest.tag !== 0 && quest.progressId === 1).map((quest): ListRow_T => ({ id: quest.id, cells: [quest.title, quest.raceRestriction, quest.minLevel > 0 ? quest.maxLevel > 0 ? `${quest.minLevel}~${quest.maxLevel}` : `${quest.minLevel} ${strings.sysStrings[SysString_T.Abnormal]}` : strings.sysStrings[SysString_T.NoLimitExists], String(quest.classification), strings.npcNames[quest.unk3]], tooltip: { title: quest.shortDescription, lines: [], description: "" } })), true);
         this.setVisible(true);
     }
 

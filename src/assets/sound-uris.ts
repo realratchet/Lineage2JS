@@ -11,7 +11,7 @@ export function refreshSoundBlobUris(library: any): void {
 
         let uri: string = null;
 
-        Object.defineProperty(entry, "uri", { configurable: true, enumerable: true, get: () => uri ?? (uri = URL.createObjectURL(new Blob([entry.data], { type: entry.mimeType }))), set: (value: string) => { uri = value; } });
+        Object.defineProperty(entry, "uri", { configurable: true, enumerable: true, get: () => uri ?? (uri = URL.createObjectURL(new Blob([entry.data as BlobPart], { type: entry.mimeType }))), set: (value: string) => { uri = value; } });
         Object.defineProperty(entry, "mintedUri", { configurable: true, get: () => uri });
     }
 }

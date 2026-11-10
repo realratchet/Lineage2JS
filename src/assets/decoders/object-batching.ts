@@ -4,7 +4,7 @@ import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./mat
 import SortedIndexBuffer from "../../rendering/sorted-index-buffer";
 import Terrain from "../../objects/terrain";
 import CollidingMesh from "../../objects/colliding-mesh";
-import ZoneObject, { SectorObject } from "../../objects/zone-object";
+import { SectorObject } from "../../objects/zone-object";
 import { MeshLight_T } from "../../objects/lit-actor";
 import { buildStaticMeshBatchData } from "./batch-data";
 import type { DecodeLibrary, IGeometryDecodeInfo, IBaseObjectOrInstanceDecodeInfo } from "@l2js/engine";
@@ -70,7 +70,7 @@ function createBatchObject(
     mergedObject.batchActorUuids = actors.map(a => a.uuid);
     mergedObject.setPerActorAmbient(perActorAmbient);
     mergedObject.batchElements = batchElements;
-    mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g }));
+    mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g })) as typeof mergedObject.allGroups;
     mergedObject.batchIndices = null;
     mergedGeometry.index.setUsage(DynamicDrawUsage);
 
@@ -217,7 +217,7 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
         yield;
         yield* createStaticMeshTextureBatchJob(batchObject, source);
         if (source) {
-            batchObject.batchIndices = geometryInfo.indices;
+            batchObject.batchIndices = geometryInfo.indices as StaticMeshIndexArray_T;
             makeSortedIndexBuffers(library, batchObject, batch);
         }
 
@@ -232,7 +232,7 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
 }
 
 export function stepStaticMeshBatchJob(job: StaticMeshBatchJob_T): boolean {
-    const { library, sector, staticMeshGroup, fetchGeometry, decodeObject3D, manifest } = job;
+    const { library, sector, staticMeshGroup, decodeObject3D, manifest } = job;
 
     if (job.batchBuild) {
         if (job.batchBuild.next().done) job.batchBuild = null;
@@ -423,7 +423,7 @@ export function batchTerrainSectors(
     if (!library.batching.terrain || sectors.length < 2) return;
 
     try {
-        const { mergedGeometry, batchSectorInfo, totalIndices } = mergeTerrainGeometries(sectors);
+        const { mergedGeometry, batchSectorInfo } = mergeTerrainGeometries(sectors);
 
         const materials: Material[] = [];
         mergedGeometry.clearGroups();

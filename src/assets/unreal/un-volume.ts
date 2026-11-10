@@ -93,7 +93,7 @@ export abstract class UVolume extends UBrush {
         };
     }
 
-    public getDecodeInfo(library?: any): any {
+    public getDecodeInfo(_library?: any): any {
         return {
             uuid: this.uuid,
             type: "Volume",

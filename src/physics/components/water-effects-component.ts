@@ -1,7 +1,7 @@
 import { Vector2, Vector3 } from "three";
 import { IObject } from "../../game/components";
 import { PhysicsComponent } from "./physics-component";
-import { encompassesVolume, findVolumeTransition } from "../volume-bsp";
+import { findVolumeTransition } from "../volume-bsp";
 import UnderWaterEffect from "../../rendering/under-water-effect";
 import WaterHitEffect from "../../rendering/water-hit-effect";
 import type PhysicsManager from "../../physics/physics-manager";

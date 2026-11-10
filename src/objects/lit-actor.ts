@@ -222,7 +222,7 @@ export class LitActorMesh extends GameMesh {
 
     protected computeHardwareLighting(sector: SectorObject, target: Uint8ClampedArray) {
         const attrPositions = this.geometry.getAttribute("position");
-        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: typeof this.ambient, hardware: BatchHardwareLighting_T | null }[] | undefined;
+        const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: LitActorMesh["ambient"], hardware: BatchHardwareLighting_T | null }[] | undefined;
 
         if (perActorAmbient) {
             const attrHardwareSun = this.geometry.getAttribute("hardwareSun");
@@ -465,7 +465,7 @@ export class LitActorMesh extends GameMesh {
                 this.staticLightingCache = new Uint8ClampedArray(colorArray.length);
 
             if (this.perActorAmbient) {
-                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: typeof this.ambient }[];
+                const perActorAmbient = this.perActorAmbient as { startVertex: number, count: number, isSunAffected: boolean, ambient: LitActorMesh["ambient"] }[];
                 for (const actor of perActorAmbient) {
                     if (actor.ambient && actor.ambient.isUnlit) {
                         // unlit renders at 1x: EnableLighting(1,1,0) + SetAmbientLight(255) (UnRenderStaticMesh.cpp line 470), 127 = 1.0 in the Modulate2X domain
@@ -562,7 +562,7 @@ export class LitActorMesh extends GameMesh {
             const indices = dynamicEnv.length >= 2 ? env.selectEnvironmentLightIndices(dynamicEnv.length) : [0, -1, 0];
             env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor);
             this.vertexLighting.update(this.lightInfo.matrix, this.staticLightingCache, staticCacheDirty, tmpEnvColor, indices[0], indices[1], indices[2]);
-            this.geometry.setAttribute("lighting", this.vertexLighting.output);
+            this.geometry.setAttribute("lighting", this.vertexLighting.output as any);
             this.needsRelightPass = false;
             if (this.elemRelight) this.elemRelight.fill(0);
             return;

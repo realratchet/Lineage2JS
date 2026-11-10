@@ -96,7 +96,7 @@ export class Terrain extends GameMesh implements ICollidable {
 
         this.hasTerrainPasses = this.material !== material;
         this.lightingInfo = lightingInfo;
-        if (lightingInfo) geometry.getAttribute("color").setUsage(DynamicDrawUsage);
+        if (lightingInfo) (geometry.getAttribute("color") as THREE.BufferAttribute).setUsage(DynamicDrawUsage);
 
         if (fieldInfo) this.setTerrainField(fieldInfo);
 

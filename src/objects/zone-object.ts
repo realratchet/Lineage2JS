@@ -1,7 +1,6 @@
 import type DynamicLight from "./dynamic-light";
 import type { L2Environment } from "../rendering/l2-env";
 import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
-import type { Terrain } from "./terrain";
 import type { TerrainDecoration } from "./terrain-decoration";
 import { encompassesVolume } from "../physics/volume-bsp";
 import { GameObject } from "../game/components";
@@ -512,7 +511,7 @@ export class SectorObject extends GameObject {
             const info = this.arrLevelActorRecords[index];
             const host = actor === undefined && info ? info : actor;
 
-            return { actor, info, exists: !!host, isStatic: host && !!getProperty(host, "bStatic"), isAlwaysRelevant: host && !!getProperty(host, "bAlwaysRelevant") };
+            return { actor, info, exists: !!host, isStatic: host && !!getProperty(host as ScriptHost_T, "bStatic"), isAlwaysRelevant: host && !!getProperty(host as ScriptHost_T, "bAlwaysRelevant") };
         });
         const ordered = entries.slice(0, 2);
 
@@ -1837,7 +1836,7 @@ export class SectorObject extends GameObject {
                 });
             }
 
-            for (const { object, uuid, actorIndex } of this.staticMeshVisibilityEntries) {
+            for (const { object, actorIndex } of this.staticMeshVisibilityEntries) {
                 if ((object as any).isBatch) {
                     const batchElements = (object as any).batchElements;
                     const geometry = (object as any).geometry;

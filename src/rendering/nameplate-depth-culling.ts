@@ -5,7 +5,7 @@ const tmpProjection = new Matrix4();
 
 type DepthGroup_T = { start: number; count: number; materialIndex: number };
 type DepthBounds_T = { box: Box3; frame: number; visible: boolean };
-type DepthBatch_T = { bounds: Map<number, DepthBounds_T>; groups: DepthGroup_T[]; pool: DepthGroup_T[]; geometry: BufferGeometry; original: DepthGroup_T[] };
+type DepthBatch_T = { bounds: Map<number, DepthBounds_T>; groups: DepthGroup_T[]; pool: DepthGroup_T[]; geometry: BufferGeometry; original: THREE.GeometryGroup[] };
 
 export class NameplateDepthCulling {
     protected readonly frustum = new Frustum();

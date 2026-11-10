@@ -20,7 +20,7 @@ export class RecordMark {
         this.timer = layer.digits(this.element, "", 0xffffffff, DigitFont_T.LARGE, 0, 30, 204);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 181, 20); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, width - 181, 20); }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
 
     public update(now: number, elapsed: number): void {

@@ -85,7 +85,7 @@ function isAnimatedHardwareLight(light: ULight): boolean {
 
 export abstract class UStaticMeshActor extends UAActor {
 
-    declare protected mesh: UStaticMesh | UTexture;
+    declare public mesh: UStaticMesh | UTexture;
     declare protected instance: UStaticMeshInstance;
 
     declare protected colLocation: FVector;
@@ -217,7 +217,7 @@ export abstract class UStaticMeshActor extends UAActor {
         if ((!isStatic && !isMoverWithoutDynamicLight) || !this.instance) {
             const ambActor = this.getAmbientLightingActor();
             // UnRenderStaticMesh hardware lights: 0x90d4d3-0x90d50f, no baked instance stream.
-            const ambient = { glow: ambActor.ambientGlow, vector: FColor.fromFloating(...ambActor.getZone().ambientVector.getElements()).toArray(), isUnlit: ambActor.isUnlit, hardwareLighting: true };
+            const ambient = { glow: ambActor.ambientGlow, vector: FColor.fromFloating(...ambActor.getZone().ambientVector.getElements()).toArray() as Vector3Arr, isUnlit: (ambActor as UStaticMeshActor).isUnlit, hardwareLighting: true };
 
             return this.getActorDecodeResult(builder, meshInfo, null, predictedBox, ambient);
         }
@@ -256,7 +256,7 @@ export abstract class UStaticMeshActor extends UAActor {
             [ambX, ambY, ambZ] = this.getZone().ambientVector.getElements();
         }
 
-        const ambVector = FColor.fromFloating(ambX, ambY, ambZ).toArray() as number[];
+        const ambVector = FColor.fromFloating(ambX, ambY, ambZ).toArray() as Vector3Arr;
         const ambientProps = {
             glow: ambActor.ambientGlow,
             vector: ambVector,

@@ -1,6 +1,6 @@
 import "./un-object-mixin";
 import getPrebuiltClass from "@generated/classes";
-import { ANativePackage, APackage, type AAssetLoader, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UClass, type UExport, type UImport, type UName, type UObject as CoreUObject, type UStruct, addClassDependency, addPackageDependendency } from "@l2js/core";
+import { ANativePackage, APackage, type CorePackage_T, type EnginePackage_T, type NativeTypes_T, type UExport, type UImport, type UName, type UObject as CoreUObject, type UStruct, addClassDependency, addPackageDependendency } from "@l2js/core";
 import UObject from "./un-object";
 import UAActor from "./un-aactor";
 import AInfo from "./un-info";
@@ -131,7 +131,18 @@ export type NativeClientTypes_T =
     | "AnimNotify_AttackItem"
     | "AnimNotify_ScreenFade"
     | "AnimNotify_ViewShake"
-    | "AnimNotify_BoneScale";
+    | "AnimNotify_BoneScale"
+    | "ReachSpec"
+    | "NCubics"
+    | "RibbonEmitter"
+    | "TexOscillatorTriggered"
+    | "ConstantColor"
+    | "MatObject"
+    | "MatSubAction"
+    | "MatAction"
+    | "ActionWarp"
+    | "ActionPause"
+    | "ActionMoveCamera";
 
 export type CoreStructs_T =
     | "Vector"

@@ -247,7 +247,7 @@ function fetchTransformedMap(library: DecodeLibrary, materialIndex: string | nul
     };
 }
 
-function decodeFadeColorModifier(library: DecodeLibrary, info: MaterialContracts.IFadeColorDecodeInfo): MaterialContracts.IDecodedParameter {
+function decodeFadeColorModifier(_library: DecodeLibrary, info: MaterialContracts.IFadeColorDecodeInfo): MaterialContracts.IDecodedParameter {
     const [r1, g1, b1,] = info.fadeColors.color1;
     const [r2, g2, b2,] = info.fadeColors.color2;
     const period = info.fadeColors.period;
@@ -704,14 +704,14 @@ function decodeLightmapped(library: DecodeLibrary, info: MaterialContracts.ILigh
         .setLightmap(info.lightmaps.map(uuid => fetchTexture(library, library.materials[uuid] as ITextureDecodeInfo)));
 }
 
-function applyModAmbient(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: MaterialContracts.ILightAmbientMaterialModifier) {
+function applyModAmbient(_library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness }: MaterialContracts.ILightAmbientMaterialModifier) {
     material.enableAmbient({
         vector: new Color().fromArray(color),
         brightness
     });
 }
 
-function applyModDirectional(library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness, direction }: MaterialContracts.ILightDirectionalMaterialModifier) {
+function applyModDirectional(_library: DecodeLibrary, material: MeshStaticMaterial, { color = [1, 1, 1], brightness, direction }: MaterialContracts.ILightDirectionalMaterialModifier) {
     material.enableDirectionalAmbient({
         vector: new Color().fromArray(color),
         direction: new Vector3().fromArray(direction),
@@ -745,7 +745,7 @@ function decodeInstancedMaterial(library: DecodeLibrary, info: IMaterialInstance
     return materials;
 }
 
-function decodeSolidColor(library: DecodeLibrary, info: MaterialContracts.ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
+function decodeSolidColor(_library: DecodeLibrary, info: MaterialContracts.ISolidMaterialDecodeInfo): import("three").Material | import("three").Material[] {
     return new MeshBasicMaterial({
         color: info["solidColor"]
     });

@@ -104,7 +104,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     }
 
     public getPhysicsComponents<T extends IPhysicsComponent<any>>(componentName: string): ReadonlySet<T> {
-        return (this.physicsComponentsByName.get(componentName) || emptyPhysicsComponents) as ReadonlySet<T>;
+        return (this.physicsComponentsByName.get(componentName) || emptyPhysicsComponents) as unknown as ReadonlySet<T>;
     }
 
     public getParticleEmitters(): ReadonlySet<any> { return this.simEmitters.getEmitters(); }
@@ -402,10 +402,10 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const vm = actor.getComponent<ScriptComponent>("script").getVM();
 
         if (vm.invokeNative(actor, actor, 303, "IsA", ["LevelInfo"])) {
-            actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+            actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
             return;
         }
-        if (forceRefresh) actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+        if (forceRefresh) actor.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
 
         const oldRegion = actor.getUnrealScriptProperty("Region") as any;
         const region = level.pointRegion(tmpZoneLocation.fromArray(actor.getUnrealScriptProperty("Location") as number[]));
@@ -494,7 +494,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const level = render.getLoadedSectors().find(sector => sector.levelInfoActor === owner);
 
         if (!level) throw new Error(`Pawn '${pawn.name}' has no registered level for SetZone.`);
-        if (forceRefresh) pawn.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 });
+        if (forceRefresh) pawn.setUnrealScriptProperty("Region", { Zone: owner, iLeaf: -1, ZoneNumber: 0 } as ScriptValue_T);
 
         const oldRegion = pawn.getUnrealScriptProperty("Region") as any;
         const region = level.pointRegion(tmpZoneLocation.fromArray(pawn.getUnrealScriptProperty("Location") as number[]));

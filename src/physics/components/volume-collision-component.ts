@@ -60,7 +60,7 @@ export class VolumeCollisionComponent extends ObjectComponent<PhysicsVolume | Mu
         this.tree.updateActor(actor.actorUuid, primitive.kind === "cylinder" ? tmpBounds.copy(primitive.bounds).expandByScalar(1) : primitive.bounds);
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         if (type !== SCRIPT_NATIVE_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
         const call = data as ScriptNativeCall_T;
         if (call.index !== 262 && call.name.toLowerCase() !== "setcollision") return COMPONENT_EVENT_NOT_HANDLED;

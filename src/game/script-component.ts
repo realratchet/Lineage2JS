@@ -110,7 +110,7 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
             if (call.context !== parent) throw new Error(`SetOwner context does not match '${parent.scriptClassId}'.`);
             if (!(parent as any).isObject3D || !this.vm.invokeNative(parent, parent, 303, "IsA", ["Actor"])) throw new Error(`SetOwner requires an actor host.`);
             setActorOwner(parent as unknown as OwnedActor_T, (call.args[0] ?? null) as unknown as OwnedActor_T);
-            return;
+            return undefined;
         }
         return this.dispatchEvent<ScriptValue_T>(SCRIPT_NATIVE_EVENT, call);
     }

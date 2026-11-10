@@ -21,7 +21,7 @@ function isPackageFallback(pkg: APackage, entry: any): boolean {
 
 export function capturePackageResolver(pkg: APackage, converted: Set<number>): any {
     const header = { ...pkg.header, generations: pkg.header.generations.map(generation => ({ exportCount: generation.exportCount, nameCount: generation.nameCount })), guid: Array.from(new Uint8Array(pkg.header.guid.bytes.buffer, pkg.header.guid.bytes.byteOffset, pkg.header.guid.bytes.byteLength)) };
-    const exports = pkg.exports.map(entry => ({ ...entry, object: null }));
+    const exports = pkg.exports.map(entry => ({ ...entry, object: null as UExport["object"] }));
     const bodies = [];
     const rawSafe = exports.every(entry => !entry.size || converted.has(entry.index) || isPackageFallback(pkg, entry));
     for (const entry of exports) {
@@ -40,7 +40,7 @@ export function validatePackageResolver(data: any): void {
         throw new Error(`Incomplete resolver tables for '${data.path}'.`);
     const converted = new Set(resolver.converted);
     const entries = new Set(Object.keys(data.entries).filter(key => !key.endsWith(":frame")).map(key => key.slice(0, key.lastIndexOf(":"))));
-    const bodies = new Map(resolver.bodies.map(body => [body.index, body]));
+    const bodies = new Map(resolver.bodies.map((body: { index: number }) => [body.index, body]));
     for (const entry of resolver.exports) {
         if (!entry.size) continue;
         if (converted.has(entry.index)) {
@@ -73,9 +73,9 @@ export async function restorePackageResolver(pkg: APackage, settings: LoadSettin
     header.guid = new BufferValue(BufferValue.guid);
     new Uint8Array(header.guid.bytes.buffer, header.guid.bytes.byteOffset, header.guid.bytes.byteLength).set(resolver.header.guid);
     pkg.header = header;
-    pkg.exports = resolver.exports.map(entry => Object.assign(new UExport(), entry, { object: null }));
-    pkg.imports = resolver.imports.map(entry => Object.assign(new UImport(), entry));
-    pkg.nameTable = resolver.names.map(entry => Object.assign(new UName(), entry));
+    pkg.exports = resolver.exports.map((entry: UExport) => Object.assign(new UExport(), entry, { object: null }));
+    pkg.imports = resolver.imports.map((entry: UImport) => Object.assign(new UImport(), entry));
+    pkg.nameTable = resolver.names.map((entry: UName) => Object.assign(new UName(), entry));
     pkg.nameHash = new Map(pkg.nameTable.map((entry, index) => [entry.name, index]));
     pkg.exportGroups = {};
     pkg.exports.forEach((entry, index) => {
@@ -101,7 +101,7 @@ class PackageExportSource {
         this.pkg = pkg;
         this.cached = cached;
         this.size = cached.library.resolver.size;
-        this.bodies = new Map(cached.library.resolver.bodies.map(body => [body.index, body]));
+        this.bodies = new Map(cached.library.resolver.bodies.map((body: { index: number }) => [body.index, body]));
     }
 
     public read(offset: number, length: number): DataView {

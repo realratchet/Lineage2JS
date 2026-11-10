@@ -7,6 +7,7 @@ import type AnimationComponent from "../objects/components/animation-component";
 import type PawnAttackComponent from "../objects/components/pawn-attack-component";
 import type BaseActor from "../base-actor";
 import type { INpcDefinition, NpcSkillAttack_T } from "@l2js/engine/contracts/pawn";
+import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 
 // PhysicsManager uses 100 world units per metre.
 const TARGET_DISTANCE = 200;
@@ -20,7 +21,7 @@ export class PlayerSkillViewerStage extends SkillViewerStage {
     protected castRequest = 0;
 
     public async getSkills(): Promise<SkillViewerSkill_T[]> {
-        if (!this.cacheSkills) this.cacheSkills = (await this.assetManager.listPlayerSkills()).map(skill => ({ ...skill, npcs: [] }));
+        if (!this.cacheSkills) this.cacheSkills = (await this.assetManager.listPlayerSkills()).map(skill => ({ ...skill, npcs: [] as INpcDefinition[] }));
         return this.cacheSkills;
     }
 
@@ -82,7 +83,7 @@ export class PlayerSkillViewerStage extends SkillViewerStage {
 
             if (selected.names.some(name => name.toLowerCase() !== "none")) hasNamedAnimation = true;
             if (clips.every(clip => !clip) || selected.names.some((name, index) => name.toLowerCase() !== "none" && !clips[index])) continue;
-            if (needsPreShot && !clips.some(clip => clip && (clip as any).animationNotifies.some(notify => notify.object?.type === "native" && notify.object.className.toLowerCase() === "animnotify_attackpreshot"))) continue;
+            if (needsPreShot && !clips.some(clip => clip && (clip as any).animationNotifies.some((notify: IAnimationNotifyDecodeInfo) => notify.object?.type === "native" && notify.object.className.toLowerCase() === "animnotify_attackpreshot"))) continue;
             return;
         }
 

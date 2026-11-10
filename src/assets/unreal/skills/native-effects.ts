@@ -115,7 +115,7 @@ export type NativeSkillEffect_T = {
     hitActorIsMover?: boolean;
     sourceOwner?: boolean;
     sourceTarget?: boolean;
-    owner?: "target" | "none" | "source" | "impactActor";
+    owner?: "target" | "none" | "source" | "impactActor" | "caster";
     attach?: "trail";
     weaponTrail?: boolean;
     bone?: number | string;

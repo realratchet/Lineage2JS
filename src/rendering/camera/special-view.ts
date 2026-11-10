@@ -3,6 +3,7 @@ import getRotatorQuaternionElements, { sinRotator } from "../../assets/unreal/ut
 import type InputManager from "../../game/input-manager";
 import type NetworkManager from "../../network/network-manager";
 import type { SpecialCamera_T } from "../../network/game-packets";
+import type { Vector3Arr, Vector4Arr } from "@l2js/engine";
 
 const tmpDirection = new Vector3();
 const tmpLocation = new Vector3();

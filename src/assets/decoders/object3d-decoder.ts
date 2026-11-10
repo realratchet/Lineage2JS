@@ -1,4 +1,4 @@
-import { Group, Object3D, Mesh, Float32BufferAttribute, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, SphereGeometry, MeshBasicMaterial, Color, AxesHelper, LineBasicMaterial, Line, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, PlaneHelper, Plane, Vector3, Vector2, Material, Points, PointsMaterial, Skeleton, Bone, SkeletonHelper, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip, Matrix4, Matrix3, Quaternion, Vector4, PlaneGeometry, NormalBlending, AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DoubleSide, BoxHelper } from "three";
+import { Group, Object3D, Mesh, Uint16BufferAttribute, BufferGeometry, Sphere, Box3, MeshBasicMaterial, Color, LineBasicMaterial, LineSegments, Uint8BufferAttribute, Uint32BufferAttribute, BufferAttribute, Box3Helper, Vector2, Bone, KeyframeTrack, VectorKeyframeTrack, QuaternionKeyframeTrack, AnimationClip } from "three";
 import decodeMaterial, { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import ZoneObject, { SectorObject, FogInfoObject } from "../../objects/zone-object";
 import decodeTexture from "./texture-decoder";
@@ -12,6 +12,7 @@ import MeshEmitter from "../../objects/emitters/mesh-emitter";
 import VertMeshEmitter from "../../objects/emitters/vert-mesh-emitter";
 import BeamEmitter from "../../objects/emitters/beam-emitter";
 import RibbonEmitter from "../../objects/emitters/ribbon-emitter";
+import type { BaseEmitter } from "../../objects/emitters/base-emitter";
 import EmitterActor from "../../objects/emitter-actor";
 import DynamicLight, { ColorHSV } from "../../objects/dynamic-light";
 import { batchTerrainSectors, createStaticMeshBatchJob, decodeStaticMeshInstance, makeSwayAttribute, stepStaticMeshBatchJob, StaticMeshBatchJob_T } from "./object-batching";
@@ -139,11 +140,11 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
 
 
 function decodeEmitterObject(library: DecodeLibrary, info: IEmitterActorDecodeInfo) {
-    const object = decodeSimpleObject(library, EmitterActor, info);
+    const object = decodeSimpleObject(library, EmitterActor, info) as EmitterActor;
 
     object.actorUuid = info.uuid;
 
-    object.scriptProperties.set("Emitters", object.children.slice());
+    object.scriptProperties.set("Emitters", object.children.slice() as BaseEmitter[]);
     object.scriptProperties.set("FirstSpawnParticle", false);
     object.speedRate = info.speedRate;
 
@@ -763,7 +764,7 @@ function decodeTerrainDecoration(library: DecodeLibrary, info: ITerrainDecoratio
     return new TerrainDecoration(geometry, materials, info);
 }
 
-function decodeBone(library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
+function decodeBone(_library: DecodeLibrary, info: IBoneDecodeInfo): Bone {
     const bone = new Bone();
 
     // Bone poses use quaternions; Euler synchronization is unused.
@@ -816,7 +817,7 @@ function decodeBones(library: DecodeLibrary, infos: IBoneDecodeInfo[]): Bone[] {
     return bones;
 }
 
-function decodeAnimation(library: DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], sequence: IAnimationSequenceDecodeInfo, notifications: IAnimationNotifyDecodeInfo[], skinNotify: ISkinNotifyDecodeInfo) {
+function decodeAnimation(_library: DecodeLibrary, name: string, info: IKeyframeDecodeInfo_T[], sequence: IAnimationSequenceDecodeInfo, notifications: IAnimationNotifyDecodeInfo[], skinNotify: ISkinNotifyDecodeInfo) {
     if (!cacheAnimationBuffers.has(info)) {
         let size = 0, offset = 0;
         for (const track of info) size += track.times.length + track.values.length;
@@ -906,11 +907,11 @@ export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObje
             return uuid;
         });
 
-        infoMats = { ...group, materials };
+        infoMats = { ...group, materials } as IMaterialGroupDecodeInfo;
     }
 
     // LodMesh wire data is points + wedges only, UE builds vertex normals at load (UnMesh.cpp)
-    if (!geometry.getAttribute("normal")) geometry.setAttribute("normal", new BufferAttribute(computePointNormals(geometry.getAttribute("position").array as Float32Array, geometry.getIndex().array), 3));
+    if (!geometry.getAttribute("normal")) geometry.setAttribute("normal", new BufferAttribute(computePointNormals(geometry.getAttribute("position").array as Float32Array, geometry.getIndex().array as Uint8Array | Uint16Array | Uint32Array), 3));
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const extendedBoneInfluences = geometry.getAttribute("skinWeight2") !== undefined;
@@ -1032,13 +1033,13 @@ function decodeVertMeshEmitter(library: DecodeLibrary, info: any) {
     const geometry = info.mesh ? fetchGeometry(info.mesh.geometry) : null;
 
     if (geometry) {
-        geometry.morphAttributes.position = info.mesh.frames.map(frame => new BufferAttribute(frame, 3));
-        geometry.morphAttributes.normal = info.mesh.normals.map(frame => new BufferAttribute(frame, 3));
+        geometry.morphAttributes.position = info.mesh.frames.map((frame: Float32Array) => new BufferAttribute(frame, 3));
+        geometry.morphAttributes.normal = info.mesh.normals.map((frame: Float32Array) => new BufferAttribute(frame, 3));
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
     }
 
-    const materials = info.mesh ? info.mesh.materials.map(material => info.useMeshBlendMode
+    const materials = info.mesh ? info.mesh.materials.map((material: string) => info.useMeshBlendMode
         ? decodeMaterial(library, library.materials[material])
         : decodeMaterial(library, { materialType: "particle", material, opacity: info.opacity, blendingMode: info.blendingMode } as IParticleMaterialDecodeInfo)) : [];
     const emitter = new VertMeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials, framerate: info.mesh ? info.mesh.framerate : 0, useMeshBlendMode: info.useMeshBlendMode, renderTwoSided: info.renderTwoSided, useParticleColor: info.useParticleColor }));
@@ -1097,7 +1098,7 @@ function decodeRibbonEmitter(library: DecodeLibrary, info: any) {
     return emitter;
 }
 
-function decodeFogInfo(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
+function decodeFogInfo(_library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
     const object = new FogInfoObject();
 
     if (info.name) object.name = info.name;

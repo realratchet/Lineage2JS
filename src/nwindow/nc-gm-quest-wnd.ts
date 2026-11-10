@@ -36,7 +36,7 @@ export class NCGMQuestWnd {
         this.questWnd.onShow = () => { if (this.onShowQuestList) this.onShowQuestList(); };
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 209, 100); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, width - 209, 100); }
     public isVisible() { return !this.element.hidden; }
     public getQuestWnd() { return this.questWnd; }
     public setVisible(visible: boolean) {

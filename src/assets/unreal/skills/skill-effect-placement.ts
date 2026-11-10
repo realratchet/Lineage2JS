@@ -263,7 +263,7 @@ export class SkillEffectPlacement {
         } else if (info.position === "center") tmpPosition[2] += this.host.getCollisionHeight(effectHost);
         // Engine.dll Shot 0x7abdd6..0x7abdd9: Actor.Location.Z - USkeletalMesh.Origin.Z, without DrawScale.
         else if (info.position === "meshOrigin") tmpPosition[2] += this.host.getCollisionHeight(effectHost) - getPawnMeshHeight(this.host, effectHost, false);
-        else if (info.position === "lastTarget") FVector.setElements(tmpPosition, ...source.scriptProperties.get("LastTargetLocation"));
+        else if (info.position === "lastTarget") FVector.setElements(tmpPosition, ...(source.scriptProperties.get("LastTargetLocation") as Vector3Arr));
         else if (info.position === "source") this.host.getPosition(source, tmpPosition, true);
         if (hasPosition && info.height === "targetFeet") { this.host.getPosition(target, tmpPosition2, true); tmpPosition[2] = tmpPosition2[2]; }
         if (info.heightOffset !== undefined) tmpPosition[2] += info.heightOffset * this.host.getCollisionHeight(effectHost);
@@ -282,10 +282,10 @@ export class SkillEffectPlacement {
             // Engine.dll 0x790881/0x790887: AMover.HitActorNormal (+0x410), FVector::Rotation.
             this.host.getHitNormal(impactActor, tmpNormal);
             FVector.getRotationQuaternionElements(tmpNormal, effectRotation);
-        } else if (info.rotation === "hit") getRotatorQuaternionElements(...source.scriptProperties.get("HitRot"), effectRotation);
+        } else if (info.rotation === "hit") getRotatorQuaternionElements(...(source.scriptProperties.get("HitRot") as Vector3Arr), effectRotation);
         else if (info.rotation === "reverseHitHorizontal") {
             // Engine.dll 0x7907ac..0x7907db negates incoming XY and clears Z before FVector::Rotation.
-            getRotatorQuaternionElements(...source.scriptProperties.get("HitRot"), tmpRotation);
+            getRotatorQuaternionElements(...(source.scriptProperties.get("HitRot") as Vector3Arr), tmpRotation);
             FVector.applyQuaternionElements([-1, 0, 0], tmpRotation, tmpPosition2);
             FVector.getRotationQuaternionElements([tmpPosition2[0], tmpPosition2[1], 0], effectRotation);
         } else if (info.rotation === "caster") getPawnRotation(this.host, caster, effectRotation);
@@ -303,7 +303,7 @@ export class SkillEffectPlacement {
             if (info.offsetRotation === "caster") getPawnRotation(this.host, caster, tmpRotation);
             else if (info.offsetRotation === "desiredCaster") getRotatorQuaternionElements(0, this.host.getDesiredRotationYaw(caster), 0, tmpRotation);
             else if (info.offsetRotation === "targetDirection") getTargetRotation(this.host, caster, target, tmpRotation);
-            else if (info.offsetRotation === "hit") getRotatorQuaternionElements(...source.scriptProperties.get("HitRot"), tmpRotation);
+            else if (info.offsetRotation === "hit") getRotatorQuaternionElements(...(source.scriptProperties.get("HitRot") as Vector3Arr), tmpRotation);
             else tmpRotation.splice(0, 4, ...rotation);
             FVector.applyQuaternionElements([info.forwardOffset, 0, 0], tmpRotation, tmpPosition2);
             FVector.addElements(tmpPosition, tmpPosition2, tmpPosition);
@@ -429,7 +429,7 @@ export class SkillEffectPlacement {
             properties.set("Physics", EPhysics_T.PHYS_Trailer);
             properties.set("bTrailerPrePivot", true);
             properties.set("bTrailerSameRotation", false);
-            FVector.setElements(tmpPosition, ...properties.get("TrailerPrePivot"));
+            FVector.setElements(tmpPosition, ...(properties.get("TrailerPrePivot") as Vector3Arr));
             tmpPosition[2] += this.host.getCollisionHeight(caster);
             this.addTrailer(effect, caster, tmpPosition, false, false);
         }
@@ -457,9 +457,9 @@ export class SkillEffectPlacement {
             if (!attached && properties.get("Physics") === EPhysics_T.PHYS_Trailer && owner && !effect.scriptBase) {
                 const relative = !!properties.get("bRelativeTrail");
                 FVector.setElements(tmpPosition, 0, 0, 0);
-                if (relative) FVector.setElements(tmpPosition, ...properties.get("RelativeTrailOffset"));
+                if (relative) FVector.setElements(tmpPosition, ...(properties.get("RelativeTrailOffset") as Vector3Arr));
                 else {
-                    if (properties.get("bTrailerPrePivot")) FVector.setElements(tmpPosition, ...properties.get("TrailerPrePivot"));
+                    if (properties.get("bTrailerPrePivot")) FVector.setElements(tmpPosition, ...(properties.get("TrailerPrePivot") as Vector3Arr));
                     if (owner.isActor) tmpPosition[2] += this.host.getCollisionHeight(owner);
                 }
                 this.addTrailer(effect, owner, tmpPosition, relative, !!properties.get("bTrailerSameRotation") && !properties.get("bSelfRotation"));
@@ -544,7 +544,7 @@ export class SkillEffectPlacement {
         if (action.useCharacterRotation) {
             if (hostIsPawn) getPawnRotation(this.host, attachHost, tmpRotation);
             else this.host.getRotation(attachHost, tmpRotation, true);
-        } else if (sourceProjectile) getRotatorQuaternionElements(...source.scriptProperties.get("HitRot"), tmpRotation);
+        } else if (sourceProjectile) getRotatorQuaternionElements(...(source.scriptProperties.get("HitRot") as Vector3Arr), tmpRotation);
         else if (source === target) getPawnRotation(this.host, target, tmpRotation);
         else getTargetRotation(this.host, source, target, tmpRotation);
 
@@ -602,7 +602,7 @@ export class SkillEffectPlacement {
         }
 
         // Engine.dll LocateEffect 0x79608f / 0x796221: the HitRot branch retains the projectile's LastTargetLocation.
-        if (action.attachOn === "none" && sourceProjectile) FVector.setElements(tmpPosition, ...source.scriptProperties.get("LastTargetLocation"));
+        if (action.attachOn === "none" && sourceProjectile) FVector.setElements(tmpPosition, ...(source.scriptProperties.get("LastTargetLocation") as Vector3Arr));
         else {
             this.host.getPosition(attachHost, tmpPosition, true);
             tmpPosition[2] += height;
@@ -663,10 +663,10 @@ export class SkillEffectPlacement {
         if (light.position === "center") {
             this.host.getPosition(host, tmpLightPosition, true);
             tmpLightPosition[2] += this.host.getCollisionHeight(host);
-        } else if (light.position === "lastTarget") FVector.setElements(tmpLightPosition, ...source.scriptProperties.get("LastTargetLocation"));
+        } else if (light.position === "lastTarget") FVector.setElements(tmpLightPosition, ...(source.scriptProperties.get("LastTargetLocation") as Vector3Arr));
         else if (effect) this.host.getPosition(effect, tmpLightPosition);
         if (light.spot) {
-            if (light.rotation === "hit") getRotatorQuaternionElements(...source.scriptProperties.get("HitRot"), tmpRotation);
+            if (light.rotation === "hit") getRotatorQuaternionElements(...(source.scriptProperties.get("HitRot") as Vector3Arr), tmpRotation);
             // Engine.dll Action_Attack 0x8bde58..0x8bde8c uses target minus caster, including a zero displacement.
             else if (light.rotation === "targetDisplacement") getTargetRotation(this.host, caster, host, tmpRotation, false);
             else if (effect) this.host.getRotation(effect, tmpRotation);

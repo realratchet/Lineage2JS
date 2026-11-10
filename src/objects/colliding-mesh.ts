@@ -219,7 +219,7 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
             if (call.context !== this) throw new Error(`SetCollision context does not match '${this.name}'.`);
 
             this.getComponent<ColliderComponent>("collider").setCollision(this, call.args[0] as boolean, call.args[1] as boolean, call.args[2] as boolean);
-            return;
+            return undefined;
         }
 
         return Actor.prototype.callUnrealNative.call(this, call);

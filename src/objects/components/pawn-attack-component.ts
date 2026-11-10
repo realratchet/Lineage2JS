@@ -15,6 +15,7 @@ import type AnimationComponent from "./animation-component";
 import type { ScriptComponent } from "../../game/script-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { NpcSkillAttack_T, NpcSkillEffectPhase_T, INpcBowDecodeInfo } from "@l2js/engine/contracts/pawn";
+import type { Vector3Arr } from "@l2js/engine";
 
 const ATTACK_RANGE_PADDING = 20;
 const arrPhysicalAnimations = ["atk01", "atk02", "atk03"];
@@ -851,7 +852,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     }
 
     protected getSkillCast(skill: NpcSkillAttack_T = this.currentAttack.skill): SkillCast_T {
-        return { skill, caster: this.getParent(), target: this.target, associatedActors: this.associatedActors, locList: this.locList, targetExcepted: this.targetExcepted, stageShot: this.stageShot, stagePreShot: this.stagePreShot, finalShot: this.shotTriggered, shotTime: this.skillShotTime, firstShotTime: skill.castStyle === 0 ? 0 : this.getFirstShotTime() } as SkillCast_T;
+        return { skill, caster: this.getParent(), target: this.target, associatedActors: this.associatedActors, locList: this.locList, targetExcepted: this.targetExcepted, stageShot: this.stageShot, stagePreShot: this.stagePreShot, finalShot: this.shotTriggered, shotTime: this.skillShotTime, firstShotTime: skill.castStyle === 0 ? 0 : this.getFirstShotTime() };
     }
 
     protected triggerPhase(phase: NpcSkillEffectPhase_T, phaseTime: number, skill: NpcSkillAttack_T = this.currentAttack?.skill, source: Object3D = this.getParent(), target: AttackTarget_T = this.target, hitActor: boolean = !!target, associatedActors: readonly AttackTarget_T[] = this.associatedActors, impactActor: Object3D = hitActor ? target : null): boolean {

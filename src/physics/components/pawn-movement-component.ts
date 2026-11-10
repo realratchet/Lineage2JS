@@ -1,6 +1,6 @@
 import { ENetMode_T } from "@l2js/engine/un-level-info";
 import RAPIER from "@dimforge/rapier3d";
-import { Box3, Euler, LoopOnce, Object3D, Quaternion, Sphere, Vector3 } from "three";
+import { Box3, Euler, LoopOnce, Object3D, Quaternion, Vector3 } from "three";
 import { COMPONENT_EVENT_NOT_HANDLED, ComponentEventResult_T } from "../../game/components";
 import { SCRIPT_NATIVE_EVENT, type ScriptComponent } from "../../game/script-component";
 import { PhysicsComponent } from "./physics-component";
@@ -171,7 +171,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         return true;
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         if (type !== SCRIPT_NATIVE_EVENT) return COMPONENT_EVENT_NOT_HANDLED;
 
         const call = data as ScriptNativeCall_T;
@@ -218,7 +218,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.collisionProfile.collideActors = value && this.isInteractive();
     }
 
-    public getCollisionPrimitive(): CollisionPrimitive_T {
+    public getCollisionPrimitive(): CollisionPrimitive_T<"cylinder"> {
         // Caching avoids an n^2 getWorldPosition chain walk across pawn traces.
         if (this.analyticalOrigin.equals(this.getPosition())) return this.analyticalPrimitive;
 
@@ -798,7 +798,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             if (slideHit) {
                 this.processHitWall(slideHit.normal, slideHit.actor);
                 position.copy(this.getPosition());
-                if (this.physicsMode === "falling") return;
+                if ((this.physicsMode as PhysicsMode_T) === "falling") return;
 
                 this.getHitNormal(slideHit, tmpNormal);
                 twoWallAdjust(desiredDir, tmpStepRemaining, tmpNormal, tmpStepNormal, slideHit.time);

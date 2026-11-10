@@ -100,14 +100,14 @@ export class NCGMWnd {
         const name = target.toLowerCase();
         let rows: [number, string][];
 
-        if (id === GMControl_T.NpcLookup) rows = Object.keys(strings.npcNames).map(key => [Number(key) + 1e6, strings.npcNames[key]]);
+        if (id === GMControl_T.NpcLookup) rows = Object.keys(strings.npcNames).map(key => [Number(key) + 1e6, strings.npcNames[key as `${number}`]]);
         else if (id === GMControl_T.ItemLookup) {
             const keys = Object.keys(strings.itemInfos);
 
             rows = [];
             for (const templateClass of ["etc", "armor", "weapon"])
                 for (const key of keys)
-                    if (strings.itemInfos[key].templateClass === templateClass && strings.itemNames[key]) rows.push([Number(key), strings.itemNames[key]]);
+                    if (strings.itemInfos[key as `${number}`].templateClass === templateClass && strings.itemNames[key as `${number}`]) rows.push([Number(key), strings.itemNames[key as `${number}`]]);
         } else rows = Object.keys(strings.skillInfos).map(key => [Number(key.split(":")[0]), strings.skillInfos[key].name]);
 
         for (const [classId, text] of rows) {

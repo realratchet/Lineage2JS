@@ -1,4 +1,4 @@
-import { BufferValue, type APackage, type Constructable_T } from "@l2js/core";
+import { type APackage, type Constructable_T } from "@l2js/core";
 
 export class FStaticMeshCollisionNode implements Constructable_T {
     declare public vertices: number[]; // vertex

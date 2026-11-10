@@ -245,7 +245,7 @@ export class NWindowCanvas { // Mirrors the two NWindow paint primitives: 0x1001
     public getLineHeight(type: FontType_T = FontType_T.SMALL): number { return this.fonts.get(type).lineHeight; }
     public getFont(type: FontType_T = FontType_T.SMALL) { return this.fonts.get(type); }
 
-    public hasGlyphs(text: string, type: FontType_T = FontType_T.SMALL): boolean {
+    public hasGlyphs(text: string, _type: FontType_T = FontType_T.SMALL): boolean {
         return !!text && !/[\x00-\x1f\x7f-\x9f\uD800-\uDFFF]/u.test(text);
     }
 

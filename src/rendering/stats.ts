@@ -17,18 +17,18 @@ export var Stats = function () {
 
     //
 
-    function addPanel(panel) {
+    function addPanel(panel: Panel_T) {
 
         container.appendChild(panel.dom);
         return panel;
 
     }
 
-    function showPanel(id) {
+    function showPanel(id: number) {
 
         for (var i = 0; i < container.children.length; i++) {
 
-            container.children[i].style.display = i === id ? 'block' : 'none';
+            (container.children[i] as HTMLElement).style.display = i === id ? 'block' : 'none';
 
         }
 
@@ -43,7 +43,7 @@ export var Stats = function () {
     var fpsPanel = addPanel(new Stats.Panel('FPS', '#0ff', '#002'));
     var msPanel = addPanel(new Stats.Panel('MS', '#0f0', '#020'));
 
-    if (self.performance && self.performance.memory) {
+    if (self.performance && (self.performance as Performance & { memory: { usedJSHeapSize: number, jsHeapSizeLimit: number } }).memory) {
 
         var memPanel = addPanel(new Stats.Panel('MB', '#f08', '#201'));
 
@@ -83,7 +83,7 @@ export var Stats = function () {
 
                 if (memPanel) {
 
-                    var memory = performance.memory;
+                    var memory = (performance as Performance & { memory: { usedJSHeapSize: number, jsHeapSizeLimit: number } }).memory;
                     memPanel.update(memory.usedJSHeapSize / (1024 * 1024));
 
                 }
@@ -107,11 +107,11 @@ export var Stats = function () {
 
     };
 
-};
+} as StatsConstructor_T;
 
-Stats.Panel = function (name, fg, bg) {
+Stats.Panel = function (name: string, fg: string, bg: string) {
 
-    var round = Math.round, values = [];
+    var round = Math.round, values: number[] = [];
     var PR = round(window.devicePixelRatio || 1);
 
     var WIDTH = 80 * PR, HEIGHT = 48 * PR,
@@ -143,7 +143,7 @@ Stats.Panel = function (name, fg, bg) {
 
         dom: canvas,
 
-        update: function (value) {
+        update: function (value: number) {
 
             values.push(value);
             if (values.length > GRAPH_WIDTH / PR) values.shift();
@@ -175,6 +175,11 @@ Stats.Panel = function (name, fg, bg) {
 
     };
 
-};
+} as PanelConstructor_T;
 
 export default Stats;
+
+type Panel_T = { dom: HTMLCanvasElement, update: (value: number) => void };
+type PanelConstructor_T = { (name: string, fg: string, bg: string): Panel_T, new (name: string, fg: string, bg: string): Panel_T };
+type Stats_T = { REVISION: number, dom: HTMLDivElement, addPanel: (panel: Panel_T) => Panel_T, showPanel: (id: number) => void, begin: () => void, end: () => number, update: () => void, domElement: HTMLDivElement, setMode: (id: number) => void };
+type StatsConstructor_T = { (): Stats_T, new (): Stats_T, Panel: PanelConstructor_T };

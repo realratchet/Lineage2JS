@@ -1,4 +1,4 @@
-import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, DataTexture, RGFormat, OneFactor, OneMinusSrcAlphaFactor, CustomBlending, LinearFilter } from "three";
+import { ShaderMaterial, Uniform, Color, Matrix3, FrontSide, OneFactor, OneMinusSrcAlphaFactor, CustomBlending } from "three";
 
 import VERTEX_SHADER from "./shader/shader-mesh-terrain.vs";
 import FRAGMENT_SHADER from "./shader/shader-mesh-terrain.fs";
@@ -42,7 +42,7 @@ export class MeshTerrainMaterial extends ShaderMaterial {
 
         if (isOverlay) defines.TERRAIN_OVERLAY = "";
 
-        const uniforms: Record<string, Uniform> = appendGlobalUniforms({
+        const uniforms: Record<string, THREE.IUniform> = appendGlobalUniforms({
             alphaTest: new Uniform(1e-3),
             diffuse: new Uniform(new Color(1, 1, 1)),
             opacity: new Uniform(1),

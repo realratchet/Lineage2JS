@@ -41,7 +41,7 @@ export class NTownMapWnd {
         });
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, 0, Math.trunc(height * 0.5 - 252)); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; }
 

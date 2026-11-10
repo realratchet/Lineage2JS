@@ -330,7 +330,7 @@ function mergeBatchGeometriesData(actorGeometries: PreparedActorGeometryData_T[]
     const tmpN = new Vector3();
 
     for (let ai = 0; ai < actorGeometries.length; ai++) {
-        const { positions, normals, uvs, colors, vertexAlpha, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, hardware, collider, collision } = actorGeometries[ai];
+        const { positions, normals, uvs, colors, vertexAlpha, colorsInstance, sway, swayPhase, indices, groups, materialIndices, vertexCount, worldMatrix, normalMatrix, reverseWinding, lights, ambient, scaledGlow, isSunAffected, hardware, collider } = actorGeometries[ai];
 
         for (let vi = 0; vi < vertexCount; vi++) {
             tmpV.fromArray(positions, vi * 3);
@@ -632,7 +632,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 uuid: a.uuid,
                 boundsMin: a.bounds?.min || [0, 0, 0],
                 boundsMax: a.bounds?.max || [0, 0, 0],
-                groups: [],
+                groups: [] as BatchElementGroup_T[],
                 zoneMask: (a as any).zoneMask || 0n,
                 isRangeIgnored: !!(a as any).isRangeIgnored,
                 leaves: actorLeaves.get(a.uuid) ?? null

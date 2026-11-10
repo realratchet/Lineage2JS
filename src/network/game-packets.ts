@@ -30,7 +30,7 @@ export type AquireSkillEntry_T = { id: number, nextLevel: number, maxLevel: numb
 export type AquireSkillRequirement_T = { type: number, itemId: number, count: number, unknown: number };
 export type AquireSkillInfo_T = { id: number, level: number, spCost: number, mode: number, requirements: AquireSkillRequirement_T[] };
 export type TradeItem_T = { tradeType: number, type1: number, objectId: number, itemId: number, count: number, initialCount: number, type2: number, bodyPart: number, enchantLevel: number, customType2: number };
-export type ShopItem_T = { type1: number, objectId: number, itemId: number, count: number, type2: number, bodyPart: number, enchantLevel: number, customType2: number, price: number };
+export type ShopItem_T = { type1: number, objectId: number, itemId: number, count: number, type2: number, bodyPart: number, enchantLevel: number, customType2?: number, price: number };
 export type StorageMaxCount_T = { inventory: number, warehouse: number, freight: number, privateSell: number, privateBuy: number, recipeDwarf: number, recipe: number };
 
 export enum AttackFlags_T {

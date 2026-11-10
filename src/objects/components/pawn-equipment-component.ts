@@ -41,7 +41,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
         if (equipment) {
             for (const item of equipment.items) {
                 if (!this.attachItem(item.mesh, item.skins, item.bone, item.extraMesh)) continue;
-                if (item.enchantMesh) this.attachEnchantMesh(item.enchantMesh, item.bone);
+                if (item.enchantMesh) this.attachEnchantMesh(item.enchantMesh, item.bone as string);
                 if (item.enchantEffect) this.attachEnchantEffect(item.enchantEffect, typeof item.bone === "string" && item.bone.startsWith("Left") ? "LeftHandBone" : "RightHandBone");
             }
         } else if (bow) this.attachItem(bow.weaponMesh, bow.weaponSkins, "LeftHandBone");
@@ -153,7 +153,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
 
             return child;
         });
-        const effect = decodeObject3D(this.library, { ...template, children } as IEmitterActorDecodeInfo) as GameObject;
+        const effect = decodeObject3D(this.library, { ...template, children } as unknown as IEmitterActorDecodeInfo) as GameObject;
 
         this.renderManager.addTransientEffect(effect, parent);
 

@@ -12,6 +12,7 @@ import type PawnFishingComponent from "./pawn-fishing-component";
 import type PawnEquipmentComponent from "./pawn-equipment-component";
 import type NpcLifecycleComponent from "./npc-lifecycle-component";
 import type { IAnimationNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { Vector3Arr } from "@l2js/engine";
 
 export const MESHES_CHANGED_EVENT = "meshesChanged";
 export const MESH_SCALE_CHANGED_EVENT = "meshScaleChanged";
@@ -166,7 +167,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         } else this.simulationSuspendedAt = this.mixer.time;
     }
 
-    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T> {
+    public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
         if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) {
             this.placeMeshes();
             if (type === MESH_SCALE_CHANGED_EVENT) this.renderManager.invalidatePawnLighting(this.getParent());

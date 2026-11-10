@@ -62,7 +62,7 @@ export class NCPetitionWnd {
         if (!isGM) this.evaluate.setEnabled(false);
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, this.isGM ? 0 : 106, Math.trunc(height * 0.5 - (this.isGM ? 252 : 192))); } // NCConsole 0x10082e63; NCConsoleWnd 0x1006062f.
+    public placeOnScreen(_width: number, height: number) { this.layer.place(this.element, this.isGM ? 0 : 106, Math.trunc(height * 0.5 - (this.isGM ? 252 : 192))); } // NCConsole 0x10082e63; NCConsoleWnd 0x1006062f.
     public setEvaluationEnabled(isEnabled: boolean) { this.evaluate.setEnabled(isEnabled); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(isVisible: boolean) {

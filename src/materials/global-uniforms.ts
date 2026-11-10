@@ -50,4 +50,4 @@ export function copyShaderMaterial(source: ShaderMaterial, target: ShaderMateria
 
 export default GLOBAL_UNIFORMS;
 
-type UniformMap_T = Record<string, Uniform>;
+type UniformMap_T = Record<string, THREE.IUniform>;

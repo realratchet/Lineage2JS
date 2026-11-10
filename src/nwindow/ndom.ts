@@ -57,7 +57,7 @@ export class NDomLayer {
     protected readonly cacheTintUrls = new Map<string, string>();
     protected readonly windowNames = new Map<HTMLElement, string>();
     protected readonly windowOrder = new WeakMap<HTMLElement, HTMLElement[]>();
-    protected arrRootWindows = [this.consoleRoot, this.root];
+    protected arrRootWindows: HTMLElement[] = [this.consoleRoot, this.root];
     protected readonly windowPositions = new Map<HTMLElement, [number, number]>();
     protected readonly arrModalWindows: ModalWindow_T[] = [];
     protected readonly modalBlocker = document.createElement("div");

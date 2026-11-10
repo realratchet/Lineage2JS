@@ -154,7 +154,7 @@ function decodeG16(info: IDataTextureDecodeInfo): DataTexture {
 
 function decodeFloat(info: IDataTextureDecodeInfo): DataTexture {
     const texture = new DataTexture(
-        info.buffer,
+        new Float32Array(info.buffer),
         info.width, info.height,
         getFormat(info.format),
         FloatType,
@@ -197,8 +197,8 @@ export function decodeTexture(library: DecodeLibrary, info: ITextureDecodeInfo):
     if (info.name) texture.name = info.name;
     if (library.anisotropy >= 0) texture.anisotropy = library.anisotropy;
 
-    const width = texture.image?.width ?? (texture as any).width ?? 1;
-    const height = texture.image?.height ?? (texture as any).height ?? 1;
+    const width = (texture.image as { width: number })?.width ?? (texture as any).width ?? 1;
+    const height = (texture.image as { height: number })?.height ?? (texture as any).height ?? 1;
 
     updateTextureFiltering(texture);
     if (info.minLOD !== undefined && info.maxLOD !== undefined) registerTextureLOD(texture, [info.minLOD, info.maxLOD]);

@@ -53,7 +53,7 @@ export enum PolyFlags_T {
 };
 
 
-abstract class FPoly extends UObject {
+// abstract class FPoly extends UObject {
     // public base: FVector = new FVector();
     // public normal: FVector = new FVector();
     // public textureU: FVector = new FVector();
@@ -162,7 +162,7 @@ abstract class FPoly extends UObject {
 
     // //     return mesh;
     // // }
-}
+// }
 
 export abstract class UPolys extends UObject {
     // protected polyList: FPoly[];

@@ -69,7 +69,7 @@ export class NCGMClanWnd {
         this.clanWnd.onAction = (action, selected) => { if (this.onAction) this.onAction(action, selected); };
     }
 
-    public placeOnScreen(width: number, height: number) { this.layer.place(this.element, width - 209, 100); }
+    public placeOnScreen(width: number, _height: number) { this.layer.place(this.element, width - 209, 100); }
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) {
         this.element.hidden = !visible;
