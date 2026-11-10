@@ -195,6 +195,7 @@ export enum GameServerPacket_T {
     NicknameChanged = 0xcc,
     PledgeStatusChanged = 0xcd,
     RelationChanged = 0xce,
+    EventTrigger = 0xcf,
     MultiSellList = 0xd0,
     SetSummonRemainTime = 0xd1,
     Dice = 0xd4,

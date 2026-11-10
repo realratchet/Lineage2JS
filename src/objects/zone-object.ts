@@ -8,7 +8,7 @@ import PhysicsVolume from "./physics-volume";
 import type MovableObject from "./movable-object";
 import { isPortalBlocked } from "../rendering/door-portals";
 import MusicVolume from "./music-volume";
-import Actor from "./actor";
+import Actor, { execL2GameEvent, type L2GameEvent_T } from "./actor";
 import type { BatchRenderGroup_T, LitActorMesh } from "./lit-actor";
 import { setScriptObjectProperty } from "./actor-properties";
 import type { ScriptObjectFactory_T } from "../game/script-component";
@@ -426,6 +426,10 @@ export class SectorObject extends GameObject {
     protected readonly cacheLevelActorIndices = new Map<string, number>();
     protected readonly cacheLevelActorObjects = new Map<string, ScriptHost_T>();
     protected levelActorHostsReady = false;
+    protected readonly initializedL2GameEventActors = new WeakSet<ScriptHost_T>();
+    protected readonly arrPendingL2GameEvents: [number, number][] = [];
+    protected hasInitializedL2GameEvents = false;
+    protected readonly hiddenActorUuids = new Set<string>();
     public bspZones: BSPZoneData[];
     public bspNodes: BSPNodeData[];
     public bspLeaves: BSPLeafData[];
@@ -503,6 +507,81 @@ export class SectorObject extends GameObject {
 
     public getLevelActorCount(): number { return this.arrLevelActors.length; }
     public getFirstDynamicActor(): number { return this.firstDynamicActor; }
+
+    public setActorHidden(uuid: string, hidden: boolean): void {
+        if (this.hiddenActorUuids.has(uuid) === hidden) return;
+
+        if (hidden) this.hiddenActorUuids.add(uuid);
+        else this.hiddenActorUuids.delete(uuid);
+        this.visibilityCacheInitialized = false;
+    }
+
+    protected getLevelActorProperty(index: number, name: string): ScriptValue_T {
+        const actor = this.arrLevelActors[index];
+
+        if (actor) return getProperty(actor, name);
+        const info = this.arrLevelActorRecords[index];
+
+        if (!info) return null;
+        const value = getProperty(info as ScriptHost_T, name);
+
+        if (value !== null) return value;
+        const shared = info.sharedScriptProperties && getProperty({ scriptClassId: info.scriptClassId, scriptProperties: info.sharedScriptProperties }, name);
+
+        return shared ?? getProperty(this.scriptVM.getDefaultObject(info.scriptClassId), name);
+    }
+
+    public initializeL2GameEvents(): void {
+        if (this.hasInitializedL2GameEvents) return;
+
+        this.traverse((object: any) => {
+            if (!object.isEmitterActor || this.initializedL2GameEventActors.has(object)) return;
+
+            this.scriptVM.initializeHost(object);
+            Actor.prototype.postBeginPlay.call(object);
+            this.initializedL2GameEventActors.add(object);
+        });
+        if (!this.staticMeshGroup) return;
+
+        // AActor::PostBeginPlay 0x8583f0..0x858424 runs independently of the script event.
+        for (let index = 0; index < this.arrLevelActors.length; index++) {
+            if (this.arrLevelActors[index] === null) continue;
+            const info = this.arrLevelActorRecords[index];
+
+            if (info && this.staticMeshMap.has(info.uuid)) this.setActorHidden(info.uuid, !!this.getLevelActorProperty(index, "bHidden"));
+            const arrEvents = this.getLevelActorProperty(index, "L2GameEvent") as L2GameEvent_T[];
+
+            if (!arrEvents.length) continue;
+            const actor = this.getLevelActor(index);
+
+            if (this.initializedL2GameEventActors.has(actor)) continue;
+            Actor.prototype.postBeginPlay.call(actor);
+            this.initializedL2GameEventActors.add(actor);
+        }
+
+        this.hasInitializedL2GameEvents = true;
+        for (const [id, value] of this.arrPendingL2GameEvents) this.l2EventTrigger(id, value);
+        this.arrPendingL2GameEvents.length = 0;
+    }
+
+    public l2EventTrigger(id: number, value: number): void {
+        if (!this.hasInitializedL2GameEvents) {
+            this.arrPendingL2GameEvents.push([id, value]);
+            return;
+        }
+
+        for (let index = 0; index < this.arrLevelActors.length; index++) {
+            if (this.arrLevelActors[index] === null) continue;
+            for (let eventIndex = 0; ; eventIndex++) {
+                const arrEvents = this.getLevelActorProperty(index, "L2GameEvent") as L2GameEvent_T[];
+
+                if (eventIndex >= arrEvents.length) break;
+                const event = arrEvents[eventIndex];
+
+                if (event.EventCmd && event.EventID === id) execL2GameEvent(this.getLevelActor(index), event.EventCmd, value);
+            }
+        }
+    }
 
     public rearrangeLevelActors(): void {
         if (this.hasRearrangedLevelActors) return;
@@ -642,6 +721,9 @@ export class SectorObject extends GameObject {
         this.arrLevelActorRecords.length = 0;
         this.firstDynamicActor = 0;
         this.hasRearrangedLevelActors = false;
+        this.hasInitializedL2GameEvents = false;
+        this.arrPendingL2GameEvents.length = 0;
+        this.hiddenActorUuids.clear();
         this.cacheLevelActorObjects.clear();
         this.cacheLevelActorIndices.clear();
     }
@@ -1836,7 +1918,7 @@ export class SectorObject extends GameObject {
                 });
             }
 
-            for (const { object, actorIndex } of this.staticMeshVisibilityEntries) {
+            for (const { object, uuid, actorIndex } of this.staticMeshVisibilityEntries) {
                 if ((object as any).isBatch) {
                     const batchElements = (object as any).batchElements;
                     const geometry = (object as any).geometry;
@@ -1875,7 +1957,7 @@ export class SectorObject extends GameObject {
                             leafVisibility[ei] = inVisibleLeaves ? 1 : 0;
                         }
 
-                        if (inVisibleLeaves) {
+                        if (inVisibleLeaves && !this.hiddenActorUuids.has(elem.uuid)) {
                             const isFrustumVisible = !frustumCullingEnabled || (elem.isRangeIgnored ? intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum, true) : batchVisibility.nodes.length ? batchVisibility.frustumVisible[ei] === 1 : intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum));
                             const offset = ei * 3, x = cameraPosition.x - centers[offset], y = cameraPosition.y - centers[offset + 1], z = cameraPosition.z - centers[offset + 2];
                             distSq = x * x + y * y + z * z;
@@ -2002,8 +2084,8 @@ export class SectorObject extends GameObject {
                         isVisible = isFrustumVisible && isZoneVisible && ((object as any).actorRangeIgnored || isActorInRange((object as any).actorBoundsMin, (object as any).actorBoundsMax, cameraPosition, staticMeshCullDistanceSq));
                     }
 
-                    object.visible = isVisible;
-                    if (isVisible) visibleCount++; // relighting happens in Pass 2, see the batch branch above
+                    object.visible = isVisible && !this.hiddenActorUuids.has(uuid);
+                    if (object.visible) visibleCount++; // relighting happens in Pass 2, see the batch branch above
                 }
             }
 
@@ -2248,7 +2330,7 @@ export class SectorObject extends GameObject {
                     const isFrustumVisible = !frustumCullingEnabled || cameraFrustum.intersectsBox(actorBox);
                     const isZoneVisible = !frustumCullingEnabled || !actor.zoneMask || !!(actor.zoneMask & finalZoneMask);
 
-                    if (isFrustumVisible && isZoneVisible) {
+                    if (isFrustumVisible && isZoneVisible && !this.hiddenActorUuids.has(actor.uuid)) {
                         visibleActorUuids.add(actor.uuid);
                     }
                 }
@@ -2283,7 +2365,7 @@ export class SectorObject extends GameObject {
                         elemVisible = isFrustumVisible && isZoneVisible;
                     }
 
-                    if (elemVisible) {
+                    if (elemVisible && !this.hiddenActorUuids.has(elem.uuid)) {
                         for (const g of elem.groups) {
                             visibleGroups.push(g);
                         }
@@ -2305,7 +2387,7 @@ export class SectorObject extends GameObject {
                     (object as any)?.update(this, environment);
                 }
             } else {
-                const isVisible = visibleActorUuids.has(uuid);
+                const isVisible = visibleActorUuids.has(uuid) && !this.hiddenActorUuids.has(uuid);
                 object.visible = isVisible;
                 if (isVisible) {
                     visibleCount++;

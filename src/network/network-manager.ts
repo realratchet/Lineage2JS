@@ -680,6 +680,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public onPacket(opcode: GamePackets.GameServerPacket_T, packet: PacketReader) {
         switch (opcode) {
+            case GamePackets.GameServerPacket_T.EventTrigger: {
+                // Engine.dll 0x6d78c0..0x6d7901: dc, sign-extend the byte value.
+                const id = packet.d(), value = packet.c() << 24 >> 24;
+
+                if (packet.getRemaining()) throw new Error(`Invalid EventTrigger payload.`);
+                this.manGame.getComponent("render").l2EventTrigger(id, value);
+                break;
+            }
             case GamePackets.GameServerPacket_T.KeyPacket:
                 this.items.inventoryOrderNamespace = packet.d(); // Engine 0x103fe0ba, NWindow 0x10065d4d.
                 this.session.game.authLogin(this.session.account, this.session.sessionKey);

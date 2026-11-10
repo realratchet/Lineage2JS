@@ -1,5 +1,5 @@
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../game/components";
-import UnScriptVM, { unregisterLevelActor, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { getProperty, setProperty, unregisterLevelActor, type ScriptHost_T, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
 import { ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
 import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/script-properties";
 import type { ICollidable } from "./objects";
@@ -10,6 +10,23 @@ import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./component
 import { EL2EventCmd_T } from "../assets/unreal/un-aactor";
 
 type ActorInfo_T = { uuid: string; name?: string; scriptClassId?: string; scriptProperties?: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
+export type L2GameEvent_T = { EventID: number, EventCmd: EL2EventCmd_T };
+type L2EventActor_T = ScriptHost_T & { l2EventShow?(value: number): void, l2EventPlay?(value: number): void };
+
+export function execL2GameEvent(actor: L2EventActor_T, command: EL2EventCmd_T, value: number): void {
+    switch (command) {
+        case EL2EventCmd_T.LEC_None: return;
+        case EL2EventCmd_T.LEC_Show:
+            if (actor.l2EventShow) actor.l2EventShow(value);
+            else setProperty(actor, "bHidden", value === 0);
+            return;
+        case EL2EventCmd_T.LEC_Play:
+            // AActor/AEmitter/AMover vtable +0xb4 -> 0x5f6190: retn 4.
+            if (actor.l2EventPlay) actor.l2EventPlay(value);
+            return;
+        default: throw new Error(`Unknown L2 event command '${command}'.`);
+    }
+}
 
 export class Actor extends GameObject {
     public readonly actorUuid: string;
@@ -65,13 +82,10 @@ export class Actor extends GameObject {
 
     public postBeginPlay(): void {
         for (let index = 0; ; index++) {
-            const arrEvents = this.getUnrealScriptProperty("L2GameEvent") as { EventID: number, EventCmd: number }[];
+            const arrEvents = getProperty(this, "L2GameEvent") as L2GameEvent_T[];
 
             if (index >= arrEvents.length) return;
-            switch (arrEvents[index].EventCmd) {
-                case EL2EventCmd_T.LEC_Show: this.l2EventShow(0); break;
-                case EL2EventCmd_T.LEC_Play: this.l2EventPlay(0); break;
-            }
+            execL2GameEvent(this, arrEvents[index].EventCmd, 0);
         }
     }
 

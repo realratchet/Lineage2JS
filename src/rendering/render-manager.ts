@@ -1025,6 +1025,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.needsUpdate = true;
     }
 
+    public l2EventTrigger(id: number, value: number): void {
+        // UGameEngine::L2EventTrigger 0x826140..0x8262a6 visits the main and streaming levels.
+        if (this.level && !this.arrSceneSectors.includes(this.level)) this.level.l2EventTrigger(id, value);
+        for (const sector of this.arrSceneSectors) sector.l2EventTrigger(id, value);
+        this.needsUpdate = true;
+    }
+
     public triggerL2Event(name: string, position: Vector3, radius: number): void {
         name = name.toLowerCase();
 

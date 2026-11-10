@@ -409,17 +409,7 @@ export class NetworkSession {
         if (!this.game || !this.game.isRecording()) return;
         const file = this.game.stopRecording(), bytes = file.toBytes();
         this.network.ui.setReplayRecording(false);
-        let name = "Replay.l2r";
-
-        try { name = await saveReplayFile(bytes); }
-        finally {
-            const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/octet-stream" })), link = document.createElement("a");
-
-            link.href = url;
-            link.download = name;
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
+        const name = await saveReplayFile(bytes);
         this.network.ui.addSystemMessage(this.network.ui.getSystemMessage(1653).replace("$s1", name), this.network.ui.getStrings().systemMessageColors[1653]);
     }
 
