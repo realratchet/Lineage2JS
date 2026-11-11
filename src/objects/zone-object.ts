@@ -1,6 +1,6 @@
 import type DynamicLight from "./dynamic-light";
 import type { L2Environment } from "../rendering/l2-env";
-import { Box3, Color, Fog, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
+import { Box3, Color, Fog, InstancedBufferAttribute, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
 import type { TerrainDecoration } from "./terrain-decoration";
 import { encompassesVolume } from "../physics/volume-bsp";
 import { GameObject } from "../game/components";
@@ -10,6 +10,7 @@ import { isPortalBlocked } from "../rendering/door-portals";
 import MusicVolume from "./music-volume";
 import Actor, { execL2GameEvent, type L2GameEvent_T } from "./actor";
 import type { BatchRenderGroup_T, LitActorMesh } from "./lit-actor";
+import { usesAlphaCore } from "../materials/mesh-static-material/mesh-static-material";
 import { setScriptObjectProperty } from "./actor-properties";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
@@ -141,11 +142,12 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
 
     for (let i = 0, len = visibleGroups.length; i < len; i++) {
         const group = visibleGroups[i];
-        group.transparent = transparentLookup[group.materialIndex];
+        group.transparent = transparentLookup[group.materialIndex] && usesAlphaCore(Array.isArray(object.material) ? object.material[group.materialIndex] : object.material) ? 2 : transparentLookup[group.materialIndex];
     }
 
     visibleGroups.sort((a, b) => {
         if (a.transparent !== b.transparent) return a.transparent - b.transparent;
+        if (a.transparent === 2) return (a.materialIndex - b.materialIndex) || (b.distance - a.distance) || (a.ordinal - b.ordinal);
         if (a.transparent) return (b.distance - a.distance) || (a.materialIndex - b.materialIndex) || (a.ordinal - b.ordinal);
 
         return (a.materialIndex - b.materialIndex) || (a.start - b.start);
@@ -411,6 +413,11 @@ export class SectorObject extends GameObject {
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
     public isRetired = false;
+    public lastInRangeTime = 0;
+    public fade = 0;
+    public meshFade = 0;
+    protected readonly fadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1);
+    protected readonly meshFadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1);
     public scriptVM: UnScriptVM;
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
@@ -1621,6 +1628,22 @@ export class SectorObject extends GameObject {
         return false;
     }
 
+    public updateFade(step: number): boolean {
+        const fade = Math.min(Math.max(this.fade + step, 0), 1), meshFade = this.staticMeshGroup ? Math.min(Math.max(this.meshFade + step, 0), fade) : 0;
+        if (fade === this.fade && meshFade === this.meshFade) return false;
+
+        this.fade = fade;
+        this.meshFade = meshFade;
+        this.fadeAttribute.setX(0, fade).needsUpdate = true;
+        this.meshFadeAttribute.setX(0, meshFade).needsUpdate = true;
+        this.traverse(object => {
+            const mesh = object as any, attribute = mesh.isBatch ? this.meshFadeAttribute : mesh.isTerrainBatch || mesh.isBSPSection ? this.fadeAttribute : null;
+            if (attribute && mesh.geometry.getAttribute("sectorFade") !== attribute) mesh.geometry.setAttribute("sectorFade", attribute);
+        });
+
+        return true;
+    }
+
     public setSortTransparent(enabled: boolean) {
         if (this.sortTransparent === enabled) return;
 
@@ -1998,6 +2021,7 @@ export class SectorObject extends GameObject {
 
                         for (const group of previousGroups) {
                             if (!group.transparent) continue;
+                            if (group.transparent === 2 && group.materialIndex !== previousMaterial) previousDistance = Infinity;
                             const distance = elemDistances[group.elementIndex];
 
                             if (distance > previousDistance || distance === previousDistance && group.materialIndex < previousMaterial) {
@@ -2061,7 +2085,7 @@ export class SectorObject extends GameObject {
 
                         for (const group of mesh.visibleBatchGroups) {
                             const sorted = mesh.sortedIndexBuffers.get(group.start);
-                            if (sorted) {
+                            if (sorted && !usesAlphaCore(Array.isArray(mesh.material) ? mesh.material[group.materialIndex] : mesh.material)) {
                                 const packed = ranges && ranges.get(group.start);
                                 const restored = repacked && (!packed || packed.stamp !== packing.stamp || packed.copied);
                                 if (sorted.apply(index.array as Uint8Array | Uint16Array | Uint32Array, offset, cameraPosition, auxiliary, auxiliary || restored)) {

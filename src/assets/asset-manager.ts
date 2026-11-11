@@ -54,6 +54,7 @@ const npcSpawnOffset = new Vector3(-600, -600, 0);
 
 const FAILED_SECTOR_RETRY_MS = 30_000;
 const RETIRED_SECTOR_DISPOSE_MS = 30_000;
+const SECTOR_RETIRE_DELAY_MS = 1000; // prefetch reach follows frame time, uneven frames flicker the sector ahead
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
@@ -1353,11 +1354,12 @@ export class AssetManager implements IEngineComponent<GameManager> {
             for (const sector of sectorsLoaded) {
                 if (sector.neverUnload || !sector.index || sector === renderManager.getLevel()) continue;
                 if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= renderDistance || sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= renderDistance) {
+                    sector.lastInRangeTime = now;
                     if (sector.isRetired) this.requestSector(renderManager, `${sector.index.x}_${sector.index.y}`);
                     continue;
                 }
 
-                this.retireSector(renderManager, sector);
+                if (teleported || now - sector.lastInRangeTime >= SECTOR_RETIRE_DELAY_MS) this.retireSector(renderManager, sector);
             }
 
             this.destroyExpiredSectors(renderManager, teleported);

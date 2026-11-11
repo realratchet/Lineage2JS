@@ -388,10 +388,17 @@
     varying vec3 vColorInstance;
 #endif
 
+#ifdef USE_RANGE_FADE
+    varying float vRangeAlpha;
+    uniform vec4 clippingSphere;
+    uniform float clippingFade;
+    attribute float sectorFade;
+#endif
 #ifdef USE_LIT_ATTRIBUTES
     attribute vec3 lighting;
     attribute float sunAffected;
     attribute float hardwareSun;
+    attribute float actorRangeIgnored;
     uniform vec3 staticMeshSunAmbient;
     uniform vec3 staticMeshHardwareSunColor;
     uniform vec3 staticMeshHardwareSunDirection;
@@ -907,4 +914,11 @@ void main() {
     // #endif
 
     #include <fog_vertex>
+    #ifdef USE_RANGE_FADE
+        vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
+        #ifdef USE_LIT_ATTRIBUTES
+            vRangeAlpha = max(actorRangeIgnored, vRangeAlpha);
+        #endif
+        vRangeAlpha = min(vRangeAlpha, sectorFade);
+    #endif
 }

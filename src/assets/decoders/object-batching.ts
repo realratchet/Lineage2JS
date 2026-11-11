@@ -70,6 +70,9 @@ function createBatchObject(
     mergedObject.batchActorUuids = actors.map(a => a.uuid);
     mergedObject.setPerActorAmbient(perActorAmbient);
     mergedObject.batchElements = batchElements;
+    const rangeIgnored = new Uint8Array(mergedGeometry.getAttribute("position").count);
+    batchElements.forEach((element, index) => { if (element.isRangeIgnored) rangeIgnored.fill(255, perActorAmbient[index].startVertex, perActorAmbient[index].startVertex + perActorAmbient[index].count); });
+    mergedGeometry.setAttribute("actorRangeIgnored", new BufferAttribute(rangeIgnored, 1, true));
     mergedObject.allGroups = mergedGeometry.groups.map(g => ({ ...g })) as typeof mergedObject.allGroups;
     mergedObject.batchIndices = null;
     mergedGeometry.index.setUsage(DynamicDrawUsage);

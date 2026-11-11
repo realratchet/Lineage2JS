@@ -350,6 +350,10 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
     (Array.isArray(materials) ? materials : [materials]).forEach(m => {
         if (!m) return;
         const material = m as any;
+        if (material.defines && material.defines.USE_RANGE_FADE === undefined) {
+            material.defines.USE_RANGE_FADE = "";
+            material.needsUpdate = true;
+        }
         if (sectionInfo.isOutdoor && material.uniforms?.ambient?.value?.color && material.defines) {
             if (material.defines.USE_LIGHTMAP !== undefined) {
                 if (!sectionInfo.isUnlit && material.defines.USE_BSP_AMBIENT === undefined) {
@@ -375,6 +379,7 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
 
     mesh.name = `BSPSection_${sectionInfo.sectionName}`;
     (mesh as any).sectionIndex = sectionIndex;
+    (mesh as any).isBSPSection = true;
     (mesh as any).priority = sectionInfo.priority;
 
     return mesh;

@@ -121,6 +121,8 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             side: FrontSide
         });
 
+        (this.defaultAttributeValues as any).sectorFade = [1];
+
         if (isOverlay) {
             this.transparent = true;
             this.premultipliedAlpha = true; // Premultiply after fog to preserve the single-pass fog weight.

@@ -53,6 +53,9 @@ uniform float opacity;
 // #include <map_pars_fragment>
 // #include <alphamap_pars_fragment>
 #include <alphatest_pars_fragment>
+#ifdef USE_ALPHATEST
+    uniform float alphaCeil;
+#endif
 #include <aomap_pars_fragment>
 #include <lightmap_pars_fragment>
 #include <envmap_common_pars_fragment>
@@ -551,6 +554,9 @@ uniform float opacity;
     varying vec3 vColorInstance;
 #endif
 
+#ifdef USE_RANGE_FADE
+    varying float vRangeAlpha;
+#endif
 #if defined(USE_LIT_ATTRIBUTES) || defined(USE_ACTOR_LIGHTS)
     varying vec3 vLitColor;
 #endif
@@ -595,6 +601,9 @@ vec3 getFadeColor(FadeData fade) {
 
 void main() {
     #include <clipping_planes_fragment>
+    #ifdef USE_RANGE_FADE
+        if (vRangeAlpha < 1.0 && vRangeAlpha <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
+    #endif
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>
 
@@ -744,6 +753,9 @@ void main() {
     #endif
     if (texModifierAlpha < 0.0) {
         #include <alphatest_fragment>
+        #ifdef USE_ALPHATEST
+            if (alphaCeil > 0.0 && diffuseColor.a >= alphaCeil) discard;
+        #endif
     }
     #ifdef USE_PROJECTOR_RECEIVER
         gl_FragColor = getProjectorShadow();

@@ -3,7 +3,7 @@ import FRAGMENT_SHADER from "./shader/shader-mesh-static.fs";
 import HIGHLIGHT_SHADER from "./shader/highlight.fs";
 import { appendGlobalUniforms, getLocalUniforms } from "../global-uniforms";
 import { MAX_TRANSFORM_STAGES, padTransformStages } from "./transform-stage";
-import { ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide, DoubleSide, Texture } from "three";
+import { Material, ShaderMaterial, Uniform, Matrix3, Color, CustomBlending, Vector2, Vector3, UniformsUtils, NormalBlending, OneFactor, OneMinusSrcColorFactor, OneMinusSrcAlphaFactor, ZeroFactor, DstColorFactor, SrcColorFactor, SrcAlphaFactor, FrontSide, DoubleSide, Texture } from "three";
 import type { SupportedBlendingTypes_T, IDecodedParameter, IDecodedSpriteParameter } from "@l2js/engine/contracts/material";
 import type { MapData_T } from "@l2js/engine/contracts/texture";
 import type DynamicLight from "../../objects/dynamic-light";
@@ -124,6 +124,10 @@ function applyParameters({ name, parameters, uniforms, defines, sprites }: Apply
     }
 }
 
+export const ALPHA_CORE_REF = new Uniform(0.75);
+
+export function usesAlphaCore(material: THREE.Material) { return ALPHA_CORE_REF.value > 0 && material.transparent && material.blending === NormalBlending && material.depthWrite; }
+
 export default class MeshStaticMaterial extends ShaderMaterial {
     public readonly isStaticMeshMaterial = true;
     public sprites: Record<string, SpriteParam_T> = {};
@@ -136,6 +140,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
     public requiresSorting = false;
     public shadowOpacity: IDecodedParameter = null;
     protected shadowMaterial: MeshStaticMaterial = null;
+    protected alphaCore: ShaderMaterial = null;
+    protected alphaFringe: ShaderMaterial = null;
+    protected alphaVersion = -1;
 
     // @ts-ignore
     public constructor(info: MeshStaticMaterialParameters_T = { diffuse: null, opacity: null, specular: null, specularMask: null, side: FrontSide, blendingMode: "normal", transparent: false, depthWrite: true, depthTest: true, visible: true }) {
@@ -163,6 +170,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         const uniforms: Record<string, THREE.IUniform> = appendGlobalUniforms(UniformsUtils.merge([
             {
                 alphaTest: new Uniform(1e-3),
+                alphaCeil: new Uniform(0),
                 diffuse: new Uniform(new Color(0xffffff)),
                 // diffuse: new Uniform(new Color(0x787878)),
                 opacity: new Uniform(1),
@@ -311,6 +319,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         });
 
         (this.defaultAttributeValues as any).vertexAlpha = [1];
+        (this.defaultAttributeValues as any).sectorFade = [1];
         this.sprites = sprites;
         this.shadowOpacity = info.shadowOpacity || null;
         this.spriteEntries = Object.entries(sprites);
@@ -483,7 +492,9 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     public setLit() {
         this.defines["USE_LIT_ATTRIBUTES"] = "";
+        this.defines["USE_RANGE_FADE"] = "";
         (this.defaultAttributeValues as any).hardwareSun = [0];
+        (this.defaultAttributeValues as any).actorRangeIgnored = [1];
 
         this.needsUpdate = true;
 
@@ -649,8 +660,44 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return material;
     }
 
+    protected createAlphaPass(uniforms: Record<string, THREE.IUniform>): ShaderMaterial {
+        const material = new ShaderMaterial({ vertexShader: this.vertexShader, fragmentShader: this.fragmentShader, defines: this.defines, uniforms: Object.assign(Object.create(this.uniforms), uniforms) });
+
+        Material.prototype.copy.call(material, this);
+        material.defaultAttributeValues = this.defaultAttributeValues;
+        (material as any).isStaticMeshMaterial = true;
+
+        return material;
+    }
+
+    protected updateAlphaPasses() {
+        if (this.alphaVersion === this.version) return;
+        if (this.alphaCore) { this.alphaCore.dispose(); this.alphaFringe.dispose(); }
+
+        this.alphaCore = this.createAlphaPass({ alphaTest: new Uniform(0) });
+        this.alphaCore.blending = CustomBlending;
+        this.alphaCore.blendSrc = this.alphaCore.blendSrcAlpha = OneFactor;
+        this.alphaCore.blendDst = ZeroFactor;
+        this.alphaCore.blendDstAlpha = OneMinusSrcAlphaFactor;
+
+        this.alphaFringe = this.createAlphaPass({ alphaCeil: ALPHA_CORE_REF });
+        this.alphaFringe.depthWrite = false;
+
+        this.alphaVersion = this.version;
+    }
+
+    public getAlphaCore() {
+        this.updateAlphaPasses();
+        this.alphaCore.uniforms.alphaTest.value = Math.max(this.uniforms.alphaTest.value, ALPHA_CORE_REF.value);
+
+        return this.alphaCore;
+    }
+
+    public getAlphaFringe() { this.updateAlphaPasses(); return this.alphaFringe; }
+
     public dispose(): void {
         if (this.shadowMaterial) this.shadowMaterial.dispose();
+        if (this.alphaCore) { this.alphaCore.dispose(); this.alphaFringe.dispose(); }
         super.dispose();
     }
 
@@ -684,6 +731,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         this.shadowOpacity = source.shadowOpacity;
         if (this.shadowMaterial) this.shadowMaterial.dispose();
         this.shadowMaterial = null;
+        this.alphaVersion = -1;
 
         return this;
     }

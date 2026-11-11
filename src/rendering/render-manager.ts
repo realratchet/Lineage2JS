@@ -41,7 +41,7 @@ import PawnCrowd from "../objects/pawn-crowd";
 import boneAtlas from "../objects/bone-atlas";
 import type PawnMesh from "../objects/pawn-mesh";
 import type DynamicLight from "../objects/dynamic-light";
-import { NUM_ACTOR_LIGHTS, type default as MeshStaticMaterial } from "../materials/mesh-static-material/mesh-static-material";
+import { ALPHA_CORE_REF, NUM_ACTOR_LIGHTS, usesAlphaCore, type default as MeshStaticMaterial } from "../materials/mesh-static-material/mesh-static-material";
 import type { ZoneObject, SectorObject, FogInfoObject } from "../objects/zone-object";
 import { IEngineComponent, IObject } from "../game/components";
 import type GameManager from "../game/game-manager";
@@ -110,6 +110,7 @@ const tmpColorByte_4 = new ColorByte();
 const tmpColorByte_5 = new ColorByte();
 
 const DEFAULT_FAR = 65536; // Core.dll FAR_CLIPPING_PLANE 0x101cff8c.
+const SECTOR_FADE_MS = 1000;
 const DEFAULT_CLEAR_COLOR = 0x0c0c0c;
 const DEFAULT_HORIZONTAL_FOV = 60; // Matches user.ini DefaultFOV/DesiredFOV (was 90 from l2.ini)
 
@@ -154,6 +155,7 @@ type Disposable_T = { dispose(): void };
 type SectorMaterialBinding_T = { object: THREE.Mesh, material: THREE.Material, materialIndex: number, textureQueue: THREE.Texture[], program?: { isReady(): boolean }, shadowPrograms?: { isReady(): boolean }[] };
 type SectorWarmup_T = {
     sector: SectorObject,
+    root: THREE.Object3D,
     materialQueue: SectorMaterialBinding_T[],
     warmedTextures: Set<THREE.Texture>,
     lightingQueue: any[],
@@ -288,6 +290,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly scene = new Scene();
     public readonly nameplateScene = new Scene();
     protected readonly translucentRenderList = new TranslucentRenderList();
+    protected readonly arrAlphaCores: any[] = [];
+    protected alphaCoreCount = 0;
     protected worldCamera: Camera = null;
     public readonly objectGroup = new Object3D();
     public readonly lastSize = new Vector2();
@@ -327,6 +331,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly nameplateDepth: NameplateDepth;
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
+    protected sectorFadeTime = 0;
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected pawnRange: number = null;
@@ -517,7 +522,22 @@ export class RenderManager implements IEngineComponent<GameManager> {
         worldList.sort = (opaque, transparent) => {
             (sortWorldList as (a: typeof opaque, b: typeof transparent) => void)(opaque, transparent);
             // Engine 0x1065238d draws opaque actors before the translucent world list.
-            let count = 0;
+            let count = 0, coreCount = 0;
+            for (const item of worldList.transparent) {
+                const material = item.material as MeshStaticMaterial;
+                if (!(item.object as CollidingMesh).isStaticMeshActor || !material.isStaticMeshMaterial || !usesAlphaCore(material)) continue;
+
+                const core = this.arrAlphaCores[coreCount] || (this.arrAlphaCores[coreCount] = {});
+                Object.assign(core, item);
+                core.material = material.getAlphaCore();
+                item.material = material.getAlphaFringe();
+                let index = coreCount++;
+                while (index && this.arrAlphaCores[index - 1].material.id > core.material.id) { this.arrAlphaCores[index] = this.arrAlphaCores[index - 1]; index--; }
+                this.arrAlphaCores[index] = core;
+            }
+            for (let i = 0; i < coreCount; i++) worldList.opaque.push(this.arrAlphaCores[i]);
+            for (let i = coreCount; i < this.alphaCoreCount; i++) { const core = this.arrAlphaCores[i]; core.object = core.geometry = core.material = core.group = null; }
+            this.alphaCoreCount = coreCount;
             for (const item of worldList.transparent) {
                 const actor = (item.object as LitSkinnedMesh).actorRenderable;
                 if (actor && actor.isOpaque() && item.material.blending === NormalBlending && item.material.depthWrite) worldList.opaque.push(item);
@@ -1707,6 +1727,17 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.arrSceneSectors.forEach(sector => sector.setSortTransparent(enabled));
     }
 
+    public setClippingFade(distance: number) {
+        GLOBAL_UNIFORMS.clippingFade.value = distance;
+        this.needsUpdate = true;
+    }
+
+    public setAlphaCore(alpha: number) {
+        ALPHA_CORE_REF.value = alpha;
+        this.arrSceneSectors.forEach(sector => { sector.setSortTransparent(!this.sortTransparent); sector.setSortTransparent(this.sortTransparent); }); // repacks canonical indices
+        this.needsUpdate = true;
+    }
+
     public setRenderDeco(enabled: boolean) {
         this.renderDeco = enabled;
         this.arrSceneSectors.forEach(sector => sector.setRenderDeco(enabled));
@@ -1921,17 +1952,21 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.getPhysicsManager().setTriggerPosition(this.usePawnCullingCamera ? this.player.position : this.camera.position);
         }
 
+        const fadeStep = auxiliary ? 0 : (this.manGame.getCurrentTime() - this.sectorFadeTime) / SECTOR_FADE_MS;
+        if (!auxiliary) this.sectorFadeTime = this.manGame.getCurrentTime();
+
         for (const sector of this.arrSceneSectors) {
-            if (sector.isRetired) { sector.visible = false; continue; }
             const isCameraInSector = activeSector === sector;
             const wasVisible = sector.visible;
+            const isInRange = !sector.isRetired && (isCameraInSector || fogSphere.intersectsBox(sector.worldBounds));
 
-            if (!isCameraInSector) {
-                if (!fogSphere.intersectsBox(sector.worldBounds)) {
-                    sector.visible = false;
-                    continue;
-                }
+            if (!auxiliary && sector.updateFade(isInRange ? fadeStep : -fadeStep)) {
+                for (const job of this.pendingSectorWarmups)
+                    if (job.sector === sector) job.fallbackMaterials.forEach(material => { if (!material.transparent) material.opacity = job.root === sector ? sector.fade : sector.meshFade; });
+                this.needsUpdate = true;
             }
+
+            if (auxiliary ? !isInRange : sector.fade === 0) { sector.visible = false; continue; }
 
             sector.visible = true;
 
@@ -1942,6 +1977,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             } else {
                 this.neighborVisibilitySectors.push(sector);
             }
+
         }
 
         if (!auxiliary && this.neighborVisibilitySectors.length > 0) {
@@ -2407,7 +2443,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (skyVisibility < 1.0)
             targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
 
-        this.skyRenderer.update(camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
+        let skyFogStart = targetFogStart, skyFogEnd = targetFogEnd;
+
+        if (presetIndex === 5 && fogSource === env && !waterVolume) {
+            // C4 Env.int: StartRange5=4, EndRange5=10.
+            skyFogStart = Math.min(skyFogStart, 4 * 2048);
+            skyFogEnd = Math.min(skyFogEnd, 10 * 2048);
+        }
+
+        this.skyRenderer.update(camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, skyFogStart, skyFogEnd, sector, targetClearColor, skyVisibility);
 
         const clearColorThree = new Color().setRGB(targetClearColor.r / 255, targetClearColor.g / 255, targetClearColor.b / 255);
         this.renderer.setClearColor(clearColorThree);
@@ -2425,6 +2469,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         GLOBAL_UNIFORMS.fogColor.value.copy(fogColorThree);
         if (GLOBAL_UNIFORMS.fogNear) GLOBAL_UNIFORMS.fogNear.value = targetFogStart;
         if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
+        GLOBAL_UNIFORMS.clippingSphere.value.set(fogPosition.x, fogPosition.y, fogPosition.z, targetFogEnd - fogCamera.position.distanceTo(fogPosition)); // stays inside the culling camera's range
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {
@@ -3573,7 +3618,7 @@ function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEm
             let fallbackMaterial = fallbackCache.get(key);
 
             if (!fallbackMaterial) {
-                fallbackMaterial = new MeshBasicMaterial({ color: 0x777777, side: material.side, transparent: material.transparent, opacity: material.transparent ? 0.5 : 1, depthTest: material.depthTest, depthWrite: material.depthWrite, vertexColors });
+                fallbackMaterial = new MeshBasicMaterial({ color: 0x777777, side: material.side, transparent: material.transparent, alphaHash: !material.transparent, opacity: material.transparent ? 0.5 : 1, depthTest: material.depthTest, depthWrite: material.depthWrite, vertexColors });
                 fallbackMaterial.visible = material.visible;
                 fallbackMaterial.blending = material.blending;
                 (fallbackMaterial as any).isSectorFallbackMaterial = true;
@@ -3594,7 +3639,7 @@ function stageSectorWarmup(sector: SectorObject, root: THREE.Object3D, releaseEm
         mesh.material = Array.isArray(mesh.material) ? fallback : fallback[0];
     });
 
-    return { sector, materialQueue, warmedTextures: new Set(), lightingQueue, fallbackMaterials: new Set(fallbackCache.values()), releaseEmitters };
+    return { sector, root, materialQueue, warmedTextures: new Set(), lightingQueue, fallbackMaterials: new Set(fallbackCache.values()), releaseEmitters };
 }
 
 function restoreSectorMaterials(job: SectorWarmup_T): void {

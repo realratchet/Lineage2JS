@@ -5,6 +5,11 @@
 #include <envmap_pars_vertex>
 #include <color_pars_vertex>
 #include <fog_pars_vertex>
+varying float vRangeAlpha;
+uniform vec4 clippingSphere;
+uniform float clippingFade;
+attribute float sectorFade;
+varying float vSectorFade;
 #include <morphtarget_pars_vertex>
 #include <skinning_pars_vertex>
 #include <logdepthbuf_pars_vertex>
@@ -143,6 +148,8 @@ void main() {
     #include <worldpos_vertex>
     #include <envmap_vertex>
     #include <fog_vertex>
+    vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
+    vSectorFade = sectorFade;
 
     #ifdef USE_UV_TEXTURE
         float u = (terrainIndex + 0.5) / uvsSize.x;
