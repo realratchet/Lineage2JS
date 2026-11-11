@@ -27,6 +27,7 @@ import BaseEmitter from "../objects/emitters/base-emitter";
 import type { Vector3Arr } from "@l2js/engine";
 
 const arrMoverPawns: BaseActor[] = [];
+const arrPhysicsVolumeClass: ScriptValue_T[] = ["PhysicsVolume"];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
 const tmpZoneLocation = new Vector3();
 const tmpVolumeLocation = new Vector3();
@@ -209,7 +210,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const location = query.location, ignoreBases = query.ignoreBases;
         let hit = this.collisionWorld.moveActor(query, notify ? contacts : null);
         if (hit) hit = { ...hit, location: hit.location.clone(), normal: hit.normal.clone() };
-        pawn.setUnrealScriptProperty("Location", location.toArray());
+        pawn.setUnrealScriptProperty("Location", [location.x, location.y, location.z]);
         if (rotation) this.setActorRotation(pawn, rotation);
         if (hasBasedActors && !transform.moveBasedActors(oldLocation, previousRotation)) {
             const delta = (pawn.getUnrealScriptProperty("Location") as Vector3Arr).map((value, index) => Math.fround(value - oldLocation[index])) as Vector3Arr;
@@ -348,7 +349,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         for (const volume of candidates) {
             if (!volume) continue;
             const script = volume.getComponent("script") as any;
-            if (!script.getVM().invokeNative(volume, volume, 303, "IsA", ["PhysicsVolume"])) continue;
+            if (!script.getVM().invokeNative(volume, volume, 303, "IsA", arrPhysicsVolumeClass)) continue;
             if ((volume.getUnrealScriptProperty("Priority") as number) <= (selected.getUnrealScriptProperty("Priority") as number)) continue;
             if (useTouching && !volume.encompasses(location)) continue;
             selected = volume;
@@ -356,6 +357,13 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         return selected;
     }
+    protected isTouchingPhysicsVolume(actor: BaseActor | CollidingMesh): boolean {
+        for (const volume of actor.getUnrealScriptProperty("Touching") as unknown as PhysicsVolume[])
+            if (volume && volume.getComponent<ScriptComponent>("script").getVM().invokeNative(volume, volume, 303, "IsA", arrPhysicsVolumeClass)) return true;
+
+        return false;
+    }
+
     public updatePawnWaterHitEffect(owner: BaseActor | CollidingMesh, volume: PhysicsVolume): void {
         if (!volume || !volume.getUnrealScriptProperty("bL2WaterVolume")) return;
 
@@ -511,9 +519,14 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         tmpZoneLocation.fromArray(pawn.getUnrealScriptProperty("Location") as number[]);
         tmpZoneLocation.set(Math.fround(tmpZoneLocation.x), Math.fround(tmpZoneLocation.y), Math.fround(tmpZoneLocation.z));
         const touching = !!pawn.getUnrealScriptProperty("bCollideActors") && !test && !forceRefresh;
-        const body = this.getPhysicsVolume(level, tmpZoneLocation, pawn, touching);
-        const head = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z + 13)), pawn, touching);
-        const foot = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z - pawn.getCollisionHeight())), pawn, touching);
+        let body: PhysicsVolume, head: PhysicsVolume, foot: PhysicsVolume;
+
+        if (touching && !(pawn as BaseActor).scriptBase && !this.isTouchingPhysicsVolume(pawn)) body = head = foot = (render.getLevel() || level).getDefaultPhysicsVolume();
+        else {
+            body = this.getPhysicsVolume(level, tmpZoneLocation, pawn, touching);
+            head = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z + 13)), pawn, touching);
+            foot = this.getPhysicsVolume(level, tmpVolumeLocation.copy(tmpZoneLocation).setZ(Math.fround(tmpZoneLocation.z - pawn.getCollisionHeight())), pawn, touching);
+        }
         const oldBody = pawn.getUnrealScriptProperty("PhysicsVolume") as unknown as PhysicsVolume;
 
         if (body !== oldBody) {

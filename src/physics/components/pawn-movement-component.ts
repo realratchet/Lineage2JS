@@ -260,11 +260,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             return;
         }
 
-        const isInteractive = this.isInteractive();
+        this.collisionProfile.collideActors = this.collideActors;
 
-        this.collisionProfile.collideActors = this.collideActors && isInteractive;
-
-        if (!this.rigidbody || !isInteractive) {
+        if (!this.rigidbody) {
             this.checkAnimationState(deltaTime);
             return;
         }
@@ -1820,9 +1818,12 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         const rate = parent.getUnrealScriptProperty("NonAttackSpeedRate") as number, delta = parent.getUnrealScriptProperty("ValidateLocationSpeed") as number;
 
-        parent.setUnrealScriptProperty("GroundSpeed", Math.fround(this.getCurSpeed(0) * rate + delta));
-        parent.setUnrealScriptProperty("WaterSpeed", Math.fround(this.getCurSpeed(1) * rate + delta));
-        parent.setUnrealScriptProperty("AirSpeed", Math.fround(this.getCurSpeed(2) * rate + delta));
+        for (let environment = 0; environment < 3; environment++) {
+            const name = environment === 0 ? "GroundSpeed" : environment === 1 ? "WaterSpeed" : "AirSpeed";
+            const speed = Math.fround(this.getCurSpeed(environment) * rate + delta);
+
+            if (parent.getUnrealScriptProperty(name) !== speed) parent.setUnrealScriptProperty(name, speed);
+        }
     }
 
     protected getMovementSpeed(environment = -1): number {

@@ -37,8 +37,11 @@ import SkeletalAnimationMixer from "../objects/skeletal-animation-mixer";
 import LocalSpaceSkeleton from "../objects/local-space-skeleton";
 import type GroundPickup from "../objects/ground-pickup";
 import ShadowProjector from "../objects/shadow-projector";
+import PawnCrowd from "../objects/pawn-crowd";
+import boneAtlas from "../objects/bone-atlas";
+import type PawnMesh from "../objects/pawn-mesh";
 import type DynamicLight from "../objects/dynamic-light";
-import { NUM_ACTOR_LIGHTS } from "../materials/mesh-static-material/mesh-static-material";
+import { NUM_ACTOR_LIGHTS, type default as MeshStaticMaterial } from "../materials/mesh-static-material/mesh-static-material";
 import type { ZoneObject, SectorObject, FogInfoObject } from "../objects/zone-object";
 import { IEngineComponent, IObject } from "../game/components";
 import type GameManager from "../game/game-manager";
@@ -318,6 +321,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected viewportSceneCanvas: HTMLCanvasElement = null;
     protected readonly manuallyHiddenEmitterUuids: Set<string> = new Set();
     protected readonly particleBatcher = new InstancedSpriteBatcher();
+    protected readonly pawnCrowd: PawnCrowd;
     protected readonly visibleWorldBatchEmitters: any[] = [];
     protected readonly arrViewportBatchEmitters: any[] = [];
     protected readonly nameplateDepth: NameplateDepth;
@@ -329,6 +333,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected pawnLimit = 10000;
     protected readonly arrVisiblePawns: PawnRenderableComponent[] = [];
     protected pawnShadow = true;
+    protected pawnRelightDistanceSq = 0; // retail relights on any root bone movement
     protected pawnShadowLimited = false;
     protected pawnShadowFrameTime = 1000 / 60;
     protected pawnShadowLowFrameRateTime = 0;
@@ -452,8 +457,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         (this.camera as any)._reversedDepth = this.renderer.capabilities.reversedDepthBuffer;
         this.camera.updateProjectionMatrix();
         const render = this.renderer.render;
+        this.pawnCrowd = new PawnCrowd(this.renderer);
         this.renderer.render = (scene, camera) => {
-            if (scene === this.scene) this.worldCamera = camera;
+            if (scene === this.scene) {
+                this.worldCamera = camera;
+                this.pawnCrowd.begin();
+            }
             setReversedDepth(this.renderer, camera.reversedDepth);
             render.call(this.renderer, scene, camera);
         };
@@ -468,6 +477,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const renderBufferDirect = this.renderer.renderBufferDirect;
         this.renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
             if (group && group.count === 0) return;
+            if ((object as PawnMesh).isPawnMesh) {
+                if (scene === this.scene && !material.transparent && this.pawnCrowd.accept(object as PawnMesh)) return;
+                boneAtlas.upload(this.renderer);
+            } else if (scene === this.scene && (object as LitSkinnedMesh).isLitSkinnedMesh && (object as LitSkinnedMesh).actorRenderable && !material.transparent && this.pawnCrowd.acceptPart(object as LitSkinnedMesh, material as MeshStaticMaterial, group)) return;
+
+            if (!(object as PawnMesh).isPawnMesh && (object as LitSkinnedMesh).skeleton && ((object as LitSkinnedMesh).skeleton as LocalSpaceSkeleton).isAtlasPacked) ((object as LitSkinnedMesh).skeleton as LocalSpaceSkeleton).resolveMatrices();
 
             this.nameplateDepth.beforeRender(material, object);
             renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
@@ -478,6 +493,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.dispose = () => {
             this.skillLightProbe.dispose();
             this.particleBatcher.dispose();
+            this.pawnCrowd.dispose();
             disposeStaticLighting(this.renderer);
             this.nameplateDepth.dispose();
             this.sectorOcclusion.dispose();
@@ -557,6 +573,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.objectGroup.name = "SectorGroup"
         this.scene.add(this.objectGroup);
+        this.scene.add(this.pawnCrowd);
         this.scene.add(this.colliderOverlay);
         this.scene.add(this.getWaterEffects().underWaterEffect);
         this.objectGroup.add(this.particleBatcher.root);
@@ -1528,6 +1545,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
+    public releasePawnParts(mesh: LitSkinnedMesh): void { this.pawnCrowd.unregisterParts(mesh); }
     public getPawnRange(): number { return this.pawnRange ?? this.manGame.getComponent("asset").userConfig.clippingRange.pawn; }
     public setPawnRange(range: number): void {
         if (!Number.isFinite(range) || range <= 0) throw new Error(`Invalid pawn range '${range}'.`);
@@ -1674,6 +1692,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
     // AShadowProjector::UpdateLightInfo 0x9363d0: daylight sun or straight down, never actor lights.
     public setPawnShadow(enabled: boolean) { this.pawnShadow = enabled; }
 
+    public setPawnRelightDistance(distance: number) {
+        if (!Number.isFinite(distance) || distance < 0) throw new Error(`Invalid pawn relight distance '${distance}'.`);
+
+        this.pawnRelightDistanceSq = distance * distance;
+    }
+
     public setUseTrilinear(enabled: boolean) { setUseTrilinear(enabled); }
 
     public setTextureDetail(detail: number) { setTextureDetail(this.renderer, detail); }
@@ -1790,7 +1814,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const center = sphere ? sphere.center : state.position;
         const radius = sphere ? sphere.radius : 24;
         const lightingSphere = renderable ? renderable.getLightingSphere() : sphere;
-        const rootChanged = !state.lightingRootPosition.equals(lightingSphere ? lightingSphere.center : center);
+        const rootChanged = state.lightingRootPosition.distanceToSquared(lightingSphere ? lightingSphere.center : center) > this.pawnRelightDistanceSq;
         const isSpecialLit = (actor as BaseActor).isActor && !!(actor as BaseActor).getUnrealScriptProperty("bSpecialLit");
         const specialLitChanged = state.lightingSpecialLit !== isSpecialLit;
         const moved = state.lightingPosition.distanceToSquared(center) >= PAWN_LIGHTING_MOVE_DISTANCE_SQ;

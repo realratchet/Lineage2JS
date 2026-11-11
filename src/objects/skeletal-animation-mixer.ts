@@ -1,11 +1,14 @@
 import { AnimationMixer, AnimationAction, KeyframeTrack, Object3D, NormalAnimationBlendMode, AdditiveAnimationBlendMode, InterpolateLinear, LinearInterpolant, Quaternion, QuaternionLinearInterpolant } from "three";
 
-type RootState_T = { object: Object3D, poseRequirements: PoseRequirements_T, frame: number, count: number, checkedFrame: number, deferredFrame: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindingVersion: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazyDurations: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
+type RootState_T = { object: Object3D, skeleton: ClipPosed_T, poseRequirements: PoseRequirements_T, frame: number, count: number, checkedFrame: number, deferredFrame: number, appliedFrame: number, activeBindings: number, constantState: ActionState_T, constantFrame: number, constantVersion: number, fastActions: any[], fastTimes: number[], slowActions: any[], bindingCount: number, bindingVersion: number, bindings: any[], bindingStates: BindingState_T[], lazyFrame: number, lazyActions: ActionState_T[], lazyTimes: number[], lazySlowActions: any[], lazySlowTimes: number[], lazySlowWeights: number[] };
 type PoseRequirements_T = { version: number };
-type BindingState_T = { root: RootState_T, property: any, target: Object3D, frame: number, value: ArrayLike<number>, x: number, y: number, z: number, w: number, wasFast: boolean, isLazyBone: boolean, lazyVersion: number };
+type BindingState_T = { root: RootState_T, target: Object3D, frame: number, wasFast: boolean, isLazyBone: boolean, lazyVersion: number };
 type TrackResult_T = { frame: number, time: number, value: ArrayLike<number> };
-type ChannelState_T = { binding: BindingState_T, interpolant: any, constant: Float32Array, linearConstant: boolean, result: TrackResult_T, kind: number, index: number };
-type ActionState_T = { root: RootState_T, channels: ChannelState_T[], activeChannels: ChannelState_T[], activeVersion: number };
+type ChannelState_T = { binding: BindingState_T, property: any, track: KeyframeTrack, interpolant: any, constant: Float32Array, result: TrackResult_T, kind: number, index: number };
+type ActionState_T = { root: RootState_T, channels: ChannelState_T[], activeChannels: ChannelState_T[], varyingChannels: ChannelState_T[], activeVersion: number, clipPose: ClipPose_T };
+
+export type ClipPose_T = { tracks: { bone: Object3D, track: KeyframeTrack, isQuaternion: boolean }[], framerate: number, lastFrame: number };
+type ClipPosed_T = { setClipPose(clipPose: ClipPose_T, clipTime: number): void, clearClipPose(): void };
 
 const cacheDeferredRoots = new WeakMap<Object3D, SkeletalAnimationMixer>();
 const cachePoseRequirements = new WeakMap<Object3D, PoseRequirements_T>();
@@ -103,11 +106,6 @@ function isLazy(binding: any, state: BindingState_T, frame: number): boolean { /
     return !!state && state.frame !== frame && state.root.lazyFrame === frame && binding.cumulativeWeight === 0 && binding.cumulativeWeightAdditive === 0 && isLazyBone(state);
 }
 
-function copyPrevious(state: BindingState_T, target: Float64Array, offset: number, size: number): void {
-    target[offset] = state.x; target[offset + 1] = state.y; target[offset + 2] = state.z;
-    if (size === 4) target[offset + 3] = state.w;
-}
-
 export class SkeletalAnimationMixer extends AnimationMixer {
     protected readonly suspendedRoots = new WeakMap<Object3D, number>();
     protected readonly rootStates = new WeakMap<Object3D, RootState_T>();
@@ -118,6 +116,8 @@ export class SkeletalAnimationMixer extends AnimationMixer {
     protected readonly arrBindingStates: BindingState_T[] = [];
     protected readonly arrBindingRootEnds: number[] = [];
     protected readonly arrDeferredRoots: RootState_T[] = [];
+    protected readonly arrFastActions: AnimationAction[] = [];
+    protected readonly arrFastTimes: number[] = [];
     protected bindingVersion: number = 0;
     protected cachedBindingVersion: number = -1;
     protected frame: number = 0;
@@ -172,21 +172,21 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         const root = action.getRoot() as Object3D;
         let rootState = this.rootStates.get(root);
-        if (!rootState) this.rootStates.set(root, rootState = { object: root, poseRequirements: getPoseRequirements(root), frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, fastActions: [], fastTimes: [], slowActions: [], bindingCount: 0, bindingVersion: -1, bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazyDurations: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
+        if (!rootState) this.rootStates.set(root, rootState = { object: root, skeleton: (root as any).skeleton && (root as any).skeleton.setClipPose ? (root as any).skeleton : null, poseRequirements: getPoseRequirements(root), frame: -1, count: 0, checkedFrame: -1, deferredFrame: -1, appliedFrame: -1, activeBindings: 0, constantState: null, constantFrame: -1, constantVersion: -1, fastActions: [], fastTimes: [], slowActions: [], bindingCount: 0, bindingVersion: -1, bindings: [], bindingStates: [], lazyFrame: -1, lazyActions: [], lazyTimes: [], lazySlowActions: [], lazySlowTimes: [], lazySlowWeights: [] });
         const channels: ChannelState_T[] = [], tracks = action.getClip().tracks;
 
         for (let i = 0; i < tracks.length; i++) {
             const mixer = (action as any)._propertyBindings[i], binding = mixer.binding;
             const property = binding.resolvedProperty;
             if (!binding.node || !binding.node.isBone || !property || !(property.isVector3 || property.isQuaternion)) {
-                state = { root: rootState, channels: null, activeChannels: null, activeVersion: -1 };
+                state = { root: rootState, channels: null, activeChannels: null, varyingChannels: null, activeVersion: -1, clipPose: null };
                 this.actionStates.set(action, state);
                 return state;
             }
 
             let target = this.bindingStates.get(mixer);
             if (!target) {
-                this.bindingStates.set(mixer, target = { root: rootState, property, target: binding.targetObject, frame: -1, value: null, x: 0, y: 0, z: 0, w: 0, wasFast: false, isLazyBone: false, lazyVersion: -1 });
+                this.bindingStates.set(mixer, target = { root: rootState, target: binding.targetObject, frame: -1, wasFast: false, isLazyBone: false, lazyVersion: -1 });
                 this.bindingVersion++;
             }
             const track = tracks[i], size = track.getValueSize();
@@ -197,16 +197,21 @@ export class SkeletalAnimationMixer extends AnimationMixer {
                     if (track.values[j] !== track.values[j % size]) { constant = null; break; }
                 this.constantTracks.set(track, constant);
             }
-            const linearConstant = !!constant && size === 3 && track.times.length === 2 && track.times[0] === 0 && track.times[1] === action.getClip().duration;
-            if (track.getInterpolation() !== InterpolateLinear || size === 3 && !linearConstant) constant = null;
+            if (track.getInterpolation() !== InterpolateLinear) constant = null;
             let result = this.trackResults.get(track);
             if (!result) this.trackResults.set(track, result = { frame: -1, time: 0, value: null });
             const interpolant = (action as any)._interpolants[i];
             const kind = interpolant.constructor === LinearInterpolant ? 1 : interpolant.constructor === QuaternionLinearInterpolant ? 2 : 0;
-            channels.push({ binding: target, interpolant, constant, linearConstant, result, kind, index: 1 });
+            channels.push({ binding: target, property, track, interpolant, constant, result, kind, index: 1 });
         }
 
-        state = { root: rootState, channels, activeChannels: null, activeVersion: -1 };
+        const clip = action.getClip() as any, lastFrame = Math.round(clip.duration * clip.framerate);
+        const isSampled = clip.framerate > 0 && Math.abs(clip.duration * clip.framerate - lastFrame) < 1e-3 && channels.every(channel => channel.constant || channel.kind !== 0 && (channel.property === channel.binding.target.position || channel.property === channel.binding.target.quaternion) && channel.track.times.every(time => {
+            const frame = time * clip.framerate;
+            return frame >= 0 && frame <= lastFrame + 1e-3 && Math.abs(frame - Math.round(frame)) < 1e-3;
+        }));
+
+        state = { root: rootState, channels, activeChannels: null, varyingChannels: null, activeVersion: -1, clipPose: !isSampled ? null : { tracks: channels.filter(channel => !channel.constant).map(channel => ({ bone: channel.binding.target, track: channel.track, isQuaternion: channel.kind === 2 })), framerate: clip.framerate, lastFrame } };
         this.actionStates.set(action, state);
         return state;
     }
@@ -216,7 +221,13 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         if (this.cachedBindingVersion !== this.bindingVersion) {
             this.arrBindingStates.length = mixer._nActiveBindings;
             this.arrBindingRootEnds.length = mixer._nActiveBindings;
+            for (let i = 0; i < mixer._nActiveBindings; i++) {
+                const root = this.rootStates.get(mixer._bindings[i].binding.rootNode);
+                if (root) root.activeBindings = 0;
+            }
             for (let i = mixer._nActiveBindings - 1, end = mixer._nActiveBindings; i >= 0; i--) {
+                const root = this.rootStates.get(mixer._bindings[i].binding.rootNode);
+                if (root) root.activeBindings++;
                 this.arrBindingStates[i] = this.bindingStates.get(mixer._bindings[i]);
                 this.arrBindingRootEnds[i] = end;
                 if (i > 0 && mixer._bindings[i - 1].binding.rootNode !== mixer._bindings[i].binding.rootNode) end = i;
@@ -231,8 +242,8 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         for (let i = 0; i < mixer._nActiveBindings; i++) {
             const binding = mixer._bindings[i], state = states[i];
             if (!state || !state.wasFast) continue;
-            copyPrevious(state, binding.buffer, binding.valueSize, binding.valueSize);
-            copyPrevious(state, binding.buffer, binding.valueSize * 2, binding.valueSize);
+            binding.binding.getValue(binding.buffer, binding.valueSize);
+            binding.binding.getValue(binding.buffer, binding.valueSize * 2);
             state.wasFast = false;
         }
     }
@@ -256,7 +267,9 @@ export class SkeletalAnimationMixer extends AnimationMixer {
             this.resetBindings();
         }
 
+        this.getBindingStates();
         deltaTime *= this.timeScale;
+        const bindingVersion = this.bindingVersion;
         const time = this.time += deltaTime, direction = this.direction = Math.sign(deltaTime), accuIndex = mixer._accuIndex ^= 1;
 
         for (let i = 0; i < count; i++) {
@@ -276,6 +289,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
             }
 
             if (!isFast) {
+                if (state && state.root.skeleton) state.root.skeleton.clearClipPose();
                 if (state && state.root.deferredFrame === frame) {
                     advanceAction(action, time, deltaTime, direction);
                     state.root.slowActions.push(action);
@@ -289,10 +303,21 @@ export class SkeletalAnimationMixer extends AnimationMixer {
             if (state.root.deferredFrame === frame) {
                 state.root.fastActions.push(action);
                 state.root.fastTimes.push(clipTime);
-            } else this.evaluateChannels(state, clipTime, action.getClip().duration, frame);
+            } else {
+                this.arrFastActions.push(action);
+                this.arrFastTimes.push(clipTime);
+            }
         }
 
-        const states = this.getBindingStates();
+        for (let i = 0; i < this.arrFastActions.length; i++) {
+            const action = this.arrFastActions[i];
+
+            if (action.isScheduled()) this.evaluateChannels(this.getActionState(action), this.arrFastTimes[i], frame);
+        }
+        this.arrFastActions.length = 0;
+        this.arrFastTimes.length = 0;
+
+        const states = this.getBindingStates(), canSkip = bindingVersion === this.bindingVersion; // a listener may have lent bindings mid-loop
         for (let i = 0; i < mixer._nActiveBindings; i++) {
             const binding = mixer._bindings[i], state = states[i], root = state ? state.root : this.rootStates.get(binding.binding.rootNode);
             if (root && root.deferredFrame === frame) {
@@ -303,7 +328,8 @@ export class SkeletalAnimationMixer extends AnimationMixer {
                 const index = root.bindingCount++;
                 root.bindings[index] = binding;
                 root.bindingStates[index] = state;
-            } else if (!isLazy(binding, state, frame)) this.applyBinding(binding, state, frame, accuIndex);
+            } else if (canSkip && root && root.appliedFrame === frame) i = this.arrBindingRootEnds[i] - 1;
+            else if (!isLazy(binding, state, frame)) this.applyBinding(binding, state, frame, accuIndex);
         }
 
         for (const root of this.arrDeferredRoots) {
@@ -327,7 +353,7 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
             for (let i = 0; i < root.fastActions.length; i++) {
                 const action = root.fastActions[i];
-                this.evaluateChannels(this.getActionState(action), root.fastTimes[i], action.getClip().duration, frame);
+                this.evaluateChannels(this.getActionState(action), root.fastTimes[i], frame);
             }
             for (let i = 0; i < root.slowActions.length; i++) root.slowActions[i]._update(this.time, 0, this.direction, accuIndex);
             for (let i = 0; i < root.bindings.length; i++)
@@ -338,10 +364,10 @@ export class SkeletalAnimationMixer extends AnimationMixer {
             const mixer = this as any, states = this.getBindingStates();
 
             for (let i = 0; i < root.lazyActions.length; i++) {
-                const channels = root.lazyActions[i].channels, clipTime = root.lazyTimes[i], weight1 = clipTime / root.lazyDurations[i];
+                const channels = root.lazyActions[i].channels, clipTime = root.lazyTimes[i];
 
                 for (let j = 0; j < channels.length; j++)
-                    if (isLazyBone(channels[j].binding)) this.evaluateChannel(channels[j], clipTime, 1 - weight1, weight1, frame);
+                    if (isLazyBone(channels[j].binding)) this.evaluateChannel(channels[j], clipTime, frame);
             }
             for (let i = 0; i < root.lazySlowActions.length; i++) {
                 const action = root.lazySlowActions[i], channels = this.getActionState(action).channels, clipTime = root.lazySlowTimes[i], weight = root.lazySlowWeights[i];
@@ -356,6 +382,10 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
             root.lazyFrame = -1;
             for (let i = 0; i < mixer._nActiveBindings; i++) {
+                if (mixer._bindings[i].binding.rootNode !== object) {
+                    i = this.arrBindingRootEnds[i] - 1;
+                    continue;
+                }
                 const state = states[i];
                 if (state && state.root === root && isLazyBone(state)) this.applyBinding(mixer._bindings[i], state, frame, accuIndex);
             }
@@ -364,22 +394,41 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         if (root.deferredFrame !== frame && root.lazyFrame !== frame) cacheDeferredRoots.delete(object);
     }
 
-    protected evaluateChannels(state: ActionState_T, clipTime: number, duration: number, frame: number): void {
-        const weight1 = clipTime / duration, weight0 = 1 - weight1, root = state.root, poseRequirementVersion = root.poseRequirements.version;
-        if (state.activeVersion !== poseRequirementVersion) {
+    protected evaluateChannels(state: ActionState_T, clipTime: number, frame: number): void {
+        const root = state.root, poseRequirements = root.poseRequirements;
+        const isComplete = this.cachedBindingVersion === this.bindingVersion && state.channels.length === root.activeBindings;
+        const isSteady = isComplete && state.activeVersion === poseRequirements.version && root.constantState === state && root.constantFrame === frame - 1 && root.constantVersion === this.bindingVersion;
+
+        if (root.skeleton) {
+            if (isSteady && state.clipPose) root.skeleton.setClipPose(state.clipPose, clipTime);
+            else root.skeleton.clearClipPose();
+        }
+        if (state.activeVersion !== poseRequirements.version) {
             state.activeChannels = state.channels.filter(channel => !isLazyBone(channel.binding)); // bones that skin nothing are posed only when something asks for them
-            state.activeVersion = poseRequirementVersion;
+            state.varyingChannels = state.activeChannels.filter(channel => !channel.constant);
+            state.activeVersion = poseRequirements.version;
         }
 
-        const channels = state.activeChannels;
+        if (isSteady) {
+            const channels = state.varyingChannels;
 
-        for (let j = 0; j < channels.length; j++) this.evaluateChannel(channels[j], clipTime, weight0, weight1, frame);
+            for (let j = 0; j < channels.length; j++) channels[j].property.fromArray(this.getChannelValue(channels[j], clipTime, frame));
+        } else {
+            const channels = state.activeChannels;
 
-        if (channels.length === state.channels.length) return;
+            for (let j = 0; j < channels.length; j++) this.evaluateChannel(channels[j], clipTime, frame);
+        }
+
+        if (isComplete) {
+            root.appliedFrame = frame;
+            root.constantState = state;
+            root.constantFrame = frame;
+            root.constantVersion = this.bindingVersion;
+        }
+        if (state.activeChannels.length === state.channels.length) return;
         this.markLazy(root, frame);
         root.lazyActions.push(state);
         root.lazyTimes.push(clipTime);
-        root.lazyDurations.push(duration);
     }
 
     protected updateSlowAction(action: any, state: ActionState_T, time: number, deltaTime: number, direction: number, accuIndex: number, frame: number): void { // AnimationAction._update without the lazy bones
@@ -419,51 +468,35 @@ export class SkeletalAnimationMixer extends AnimationMixer {
         if (root.lazyFrame === frame) return;
 
         root.lazyFrame = frame;
-        root.lazyActions.length = 0; root.lazyTimes.length = 0; root.lazyDurations.length = 0;
+        root.lazyActions.length = 0; root.lazyTimes.length = 0;
         root.lazySlowActions.length = 0; root.lazySlowTimes.length = 0; root.lazySlowWeights.length = 0;
         cacheDeferredRoots.set(root.object, this);
     }
 
-    protected evaluateChannel(channel: ChannelState_T, clipTime: number, weight0: number, weight1: number, frame: number): void {
-        if (channel.linearConstant && weight1 > 0 && weight1 < 1) {
-            const value = channel.constant, target = channel.interpolant.resultBuffer;
-            target[0] = value[0] * weight0 + value[0] * weight1;
-            target[1] = value[1] * weight0 + value[1] * weight1;
-            target[2] = value[2] * weight0 + value[2] * weight1;
-            channel.binding.value = target;
-        } else if (channel.constant) channel.binding.value = channel.constant;
-        else {
-            const result = channel.result; // parts of one pawn and synced idles share clips, so most tracks repeat a (track, time) pair
-            if (result.frame !== frame || result.time !== clipTime) { result.frame = frame; result.time = clipTime; result.value = evaluateTrack(channel, clipTime); }
-            channel.binding.value = result.value;
-        }
-        channel.binding.frame = frame;
+    protected getChannelValue(channel: ChannelState_T, clipTime: number, frame: number): ArrayLike<number> {
+        if (channel.constant) return channel.constant;
+
+        const result = channel.result; // parts of one pawn and synced idles share clips, so most tracks repeat a (track, time) pair
+        if (result.frame !== frame || result.time !== clipTime) { result.frame = frame; result.time = clipTime; result.value = evaluateTrack(channel, clipTime); }
+        return result.value;
+    }
+
+    protected evaluateChannel(channel: ChannelState_T, clipTime: number, frame: number): void {
+        const state = channel.binding;
+
+        state.frame = frame;
+        state.wasFast = true;
+        channel.property.fromArray(this.getChannelValue(channel, clipTime, frame));
     }
 
     protected applyBinding(binding: any, state: BindingState_T, frame: number, accuIndex: number): void {
-        if (!state || state.frame !== frame) {
-            if (this.suspendedRoots.has(binding.binding.rootNode)) return;
-            if (state && state.wasFast) {
-                copyPrevious(state, binding.buffer, (2 - accuIndex) * binding.valueSize, binding.valueSize);
-                state.wasFast = false;
-            }
-            binding.apply(accuIndex);
-            return;
+        if (state && (state.frame === frame || state.wasFast && state.root.appliedFrame === frame)) return;
+        if (this.suspendedRoots.has(binding.binding.rootNode)) return;
+        if (state && state.wasFast) {
+            binding.binding.getValue(binding.buffer, (2 - accuIndex) * binding.valueSize); // the mixer compares against the last applied value, which the fast path never stored
+            state.wasFast = false;
         }
-
-        const property = state.property, value = state.value, size = binding.valueSize;
-        if (!state.wasFast) {
-            const offset = (2 - accuIndex) * size;
-            state.x = binding.buffer[offset]; state.y = binding.buffer[offset + 1]; state.z = binding.buffer[offset + 2];
-            if (size === 4) state.w = binding.buffer[offset + 3];
-        }
-        if (state.x !== value[0] || state.y !== value[1] || state.z !== value[2] || size === 4 && state.w !== value[3]) {
-            property.fromArray(value);
-            state.target.matrixWorldNeedsUpdate = true;
-            state.x = value[0]; state.y = value[1]; state.z = value[2];
-            if (size === 4) state.w = value[3];
-        }
-        state.wasFast = true;
+        binding.apply(accuIndex);
     }
 }
 

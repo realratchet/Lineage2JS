@@ -1,5 +1,7 @@
-import { Bone, BufferGeometry, Matrix4, Object3D, Skeleton, SkinnedMesh, Vector3 } from "three";
+import { Bone, BufferGeometry, KeyframeTrack, Matrix4, Object3D, Skeleton, SkinnedMesh, Vector3 } from "three";
 import { evaluateDeferredPose, invalidatePoseRequirements } from "./skeletal-animation-mixer";
+import type { ClipPose_T } from "./skeletal-animation-mixer";
+import boneAtlas, { POSE_CLIP, POSE_LOCAL_MATRIX, POSE_SKIN_MATRIX, POSE_TRANSFORM, writePoseMatrix } from "./bone-atlas";
 
 const tmpMeshInverse = new Matrix4();
 const tmpBoneMatrix = new Matrix4();
@@ -63,6 +65,9 @@ export class LocalSpaceSkeleton extends Skeleton {
     public posePaused: boolean = false;
     public rootBoneSource: Bone = null;
     public isAtlasPacked: boolean = false;
+    public atlasOffset: number = -1;
+    protected atlasReferences: number = 0;
+    protected isMatrixStale: boolean = false;
 
     protected poseFrame: number = 0;
     protected parents: Int32Array = null;
@@ -71,6 +76,13 @@ export class LocalSpaceSkeleton extends Skeleton {
     protected ownsBones: boolean = false;
     protected requiredBones: Set<number> = null;
     protected activeBones: number[] = null;
+    protected attachmentBones: number[] = null;
+    protected explicitBones: Set<number> = null;
+    protected sampledBones: number[] = null;
+    protected evaluatedBones: number[] = null;
+    protected boneIndices: Map<Object3D, number> = null;
+    protected clipPose: ClipPose_T = null;
+    protected readonly cacheTrackAddresses = new Map<KeyframeTrack, number>();
 
     public addGeometry(geometry: BufferGeometry): void {
         if (!geometry.getAttribute("skinIndex")) return;
@@ -99,11 +111,47 @@ export class LocalSpaceSkeleton extends Skeleton {
         this.activeBones = null;
     }
 
+    public retainAtlas(): void {
+        if (this.atlasReferences++ > 0) return;
+        if (this.parents === null) this.claimBones();
+
+        this.atlasOffset = boneAtlas.allocate(this.bones.length);
+        this.isAtlasPacked = true;
+        boneAtlas.setBind(this.atlasOffset, this.boneInverses, this.parents);
+        this.writeAtlasPose();
+    }
+
+    public releaseAtlas(isDisposed: boolean = false): void {
+        if (!this.isAtlasPacked || !isDisposed && --this.atlasReferences > 0) return;
+        if (this.clipPose && !isDisposed) {
+            evaluateDeferredPose(this.mesh, true);
+            this.clearClipPose();
+        }
+
+        this.atlasReferences = 0;
+
+        const offset = this.atlasOffset;
+
+        this.isAtlasPacked = false;
+        this.atlasOffset = -1;
+        boneAtlas.free(offset);
+        for (const track of this.cacheTrackAddresses.keys()) boneAtlas.releaseClip(track);
+        this.cacheTrackAddresses.clear();
+        if (!isDisposed) this.resolveMatrices();
+    }
+
+    public dispose(): void {
+        this.releaseAtlas(true);
+        super.dispose();
+    }
+
     public requireBone(index: number): void {
         if (index < 0) throw new Error(`Bone is not part of skeleton '${this.mesh.name}'.`);
-        if (!this.requiredBones || this.requiredBones.has(index)) return;
+        if (!this.explicitBones) this.explicitBones = new Set();
+        if (this.explicitBones.has(index)) return;
 
-        this.requiredBones.add(index);
+        this.explicitBones.add(index);
+        if (this.requiredBones) this.requiredBones.add(index);
         this.activeBones = null;
     }
 
@@ -248,6 +296,7 @@ export class LocalSpaceSkeleton extends Skeleton {
 
         if (this.attachments[index].absolute) this.attachments[index].absolute.removeFromParent();
         this.attachments.splice(index, 1);
+        this.activeBones = null;
         object.removeFromParent();
 
         if (!this.attachments.some(attachment => attachment.bone === bone))
@@ -272,48 +321,186 @@ export class LocalSpaceSkeleton extends Skeleton {
         if (this.posePaused) return;
 
         evaluateDeferredPose(this.mesh, this.activeBones === null);
+        if (this.activeBones === null) this.clipPose = null; // every bone was just posed, the mixer samples again on its next steady frame
 
+        if (this.isAtlasPacked) {
+            this.writeAtlasPose();
+            this.isMatrixStale = true;
+
+            if (this.ownsBones) {
+                for (let j = 0, len = this.attachmentBones.length; j < len; j++)
+                    if (this.attachmentBones[j] !== 0 || !this.rootBoneSource) this.composeLocal(this.attachmentBones[j]);
+
+                this.updateAttachments();
+            }
+        } else this.updateMatrices();
+
+        this.poseFrame = LocalSpaceSkeleton.renderFrame;
+    }
+
+    public resolveMatrices(): void {
+        if (!this.isMatrixStale) return;
+        if (this.clipPose) evaluateDeferredPose(this.mesh, true);
+
+        this.updateMatrices();
+    }
+
+    public setClipPose(clipPose: ClipPose_T, clipTime: number): void {
+        if (!this.isAtlasPacked || !this.ownsBones) return this.clearClipPose();
+
+        const pose = boneAtlas.getPose(), base = this.atlasOffset * 16;
+
+        if (this.clipPose !== clipPose) {
+            this.clipPose = null;
+            this.writeAtlasPose();
+
+            const sampled = this.sampledBones;
+
+            for (let j = 0, len = sampled.length; j < len; j++) {
+                const offset = base + sampled[j] * 16;
+
+                pose[offset + 3] = -1;
+                pose[offset + 11] = -1;
+                pose[offset + 12] = POSE_CLIP;
+                pose[offset + 13] = this.atlasOffset;
+            }
+            for (const { bone, track, isQuaternion } of clipPose.tracks) {
+                const index = this.boneIndices.get(bone);
+
+                if (index === undefined) continue; // a loose chain bone under this mesh
+                if (pose[base + index * 16 + 12] !== POSE_CLIP) continue;
+
+                let address = this.cacheTrackAddresses.get(track);
+
+                if (address === undefined) {
+                    address = boneAtlas.retainClip(track, clipPose.framerate, clipPose.lastFrame);
+                    this.cacheTrackAddresses.set(track, address);
+                }
+                pose[base + index * 16 + (isQuaternion ? 11 : 3)] = address;
+            }
+
+            this.clipPose = clipPose;
+            this.setPoseRequirements();
+        }
+
+        pose[base + 14] = Math.min(Math.max(clipTime * clipPose.framerate, 0), clipPose.lastFrame);
+        pose[base + 15] = clipPose.lastFrame;
+        boneAtlas.markDirty(this.atlasOffset, this.bones.length);
+    }
+
+    public clearClipPose(): void {
+        if (!this.clipPose) return;
+
+        this.clipPose = null;
+        if (this.activeBones) this.setPoseRequirements();
+    }
+
+    protected setPoseRequirements(): void {
+        const bones = this.bones;
+
+        for (let i = 0; i < bones.length; i++) (bones[i] as any).isPoseRequired = false;
+        for (const index of this.clipPose ? this.evaluatedBones : this.activeBones) (bones[index] as any).isPoseRequired = true;
+        invalidatePoseRequirements(this.mesh);
+    }
+
+    protected updateMatrices(): void {
         if (this.ownsBones) this.updateOwnedPose();
         else this.updateAttachedPose();
 
         if (this.boneTexture !== null) this.boneTexture.needsUpdate = true;
-        this.poseFrame = LocalSpaceSkeleton.renderFrame;
+        this.isMatrixStale = false;
     }
 
-    // Compose the mesh-space pose directly and freeze three's redundant world-space walk.
+    protected writeAtlasPose(): void {
+        const bones = this.bones, pose = boneAtlas.getPose(), base = this.atlasOffset * 16;
+
+        if (this.ownsBones) {
+            const active = this.getActiveBones(), written = this.clipPose ? this.evaluatedBones : active;
+
+            for (let j = 0, len = written.length; j < len; j++) {
+                const i = written[j], offset = base + i * 16;
+
+                if (i === 0 && this.rootBoneSource) {
+                    writePoseMatrix(this.composeLocal(0), pose, offset, POSE_LOCAL_MATRIX);
+                    continue;
+                }
+
+                const position = bones[i].position, quaternion = bones[i].quaternion, scale = bones[i].scale;
+
+                pose[offset] = position.x; pose[offset + 1] = position.y; pose[offset + 2] = position.z;
+                pose[offset + 4] = quaternion.x; pose[offset + 5] = quaternion.y; pose[offset + 6] = quaternion.z; pose[offset + 7] = quaternion.w;
+                pose[offset + 8] = scale.x; pose[offset + 9] = scale.y; pose[offset + 10] = scale.z;
+                pose[offset + 12] = POSE_TRANSFORM;
+            }
+        } else {
+            tmpMeshInverse.copy(this.mesh.matrixWorld).invert();
+
+            for (let i = 0, len = bones.length; i < len; i++) {
+                tmpBoneMatrix.multiplyMatrices(bones[i] ? bones[i].matrixWorld : tmpIdentity, this.boneInverses[i]);
+                tmpBoneMatrix.premultiply(tmpMeshInverse);
+                writePoseMatrix(tmpBoneMatrix, pose, base + i * 16, POSE_SKIN_MATRIX);
+            }
+        }
+
+        boneAtlas.markDirty(this.atlasOffset, bones.length);
+    }
+
+    protected getActiveBones(): number[] {
+        if (this.activeBones) return this.activeBones;
+
+        const bones = this.bones, parents = this.parents;
+        const active = this.requiredBones ? new Set(this.requiredBones) : new Set(bones.map((_bone, index) => index));
+        const attached = new Set<number>();
+
+        for (const attachment of this.attachments) active.add(attachment.bone);
+        for (const index of active)
+            for (let parent = parents[index]; parent >= 0; parent = parents[parent]) active.add(parent);
+        for (const attachment of this.attachments)
+            for (let index = attachment.bone; index >= 0; index = parents[index]) attached.add(index);
+
+        const evaluated = new Set(attached);
+
+        if (this.rootBoneSource) evaluated.add(0);
+        if (this.explicitBones)
+            for (const index of this.explicitBones)
+                for (let bone = index; bone >= 0; bone = parents[bone]) evaluated.add(bone);
+
+        this.activeBones = Array.from(active).sort((a, b) => a - b);
+        this.attachmentBones = Array.from(attached).sort((a, b) => a - b);
+        this.evaluatedBones = Array.from(evaluated).sort((a, b) => a - b);
+        this.sampledBones = this.activeBones.filter(index => !evaluated.has(index));
+        if (!this.boneIndices) this.boneIndices = new Map(bones.map((bone, index) => [bone, index]));
+        this.setPoseRequirements();
+
+        return this.activeBones;
+    }
+
+    protected composeLocal(index: number): Matrix4 {
+        const bone = this.bones[index], local = this.locals[index], parent = this.parents[index];
+
+        // UExtraSkeletalMeshInstance::GetFrame 0x96feba replaces the root pose with LowbodyBone.
+        if (index === 0 && this.rootBoneSource) this.getBonePose(0, local);
+        else local.compose(bone.position, bone.quaternion, bone.scale);
+
+        if (parent >= 0) local.premultiply(this.locals[parent]);
+
+        return local;
+    }
+
     protected updateOwnedPose(): void {
-        const bones = this.bones;
         const inverses = this.boneInverses;
         const matrices = this.boneMatrices;
-        const parents = this.parents;
+        const active = this.getActiveBones();
+
+        for (let j = 0, len = active.length; j < len; j++)
+            writeBoneMatrix(this.composeLocal(active[j]), inverses[active[j]], matrices, active[j] * 16);
+
+        this.updateAttachments();
+    }
+
+    protected updateAttachments(): void {
+        const bones = this.bones;
         const locals = this.locals;
-
-        if (!this.activeBones) {
-            const active = this.requiredBones ? new Set(this.requiredBones) : new Set(bones.map((_bone, index) => index));
-
-            for (const attachment of this.attachments) active.add(attachment.bone);
-            for (const index of active)
-                for (let parent = parents[index]; parent >= 0; parent = parents[parent]) active.add(parent);
-
-            this.activeBones = Array.from(active).sort((a, b) => a - b);
-            for (let i = 0; i < bones.length; i++) (bones[i] as any).isPoseRequired = active.has(i);
-            invalidatePoseRequirements(this.mesh);
-        }
-
-        for (let j = 0, len = this.activeBones.length; j < len; j++) {
-            const i = this.activeBones[j];
-            const bone = bones[i];
-            const local = locals[i];
-            const parent = parents[i];
-
-            // UExtraSkeletalMeshInstance::GetFrame 0x96feba replaces the root pose with LowbodyBone.
-            if (i === 0 && this.rootBoneSource) this.getBonePose(0, local);
-            else local.compose(bone.position, bone.quaternion, bone.scale);
-
-            if (parent >= 0) local.premultiply(locals[parent]);
-
-            writeBoneMatrix(local, inverses[i], matrices, i * 16);
-        }
 
         for (let i = 0, len = this.attachments.length; i < len; i++) {
             const attachment = this.attachments[i];

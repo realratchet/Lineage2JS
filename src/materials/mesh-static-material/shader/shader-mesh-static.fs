@@ -8,7 +8,15 @@ const float texModifierAlpha = -1.0;
 #endif
 uniform float opacity;
 #ifdef USE_PAWN_MATERIALS
-    flat varying int vPawnPart;
+    #ifdef USE_PAWN_CROWD
+        flat varying vec4 vPawnColor;
+        flat varying vec4 vPawnMaps;
+        flat varying vec4 vPawnParameters;
+        flat varying vec4 vPawnFlags;
+        flat varying vec3 vPawnTexModifierColor;
+    #else
+        flat varying int vPawnPart;
+    #endif
     varying vec2 vPawnSpecularUv;
     varying vec2 vPawnWorldSpecularUv;
     struct PawnMaterialData {
@@ -19,7 +27,9 @@ uniform float opacity;
         int envMode;
         bool visible;
     };
-    uniform vec4 pawnMaterialData[NUM_PAWN_PARTS * 4];
+    #ifndef USE_PAWN_CROWD
+        uniform vec4 pawnMaterialData[NUM_PAWN_PARTS * 4];
+    #endif
     uniform bool pawnSilhouette;
 #endif
 #ifdef USE_TERRAIN_DECORATION_FADE
@@ -589,8 +599,12 @@ void main() {
     #include <logdepthbuf_fragment>
 
     #ifdef USE_PAWN_MATERIALS
+        #ifdef USE_PAWN_CROWD
+            PawnMaterialData part = PawnMaterialData(vPawnColor, vPawnMaps, vPawnParameters, int(vPawnFlags.x), int(vPawnFlags.y), vPawnFlags.z > 0.5);
+        #else
         int partRow = vPawnPart * 4;
         PawnMaterialData part = PawnMaterialData(pawnMaterialData[partRow], pawnMaterialData[partRow + 1], pawnMaterialData[partRow + 2], int(pawnMaterialData[partRow + 3].x), int(pawnMaterialData[partRow + 3].y), pawnMaterialData[partRow + 3].z > 0.5);
+        #endif
         if (pawnSilhouette) { // same coverage as the per-part black FrontSide silhouette the shadow pass draws for unbatched meshes
             if (!part.visible || !gl_FrontFacing) discard;
             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -835,7 +849,11 @@ void main() {
     #endif
     
     #include <envmap_fragment>
-    outgoingLight *= texModifierColor;
+    #ifdef USE_PAWN_CROWD
+        outgoingLight *= vPawnTexModifierColor;
+    #else
+        outgoingLight *= texModifierColor;
+    #endif
 
     if (texModifierAlpha >= 0.0) {
         #ifdef USE_PAWN_MATERIALS

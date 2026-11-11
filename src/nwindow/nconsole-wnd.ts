@@ -251,6 +251,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.nwindow = new NWindowManager(asset, this.skin.textures);
         this.layer = new NDomLayer(this.nwindow);
         this.applyUIScale(Number(localStorage.getItem("option:UIScale") ?? 1));
+        this.manRender.setPawnRelightDistance(Number(localStorage.getItem("option:PawnRelightDistance") ?? 0));
         this.strings = this.nwindow.strings;
         for (const type of ["keydown", "keyup", "mousedown", "mouseup", "mousemove"])
             window.addEventListener(type, (event: KeyboardEvent | MouseEvent) => {
@@ -1346,7 +1347,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
 
     protected siegeConfirm(id: number, name: string, onOk: () => void) { this.dialogBox.show(this.formatSystemMessage(id, name), DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }, true, 0, id); }
     protected confirmLink(text: string, onOk: () => void) { this.dialogBox.show(text, DialogType_T.OK_CANCEL, isOk => { if (isOk) onOk(); }); }
-    protected confirm(text: string, onYes: () => void, messageId = 0) {this.lobbyDialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
+    protected confirm(text: string, onYes: () => void, messageId = 0) { this.lobbyDialogBox.show(text, DialogType_T.YES_NO, isYes => { if (isYes) onYes(); }, true, 0, messageId); }
     public showNotice(messageId: number) { this.dialogBox.show(this.nwindow.getSystemMessage(messageId), DialogType_T.OK, null, true, 0, messageId); }
 
     public playSystemMessageSound(id: number) { this.nwindow.playSystemMessageSound(id); }

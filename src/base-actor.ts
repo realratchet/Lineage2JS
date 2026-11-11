@@ -26,6 +26,7 @@ import type { INpcEnterEvent } from "@l2js/engine/contracts/pawn";
 const tmpUp = new Vector3(0, 0, 1);
 const tmpScriptLocation = new Vector3();
 const arrVehicleClass: ScriptValue_T[] = ["Vehicle"];
+const arrPhysicsModes = ["none", "walking", "falling", "swimming", "flying"];
 export class BaseActor extends GameObject implements ICollidable {
     public readonly isActor = true;
     declare public readonly isCollidable: boolean;
@@ -107,7 +108,7 @@ export class BaseActor extends GameObject implements ICollidable {
             case "location":
                 this.getWorldPosition(tmpScriptLocation);
                 tmpScriptLocation.z += this.movementComponent.getCollisionHeight();
-                return tmpScriptLocation.toArray();
+                return [tmpScriptLocation.x, tmpScriptLocation.y, tmpScriptLocation.z];
             case "velocity": return this.movementComponent.getVelocity().toArray();
             case "acceleration": return this.movementComponent.getAcceleration().toArray();
             case "collisionradius": return this.movementComponent.getCollisionRadius();
@@ -118,7 +119,7 @@ export class BaseActor extends GameObject implements ICollidable {
 
                 return [rotation[0], this.movementComponent.getRotationYaw(), rotation[2]];
             }
-            case "physics": return this.movementComponent.getPhysicsMode() === "nMover" ? EPhysics_T.PHYS_NMover : ["none", "walking", "falling", "swimming", "flying"].indexOf(this.movementComponent.getPhysicsMode());
+            case "physics": return this.movementComponent.getPhysicsMode() === "nMover" ? EPhysics_T.PHYS_NMover : arrPhysicsModes.indexOf(this.movementComponent.getPhysicsMode());
         }
 
         return this.getStoredUnrealScriptProperty(id);
@@ -167,8 +168,9 @@ export class BaseActor extends GameObject implements ICollidable {
         const property = findScriptPropertyKey(this.scriptProperties, name) ?? id.slice(id.lastIndexOf(".") + 1);
 
         this.scriptProperties.set(property, value);
-        if (name === "level") updateLevelActor(this);
         switch (name) {
+            case "level": updateLevelActor(this); break;
+            case "drawscale": case "drawscale3d": this.dispatchComponentEvent(MESH_SCALE_CHANGED_EVENT); break;
             case "bcollideactors":
                 this.movementComponent.setCollideActors(!!value);
                 this.renderManager.getPhysicsManager().updatePawnCollision(this);
@@ -180,7 +182,6 @@ export class BaseActor extends GameObject implements ICollidable {
             case "bblocknonzeroextenttraces": this.movementComponent.getCollisionProfile().blockNonZeroExtent = !!value; break;
             case "bworldgeometry": this.movementComponent.getCollisionProfile().worldGeometry = !!value; break;
         }
-        if (name === "drawscale" || name === "drawscale3d") this.dispatchComponentEvent(MESH_SCALE_CHANGED_EVENT);
     }
 
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
@@ -253,7 +254,7 @@ export class BaseActor extends GameObject implements ICollidable {
         this.updatePresentation(currentTime, deltaTime);
     }
 
-    public updateMatrixWorld(force?: boolean): void { // culled actors skip three's per-frame walk, getWorldPosition/updateWorldMatrix still resolve on demand
+    public updateMatrixWorld(force?: boolean): void {
         if (this.visible) super.updateMatrixWorld(force);
     }
 

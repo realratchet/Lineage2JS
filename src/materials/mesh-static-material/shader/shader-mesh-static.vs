@@ -3,16 +3,48 @@
     varying vec3 vProjectorNormal;
 #endif
 #ifdef USE_PAWN_MATERIALS
-    attribute float pawnPart;
-    flat varying int vPawnPart;
     varying vec2 vPawnSpecularUv;
     varying vec2 vPawnWorldSpecularUv;
-    uniform mat4 pawnWorldMatrices[NUM_PAWN_PARTS];
-    uniform mat4 pawnViewMatrices[NUM_PAWN_PARTS];
-    uniform mat3 pawnNormalMatrices[NUM_PAWN_PARTS];
-    #define modelMatrix pawnWorldMatrices[int(pawnPart)]
-    #define modelViewMatrix pawnViewMatrices[int(pawnPart)]
-    #define normalMatrix pawnNormalMatrices[int(pawnPart)]
+    #ifdef USE_PAWN_CROWD
+        #undef USE_BATCHING
+        #if ! defined( GL_ANGLE_multi_draw )
+            #define gl_DrawID _gl_DrawID
+            uniform int _gl_DrawID;
+        #endif
+        uniform highp sampler2D pawnCrowdStatic;
+        uniform highp sampler2D pawnCrowdDynamic;
+        uniform int pawnCrowdDrawBase;
+        flat varying vec4 vPawnColor;
+        flat varying vec4 vPawnMaps;
+        flat varying vec4 vPawnParameters;
+        flat varying vec4 vPawnFlags;
+        flat varying vec3 vPawnTexModifierColor;
+        mat4 pawnCrowdWorld;
+        mat4 pawnCrowdView;
+        mat3 pawnCrowdNormal;
+        int pawnCrowdBoneOffset;
+        int pawnCrowdLight;
+        vec4 fetchPawnCrowd(highp sampler2D map, int index) {
+            int size = textureSize(map, 0).x;
+            return texelFetch(map, ivec2(index % size, index / size), 0);
+        }
+        mat4 fetchPawnCrowdMatrix(highp sampler2D map, int index) {
+            vec4 a = fetchPawnCrowd(map, index), b = fetchPawnCrowd(map, index + 1), c = fetchPawnCrowd(map, index + 2);
+            return mat4(a.x, b.x, c.x, 0.0, a.y, b.y, c.y, 0.0, a.z, b.z, c.z, 0.0, a.w, b.w, c.w, 1.0);
+        }
+        #define modelMatrix pawnCrowdWorld
+        #define modelViewMatrix pawnCrowdView
+        #define normalMatrix pawnCrowdNormal
+    #else
+        attribute float pawnPart;
+        flat varying int vPawnPart;
+        uniform mat4 pawnWorldMatrices[NUM_PAWN_PARTS];
+        uniform mat4 pawnViewMatrices[NUM_PAWN_PARTS];
+        uniform mat3 pawnNormalMatrices[NUM_PAWN_PARTS];
+        #define modelMatrix pawnWorldMatrices[int(pawnPart)]
+        #define modelViewMatrix pawnViewMatrices[int(pawnPart)]
+        #define normalMatrix pawnNormalMatrices[int(pawnPart)]
+    #endif
 #endif
 #ifdef USE_UV
     varying vec2 vUv;
@@ -487,7 +519,24 @@ void main() {
     #ifdef USE_VERTEX_ALPHA_MASK
         vVertexAlpha = vertexAlpha;
     #endif
-    #ifdef USE_PAWN_MATERIALS
+    #ifdef USE_PAWN_CROWD
+        int pawnCrowdDraw = pawnCrowdDrawBase + gl_DrawID * PAWN_CROWD_DRAW_TEXELS;
+        vec4 pawnCrowdRows = fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdDraw + 9);
+        int pawnCrowdPart = int(pawnCrowdRows.x);
+
+        pawnCrowdView = fetchPawnCrowdMatrix(pawnCrowdDynamic, pawnCrowdDraw);
+        pawnCrowdWorld = fetchPawnCrowdMatrix(pawnCrowdDynamic, pawnCrowdDraw + 3);
+        pawnCrowdNormal = mat3(fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdDraw + 6).xyz, fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdDraw + 7).xyz, fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdDraw + 8).xyz);
+        pawnCrowdLight = int(pawnCrowdRows.y);
+        bindMatrix = fetchPawnCrowdMatrix(pawnCrowdStatic, pawnCrowdPart);
+        bindMatrixInverse = fetchPawnCrowdMatrix(pawnCrowdStatic, pawnCrowdPart + 3);
+        vPawnColor = fetchPawnCrowd(pawnCrowdStatic, pawnCrowdPart + 6);
+        vPawnMaps = fetchPawnCrowd(pawnCrowdStatic, pawnCrowdPart + 7);
+        vPawnParameters = fetchPawnCrowd(pawnCrowdStatic, pawnCrowdPart + 8);
+        vPawnParameters.w = pawnCrowdRows.z;
+        vPawnFlags = fetchPawnCrowd(pawnCrowdStatic, pawnCrowdPart + 9);
+        pawnCrowdBoneOffset = int(fetchPawnCrowd(pawnCrowdStatic, pawnCrowdPart + 10).x);
+    #elif defined(USE_PAWN_MATERIALS)
         vPawnPart = int(pawnPart);
         bindMatrix = pawnBindMatrices[vPawnPart];
         bindMatrixInverse = pawnBindInverses[vPawnPart];
@@ -740,6 +789,23 @@ void main() {
     #ifdef USE_ACTOR_LIGHTS
         vec3 actorPosition = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
         vec3 actorNormal = inverseTransformDirection( normalMatrix * objectNormal, viewMatrix );
+        #ifdef USE_PAWN_CROWD
+            vec4 pawnCrowdAmbient = fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdLight);
+            vec4 pawnCrowdModifier = fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdLight + 1);
+            vec3 actorLighting = pawnCrowdAmbient.rgb;
+
+            vPawnTexModifierColor = pawnCrowdModifier.yzw;
+
+            for ( int i = 0; i < NUM_ACTOR_LIGHTS; i++ ) {
+                if ( i >= int(pawnCrowdModifier.x) ) break;
+
+                int pawnCrowdRow = pawnCrowdLight + 2 + i * 4;
+                vec4 lightPosition = fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdRow), lightDirection = fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdRow + 1);
+                vec4 lightColor = fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdRow + 2), lightAttenuation = fetchPawnCrowd(pawnCrowdDynamic, pawnCrowdRow + 3);
+                ActorLight actorLight = ActorLight( lightPosition.xyz, lightDirection.xyz, lightColor.rgb, lightPosition.w, lightDirection.w, int( lightColor.w ), lightAttenuation.x > 0.5, lightAttenuation.yz );
+                actorLighting += actorLight.color * ( actorLightIntensity( actorLight, actorPosition, actorNormal ) * pawnCrowdAmbient.a * 0.5 );
+            }
+        #else
         vec3 actorLighting = actorAmbient;
 
         for ( int i = 0; i < NUM_ACTOR_LIGHTS; i++ ) {
@@ -750,6 +816,7 @@ void main() {
             ActorLight actorLight = ActorLight( actorLightPositions[i], actorLightDirections[i], actorLightColors[i], actorLightParameters[i].x, actorLightParameters[i].y, int( actorLightParameters[i].z ), actorLightParameters[i].w > 0.5, actorLightAttenuations[i] );
             actorLighting += actorLight.color * ( actorLightIntensity( actorLight, actorPosition, actorNormal ) * actorScaledGlow * 0.5 );
         }
+        #endif
 
         vLitColor = clamp( actorLighting, 0.0, 1.0 );
     #endif

@@ -32,6 +32,8 @@ const clipState: ClipState_T = { t0: -1, t1: 1, normal: new Vector3(), item: -1,
 const arrPointTriangles: number[] = [];
 const arrHullPlanes: HullPlane_T[] = [];
 const arrHullBoxPlanes: HullPlane_T[] = [];
+const arrHullEdgePlanes: number[] = [];
+const cacheHullEdgePlanes = new WeakMap<HullPlane_T[], number[]>();
 let pointBestDistance = Infinity;
 let staticPrimitive: Extract<CollisionPrimitive_T, { kind: "staticMesh" }> = null;
 let staticStart: Vector3 = null;
@@ -359,16 +361,15 @@ function walkGridCells(startX: number, startY: number, endX: number, endY: numbe
 }
 
 function walkIndexCells(index: CollisionTriangleIndex_T, visit: GridCellVisitor_T) {
-    walkGridCells(
-        (tmpLocalStart.x - index.minX) / index.cellSizeX,
-        (tmpLocalStart.y - index.minY) / index.cellSizeY,
-        (tmpLocalEnd.x - index.minX) / index.cellSizeX,
-        (tmpLocalEnd.y - index.minY) / index.cellSizeY,
-        Math.ceil(tmpLocalExtent.x / index.cellSizeX),
-        Math.ceil(tmpLocalExtent.y / index.cellSizeY),
-        0, 0, index.sizeX - 1, index.sizeY - 1,
-        visit
-    );
+    const startX = (tmpLocalStart.x - index.minX) / index.cellSizeX, startY = (tmpLocalStart.y - index.minY) / index.cellSizeY;
+    const endX = (tmpLocalEnd.x - index.minX) / index.cellSizeX, endY = (tmpLocalEnd.y - index.minY) / index.cellSizeY;
+    const extentX = tmpLocalExtent.x / index.cellSizeX, extentY = tmpLocalExtent.y / index.cellSizeY;
+    const minCellX = Math.max(0, Math.floor(Math.min(startX, endX) - extentX)), maxCellX = Math.min(index.sizeX - 1, Math.floor(Math.max(startX, endX) + extentX));
+    const minCellY = Math.max(0, Math.floor(Math.min(startY, endY) - extentY)), maxCellY = Math.min(index.sizeY - 1, Math.floor(Math.max(startY, endY) + extentY));
+
+    if (minCellX > maxCellX || minCellY > maxCellY) return;
+
+    walkGridCells(startX, startY, endX, endY, Math.ceil(extentX), Math.ceil(extentY), minCellX, minCellY, maxCellX, maxCellY, visit); // cells outside the swept box only hold triangles the box cells hold too
 }
 
 function beginIndexQuery(index: CollisionTriangleIndex_T) {
@@ -868,14 +869,8 @@ function pointTriangle(location: Vector3, extent: Vector3, a: Vector3, b: Vector
     return tmpPointHit;
 }
 
-function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Vector3, extent: Vector3): PrimitiveHit_T | null {
-    pointBestDistance = Infinity;
-
-    for (const plane of planes)
-        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
-
-    for (const plane of boxPlanes)
-        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+function loadHullEdgePlanes(planes: HullPlane_T[], edges: number[]): number[] {
+    edges.length = 0;
 
     for (let i = 0, len = planes.length; i < len; i++) {
         const a = planes[i];
@@ -889,20 +884,39 @@ function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Ve
             if ((flags & 3) === 3 && a[1] * b[1] + a[2] * b[2] > 1e-3) {
                 tmpN.set(0, -tmpD.z, tmpD.y).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+                edges.push(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection));
             }
             if ((flags & 12) === 12 && a[0] * b[0] + a[2] * b[2] > 1e-3) {
                 tmpN.set(tmpD.z, 0, -tmpD.x).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+                edges.push(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection));
             }
             if ((flags & 48) === 48 && a[0] * b[0] + a[1] * b[1] > 1e-3) {
                 tmpN.set(-tmpD.y, tmpD.x, 0).normalize();
                 if (a[0] * tmpN.x + a[1] * tmpN.y + a[2] * tmpN.z < 0) tmpN.multiplyScalar(-1);
-                if (!pointClip(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection), location, extent)) return null;
+                edges.push(tmpN.x, tmpN.y, tmpN.z, tmpN.dot(tmpIntersection));
             }
         }
     }
+
+    return edges;
+}
+
+function pointHull(planes: HullPlane_T[], boxPlanes: HullPlane_T[], location: Vector3, extent: Vector3): PrimitiveHit_T | null {
+    pointBestDistance = Infinity;
+
+    for (const plane of planes)
+        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+
+    for (const plane of boxPlanes)
+        if (!pointClip(plane[0], plane[1], plane[2], plane[3], location, extent)) return null;
+
+    let edges = planes === arrHullPlanes ? loadHullEdgePlanes(planes, arrHullEdgePlanes) : cacheHullEdgePlanes.get(planes); // untransformed hulls keep their convolved edge planes
+
+    if (!edges) cacheHullEdgePlanes.set(planes, edges = loadHullEdgePlanes(planes, []));
+
+    for (let i = 0, len = edges.length; i < len; i += 4)
+        if (!pointClip(edges[i], edges[i + 1], edges[i + 2], edges[i + 3], location, extent)) return null;
 
     tmpPointHit.item = -1;
 

@@ -14,7 +14,7 @@ const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "
 
 // Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
 export const NUM_ACTOR_LIGHTS = 4;
-const MAX_HARDWARE_LIGHTS = 8; // D3DDrv SetPawnLight RVA 0x1c7b2.
+export const MAX_HARDWARE_LIGHTS = 8; // D3DDrv SetPawnLight RVA 0x1c7b2.
 const arrEmptyPawnLights: PawnLight_T[] = [];
 
 type SupportedShaderParams_T = "shDiffuse" | "shOpacity" | "shSpecular" | "shSpecularMask" | "shDetail" | "shMaterial2";
@@ -596,14 +596,14 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         for (let i = 0, count = uniforms.numActorLights.value; i < count; i++) {
             const entry = entries[i];
 
-            entry.position.toArray(positions, i * 3);
-            entry.direction.toArray(directions, i * 3);
-            entry.color.toArray(colors, i * 3);
+            positions[i * 3] = entry.position.x; positions[i * 3 + 1] = entry.position.y; positions[i * 3 + 2] = entry.position.z;
+            directions[i * 3] = entry.direction.x; directions[i * 3 + 1] = entry.direction.y; directions[i * 3 + 2] = entry.direction.z;
+            colors[i * 3] = entry.color.r; colors[i * 3 + 1] = entry.color.g; colors[i * 3 + 2] = entry.color.b;
             parameters[i * 4] = entry.radius;
             parameters[i * 4 + 1] = entry.cone;
             parameters[i * 4 + 2] = entry.effect;
             parameters[i * 4 + 3] = entry.isHardwareLight ? 1 : 0;
-            entry.attenuation.toArray(attenuations, i * 2);
+            attenuations[i * 2] = entry.attenuation.x; attenuations[i * 2 + 1] = entry.attenuation.y;
         }
     }
 

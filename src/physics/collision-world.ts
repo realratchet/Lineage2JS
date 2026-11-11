@@ -101,7 +101,7 @@ export type PhysicsVolumeHit_T = { time: number, location: Vector3, normal: Vect
 export type ActorLineHit_T = { time: number, actor: ScriptHost_T };
 type PhysicsVolumeEntry_T = VolumeCollisionComponent & { readonly actor: PhysicsVolume };
 type VolumeEntry_T = VolumeCollisionComponent;
-type PhysicsVolumeTree_T = { tree: CollisionOctree, entries: Map<string, PhysicsVolumeEntry_T> };
+type PhysicsVolumeTree_T = { tree: CollisionOctree, entries: Map<string, PhysicsVolumeEntry_T>, pawnMark: number, dirtyPawns: Set<CollisionActor_T> };
 
 export type CollisionStats_T = {
     queries: number;
@@ -291,8 +291,6 @@ export class CollisionWorld {
         if (mark === this.dynamicMark) return;
 
         this.dynamicMark = mark;
-
-        for (const [pawn, level] of this.pawnLevels) this.updateLevelPawn(pawn, level);
 
         for (const entry of this.dynamicEntries) {
             if (!entry.active) continue;
@@ -508,7 +506,7 @@ export class CollisionWorld {
             if (!entry.active) entry.removeCollision();
         if (arrPhysicsVolumes !== volumes) entries[volumes.length].updateCollision();
         const physicsEntries = entries.slice(0, arrPhysicsVolumes.length) as PhysicsVolumeEntry_T[];
-        this.physicsVolumeTrees.set(volumes, { tree, entries: new Map(physicsEntries.map(entry => [entry.actor.actorUuid, entry])) });
+        this.physicsVolumeTrees.set(volumes, { tree, entries: new Map(physicsEntries.map(entry => [entry.actor.actorUuid, entry])), pawnMark: -2, dirtyPawns: new Set() });
         this.physicsVolumes.set(volumes, physicsEntries);
         this.volumeActors.set(volumes, entries);
     }
@@ -529,7 +527,10 @@ export class CollisionWorld {
     public setPawnLevel(pawn: CollisionActor_T, volumes: PhysicsVolume[] | null): void {
         const previous = this.pawnLevels.get(pawn), level = volumes ? this.physicsVolumeTrees.get(volumes) : null;
         if (volumes && !level) throw new Error(`Pawn '${pawn.name}' has no registered owning level.`);
-        if (previous && previous !== level) previous.tree.removeActor(pawn.uuid);
+        if (previous && previous !== level) {
+            previous.tree.removeActor(pawn.uuid);
+            previous.dirtyPawns.delete(pawn);
+        }
         if (!level) {
             this.pawnLevels.delete(pawn);
             return;
@@ -573,7 +574,7 @@ export class CollisionWorld {
             else this.removeActor(pawn);
         }
         const level = this.pawnLevels.get(pawn);
-        if (level) this.updateLevelPawn(pawn, level);
+        if (level) level.dirtyPawns.add(pawn); // the level octree is only read by physicsVolumePointCheck
 
         if (!entry || !entry.active || entry.grid !== this.pawnCells) return;
 
@@ -590,7 +591,10 @@ export class CollisionWorld {
         const entry = this.entriesByActor.get(pawn);
         if (entry || (pawn as StaticMeshActor).collisionOwner) this.removeActor(pawn);
         const level = this.pawnLevels.get(pawn);
-        if (level) level.tree.removeActor(pawn.uuid);
+        if (level) {
+            level.tree.removeActor(pawn.uuid);
+            level.dirtyPawns.delete(pawn);
+        }
     }
 
     public setCollision(pawn: CollisionSource_T, collideActors: boolean = pawn.getUnrealScriptProperty("bCollideActors") as boolean, blockActors: boolean = pawn.getUnrealScriptProperty("bBlockActors") as boolean, blockPlayers: boolean = pawn.getUnrealScriptProperty("bBlockPlayers") as boolean): void {
@@ -642,8 +646,15 @@ export class CollisionWorld {
         const actors: PhysicsVolume[] = [], group = this.physicsVolumeTrees.get(volumes);
         if (!group) throw new Error(`Physics volume point query has no registered level.`);
 
-        for (const [pawn, level] of this.pawnLevels)
-            if (level === group) this.updateLevelPawn(pawn, level);
+        if (group.pawnMark !== this.dynamicMark) { // a full pass per query is quadratic in pawns
+            group.pawnMark = this.dynamicMark;
+            for (const [pawn, level] of this.pawnLevels)
+                if (level === group) this.updateLevelPawn(pawn, level);
+        } else {
+            for (const pawn of group.dirtyPawns)
+                if (this.pawnLevels.get(pawn) === group) this.updateLevelPawn(pawn, group);
+        }
+        group.dirtyPawns.clear();
 
         for (const entry of this.physicsVolumes.get(volumes)) {
             const actor = entry.actor, primitive = entry.primitive;

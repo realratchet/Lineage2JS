@@ -1134,6 +1134,7 @@ export class UnScriptVM {
     protected readonly enumsById = new Map<string, string[]>();
     protected readonly classParents = new Map<string, string | null>();
     protected readonly classAliases = new Map<string, string>();
+    protected readonly cacheIsA = new Map<string, Map<string, boolean>>();
     protected readonly objectClasses = new Map<string, string>();
     protected readonly scriptObjectClasses: ScriptObjectClasses_T = { parents: this.classParents, aliases: this.classAliases, vm: new WeakRef(this) };
 
@@ -1419,6 +1420,8 @@ export class UnScriptVM {
 
     public loadFunctions(): void {
         const parents: ClassParentRecords_T = { parents: this.classParents, records: new Map(), revision: 0 };
+
+        this.cacheIsA.clear();
 
         for (const cls of Object.values(this.library.scriptClasses)) {
             for (const [id, names] of Object.entries(cls.enums || {})) this.enumsById.set(id.toLowerCase(), names);
@@ -2588,18 +2591,27 @@ export class UnScriptVM {
     }
 
     protected isA(context: ScriptHost_T, className: string): boolean {
-        className = className.toLowerCase();
         const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
         const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
-        let classId = context.scriptClassId.toLowerCase();
+        let cache = vm.cacheIsA.get(context.scriptClassId);
 
-        classId = vm.classAliases.get(classId) || classId;
+        if (!cache) vm.cacheIsA.set(context.scriptClassId, cache = new Map());
+
+        let result = cache.get(className);
+
+        if (result === undefined) cache.set(className, result = vm.isClassA(context.scriptClassId.toLowerCase(), className.toLowerCase()));
+
+        return result;
+    }
+
+    protected isClassA(classId: string, className: string): boolean {
+        classId = this.classAliases.get(classId) || classId;
 
         // UObject::execIsA (Core.dll 0x10137eb9..0x10137edd) compares class names up the superclass chain.
         while (classId) {
-            if (!vm.classParents.has(classId)) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
+            if (!this.classParents.has(classId)) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
             if (getFieldName(classId) === className) return true;
-            classId = vm.classParents.get(classId);
+            classId = this.classParents.get(classId);
         }
 
         return false;

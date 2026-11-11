@@ -24,6 +24,25 @@ const tmpVec = new Vector3();
 const tmpActorCenter = new Vector3();
 const tmpWhite = new Vector3(1, 1, 1);
 
+function transformBox(box: Box3, e: ArrayLike<number>, target: Box3): Box3 {
+    if (box.isEmpty()) return target.copy(box);
+
+    const min = box.min, max = box.max;
+
+    target.min.set(
+        Math.min(e[0] * min.x, e[0] * max.x) + Math.min(e[4] * min.y, e[4] * max.y) + Math.min(e[8] * min.z, e[8] * max.z) + e[12],
+        Math.min(e[1] * min.x, e[1] * max.x) + Math.min(e[5] * min.y, e[5] * max.y) + Math.min(e[9] * min.z, e[9] * max.z) + e[13],
+        Math.min(e[2] * min.x, e[2] * max.x) + Math.min(e[6] * min.y, e[6] * max.y) + Math.min(e[10] * min.z, e[10] * max.z) + e[14]
+    );
+    target.max.set(
+        Math.max(e[0] * min.x, e[0] * max.x) + Math.max(e[4] * min.y, e[4] * max.y) + Math.max(e[8] * min.z, e[8] * max.z) + e[12],
+        Math.max(e[1] * min.x, e[1] * max.x) + Math.max(e[5] * min.y, e[5] * max.y) + Math.max(e[9] * min.z, e[9] * max.z) + e[13],
+        Math.max(e[2] * min.x, e[2] * max.x) + Math.max(e[6] * min.y, e[6] * max.y) + Math.max(e[10] * min.z, e[10] * max.z) + e[14]
+    );
+
+    return target;
+}
+
 export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "pawnRenderable";
     public isRendered: boolean = false;
@@ -220,6 +239,8 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     }
 
     protected releaseBatches(): void {
+        for (const mesh of this.meshes) this.renderManager.releasePawnParts(mesh as LitSkinnedMesh);
+        for (const mesh of this.equipmentMeshes) this.renderManager.releasePawnParts(mesh as LitSkinnedMesh);
         for (const batch of this.batches) {
             batch.release();
             this.renderManager.releaseGeometry(batch.geometry);
@@ -242,6 +263,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (type === PAWN_COLLISION_SIZE_CHANGED_EVENT || type === MESH_SCALE_CHANGED_EVENT) this.invalidateBounds();
         else if (type === MESHES_CHANGED_EVENT) this.setMeshes(data as Mesh[]);
         else if (type === EQUIPMENT_MESHES_CHANGED_EVENT) {
+            for (const mesh of this.equipmentMeshes) this.renderManager.releasePawnParts(mesh as LitSkinnedMesh);
             this.equipmentMeshes = data as Mesh[];
             if (this.isAttached()) this.setMeshes(this.meshes); // equipment detaches during a pawn's component clear, possibly after this one
         }
@@ -357,12 +379,15 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (mesh.isLitSkinnedMesh) tmpMatrix.multiply(tmpOrigin.makeTranslation(-mesh.meshOrigin.x, -mesh.meshOrigin.y, -mesh.meshOrigin.z));
 
         // FDynamicActor::Update 0x8e7c75..0x8e7fad uses the primary MeshToWorld for all pawn parts.
+        const scale = tmpMatrix.getMaxScaleOnAxis();
+
         for (const part of this.meshes) {
             if (!part.geometry.boundingBox) part.geometry.computeBoundingBox();
             if (!part.geometry.boundingSphere) part.geometry.computeBoundingSphere();
 
-            this.worldBox.union(tmpBox.copy(part.geometry.boundingBox).applyMatrix4(tmpMatrix));
-            tmpSphere.copy(part.geometry.boundingSphere).applyMatrix4(tmpMatrix);
+            this.worldBox.union(transformBox(part.geometry.boundingBox, tmpMatrix.elements, tmpBox));
+            tmpSphere.center.copy(part.geometry.boundingSphere.center).applyMatrix4(tmpMatrix);
+            tmpSphere.radius = part.geometry.boundingSphere.radius * scale;
             tmpSphereBox.expandByPoint(tmpVec.copy(tmpSphere.center).addScalar(-tmpSphere.radius));
             tmpSphereBox.expandByPoint(tmpVec.copy(tmpSphere.center).addScalar(tmpSphere.radius));
         }

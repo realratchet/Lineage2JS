@@ -64,6 +64,7 @@ function getOnceAnimation(clip: AnimationClip): AnimationClip {
     (once as any).animationNotifies = (clip as any).animationNotifies;
     (once as any).skinNotify = (clip as any).skinNotify;
     (once as any).attackEffectFrame = (clip as any).attackEffectFrame;
+    (once as any).framerate = (clip as any).framerate;
     (once as any).attackEndEffectFrame = (clip as any).attackEndEffectFrame;
     cacheOnceAnimations.set(clip, once);
 
@@ -253,6 +254,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
             if (!skeleton) continue;
             const index = typeof name === "number" ? name : skeleton.matchRefBone(name);
             if (index < 0 || index >= skeleton.bones.length) continue;
+            skeleton.requireBone(index);
             const bone = skeleton.bones[index];
             if (!scaler.bones.has(bone)) scaler.bones.set(bone, bone.scale.clone());
             bone.scale.copy(scaler.bones.get(bone)).multiplyScalar(scale);
