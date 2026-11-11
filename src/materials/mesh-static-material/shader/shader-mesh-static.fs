@@ -857,10 +857,10 @@ void main() {
 
     if (texModifierAlpha >= 0.0) {
         #ifdef USE_PAWN_MATERIALS
-            bool masked = part.parameters.x == 127.0 / 255.0;
+            bool masked = part.parameters.x > 0.0;
         #else
             #ifdef USE_ALPHATEST
-                bool masked = alphaTest == 127.0 / 255.0;
+                bool masked = alphaTest > 0.0;
             #else
                 bool masked = false;
             #endif
