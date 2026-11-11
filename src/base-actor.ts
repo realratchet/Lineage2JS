@@ -373,7 +373,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public setCollisionSize(collisionRadius: number, collisionHeight: number): void { this.movementComponent.setCollisionSize(collisionRadius, collisionHeight); }
     public l2Teleport(position: Vector3, base: ICollidable = null): void { this.movementComponent.l2Teleport(position, base); }
     public teleportTo(position: Vector3, adjustToFloor: boolean = false): void { this.movementComponent.teleportTo(position, adjustToFloor); }
-    public adjustLocation(position: Vector3): void { this.movementComponent.adjustLocation(position); }
+    public adjustLocation(position: Vector3): void { this.movementComponent.adjustPawnLocation(position); }
 
 }
 

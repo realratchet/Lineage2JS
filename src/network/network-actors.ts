@@ -816,7 +816,7 @@ export class NetworkActors {
 
             const hit = render.getPhysicsManager().singleLineCheck(query);
 
-            if (!hit || hit.location.z === 0) continue;
+            if (!hit || hit.time === 0 || hit.location.z === 0) continue;
 
             tmpNpcSpawnPosition.copy(hit.location);
             tmpNpcSpawnPosition.z -= height;

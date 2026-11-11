@@ -602,8 +602,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
                     if (floorDistance > MAX_FLOOR_DISTANCE)
                         this.moveSwept(position, tmpDown.set(0, 0, -(floorDistance - FLOOR_DISTANCE)));
-                    else if (floorDistance > 0 && floorDistance < MIN_FLOOR_DISTANCE)
-                        this.moveSwept(position, tmpStepUp.set(0, 0, FLOOR_DISTANCE - floorDistance));
+                    else if (floorDistance < MIN_FLOOR_DISTANCE)
+                        this.moveSwept(position, tmpStepUp.set(0, 0, FLOOR_DISTANCE - floorDistance)); // APawn::physWalking 0x8d5482 has no lower bound
                     else if (floorDistance >= MIN_FLOOR_DISTANCE && floorHit.actor === this.getBaseActor())
                         this.isPhysicInit = true; // APawn::physWalking 0x8d554d
 
@@ -1660,6 +1660,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
             query.delta.set(0, 0, teleport ? -(i + 1) * 60 : -(validate ? 30 : 50) - this.collisionHeight - i * 60);
             hit = this.physicsManager.singleLineCheck(query);
 
+            if (hit && hit.time === 0) hit = null; // started inside the floor
             if (hit && hit.location.z !== 0) break;
         }
 
@@ -1687,6 +1688,13 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.desired.position.copy(position);
         this.actorState.desired.actor = null;
         this.adjustLocation(position, adjustToFloor, base);
+    }
+
+    public adjustPawnLocation(position: Vector3) {
+        if (this.physicsMode === "flying" || !this.isInteractive() || !this.renderManager.isSectorCollisionReady(position)) return this.adjustLocation(position);
+        if (!this.physicsManager.farMoveActor(this.getParent(), this.findAdjustmentLocation(position, false))) return; // AdjustPawnLocation 0x7427c7: a rejected FarMoveActor moves nothing
+
+        this.adjustLocation(this.getPosition(), false);
     }
 
     public adjustLocation(position: Vector3, adjustToFloor: boolean = true, base: ICollidable = null) {
