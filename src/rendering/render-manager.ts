@@ -2443,15 +2443,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (skyVisibility < 1.0)
             targetClearColor.lerp(targetFogColor, 1.0 - skyVisibility);
 
-        let skyFogStart = targetFogStart, skyFogEnd = targetFogEnd;
-
-        if (presetIndex === 5 && fogSource === env && !waterVolume) {
-            // C4 Env.int: StartRange5=4, EndRange5=10.
-            skyFogStart = Math.min(skyFogStart, 4 * 2048);
-            skyFogEnd = Math.min(skyFogEnd, 10 * 2048);
-        }
-
-        this.skyRenderer.update(camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, skyFogStart, skyFogEnd, sector, targetClearColor, skyVisibility);
+        this.skyRenderer.update(camera, env, targetSkyColor, tmpColorByte_4, blendedHazeColors, targetCloudColors, targetFogColor, targetFogStart, targetFogEnd, sector, targetClearColor, skyVisibility);
 
         const clearColorThree = new Color().setRGB(targetClearColor.r / 255, targetClearColor.g / 255, targetClearColor.b / 255);
         this.renderer.setClearColor(clearColorThree);

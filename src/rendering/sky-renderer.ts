@@ -4,7 +4,6 @@ import { ColorByte } from "../utils/color-byte";
 import { SectorObject, ZoneObject } from "../objects/zone-object";
 import EnvInfo from "./env-info";
 import { EEnvCycle } from "@l2js/engine/env-consts";
-import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 
 const DEG2RAD = Math.PI / 180;
 const HALF_PI = Math.PI / 2;
@@ -435,19 +434,7 @@ export default class SkyRenderer {
             return;
         }
 
-        const fog = this.celestialScene.fog as Fog;
-        const fogNear = GLOBAL_UNIFORMS.fogNear.value;
-        const fogFar = GLOBAL_UNIFORMS.fogFar.value;
-
-        GLOBAL_UNIFORMS.fogNear.value = fog.near;
-        GLOBAL_UNIFORMS.fogFar.value = fog.far;
-
-        try {
-            renderer.render(this.celestialScene, this.camera);
-        } finally {
-            GLOBAL_UNIFORMS.fogNear.value = fogNear;
-            GLOBAL_UNIFORMS.fogFar.value = fogFar;
-        }
+        renderer.render(this.celestialScene, this.camera);
     }
 
     public setSkyZone(zone: ZoneObject) { this.skyZone = zone; }

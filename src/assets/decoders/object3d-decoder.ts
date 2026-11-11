@@ -354,7 +354,7 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
             material.defines.USE_RANGE_FADE = "";
             material.needsUpdate = true;
         }
-        if (sectionInfo.isOutdoor && material.uniforms?.ambient?.value?.color && material.defines) {
+        if (!sectionInfo.isUnlit && sectionInfo.isOutdoor && material.uniforms?.ambient?.value?.color && material.defines) {
             if (material.defines.USE_LIGHTMAP !== undefined) {
                 if (!sectionInfo.isUnlit && material.defines.USE_BSP_AMBIENT === undefined) {
                     material.defines.USE_BSP_AMBIENT = "";
