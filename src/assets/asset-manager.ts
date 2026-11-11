@@ -1348,9 +1348,10 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             this.lastCameraPosition.copy(cameraPosition);
             this.lastCameraSampleTime = now;
+            network.actors.updateWorldLevel();
 
             for (const sector of sectorsLoaded) {
-                if (sector.neverUnload || !sector.index) continue;
+                if (sector.neverUnload || !sector.index || sector === renderManager.getLevel()) continue;
                 if (sectorDistance(cameraPosition, sector.index.x, sector.index.y) <= renderDistance || sectorDistance(tmpPrefetchPosition, sector.index.x, sector.index.y) <= renderDistance) {
                     if (sector.isRetired) this.requestSector(renderManager, `${sector.index.x}_${sector.index.y}`);
                     continue;

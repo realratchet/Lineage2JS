@@ -1312,14 +1312,14 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public getLevel(): SectorObject { return this.level; }
-    public setLevel(level: SectorObject, netMode: ENetMode_T = ENetMode_T.NM_Standalone): void {
+    public setLevel(level: SectorObject, netMode: ENetMode_T = ENetMode_T.NM_Standalone, resetTime: boolean = true): void {
         this.level = level;
         this.fogSource = null;
         if (level) {
             level.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
             for (const sector of this.arrSceneSectors) sector.levelInfoActor.setUnrealScriptProperty("NetMode", netMode);
         }
-        this.levelTimeSeconds = 0;
+        if (resetTime) this.levelTimeSeconds = 0;
         this.updateLevelTime(0);
     }
 

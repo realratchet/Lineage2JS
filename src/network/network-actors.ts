@@ -286,6 +286,7 @@ export class NetworkActors {
 
         this.worldLevel = level;
         render.setLevel(level);
+        level.neverUnload = false;
 
         await this.loadAppearance(entry, render.player);
 
@@ -306,6 +307,29 @@ export class NetworkActors {
         this.network.session.game.enterWorld();
         this.network.session.game.requestSkillList();
         this.network.session.game.requestSkillCoolTime();
+    }
+
+    public updateWorldLevel(): void {
+        if (!this.worldLevel || !this.inWorld || this.userAppearanceLoad) return;
+
+        const render = this.network.getParent().getComponent("render"), level = render.getSector(render.player.position);
+
+        if (!level || level === this.worldLevel || level.isRetired || !level.staticMeshGroup || !render.isSectorWarm(level)) return;
+
+        const previous = this.worldLevel, physics = this.network.getParent().getComponent("physics");
+
+        render.setLevel(level, previous.levelInfoActor.getUnrealScriptProperty("NetMode") as any, false);
+        this.worldLevel = level;
+        this.network.getParent().getComponent("asset").playerController.scriptProperties.set("Level", level.levelInfoActor as any);
+
+        for (const host of previous.moveLevelActors(level)) {
+            const actor = host as BaseActor;
+
+            if (!actor.findComponent || !actor.findComponent("pawnMovement")) continue;
+
+            physics.setPawnZone(actor, false, true);
+            physics.setPawnVolumes(actor);
+        }
     }
 
     protected createObject(objectId: number, kind: NetObjectKind_T, info: GamePackets.CreatureInfo_T): NetObject_T {

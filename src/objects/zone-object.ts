@@ -14,7 +14,7 @@ import { setScriptObjectProperty } from "./actor-properties";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
-import UnScriptVM, { getProperty, setLevelActors, deleteLevelActors, registerLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { getProperty, setProperty, setLevelActors, deleteLevelActors, registerLevelActor, updateLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
 import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
@@ -711,6 +711,22 @@ export class SectorObject extends GameObject {
         if (actor.scriptClassId !== info.scriptClassId) throw new Error(`Actor '${info.uuid}' has class '${actor.scriptClassId}', expected '${info.scriptClassId}'`);
         this.arrLevelActors[index] = actor;
         return actor;
+    }
+
+    public moveLevelActors(level: SectorObject): ScriptHost_T[] {
+        const actors: ScriptHost_T[] = [];
+
+        for (let i = 0; i < this.arrLevelActors.length; i++) {
+            const actor = this.arrLevelActors[i];
+
+            if (!actor || this.arrLevelActorRecords[i]) continue;
+
+            setProperty(actor, "Level", level.levelInfoActor as any);
+            updateLevelActor(actor);
+            actors.push(actor);
+        }
+
+        return actors;
     }
 
     public releaseLevelActors(): void {
