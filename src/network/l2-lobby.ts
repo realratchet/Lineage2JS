@@ -136,7 +136,7 @@ export class L2Lobby {
     }
 
     public showLogin() {
-        this.manGame.getComponent("render").setHorizontalFov(50);
+        this.manGame.getComponent("render").setHorizontalFov(50, 4 / 3); // widescreen fix
         this.isBackdropExpanded = true;
         this.resizeBackdrop();
         this.matinee.trigger("LogOn_Warp"); // MoveCameraByState 0x1042e9e0: to-state 2 fires LogOn_Warp, 4 fires Char_Select_Warp.
@@ -218,7 +218,7 @@ export class L2Lobby {
     }
 
     public showCreate() {
-        this.manGame.getComponent("render").setHorizontalFov(50, 4 / 3);
+        this.manGame.getComponent("render").setHorizontalFov(50, 4 / 3); // widescreen fix
         this.isBackdropExpanded = true;
         this.resizeBackdrop();
         this.clearPawns();
