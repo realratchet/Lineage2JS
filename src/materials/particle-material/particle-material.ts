@@ -25,7 +25,7 @@ export function fixParticleTextureSampling(texture: any, disableMipmaps: boolean
 export class ParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
 
-    public constructor({ map, blendingMode, opacity, name, usesSubdivision, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
+    public constructor({ map, blendingMode, opacity, name, usesSubdivision, blendBetweenSubdivisions, rangeFade }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -38,6 +38,7 @@ export class ParticleMaterial extends ShaderMaterial {
         uniforms.diffuse.value = new Color(0xffffff);
         uniforms.alphaTest.value = 1e-3;
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
+        uniforms.rangeFade = rangeFade ?? { value: 1 };
 
         const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
 
@@ -82,7 +83,7 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
     protected sprites: IDecodedParameter[];
     public readonly isUpdatable = true;
 
-    public constructor({ blendingMode, opacity, name, framerate, sprites, blendBetweenSubdivisions }: ParticleMaterialInitSettings_T) {
+    public constructor({ blendingMode, opacity, name, framerate, sprites, blendBetweenSubdivisions, rangeFade }: ParticleMaterialInitSettings_T) {
 
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.common,
@@ -95,6 +96,7 @@ export class AnimatedParticleMaterial extends ShaderMaterial {
         uniforms.diffuse.value = new Color(0xffffff);
         uniforms.alphaTest.value = 1e-3;
         uniforms.uvOffsetScale = { value: new Vector4(0, 0, 1, 1) };
+        uniforms.rangeFade = rangeFade ?? { value: 1 };
 
         const defines: Record<string, any> = { USE_MAP: "", USE_FOG: "", USE_ALPHATEST: "" };
         if (blendBetweenSubdivisions) {
@@ -208,5 +210,6 @@ export type ParticleMaterialInitSettings_T = {
     opacity: number,
     name: string,
     usesSubdivision?: boolean,
-    blendBetweenSubdivisions?: boolean
+    blendBetweenSubdivisions?: boolean,
+    rangeFade?: THREE.IUniform
 };

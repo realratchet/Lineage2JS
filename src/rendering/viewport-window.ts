@@ -1,7 +1,7 @@
 import { Color, Fog, Frustum, LinearFilter, PerspectiveCamera, Scene, Vector3, Vector4, WebGLRenderer, WebGLRenderTarget } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 
-type ViewObjectState_T = { object: any, visible: boolean, renderOrder: number, groups: any[], index: any, indexData: any, values: Record<string, any>, buffers: Record<string, any>, vectors: Record<string, Vector3>, batchGroupPool?: any[], batchRenderGroups?: any[], visibleBatchGroups?: any[] };
+type ViewObjectState_T = { object: any, visible: boolean, renderOrder: number, groups: any[], index: any, indexData: any, values: Record<string, any>, buffers: Record<string, any>, vectors: Record<string, Vector3>, batchGroupPool?: any[], batchRenderGroups?: any[], visibleBatchGroups?: any[], rangeFade?: number };
 type ViewMaterialState_T = { material: THREE.Material, visible: boolean };
 
 const arrSectorProperties = ["lastZoneMask", "visibleLeaves", "visibleEmitterUuids", "visibilityCacheInitialized", "visibilityCacheFrustumCulling", "visibilityCacheTopLevelOnly", "visibilityCacheDistanceSq", "visibilityCacheEmitterDistanceSq", "visibilityCacheEnvVersion", "visibilityCacheTimeStep", "lastLoggedZone", "lastLoggedLeaf", "lastLoggedStaticMeshLeaf"];
@@ -126,6 +126,7 @@ export class ViewportWindow {
                     if (node.elemVisibility) node.elemVisibility.fill(2);
                 }
             }
+            if (node.particlePool) state.rangeFade = node.getRangeFade();
             this.arrObjects.push(state);
 
             const materials = node.material;
@@ -149,6 +150,7 @@ export class ViewportWindow {
             const object = state.object;
             object.visible = state.visible;
             object.renderOrder = state.renderOrder;
+            if (state.rangeFade !== undefined) object.setRangeFade(state.rangeFade);
             if (state.groups) object.geometry.groups = state.groups;
             if (state.index) {
                 state.index.array.set(state.indexData);

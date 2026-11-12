@@ -1,6 +1,7 @@
 uniform vec3 diffuse;
 uniform float opacity;
 uniform sampler2D map;
+uniform float rangeFade;
 
 varying vec2 vUv;
 #ifdef USE_PARTICLE_INSTANCING
@@ -16,6 +17,7 @@ varying vec4 vInstanceTint;
 
 void main() {
     #include <clipping_planes_fragment>
+    if (rangeFade < 1.0 && rangeFade <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
     
     vec4 texelColor = texture2D( map, vUv );
     vec4 diffuseColor = vec4( diffuse, opacity );

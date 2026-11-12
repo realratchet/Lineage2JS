@@ -122,6 +122,7 @@ export abstract class BaseEmitter extends Object3D {
     protected isInstancedRendering: boolean = false;
     protected instancedMesh: InstancedSpriteMesh | InstancedMeshParticles | null = null;
     protected material: ParticleMaterialInitSettings_T;
+    protected rangeFade: THREE.IUniform = { value: 1 };
 
     protected warmedUp: boolean;
     protected warmupTime: number;
@@ -1660,6 +1661,8 @@ export abstract class BaseEmitter extends Object3D {
     public getRenderBounds(target: Box3): Box3 { return target.copy(this.boundingBox).applyMatrix4(this.matrixWorld); }
 
     public setRenderVisible(visible: boolean): void { this.visible = visible && !this.isDisabled; }
+    public getRangeFade(): number { return this.rangeFade.value; }
+    public setRangeFade(fade: number): void { this.rangeFade.value = fade; }
 
     protected updateReset(deltaTime: number): void {
         const properties = (this.parent as any).scriptProperties as Map<string, boolean>;

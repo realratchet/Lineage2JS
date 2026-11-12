@@ -79,6 +79,7 @@ export class SpecialView {
 
             if (actor) {
                 network.ui.setHUDVisible(false); // SetSpecialViewTarget 0x800028..0x800037
+                this.input.getParent().getComponent("render").setHorizontalFov(undefined, 4 / 3); // widescreen fix
                 if (!this.isActive()) {
                     camera.getWorldDirection(tmpDirection);
                     this.normalRotation.set(Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * 32768 / Math.PI), Math.trunc(Math.atan2(tmpDirection.z, Math.hypot(tmpDirection.x, tmpDirection.y)) * 32768 / Math.PI));
@@ -170,6 +171,7 @@ export class SpecialView {
 
     protected release(network: NetworkManager) {
         if (!this.isReturning && !network.session.game.isPlayingReplay()) network.ui.setHUDVisible(true); // ReleaseSpecialViewTarget 0x80070c, 0x8007a7..0x8007be
+        this.input.getParent().getComponent("render").setHorizontalFov();
         this.objectId = network.getUserId();
         this.isReturning = this.isMoving = true;
         this.baseRotation.copy(this.normalRotation);
@@ -178,9 +180,10 @@ export class SpecialView {
     }
 
     protected finish() {
-        const orbit = this.input.controls.orbit;
+        const orbit = this.input.controls.orbit, render = this.input.getParent().getComponent("render");
 
-        this.input.getParent().getComponent("render").player.getCameraTargetPosition(orbit.target);
+        render.setHorizontalFov();
+        render.player.getCameraTargetPosition(orbit.target);
         viewDirection(this.normalRotation.x, this.normalRotation.y, tmpDirection);
         orbit.object.position.copy(orbit.target).addScaledVector(tmpDirection, -this.normalDistance);
         orbit.unclippedDistance = 0;

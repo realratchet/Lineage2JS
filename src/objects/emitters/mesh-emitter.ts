@@ -51,7 +51,8 @@ export class MeshEmitter extends BaseEmitter {
             transparent: true,
             depthWrite: this.isDepthWriting,
             depthTest: this.isDepthTesting,
-            isInstanced
+            isInstanced,
+            rangeFade: this.rangeFade
         });
     }
 

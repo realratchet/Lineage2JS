@@ -16,7 +16,8 @@ export type MeshEmitterMaterialParameters = {
     depthTest?: boolean,
     sprites?: THREE.Texture[],
     framerate?: number,
-    isInstanced?: boolean
+    isInstanced?: boolean,
+    rangeFade?: THREE.IUniform
 };
 
 export default class MeshEmitterMaterial extends ShaderMaterial {
@@ -29,7 +30,8 @@ export default class MeshEmitterMaterial extends ShaderMaterial {
         const uniforms = appendGlobalUniforms({
             diffuse: new Uniform(info.diffuse || new Color(1, 1, 1)),
             opacity: new Uniform(info.opacity !== undefined ? info.opacity : 1),
-            map: new Uniform(info.map || null)
+            map: new Uniform(info.map || null),
+            rangeFade: info.rangeFade || new Uniform(1)
         });
 
         super({

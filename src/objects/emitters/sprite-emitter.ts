@@ -49,7 +49,7 @@ export class SpriteEmitter extends BaseEmitter {
         if (this.material === null) return null;
 
         const usesSubdivision = this.texSubdivU > 1 || this.texSubdivV > 1;
-        const settings = { ...this.material, usesSubdivision, blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv };
+        const settings = { ...this.material, usesSubdivision, blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv, rangeFade: this.rangeFade };
         const mesh = new ParticleMesh(this.material.type === "sprite" ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings));
         mesh.spriteDirection = this.spriteDirection;
         mesh.projectionNormal = this.projectionNormal;
@@ -63,7 +63,8 @@ export class SpriteEmitter extends BaseEmitter {
             usesSubdivision,
             blendBetweenSubdivisions: this.isBlendBetweenSubdivisions && !this.isUsingRandomSubdiv,
             spriteDirection: this.spriteDirection,
-            projectionNormal: this.projectionNormal
+            projectionNormal: this.projectionNormal,
+            rangeFade: this.rangeFade
         }), capacity);
     }
 }

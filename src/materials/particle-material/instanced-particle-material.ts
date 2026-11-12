@@ -8,7 +8,7 @@ import type { ParticleBlendModes_T, SpriteDirections_T } from "@l2js/engine/cont
 export class InstancedParticleMaterial extends ShaderMaterial {
     public isUpdatable = false;
     
-    public constructor({ map, blendingMode, name, usesSubdivision, blendBetweenSubdivisions, spriteDirection, projectionNormal }: InstancedParticleMaterialInitSettings_T) {
+    public constructor({ map, blendingMode, name, usesSubdivision, blendBetweenSubdivisions, spriteDirection, projectionNormal, rangeFade }: InstancedParticleMaterialInitSettings_T) {
         
         const uniforms = appendGlobalUniforms(UniformsUtils.merge([
             UniformsLib.fog
@@ -18,6 +18,7 @@ export class InstancedParticleMaterial extends ShaderMaterial {
         fixParticleTextureSampling(uniforms.map.value, usesSubdivision === true);
         uniforms.alphaTest = { value: 1e-3 };
         uniforms.particleProjectionNormal = { value: projectionNormal?.clone() ?? new Vector3(0, 0, 1) };
+        uniforms.rangeFade = rangeFade ?? { value: 1 };
 
         const defines: Record<string, any> = { USE_FOG: "", USE_ALPHATEST: "" };
 
@@ -71,5 +72,6 @@ type InstancedParticleMaterialInitSettings_T = {
     usesSubdivision?: boolean,
     blendBetweenSubdivisions?: boolean,
     spriteDirection?: SpriteDirections_T,
-    projectionNormal?: Vector3
+    projectionNormal?: Vector3,
+    rangeFade?: THREE.IUniform
 };

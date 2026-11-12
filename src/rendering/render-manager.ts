@@ -2021,8 +2021,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
             emitter.parent.getWorldPosition(tmpEmitterOrigin);
             const dx = tmpEmitterOrigin.x - camera.position.x, dy = tmpEmitterOrigin.y - camera.position.y;
-            const visible = (emitter.isActorAttachedEmitter || !!sector && sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) && Math.sqrt(dx * dx + dy * dy) < emitterCullDist;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const visible = (emitter.isActorAttachedEmitter || !!sector && sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) && distance < emitterCullDist;
             emitter.setRenderVisible(visible && !this.manuallyHiddenEmitterUuids.has(emitter.uuid));
+            emitter.setRangeFade((emitterCullDist - distance) / GLOBAL_UNIFORMS.clippingFade.value);
         }
         return activeSector;
     }

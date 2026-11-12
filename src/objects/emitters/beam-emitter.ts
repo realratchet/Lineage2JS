@@ -128,7 +128,8 @@ export class BeamEmitter extends BaseEmitter {
         geometry.setIndex(new BufferAttribute(indices, 1));
         geometry.boundingSphere = null;
 
-        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(this.material) : new ParticleMaterial(this.material);
+        const settings = { ...this.material, rangeFade: this.rangeFade };
+        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings);
         const mesh = new BeamMesh(geometry, material);
 
         mesh.emitter = this;

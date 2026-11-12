@@ -74,7 +74,8 @@ export class RibbonEmitter extends BaseEmitter {
     }
 
     protected initParticleMesh() {
-        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(this.material) : new ParticleMaterial(this.material);
+        const settings = { ...this.material, rangeFade: this.rangeFade };
+        const material = this.material.sprites?.length > 1 ? new AnimatedParticleMaterial(settings) : new ParticleMaterial(settings);
         material.depthTest = this.isDepthTesting;
         material.depthWrite = this.isDepthWriting;
         const mesh = new RibbonMesh(this.ribbonGeometry, material);
