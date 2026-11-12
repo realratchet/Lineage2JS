@@ -308,6 +308,8 @@ export class NetworkMovement {
         const sector = render.getSector(render.player.position);
         const isLoading = !sector || !sector.staticMeshGroup || !render.isSectorWarm(sector); // LoadTeleportMap 0x10567fa0 only loads, with progress, a destination sector that is not resident
 
+        render.cutCamera();
+
         if (isLoading) {
             this.teleportLoading = true;
             render.setZoneMusicEnabled(false);

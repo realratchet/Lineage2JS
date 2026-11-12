@@ -335,6 +335,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly neighborVisibilitySectors: SectorObject[] = [];
     protected neighborVisibilityCursor = 0;
     protected sectorFadeTime = 0;
+    protected isCameraCut = false;
     protected readonly deferredMixerOperations: (() => void)[] = [];
     protected readonly pawnRenderables = new Set<PawnRenderableComponent>();
     protected pawnRange: number = null;
@@ -879,6 +880,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.activeMusicId = null;
         this.audioManager.cancelMusic();
     }
+
+    public cutCamera(): void { this.isCameraCut = true; }
 
     public setZoneMusicEnabled(isEnabled: boolean): void {
         this.isZoneMusicEnabled = isEnabled;
@@ -1967,7 +1970,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             this.getPhysicsManager().setTriggerPosition(this.usePawnCullingCamera ? this.player.position : this.camera.position);
         }
 
-        const fadeStep = auxiliary ? 0 : (this.manGame.getCurrentTime() - this.sectorFadeTime) / SECTOR_FADE_MS;
+        const fadeStep = auxiliary ? 0 : this.isCameraCut ? Infinity : (this.manGame.getCurrentTime() - this.sectorFadeTime) / SECTOR_FADE_MS;
         if (!auxiliary) this.sectorFadeTime = this.manGame.getCurrentTime();
 
         for (const sector of this.arrSceneSectors) {
@@ -2188,6 +2191,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const sector = this.getSector(fogPosition);
         const blendedHazeColors: ColorByte[] = env.getHazeGradient();
         let skyVisibility = 1.0;
+        let isIndoor = false;
 
         const targetCloudColors: ColorByte[] = [
             env.getCloudColor(0, new ColorByte()),
@@ -2198,6 +2202,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (sector) {
             const zoneIndex = sector.findPositionZone(fogPosition);
             const zone = sector.zones.children[zoneIndex] as ZoneObject;
+
+            isIndoor = zoneIndex !== 0 && !!zone && !zone.isSunAffected;
 
             // FLevelSceneNode::Render: direct zone fog (0x8f327c); outdoor world fog (0x8f3077-0x8f31b2).
             if (zone && zone.fog && (!zone.isSunAffected || !this.manGame.getComponent("asset").getStreaming())) {
@@ -2406,9 +2412,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         if (camera === this.camera) {
             if (updateAudio) {
-                if (!this.fogSource) {
+                if (!this.fogSource || this.isCameraCut) {
                     this.fogBlend.snapToTarget(targetFogColor, targetFogStart, targetFogEnd);
                     this.skyColors.length = this.prevSkyColors.length = 0;
+                    this.isCameraCut = this.isCameraCut && !this.manGame.getComponent("asset").isAreaLoaded(this, fogCamera.position);
                 } else if (fogSource !== this.fogSource) {
                     this.prevSkyColors.forEach((color, index) => color.copy(this.skyColors[index]));
                     this.fogBlend.setTarget(targetFogColor, targetFogStart, targetFogEnd);
@@ -2479,6 +2486,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         if (GLOBAL_UNIFORMS.fogNear) GLOBAL_UNIFORMS.fogNear.value = targetFogStart;
         if (GLOBAL_UNIFORMS.fogFar) GLOBAL_UNIFORMS.fogFar.value = targetFogEnd;
         GLOBAL_UNIFORMS.clippingSphere.value.set(fogPosition.x, fogPosition.y, fogPosition.z, targetFogEnd - fogCamera.position.distanceTo(fogPosition)); // stays inside the culling camera's range
+        GLOBAL_UNIFORMS.indoorRangeIgnored.value = isIndoor ? 1 : 0;
     }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void {

@@ -1415,16 +1415,12 @@ export class SectorObject extends GameObject {
                         const currentZoneBit = 1n << BigInt(currentZone);
                         const isCurrentZoneActive = !!(currentZoneBit & currentZoneMask);
 
-                        const PORTAL_MAX_DISTANCE = 5000;
                         const portalSphere = currentNode.exclusiveSphereBound;
-                        const portalDistance = cameraPosition.distanceTo(portalSphere.center);
-                        const isPortalInRange = portalDistance <= (PORTAL_MAX_DISTANCE + portalSphere.radius);
                         // shortcut: retain indoor-to-outdoor visibility until indoor BSP boundary visibility is verified.
                         const isDoorOccluded = !!(currentZoneBit & this.outdoorZoneMask) && !(this.outdoorZoneMask & (1n << BigInt(oppositeZone))) && this.blockedDoorPortals.has(current) && Math.abs(planeDot) > portalSphere.radius;
 
                         const portalVisible = isCurrentZoneActive &&
                             !isDoorOccluded &&
-                            isPortalInRange &&
                             (!frustumCullingEnabled || cameraFrustum.intersectsSphere(portalSphere));
 
                         if (!leafOnlyMode && portalVisible && oppositeZone >= 0 && oppositeZone < 64) {

@@ -376,6 +376,7 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
         const material = m as any;
         if (material.defines && material.defines.USE_RANGE_FADE === undefined) {
             material.defines.USE_RANGE_FADE = "";
+            if (!sectionInfo.isOutdoor) material.defines.USE_INDOOR_RANGE_IGNORED = "";
             material.needsUpdate = true;
         }
         if (!sectionInfo.isUnlit && sectionInfo.isOutdoor && material.uniforms?.ambient?.value?.color && material.defines) {

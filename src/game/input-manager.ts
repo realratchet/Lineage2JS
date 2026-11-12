@@ -656,6 +656,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         const target = this.controls.orbit.target;
 
         this.renderManager.cancelMusic();
+        this.renderManager.cutCamera();
 
         switch (index) {
             case 1:
@@ -693,6 +694,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         const sector = bounds[index];
 
         this.renderManager.cancelMusic();
+        this.renderManager.cutCamera();
         this.renderManager.camera.position.copy(sector.max);
         this.controls.orbit.target.copy(sector.min).sub(sector.max).setLength(100).add(sector.max);
         this.controls.orbit.update();

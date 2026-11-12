@@ -392,6 +392,7 @@
     varying float vRangeAlpha;
     uniform vec4 clippingSphere;
     uniform float clippingFade;
+    uniform float indoorRangeIgnored;
     attribute float sectorFade;
 #endif
 #ifdef USE_LIT_ATTRIBUTES
@@ -918,6 +919,9 @@ void main() {
         vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
         #ifdef USE_LIT_ATTRIBUTES
             vRangeAlpha = max(actorRangeIgnored, vRangeAlpha);
+        #endif
+        #ifdef USE_INDOOR_RANGE_IGNORED
+            vRangeAlpha = max(indoorRangeIgnored, vRangeAlpha);
         #endif
         vRangeAlpha = min(vRangeAlpha, sectorFade);
     #endif
