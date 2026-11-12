@@ -481,7 +481,7 @@ export class NetworkActors {
         while (this.inWorld && generation === this.teleportGeneration) {
             const isAreaLoaded = asset.isAreaLoaded(render, render.player.position);
 
-            if (isAreaLoaded && this.npcSpawnCount === 0 && this.npcSpawnWaiters.length === 0) break;
+            if (isAreaLoaded && render.areProgramsReady() && this.npcSpawnCount === 0 && this.npcSpawnWaiters.length === 0) break;
 
             setLoadingProgress(isAreaLoaded ? 0.9 : 0.5, isAreaLoaded ? loadingTexts.nearbyCharacters(this.npcSpawnCount + this.npcSpawnWaiters.length) : loadingTexts.area());
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -1056,12 +1056,14 @@ export class NetworkActors {
         const level = render.getLevel();
         const dilation = level ? level.levelInfoActor.getUnrealScriptProperty("TimeDilation") as number : 1;
         const delta = Math.fround(Math.max(Math.fround(0.0005), Math.min(Math.fround(0.4), Math.fround(Math.fround(deltaTime / 1000) * dilation))));
+        let canRemove = true;
 
         // DisappearNpcAction::Tick 0x10499f90..0x1049a08d.
         for (const [actor, previous] of this.disappearNpcActions) {
             const elapsed = Math.fround(previous + delta);
 
-            if (elapsed > 2) {
+            if (elapsed > 2 && canRemove) {
+                canRemove = false; // a group that left together expires on one tick, removal costs milliseconds per pawn
                 this.disappearNpcActions.delete(actor);
                 render.removePawn(actor);
             } else {

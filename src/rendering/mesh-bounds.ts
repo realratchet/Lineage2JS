@@ -5,6 +5,7 @@ type Sway_T = { position: any, sway: any, positionVersion: number, swayVersion: 
 type Instances_T = { matrix: any, version: number, count: number, sway: Sway_T, bounds: Box3 };
 
 const tmpInstanceBox = new Box3();
+const tmpBox = new Box3();
 const tmpInstanceMatrix = new Matrix4();
 const tmpVertex = new Vector3();
 
@@ -45,10 +46,11 @@ export class MeshBounds {
     }
 
     public *prepare(root: THREE.Object3D): Generator<void, void, unknown> {
-        const geometries = new Set<THREE.BufferGeometry>();
+        const geometries = new Set<THREE.BufferGeometry>(), instanced: THREE.InstancedMesh[] = [];
         root.traverse(object => {
             const geometry = (object as THREE.Mesh).geometry;
             if (geometry?.attributes.position) geometries.add(geometry);
+            if ((object as THREE.InstancedMesh).isInstancedMesh) instanced.push(object as THREE.InstancedMesh);
         });
         for (const geometry of geometries) {
             const position = geometry.attributes.position, sway = geometry.attributes.sway, positionVersion = version(position), swayVersion = version(sway);
@@ -91,6 +93,11 @@ export class MeshBounds {
                     geometry.boundingSphere = sphere;
                 }
             }
+        }
+        for (const object of instanced) {
+            if (!object.boundingBox) object.computeBoundingBox();
+            yield;
+            if ((object as any).isTerrainDecoration && this.getBounds({ object, geometry: object.geometry }, tmpBox, true)) yield;
         }
     }
 

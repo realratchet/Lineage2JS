@@ -120,7 +120,29 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     return geometry;
 }
 
-function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary, object: T, info: IBaseObjectDecodeInfo) {
+function drainSteps<T>(steps: Generator<void, T>): T {
+    let step = steps.next();
+
+    while (!step.done) step = steps.next();
+
+    return step.value;
+}
+
+function* decodeChildren(library: DecodeLibrary, object: THREE.Object3D, info: Pick<IBaseObjectDecodeInfo, "children">): Generator<void, void> {
+    if (!info.children) return;
+
+    for (const ch of info.children) {
+        switch (ch.type) {
+            case "Group":
+            case "Level":
+            case "TerrainInfo": object.add(yield* decodeTerrainInfoSteps(library, ch as IBaseObjectDecodeInfo)); break;
+            default: object.add(decodeObject3D(library, ch)); break;
+        }
+        yield;
+    }
+}
+
+function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary, object: T, info: IBaseObjectDecodeInfo, children: boolean = true) {
 
     if (info.name) object.name = info.name;
     if (info.scriptClassId) {
@@ -133,7 +155,7 @@ function applySimpleProperties<T extends THREE.Object3D>(library: DecodeLibrary,
     if (info.quaternion) object.quaternion.fromArray(info.quaternion);
     else if (info.rotation) object.rotation.fromArray(info.rotation);
 
-    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+    if (children && info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
 
     return object;
 }
@@ -297,7 +319,9 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     return object;
 }
 
-function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
+function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) { return drainSteps(decodeZoneObjectSteps(library, info)); }
+
+function* decodeZoneObjectSteps(library: DecodeLibrary, info: IBaseZoneDecodeInfo): Generator<void, ZoneObject> {
     const object = new ZoneObject();
 
     if (info.name) object.name = info.name;
@@ -316,7 +340,7 @@ function decodeZoneObject(library: DecodeLibrary, info: IBaseZoneDecodeInfo) {
             object.skyOrigin.fromArray((info as any).location);
         }
     }
-    if (info.children) info.children.forEach(ch => object.add(decodeObject3D(library, ch)));
+    yield* decodeChildren(library, object, info);
 
     // object.visible = false;
 
@@ -418,14 +442,17 @@ function decodeLight(library: DecodeLibrary, info: ILightDecodeInfo | ISunLightD
     // };
 }
 
-export function decodeSectorCore(library: DecodeLibrary) {
+export function decodeSectorCore(library: DecodeLibrary) { return drainSteps(decodeSectorCoreSteps(library)); }
+
+export function* decodeSectorCoreSteps(library: DecodeLibrary): Generator<void, SectorObject> {
     const sector = new SectorObject();
 
     sector.name = library.name;
     sector.brightness = library.brightness;
     sector.levelInfo = library.levelInfo;
     sector.levelActorUuids = library.levelActorUuids;
-    sector.scriptVM = new UnScriptVM(library);
+    sector.scriptVM = new UnScriptVM(library, true);
+    yield* sector.scriptVM.loadSteps();
     sector.scriptVM.initializeLevel(sector);
 
     if (library.sector) {
@@ -437,11 +464,17 @@ export function decodeSectorCore(library: DecodeLibrary) {
         sector.gridBounds.max.set(minX + sectorSize, 262144, minZ + sectorSize);
     }
 
-    library.bspZones.forEach(bspZone => sector.zones.add(decodeZoneObject(library, bspZone.zoneInfo)));
+    yield;
+    for (const bspZone of library.bspZones) sector.zones.add(yield* decodeZoneObjectSteps(library, bspZone.zoneInfo));
 
     sector.setBSPInfo(library.bspZones, library.bspNodes, library.bspLeaves);
+    yield;
     sector.setLights(library.lightActors.map(info => decodeLight(library, info)))
-    library.skyZoneInfos.forEach(info => sector.add(decodeObject3D(library, info)));
+    yield;
+    for (const info of library.skyZoneInfos) {
+        sector.add(decodeObject3D(library, info));
+        yield;
+    }
     sector.musicVolumeInfos = library.musicVolumes;
     sector.musicVolumes = library.musicVolumes.filter(volume => library.audioList.some(info => info.uuid === volume.uuid));
     sector.waterVolumes = library.waterVolumes;
@@ -456,6 +489,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
     sector.nodeToSection = library.nodeToSection;
     sector.nodeZoneMasks = library.nodeZoneMasks;
 
+    yield;
     if (library.bspNodes.some(node => !!node.collision)) sector.add(new BSPCollider(library.bspNodes, library.bspRootOutside, library.levelInfoCollisionRadius));
 
     for (const info of library.blockingVolumes) {
@@ -465,6 +499,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
         volume.actorUuid = info.uuid;
         applySimpleProperties(library, volume, info);
         sector.add(volume);
+        yield;
     }
 
     if (library.bspSections && library.bspSections.length > 0) {
@@ -485,7 +520,7 @@ export function decodeSectorCore(library: DecodeLibrary) {
             }
         });
 
-        opaqueSections.forEach(section => {
+        for (const section of opaqueSections) {
             try {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
@@ -495,9 +530,10 @@ export function decodeSectorCore(library: DecodeLibrary) {
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
-        });
+            yield;
+        }
 
-        transparentSections.forEach(section => {
+        for (const section of transparentSections) {
             try {
                 const sectionIndex = library.bspSections.indexOf(section);
                 const mesh = decodeBSPSection(library, section, sectionIndex);
@@ -507,7 +543,8 @@ export function decodeSectorCore(library: DecodeLibrary) {
             } catch (e) {
                 console.warn(`Failed to decode BSP section ${section.uuid}:`, e);
             }
-        });
+            yield;
+        }
 
         sector.add(bspGroup);
     }
@@ -698,9 +735,12 @@ function attachMoveEventActors(sector: SectorObject) {
     });
 }
 
-function decodeTerrainInfo(library: DecodeLibrary, info: IBaseObjectDecodeInfo) {
+function decodeTerrainInfo(library: DecodeLibrary, info: IBaseObjectDecodeInfo) { return drainSteps(decodeTerrainInfoSteps(library, info)); }
+
+function* decodeTerrainInfoSteps(library: DecodeLibrary, info: IBaseObjectDecodeInfo): Generator<void, Object3D> {
     const group = new Object3D();
-    applySimpleProperties(library, group, info);
+    applySimpleProperties(library, group, info, false);
+    yield* decodeChildren(library, group, info);
 
     const sectors: Terrain[] = [];
     const decorations: TerrainDecoration[] = [];
@@ -720,6 +760,7 @@ function decodeTerrainInfo(library: DecodeLibrary, info: IBaseObjectDecodeInfo) 
         decoration.setTerrain(terrain);
     });
 
+    yield;
     batchTerrainSectors(library, group, sectors);
 
     return group;

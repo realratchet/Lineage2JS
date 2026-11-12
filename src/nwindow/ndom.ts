@@ -7,7 +7,7 @@ const CARET_BLINK = 500;
 const TEXT_COLOR = 0xffdcdcdc;
 const LABEL_ENABLED = 0xffe6dcbe;
 const LABEL_DISABLED = 0xffa0a0a0;
-const ATLAS_WIDTH = 2048;
+const ATLAS_WIDTH = 256; // chrome drops idle decoded images, a repaint then decodes whole pages while the frame waits
 const MIN_THUMB = 15;
 
 type AtlasFrame_T = { url: string, x: number, y: number, atlasWidth: number, atlasHeight: number };
@@ -339,20 +339,18 @@ export class NDomLayer {
         const keys = requests.map(([atlasKey]) => atlasKey);
         const animations: { frames: (ImageBitmap | HTMLCanvasElement)[], frameTime: number }[] = requests.map(([, [key, tint]]) => tint === 0xffffff ? canvas.getTextureAnimation(key, useIntrinsicAlpha) : { frames: [canvas.getTintedImage(key, tint, -1, useIntrinsicAlpha)], frameTime: 0 });
         const images = animations.flatMap(image => image.frames);
-        const atlasWidth = Math.max(ATLAS_WIDTH, ...images.map(image => image.width));
-        const atlasHeight = Math.max(ATLAS_WIDTH, ...images.map(image => image.height));
         const places: [number, number][] = [];
         const arrPages: number[][] = [[]];
         let x = 0, y = 0, shelf = 0;
 
         for (const i of images.map((_, i) => i).sort((a, b) => images[b].height - images[a].height)) {
-            if (x + images[i].width > atlasWidth) {
+            if (x > 0 && x + images[i].width > ATLAS_WIDTH) {
                 x = 0;
                 y += shelf + 1;
                 shelf = 0;
             }
 
-            if (y + images[i].height > atlasHeight) {
+            if (y > 0 && y + images[i].height > ATLAS_WIDTH) {
                 arrPages.push([]);
                 x = y = shelf = 0;
             }
@@ -368,7 +366,7 @@ export class NDomLayer {
         for (const page of arrPages) {
             const atlas = document.createElement("canvas");
 
-            atlas.width = Math.min(atlasWidth, Math.max(...page.map(i => places[i][0] + images[i].width + 1)));
+            atlas.width = Math.max(...page.map(i => places[i][0] + images[i].width + 1));
             atlas.height = Math.max(...page.map(i => places[i][1] + images[i].height));
 
             const context = atlas.getContext("2d", { willReadFrequently: true });

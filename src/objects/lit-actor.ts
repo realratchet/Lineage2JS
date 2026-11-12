@@ -316,7 +316,7 @@ export class LitActorMesh extends GameMesh {
     public needsInitialLighting(): boolean {
         if (this.ambient?.hardwareLighting) return this.lastEnvVersion < 0;
 
-        return this.staticLightingPending || !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
+        return this.staticLightingPending || !!this.vertexLighting && this.vertexLighting.isBuilding() || !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
     }
 
     public cancelPendingLighting(): void {
@@ -456,7 +456,6 @@ export class LitActorMesh extends GameMesh {
 
         const perActorAmbientForFilter = this.perActorAmbient as { startVertex: number, count: number }[] | undefined;
         const canFilterByVisibility = !!this.elemVisibility && !!perActorAmbientForFilter;
-        const vertexToElement = canFilterByVisibility ? this.getVertexToElement(perActorAmbientForFilter!, colorArray.length / 3) : undefined;
         const relight = canFilterByVisibility && !staticCacheDirty && !anyDynamicLightNeedsUpdate ? this.elemRelight : undefined;
         const filterVisibility = relight ?? (canFilterByVisibility ? this.elemVisibility : undefined);
 
@@ -557,11 +556,16 @@ export class LitActorMesh extends GameMesh {
                 const glow = this.perActorAmbient ? this.getPerVertexGlow(this.perActorAmbient, this.geometry.getAttribute("position").count) : new Float32Array(this.geometry.getAttribute("position").count).fill(this.scaledGlow);
                 this.vertexLighting = new VertexLighting(this.lightingRenderer, this.geometry, glow, dynamicScene.concat(dynamicEnv), dynamicScene.length, this.staticLightingCache);
                 this.geometry.setAttribute("lightingSource", attrColors);
+                colorArray.set(this.staticLightingCache); // shown until the GPU tables are built
+                attrColors.needsUpdate = true;
             }
 
             const indices = dynamicEnv.length >= 2 ? env.selectEnvironmentLightIndices(dynamicEnv.length) : [0, -1, 0];
             env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor);
-            this.vertexLighting.update(this.lightInfo.matrix, this.staticLightingCache, staticCacheDirty, tmpEnvColor, indices[0], indices[1], indices[2]);
+            if (!this.vertexLighting.update(this.lightInfo.matrix, this.staticLightingCache, staticCacheDirty, tmpEnvColor, indices[0], indices[1], indices[2])) {
+                this.needsRelightPass = true;
+                return;
+            }
             this.geometry.setAttribute("lighting", this.vertexLighting.output as any);
             this.needsRelightPass = false;
             if (this.elemRelight) this.elemRelight.fill(0);
@@ -576,6 +580,8 @@ export class LitActorMesh extends GameMesh {
                 colorArray.set(this.staticLightingCache!.subarray(startVertex * 3, (startVertex + count) * 3), startVertex * 3);
             }
         } else colorArray.set(this.staticLightingCache!);
+
+        const vertexToElement = canFilterByVisibility ? this.getVertexToElement(perActorAmbientForFilter!, colorArray.length / 3) : undefined;
 
         if (dynamicScene.length > 0) this.computeLighting(sector, dynamicScene, colorArray, 1.0, filterVisibility, vertexToElement);
         if (dynamicEnv.length > 0) env.getBaseColorPlaneStaticMeshSunLight(tmpEnvColor);

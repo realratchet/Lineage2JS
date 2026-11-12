@@ -17,7 +17,7 @@ import { PropertyFlags_T } from "@l2js/core";
 
 const DEFAULT_CHAR_INDEX = 1;
 import { WebGLCapabilities } from "three/src/renderers/webgl/WebGLCapabilities";
-import { createSectorStaticMeshDecodeJob, decodeAnimations, decodeObject3D, decodePackage, decodeSectorCore, stepSectorStaticMeshDecodeJob, SectorStaticMeshDecodeJob_T } from "./decoders/object3d-decoder";
+import { createSectorStaticMeshDecodeJob, decodeAnimations, decodeObject3D, decodePackage, decodeSectorCoreSteps, stepSectorStaticMeshDecodeJob } from "./decoders/object3d-decoder";
 import decodeEnv from "./decoders/env-decoder";
 import DecodeWorkerClient from "./decode-worker/decode-worker-client";
 import type { ClientConfig_T, GameStrings_T, MatineeScene_T, PlayerSkillInfo_T, UITexture_T } from "./decode-worker/decode-protocol";
@@ -58,7 +58,6 @@ const SECTOR_RETIRE_DELAY_MS = 1000; // prefetch reach follows frame time, uneve
 const SECTOR_WORLD_SIZE = 256 * 128;
 const SECTOR_PREFETCH_LOOKAHEAD_MS = 1500;
 const SECTOR_PREFETCH_MAX_DISTANCE = SECTOR_WORLD_SIZE;
-const STATIC_MESH_BUILD_FRAME_MS = 2;
 const BIND_POSE_EPSILON = 1e-3;
 const NPC_SPAWN_FLOOR_DISTANCE = 2000;
 const LANDMARK_EFFECTS = ["LineageEffect.e_u093_a", "LineageEffect.e_u093_b"];
@@ -73,7 +72,8 @@ const PLAYER_CONTROLLER_CLASS = "Engine.LineagePlayerController";
 const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
-type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, decodeJob: SectorStaticMeshDecodeJob_T };
+type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, steps: Generator<void, void> };
+type SectorSteps_T = { steps: Generator<void, unknown>, resolve: (value: any) => void, reject: (error: unknown) => void };
 export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
 function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo | null {
@@ -233,6 +233,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected isWorkerReady = false;
     protected failedSectors = new Map<string, number>();
     protected retiredSectors = new Map<string, { sector: SectorObject, retiredAt: number }>();
+    protected readonly arrRemovedSectors: SectorObject[] = [];
     protected inFlightSectors = new Map<string, number>();
     protected readonly requiredSectors = new Set<string>();
     protected nextSectorRequest = 0;
@@ -257,6 +258,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly pawnSkillRequests = new WeakMap<BaseActor, number>();
     protected readonly cacheSkillVisuals = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheNpcLibraries = new Map<string, CachedLibrary_T>();
+    protected readonly cacheNpcVMs = new WeakMap<DecodeLibrary, Promise<UnScriptVM>>();
+    protected pawnBuildTick: Promise<void> = null;
+    protected readonly pendingSectorSteps: SectorSteps_T[] = [];
     protected readonly cacheCharacterLibraries = new Map<string, CachedLibrary_T>();
     protected readonly cacheCharacterScripts = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheNpcs = new Map<string | number, Promise<INpcDefinition>>();
@@ -269,7 +273,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected gameManager: GameManager;
     public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
     public getParent(): GameManager { return this.gameManager; }
-    public getPendingAssetCount(): number { return this.decodeWorker.getPendingAssetCount() + this.pendingStaticMeshBuilds.length; }
+    public getPendingAssetCount(): number { return this.decodeWorker.getPendingAssetCount() + this.pendingStaticMeshBuilds.length + this.pendingSectorSteps.length; }
 
     public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
@@ -338,6 +342,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
         (this.loadSettings as any).rgbaTextures = !this.preferCompressedTextures;
 
         this.decodeWorker = this.createDecodeWorker();
+        this.decodeWorker.waitFrame = () => this.isStreaming && this.gameManager.getCurrentTime() > 0 ? this.waitFrameBudget() : null;
     }
 
     protected createDecodeWorker(): DecodeWorkerClient { return new DecodeWorkerClient(this.decodeWorkerPoolSize); }
@@ -816,6 +821,33 @@ export class AssetManager implements IEngineComponent<GameManager> {
         actor.findComponent<PawnAttackComponent>("pawnAttack")?.stop();
     }
 
+    protected async waitFrameBudget(): Promise<number> {
+        await this.gameManager.getComponent("network").waitNextTick();
+
+        return this.gameManager.getBackgroundBudget();
+    }
+
+    protected async waitPawnBuild(): Promise<void> {
+        const network = this.gameManager.getComponent("network");
+
+        if (!this.isStreaming || this.gameManager.getCurrentTime() <= 0 || network.isWorldLoading()) return new Promise<void>(resolve => setTimeout(resolve, 0));
+
+        while (this.pawnBuildTick === network.waitNextTick()) await this.pawnBuildTick;
+
+        this.pawnBuildTick = network.waitNextTick();
+    }
+
+    protected async loadNpcVM(source: DecodeLibrary): Promise<UnScriptVM> {
+        await this.waitPawnBuild();
+
+        if (!this.isStreaming || this.gameManager.getCurrentTime() <= 0) return new UnScriptVM(source);
+
+        const vm = new UnScriptVM(source, true);
+
+        await this.runSectorSteps(vm.loadSteps()); // 12 ms in one frame otherwise, the first time an npc type shows up
+        return vm;
+    }
+
     public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: INpcEquipment | null = null, preloadSkills: boolean = true) {
         const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
         const libraryPromise = npcId === null ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment) : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, preloadSkills);
@@ -826,10 +858,17 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         const meshes: THREE.SkinnedMesh[] = [];
         for (const info of library.pawnActors) {
-            await new Promise<void>(resolve => setTimeout(resolve, 0));
+            await this.waitPawnBuild();
             meshes.push(decodeObject3D(library, info) as THREE.SkinnedMesh);
         }
         const animations = (meshes.length ? (meshes[0] as any).meshAnimations : {}) as Record<string, THREE.AnimationClip>;
+        const source = npcId === null ? library : library.sourceLibrary;
+
+        if (scriptClassPath && !this.cacheNpcVMs.has(source)) this.cacheNpcVMs.set(source, this.loadNpcVM(source));
+
+        const vm = scriptClassPath ? await this.cacheNpcVMs.get(source) : null;
+
+        await this.waitPawnBuild();
 
         if (!animations) throw new Error(`'${library.name}' animations failed to decode.`);
 
@@ -861,8 +900,6 @@ export class AssetManager implements IEngineComponent<GameManager> {
             if (!classId) throw new Error(`'${library.name}' has no transferred script class.`);
 
             applyScriptLocalization(library, classId, localization);
-
-            const vm = new UnScriptVM(library);
 
             actor.setScriptRuntime(vm, classId, effectClassId => this.createScriptObject(renderManager, library, effectClassId, vm));
             if (renderManager.getLevel()) actor.setUnrealScriptProperty("Level", renderManager.getLevel().levelInfoActor as any);
@@ -1139,21 +1176,51 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected setSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): void {
+        const steps = this.stepSectorScriptRuntime(renderManager, library, sector);
+
+        while (!steps.next().done) { }
+    }
+
+    protected *stepSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): Generator<void, void> {
+        const objects: any[] = [];
+
         sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
-        sector.traverse((object: any) => {
+        sector.traverse(object => { objects.push(object); });
+        for (const object of objects) {
             if (object.isTerrain) object.terrainInfoActor = sector.getTerrainInfoActor(object.terrainInfoUuid);
             if (object.isTerrainBatch)
                 for (const terrain of object.sectors) terrain.terrainInfoActor = sector.getTerrainInfoActor(terrain.terrainInfoUuid);
 
-            if (!object.isVolume && !object.isStaticMeshActor) return;
+            if (!object.isVolume && !object.isStaticMeshActor) continue;
 
             object.setScriptRuntime(sector.scriptVM, (classId: string) => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
             if (object.isMovableObject && !object.findComponent("sound")) object.addComponent(new SoundComponent(renderManager.audioManager).setLibrary(library));
             if (object.isStaticMeshActor && object.scriptClassId && !object.getUnrealScriptProperty("bStatic") && object.getUnrealScriptProperty("bMovable") && !object.findComponent("transform"))
                 object.addComponent(new TransformComponent(renderManager, object.getBasedActors()));
-        });
+            yield;
+        }
         sector.rearrangeLevelActors();
+        yield;
+        for (const object of objects)
+            if (sector.initializeL2GameEventActor(object)) yield;
         sector.initializeL2GameEvents();
+    }
+
+    protected *stepStaticMeshBuild(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): Generator<void, void> {
+        const job = createSectorStaticMeshDecodeJob(library, sector);
+
+        job.prepareBounds = root => renderManager.prepareSector(sector, root);
+
+        while (!stepSectorStaticMeshDecodeJob(job)) yield;
+
+        yield;
+        yield* this.stepSectorScriptRuntime(renderManager, library, sector);
+        yield; // the last build step, the level events and the attach cost 5-7 ms each
+        renderManager.attachStaticMeshGroup(sector);
+    }
+
+    protected runSectorSteps<T>(steps: Generator<void, T>): Promise<T> {
+        return new Promise((resolve, reject) => this.pendingSectorSteps.push({ steps, resolve, reject }));
     }
 
     protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes, isActive: boolean = false): boolean {
@@ -1210,13 +1277,24 @@ export class AssetManager implements IEngineComponent<GameManager> {
             decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
             (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-            const sector = decodeSectorCore(decodeLibrary);
-            this.setSectorScriptRuntime(renderManager, decodeLibrary, sector);
-            renderManager.addSector(sector);
+            const sector = await this.runSectorSteps(decodeSectorCoreSteps(decodeLibrary));
+
+            await this.runSectorSteps(this.stepSectorScriptRuntime(renderManager, decodeLibrary, sector));
+            await this.runSectorSteps(renderManager.prepareSector(sector, sector));
+
+            if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request || !this.requiredSectors.has(sectorIdx)) {
+                if (this.inFlightSectors.get(sectorIdx) === request) this.decodeWorker.freeSector(sectorIdx);
+                return;
+            }
+
+            const steps = renderManager.addSectorSteps(sector);
+
+            steps.next();
             this.gameManager.getComponent("physics").setEmitterWarmupGate(sector, false);
 
-            this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, decodeJob: null });
+            this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, steps: null });
             this.failedSectors.delete(sectorIdx);
+            await this.runSectorSteps(steps);
         } catch (e) {
             if (e.name === "AbortError") return;
 
@@ -1242,6 +1320,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected destroyExpiredSectors(renderManager: RenderManager, immediate = false) {
         const now = performance.now();
 
+        while (this.arrRemovedSectors.length > 0) {
+            renderManager.disposeSector(this.arrRemovedSectors.pop());
+            if (!immediate) return;
+        }
+
         for (const [sectorIdx, { sector, retiredAt }] of this.retiredSectors) {
             if (!immediate && now - retiredAt < RETIRED_SECTOR_DISPOSE_MS) continue;
 
@@ -1250,9 +1333,13 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.retiredSectors.delete(sectorIdx);
             this.dropPendingBuild(sector);
             renderManager.removeSector(sector);
-            renderManager.disposeSector(sector);
-
             this.decodeWorker?.freeSector(sectorIdx);
+
+            if (immediate) renderManager.disposeSector(sector);
+            else {
+                this.arrRemovedSectors.push(sector); // removal and disposal cost 7 ms each
+                return;
+            }
         }
     }
 
@@ -1263,6 +1350,27 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected processPendingBuilds(renderManager: RenderManager, cameraPosition: THREE.Vector3) {
+        const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : this.gameManager.getBackgroundBudget());
+
+        while (this.pendingSectorSteps.length > 0) {
+            const pending = this.pendingSectorSteps[0];
+            let step: IteratorResult<void, unknown>;
+
+            try {
+                do step = pending.steps.next();
+                while (!step.done && performance.now() < deadline);
+            } catch (e) {
+                this.pendingSectorSteps.shift();
+                pending.reject(e);
+                continue;
+            }
+
+            if (!step.done) return;
+
+            this.pendingSectorSteps.shift();
+            pending.resolve(step.value);
+        }
+
         let jobIndex = -1;
         let jobDistance = Infinity;
 
@@ -1284,22 +1392,16 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (!job) return;
 
         try {
-            if (!job.decodeJob) {
-                job.decodeJob = createSectorStaticMeshDecodeJob(job.library, job.sector);
-                job.decodeJob.prepareBounds = root => renderManager.prepareStaticMeshBounds(root);
-            }
+            if (!job.steps) job.steps = this.stepStaticMeshBuild(renderManager, job.library, job.sector);
 
-            const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : STATIC_MESH_BUILD_FRAME_MS);
-            let complete = false;
+            let step: IteratorResult<void, void>;
 
-            do complete = stepSectorStaticMeshDecodeJob(job.decodeJob);
-            while (!complete && performance.now() < deadline);
+            do step = job.steps.next();
+            while (!step.done && performance.now() < deadline);
 
-            if (!complete) return;
+            if (!step.done) return;
 
             this.pendingStaticMeshBuilds.splice(jobIndex, 1);
-            this.setSectorScriptRuntime(renderManager, job.library, job.sector);
-            renderManager.attachStaticMeshGroup(job.sector);
         } catch (e) {
             this.pendingStaticMeshBuilds.splice(jobIndex, 1);
             console.error(`Failed to build static meshes for sector '${job.sector.name}':`, e);
@@ -1362,8 +1464,14 @@ export class AssetManager implements IEngineComponent<GameManager> {
                 if (teleported || now - sector.lastInRangeTime >= SECTOR_RETIRE_DELAY_MS) this.retireSector(renderManager, sector);
             }
 
+            let start = performance.now();
+
             this.destroyExpiredSectors(renderManager, teleported);
+            this.gameManager.addBackgroundTime(performance.now() - start);
+            start = performance.now();
+
             this.processPendingBuilds(renderManager, cameraPosition);
+            this.gameManager.addBackgroundTime(performance.now() - start);
 
             const sectorsToLoad: string[] = [];
 

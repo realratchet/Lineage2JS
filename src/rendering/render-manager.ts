@@ -6,6 +6,7 @@ import PortalVisibility from "./portal-visibility";
 import MeshBounds from "./mesh-bounds";
 import BatchAngleVisibility from "./batch-angle-visibility";
 import SectorOcclusion from "./sector-occlusion";
+import ProgramVariants from "./program-variants";
 import { ENetMode_T } from "../assets/unreal/un-level-info";
 import "./ue2-conventions";
 import { setTerrainTextureUnits } from "../materials/mesh-terrain-material/mesh-terrain-material";
@@ -281,6 +282,7 @@ function updateViewShake(state: ViewShakeState_T, deltaTime: number): boolean {
 
 export class RenderManager implements IEngineComponent<GameManager> {
     public readonly renderer: THREE.WebGLRenderer;
+    protected readonly programVariants: ProgramVariants;
     public readonly viewport: HTMLViewportElement_T;
     public getDomElement() { return this.renderer.domElement; }
     public readonly camera = new PerspectiveCamera(DEFAULT_HORIZONTAL_FOV, 1, 0.1, DEFAULT_FAR);
@@ -290,6 +292,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
     public readonly scene = new Scene();
     public readonly nameplateScene = new Scene();
     protected readonly translucentRenderList = new TranslucentRenderList();
+    protected readonly cacheSectorResources = new WeakMap<THREE.Object3D, Set<Disposable_T>>();
     protected readonly arrAlphaCores: any[] = [];
     protected alphaCoreCount = 0;
     protected worldCamera: Camera = null;
@@ -366,7 +369,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
     protected readonly arrSceneSectors: SectorObject[] = [];
 
     protected readonly pendingSectorWarmups: SectorWarmup_T[] = [];
-    protected static readonly TEXTURE_WARMUP_FRAME_MS = 2;
     protected readonly pendingShaderCompiles = new Set<THREE.Object3D>();
 
     // deferred shader link/compile error reporting, see processShaderDiagnostics
@@ -459,6 +461,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             throw error;
         }
 
+        this.programVariants = new ProgramVariants(this.renderer);
         (this.camera as any)._reversedDepth = this.renderer.capabilities.reversedDepthBuffer;
         this.camera.updateProjectionMatrix();
         const render = this.renderer.render;
@@ -483,13 +486,13 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.renderer.renderBufferDirect = (camera, scene, geometry, material, object, group) => {
             if (group && group.count === 0) return;
             if ((object as PawnMesh).isPawnMesh) {
-                if (scene === this.scene && !material.transparent && this.pawnCrowd.accept(object as PawnMesh)) return;
+                if (scene === this.scene && this.pawnCrowd.accept(object as PawnMesh, material.transparent)) return;
                 boneAtlas.upload(this.renderer);
-            } else if (scene === this.scene && (object as LitSkinnedMesh).isLitSkinnedMesh && (object as LitSkinnedMesh).actorRenderable && !material.transparent && this.pawnCrowd.acceptPart(object as LitSkinnedMesh, material as MeshStaticMaterial, group)) return;
+            } else if (scene === this.scene && (object as LitSkinnedMesh).isLitSkinnedMesh && (object as LitSkinnedMesh).actorRenderable && this.pawnCrowd.acceptPart(object as LitSkinnedMesh, material as MeshStaticMaterial, group)) return;
 
             if (!(object as PawnMesh).isPawnMesh && (object as LitSkinnedMesh).skeleton && ((object as LitSkinnedMesh).skeleton as LocalSpaceSkeleton).isAtlasPacked) ((object as LitSkinnedMesh).skeleton as LocalSpaceSkeleton).resolveMatrices();
 
-            this.nameplateDepth.beforeRender(material, object);
+            if (scene === this.scene || scene === this.nameplateScene) this.nameplateDepth.beforeRender(material, object); // a fading pawn in the shadow pass made it copy the 256x256 shadow depth
             renderBufferDirect.call(this.renderer, camera, scene, geometry, material, object, group);
             this.sectorOcclusion.afterRender(camera, scene, geometry, material, object, group);
         };
@@ -1212,6 +1215,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         return this.getSectorByCoords(sectorX, sectorY);
     }
 
+    public areProgramsReady(): boolean { return this.programVariants.isReady(); }
     public isSectorWarm(sector: SectorObject): boolean { return !this.pendingSectorWarmups.some(job => job.sector === sector); }
 
     public isSectorCollisionReady(position: THREE.Vector3): boolean {
@@ -1513,7 +1517,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         pawn.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
         arrPawnEffects.length = 0;
         for (const effect of pawn.getScriptChildren()) arrPawnEffects.push(effect);
-        this.scene.traverse(object => {
+        pawn.traverse(object => { // bone attachments are the only objects with a scriptBase
             if ((object as any).scriptBase === pawn && !arrPawnEffects.includes(object)) arrPawnEffects.push(object);
         });
         for (const effect of arrPawnEffects) this.removeTransientEffect(effect);
@@ -1566,6 +1570,8 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
     public registerPawnRenderable(component: PawnRenderableComponent): void { this.pawnRenderables.add(component); }
     public releasePawnParts(mesh: LitSkinnedMesh): void { this.pawnCrowd.unregisterParts(mesh); }
+    public joinPawnParts(mesh: LitSkinnedMesh): void { this.pawnCrowd.joinParts(mesh); }
+    public joinPawnBatch(mesh: PawnMesh): void { this.pawnCrowd.join(mesh); }
     public getPawnRange(): number { return this.pawnRange ?? this.manGame.getComponent("asset").userConfig.clippingRange.pawn; }
     public setPawnRange(range: number): void {
         if (!Number.isFinite(range) || range <= 0) throw new Error(`Invalid pawn range '${range}'.`);
@@ -2507,10 +2513,18 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.updateScreenFade(currentTime);
 
         this.manGame.getComponent("asset").tick(this);
+
+        const start = performance.now();
+
+        this.programVariants.update(this.manGame.isWorldLoading());
         this.processSectorWarmups();
         for (const root of this.pendingShaderCompiles) {
             if (!root.parent) continue;
-            tmpShaderCompileGroup.children.push(root);
+            root.traverse(object => { // compile() rebuilds the cache key of every material it is handed, 25 ms for a warmed sector
+                const material = (object as THREE.Mesh).material;
+
+                if (material && (Array.isArray(material) ? material : [material]).some(value => !(this.renderer.properties.get(value) as { currentProgram: unknown }).currentProgram)) tmpShaderCompileGroup.children.push(object);
+            });
             this.particleBatcher.prepare(root, tmpShaderCompileGroup);
         }
 
@@ -2528,6 +2542,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         tmpShaderCompileGroup.children.length = 0;
         this.pendingShaderCompiles.clear();
         this.processShaderDiagnostics();
+        this.manGame.addBackgroundTime(performance.now() - start);
         this.viewShakeDelta = deltaTime / 1000;
 
         for (const component of this.pawnRenderables) {
@@ -3023,6 +3038,12 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public addSector(sector: SectorObject) {
+        const steps = this.addSectorSteps(sector);
+
+        while (!steps.next().done);
+    }
+
+    public *addSectorSteps(sector: SectorObject): Generator<void, void> {
         sector.setRenderDeco(this.renderDeco);
         sector.setSortTransparent(this.sortTransparent);
         if (this.level) {
@@ -3049,7 +3070,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         this.shadowProjector.attachReceivers(sector);
         this.updateClanHallDecorations(sector);
-        retainSectorResources(sector, sector);
+        retainSectorResources(sector, sector, this.cacheSectorResources.get(sector));
         this.pawnLightingStates = new WeakMap();
 
         sector.worldBounds.setFromObject(sector);
@@ -3059,7 +3080,6 @@ export class RenderManager implements IEngineComponent<GameManager> {
         this.objectGroup.add(sector);
         this.getPhysicsManager().registerSimulationObjects(sector);
         this.updateColliderOverlay();
-        this.stitchTerrains();
 
         setLightingGate(sector, false);
 
@@ -3071,6 +3091,10 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         sector.updateMatrixWorld(true);
         freezeStaticSubtree(sector);
+        yield;
+        if (!this.arrSceneSectors.includes(sector)) return;
+
+        this.stitchTerrains();
         this.sectorOcclusion.add(sector);
 
         const currentSector = this.getSector(this.camera.position);
@@ -3132,7 +3156,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const job = jobIndex < 0 ? null : this.pendingSectorWarmups[jobIndex];
         if (!job) return;
 
-        const deadline = performance.now() + (this.manGame.getComponent("network").isWorldLoading() ? 8 : RenderManager.TEXTURE_WARMUP_FRAME_MS);
+        const deadline = performance.now() + (this.manGame.getComponent("network").isWorldLoading() ? 8 : this.manGame.getBackgroundBudget());
         while (job.materialQueue.length > 0) {
             const bindingIndex = findVisibleMaterialBinding(job.materialQueue, cacheVisibleMaterials, visibleOnly);
             if (bindingIndex < 0) return;
@@ -3267,13 +3291,19 @@ export class RenderManager implements IEngineComponent<GameManager> {
         }
     }
 
-    public prepareStaticMeshBounds(root: THREE.Object3D) { return this.meshBounds.prepare(root); }
+    public *prepareSector(sector: SectorObject, root: THREE.Object3D): Generator<void, void> {
+        yield* this.meshBounds.prepare(root);
+        this.cacheSectorResources.set(root, collectSectorResources(root, new Set()));
+        yield;
+
+        if (root !== sector) yield* sector.prepareBatchVisibility();
+    }
 
     // repeats addSector's staticMeshGroup-scoped bookkeeping once decodeSectorStaticMeshes runs
     public attachStaticMeshGroup(sector: SectorObject) {
         this.shadowProjector.attachReceivers(sector.staticMeshGroup);
         this.updateClanHallDecorations(sector.staticMeshGroup);
-        retainSectorResources(sector, sector.staticMeshGroup);
+        retainSectorResources(sector, sector.staticMeshGroup, this.cacheSectorResources.get(sector.staticMeshGroup));
 
         sector.worldBounds.setFromObject(sector);
 
@@ -3311,7 +3341,9 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const boundsIndex = this.sectorBounds.indexOf(sector.worldBounds);
         if (boundsIndex >= 0) this.sectorBounds.splice(boundsIndex, 1);
 
-        for (const component of sector.getComponents<AmbientSoundComponent>("ambientSound")) sector.removeComponent(component);
+        const ambientSounds = sector.getComponents<AmbientSoundComponent>("ambientSound");
+
+        for (let i = ambientSounds.length - 1; i >= 0; i--) sector.removeComponent(ambientSounds[i]);
 
         this.getPhysicsManager().unregisterSimulationObjects(sector);
         this.updateColliderOverlay();
@@ -3429,11 +3461,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
 
         (window as any).terrainDebug = result;
 
-        // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
-        for (const terrain of result.modified) this.getPhysicsManager().refreshCollider(terrain);
+        const sectors = new Set<SectorObject>();
 
-        if (result.modified.length)
-            for (const sector of this.arrSceneSectors) this.sectorOcclusion.add(sector);
+        // Rebuilding settled terrain trimeshes cost roughly 160ms per sector change.
+        for (const terrain of result.modified) {
+            this.getPhysicsManager().refreshCollider(terrain);
+            sectors.add(this.sectors.get(terrain.mapX).get(terrain.mapY));
+        }
+
+        for (const sector of sectors) this.sectorOcclusion.add(sector);
 
         this.updateColliderOverlay();
     }
@@ -3495,6 +3531,8 @@ function collectSectorResources(root: THREE.Object3D, target: Set<Disposable_T>)
             collectMaterialResources(material, target);
         }
     });
+
+    return target;
 }
 
 function collectCelestialResources(sector: SectorObject, target: Set<Disposable_T>) {
@@ -3512,11 +3550,7 @@ function collectCelestialResources(sector: SectorObject, target: Set<Disposable_
 }
 
 // Retain twice safely because progressive static meshes arrive after the sector root.
-function retainSectorResources(sector: SectorObject, root: THREE.Object3D) {
-    const resources = new Set<Disposable_T>();
-
-    collectSectorResources(root, resources);
-
+function retainSectorResources(sector: SectorObject, root: THREE.Object3D, resources = collectSectorResources(root, new Set())) {
     if (root === sector) collectCelestialResources(sector, resources);
 
     for (const resource of resources) {

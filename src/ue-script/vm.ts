@@ -277,7 +277,7 @@ function findPropertyKey(properties: ScriptProperties_T, id: string): string | n
     return null;
 }
 
-function cloneScriptValue(value: ScriptValue_T): ScriptValue_T {
+export function cloneScriptValue(value: ScriptValue_T): ScriptValue_T {
     if (!value || typeof value !== "object") return value;
     if ("scriptClassId" in value) return value;
     if (Array.isArray(value)) return value.map(cloneScriptValue) as ScriptPropertyValue_T[];
@@ -1141,7 +1141,7 @@ export class UnScriptVM {
     public static setLocalization(localization: Map<string, Map<string, Map<string, string>>>): void { scriptLocalization = localization; }
     public static setConfig(config: ConfigCache): void { this.config = config; }
 
-    public constructor(library: DecodeLibrary) {
+    public constructor(library: DecodeLibrary, isDeferred = false) {
         this.library = library;
         if (library.levelPackageName) this.levelPackage = cacheScriptResources.get(library.levelPackageName.toLowerCase())?.deref() || { scriptClassId: "core.Package", isLevelActor: false, scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 } };
         registerScriptObject(transientPackage, this.scriptObjectClasses);
@@ -1150,7 +1150,15 @@ export class UnScriptVM {
             registerScriptObject(this.levelPackage, this.scriptObjectClasses);
             registerScriptResourceAlias(library.levelPackageName, this.levelPackage);
         }
-        this.loadFunctions();
+        if (isDeferred) return;
+
+        const steps = this.loadSteps();
+
+        while (!steps.next().done);
+    }
+
+    public *loadSteps(): Generator<void, void> {
+        yield* this.loadFunctionSteps();
         const reference = new WeakRef(this);
 
         scriptVMs.add(reference);
@@ -1419,7 +1427,14 @@ export class UnScriptVM {
     }
 
     public loadFunctions(): void {
+        const steps = this.loadFunctionSteps();
+
+        while (!steps.next().done);
+    }
+
+    public *loadFunctionSteps(): Generator<void, void> {
         const parents: ClassParentRecords_T = { parents: this.classParents, records: new Map(), revision: 0 };
+        let count = 0;
 
         this.cacheIsA.clear();
 
@@ -1428,14 +1443,16 @@ export class UnScriptVM {
             loadClassParents(cls.classParents || {}, parents);
             for (const [id, actual] of Object.entries(cls.classAliases || {})) this.classAliases.set(id.toLowerCase(), actual.toLowerCase());
             for (const [id, type] of Object.entries(cls.objectClasses || {})) this.objectClasses.set(id.toLowerCase(), type.toLowerCase());
+            if (++count % 64 === 0) yield;
         }
         for (const [id, info] of Object.entries(this.library.scriptObjects || {})) {
             this.objectClasses.set(id.toLowerCase(), info.classId.toLowerCase());
             loadClassParents(info.classParents, parents);
+            if (++count % 64 === 0) yield;
         }
         for (const cls of Object.values(this.library.scriptClasses)) this.classParents.set(cls.id.toLowerCase(), cls.superClassId ? cls.superClassId.toLowerCase() : null);
         if (this.classParents.has("__native__.class")) this.classAliases.set("core.class", "__native__.class");
-        this.registerResources();
+        yield* this.registerResources();
 
         for (const fn of Object.values(this.library.scriptFunctions)) {
             this.functionsById.set(fn.id.toLowerCase(), fn);
@@ -1445,10 +1462,11 @@ export class UnScriptVM {
             if (!functions) this.functionsByClass.set(fn.owner, functions = new Map());
 
             functions.set(fn.name.toLowerCase(), fn);
+            if (++count % 64 === 0) yield;
         }
     }
 
-    protected registerResources(): void {
+    protected *registerResources(): Generator<void, void> {
         let resources = cacheLibraryScriptResources.get(this.library);
 
         if (!resources) cacheLibraryScriptResources.set(this.library, resources = new Map());
@@ -1487,11 +1505,14 @@ export class UnScriptVM {
             return object;
         }
 
+        let count = 0;
+
         for (const [id, info] of Object.entries(this.library.scriptObjects || {})) {
             const object = pull(info, this.scriptObjectClasses);
 
             this.objectClasses.set(info.path.toLowerCase(), info.classId.toLowerCase());
             registerScriptResourceAlias(id, object);
+            if (++count % 64 === 0) yield;
         }
     }
 

@@ -174,6 +174,12 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         return type !== EActorViewType_T.EAVT_OutSight;
     }
 
+    public getSourceMaterial(mesh: Mesh): Material | Material[] {
+        const entry = this.fadeMeshes.get(mesh);
+
+        return entry && entry.material === mesh.material ? entry.source : mesh.material;
+    }
+
     public isOpaque(): boolean {
         if (this.texModifierAlpha >= 0 || !this.meshes.length) return false;
 
@@ -273,7 +279,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
     }
 
     protected setMeshes(meshes: Mesh[]): void {
-        const alpha = this.texModifierAlpha;
+        const alpha = this.texModifierAlpha, wasRendered = Math.fround(GLOBAL_UNIFORMS.globalTimeSeconds.value) - this.lastRenderTime < 0.1;
         this.clearAlphaTexModifier();
         this.texModifierAlpha = alpha;
         const geometries = this.batches.map(batch => batch.geometry);
@@ -288,7 +294,11 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
             for (const batch of this.batches) {
                 this.getParent().add(batch);
                 this.renderManager.retainGeometry(batch.geometry);
+                if (wasRendered) this.renderManager.joinPawnBatch(batch); // a pawn on screen would miss a frame while its new meshes wait to join the crowd
             }
+            if (wasRendered)
+                for (const mesh of [...meshes, ...this.equipmentMeshes])
+                    if ((mesh as LitSkinnedMesh).isLitSkinnedMesh && mesh.layers.mask !== 0) this.renderManager.joinPawnParts(mesh as LitSkinnedMesh);
         } finally {
             for (const geometry of geometries) this.renderManager.releaseGeometry(geometry);
         }

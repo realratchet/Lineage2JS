@@ -1,5 +1,5 @@
 import { COMPONENT_EVENT_NOT_HANDLED, GameObject } from "../game/components";
-import UnScriptVM, { getProperty, setProperty, unregisterLevelActor, type ScriptHost_T, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { cloneScriptValue, getProperty, setProperty, unregisterLevelActor, type ScriptHost_T, type ScriptLevelActors_T, type ScriptNativeCall_T, type ScriptValue_T } from "../ue-script/vm";
 import { ScriptComponent, ScriptObjectFactory_T } from "../game/script-component";
 import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/script-properties";
 import type { ICollidable } from "./objects";
@@ -45,9 +45,9 @@ export class Actor extends GameObject {
         this.isLevelActor = isLevelActor;
         this.scriptProperties = new Map();
         if (info.scriptProperties !== null) {
-            const properties = structuredClone(info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties);
+            const properties = info.sharedScriptProperties ? { ...info.sharedScriptProperties, ...info.scriptProperties } : info.scriptProperties;
 
-            for (const [key, value] of Object.entries(properties)) this.scriptProperties.set(key, value);
+            for (const [key, value] of Object.entries(properties)) this.scriptProperties.set(key, cloneScriptValue(value)); // structuredClone took 70 ms on TerrainInfo's TIntMap
             // UGameEngine::LoadMap (0x831cbf..0x831cd3) clears serialized Touching.
             setScriptObjectProperty(this, "Touching", []);
         }

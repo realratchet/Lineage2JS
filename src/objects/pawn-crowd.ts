@@ -16,6 +16,7 @@ const PLAIN_SLOTS = 4;
 const arrPoolAttributes: [string, number, Float32ArrayConstructor | Uint16ArrayConstructor, boolean][] = [["position", 3, Float32Array, true], ["normal", 3, Float32Array, true], ["uv", 2, Float32Array, true], ["skinIndex", 4, Uint16Array, true], ["skinWeight", 4, Float32Array, true], ["skinIndex2", 4, Uint16Array, false], ["skinWeight2", 4, Float32Array, false]];
 const tmpWhite = new Vector3(1, 1, 1);
 const tmpMaps = [0, 0, 0, 0];
+const joiningPart = {} as PawnCrowdPart_T;
 
 type PawnCrowdRange_T = { vertexStart: number, vertexCount: number, indexStart: number, indexCount: number, references: number };
 type PawnCrowdLayer_T = { array: PawnTextureArray, layer: number, references: number };
@@ -504,6 +505,25 @@ export class PawnCrowd extends Object3D {
         this.isLayoutDirty = true;
     }
 
+    public join(mesh: PawnMesh): void {
+        if (this.isEnabled && !this.arrJoining.includes(mesh)) this.arrJoining.push(mesh);
+    }
+
+    public joinParts(mesh: LitSkinnedMesh): void {
+        if (!this.isEnabled) return;
+
+        let parts = this.cacheParts.get(mesh);
+
+        if (!parts) this.cacheParts.set(mesh, parts = []);
+
+        for (const index of Array.isArray(mesh.material) ? new Set(mesh.geometry.groups.map(group => group.materialIndex)) : [0]) {
+            if (parts[index] !== undefined) continue;
+
+            parts[index] = joiningPart;
+            this.arrJoiningParts.push([mesh, index]);
+        }
+    }
+
     public unregister(mesh: PawnMesh): void {
         if (mesh.crowdEntry) this.releaseEntry(mesh.crowdEntry);
     }
@@ -514,7 +534,7 @@ export class PawnCrowd extends Object3D {
         if (!parts) return;
 
         for (const part of parts) {
-            if (!part) continue;
+            if (!part || part === joiningPart) continue;
 
             this.releaseEntry(part);
             mesh.skeleton.releaseAtlas();
@@ -525,7 +545,7 @@ export class PawnCrowd extends Object3D {
     }
 
     protected registerPart(mesh: LitSkinnedMesh, index: number): void {
-        const material = (Array.isArray(mesh.material) ? mesh.material[index] : mesh.material) as MeshStaticMaterial;
+        const source = mesh.actorRenderable.getSourceMaterial(mesh), material = (Array.isArray(source) ? source[index] : source) as MeshStaticMaterial;
         const parts = this.cacheParts.get(mesh);
 
         parts[index] = null;
@@ -575,7 +595,11 @@ export class PawnCrowd extends Object3D {
         }
         this.arrJoining.length = 0;
 
-        for (const [mesh, index] of this.arrJoiningParts) if (mesh.parent && this.cacheParts.has(mesh)) this.registerPart(mesh, index);
+        for (const [mesh, index] of this.arrJoiningParts) {
+            if (!this.cacheParts.has(mesh)) continue;
+            if (mesh.parent) this.registerPart(mesh, index);
+            else this.cacheParts.get(mesh)[index] = undefined;
+        }
         this.arrJoiningParts.length = 0;
 
         if (this.isLayoutDirty) this.updateLayout();
@@ -656,16 +680,16 @@ export class PawnCrowd extends Object3D {
         group.counts[draw] = count;
     }
 
-    public accept(mesh: PawnMesh): boolean {
-        if (!this.isEnabled || this.isFlushed) return false;
+    public accept(mesh: PawnMesh, isBlended: boolean): boolean {
+        if (!this.isEnabled) return false;
 
         const entry = mesh.crowdEntry;
 
         if (entry === undefined) {
-            if (!this.arrJoining.includes(mesh)) this.arrJoining.push(mesh);
-            return false;
+            if (!this.arrJoining.includes(mesh)) this.arrJoining.push(mesh); // a fading pawn draws after the flush and has to be in the crowd by its first opaque frame
+            return !isBlended && !this.isFlushed; // joins next frame, a draw of its own now would compile a program used once
         }
-        if (entry === null) return false;
+        if (this.isFlushed || isBlended || entry === null) return false;
         if (entry.materialVersion !== mesh.materialVersion) this.writeStatic(mesh, entry);
 
         const uniforms = (mesh.material as MeshStaticMaterial).uniforms, materials = uniforms.pawnMaterialData.value as Float32Array;
@@ -681,7 +705,7 @@ export class PawnCrowd extends Object3D {
     }
 
     public acceptPart(mesh: LitSkinnedMesh, material: MeshStaticMaterial, group: THREE.GeometryGroup): boolean {
-        if (!this.isEnabled || this.isFlushed || material.transparent) return false;
+        if (!this.isEnabled) return false;
 
         const index = group ? group.materialIndex : 0;
         let parts = this.cacheParts.get(mesh);
@@ -691,11 +715,11 @@ export class PawnCrowd extends Object3D {
         const part = parts[index];
 
         if (part === undefined) {
-            parts[index] = null;
+            parts[index] = joiningPart;
             this.arrJoiningParts.push([mesh, index]);
-            return false;
         }
-        if (part === null || part.material !== material || material.uniforms.texModifierAlpha.value >= 0) return false;
+        if (part === undefined || part === joiningPart) return !material.transparent && !this.isFlushed;
+        if (this.isFlushed || material.transparent || part === null || part.material !== material || material.uniforms.texModifierAlpha.value >= 0) return false;
 
         const start = group ? group.start : 0, count = Math.min(group ? group.count : Infinity, mesh.geometry.index.count - start);
 

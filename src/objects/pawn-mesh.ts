@@ -99,9 +99,9 @@ export class PawnMesh extends LitSkinnedMesh {
     protected readonly skeletons: LocalSpaceSkeleton[];
     protected readonly materials: MeshStaticMaterial[];
 
-    public constructor(parts: PawnPart_T[], textures: Texture[]) {
+    public constructor(parts: PawnPart_T[], textures: Texture[], maxParts: number, maxTextures: number) {
         const material = new MeshStaticMaterial();
-        const sources = parts.map(part => part.mesh);
+        const sources = parts.map(part => part.mesh), padded = Array.from({ length: maxParts }, (_value, i) => sources[Math.min(i, sources.length - 1)]);
         super(getGeometry(parts), material);
 
         (this as any).isPawnMesh = true;
@@ -132,16 +132,16 @@ export class PawnMesh extends LitSkinnedMesh {
         material.side = DoubleSide;
         material.setActorLit();
         if (this.geometry.hasAttribute("skinWeight2")) material.setExtendedBoneInfluences();
-        Object.assign(material.defines, { USE_PAWN_MATERIALS: "", USE_UV: "", USE_ENVMAP: "", ENVMAP_MODE_REFLECTION: "", NUM_PAWN_PARTS: sources.length });
+        Object.assign(material.defines, { USE_PAWN_MATERIALS: "", USE_UV: "", USE_ENVMAP: "", ENVMAP_MODE_REFLECTION: "", NUM_PAWN_PARTS: maxParts }); // sized by the limits, not the pawn, so every pawn shares one program
         Object.assign(material.uniforms, {
-            pawnTextures: { value: textures },
+            pawnTextures: { value: Array.from({ length: maxTextures }, (_value, i) => textures[i] || null) },
             pawnBones: { value: boneAtlas.getTexture() },
             pawnBoneOffsets: { value: Int32Array.from(sources, mesh => mesh.skeleton.atlasOffset) },
             pawnBindMatrices: { value: packMatrices(sources.map(mesh => mesh.bindMatrix)) },
             pawnBindInverses: { value: packMatrices(sources.map(mesh => mesh.bindMatrixInverse)) },
-            pawnWorldMatrices: { value: sources.map(mesh => mesh.matrixWorld) },
-            pawnViewMatrices: { value: sources.map(mesh => mesh.modelViewMatrix) },
-            pawnNormalMatrices: { value: sources.map(mesh => mesh.normalMatrix) },
+            pawnWorldMatrices: { value: padded.map(mesh => mesh.matrixWorld) },
+            pawnViewMatrices: { value: padded.map(mesh => mesh.modelViewMatrix) },
+            pawnNormalMatrices: { value: padded.map(mesh => mesh.normalMatrix) },
             pawnSilhouette: { value: false },
             pawnMaterialData: { value: new Float32Array(sources.length * 16).map((_value, i) => i % 16 === 14 ? 1 : 0) } // per part: color, maps, parameters, (operation, envMode, visible)
         });
@@ -162,9 +162,9 @@ export class PawnMesh extends LitSkinnedMesh {
             }
         `);
         material.fragmentShader = `
-            uniform sampler2D pawnTextures[${textures.length}];
+            uniform sampler2D pawnTextures[${maxTextures}];
             vec4 samplePawnTexture(int index, vec2 uv) {
-                ${textures.map((_texture, i) => `if (index == ${i}) return texture2D(pawnTextures[${i}], uv);`).join("\n")}
+                ${Array.from({ length: maxTextures }, (_value, i) => `if (index == ${i}) return texture2D(pawnTextures[${i}], uv);`).join("\n")}
                 return vec4(1.0);
             }
         ` + material.fragmentShader;
@@ -236,7 +236,7 @@ export class PawnMesh extends LitSkinnedMesh {
 export function createPawnMeshes(meshes: THREE.Mesh[], renderer: WebGLRenderer): PawnMesh[] {
     const groups: PawnPart_T[][] = [], textures: Set<Texture>[] = [];
     const layouts: string[] = [];
-    const maxParts = Math.min(16, Math.floor((renderer.capabilities.maxVertexUniforms - 96) / 19));
+    const maxParts = Math.min(16, Math.floor((renderer.capabilities.maxVertexUniforms - 96) / 19)), maxTextures = Math.min(16, renderer.capabilities.maxTextures - 4);
 
     for (const mesh of meshes as LitSkinnedMesh[]) {
         if (!mesh.isLitSkinnedMesh || !mesh.skeleton) continue;
@@ -251,21 +251,21 @@ export function createPawnMeshes(meshes: THREE.Mesh[], renderer: WebGLRenderer):
         const materials = [...parts.map(part => getMaterial(mesh, part.materialIndex)), ...Object.values((mesh as any).skinMaterials || {}) as MeshStaticMaterial[]];
         if (!materials.every(material => canBatchPawnMaterial(material))) continue;
         const maps = materials.flatMap(getPawnTextures).filter(texture => texture);
-        if (new Set(maps).size > renderer.capabilities.maxTextures) continue;
+        if (new Set(maps).size > maxTextures) continue;
         const layout = Object.keys(mesh.geometry.attributes).filter(name => name !== "skinIndex2" && name !== "skinWeight2").sort().map(name => {
             const attribute = mesh.geometry.getAttribute(name);
             return `${name}:${attribute.itemSize}:${attribute.array.constructor.name}:${attribute.normalized}`;
         }).join(";");
         if (parts.length > maxParts) continue;
         const owner = groups.findIndex(group => group.some(part => part.mesh.skeleton === mesh.skeleton));
-        const groupIndex = groups.findIndex((group, i) => (owner < 0 || i === owner) && layouts[i] === layout && group.length + parts.length <= maxParts && group[0].mesh.layers.mask === mesh.layers.mask && group[0].mesh.scaledGlow === mesh.scaledGlow && group[0].mesh.ambientGlow === mesh.ambientGlow && group[0].mesh.isUnlit === mesh.isUnlit && new Set([...textures[i], ...maps]).size <= renderer.capabilities.maxTextures && new Set([...group.map(part => part.mesh.skeleton), mesh.skeleton]).size <= renderer.capabilities.maxVertexTextures);
+        const groupIndex = groups.findIndex((group, i) => (owner < 0 || i === owner) && layouts[i] === layout && group.length + parts.length <= maxParts && group[0].mesh.layers.mask === mesh.layers.mask && group[0].mesh.scaledGlow === mesh.scaledGlow && group[0].mesh.ambientGlow === mesh.ambientGlow && group[0].mesh.isUnlit === mesh.isUnlit && new Set([...textures[i], ...maps]).size <= maxTextures && new Set([...group.map(part => part.mesh.skeleton), mesh.skeleton]).size <= renderer.capabilities.maxVertexTextures);
 
         if (owner >= 0 && groupIndex < 0) continue; // a skeleton packs into one bone atlas only
         if (groupIndex < 0) { groups.push(parts); textures.push(new Set(maps)); layouts.push(layout); }
         else { groups[groupIndex].push(...parts); for (const texture of maps) textures[groupIndex].add(texture); }
     }
 
-    return groups.flatMap((group, i) => group.length > 1 ? [new PawnMesh(group, Array.from(textures[i]))] : []);
+    return groups.flatMap((group, i) => group.length > 1 ? [new PawnMesh(group, Array.from(textures[i]), maxParts, maxTextures)] : []);
 }
 
 export default PawnMesh;

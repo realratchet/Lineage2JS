@@ -22,6 +22,7 @@ const clients = new Set<DecodeWorkerClient>();
 const DECODE_PACKAGE_SWEEP_MS = 5000;
 let nextProfileWorker = 1;
 const pendingTextureDisposals = new Set<ArrayBuffer>();
+const arrForgottenTextures: string[] = [];
 const pendingSoundDisposals = new Set<SharedSound_T>();
 const soundFinalizer = new FinalizationRegistry<SharedSound_T>(sound => {
     if (--sound.refs < 0) throw new Error(`Invalid sound reference count for '${sound.key}'.`);
@@ -69,6 +70,13 @@ export function releaseSharedTextureBuffer(buffer: ArrayBuffer): void {
 
     forgotten.forEach(key => cacheTextureBuffers.delete(key));
     cacheTextureIds.delete(buffer);
+    if (arrForgottenTextures.length === 0) queueMicrotask(flushForgottenTextures);
+    arrForgottenTextures.push(...forgotten);
+}
+
+function flushForgottenTextures(): void { // a disposed sector forgets hundreds of textures, one message per worker instead of one per texture
+    const forgotten = arrForgottenTextures.splice(0);
+
     for (const client of clients) client.forgetSharedTextures(forgotten);
 }
 
@@ -226,6 +234,7 @@ export class DecodeWorkerClient {
     protected loadingWorker: DecodeWorkerClient = null;
     protected loadingSectorCount = 0;
     protected isWorldLoading = false;
+    public waitFrame: () => Promise<number> = null;
     protected characterAnimationSets = new Map<number, CharacterAnimationSet_T>();
     protected npcAnimationSets = new Set<string>();
     protected readonly cacheNpcDefinitions = new Map<number, INpcDefinition>();
@@ -982,6 +991,7 @@ export class DecodeWorkerClient {
             this.pending.set(requestId, { resolve, reject, workerIndex, loadingId, packagesReady, isPackageDiscovery: message.type === "sectorPackages" || message.type === "packageDependencies", isAsset, isRaw, copyChunks: true, urgent: message.type === "decodeCharacterEquipment" || message.type === "decodeSkill" && message.urgent });
 
             try {
+                flushForgottenTextures();
                 this.slots[workerIndex].worker.postMessage({ ...message, requestId });
             } catch (error) {
                 this.settlePending(requestId);
@@ -1184,7 +1194,7 @@ export class DecodeWorkerClient {
                     continue;
                 }
 
-                const library = transferred || await deserializeLibraryAsync(buffer, request.copyChunks, () => this.processUrgentLibraries());
+                const library = transferred || await deserializeLibraryAsync(buffer, request.copyChunks, () => this.yieldLibraryWork());
 
                 shareScript(library);
                 refreshSoundBlobUris(library);
@@ -1201,6 +1211,14 @@ export class DecodeWorkerClient {
         this.isDecodingBinary = false;
         releaseDisposedTextures();
         releaseDisposedSounds();
+    }
+
+    protected async yieldLibraryWork(): Promise<number> {
+        await this.processUrgentLibraries();
+
+        const frame = this.waitFrame && !this.isWorldLoading ? this.waitFrame() : null; // one slice per frame while playing, back to back slices delay the next frame
+
+        return frame ? frame : 0;
     }
 
     protected async processUrgentLibraries(): Promise<void> {

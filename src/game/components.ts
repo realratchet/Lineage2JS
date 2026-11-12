@@ -74,14 +74,14 @@ class ComponentCollection<TParent extends IObject> {
     }
 
     public remove(component: IComponent<any>): boolean {
-        const index = this.components.indexOf(component);
+        const index = this.components.lastIndexOf(component); // a sector drops thousands of ambient sounds newest first
 
         if (index < 0) return false;
 
         component.onDetach?.();
         this.components.splice(index, 1);
         this.cacheComponents.clear();
-        const updateIndex = this.updateComponents.indexOf(component);
+        const updateIndex = this.updateComponents.lastIndexOf(component);
         if (updateIndex >= 0) this.updateComponents.splice(updateIndex, 1);
         component.setParent(null);
 

@@ -7,7 +7,7 @@ const CHUNK_ALIGNMENT = 8;
 const RANGE_GAP = 4096;
 const RANGE_SIZE = 16 * 1024 * 1024;
 const DECODE_FRAME_MS = 2;
-const DECODE_STEP_BATCH = 2048;
+const DECODE_STEP_BATCH = 64;
 const BUFFER_COPY_CHUNK_SIZE = 256 * 1024;
 
 const decodeYieldQueue: (() => void)[] = [];
@@ -59,6 +59,7 @@ const TYPED_ARRAY_KINDS: (new (buffer: ArrayBuffer, byteOffset?: number, length?
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const tmpStringBytes = new Uint8Array(256), arrStringViews: Uint8Array[] = [];
 const fileReader = typeof (globalThis as any).FileReaderSync === "function" ? new (globalThis as any).FileReaderSync() : null;
 
 class ByteWriter {
@@ -182,7 +183,14 @@ class ByteReader {
 
         if (length > this.bytes.length - this.offset) throw new Error(`Truncated decode-cache string`);
 
-        const value = textDecoder.decode(this.take(length));
+        let view = this.take(length);
+
+        if (length < tmpStringBytes.length) { // every new view handed to the decoder leaves a Blink object behind until the next major GC
+            tmpStringBytes.set(view);
+            view = arrStringViews[length] || (arrStringViews[length] = tmpStringBytes.subarray(0, length));
+        }
+
+        const value = textDecoder.decode(view);
 
         this.arrStrings.push(value);
         return value;
@@ -390,6 +398,7 @@ class LibraryDecoder {
     protected hasRoot = false;
     protected root: any;
     protected isSynchronous = false;
+    public copiedBytes = 0;
 
     protected readonly chunks: (index: number, kind: number, byteLength: number) => any;
 
@@ -424,6 +433,7 @@ class LibraryDecoder {
                 const byteLength = this.reader.u32();
                 const value = this.chunks(index, kind, byteLength);
 
+                this.copiedBytes += byteLength;
                 this.refs.push(value);
                 return value;
             }
@@ -560,6 +570,7 @@ class LibraryDecoder {
 
                 new Uint8Array(frame.value, frame.index, length).set(source);
                 frame.index += length;
+                this.copiedBytes += length;
                 return true;
             }
         }
@@ -647,20 +658,23 @@ export function deserializeLibrary(buffer: ArrayBuffer): any {
     return decoder.result();
 }
 
-export async function deserializeLibraryAsync(buffer: ArrayBuffer, copyChunks: boolean = false, yieldWork: () => Promise<void> = null): Promise<any> {
+export async function deserializeLibraryAsync(buffer: ArrayBuffer, copyChunks: boolean = false, yieldWork: () => Promise<number> = null): Promise<any> {
     const { chunkCount } = readHeader(buffer);
     const entries = readEntries(buffer, chunkCount);
     const decoder = createDecoder(buffer, HEADER_SIZE + chunkCount * CHUNK_ENTRY_SIZE, entries, copyChunks);
 
+    let budget = DECODE_FRAME_MS;
+
     while (true) {
-        const deadline = performance.now() + DECODE_FRAME_MS;
+        const deadline = performance.now() + budget;
 
         do {
-            for (let i = 0; i < DECODE_STEP_BATCH; i++)
+            decoder.copiedBytes = 0;
+            for (let i = 0; i < DECODE_STEP_BATCH && decoder.copiedBytes < BUFFER_COPY_CHUNK_SIZE; i++)
                 if (!decoder.step()) return decoder.result();
         } while (performance.now() < deadline);
 
-        if (yieldWork) await yieldWork();
+        if (yieldWork) budget = await yieldWork() || DECODE_FRAME_MS;
         await yieldDecode();
     }
 }

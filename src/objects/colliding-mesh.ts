@@ -78,10 +78,10 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
         this.addComponent(new ColliderComponent());
     }
 
-    public setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"], source: Uint32Array): void {
+    public *setCollisionActors(actors: StaticMeshBatchInfo_T["actorColliders"], source: Uint32Array): Generator<void, void> {
         const vertices = this.geometry.getAttribute("position").array as Float32Array;
         const triangleBounds = this.colliderIndices === source ? this.collisionIndex?.triangleBounds : null;
-        let indexOffset = 0;
+        let indexOffset = 0, yieldOffset = 0;
 
         for (const record of this.collisionActors) if (record.object) record.object.release();
         this.collisionActors.length = 0;
@@ -105,6 +105,10 @@ export class CollidingMesh extends LitActorMesh implements ICollidable {
 
             this.collisionActors.push({ actor, object: null, firstTriangle: indexOffset / 3, triangleCount: indices.length / 3, primitive: { kind: "staticMesh", vertices, indices, collisionNodes: null, collisionBounds: null, index: collisionIndex, matrixWorld: this.matrixWorld, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true } });
             indexOffset += indices.length;
+            if (indexOffset - yieldOffset < 32768) continue;
+
+            yieldOffset = indexOffset;
+            yield;
         }
 
         this.collisionActorCells = null;

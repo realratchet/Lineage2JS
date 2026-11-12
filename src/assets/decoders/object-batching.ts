@@ -216,7 +216,7 @@ function* buildStaticMeshBatch(job: StaticMeshBatchJob_T, batch: StaticMeshBatch
 
         yield;
         const source = geometry.index?.array as StaticMeshIndexArray_T;
-        batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
+        yield* batchObject.setCollisionActors(batch.actorColliders, batch.actorColliderIndices);
         yield;
         yield* createStaticMeshTextureBatchJob(batchObject, source);
         if (source) {

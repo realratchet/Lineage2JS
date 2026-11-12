@@ -24,6 +24,9 @@ export class GameManager implements IEngineComponent<GameManager> {
 
     protected lastTick: number = 0;
     protected currentTime = 0;
+    protected frameInterval = 1000 / 60;
+    protected tickCost = 0;
+    protected backgroundTime = 0;
     protected readonly animationFrameCallback: FrameRequestCallback;
     protected readonly visibilityCallback: () => void;
     protected animationFrameHandle = 0;
@@ -117,6 +120,8 @@ export class GameManager implements IEngineComponent<GameManager> {
     public setParent(_parent: GameManager): this { return this; } // this is the root
     public getParent() { return this; }
     public getCurrentTime() { return this.currentTime; }
+    public getBackgroundBudget(): number { return Math.max(0.3, Math.min(8, Math.max(this.frameInterval * 0.12, this.frameInterval - this.tickCost - 1.2)) - this.backgroundTime); }
+    public addBackgroundTime(time: number): void { this.backgroundTime += time; }
     public isWorldLoading(): boolean { return this.manNetwork ? this.manNetwork.isWorldLoading() : false; }
 
     public onBeforeEngineTick(currentTime: number, deltaTime: number): void { for (const comp of this.components) comp.onBeforeEngineTick?.(currentTime, deltaTime); }
@@ -125,15 +130,21 @@ export class GameManager implements IEngineComponent<GameManager> {
 
     protected tick(currentTime: number): void {
         currentTime = Math.max(currentTime, this.lastTick);
-        const deltaTime = this.manNetwork ? this.manNetwork.getReplayDeltaTime(currentTime - this.lastTick) : currentTime - this.lastTick;
+        const frameTime = currentTime - this.lastTick, deltaTime = this.manNetwork ? this.manNetwork.getReplayDeltaTime(frameTime) : frameTime;
 
         this.lastTick = currentTime;
         if (deltaTime === null) return;
         this.currentTime += deltaTime;
 
+        const start = performance.now();
+
+        if (frameTime > 2 && frameTime < 50) this.frameInterval += (frameTime - this.frameInterval) * (frameTime < this.frameInterval ? 1 : 0.02);
+        this.backgroundTime = 0;
+
         this.onBeforeEngineTick(this.currentTime, deltaTime);
         this.onEngineTick(this.currentTime, deltaTime);
         this.onAfterEngineTick(this.currentTime, deltaTime);
+        this.tickCost += (performance.now() - start - this.backgroundTime - this.tickCost) * 0.1;
     }
 
     protected onHandleAnimationFrame(currentTime: number): void {

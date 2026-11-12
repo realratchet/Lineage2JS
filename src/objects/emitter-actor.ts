@@ -21,6 +21,8 @@ export class EmitterActor extends GameObject {
     public scriptProperties: Map<string, ScriptValue_T>;
     public spawnSound: EmitterSpawnSound_T = null;
     public speedRate: number = 1;
+    public simulationPhase: number = 0;
+    public simulationSlot: number;
     public readonly emitterRotation = new Quaternion();
     public readonly globalOffset = new Vector3();
 
@@ -114,6 +116,8 @@ export class EmitterActor extends GameObject {
         this.scriptProperties.set("GlobalOffset", this.globalOffset.toArray());
         this.scriptProperties.set("TimeTillReset", Math.fround(resetRange.Max + Math.random() * (resetRange.Min - resetRange.Max)));
     }
+
+    public isInactive(): boolean { return (this.scriptProperties.get("Emitters") as unknown as BaseEmitter[]).every(emitter => emitter.isInactive()); }
 
     public updateEmitters(currentTime: number, deltaTime: number): boolean {
         const properties = this.scriptProperties;

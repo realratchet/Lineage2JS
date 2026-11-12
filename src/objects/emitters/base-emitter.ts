@@ -91,6 +91,8 @@ export abstract class BaseEmitter extends Object3D {
 
     public warmupGate: boolean = true; // set false by PhysicsManager while a sector's higher-priority tiers are still loading
     public budgetWarmup: boolean = false;
+    public simulationPhase: number = 0;
+    public simulationSlot: number;
     public readonly pendingSounds: PendingEmitterSound_T[] = []; // spawning-sound requests queued by spawnParticle(), drained by RenderManager each frame
 
     protected fadingSettings: FadeSettings_T;
@@ -1631,6 +1633,7 @@ export abstract class BaseEmitter extends Object3D {
     }
 
     public onRender(): void { if (!this.isDisabled) this.inactive = false; }
+    public isInactive(): boolean { return this.isDisabled || this.inactive && this.inactiveTime > 1; }
 
     public getRenderBounds(target: Box3): Box3 { return target.copy(this.boundingBox).applyMatrix4(this.matrixWorld); }
 

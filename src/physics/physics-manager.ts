@@ -63,6 +63,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
     protected readonly triggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected readonly lastMoverTriggerPosition = new Vector3(Infinity, Infinity, Infinity);
     protected nextPhysicsTick: number;
+    protected emitterSlot = 0;
 
     public setParent(parent: GameManager): this {
         this.manGame = parent;
@@ -87,9 +88,9 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 
         BaseEmitter.beginWarmupFrame();
         try {
-            while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS) {
-                this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), manRender);
-                this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS;
+            while (this.nextPhysicsTick <= currentTime && physicsTicks++ < PhysicsManager.MAX_PHYSICS_TICKS * EmitterSimulation.PHASES) {
+                this.simEmitters.tick(this.nextPhysicsTick, Math.fround(PhysicsManager.PHYSICS_INTERVAL_MS / 1000), this.emitterSlot++, manRender);
+                this.nextPhysicsTick += PhysicsManager.PHYSICS_INTERVAL_MS / EmitterSimulation.PHASES;
             }
         } finally {
             BaseEmitter.endWarmupFrame();
@@ -98,7 +99,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         if (physicsTicks > 0) this.simEmitters.syncParticles();
 
         if (this.nextPhysicsTick <= currentTime)
-            this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS;
+            this.nextPhysicsTick = currentTime + PhysicsManager.PHYSICS_INTERVAL_MS / EmitterSimulation.PHASES;
 
         if (updatedPhysicsComponent || physicsTicks > 0 && this.simEmitters.getSize() > 0)
             manRender.needsUpdate = true;
@@ -717,16 +718,25 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
 }
 
 class EmitterSimulation {
+    public static readonly PHASES = 4; // each emitter still ticks at PHYSICS_HZ, a quarter of them per slot instead of all in one frame
+    public static readonly INACTIVE_PHASES = 16; // an emitter nothing has drawn for a second ticks at a quarter of the rate with four times the step
+
     protected readonly emitters = new Set<any>();
     protected readonly actors = new Set<any>();
+    protected nextPhase = 0;
 
     public getSize(): number { return this.emitters.size + this.actors.size; }
     public getEmitters(): ReadonlySet<any> { return this.emitters; }
     public syncParticles(): void { for (const emitter of this.emitters) emitter.syncParticles(); }
 
     public add(emitter: Object3D): void {
-        if ((emitter as any).isEmitterActor) this.actors.add(emitter);
-        else this.emitters.add(emitter);
+        const emitters = (emitter as any).isEmitterActor ? this.actors : this.emitters;
+
+        if (!emitters.has(emitter)) {
+            (emitter as any).simulationSlot = undefined; // a revived sector's emitters must not step over the time they were away
+            if (!(emitter.parent as any)?.isEmitterActor) (emitter as any).simulationPhase = this.nextPhase++ % EmitterSimulation.INACTIVE_PHASES;
+        }
+        emitters.add(emitter);
     }
     public remove(emitter: Object3D): void {
         this.emitters.delete(emitter);
@@ -758,15 +768,34 @@ class EmitterSimulation {
         return hasEmitter && isFinished;
     }
 
-    public tick(currentTime: number, deltaTime: number, renderManager?: RenderManager): void {
-        for (const actor of this.actors)
-            if (actor.updateEmitters(currentTime, deltaTime)) {
+    public tick(currentTime: number, deltaTime: number, slot: number, renderManager?: RenderManager): void {
+        for (const actor of this.actors) {
+            const steps = this.getSteps(actor, slot);
+
+            if (steps > 0 && actor.updateEmitters(currentTime, Math.fround(deltaTime * steps))) {
                 if (!renderManager) throw new Error(`Emitter '${actor.name}' destruction requires its render manager.`);
                 renderManager.removeTransientEffect(actor);
             }
+        }
 
-        for (const emitter of this.emitters)
-            if (!this.actors.has(emitter.parent)) emitter.update(currentTime, deltaTime);
+        for (const emitter of this.emitters) {
+            if (this.actors.has(emitter.parent)) continue;
+
+            const steps = this.getSteps(emitter, slot);
+
+            if (steps > 0) emitter.update(currentTime, Math.fround(deltaTime * steps));
+        }
+    }
+
+    protected getSteps(emitter: any, slot: number): number {
+        const offset = slot - emitter.simulationPhase;
+
+        if (offset % EmitterSimulation.PHASES !== 0 || offset % EmitterSimulation.INACTIVE_PHASES !== 0 && emitter.isInactive()) return 0;
+
+        const steps = emitter.simulationSlot === undefined ? 1 : (slot - emitter.simulationSlot) / EmitterSimulation.PHASES;
+
+        emitter.simulationSlot = slot;
+        return steps;
     }
 }
 export default PhysicsManager;

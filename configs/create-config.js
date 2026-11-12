@@ -153,8 +153,8 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
 
 
         if (!isWorker) rules.push({
-            test: /three[\\/]src[\\/]renderers[\\/]webgl[\\/]WebGLBindingStates\.js$/,
-            loader: path.resolve(__dirname, "webgl-binding-states-loader.js")
+            test: /three[\\/]src[\\/]renderers[\\/](WebGLRenderer|webgl[\\/](WebGLBindingStates|WebGLPrograms|WebGLShaderCache))\.js$/,
+            loader: path.resolve(__dirname, "three-override-loader.js")
         });
 
         rules.unshift({

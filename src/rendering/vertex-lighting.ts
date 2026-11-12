@@ -7,6 +7,9 @@ import { resolveShaderIncludes } from "../materials/shader-chunks/register-chunk
 const VERTEX_SHADER = resolveShaderIncludes(VERTEX_SOURCE.replace("#version 300 es", "#version 300 es\n#define DYNAMIC_LIGHTING"));
 const FRAGMENT_SHADER = "#version 300 es\nprecision highp float;out vec4 color;void main(){color=vec4(0.0);}";
 const cacheAffectedVertices = new WeakMap<Uint8Array, Uint32Array>();
+const cachePrograms = new WeakMap<WebGL2RenderingContext, VertexLightingProgram_T>();
+
+type VertexLightingProgram_T = { program: WebGLProgram, matrixUniform: WebGLUniformLocation };
 
 export type VertexLight_T = { flags: Uint8Array, vertexRangeStart?: number, vertexRangeEnd?: number, flagsOffset?: number, instance?: DynamicLight };
 
@@ -15,12 +18,20 @@ export function getAffectedVertices(flags: Uint8Array, vertexCount: number, rang
 
     if (!indices) {
         let count = 0;
-        for (let vi = rangeStart; vi < rangeEnd; vi++)
-            if (flags[(vi >> 3) - flagsOffset] & (1 << (vi & 7))) count++;
+        for (let vi = rangeStart; vi < rangeEnd; vi++) {
+            const byte = flags[(vi >> 3) - flagsOffset];
+
+            if (byte === 0) vi |= 7;
+            else if (byte & (1 << (vi & 7))) count++;
+        }
 
         indices = new Uint32Array(count);
-        for (let vi = rangeStart, k = 0; vi < rangeEnd; vi++)
-            if (flags[(vi >> 3) - flagsOffset] & (1 << (vi & 7))) indices[k++] = vi;
+        for (let vi = rangeStart, k = 0; vi < rangeEnd; vi++) {
+            const byte = flags[(vi >> 3) - flagsOffset];
+
+            if (byte === 0) vi |= 7;
+            else if (byte & (1 << (vi & 7))) indices[k++] = vi;
+        }
 
         cacheAffectedVertices.set(flags, indices);
     }
@@ -33,12 +44,13 @@ export class VertexLighting {
     protected readonly gl: WebGL2RenderingContext;
     protected readonly buffers: WebGLBuffer[] = [];
     protected readonly textures: WebGLTexture[] = [];
-    protected readonly shaders: WebGLShader[] = [];
     protected readonly attributes: { source: BufferAttribute, buffer: WebGLBuffer, version: number }[] = [];
     protected readonly table: Float32Array;
     protected readonly matrix = new Float32Array(16);
-    protected readonly offsets: Uint32Array;
-    protected readonly indices: Uint32Array;
+    protected offsets: Uint32Array;
+    protected indices: Uint32Array;
+    protected build: Generator<void, void>;
+    protected hasCreatedProgram = false;
     protected program: WebGLProgram;
     protected vao: WebGLVertexArrayObject;
     protected feedback: WebGLTransformFeedback;
@@ -50,38 +62,59 @@ export class VertexLighting {
     protected matrixUniform: WebGLUniformLocation;
     protected baseChanged = true;
     protected readonly onDispose = () => this.dispose();
-    protected readonly onRestore = () => { this.program = null; this.render(); };
+    protected readonly onRestore = () => {
+        const shared = cachePrograms.get(this.gl);
+
+        if (shared && shared.program === this.program) cachePrograms.delete(this.gl);
+        this.program = null;
+        this.build = this.offsets ? this.create() : this.createTables();
+        this.render();
+    };
 
     public constructor(protected readonly renderer: WebGLRenderer, protected readonly geometry: BufferGeometry, protected readonly glow: Float32Array, protected readonly lights: VertexLight_T[], protected readonly environmentStart: number, protected base: Uint8ClampedArray) {
         this.gl = renderer.getContext() as WebGL2RenderingContext;
-        const count = geometry.getAttribute("position").count;
-        const counts = new Uint32Array(count);
 
-        for (const entry of lights)
-            for (const vi of getAffectedVertices(entry.flags, count, entry.vertexRangeStart, entry.vertexRangeEnd, entry.flagsOffset)) counts[vi]++;
-
-        this.offsets = new Uint32Array(count + 1);
-        for (let i = 0; i < count; i++) this.offsets[i + 1] = this.offsets[i] + counts[i];
-        this.indices = new Uint32Array(this.offsets[count]);
-        counts.set(this.offsets.subarray(0, count));
-        for (let i = 0; i < lights.length; i++) {
-            const entry = lights[i];
-            for (const vi of getAffectedVertices(entry.flags, count, entry.vertexRangeStart, entry.vertexRangeEnd, entry.flagsOffset)) this.indices[counts[vi]++] = i;
-        }
-
-        const maxSize = this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE);
-        this.width = Math.min(4096, maxSize);
+        this.width = Math.min(4096, this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE));
         this.tableHeight = Math.max(1, Math.ceil(lights.length * 4 / this.width));
         this.tableWidth = Math.min(this.width, Math.max(1, lights.length * 4));
-        if (Math.max(this.offsets.length, this.indices.length, lights.length * 4) > this.width * maxSize) throw new Error(`Vertex lighting tables exceed GPU texture limits for '${geometry.name}'.`);
         this.table = new Float32Array(this.width * this.tableHeight * 4);
+        this.build = this.createTables(); // a 300k vertex batch took 80 ms in one frame, stepped from render instead
         geometry.addEventListener("dispose", this.onDispose);
         renderer.domElement.addEventListener("webglcontextrestored", this.onRestore);
     }
 
+    public isBuilding() { return !!this.build; }
+
+    protected *createTables(): Generator<void, void> {
+        const lights = this.lights, count = this.geometry.getAttribute("position").count;
+        const counts = new Uint32Array(count), offsets = new Uint32Array(count + 1);
+
+        for (const entry of lights) {
+            const affected = getAffectedVertices(entry.flags, count, entry.vertexRangeStart, entry.vertexRangeEnd, entry.flagsOffset);
+
+            for (let k = 0; k < affected.length; k++) counts[affected[k]]++;
+            yield;
+        }
+
+        for (let i = 0; i < count; i++) offsets[i + 1] = offsets[i] + counts[i];
+        const indices = new Uint32Array(offsets[count]);
+        counts.set(offsets.subarray(0, count));
+        yield;
+        for (let i = 0; i < lights.length; i++) {
+            const entry = lights[i], affected = getAffectedVertices(entry.flags, count, entry.vertexRangeStart, entry.vertexRangeEnd, entry.flagsOffset);
+
+            for (let k = 0; k < affected.length; k++) indices[counts[affected[k]]++] = i;
+            yield;
+        }
+
+        if (Math.max(offsets.length, indices.length, lights.length * 4) > this.width * this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE)) throw new Error(`Vertex lighting tables exceed GPU texture limits for '${this.geometry.name}'.`);
+        this.offsets = offsets;
+        this.indices = indices;
+        yield* this.create();
+    }
+
     protected createShader(type: number, source: string): WebGLShader {
         const gl = this.gl, shader = gl.createShader(type);
-        this.shaders.push(shader);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
@@ -98,7 +131,7 @@ export class VertexLighting {
         return buffer;
     }
 
-    protected texture(data: Uint32Array | Float32Array, channels: number, unit: number, name: string): WebGLTexture {
+    protected texture(data: Uint32Array | Float32Array, channels: number, unit: number): WebGLTexture {
         const gl = this.gl, height = Math.max(1, Math.ceil(data.length / (this.width * channels)));
         const padded = new (data.constructor as any)(this.width * height * channels);
         padded.set(data);
@@ -109,35 +142,56 @@ export class VertexLighting {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texImage2D(gl.TEXTURE_2D, 0, channels === 1 ? gl.R32UI : gl.RGBA32F, this.width, height, 0, channels === 1 ? gl.RED_INTEGER : gl.RGBA, channels === 1 ? gl.UNSIGNED_INT : gl.FLOAT, padded);
-        gl.uniform1i(gl.getUniformLocation(this.program, name), unit);
         return texture;
     }
 
-    protected create() {
+    protected createProgram(): VertexLightingProgram_T {
+        const gl = this.gl, program = gl.createProgram(), vertex = this.createShader(gl.VERTEX_SHADER, VERTEX_SHADER), fragment = this.createShader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+
+        gl.attachShader(program, vertex);
+        gl.attachShader(program, fragment);
+        gl.transformFeedbackVaryings(program, ["packedLighting"], gl.INTERLEAVED_ATTRIBS);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+        gl.deleteShader(vertex);
+        gl.deleteShader(fragment);
+        gl.useProgram(program);
+        gl.uniform1i(gl.getUniformLocation(program, "offsets"), 0);
+        gl.uniform1i(gl.getUniformLocation(program, "indices"), 1);
+        gl.uniform1i(gl.getUniformLocation(program, "lights"), 2);
+        gl.uniform1ui(gl.getUniformLocation(program, "textureWidth"), this.width);
+
+        return { program, matrixUniform: gl.getUniformLocation(program, "matrix") };
+    }
+
+    protected *create(): Generator<void, void> {
         const gl = this.gl;
-        this.buffers.length = this.textures.length = this.shaders.length = 0;
+        let shared = cachePrograms.get(gl);
+
+        this.hasCreatedProgram = !shared;
+        if (!shared) cachePrograms.set(gl, shared = this.createProgram()); // one link per context, each one stalls the GPU process
+
+        this.buffers.length = this.textures.length = 0;
         this.attributes.length = 0;
-        this.program = gl.createProgram();
-        gl.attachShader(this.program, this.createShader(gl.VERTEX_SHADER, VERTEX_SHADER));
-        gl.attachShader(this.program, this.createShader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER));
-        gl.transformFeedbackVaryings(this.program, ["packedLighting"], gl.INTERLEAVED_ATTRIBS);
-        gl.linkProgram(this.program);
-        if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(this.program));
-        gl.useProgram(this.program);
+        this.matrixUniform = shared.matrixUniform;
         this.vao = gl.createVertexArray();
-        gl.bindVertexArray(this.vao);
         for (let i = 0; i < 2; i++) {
             const source = this.geometry.getAttribute(i === 0 ? "position" : "normal") as BufferAttribute;
             if ((source as any).isInterleavedBufferAttribute || !(source.array instanceof Float32Array) || source.count !== this.glow.length || source.itemSize !== 3) throw new Error(`Invalid vertex lighting input for '${this.geometry.name}'.`);
+            gl.bindVertexArray(this.vao);
             this.attributes.push({ source, buffer: this.attribute(source.array, i, 3, gl.FLOAT), version: source.version });
+            yield;
         }
+        gl.bindVertexArray(this.vao);
         this.attribute(this.glow, 2, 1, gl.FLOAT);
         this.baseBuffer = this.attribute(this.base, 3, 3, gl.UNSIGNED_BYTE);
-        this.texture(this.offsets, 1, 0, "offsets");
-        this.texture(this.indices, 1, 1, "indices");
-        this.tableTexture = this.texture(this.table, 4, 2, "lights");
-        gl.uniform1ui(gl.getUniformLocation(this.program, "textureWidth"), this.width);
-        this.matrixUniform = gl.getUniformLocation(this.program, "matrix");
+        this.baseChanged = false;
+        yield;
+        this.texture(this.offsets, 1, 0);
+        yield;
+        this.texture(this.indices, 1, 1);
+        yield;
+        this.tableTexture = this.texture(this.table, 4, 2);
         const buffer = gl.createBuffer();
         this.buffers.push(buffer);
         gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, buffer);
@@ -149,10 +203,10 @@ export class VertexLighting {
             this.output.setBuffer(buffer);
             this.output.needsUpdate = true;
         } else this.output = new GLBufferAttribute(buffer, gl.UNSIGNED_BYTE, 4, 1, this.glow.length, true);
-        this.baseChanged = false;
+        this.program = shared.program;
     }
 
-    public update(matrix: Matrix4, base: Uint8ClampedArray, baseChanged: boolean, color: ColorByte, current: number, next: number, lerp: number) {
+    public update(matrix: Matrix4, base: Uint8ClampedArray, baseChanged: boolean, color: ColorByte, current: number, next: number, lerp: number): boolean {
         this.base = base;
         this.baseChanged = this.baseChanged || baseChanged;
         matrix.toArray(this.matrix);
@@ -169,17 +223,25 @@ export class VertexLighting {
             const index = i - this.environmentStart;
             this.table[offset + 12] = environment ? (index === current ? 1 - lerp : 0) + (index === next ? lerp : 0) : 1;
         }
-        this.render();
+        return this.render();
     }
 
-    protected render() {
+    protected render(): boolean {
         const gl = this.gl;
-        if (gl.isContextLost()) return;
+        if (gl.isContextLost()) return false;
         const target = this.renderer.getRenderTarget(), cubeFace = this.renderer.getActiveCubeFace(), mipLevel = this.renderer.getActiveMipmapLevel();
         this.renderer.resetState();
         try {
-            const created = !this.program;
-            if (created) this.create();
+            if (this.build) {
+                const deadline = performance.now() + 1.5;
+
+                while (!this.build.next().done)
+                    if (performance.now() >= deadline) return false;
+                this.build = null;
+            }
+
+            const created = this.hasCreatedProgram;
+            this.hasCreatedProgram = false;
             gl.useProgram(this.program);
             gl.bindVertexArray(this.vao);
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.feedback);
@@ -209,6 +271,7 @@ export class VertexLighting {
                 const error = gl.getError();
                 if (error !== gl.NO_ERROR && !gl.isContextLost()) throw new Error(`Vertex lighting GL error ${error}.`);
             }
+            return true;
         } finally {
             gl.disable(gl.RASTERIZER_DISCARD);
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
@@ -225,10 +288,8 @@ export class VertexLighting {
         this.renderer.domElement.removeEventListener("webglcontextrestored", this.onRestore);
         for (const buffer of this.buffers) gl.deleteBuffer(buffer);
         for (const texture of this.textures) gl.deleteTexture(texture);
-        for (const shader of this.shaders) gl.deleteShader(shader);
         if (this.feedback) gl.deleteTransformFeedback(this.feedback);
         if (this.vao) gl.deleteVertexArray(this.vao);
-        if (this.program) gl.deleteProgram(this.program);
     }
 }
 

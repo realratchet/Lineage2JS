@@ -538,16 +538,19 @@ export class SectorObject extends GameObject {
         return shared ?? getProperty(this.scriptVM.getDefaultObject(info.scriptClassId), name);
     }
 
+    public initializeL2GameEventActor(object: any): boolean {
+        if (!object.isEmitterActor || this.initializedL2GameEventActors.has(object)) return false;
+
+        this.scriptVM.initializeHost(object);
+        Actor.prototype.postBeginPlay.call(object);
+        this.initializedL2GameEventActors.add(object);
+        return true;
+    }
+
     public initializeL2GameEvents(): void {
         if (this.hasInitializedL2GameEvents) return;
 
-        this.traverse((object: any) => {
-            if (!object.isEmitterActor || this.initializedL2GameEventActors.has(object)) return;
-
-            this.scriptVM.initializeHost(object);
-            Actor.prototype.postBeginPlay.call(object);
-            this.initializedL2GameEventActors.add(object);
-        });
+        this.traverse(object => { this.initializeL2GameEventActor(object); });
         if (!this.staticMeshGroup) return;
 
         // AActor::PostBeginPlay 0x8583f0..0x858424 runs independently of the script event.
@@ -2192,6 +2195,15 @@ export class SectorObject extends GameObject {
         previous.clear();
         for (const leaf of visibleLeaves) previous.add(leaf);
         this.staticLeafVisibilityVersion++;
+    }
+
+    public *prepareBatchVisibility(): Generator<void, void> {
+        for (const object of this.staticMeshMap.values()) {
+            if (!(object as any).isBatch || !(object as any).batchElements) continue;
+
+            this.getBatchVisibility((object as any).batchElements);
+            yield;
+        }
     }
 
     protected getBatchVisibility(elements: any[]): BatchVisibility_T {
