@@ -111,6 +111,7 @@ export class NetworkActors {
     protected readonly bodyKeys = new WeakMap<BaseActor, string>();
     protected readonly appearanceRequests = new WeakMap<BaseActor, number>();
     protected readonly disappearNpcActions = new Map<BaseActor, number>();
+    protected readonly arrDetachedPawns: BaseActor[] = [];
     public petStatusType = -1;
     public deletedPetId = 0;
     public petInfo: GamePackets.PetStatus_T = { objectId: -1, npcId: -GamePackets.NPC_ID_OFFSET, name: "", x: 0, y: 0, z: 0, statusType: 0, curFood: 0, maxFood: 0, curHp: 0, maxHp: 0, curMp: 0, maxMp: 0, field42: 0, level: 0, exp: 0, minExp: 0, nextExp: 0, weight: 0, maxWeight: 0, pAtk: 0, pDef: 0, mAtk: 0, mDef: 0, accuracy: 0, evasion: 0, critical: 0, speed: 0, attackSpeed: 0, castSpeed: 0, field60: 0, isMountable: false, soulshotsUsed: 0, spiritshotsUsed: 0 };
@@ -1050,22 +1051,22 @@ export class NetworkActors {
     }
 
     public updateDisappearNpcActions(deltaTime: number): void {
+        const render = this.network.getParent().getComponent("render");
+
+        if (this.arrDetachedPawns.length > 0) render.releasePawn(this.arrDetachedPawns.pop()); // a group that left together expires on one tick, freeing meshes costs half a millisecond per pawn
         if (!this.disappearNpcActions.size) return;
 
-        const render = this.network.getParent().getComponent("render");
         const level = render.getLevel();
         const dilation = level ? level.levelInfoActor.getUnrealScriptProperty("TimeDilation") as number : 1;
         const delta = Math.fround(Math.max(Math.fround(0.0005), Math.min(Math.fround(0.4), Math.fround(Math.fround(deltaTime / 1000) * dilation))));
-        let canRemove = true;
 
         // DisappearNpcAction::Tick 0x10499f90..0x1049a08d.
         for (const [actor, previous] of this.disappearNpcActions) {
             const elapsed = Math.fround(previous + delta);
 
-            if (elapsed > 2 && canRemove) {
-                canRemove = false; // a group that left together expires on one tick, removal costs milliseconds per pawn
+            if (elapsed > 2) {
                 this.disappearNpcActions.delete(actor);
-                render.removePawn(actor);
+                if (render.detachPawn(actor)) this.arrDetachedPawns.push(actor);
             } else {
                 this.disappearNpcActions.set(actor, elapsed);
                 actor.getComponent<PawnRenderableComponent>("pawnRenderable").setAlphaTexModifier(Math.trunc(Math.max(0, Math.min(255, 255 - elapsed * 127.5))));
@@ -1078,6 +1079,8 @@ export class NetworkActors {
 
         for (const actor of this.disappearNpcActions.keys()) render.removePawn(actor);
         this.disappearNpcActions.clear();
+        for (const actor of this.arrDetachedPawns) render.releasePawn(actor);
+        this.arrDetachedPawns.length = 0;
     }
 
     public withActor(objectId: number, callback: (actor: BaseActor, object: NetObject_T) => void) {

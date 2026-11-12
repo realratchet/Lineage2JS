@@ -90,7 +90,7 @@ export class ProgramVariants {
         return this.cacheHashes.get(source);
     }
 
-    public isReady(): boolean { return this.store !== null && !this.isRestoring && this.arrLinking.length === 0; }
+    public isReady(): boolean { return this.store !== null && !this.isRestoring && this.count === this.programs.length && this.arrLinking.length === 0; }
 
     public update(isLoading: boolean): void {
         if (!this.store) return;
@@ -100,6 +100,7 @@ export class ProgramVariants {
         for (; this.count < this.programs.length; this.count++) {
             const program = this.programs[this.count];
 
+            this.arrLinking.push(program); // restored or freshly compiled, a loading screen waits for both
             if (program.parameters.shaderID) continue;
 
             const { uniforms, customVertexShaderID, customFragmentShaderID, vertexShader, fragmentShader, ...parameters } = program.parameters;
@@ -155,7 +156,6 @@ export class ProgramVariants {
             const program = this.programCache.restoreProgram({ ...variant.parameters, vertexShader, fragmentShader });
 
             this.restored.set(program, variant);
-            this.arrLinking.push(program);
             this.arrPending.splice(i, 1);
         }
     }

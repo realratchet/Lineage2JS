@@ -25,10 +25,11 @@ type AmbientInfo_T = {
     looping: boolean
 };
 
+type ChannelNodes_T = { gain: GainNode, panner: PannerNode };
+
 type AmbientChannel_T = {
     source?: AudioBufferSourceNode,
-    panner?: PannerNode,
-    gain?: GainNode,
+    nodes?: ChannelNodes_T,
     priority: number,
     isAudible: boolean,
     info: AmbientInfo_T
@@ -658,6 +659,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     }
 
     protected readonly activeAmbientSounds = new Map<string, AmbientChannel_T>();
+    protected readonly arrChannelNodes: ChannelNodes_T[] = [];
     protected readonly ambientSounds = new Set<AmbientSoundComponent>();
     protected readonly cacheAmbientCells = new Map<number, AmbientSoundComponent[]>();
     protected isAmbientGridDirty = true;
@@ -915,30 +917,50 @@ export class AudioManager implements IEngineComponent<GameManager> {
         return pending;
     }
 
+    protected acquireChannelNodes(output: AudioNode, volume: number, isAttenuated: boolean, x: number, y: number, z: number, refDistance: number, maxDistance: number): ChannelNodes_T {
+        let nodes = this.arrChannelNodes.pop(); // a gain and panner per sound left thousands of nodes for every major GC to delete
+
+        if (!nodes) {
+            nodes = { gain: this.audioContext.createGain(), panner: this.audioContext.createPanner() };
+            nodes.panner.panningModel = "equalpower"; // hrtf convolution is too costly at 32 concurrent panners
+            nodes.panner.distanceModel = "inverse";
+        }
+
+        const { gain, panner } = nodes;
+
+        gain.gain.value = volume;
+        if (!isAttenuated) {
+            gain.connect(output);
+            return nodes;
+        }
+
+        panner.refDistance = refDistance;
+        panner.maxDistance = maxDistance;
+        panner.rolloffFactor = this.alAudio.rollOff;
+        panner.positionX.value = x;
+        panner.positionY.value = y;
+        panner.positionZ.value = z;
+        gain.connect(panner);
+        panner.connect(output);
+
+        return nodes;
+    }
+
+    protected releaseChannelNodes(nodes: ChannelNodes_T): void {
+        nodes.gain.disconnect();
+        nodes.panner.disconnect();
+        this.arrChannelNodes.push(nodes);
+    }
+
     protected startAmbientSource(id: string, buffer: AudioBuffer, entry: AmbientChannel_T) {
         const info = entry.info;
-
-        const panner = this.audioContext.createPanner();
-        panner.panningModel = "equalpower"; // hrtf convolution is too costly at 32 concurrent panners
-        panner.distanceModel = "inverse";
-        panner.refDistance = info.refDistance;
-        panner.maxDistance = info.maxDistance;
-        panner.rolloffFactor = this.alAudio.rollOff;
-        panner.positionX.value = info.position[0];
-        panner.positionY.value = info.position[1];
-        panner.positionZ.value = info.position[2];
-
-        const gain = this.audioContext.createGain();
-        gain.gain.value = info.volume;
-
-        gain.connect(panner);
-        panner.connect(this.ambientGainNode);
+        const nodes = this.acquireChannelNodes(this.ambientGainNode, info.volume, true, info.position[0], info.position[1], info.position[2], info.refDistance, info.maxDistance);
 
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
         source.loop = info.looping;
         source.playbackRate.value = info.pitch;
-        source.connect(gain);
+        source.connect(nodes.gain);
 
         if (!info.looping) source.onended = () => {
             if (this.activeAmbientSounds.get(id) !== entry || entry.source !== source) return;
@@ -946,8 +968,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
             this.stopAmbientSound(id);
         };
 
-        entry.panner = panner;
-        entry.gain = gain;
+        entry.nodes = nodes;
         entry.source = source;
 
         source.start(0);
@@ -977,36 +998,17 @@ export class AudioManager implements IEngineComponent<GameManager> {
         await pendingUnlock;
         if (!buffer || this.gameManager.isWorldLoading()) return;
 
-        const gain = this.audioContext.createGain();
-        gain.gain.value = volume;
+        const nodes = this.acquireChannelNodes(isCombat ? this.combatGainNode : this.effectsGainNode, volume, attenuate, x, y, z, sourceRadius, sourceMaxDistance);
 
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
         source.playbackRate.value = pitch;
 
-        source.connect(gain);
-
-        const output = isCombat ? this.combatGainNode : this.effectsGainNode;
-        let panner: PannerNode = null;
-
-        if (attenuate) {
-            panner = this.audioContext.createPanner();
-            panner.panningModel = "equalpower";
-            panner.distanceModel = "inverse";
-            panner.refDistance = sourceRadius;
-            panner.maxDistance = sourceMaxDistance;
-            panner.rolloffFactor = this.alAudio.rollOff;
-            panner.positionX.value = x;
-            panner.positionY.value = y;
-            panner.positionZ.value = z;
-            gain.connect(panner);
-            panner.connect(output);
-        } else gain.connect(output);
+        source.connect(nodes.gain);
 
         source.onended = () => {
             source.disconnect();
-            gain.disconnect();
-            if (panner) panner.disconnect();
+            this.releaseChannelNodes(nodes);
         };
 
         source.start(0);
@@ -1023,8 +1025,10 @@ export class AudioManager implements IEngineComponent<GameManager> {
             entry.source.buffer = null;
             entry.source = undefined;
         }
-        if (entry.gain) entry.gain.disconnect();
-        if (entry.panner) entry.panner.disconnect();
+        if (entry.nodes) {
+            this.releaseChannelNodes(entry.nodes);
+            entry.nodes = undefined;
+        }
 
         this.activeAmbientSounds.delete(id);
     }

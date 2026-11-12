@@ -19,6 +19,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
     protected deathAnimationFinishedHandler: ((actor: BaseActor) => void) = null;
     protected isDying = false;
     protected isReleased = false;
+    protected hasMeshes = true;
     protected deathSkyAnimation: string = null;
     protected isDeathFalling = false;
     protected readonly defaultController = { scriptClassId: "engine.Controller", scriptProperties: new Map<string, ScriptValue_T>([["bDead", false], ["WaitType", PStopType_T.STP_STAND], ["bAutoAttacking", false]]) };
@@ -50,7 +51,7 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
         setProperty(controller, "bAutoAttacking", isAutoAttacking);
     }
 
-    public onDetach(): void { this.release(); }
+    public onDetach(): void { this.release(); this.releaseMeshes(); }
     public hasDeathActions(): boolean { return !!this.deathSkyAnimation || this.isDeathFalling; }
     public isDead(): boolean { return this.isDying; }
 
@@ -166,14 +167,20 @@ export class NpcLifecycleComponent extends ObjectComponent<BaseActor> {
 
         script?.destroy();
         parent.getComponent<TransformComponent>("transform").releaseTouching();
-        const equipment = parent.findComponent("pawnEquipment");
-
-        if (equipment) parent.removeComponent(equipment);
-        this.getComponent<AnimationComponent>("animation").release();
         this.deathAnimationFinishedHandler = null;
         this.isDying = false;
         this.deathSkyAnimation = null;
         this.isDeathFalling = false;
+    }
+
+    public releaseMeshes(): void {
+        if (!this.hasMeshes) return;
+
+        const parent = this.getParent(), equipment = parent.findComponent("pawnEquipment");
+
+        this.hasMeshes = false;
+        if (equipment) parent.removeComponent(equipment);
+        this.getComponent<AnimationComponent>("animation").release();
     }
 }
 

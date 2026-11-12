@@ -1511,7 +1511,11 @@ export class RenderManager implements IEngineComponent<GameManager> {
     }
 
     public removePawn(pawn: BaseActor): void {
-        if (!this.getPhysicsManager().removePawn(pawn)) return;
+        if (this.detachPawn(pawn)) this.releasePawn(pawn);
+    }
+
+    public detachPawn(pawn: BaseActor): boolean {
+        if (!this.getPhysicsManager().removePawn(pawn)) return false;
 
         pawn.findComponent<PawnAttackComponent>("pawnAttack")?.detachSkillVisuals();
         pawn.getComponent<NpcLifecycleComponent>("npcLifecycle").release();
@@ -1523,11 +1527,15 @@ export class RenderManager implements IEngineComponent<GameManager> {
         for (const effect of arrPawnEffects) this.removeTransientEffect(effect);
 
         pawn.removeFromParent();
-
-        if (this.isUpdatingMixer) this.deferredMixerOperations.push(() => pawn.release());
-        else pawn.release();
+        pawn.destroy();
 
         this.needsUpdate = true;
+        return true;
+    }
+
+    public releasePawn(pawn: BaseActor): void {
+        if (this.isUpdatingMixer) this.deferredMixerOperations.push(() => pawn.release());
+        else pawn.release();
     }
 
     public retainSkillVisual(visual: SkillVisualEffect, effects: Object3D[], caster: BaseActor): void { this.retainedSkillVisuals.set(visual, { effects, caster }); }

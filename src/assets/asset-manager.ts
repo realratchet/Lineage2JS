@@ -1369,6 +1369,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             this.pendingSectorSteps.shift();
             pending.resolve(step.value);
+            if (performance.now() >= deadline) return; // every queued job runs at least one step, ten short ones took 20 ms of a 1 ms budget
         }
 
         let jobIndex = -1;

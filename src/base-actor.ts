@@ -289,6 +289,12 @@ export class BaseActor extends GameObject implements ICollidable {
 
     // materials stay - material-decoder hands those out of name-keyed shared caches
     public release(): void {
+        this.destroy();
+        this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.releaseMeshes();
+        this.detachComponents();
+    }
+
+    public destroy(): void { // gameplay and collision state only, a pawn's meshes cost half a millisecond to free and can wait a frame
         if (this.isPendingDelete) return;
 
         this.isPendingDelete = true;
@@ -300,7 +306,6 @@ export class BaseActor extends GameObject implements ICollidable {
         this.renderManager.getPhysicsManager().setPawnLevel(this, null);
         this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.release();
         this.isDeleted = true;
-        this.detachComponents();
         unregisterLevelActor(this);
     }
 

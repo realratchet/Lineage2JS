@@ -1,5 +1,6 @@
 import { AnimationAction, Sphere, Vector3 } from "three";
 import { GameObject } from "../game/components";
+import { ScriptComponent } from "../game/script-component";
 import { findScriptPropertyKey, getScriptPropertyName } from "../ue-script/script-properties";
 import ActorMeshComponent from "../rendering/components/actor-mesh-component";
 import ActorOwnershipComponent from "./components/actor-ownership-component";
@@ -59,7 +60,9 @@ export class FishingFloat extends GameObject {
         this.nativeRotation.toQuaternion(this.quaternion);
         this.position.copy(location);
         this.originalLocation.copy(location);
-        new UnScriptVM(library).initializeHost(this);
+        const vm = new UnScriptVM(library);
+
+        this.addComponent(new ScriptComponent(vm, classId => renderManager.getParent().getComponent("asset").createScriptObject(renderManager, library, classId, vm), this.scriptClassId));
 
         const rate = this.scriptProperties.get("RotationRate");
         if (!Array.isArray(rate) || rate.some(value => value !== 0)) throw new Error(`L2Float has unsupported RotationRate ${rate}`);
