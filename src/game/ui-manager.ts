@@ -133,11 +133,8 @@ export class UIManager implements IEngineComponent<GameManager> {
     public async onInit(): Promise<this> {
         const camera = this.addSection("Camera", true);
         this.freeCamera = this.addCheckbox(camera, "Free Camera", false, value => {
-            const controls = this.manGame.getComponent("input").controls.fps;
-
             this.freeCamera.blur();
-            if (value) controls.lock();
-            else controls.unlock();
+            this.manGame.getComponent("input").setFreeCamera(value);
         });
         if (!loginServer) this.addRenderControls();
         this.addBspControls();
@@ -246,11 +243,12 @@ export class UIManager implements IEngineComponent<GameManager> {
         for (const section of this.standaloneSections) section.hidden = !!loginServer;
         const input = this.manGame.getComponent("input");
 
-        this.freeCamera.checked = !input.isUsingOrbitControls();
+        this.freeCamera.checked = input.isFreeCameraEnabled();
         this.freeCamera.disabled = input.isCameraInputLocked();
     }
 
     public toggleDebugView(): void {
+        if (loginServer && !this.debugView.hidden) this.manGame.getComponent("input").setFreeCamera(false);
         this.updateDebugControls();
         if (!this.debugView.hidden) this.selectDebugTab("controls");
         this.debugView.hidden = !this.debugView.hidden;

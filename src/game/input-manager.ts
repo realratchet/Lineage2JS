@@ -104,6 +104,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     protected hasMouseDragged = false;
     protected followPlayer = false;
     protected isCameraLocked = false;
+    protected isFreeCamera = false;
     protected isPawnFreeCamera = false;
     protected isCameraHeightAdjusted = false;
     protected replayCameraState: ReplayCameraState_T = null;
@@ -200,8 +201,19 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     public getOrbitTarget(): Vector3 { return this.controls.orbit.target; }
     public isUsingOrbitControls(): boolean { return this.isOrbitControls; }
-    public isFollowingPlayer(): boolean { return this.followPlayer; }
+    public isFollowingPlayer(): boolean { return this.followPlayer || this.isPawnFreeCamera; }
     public isCameraInputLocked(): boolean { return this.isCameraLocked; }
+    public isFreeCameraEnabled(): boolean { return this.isFreeCamera; }
+
+    public setFreeCamera(enabled: boolean): void {
+        if (enabled && this.isCameraLocked) return;
+        if (enabled === this.isFreeCamera) return;
+
+        this.isFreeCamera = enabled;
+        if (enabled) this.controls.fps.lock();
+        else if (this.controls.fps.isLocked) this.controls.fps.unlock();
+        else this.onPointerControlsUnlocked();
+    }
 
     public setCameraLocked(isLocked: boolean): void {
         if (isLocked) this.specialView.reset();
@@ -210,7 +222,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.controls.orbit.enabled = !isLocked;
 
         if (isLocked) {
-            if (this.controls.fps.isLocked) this.controls.fps.unlock();
+            this.setFreeCamera(false);
             this.setFollowPlayer(false);
         }
     }
@@ -340,6 +352,7 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public isRenderingWide() { return this.specialView.isWide(); }
+    public isNameHidden() { return this.specialView.isNameHidden(); }
 
     public updateCamera(): void {
         if (this.isOrbitControls || this.specialView.isActive()) return;
@@ -548,9 +561,10 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onPointerControlsLocked(): void {
+        this.isFreeCamera = true;
         if (this.manGame.getComponent("network").isInWorld()) {
             this.isPawnFreeCamera = true;
-            this.setFollowPlayer(true);
+            this.setFollowPlayer(false);
             this.renderManager.setPawnCullingCamera(true);
         }
         this.isOrbitControls = false;
@@ -559,9 +573,10 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     protected onPointerControlsUnlocked(): void {
+        if (!loginServer) this.isFreeCamera = false;
         this.isOrbitControls = true;
         this.controls.orbit.enabled = !this.isCameraLocked;
-        if (this.isPawnFreeCamera) {
+        if (this.isPawnFreeCamera && !this.isFreeCamera) {
             this.isPawnFreeCamera = false;
             this.renderManager.setPawnCullingCamera(false);
             if (this.manGame.getComponent("network").isInWorld() && !this.isCameraLocked) {
@@ -713,7 +728,7 @@ export class InputManager implements IEngineComponent<GameManager> {
                 const target = event.target as HTMLElement;
 
                 if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-                if (loginServer) return;
+                if (loginServer && !this.isFreeCamera) return;
                 if (this.isOrbitControls) this.controls.fps.lock();
                 else this.controls.fps.unlock();
                 break;
@@ -727,7 +742,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onHandleMouseDown(event: MouseEvent): void {
         if (event.button === 2) { this.rightMouseDownTime = event.timeStamp; return; }
-        if (event.button !== 0 || !this.isOrbitControls) return;
+        if (event.button !== 0 || !this.isOrbitControls || this.isFreeCamera) return;
 
         this.isPrimaryMouseDown = true;
         this.hasMouseDragged = false;
@@ -873,7 +888,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         const network = this.manGame.getComponent("network");
         const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
 
-        if (this.isMouseInViewport && this.isOrbitControls && !this.isCameraLocked && this.mousePosition.x >= bounds.left && this.mousePosition.x < bounds.right && this.mousePosition.y >= bounds.top && this.mousePosition.y < bounds.bottom && !network.isMouseOverUI(this.mousePosition.x, this.mousePosition.y)) {
+        if (this.isMouseInViewport && this.isOrbitControls && !this.isFreeCamera && !this.isCameraLocked && this.mousePosition.x >= bounds.left && this.mousePosition.x < bounds.right && this.mousePosition.y >= bounds.top && this.mousePosition.y < bounds.bottom && !network.isMouseOverUI(this.mousePosition.x, this.mousePosition.y)) {
             tmpScreenPosition.set((this.mousePosition.x - bounds.left) / bounds.width * 2 - 1, 1 - (this.mousePosition.y - bounds.top) / bounds.height * 2);
             this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
 

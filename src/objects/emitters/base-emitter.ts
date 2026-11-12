@@ -6,6 +6,7 @@ import { isOrderIndependentAdditive } from "../../materials/particle-blending";
 import Rotator from "../../utils/rotator";
 import type { ParticleMaterial, ParticleMaterialInitSettings_T } from "../../materials/particle-material/particle-material";
 import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine/contracts/emitter";
+import { findScriptPropertyKey, getScriptPropertyName } from "../../ue-script/script-properties";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 
 const frozenUpdateMatrixWorld = function () { };
@@ -88,6 +89,7 @@ export abstract class BaseEmitter extends Object3D {
     protected static warmupOwner: Object3D = null;
     protected readonly isUpdatable = true;
     public scriptClassId: string;
+    public scriptProperties: Map<string, ScriptValue_T>;
 
     public warmupGate: boolean = true; // set false by PhysicsManager while a sector's higher-priority tiers are still loading
     public budgetWarmup: boolean = false;
@@ -307,6 +309,26 @@ export abstract class BaseEmitter extends Object3D {
         this.kill();
         this.fadeOutDuration = duration;
     }
+    public getUnrealScriptProperty(id: string): ScriptValue_T {
+        const name = getScriptPropertyName(id);
+
+        if (name === "initialdelayrange") return { Min: this.initialDelayRange.min, Max: this.initialDelayRange.max };
+        const key = findScriptPropertyKey(this.scriptProperties, name);
+
+        return key === undefined ? null : this.scriptProperties.get(key);
+    }
+
+    public setUnrealScriptProperty(id: string, value: ScriptValue_T): void {
+        const name = getScriptPropertyName(id);
+
+        if (name === "initialdelayrange") {
+            this.initialDelayRange = { min: (value as any).Min, max: (value as any).Max };
+            return;
+        }
+
+        this.scriptProperties.set(findScriptPropertyKey(this.scriptProperties, name) ?? id.slice(id.lastIndexOf(".") + 1), value);
+    }
+
     public handlesUnrealNative(_index: number, name: string): boolean { return name.toLowerCase() === "trigger"; }
     public callUnrealNative(call: ScriptNativeCall_T): ScriptValue_T {
         if (call.context === this && call.name.toLowerCase() === "trigger") { this.trigger(); return undefined; }

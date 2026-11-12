@@ -120,12 +120,16 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.mixer = renderManager.mixer;
     }
 
-    public onUpdate(_currentTime: number, _deltaTime: number): void {
-        if (this.tweenTimeScales.size > 0 && this.mixer.time >= this.animationTweenEndTime) {
-            for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
+    protected releaseTween(): void {
+        if (this.tweenTimeScales.size === 0 || this.simulationSuspendedAt !== null || this.mixer.time < this.animationTweenEndTime) return;
 
-            this.tweenTimeScales.clear();
-        }
+        for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
+
+        this.tweenTimeScales.clear();
+    }
+
+    public onUpdate(_currentTime: number, _deltaTime: number): void {
+        this.releaseTween();
 
         const action = this.animationNotifyAction;
 
@@ -231,6 +235,8 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         return this.cacheAnimationNames.get(lowerName);
     }
     public isAnimating(): boolean {
+        this.releaseTween(); // polled in the frame a tween ends, before onUpdate, the action is neither tweening nor running yet
+
         const action = this.animationNotifyAction;
 
         return !!action && (action.isRunning() || action.isScheduled() && action.enabled && this.mixer.time < this.animationTweenEndTime);

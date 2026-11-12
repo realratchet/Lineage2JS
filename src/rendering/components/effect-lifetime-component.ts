@@ -1,12 +1,14 @@
 import { Quaternion, Vector3 } from "three";
 import { PhysicsComponent } from "../../physics/components/physics-component";
 import { EPhysics_T } from "../../assets/unreal/un-aactor";
+import Rotator from "../../utils/rotator";
 import type { IObject } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import type RenderManager from "../render-manager";
 
 const tmpTrailerOffset = new Vector3();
 const tmpOwnerRotation = new Quaternion();
+const tmpRotator = new Rotator();
 const pawnMeshRotation = new Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
 
 function updateEmitterMatrices(object: THREE.Object3D): void { // particles are posed by the render's own matrix pass
@@ -85,6 +87,19 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
             owner.getWorldQuaternion(effect.quaternion);
             if ((owner as any).isActor) effect.quaternion.multiply(pawnMeshRotation);
         }
+        if ((effect as any).isEmitterActor) updateEmitterMatrices(effect);
+        else effect.updateMatrixWorld(true);
+    }
+
+    public updateCameraTransform(): void { // PlayerCalcView 0x80cf0a..0x80cf66: actors based on the player controller take the camera's location and rotation
+        const effect = this.getParent(), base = (effect as any).scriptProperties?.get("Base");
+
+        if (!base || !base.isPlayerController) return;
+        const camera = this.renderManager.camera;
+
+        camera.getWorldDirection(tmpTrailerOffset);
+        tmpRotator.set(Math.round(Math.atan2(tmpTrailerOffset.z, Math.hypot(tmpTrailerOffset.x, tmpTrailerOffset.y)) * 32768 / Math.PI), Math.round(Math.atan2(tmpTrailerOffset.y, tmpTrailerOffset.x) * 32768 / Math.PI), 0).toQuaternion(effect.quaternion);
+        effect.position.copy(camera.position);
         if ((effect as any).isEmitterActor) updateEmitterMatrices(effect);
         else effect.updateMatrixWorld(true);
     }

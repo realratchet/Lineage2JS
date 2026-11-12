@@ -317,7 +317,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         window.addEventListener("keydown", event => {
             const target = event.target as HTMLElement;
 
-            if (event.code === "Backquote" || !this.manGame.getComponent("input").isUsingOrbitControls()) return;
+            if (event.code === "Backquote" || this.manGame.getComponent("input").isFreeCameraEnabled()) return;
             if (asset.playerController.isEnterChatting || this.screen !== "world" || event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
             if (this.chatWnd.isInputFocused() || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
             if (event.key === " " && target.closest('[role="checkbox"], [role="tab"], [role="button"], [role="combobox"]')) return;
@@ -1715,6 +1715,8 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
                 label.visible = true;
             }
         }
+
+        if (this.manRender.getParent().getComponent("input").isNameHidden()) return; // FDynamicActor::Render 0x8f10ef, DrawChat 0x8e838f
 
         const plates = this.manNetwork.getNameplates(), player = this.manRender.player;
         if (plates.length > 24) plates.sort((a, b) => a.actor.position.distanceToSquared(player.position) - b.actor.position.distanceToSquared(player.position));

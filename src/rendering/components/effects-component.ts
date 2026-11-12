@@ -79,16 +79,20 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
         const parent = this.getParent();
 
         // Engine.dll UAnimNotify_Effect::Notify 0x94cb30 / 0x94ccc8: null class and unrendered pawns do not spawn.
-        if (!info.effectClass || !parent.visible) return;
-        if (info.trailCamera) {
-            debugger;
-            throw new Error(`Animation effect '${info.objectName}' requires TrailCamera.`);
-        }
+        if (!info.effectClass || !info.trailCamera && !parent.visible) return;
         if (!this.vm) this.vm = new UnScriptVM(this.library);
 
         const effect = this.renderManager.getParent().getComponent("asset").createScriptObject(this.renderManager, this.library, info.effectClass, this.vm);
 
         this.vm.initializeHost(effect);
+        if (info.trailCamera) { // 0x94cb6a..0x94cc62: spawned at the origin, owned by and based on the player controller
+            const controller = this.renderManager.getParent().getComponent("asset").playerController;
+
+            effect.scriptProperties.set("Owner", controller);
+            effect.scriptProperties.set("Base", controller);
+            this.renderManager.addTransientEffect(effect);
+            return;
+        }
         const drawScale = parent.scriptClassId ? parent.getUnrealScriptProperty("DrawScale") as number : 1;
 
         parent.getWorldPosition(effect.position);

@@ -60,6 +60,7 @@ export class SpecialView {
 
     public isActive() { return this.objectId !== 0; }
     public isWide() { return this.isActive() && !this.isReturning && !!this.request && this.request.wideScreen === 1; } // bRenderWide: set by SetSpecialViewTarget, cleared when release starts (0x1053077e)
+    public isNameHidden() { return this.isActive() && !this.isReturning; } // GIsL2HideName: set by SetSpecialViewTarget 0x80003d, cleared when release starts 0x800727
     public reset() { if (this.isActive()) this.finish(); }
 
     public update(network: NetworkManager, delta: number) { // SetSpecialViewTarget 0x800000, SpecialViewTick 0x800860, ReleaseSpecialViewTarget 0x800700.
@@ -77,6 +78,7 @@ export class SpecialView {
             const actor = request ? network.getActor(request.objectId) : null;
 
             if (actor) {
+                network.ui.setHUDVisible(false); // SetSpecialViewTarget 0x800028..0x800037
                 if (!this.isActive()) {
                     camera.getWorldDirection(tmpDirection);
                     this.normalRotation.set(Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * 32768 / Math.PI), Math.trunc(Math.atan2(tmpDirection.z, Math.hypot(tmpDirection.x, tmpDirection.y)) * 32768 / Math.PI));
@@ -167,6 +169,7 @@ export class SpecialView {
     }
 
     protected release(network: NetworkManager) {
+        if (!this.isReturning && !network.session.game.isPlayingReplay()) network.ui.setHUDVisible(true); // ReleaseSpecialViewTarget 0x80070c, 0x8007a7..0x8007be
         this.objectId = network.getUserId();
         this.isReturning = this.isMoving = true;
         this.baseRotation.copy(this.normalRotation);

@@ -1961,6 +1961,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         const emitterCullDistSq = emitterCullDist * emitterCullDist;
 
         const activeSector = this.getSector(bspCullingPosition);
+        const hasExteriorView = !this.frustumCullingEnabled || !this.portalVisibility.prepare(camera, activeSector) || this.portalVisibility.hasExteriorView();
 
         if (!auxiliary) {
             this.getPhysicsManager().setTriggerPosition(this.usePawnCullingCamera ? this.player.position : this.camera.position);
@@ -1980,7 +1981,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
                 this.needsUpdate = true;
             }
 
-            if (auxiliary ? !isInRange : sector.fade === 0) { sector.visible = false; continue; }
+            if ((auxiliary ? !isInRange : sector.fade === 0) || !isCameraInSector && !hasExteriorView) { sector.visible = false; continue; }
 
             sector.visible = true;
 
@@ -2013,7 +2014,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
             for (let parent = emitter.parent; parent; parent = parent.parent)
                 if (parent.isSectorObject) { sector = parent; break; }
 
-            if (!emitter.isActorAttachedEmitter && sector && !sector.visibleEmitterUuids.has(emitter.emitterActorUuid)) {
+            if (!emitter.isActorAttachedEmitter && sector && (!sector.visible || !sector.visibleEmitterUuids.has(emitter.emitterActorUuid))) {
                 emitter.setRenderVisible(false);
                 continue;
             }
@@ -2618,6 +2619,7 @@ export class RenderManager implements IEngineComponent<GameManager> {
         for (const fishing of this.pawnFishing) fishing.tick(deltaTime / 1000);
 
         this.getInputManager().updateFollowPlayer(deltaTime);
+        for (const effect of this.getPhysicsManager().getPhysicsComponents<EffectLifetimeComponent>("effectLifetime")) effect.updateCameraTransform();
         this.getInputManager().updateMouseTarget();
 
         this.audioManager.update(currentTime);
