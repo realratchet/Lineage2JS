@@ -79,7 +79,11 @@ varying vec4 vShadowCoord;
 
 #ifdef USE_UV_TEXTURE
     uniform vec2 uvsSize;
-    uniform sampler2D uvsMap;
+    #ifdef USE_UV_TEXTURE_ARRAY
+        uniform highp sampler2DArray uvsMap;
+    #else
+        uniform sampler2D uvsMap;
+    #endif
     uniform mat3 uvTransform;
     uniform sampler2D tex;
     
@@ -152,13 +156,22 @@ void main() {
     vSectorFade = sectorFade;
 
     #ifdef USE_UV_TEXTURE
-        float u = (terrainIndex + 0.5) / uvsSize.x;
+        #ifdef USE_UV_TEXTURE_ARRAY
+            float segment = floor((terrainIndex + 0.5) / uvsSize.x);
+            float u = (terrainIndex - segment * uvsSize.x + 0.5) / uvsSize.x;
+        #else
+            float u = (terrainIndex + 0.5) / uvsSize.x;
+        #endif
 
         #pragma unroll_loop_start
         for(int i = 0; i < UV_COUNT; i++) {
             float v = (float(i) + 0.5) / float(uvsSize.y);
 
-            vUv[i] = (uvTransform * vec3(texture2D(uvsMap, vec2(u, v)).xy, 1.0)).xy;
+            #ifdef USE_UV_TEXTURE_ARRAY
+                vUv[i] = (uvTransform * vec3(texture(uvsMap, vec3(u, v, segment)).xy, 1.0)).xy;
+            #else
+                vUv[i] = (uvTransform * vec3(texture2D(uvsMap, vec2(u, v)).xy, 1.0)).xy;
+            #endif
         }
         #pragma unroll_loop_end
     #endif

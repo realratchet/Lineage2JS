@@ -2334,14 +2334,28 @@ export class SectorObject extends GameObject {
             if (cached.visible.length !== visibleCount) { changed = true; cached.visible.length = visibleCount; }
             if (!changed) continue;
             let groupKey = "";
-            const visibleGroups: any[] = [];
-            for (let i = 0; i < cached.visible.length; i++) {
-                const sector = sectors[cached.visible[i]], start = sector.batchGroupOffset, count = sector.batchGroupCount;
-                groupKey += start + ",";
-                for (let j = start; j < start + count; j++) visibleGroups.push(originalGroups[j]);
-            }
+            for (let i = 0; i < cached.visible.length; i++) groupKey += sectors[cached.visible[i]].batchGroupOffset + ",";
             if (groupKey === (batch as any).visibleGroupKey) continue;
             cached.key = (batch as any).visibleGroupKey = groupKey;
+
+            const visibleGroups: BatchRenderGroup_T[] = [];
+            const index = batchGeo.index, position = batchGeo.getAttribute("position") as THREE.BufferAttribute;
+            for (let i = 0; i < cached.visible.length; i++) {
+                const sector = sectors[cached.visible[i]], start = sector.batchGroupOffset, count = sector.batchGroupCount;
+                const bounds = getBatchBounds(batchGeo, index.array as Uint32Array, originalGroups[start]);
+                const run = visibleGroups.length - count;
+                const isAdjacent = run >= 0 && visibleGroups[run].start + visibleGroups[run].count === originalGroups[start].start;
+
+                for (let j = 0; j < count; j++) {
+                    const group = originalGroups[start + j];
+
+                    if (isAdjacent) {
+                        visibleGroups[run + j].count += group.count;
+                        visibleGroups[run + j].boundsCount += group.count;
+                        visibleGroups[run + j].bounds.union(bounds);
+                    } else visibleGroups.push({ start: group.start, count: group.count, materialIndex: group.materialIndex, bounds: bounds.clone(), boundsStart: group.start, boundsCount: group.count, position, index, positionVersion: position.version, indexVersion: index.version });
+                }
+            }
 
             if (visibleGroups.length > 0) {
                 batch.visible = true;

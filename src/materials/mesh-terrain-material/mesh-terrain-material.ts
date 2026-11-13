@@ -16,6 +16,7 @@ export function setTerrainTextureUnits(units: number) { maxTextureUnits = units;
 export class MeshTerrainMaterial extends ShaderMaterial {
     public readonly isTerrainMaterial = true;
     public readonly passes: MeshTerrainMaterial[] = [];
+    protected layers: MeshTerrainMaterialParameters["layers"];
 
     public static create(info: MeshTerrainMaterialParameters): MeshTerrainMaterial {
         const layers = info.layers.map((layer, index) => ({ layer, index })).filter(({ layer }) => layer.map && layer.alphaMap);
@@ -31,6 +32,14 @@ export class MeshTerrainMaterial extends ShaderMaterial {
         return base;
     }
 
+    public createBatch(uvs: MapData_T): MeshTerrainMaterial {
+        const batch = MeshTerrainMaterial.create({ uvs, layers: this.layers });
+
+        for (const pass of [batch, ...batch.passes]) pass.vertexColors = this.vertexColors;
+
+        return batch;
+    }
+
     // @ts-ignore
     protected constructor(info: MeshTerrainMaterialParameters, layerIndices: number[], isOverlay: boolean) {
         const defines: Record<string, any> = {
@@ -41,6 +50,7 @@ export class MeshTerrainMaterial extends ShaderMaterial {
         };
 
         if (isOverlay) defines.TERRAIN_OVERLAY = "";
+        if ((info.uvs.texture as THREE.DataArrayTexture).isDataArrayTexture) defines.USE_UV_TEXTURE_ARRAY = "";
 
         const uniforms: Record<string, THREE.IUniform> = appendGlobalUniforms({
             alphaTest: new Uniform(1e-3),
@@ -121,6 +131,7 @@ export class MeshTerrainMaterial extends ShaderMaterial {
             side: FrontSide
         });
 
+        this.layers = info.layers;
         (this.defaultAttributeValues as any).sectorFade = [1];
 
         if (isOverlay) {

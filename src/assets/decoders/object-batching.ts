@@ -1,8 +1,9 @@
 import { createStaticMeshTextureBatchJob } from "./static-mesh-texture-batching";
-import { BufferGeometry, BufferAttribute, DynamicDrawUsage, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
+import { BufferGeometry, BufferAttribute, DataArrayTexture, DynamicDrawUsage, Mesh, Matrix4, Group, Object3D, Material, MeshBasicMaterial, NormalBlending, Quaternion, Vector3 } from "three";
 import { canonicalizeStaticMeshMaterials, decodeStaticMeshMaterial } from "./material-decoder";
 import SortedIndexBuffer from "../../rendering/sorted-index-buffer";
 import Terrain from "../../objects/terrain";
+import type MeshTerrainMaterial from "../../materials/mesh-terrain-material/mesh-terrain-material";
 import CollidingMesh from "../../objects/colliding-mesh";
 import { SectorObject } from "../../objects/zone-object";
 import { MeshLight_T } from "../../objects/lit-actor";
@@ -310,7 +311,34 @@ export function batchStaticMeshActors(
     while (!stepStaticMeshBatchJob(job)) { }
 }
 
-function mergeTerrainGeometries(sectors: Terrain[]) {
+function createTerrainBatchMaterial(sectors: Terrain[]): MeshTerrainMaterial {
+    const source = (Array.isArray(sectors[0].material) ? sectors[0].material[0] : sectors[0].material) as MeshTerrainMaterial;
+
+    if (!source.isTerrainMaterial) throw new Error(`Terrain sector '${sectors[0].name}' has no terrain material.`);
+
+    const size = source.uniforms.uvsSize.value as THREE.Vector2, texture = source.uniforms.uvsMap.value as THREE.DataTexture;
+    const layerSize = texture.image.data.length;
+    const data = new Float32Array(layerSize * sectors.length);
+
+    for (let i = 0; i < sectors.length; i++) {
+        const material = (Array.isArray(sectors[i].material) ? (sectors[i].material as Material[])[0] : sectors[i].material) as MeshTerrainMaterial;
+
+        if (!material.isTerrainMaterial || material.fragmentShader !== source.fragmentShader || !(material.uniforms.uvsSize.value as THREE.Vector2).equals(size))
+            throw new Error(`Terrain sector '${sectors[i].name}' does not share the layers of '${sectors[0].name}'.`);
+
+        data.set((material.uniforms.uvsMap.value as THREE.DataTexture).image.data, i * layerSize);
+    }
+
+    const uvs = new DataArrayTexture(data, size.x, size.y, sectors.length);
+
+    uvs.format = texture.format;
+    uvs.type = texture.type;
+    uvs.needsUpdate = true;
+
+    return source.createBatch({ texture: uvs, size });
+}
+
+function mergeTerrainGeometries(sectors: Terrain[], indexStride: number) {
     let totalVertices = 0;
     let totalIndices = 0;
 
@@ -382,7 +410,7 @@ function mergeTerrainGeometries(sectors: Terrain[]) {
             }
 
             if (terrainIndexArray) {
-                mergedTerrainIndices[vi] = terrainIndexArray[i];
+                mergedTerrainIndices[vi] = terrainIndexArray[i] + sectorIndex * indexStride;
             }
         }
 
@@ -426,27 +454,18 @@ export function batchTerrainSectors(
     if (!library.batching.terrain || sectors.length < 2) return;
 
     try {
-        const { mergedGeometry, batchSectorInfo } = mergeTerrainGeometries(sectors);
+        const base = createTerrainBatchMaterial(sectors);
+        const { mergedGeometry, batchSectorInfo } = mergeTerrainGeometries(sectors, (base.uniforms.uvsSize.value as THREE.Vector2).x);
 
-        const materials: Material[] = [];
+        const materials: Material[] = [base, ...base.passes];
         mergedGeometry.clearGroups();
         for (let i = 0; i < batchSectorInfo.length; i++) {
             const info = batchSectorInfo[i];
-            const sector = info.sector;
-            const matIndex = materials.length;
-            const sectorGroups = (sector as any).hasTerrainPasses ? sector.geometry.groups : [];
-
-            if (Array.isArray(sector.material)) {
-                sector.material.forEach((m: Material) => materials.push(m));
-            } else {
-                materials.push(sector.material);
-            }
 
             info.groupOffset = mergedGeometry.groups.length;
-            info.groupCount = Math.max(1, sectorGroups.length);
+            info.groupCount = materials.length;
 
-            if (sectorGroups.length === 0) mergedGeometry.addGroup(info.startIndex, info.indexCount, matIndex);
-            else for (const group of sectorGroups) mergedGeometry.addGroup(info.startIndex + group.start, group.count, matIndex + group.materialIndex);
+            for (let pass = 0; pass < materials.length; pass++) mergedGeometry.addGroup(info.startIndex, info.indexCount, pass);
         }
 
         const batchedTerrain = new Mesh(mergedGeometry, materials as any);
