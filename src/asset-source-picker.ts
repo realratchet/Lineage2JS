@@ -62,25 +62,18 @@ async function selectAssetSource(): Promise<void> {
 
     const viewport = document.querySelector("viewport") as HTMLViewportElement_T;
 
-    viewport.classList.add("asset-source");
-    viewport.innerHTML = `<main><h1>Game files</h1><p>Select an installed Lineage II folder, or an InstallShield installer folder (data1.hdr, data1.cab, data2.cab, ...).</p>${stored ? `<button class="continue">Continue with ${stored.name}</button> ` : ""}${hasDirectoryPicker ? `<button class="choose">Choose folder</button>` : `<p>This browser can't remember the folder between launches. On Brave enable <code>brave://flags/#file-system-access-api</code>, otherwise use Chrome, Edge, Opera or Vivaldi.</p><input type="file" webkitdirectory>`}<pre></pre></main>`;
-
-    const errors = viewport.querySelector("pre");
     const storageWarning = document.querySelector<HTMLElement>(".storage-warning");
 
-    if (!storageWarning.hidden) errors.before(storageWarning.cloneNode(true));
+    viewport.classList.add("asset-source");
+    viewport.innerHTML = `<main><h1>Game files</h1><p>Select an installed Lineage II folder, or an InstallShield installer folder (data1.hdr, data1.cab, data2.cab, ...).</p>${hasDirectoryPicker ? "" : `<p class="browser-notice">This browser can't remember the folder between launches. On Brave enable <code>brave://flags/#file-system-access-api</code>, otherwise use Chrome, Edge, Opera or Vivaldi.</p>`}${storageWarning.hidden ? "" : storageWarning.outerHTML}<div>${stored ? `<button class="continue">Continue with ${stored.name}</button>` : ""}<button class="choose">Choose folder</button>${clientDownloadUrl ? `<a class="client-download" href="${clientDownloadUrl}">Client download</a>` : ""}</div><pre></pre></main>`;
 
-    if (clientDownloadUrl) {
-        const template = document.querySelector<HTMLTemplateElement>("#asset-source-download");
-
-        errors.before(template.content.cloneNode(true));
-        viewport.querySelector<HTMLAnchorElement>("a.client-download").href = clientDownloadUrl;
-    }
+    const errors = viewport.querySelector("pre");
 
     errors.textContent = storedError;
 
     await new Promise<void>(resolve => {
-        const controls = viewport.querySelectorAll<HTMLButtonElement | HTMLInputElement>("button, input");
+        const controls = viewport.querySelectorAll("button");
+        const choose = viewport.querySelector<HTMLButtonElement>("button.choose");
         let selecting = false;
 
         async function select(selectFiles: () => Promise<void>) {
@@ -107,11 +100,14 @@ async function selectAssetSource(): Promise<void> {
             await selectDirectory(stored);
         });
 
-        if (hasDirectoryPicker) viewport.querySelector<HTMLButtonElement>("button.choose").onclick = () => select(async () => selectDirectory(await (window as any).showDirectoryPicker({ id: "lineage2", mode: "read" })));
+        if (hasDirectoryPicker) choose.onclick = () => select(async () => selectDirectory(await (window as any).showDirectoryPicker({ id: "lineage2", mode: "read" })));
         else {
-            const input = viewport.querySelector("input");
+            const input = document.createElement("input");
 
+            input.type = "file";
+            input.webkitdirectory = true;
             input.onchange = () => select(() => selectAssetFiles(Array.from(input.files, file => [file.webkitRelativePath, file])));
+            choose.onclick = () => input.click();
         }
     });
 

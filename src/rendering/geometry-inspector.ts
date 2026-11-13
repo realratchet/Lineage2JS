@@ -16,7 +16,7 @@ type MaterialSlot_T = { uuid: string, modifiers: string[] };
 type InspectMap_T = { slot: string, name: string, texture: THREE.Texture, layer: number };
 type HighlightGroup_T = { start: number, count: number, materialIndex: number };
 type InspectMaterial_T = { title: string, isHit: boolean, graph: string[], lines: string[], uniforms: string[], maps: InspectMap_T[], groups: HighlightGroup_T[] };
-type InspectHighlight_T = { object: THREE.Object3D, position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, index: THREE.BufferAttribute, groups: HighlightGroup_T[], local: Matrix4, skin?: LitSkinnedMesh };
+type InspectHighlight_T = { object: THREE.Object3D, position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, index: THREE.BufferAttribute, groups: HighlightGroup_T[], local: Matrix4, skin?: LitSkinnedMesh, batch?: { start: number, count: number }[] };
 type InspectPart_T = { title: string, isHit: boolean, lines: string[], materials: InspectMaterial_T[], groups: HighlightGroup_T[] };
 type InspectSelection_T = { title: string, lines: string[], materials: InspectMaterial_T[], highlights: InspectHighlight_T[], parts?: InspectPart_T[] };
 type InspectPanel_T = { root: HTMLElement, title: HTMLElement, body: HTMLElement, button: HTMLButtonElement, groups: HighlightGroup_T[] };
@@ -436,7 +436,8 @@ export class GeometryInspector {
     protected readonly raycaster = new Raycaster();
     protected readonly highlightMaterials = [
         new MeshBasicMaterial({ color: 0x33ccff, opacity: 0.25, transparent: true, side: DoubleSide, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
-        new MeshBasicMaterial({ color: 0xffaa00, opacity: 0.4, transparent: true, side: DoubleSide, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })
+        new MeshBasicMaterial({ color: 0xffaa00, opacity: 0.4, transparent: true, side: DoubleSide, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+        new MeshBasicMaterial({ color: 0xff33cc, opacity: 0.25, transparent: true, side: DoubleSide, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })
     ];
     protected readonly highlights: THREE.Mesh[] = [];
     protected readonly previewTarget = new WebGLRenderTarget(1, 1, { depthBuffer: false });
@@ -590,7 +591,9 @@ export class GeometryInspector {
         const hitGroup = findElementGroup(object.batchIndices, groups.map(({ group }) => group), hit.face);
         const slots = getMaterialSlots(library, batch.materials), layers = object.geometry.getAttribute("batchLayer");
         const materials = Array.isArray(object.material) ? object.material : [object.material], actor = batch.actors[elementIndex];
-        const indices = new Uint32Array(groups.reduce((count, { group }) => count + group.count, 0)), highlight: HighlightGroup_T[] = [];
+        const others = (object.batchElements as { groups: BatchElementGroup_T[] }[]).filter((_, index) => index !== elementIndex).flatMap(element => element.groups);
+        const elementCount = groups.reduce((count, { group }) => count + group.count, 0);
+        const indices = new Uint32Array(others.reduce((count, group) => count + group.count, elementCount)), highlight: HighlightGroup_T[] = [];
         const lines = [row("Kind", "Static mesh (batched)")];
         let offset = 0;
 
@@ -600,12 +603,17 @@ export class GeometryInspector {
             offset += group.count;
         });
 
+        for (const group of others) {
+            indices.set(object.batchIndices.subarray(group.start, group.start + group.count), offset);
+            offset += group.count;
+        }
+
         describeActor(actor, lines);
-        lines.push(row("Batch", `${object.name}, element ${elementIndex} of ${object.batchElements.length}`), row("Triangles", indices.length / 3), row("Vertices", object.perActorAmbient[elementIndex].count));
+        lines.push(row("Batch", `${object.name}, element ${elementIndex} of ${object.batchElements.length}`), row("Triangles", elementCount / 3), row("Vertices", object.perActorAmbient[elementIndex].count));
 
         return {
             title: `${actor.name} (${actor.instance.mesh.name})`, lines,
-            highlights: [{ object, position: object.geometry.getAttribute("position"), index: new Uint32BufferAttribute(indices, 1), groups: highlight, local: new Matrix4() }],
+            highlights: [{ object, position: object.geometry.getAttribute("position"), index: new Uint32BufferAttribute(indices, 1), groups: highlight, local: new Matrix4(), batch: [{ start: elementCount, count: indices.length - elementCount }] }],
             materials: groups.map(({ group, slot }, index) => describeMaterial(library, materials[group.materialIndex], slots[slot], `Material ${index + 1}/${groups.length}: ${getMaterialName(library, materials[group.materialIndex], slots[slot])}`, index === hitGroup, [highlight[index]], layers ? layers.getX(object.batchIndices[group.start]) : 0))
         };
     }
@@ -638,6 +646,17 @@ export class GeometryInspector {
         if (node >= 0) lines.push(row("Node", `${node}, zones ${sector.bspNodes[node].zones.join("/")}`));
 
         lines.push(row("Nodes", section.nodeIndices.length), row("Triangles", countTriangles(highlight)));
+
+        if (node >= 0) {
+            const index = object.geometry.index;
+            let start = 0, count = 0;
+
+            while (nodes.getX(index.getX(start)) !== node) start += 3;
+            while (start + count < index.count && nodes.getX(index.getX(start + count)) === node) count += 3;
+
+            highlight.groups = [{ start, count, materialIndex: hit.face.materialIndex }];
+            highlight.batch = [{ start: 0, count: start }, { start: start + count, count: index.count - start - count }];
+        }
 
         return {
             title: `BSP section ${(object as any).sectionIndex}`, lines, highlights: [highlight],
@@ -810,6 +829,7 @@ export class GeometryInspector {
 
             geometry.clearGroups();
             for (const group of highlight.groups) geometry.addGroup(group.start, group.count, hasOthers && active.includes(group) ? 1 : 0);
+            for (const range of highlight.batch || []) geometry.addGroup(range.start, range.count, 2);
         });
 
         this.render.needsUpdate = true;

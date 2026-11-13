@@ -3306,7 +3306,7 @@ export class DecodeEngine {
 
     protected async decodeNpcDefinitions(settings: LoadSettings_T): Promise<INpcDefinition[]> {
         if (!this.cacheNpcDefinitions) {
-            const library = await this.getStoredAssets("npc_runtime", "definitions-v3", settings, async () => Object.assign(new DecodeLibrary(), { npcDefinitions: await this.loadNpcDefinitions() })) as DecodeLibrary & { npcDefinitions: INpcDefinition[] };
+            const library = await this.getStoredAssets("npc_runtime", "definitions", settings, async () => Object.assign(new DecodeLibrary(), { npcDefinitions: await this.loadNpcDefinitions() })) as DecodeLibrary & { npcDefinitions: INpcDefinition[] };
             this.cacheNpcDefinitions = library.npcDefinitions;
         }
 

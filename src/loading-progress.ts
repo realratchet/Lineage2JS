@@ -79,4 +79,11 @@ export function hideLoadingProgress() {
     window.clearInterval(timer);
     timer = 0;
     document.querySelector<HTMLElement>(".loading-progress").hidden = true;
+    document.querySelector(".loading-error").textContent = "";
+}
+
+export function showLoadingError(error: any) {
+    const errors = document.querySelector(".loading-error");
+
+    errors.textContent += `${errors.textContent ? "\n" : ""}${error instanceof Error ? error.message : String(error)}`;
 }

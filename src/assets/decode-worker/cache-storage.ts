@@ -1,4 +1,4 @@
-import { FORMAT_VERSION, serializeLibraryBlob, openLibraryFile, type LibraryBytes_T } from "./library-serializer";
+import { serializeLibraryBlob, openLibraryFile, type LibraryBytes_T } from "./library-serializer";
 import type { LoadSettings_T } from "@l2js/engine/contracts/config";
 import { getAssetSourceId } from "../asset-source";
 import requestWebLock from "../web-lock";
@@ -18,7 +18,7 @@ export function getCacheVersion(settings: LoadSettings_T): number {
 }
 
 export function hashSettings(settings: LoadSettings_T): string {
-    const json = JSON.stringify({ ...settings, formatVersion: FORMAT_VERSION, scriptVersion: 14, packageVersion: 8, staticMeshBatchVersion: 3, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
+    const json = JSON.stringify({ ...settings, loadExtendedBoneInfluences: settings.loadExtendedBoneInfluences !== false, cache: undefined, textures: undefined, rgbaTextures: settings.rgbaTextures !== false, decodeWorkerPoolSize: undefined });
     let hash = 5381;
 
     for (let i = 0; i < json.length; i++)

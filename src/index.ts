@@ -1,9 +1,10 @@
 import "../style/style.scss";
 import startCore from "./core";
 import runSkillViewer from "./skill-viewer/skill-viewer";
-import { setLoadingProgress, loadingTexts } from "./loading-progress";
+import { setLoadingProgress, showLoadingError, loadingTexts } from "./loading-progress";
 
 const params = new URLSearchParams(location.search);
+let isStarting = true;
 
 async function start(): Promise<void> {
     if (params.has("clearCache")) {
@@ -18,6 +19,15 @@ async function start(): Promise<void> {
 
     if (params.has("skillViewer")) await runSkillViewer(params.get("skillViewer") === "player");
     else await startCore();
+
+    isStarting = false;
 }
+
+function onLoadingError(error: any) {
+    if (isStarting || !document.querySelector<HTMLElement>(".loading-progress").hidden) showLoadingError(error);
+}
+
+window.addEventListener("error", event => onLoadingError(event.error ?? event.message));
+window.addEventListener("unhandledrejection", event => onLoadingError(event.reason));
 
 void start();

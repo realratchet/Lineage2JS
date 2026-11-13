@@ -9,21 +9,18 @@
 </head>
 <body>
     <viewport></viewport>
-    <template id="asset-source-download">
-        <a class="client-download">Client download</a>
-    </template>
     <section class="loading-progress" hidden aria-label="Loading">
         <div>
             <progress max="1" value="0" aria-label="Loading progress"></progress>
             <p role="status" aria-live="polite"></p>
-            <p class="storage-warning" hidden>Without persistent storage, your browser may clear cached game files when space is low. They will need to be rebuilt.</p>
+            <p class="storage-warning browser-notice" hidden>Without persistent storage, your browser may clear cached game files when space is low. They will need to be rebuilt.</p>
         </div>
     </section>
-    <section class="gpu-error" role="alert">
+    <pre class="loading-error" role="alert"></pre>
+    <section class="gpu-error" role="alert" hidden>
         <main>
             <h1>GPU rendering is unavailable</h1>
-            <p>The browser could not start WebGL 2. Fully close and restart your browser, then reopen this page.</p>
-            <p>If this keeps happening, check that graphics acceleration is enabled in your browser settings and that your graphics drivers are up to date.</p>
+            <p class="browser-notice">The browser could not start WebGL 2. Fully close and restart your browser, then reopen this page.<br>If this keeps happening, check that graphics acceleration is enabled in your browser settings and that your graphics drivers are up to date.</p>
         </main>
     </section>
 </body>
