@@ -389,7 +389,6 @@ function mergeTerrainGeometries(sectors: Terrain[], indexStride: number) {
         const colorArray = color ? color.array as any : null;
         const terrainIndexArray = terrainIndex ? terrainIndex.array as any : null;
 
-        // Copy and shift data
         for (let i = 0; i < vCount; i++) {
             const vi = vertexOffset + i;
 
@@ -488,15 +487,12 @@ export function batchTerrainSectors(
             (sector as any).batchIndexOffset = info.startIndex;
             (sector as any).batchSectorIndex = i;
 
-            // Properties used by zone-object.ts for culling and updates:
             (sector as any).batchGroupOffset = info.groupOffset;
             (sector as any).batchGroupCount = info.groupCount;
 
-            // Shift bounds to world space for frustum culling in zone-object.ts
             (sector as any).bounds.min.add(sector.position);
             (sector as any).bounds.max.add(sector.position);
 
-            // Remove from scene graph to avoid interference
             group.remove(sector);
         }
 

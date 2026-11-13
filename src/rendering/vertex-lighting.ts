@@ -171,6 +171,7 @@ export class VertexLighting {
         this.hasCreatedProgram = !shared;
         if (!shared) cachePrograms.set(gl, shared = this.createProgram()); // one link per context, each one stalls the GPU process
 
+        this.program = shared.program;
         this.buffers.length = this.textures.length = 0;
         this.attributes.length = 0;
         this.matrixUniform = shared.matrixUniform;
@@ -203,7 +204,6 @@ export class VertexLighting {
             this.output.setBuffer(buffer);
             this.output.needsUpdate = true;
         } else this.output = new GLBufferAttribute(buffer, gl.UNSIGNED_BYTE, 4, 1, this.glow.length, true);
-        this.program = shared.program;
     }
 
     public update(matrix: Matrix4, base: Uint8ClampedArray, baseChanged: boolean, color: ColorByte, current: number, next: number, lerp: number): boolean {

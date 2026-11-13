@@ -490,6 +490,8 @@ export class GeometryInspector {
 
         try {
             this.raycaster.intersectObjects(arrMeshes, false, arrIntersections);
+            cacheSides.forEach((side, material) => material.side = side);
+            cacheSides.clear();
 
             for (const target of arrSkinned)
                 if (target.mesh.layers.mask !== 0 || cacheBatched.has(target.mesh)) pawnHit = raycastSkinned(target, this.raycaster.ray, pawnHit);

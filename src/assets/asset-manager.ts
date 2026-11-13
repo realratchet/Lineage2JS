@@ -73,7 +73,7 @@ const tmpPrefetchPosition = new Vector3();
 const tmpCameraMovement = new Vector3();
 
 type PendingStaticMeshBuild_T = { sector: SectorObject, library: DecodeLibrary, steps: Generator<void, void> };
-type SectorSteps_T = { steps: Generator<void, unknown>, resolve: (value: any) => void, reject: (error: unknown) => void };
+type BuildSteps_T = { steps: Generator<void, unknown>, resolve: (value: any) => void, reject: (error: unknown) => void };
 export type AssetList_T = { supported: Record<string, string>, unsupported: string[] };
 
 function findScriptField(library: DecodeLibrary, classId: string, name: string): IScriptFieldDecodeInfo | null {
@@ -260,7 +260,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected readonly cacheNpcLibraries = new Map<string, CachedLibrary_T>();
     protected readonly cacheNpcVMs = new WeakMap<DecodeLibrary, Promise<UnScriptVM>>();
     protected pawnBuildTick: Promise<void> = null;
-    protected readonly pendingSectorSteps: SectorSteps_T[] = [];
+    protected readonly pendingBuildSteps: BuildSteps_T[] = [];
     protected readonly cacheCharacterLibraries = new Map<string, CachedLibrary_T>();
     protected readonly cacheCharacterScripts = new Map<string, Promise<DecodeLibrary>>();
     protected readonly cacheNpcs = new Map<string | number, Promise<INpcDefinition>>();
@@ -273,7 +273,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected gameManager: GameManager;
     public setParent(parent: GameManager): this { this.gameManager = parent; return this; }
     public getParent(): GameManager { return this.gameManager; }
-    public getPendingAssetCount(): number { return this.decodeWorker.getPendingAssetCount() + this.pendingStaticMeshBuilds.length + this.pendingSectorSteps.length; }
+    public getPendingAssetCount(): number { return this.decodeWorker.getPendingAssetCount() + this.pendingStaticMeshBuilds.length + this.pendingBuildSteps.length; }
 
     public constructor(loadSettings: LoadSettings_T, assetList: AssetList_T) {
         this.loadSettings = loadSettings;
@@ -846,7 +846,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
         const vm = new UnScriptVM(source, true);
 
-        await this.runSectorSteps(vm.loadSteps()); // 12 ms in one frame otherwise, the first time an npc type shows up
+        await this.runBuildSteps(vm.loadSteps()); // 12 ms in one frame otherwise, the first time an npc type shows up
         return vm;
     }
 
@@ -1221,8 +1221,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         renderManager.attachStaticMeshGroup(sector);
     }
 
-    protected runSectorSteps<T>(steps: Generator<void, T>): Promise<T> {
-        return new Promise((resolve, reject) => this.pendingSectorSteps.push({ steps, resolve, reject }));
+    protected runBuildSteps<T>(steps: Generator<void, T>): Promise<T> {
+        return new Promise((resolve, reject) => this.pendingBuildSteps.push({ steps, resolve, reject }));
     }
 
     protected requestSector(renderManager: RenderManager, sectorIdx: string, maxInFlight: number = this.maxConcurrentDecodes, isActive: boolean = false): boolean {
@@ -1279,10 +1279,10 @@ export class AssetManager implements IEngineComponent<GameManager> {
             decodeLibrary.anisotropy = this.glCapabilities.getMaxAnisotropy();
             (decodeLibrary as any).preferCompressedTextures = this.preferCompressedTextures;
 
-            const sector = await this.runSectorSteps(decodeSectorCoreSteps(decodeLibrary));
+            const sector = await this.runBuildSteps(decodeSectorCoreSteps(decodeLibrary));
 
-            await this.runSectorSteps(this.stepSectorScriptRuntime(renderManager, decodeLibrary, sector));
-            await this.runSectorSteps(renderManager.prepareSector(sector, sector));
+            await this.runBuildSteps(this.stepSectorScriptRuntime(renderManager, decodeLibrary, sector));
+            await this.runBuildSteps(renderManager.prepareSector(sector, sector));
 
             if (generation !== this.streamingGeneration || this.inFlightSectors.get(sectorIdx) !== request || !this.requiredSectors.has(sectorIdx)) {
                 if (this.inFlightSectors.get(sectorIdx) === request) this.decodeWorker.freeSector(sectorIdx);
@@ -1296,7 +1296,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
             this.pendingStaticMeshBuilds.push({ sector, library: decodeLibrary, steps: null });
             this.failedSectors.delete(sectorIdx);
-            await this.runSectorSteps(steps);
+            await this.runBuildSteps(steps);
         } catch (e) {
             if (e.name === "AbortError") return;
 
@@ -1351,28 +1351,33 @@ export class AssetManager implements IEngineComponent<GameManager> {
         if (jobIndex >= 0) this.pendingStaticMeshBuilds.splice(jobIndex, 1);
     }
 
-    protected processPendingBuilds(renderManager: RenderManager, cameraPosition: THREE.Vector3) {
-        const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : this.gameManager.getBackgroundBudget());
-
-        while (this.pendingSectorSteps.length > 0) {
-            const pending = this.pendingSectorSteps[0];
+    protected processPendingBuildSteps(deadline: number): void {
+        while (this.pendingBuildSteps.length > 0) {
+            const pending = this.pendingBuildSteps[0];
             let step: IteratorResult<void, unknown>;
 
             try {
                 do step = pending.steps.next();
                 while (!step.done && performance.now() < deadline);
             } catch (e) {
-                this.pendingSectorSteps.shift();
+                this.pendingBuildSteps.shift();
                 pending.reject(e);
                 continue;
             }
 
             if (!step.done) return;
 
-            this.pendingSectorSteps.shift();
+            this.pendingBuildSteps.shift();
             pending.resolve(step.value);
             if (performance.now() >= deadline) return; // every queued job runs at least one step, ten short ones took 20 ms of a 1 ms budget
         }
+    }
+
+    protected processPendingBuilds(renderManager: RenderManager, cameraPosition: THREE.Vector3) {
+        const deadline = performance.now() + (this.gameManager.getComponent("network").isWorldLoading() ? 8 : this.gameManager.getBackgroundBudget());
+
+        this.processPendingBuildSteps(deadline);
+        if (this.pendingBuildSteps.length > 0 || performance.now() >= deadline) return;
 
         let jobIndex = -1;
         let jobDistance = Infinity;
@@ -1418,7 +1423,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
             this.isTicking = true;
 
             if (!this.isStreaming) {
+                const start = performance.now();
+
+                this.processPendingBuildSteps(start + this.gameManager.getBackgroundBudget());
                 this.destroyExpiredSectors(renderManager);
+                this.gameManager.addBackgroundTime(performance.now() - start);
                 return;
             }
 

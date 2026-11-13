@@ -18,8 +18,8 @@ function hashSource(source: string): string {
 }
 
 export class ProgramVariants {
-    protected readonly programs: any[];
-    protected readonly programCache: any;
+    protected programs: any[];
+    protected programCache: any;
     protected readonly cacheHashes = new Map<string, string>();
     protected readonly restored = new Map<any, Variant_T>();
     protected readonly arrLinking: any[] = [];
@@ -32,11 +32,22 @@ export class ProgramVariants {
     protected isSaving = false;
     protected isRestoring = false;
 
-    public constructor(renderer: WebGLRenderer) {
-        this.programs = (renderer.info as any).programs;
-        this.programCache = (renderer as any).programCache;
+    public constructor(protected readonly renderer: WebGLRenderer) {
+        this.reset();
+        renderer.domElement.addEventListener("webglcontextrestored", () => this.reset());
 
         void this.load();
+    }
+
+    protected reset(): void {
+        this.programs = (this.renderer.info as any).programs;
+        this.programCache = (this.renderer as any).programCache;
+        this.count = 0;
+        this.isRestoring = false;
+        this.arrLinking.length = 0;
+        this.restored.clear();
+        this.arrPending.length = 0;
+        if (this.store) this.arrPending.push(...Object.values(this.store.variants));
     }
 
     protected async load(): Promise<void> {
@@ -100,7 +111,7 @@ export class ProgramVariants {
         for (; this.count < this.programs.length; this.count++) {
             const program = this.programs[this.count];
 
-            this.arrLinking.push(program); // restored or freshly compiled, a loading screen waits for both
+            this.arrLinking.push(program);
             if (program.parameters.shaderID) continue;
 
             const { uniforms, customVertexShaderID, customFragmentShaderID, vertexShader, fragmentShader, ...parameters } = program.parameters;
