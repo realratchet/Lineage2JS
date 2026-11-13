@@ -4,6 +4,7 @@ import Stats from "../rendering/stats";
 import { GAMMA_STEPS } from "../rendering/display-gamma";
 import loginServer from "../network/login-server";
 import { LeafVisualizerDetail, VisualizerMode, type default as Visualizer } from "../rendering/visualizer";
+import GeometryInspector from "../rendering/geometry-inspector";
 import type RenderManager from "../rendering/render-manager";
 import type BaseActor from "../base-actor";
 import type { PawnAttackSelection_T } from "../objects/components/pawn-attack-component";
@@ -12,7 +13,7 @@ import type { ICharacterArmorSelection } from "@l2js/engine/contracts/pawn";
 import { WeaponType } from "../assets/unreal/un-pawn";
 import type NDomLayer from "../nwindow/ndom";
 
-type DebugTab = "controls" | "environment" | "bsp" | "statistics" | VisualizerMode.Fogs | VisualizerMode.Audio | VisualizerMode.Emitters;
+type DebugTab = "controls" | "environment" | "bsp" | "statistics" | "inspect" | VisualizerMode.Fogs | VisualizerMode.Audio | VisualizerMode.Emitters;
 type GraphSeries_T = { label: string, color: string, values: number[] };
 type GpuMemoryUsage_T = { used: number, total: number };
 
@@ -44,6 +45,7 @@ export class UIManager implements IEngineComponent<GameManager> {
     protected leafDetailRow: HTMLElement;
     protected bspInfoElement: HTMLElement;
     protected statisticsElement: HTMLElement;
+    protected inspector: GeometryInspector;
     protected statisticsCanvas: HTMLCanvasElement;
     protected statisticsContext: CanvasRenderingContext2D;
     protected statisticsHistory: Record<string, number[]> = { fps: [], frameTime: [], calls: [], triangles: [], heap: [], vram: [] };
@@ -94,6 +96,7 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.addDebugTab(VisualizerMode.Fogs, "Fogs", tabs, content);
         this.addDebugTab(VisualizerMode.Audio, "Audio", tabs, content);
         this.addDebugTab(VisualizerMode.Emitters, "Emitters", tabs, content);
+        this.addDebugTab("inspect", "Inspect", tabs, content);
     }
 
     public setParent(parent: GameManager): this { this.manGame = parent; return this; }
@@ -140,6 +143,9 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.addBspControls();
         this.addStatisticsControls();
 
+        this.inspector = new GeometryInspector(this.manGame.getComponent("render"));
+        this.debugTabs.get("inspect")!.panel.appendChild(this.inspector.element);
+
         this.attachVisualizerDebugElements(this.manGame.getComponent("render").visualizer);
 
         return this;
@@ -167,6 +173,11 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.updateDebugControls();
 
         const render = this.manGame.getComponent("render");
+        if (this.activeTab === "inspect") {
+            this.inspector.update();
+            return;
+        }
+
         if (this.activeTab === "statistics") {
             const info = render.renderer.info;
             const memory = (performance as any).memory;
@@ -247,6 +258,9 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.freeCamera.disabled = input.isCameraInputLocked();
     }
 
+    public isInspecting(): boolean { return !this.debugView.hidden && this.activeTab === "inspect"; }
+    public inspect(clientX: number, clientY: number): void { this.inspector.pick(clientX, clientY); }
+
     public toggleDebugView(): void {
         if (loginServer && !this.debugView.hidden) this.manGame.getComponent("input").setFreeCamera(false);
         this.updateDebugControls();
@@ -279,7 +293,9 @@ export class UIManager implements IEngineComponent<GameManager> {
         }
 
         const render = this.manGame.getComponent("render");
-        if (tab === "controls" || tab === "environment" || tab === "statistics") {
+        if (tab !== "inspect") this.inspector.clear();
+        document.documentElement.classList.toggle("debug-inspecting", tab === "inspect");
+        if (tab === "controls" || tab === "environment" || tab === "statistics" || tab === "inspect") {
             if (render.visualizer.isEnabled()) render.toggleVisualizer();
         } else if (tab === "bsp") {
             render.setVisualizerMode(this.bspMode.value as VisualizerMode);

@@ -276,7 +276,91 @@ body {
             display: flex;
             gap: 6px;
         }
+
+        .debug-inspect {
+            > p { margin: 4px 0; color: #aaa; }
+            > strong { display: block; margin: 4px 0; overflow-wrap: anywhere; }
+
+            .debug-info {
+                margin: 6px 0 10px;
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+            }
+
+            .debug-item {
+                display: block;
+                width: 100%;
+                margin: 0 0 4px;
+                text-align: left;
+                overflow-wrap: anywhere;
+            }
+        }
+
+        .debug-maps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 6px 0 10px;
+        }
+
+        .debug-map {
+            width: 118px;
+            margin: 0;
+
+            canvas {
+                display: block;
+                width: 100%;
+                border: 1px solid #444;
+                box-sizing: border-box;
+                cursor: zoom-in;
+            }
+
+            figcaption {
+                margin-top: 3px;
+                color: #aaa;
+                font-size: 11px;
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+            }
+
+            &.expanded {
+                width: 100%;
+
+                canvas { cursor: zoom-out; }
+            }
+        }
     }
+
+    .debug-inspect-views {
+        position: fixed;
+        top: 10px;
+        left: 440px;
+        right: 10px;
+        z-index: 10000;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        pointer-events: none;
+
+        .debug-view {
+            position: static;
+            flex: 0 1 420px;
+            width: auto;
+            min-width: 0;
+            pointer-events: auto;
+
+            header {
+                strong { min-width: 0; overflow-wrap: anywhere; }
+                button { margin-left: auto; }
+            }
+        }
+    }
+}
+
+.debug-inspecting .ndom-layer > .ndom-back {
+    pointer-events: none;
+
+    > * { pointer-events: auto; }
 }
 
 @keyframes loading-progress {

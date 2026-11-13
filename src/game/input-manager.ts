@@ -750,7 +750,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.hasMouseDragged = false;
         this.mouseDownPosition.set(event.clientX, event.clientY);
 
-        if (this.isCameraLocked) return;
+        if (this.isCameraLocked || this.manGame.getComponent("ui").isInspecting()) return;
 
         const renderManager = this.renderManager;
         const bounds = renderManager.renderer.domElement.getBoundingClientRect();
@@ -837,6 +837,11 @@ export class InputManager implements IEngineComponent<GameManager> {
         const isClick = this.isPrimaryMouseDown && !this.hasMouseDragged && dx * dx + dy * dy <= CLICK_MAX_MOVEMENT_SQ;
 
         this.isPrimaryMouseDown = false;
+
+        if (isClick && this.manGame.getComponent("ui").isInspecting()) {
+            this.manGame.getComponent("ui").inspect(event.clientX, event.clientY);
+            return;
+        }
 
         if (isClick && this.isCameraLocked) {
             const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();

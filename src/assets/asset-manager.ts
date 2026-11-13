@@ -740,6 +740,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         attack.attack(target, attack.addSkill(previewRange === undefined ? skill : { ...skill, castRange: previewRange }), [], [target]);
     }
 
+    public getPawnLibrary(actor: BaseActor): DecodeLibrary { return this.pawnLibraries.get(actor); }
+
     public async loadPawnSkill(actor: BaseActor, id: number, level: number, isTransient: boolean = false) {
         const pawnLibrary = this.pawnLibraries.get(actor);
 
