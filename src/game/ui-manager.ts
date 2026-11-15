@@ -99,7 +99,10 @@ export class UIManager implements IEngineComponent<GameManager> {
         this.addDebugTab("inspect", "Inspect", tabs, content);
     }
 
-    public setParent(parent: GameManager): this { this.manGame = parent; return this; }
+    public setParent(parent: GameManager): this {
+        this.manGame = parent;
+        return this;
+    }
     public getParent(): GameManager { return this.manGame; }
 
     public getStatsWindow() { return this.statsWindow; }
@@ -508,17 +511,36 @@ export class UIManager implements IEngineComponent<GameManager> {
         const sky = this.addSection("Sky", false, "environment");
         const audio = this.addSection("Audio", false, "environment");
 
-        this.fogPresetSelect = this.addSelect(quality, "Fog Range", Object.fromEntries(environment.getEnv().fog.ranges.map((range, index) => [`${index + 1} (${range.x * 2048}-${range.y * 2048})`, String(index + 1)])), this.fogPreset, value => this.setFogPreset(value));
-        this.addCheckbox(world, "Show Level", this.showLevel, value => { this.showLevel = value; render.setLevelVisible(value); });
-        this.addCheckbox(world, "Show Colliders", this.showColliders, value => { this.showColliders = value; render.setCollidersVisible(value); });
-        this.addCheckbox(world, "Open Doors", this.areDoorsOpen, value => { this.areDoorsOpen = value; render.needsUpdate = true; });
+        this.fogPresetSelect = this.addSelect(
+            quality,
+            "Fog Range",
+            Object.fromEntries(environment.getEnv().fog.ranges.map((range, index) => [`${index + 1} (${range.x * 2048}-${range.y * 2048})`, String(index + 1)])),
+            this.fogPreset,
+            value => this.setFogPreset(value)
+        );
+        this.addCheckbox(world, "Show Level", this.showLevel, value => {
+            this.showLevel = value;
+            render.setLevelVisible(value);
+        });
+        this.addCheckbox(world, "Show Colliders", this.showColliders, value => {
+            this.showColliders = value;
+            render.setCollidersVisible(value);
+        });
+        this.addCheckbox(world, "Open Doors", this.areDoorsOpen, value => {
+            this.areDoorsOpen = value;
+            render.needsUpdate = true;
+        });
         this.addCheckbox(sky, "Celestials", render.skyRenderer.config.celestials, value => render.skyRenderer.config.celestials = value);
         this.addCheckbox(sky, "Haze", render.skyRenderer.config.haze1, value => render.skyRenderer.config.haze1 = value);
         this.addCheckbox(sky, "Stars/Clouds", render.skyRenderer.config.starsClouds, value => render.skyRenderer.config.starsClouds = value);
         this.addRange(audio, "Music Volume", render.audioManager.getMusicVolume(), 0, 1, 0.01, value => render.audioManager.setMusicVolume(value));
         this.addRange(audio, "Ambient Volume", render.audioManager.getAmbientVolume(), 0, 1, 0.01, value => render.audioManager.setAmbientVolume(value));
 
-        const timeRange = this.addRange(world, "Time", environment.getTimeOfDay(), 0, 24, 0.01, value => { environment.setTimeOfDay(value); timeClock.value = formatClock(value); render.needsUpdate = true; });
+        const timeRange = this.addRange(world, "Time", environment.getTimeOfDay(), 0, 24, 0.01, value => {
+            environment.setTimeOfDay(value);
+            timeClock.value = formatClock(value);
+            render.needsUpdate = true;
+        });
         const timeClock = this.addText(world, "Time (HH:MM)", formatClock(environment.getTimeOfDay()), value => {
             const [hours, minutes = "0"] = value.split(":");
             const time = Number(hours) + Number(minutes) / 60;
@@ -529,14 +551,20 @@ export class UIManager implements IEngineComponent<GameManager> {
             timeRange.value = String(time);
             render.needsUpdate = true;
         });
-        const scaleRange = this.addRange(world, "Time Scale", environment.getTimeScale(), 0, 100, 0.01, value => { environment.setTimeScale(value); scaleValue.value = String(value); });
+        const scaleRange = this.addRange(world, "Time Scale", environment.getTimeScale(), 0, 100, 0.01, value => {
+            environment.setTimeScale(value);
+            scaleValue.value = String(value);
+        });
         const scaleValue = this.addText(world, "Time Scale (x)", String(environment.getTimeScale()), value => {
             if (!Number.isFinite(Number(value))) return;
 
             environment.setTimeScale(Number(value));
             scaleRange.value = value;
         });
-        this.addSelect(world, "Signs Sky", { Normal: 0, Dusk: 1, Dawn: 2 }, String(environment.getActiveEnv()), value => { environment.setActiveEnv(Number(value) as 0 | 1 | 2); render.needsUpdate = true; });
+        this.addSelect(world, "Signs Sky", { Normal: 0, Dusk: 1, Dawn: 2 }, String(environment.getActiveEnv()), value => {
+            environment.setActiveEnv(Number(value) as 0 | 1 | 2);
+            render.needsUpdate = true;
+        });
     }
 
     public async addCharacterControls(): Promise<void> {
@@ -588,11 +616,21 @@ export class UIManager implements IEngineComponent<GameManager> {
             variants.innerHTML = "";
             this.characterFace = Math.min(this.characterFace, group.faceVariants - 1);
             this.characterHair = group.hairStyles.includes(this.characterHair) ? this.characterHair : group.hairStyles[0];
-            this.addSelect(variants, "Face", Array.from({ length: group.faceVariants }, (_, i) => String(i)), String(this.characterFace), async value => { this.characterFace = Number(value); await applyCharacter(); });
-            this.addSelect(variants, "Hair", group.hairStyles.map(String), String(this.characterHair), async value => { this.characterHair = Number(value); buildVariantControls(); await applyCharacter(); });
+            this.addSelect(variants, "Face", Array.from({ length: group.faceVariants }, (_, i) => String(i)), String(this.characterFace), async value => {
+                this.characterFace = Number(value);
+                await applyCharacter();
+            });
+            this.addSelect(variants, "Hair", group.hairStyles.map(String), String(this.characterHair), async value => {
+                this.characterHair = Number(value);
+                buildVariantControls();
+                await applyCharacter();
+            });
             const colours = group.hairColours[this.characterHair];
             this.characterHairColour = colours.includes(this.characterHairColour) ? this.characterHairColour : colours[0];
-            this.addSelect(variants, "Hair Color", colours.map(String), String(this.characterHairColour), async value => { this.characterHairColour = Number(value); await applyCharacter(); });
+            this.addSelect(variants, "Hair Color", colours.map(String), String(this.characterHairColour), async value => {
+                this.characterHairColour = Number(value);
+                await applyCharacter();
+            });
             addArmorControls(group);
         };
 
@@ -601,7 +639,13 @@ export class UIManager implements IEngineComponent<GameManager> {
         const skills = this.addSection("Player Skills", false, "controls", true);
         const skill = { id: 1012 };
         this.addText(skills, "Skill ID", String(skill.id), value => skill.id = Number(value)).type = "number";
-        const weapon = this.addSelect(skills, "Weapon animation (preview)", Object.fromEntries(Object.entries(WeaponType).filter(([, value]) => typeof value === "number").map(([name, value]) => [name, String(value)])), String(render.player.scriptClassId ? render.player.getUnrealScriptProperty("CurWeaponType") : 0), () => {});
+        const weapon = this.addSelect(
+            skills,
+            "Weapon animation (preview)",
+            Object.fromEntries(Object.entries(WeaponType).filter(([, value]) => typeof value === "number").map(([name, value]) => [name, String(value)])),
+            String(render.player.scriptClassId ? render.player.getUnrealScriptProperty("CurWeaponType") : 0),
+            () => {}
+        );
         const target = this.addSelect(skills, "Target", { Self: "self", "Spawned NPC": "npc" }, "self", () => {});
         this.addButton(skills, "Cast", () => {
             const targetActor = target.value === "npc" ? this.spawnedNpc : render.player;
@@ -659,7 +703,10 @@ export class UIManager implements IEngineComponent<GameManager> {
         section.appendChild(actions);
         section.appendChild(attackControls);
         buildAttackControl(null);
-        this.addSelect(section, "Attack target", { Player: "player", Self: "self" }, state.selectedTarget, value => { state.selectedTarget = value; this.spawnedNpc?.stopAttack(); });
+        this.addSelect(section, "Attack target", { Player: "player", Self: "self" }, state.selectedTarget, value => {
+            state.selectedTarget = value;
+            this.spawnedNpc?.stopAttack();
+        });
         const attackActions = document.createElement("div");
         attackActions.className = "debug-actions";
         this.addButton(attackActions, "Attack", () => {
@@ -673,7 +720,10 @@ export class UIManager implements IEngineComponent<GameManager> {
     public addClippingRangeControls(): void {
         const asset = this.manGame.getComponent("asset"), render = this.manGame.getComponent("render");
         const clippingRange = asset.userConfig.clippingRange;
-        this.addRange(this.qualitySection, "Emitter Range", clippingRange.actor, 1, 12, 0.5, value => { clippingRange.actor = value; render.invalidateSectorVisibility(); });
+        this.addRange(this.qualitySection, "Emitter Range", clippingRange.actor, 1, 12, 0.5, value => {
+            clippingRange.actor = value;
+            render.invalidateSectorVisibility();
+        });
     }
 
     public addDisplayGammaControls(): void {

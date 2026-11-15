@@ -138,7 +138,18 @@ export abstract class UTexture extends UMaterial {
                 frame = frame.animNext;
             }
         }
-        return { name: this.name, format: this.format.valueOf(), width: this.width, height: this.height, mipCount, data, paletteRed, paletteId: this.palette ? this.palette.name : null, palettes, animNext: this.animNext ? { path: this.animNext.pkg.path, index: this.animNext.exportIndex } : null };
+        return {
+            name: this.name,
+            format: this.format.valueOf(),
+            width: this.width,
+            height: this.height,
+            mipCount,
+            data,
+            paletteRed,
+            paletteId: this.palette ? this.palette.name : null,
+            palettes,
+            animNext: this.animNext ? { path: this.animNext.pkg.path, index: this.animNext.exportIndex } : null
+        };
     }
 
     public doLoad(pkg: APackage, exp: UExport) {    // 2785

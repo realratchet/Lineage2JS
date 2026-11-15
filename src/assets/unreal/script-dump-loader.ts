@@ -94,7 +94,8 @@ function getObjectId(object: UObject): string {
 }
 
 function getObjectClass(object: UObject): UClass {
-    const pkg = (object as any).pkg, cls = object.exp.idClass ? pkg.fetchObject(object.exp.idClass) as UClass : (object as any).isClass ? pkg.loader.getNativePackage().fetchObjectByType("Class", "Class") as UClass : null;
+    const pkg = (object as any).pkg;
+    const cls = object.exp.idClass ? pkg.fetchObject(object.exp.idClass) as UClass : (object as any).isClass ? pkg.loader.getNativePackage().fetchObjectByType("Class", "Class") as UClass : null;
 
     if (!cls || !cls.isClass) throw new Error(`Script object '${getObjectId(object)}' has no class descriptor.`);
     return cls;
@@ -118,7 +119,8 @@ export function dumpObjectClass(object: UObject) {
         cacheObjectClassParents.set(cls, classParents);
     }
     // Core.dll registers Class in Core at 0x10183d40..0x10183d8e.
-    const path = (object as UClass).isClass && object.name === "__native__.Class" ? "core.Class" : getObjectId(object), info: DecodeLibrary["scriptObjects"][string] = { path, classId: getObjectId(cls), classParents, outer: null };
+    const path = (object as UClass).isClass && object.name === "__native__.Class" ? "core.Class" : getObjectId(object);
+    const info: DecodeLibrary["scriptObjects"][string] = { path, classId: getObjectId(cls), classParents, outer: null };
     cacheScriptObjects.set(object, info);
     const pkg = (object as any).pkg, end = path.indexOf(".");
 
@@ -361,7 +363,15 @@ function dumpProgram(script: UStruct): IScriptProgramDecodeInfo {
 
 function dumpField(field: UProperty): IScriptFieldDecodeInfo {
     field = field.loadSelf();
-    const info: IScriptFieldDecodeInfo = { id: getObjectId(field), name: field.propertyName, type: field.getTypeName(), arrayDimensions: field.arrayDimensions, flags: field.getPropertyFlags(), isPublic: field.exp ? field.exp.anyFlags(ObjectFlags_T.RF_Public) : false, categoryName: (field as any).categoryName };
+    const info: IScriptFieldDecodeInfo = {
+        id: getObjectId(field),
+        name: field.propertyName,
+        type: field.getTypeName(),
+        arrayDimensions: field.arrayDimensions,
+        flags: field.getPropertyFlags(),
+        isPublic: field.exp ? field.exp.anyFlags(ObjectFlags_T.RF_Public) : false,
+        categoryName: (field as any).categoryName
+    };
 
     if (info.type === "Byte") {
         const enumeration = (field as UByteProperty).value;
@@ -493,7 +503,10 @@ function dumpScriptReferences(script: UStruct, library: DecodeLibrary) {
         return cached.references;
     }
 
-    const enums: Record<string, string[]> = {}, classParents: Record<string, string | null> = {}, classAliases: Record<string, string> = {}, objectClasses: Record<string, string> = {};
+    const enums: Record<string, string[]> = {};
+    const classParents: Record<string, string | null> = {};
+    const classAliases: Record<string, string> = {};
+    const objectClasses: Record<string, string> = {};
     const objects: DecodeLibrary["scriptObjects"] = {};
     const seenFields = new Set<UProperty>();
 
@@ -571,7 +584,10 @@ function dumpScriptReferences(script: UStruct, library: DecodeLibrary) {
 
     function pullValue(value: any): void {
         if (!value) return;
-        if (value.isClass) { pullClass(value); pullObject(value); }
+        if (value.isClass) {
+            pullClass(value);
+            pullObject(value);
+        }
         else if (value.isScriptDelegate) pullValue(value.object);
         else if (Array.isArray(value)) value.forEach(pullValue);
         else if (value.constructor?.plainStructFields || value.constructor?.hostClass?.isStruct && !value.constructor.hostClass.isClass) {

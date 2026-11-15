@@ -56,6 +56,8 @@ const CPF_Parm = 0x00000080;
 const CPF_OutParm = 0x00000100;
 const CPF_ReturnParm = 0x00000400;
 const FUNC_Native = 0x00000400;
+const NATIVE_Trace = 277;
+const NATIVE_FinishRotation = 508;
 const NAME_SIZE = 64;
 const assignmentNatives = new Set([133, 134, 135, 136, 137, 138, 139, 140, 159, 160, 161, 162, 163, 164, 165, 166, 182, 183, 184, 185, 221, 222, 223, 224, 290, 291, 297, 318, 319]);
 const postAssignmentNatives = new Set([139, 140, 165, 166]);
@@ -128,7 +130,8 @@ function getFieldName(id: string): string {
 }
 
 function isPropertyPorted(field: IScriptClassDecodeInfo["fields"][number]): boolean {
-    return field.arrayDimensions > 0 && field.name.toLowerCase() !== "class" && (field.categoryName.toLowerCase() !== "none" || !(field.flags & (PropertyFlags_T.CPF_Transient | PropertyFlags_T.CPF_Native)));
+    return field.arrayDimensions > 0 && field.name.toLowerCase() !== "class" && (
+        field.categoryName.toLowerCase() !== "none" || !(field.flags & (PropertyFlags_T.CPF_Transient | PropertyFlags_T.CPF_Native)));
 }
 
 const cacheClassFields = new WeakMap<IScriptClassDecodeInfo, Map<string, IScriptClassDecodeInfo["fields"][number]>>();
@@ -522,7 +525,9 @@ class ScriptExecutor {
             case ExprToken_T.InstanceVariable:
             case ExprToken_T.DefaultVariable: {
                 const field = this.next(), id = field.value as string;
-                const context = opcode === ExprToken_T.DefaultVariable && !this.frame.context.isClassDefaultObject ? (cacheStateFrames.get(this.frame.context)?.vm || this.vm).getDefaultObject(this.frame.context.scriptClassId) : this.frame.context;
+                const context = opcode === ExprToken_T.DefaultVariable && !this.frame.context.isClassDefaultObject
+                    ? (cacheStateFrames.get(this.frame.context)?.vm || this.vm).getDefaultObject(this.frame.context.scriptClassId)
+                    : this.frame.context;
 
                 return {
                     arrayElementDefault: field.arrayElementDefault,
@@ -1143,7 +1148,11 @@ export class UnScriptVM {
 
     public constructor(library: DecodeLibrary, isDeferred = false) {
         this.library = library;
-        if (library.levelPackageName) this.levelPackage = cacheScriptResources.get(library.levelPackageName.toLowerCase())?.deref() || { scriptClassId: "core.Package", isLevelActor: false, scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 } };
+        if (library.levelPackageName)
+            this.levelPackage = cacheScriptResources.get(library.levelPackageName.toLowerCase())?.deref() || {
+                scriptClassId: "core.Package", isLevelActor: false,
+                scriptProperties: { Name: library.levelPackageName, Outer: null, Class: "core.Package", ObjectFlags: 0 }
+            };
         registerScriptObject(transientPackage, this.scriptObjectClasses);
         registerScriptResourceAlias("Transient", transientPackage);
         if (this.levelPackage) {
@@ -1223,7 +1232,8 @@ export class UnScriptVM {
 
         for (let parent = cls; parent; parent = this.library.scriptClasses[parent.superClassId]) {
             if (parent.id.toLowerCase() === "engine.actor") isActor = true;
-            if (parent.isNative && parent.superClassId && !["engine.actor", "engine.info", "engine.mutator", "engine.gameinfo"].includes(parent.id.toLowerCase())) throw new Error(`UnrealScript native constructor '${parent.id}' is not implemented.`);
+            if (parent.isNative && parent.superClassId && !["engine.actor", "engine.info", "engine.mutator", "engine.gameinfo"].includes(parent.id.toLowerCase()))
+                throw new Error(`UnrealScript native constructor '${parent.id}' is not implemented.`);
         }
         if (!isActor) throw new Error(`UnrealScript class '${cls.id}' is not an actor class.`);
 
@@ -1260,8 +1270,10 @@ export class UnScriptVM {
 
     protected validateConstructorTemplate(cls: IScriptClassDecodeInfo, template: ScriptHost_T, superObject: ScriptHost_T): void {
         // shortcut: same-class templates; cross-class native memory layouts need qualification before accepting them.
-        if (template !== null && (!template || typeof template !== "object" || (typeof template.scriptClassId !== "string" || template.scriptClassId.toLowerCase() !== cls.id.toLowerCase()))) throw new Error(`Invalid constructor template for '${cls.id}'.`);
-        if (superObject !== null && (!superObject || typeof superObject !== "object" || (typeof superObject.scriptClassId !== "string" || !superObject.scriptClassId))) throw new Error(`Invalid constructor SuperObject for '${cls.id}'.`);
+        if (template !== null && (!template || typeof template !== "object" || (typeof template.scriptClassId !== "string" || template.scriptClassId.toLowerCase() !== cls.id.toLowerCase())))
+            throw new Error(`Invalid constructor template for '${cls.id}'.`);
+        if (superObject !== null && (!superObject || typeof superObject !== "object" || (typeof superObject.scriptClassId !== "string" || !superObject.scriptClassId)))
+            throw new Error(`Invalid constructor SuperObject for '${cls.id}'.`);
     }
 
     protected initializeTemplate(object: ScriptHost_T, template: ScriptHost_T, superObject: ScriptHost_T): void {
@@ -1320,7 +1332,9 @@ export class UnScriptVM {
             case "Struct": {
                 if (!field.structFieldIds) throw new Error(`Missing constructor struct metadata for '${path}'.`);
                 if (Array.isArray(value)) {
-                    if (value.length !== field.structFieldIds.length || !field.structFieldIds.every(id => fields[id] && ["Byte", "Int", "Float"].includes(fields[id].type) && fields[id].arrayDimensions === 1)) throw new Error(`Unsupported packed constructor struct '${path}'.`);
+                    if (value.length !== field.structFieldIds.length ||
+                        !field.structFieldIds.every(id => fields[id] && ["Byte", "Int", "Float"].includes(fields[id].type) && fields[id].arrayDimensions === 1))
+                        throw new Error(`Unsupported packed constructor struct '${path}'.`);
                     return value.map(() => 0);
                 }
                 const result: Record<string, ScriptValue_T> = {};
@@ -1862,7 +1876,9 @@ export class UnScriptVM {
 
     public saveConfig(context: ScriptHost_T, flags: number = PropertyFlags_T.CPF_Config, filename: string = null): void {
         const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
-        const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this), source = vm.library.scriptClasses[context.scriptClassId], config = UnScriptVM.config;
+        const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
+        const source = vm.library.scriptClasses[context.scriptClassId];
+        const config = UnScriptVM.config;
 
         if (!source) throw new Error(`Configuration class '${context.scriptClassId}' is not in the decode library.`);
         if (!config) throw new Error(`UnrealScript configuration is not initialized.`);
@@ -2162,7 +2178,8 @@ export class UnScriptVM {
         let fn: IScriptFunctionDecodeInfo = null;
 
         if (object) {
-            const isResource = (object as ScriptResource_T).isScriptResource, script = typeof (object as any).findComponent === "function" ? (object as any).findComponent("script") : null;
+            const isResource = (object as ScriptResource_T).isScriptResource,
+                script = typeof (object as any).findComponent === "function" ? (object as any).findComponent("script") : null;
             let vm = isResource ? this : cacheStateFrames.get(object)?.vm || (script ? script.getVM() as UnScriptVM : null) || cacheScriptObjectClasses.get(object)?.vm?.deref() || this;
             const classId = isResource && this.dynamicCast((object as ScriptResource_T).scriptObjectPath, "core.Class") ? (object as ScriptResource_T).scriptObjectPath : object.scriptClassId;
 
@@ -2395,7 +2412,8 @@ export class UnScriptVM {
         if (!cls || !target) return false;
         cls = cls.toLowerCase();
         cls = this.classAliases.get(cls) || cls;
-        const resource = cacheScriptResources.get(cls)?.deref(), classes = resource ? cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses : this.scriptObjectClasses;
+        const resource = cacheScriptResources.get(cls)?.deref(),
+            classes = resource ? cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses : this.scriptObjectClasses;
 
         cls = classes.aliases.get(cls) || cls;
         target = target.toLowerCase();
@@ -2418,7 +2436,8 @@ export class UnScriptVM {
     public metaCast(value: ScriptValue_T, target: string): ScriptValue_T {
         if (typeof value !== "string" || !target) return null;
         const cls = value.toLowerCase();
-        const resource = cacheScriptResources.get(cls)?.deref(), classes = resource ? cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses : this.scriptObjectClasses;
+        const resource = cacheScriptResources.get(cls)?.deref(),
+            classes = resource ? cacheScriptObjectClasses.get(resource) || this.scriptObjectClasses : this.scriptObjectClasses;
 
         if (!classes.parents.has(classes.aliases.get(this.classAliases.get(cls) || cls) || cls)) return null;
         return this.isClassChildOf(cls, target) ? value : null;
@@ -2675,7 +2694,10 @@ export class UnScriptVM {
         }
 
         if (index === 113) {
-            const frame = cacheStateFrames.get(context), previous = frame && frame.node !== frame.cls ? frame.node.name : "None", requested = args[0] == null ? previous : args[0] as string, label = args[1] == null || (args[1] as string).toLowerCase() === "none" ? "Begin" : args[1] as string;
+            const frame = cacheStateFrames.get(context);
+            const previous = frame && frame.node !== frame.cls ? frame.node.name : "None";
+            const requested = args[0] == null ? previous : args[0] as string;
+            const label = args[1] == null || (args[1] as string).toLowerCase() === "none" ? "Begin" : args[1] as string;
             const result = requested.toLowerCase() === previous.toLowerCase() ? 1 : this.gotoState(context, requested);
 
             if (result === 1) {

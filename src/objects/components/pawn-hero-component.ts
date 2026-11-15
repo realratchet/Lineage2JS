@@ -5,6 +5,9 @@ import type RenderManager from "../../rendering/render-manager";
 import ActorMeshComponent from "../../rendering/components/actor-mesh-component";
 import type AnimationComponent from "./animation-component";
 
+const heroScale = Math.fround(1 / 9);
+const basePawnSize = Math.sqrt(207);
+
 class HeroMesh extends GameObject {
     public readonly scriptProperties = new Map<string, any>();
 }
@@ -54,7 +57,7 @@ export class PawnHeroComponent extends ObjectComponent<BaseActor> {
 
             this.renderManager.addTransientEffect(effect, parent);
             // APawn::UpdateAbnormalState 0x10496407..0x1049642b: radius / 9, root attachment with absolute rotation.
-            const scale = Math.fround(Math.fround(parent.getCollisionRadius()) * Math.fround(1 / 9));
+            const scale = Math.fround(Math.fround(parent.getCollisionRadius()) * heroScale);
 
             effect.traverse((emitter: any) => {
                 if (emitter.particlePool) emitter.setSizeScale(scale);
@@ -70,7 +73,7 @@ export class PawnHeroComponent extends ObjectComponent<BaseActor> {
         this.radius = radius;
         this.height = height;
         // USkeletalMeshInstance::Render 0x1069c3d4..0x1069c5ad.
-        this.mesh.scale.setScalar(Math.fround(Math.fround(Math.sqrt(Math.fround(radius) * Math.fround(height)) / Math.sqrt(207)) * 3));
+        this.mesh.scale.setScalar(Math.fround(Math.fround(Math.sqrt(Math.fround(radius) * Math.fround(height)) / basePawnSize) * 3));
     }
 
     public onDetach(): void {

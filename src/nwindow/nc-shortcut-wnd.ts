@@ -6,6 +6,10 @@ import type { NDomButton_T } from "./ndom";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const TEX_BACK = "L2UI_CH3.ShortcutWnd.shortcut_back";
+const TEX_JOYPAD = "L2UI_CH3.Joypad.joypad_back";
+const TEX_JOYPAD_SWITCH = "L2UI_CH3.ShortcutWnd.shortcut_joypad";
+const TEX_JOYPAD_LEFT = "L2UI_CH3.Joypad.joypad_L";
+const TEX_JOYPAD_RIGHT = "L2UI_CH3.Joypad.joypad_R";
 const TEX_BACKV = "L2UI_CH3.ShortcutWnd.shortcut_backv";
 const TEX_OUTLINE = "L2UI_CH3.Etc.menu_outline";
 const TEX_OUTLINE_DOWN = "L2UI_CH3.Etc.menu_outline_down";
@@ -87,8 +91,12 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
         this.pageZero = layer.digits(this.element, "0", TEXT_COLOR, undefined, 0, 0);
 
         for (let i = 0; i < SLOTS_PER_PAGE; i++) {
-            const icon = layer.tile(this.element, 0, 0, ICON_SIZE, ICON_SIZE, 0, 0, ICON_SIZE, ICON_SIZE, TEX_OUTLINE), outline = layer.tile(this.element, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE), outlineDown = layer.tile(this.element, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE_DOWN);
-            const toggle = layer.tile(this.element, 0, 0, ICON_SIZE, ICON_SIZE, 0, 0, ICON_SIZE, ICON_SIZE, TEX_TOGGLE), acronym = layer.createWindow(0, 0, 0, 0, this.element), coolTime = layer.tile(this.element, 0, 0, ICON_SIZE, ICON_SIZE, 0, 0, ICON_SIZE, ICON_SIZE, TEX_OUTLINE);
+            const icon = layer.tile(this.element, 0, 0, ICON_SIZE, ICON_SIZE, 0, 0, ICON_SIZE, ICON_SIZE, TEX_OUTLINE);
+            const outline = layer.tile(this.element, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE);
+            const outlineDown = layer.tile(this.element, 0, 0, 34, 34, 0, 0, 34, 34, TEX_OUTLINE_DOWN);
+            const toggle = layer.tile(this.element, 0, 0, ICON_SIZE, ICON_SIZE, 0, 0, ICON_SIZE, ICON_SIZE, TEX_TOGGLE);
+            const acronym = layer.createWindow(0, 0, 0, 0, this.element);
+            const coolTime = layer.tile(this.element, 0, 0, ICON_SIZE, ICON_SIZE, 0, 0, ICON_SIZE, ICON_SIZE, TEX_OUTLINE);
 
             this.arrSlots.push({ icon, outline, outlineDown, toggle, acronym, coolTime, fkey: layer.tile(this.element, 0, 0, 16, 16, 0, 0, 16, 16, TEX_FKEYS[i]), coolTexture: null, coolColor: 0xffffff });
         }
@@ -180,7 +188,8 @@ export class NCShortCutWnd { // NCShortCutWnd: NCConsole 0x10061d76 SetWindowPos
     }
 
     protected rotate(save = true) { // slot80 0x10106300 -> slot75 0x101058e0: swap w/h around x+W-H, y+H-W, clamped to >= 0.
-        const w = this.element.offsetWidth || parseFloat(this.element.style.width), h = this.element.offsetHeight || parseFloat(this.element.style.height);
+        const w = this.element.offsetWidth || parseFloat(this.element.style.width);
+        const h = this.element.offsetHeight || parseFloat(this.element.style.height);
 
         this.isHorizontal = !this.isHorizontal;
         this.layer.place(this.element, Math.max(0, this.getX() + w - h), Math.max(0, this.getY() + h - w), h, w);

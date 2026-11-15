@@ -65,7 +65,9 @@ export class VolumeCamera {
     }
 
     public update(controller: PlayerController, rotation: Vector3Arr, target: Vector3, output: Vector3): void { // ALineagePlayerController::CalcVolumeCamera 0x105372c0.
-        const properties = controller.scriptProperties, oldRotation = properties.get("OldCameraRotation") as Vector3Arr, oldLocation = properties.get("OldCameraLocation") as number[];
+        const properties = controller.scriptProperties,
+            oldRotation = properties.get("OldCameraRotation") as Vector3Arr,
+            oldLocation = properties.get("OldCameraLocation") as number[];
         const distance = Math.fround((properties.get("CurZoomingDist") as number) + 250), radius = properties.get("CurVolumeCameraRadius") as number;
 
         direction(rotation, tmpInitialDirection);

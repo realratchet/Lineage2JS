@@ -3,6 +3,15 @@ import { DigitFont_T, FontType_T } from "./nwindow-canvas";
 import SystemMessage_T from "./system-message";
 import SysString_T from "./sys-string";
 
+const effectFlashEnd = Math.fround(.04);
+const effectFadeStart = Math.fround(.05);
+const effectFadeChange = Math.fround(.08);
+const effectFadeEnd = Math.fround(.095);
+const hintFirstEnd = Math.fround(.1);
+const hintSecondStart = Math.fround(.2);
+const hintSecondEnd = Math.fround(.3);
+const hintLastStart = Math.fround(.4);
+
 const TEX_BACK = "L2UI_CH3.FishingWnd.fishing_back";
 const TEX_CLOCK = "L2UI_CH3.FishingWnd.fishing_clockicon";
 const TEX_BAR = "L2UI_CH3.FishingWnd.fishing_bar1";
@@ -117,7 +126,11 @@ export class NCFishViewportWnd {
         if (this.hasCombatUI) {
             if (goodUse) this.startEffect();
             if (animation === 1 || animation === 2) {
-                if (delta < 0) this.setMessage(penalty > 0 ? animation === 1 ? SystemMessage_T.PumpingMasteryPenalty : SystemMessage_T.ReelingMasteryPenalty : animation === 1 ? SysString_T.PumpingSuccessful : SysString_T.ReelingSuccessful, delta, penalty);
+                if (delta < 0) this.setMessage(
+                    penalty > 0 ? animation === 1 ? SystemMessage_T.PumpingMasteryPenalty : SystemMessage_T.ReelingMasteryPenalty : animation === 1 ? SysString_T.PumpingSuccessful : SysString_T.ReelingSuccessful,
+                    delta,
+                    penalty
+                );
                 else this.setMessage(animation === 1 ? SysString_T.PumpingFailed : SysString_T.ReelingFailed, delta);
             }
         }
@@ -138,10 +151,10 @@ export class NCFishViewportWnd {
         if (this.effectActive) {
             const t = this.effectTime = Math.fround(this.effectTime + dt);
 
-            if (t <= Math.fround(.04)) this.effectAlpha = 255;
-            else if (t <= Math.fround(.08)) this.effectAlpha = 0;
-            else if (t <= Math.fround(.095)) this.effectAlpha = Math.trunc(255 - (t - Math.fround(.05)) * 10000);
-            else if (t <= Math.fround(.2)) this.effectAlpha = Math.trunc(105 - (t - Math.fround(.08)) * 500);
+            if (t <= effectFlashEnd) this.effectAlpha = 255;
+            else if (t <= effectFadeChange) this.effectAlpha = 0;
+            else if (t <= effectFadeEnd) this.effectAlpha = Math.trunc(255 - (t - effectFadeStart) * 10000);
+            else if (t <= hintSecondStart) this.effectAlpha = Math.trunc(105 - (t - effectFadeChange) * 500);
             else { this.effectActive = false; this.effectTime = this.effectAlpha = 0; }
         }
         if (this.hintsEnabled) this.hintPhase = Math.fround(this.hintPhase + dt);
@@ -177,7 +190,7 @@ export class NCFishViewportWnd {
             if (this.effectActive) this.paintTile(TEX_EFFECT, -22, 221, 297, 41, 297, 41, this.effectAlpha);
         }
         const phase = this.hintPhase;
-        if (this.hintsEnabled && (phase >= 0 && phase < Math.fround(.1) || phase >= Math.fround(.2) && phase < Math.fround(.3) || phase >= Math.fround(.4))) {
+        if (this.hintsEnabled && (phase >= 0 && phase < hintFirstEnd || phase >= hintSecondStart && phase < hintSecondEnd || phase >= hintLastStart)) {
             this.paintTile(TEX_HINT[this.mode === 0 ? 0 : 1], 13, 33, 32, 32, 32, 32);
             layer.wrappedText(hud, 53, 33, 0xffe7dcb6, layer.getManager().getSystemMessage(this.mode === 0 ? SystemMessage_T.FishExhausted : SystemMessage_T.FishResisting), 193);
         }

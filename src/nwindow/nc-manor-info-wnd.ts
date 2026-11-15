@@ -102,7 +102,14 @@ class NCManorSeedInfoWnd extends NCManorInfoDownWnd { // NCManorSeedInfoWnd: OnC
 
 class NCManorCropInfoWnd extends NCManorSeedInfoWnd { // NCManorCropInfoWnd: OnCreate 0x10132e00, OnShowCropInfo 0x10132630, paint 0x10132c30
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, SysString_T.CurrentCrops, [{ width: 269, label: SysString_T.CropName, numeric: false }, { width: 80, label: SysString_T.Remaining, numeric: true }, { width: 80, label: SysString_T.Buy, numeric: true }, { width: 80, label: SysString_T.BuyPrice, numeric: true }, { width: 77, label: SysString_T.Reward, numeric: false }], SysString_T.CropSales, 4);
+        super(
+            layer,
+            parent,
+            SysString_T.CurrentCrops,
+            [{ width: 269, label: SysString_T.CropName, numeric: false }, { width: 80, label: SysString_T.Remaining, numeric: true }, { width: 80, label: SysString_T.Buy, numeric: true }, { width: 80, label: SysString_T.BuyPrice, numeric: true }, { width: 77, label: SysString_T.Reward, numeric: false }],
+            SysString_T.CropSales,
+            4
+        );
     }
 
     protected onButton() { this.bypass("manor_menu_select?ask=2&state=-1&time=0"); } // 0x10132470
@@ -112,7 +119,12 @@ class NCManorDefaultInfoWnd extends NCManorInfoDownWnd { // NCManorDefaultInfoWn
     protected readonly arrButtons: NDomButton_T[];
 
     public constructor(layer: NDomLayer, parent: HTMLElement) {
-        super(layer, parent, SysString_T.CommonCropInfo, [{ width: 169, label: SysString_T.CropName, numeric: false }, { width: 50, label: SysString_T.ItemLevel, numeric: true }, { width: 80, label: SysString_T.SeedPrice, numeric: true }, { width: 80, label: SysString_T.CropPrice, numeric: true }, { width: 95, label: SysString_T.RewardType1, numeric: false }, { width: 112, label: SysString_T.RewardType2, numeric: false }]);
+        super(
+            layer,
+            parent,
+            SysString_T.CommonCropInfo,
+            [{ width: 169, label: SysString_T.CropName, numeric: false }, { width: 50, label: SysString_T.ItemLevel, numeric: true }, { width: 80, label: SysString_T.SeedPrice, numeric: true }, { width: 80, label: SysString_T.CropPrice, numeric: true }, { width: 95, label: SysString_T.RewardType1, numeric: false }, { width: 112, label: SysString_T.RewardType2, numeric: false }]
+        );
         this.arrButtons = [createTextButton(layer, this.element, 438, 249, SysString_T.SeedPurchase, () => this.bypass("manor_menu_select?ask=1&state=-1&time=0")), createTextButton(layer, this.element, 518, 249, SysString_T.CropSales, () => this.bypass("manor_menu_select?ask=2&state=-1&time=0"))];
     }
 

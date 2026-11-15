@@ -181,5 +181,15 @@ export default Stats;
 
 type Panel_T = { dom: HTMLCanvasElement, update: (value: number) => void };
 type PanelConstructor_T = { (name: string, fg: string, bg: string): Panel_T, new (name: string, fg: string, bg: string): Panel_T };
-type Stats_T = { REVISION: number, dom: HTMLDivElement, addPanel: (panel: Panel_T) => Panel_T, showPanel: (id: number) => void, begin: () => void, end: () => number, update: () => void, domElement: HTMLDivElement, setMode: (id: number) => void };
+type Stats_T = {
+    REVISION: number,
+    dom: HTMLDivElement,
+    addPanel: (panel: Panel_T) => Panel_T,
+    showPanel: (id: number) => void,
+    begin: () => void,
+    end: () => number,
+    update: () => void,
+    domElement: HTMLDivElement,
+    setMode: (id: number) => void
+};
 type StatsConstructor_T = { (): Stats_T, new (): Stats_T, Panel: PanelConstructor_T };

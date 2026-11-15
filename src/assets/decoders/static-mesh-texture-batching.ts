@@ -31,7 +31,10 @@ export function* createStaticMeshTextureBatchJob(object: any, indices: ArrayLike
             }
             budget -= limit - start;
             start = limit;
-            if (!budget) { budget = 65536; yield; }
+            if (!budget) {
+                budget = 65536;
+                yield;
+            }
         }
     }
     yield;
@@ -39,12 +42,30 @@ export function* createStaticMeshTextureBatchJob(object: any, indices: ArrayLike
     const cacheShaderIds = new Map<string, number>();
     for (let i = 0; i < materials.length; i++) {
         const material = materials[i] as any, data = material.uniforms?.shDiffuse?.value, texture = data?.map?.texture as CompressedTexture;
-        if (bad.has(i) || !material.isStaticMeshMaterial || material.transparent || material.isUpdatable || material.defines.USE_ACTOR_LIGHTS !== undefined || !texture?.isCompressedTexture || (texture as any).isCubeTexture || (texture as any).isUpdatable || (texture as any).isCompressedArrayTexture) continue;
+        if (bad.has(i) || !material.isStaticMeshMaterial || material.transparent || material.isUpdatable || material.defines.USE_ACTOR_LIGHTS !== undefined || !texture?.isCompressedTexture || (texture as any).isCubeTexture || (texture as any).isUpdatable || (texture as any).isCompressedArrayTexture)
+            continue;
 
         const compare = Object.create(material);
         compare.name = "";
         compare.uniforms = { ...material.uniforms, shDiffuse: { value: { ...data, map: { ...data.map, texture: null } } }, shDiffuseMap: { value: null } };
-        const key = getCanonicalStaticMaterialKey(compare) + JSON.stringify([getShaderId(cacheShaderIds, material.vertexShader), getShaderId(cacheShaderIds, material.fragmentShader), texture.image.width, texture.image.height, texture.format, texture.type, texture.mipmaps.length, texture.wrapS, texture.wrapT, texture.minFilter, texture.magFilter, texture.anisotropy, texture.colorSpace, texture.flipY, texture.premultiplyAlpha, getTextureLODBounds(texture)]);
+        const key = getCanonicalStaticMaterialKey(compare) + JSON.stringify([
+            getShaderId(cacheShaderIds, material.vertexShader),
+            getShaderId(cacheShaderIds, material.fragmentShader),
+            texture.image.width,
+            texture.image.height,
+            texture.format,
+            texture.type,
+            texture.mipmaps.length,
+            texture.wrapS,
+            texture.wrapT,
+            texture.minFilter,
+            texture.magFilter,
+            texture.anisotropy,
+            texture.colorSpace,
+            texture.flipY,
+            texture.premultiplyAlpha,
+            getTextureLODBounds(texture)
+        ]);
         if (!buckets.has(key)) buckets.set(key, []);
         buckets.get(key).push({ index: i, material, texture });
         yield;
@@ -66,7 +87,10 @@ export function* createStaticMeshTextureBatchJob(object: any, indices: ArrayLike
 
                     data.set(source.data, layer * mip.data.byteLength);
                     copiedBytes += source.data.byteLength;
-                    if (copiedBytes >= 256 * 1024) { copiedBytes = 0; yield; }
+                    if (copiedBytes >= 256 * 1024) {
+                        copiedBytes = 0;
+                        yield;
+                    }
                 }
                 mipmaps.push({ width: mip.width, height: mip.height, data });
             }
@@ -81,7 +105,8 @@ export function* createStaticMeshTextureBatchJob(object: any, indices: ArrayLike
             texture.premultiplyAlpha = first.premultiplyAlpha;
             texture.needsUpdate = true;
             const material = group[0].material.clone() as any;
-            if (!material.vertexShader.includes("void main() {") || !material.fragmentShader.includes("texture2D(shDiffuseMap, UV_DIFFUSE)")) throw new Error(`Material '${material.name}' has no diffuse array shader path.`);
+            if (!material.vertexShader.includes("void main() {") || !material.fragmentShader.includes("texture2D(shDiffuseMap, UV_DIFFUSE)"))
+                throw new Error(`Material '${material.name}' has no diffuse array shader path.`);
 
             material.uniforms.batchDiffuse = { value: texture };
             material.vertexShader = `attribute float batchLayer; flat varying float vBatchLayer;\n${material.vertexShader.replace("void main() {", "void main() { vBatchLayer=batchLayer;")}`;
@@ -107,7 +132,10 @@ export function* createStaticMeshTextureBatchJob(object: any, indices: ArrayLike
             for (let i = start; i < limit; i++) layerValues[indices[i]] = layer;
             budget -= limit - start;
             start = limit;
-            if (!budget) { budget = 65536; yield; }
+            if (!budget) {
+                budget = 65536;
+                yield;
+            }
         }
     }
     object.material = target;

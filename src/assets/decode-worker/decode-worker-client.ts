@@ -324,7 +324,10 @@ export class DecodeWorkerClient {
         for (let i = 0; i < count; i++) {
             if (this.slots[i].isDead || this.slots[i].isReserved) continue;
             if (idleOnly && (!this.slots[i].isReady || this.slots[i].inFlight > 0)) continue;
-            if (this.slots[i].inFlight < bestLoad) { best = i; bestLoad = this.slots[i].inFlight; }
+            if (this.slots[i].inFlight < bestLoad) {
+                best = i;
+                bestLoad = this.slots[i].inFlight;
+            }
         }
 
         if (best >= 0 || !reserveScriptWorker) return best;
@@ -414,7 +417,8 @@ export class DecodeWorkerClient {
 
             for (let i = 0; i < this.sectorQueue.length; i++) {
                 const request = this.sectorQueue[i];
-                if ((request.message.type === "sectorPackages" || request.message.type === "packageDependencies") && [...this.pending.values()].filter(entry => entry.isPackageDiscovery).length >= Math.max(1, Math.floor(this.slots.length / 2))) continue;
+                if ((request.message.type === "sectorPackages" || request.message.type === "packageDependencies") && [...this.pending.values()].filter(entry => entry.isPackageDiscovery).length >= Math.max(1, Math.floor(this.slots.length / 2)))
+                    continue;
                 const requestPriority = request.message.sectorName === this.activeSector ? 3 : request.message.type === "precachePackage" ? 2 : request.reserveScriptWorker ? 0 : 1;
 
                 if (requestPriority <= priority) continue;
@@ -611,7 +615,10 @@ export class DecodeWorkerClient {
                     library.sourceLibrary = source;
                     return library;
                 }
-                if (!cached.library) { await cached.pending; continue; }
+                if (!cached.library) {
+                    await cached.pending;
+                    continue;
+                }
             }
 
             let complete: () => void;
@@ -988,7 +995,18 @@ export class DecodeWorkerClient {
         assignLoadingProfile(loadingId, this.slots[workerIndex].loadingName);
 
         return new Promise((resolve, reject) => {
-            this.pending.set(requestId, { resolve, reject, workerIndex, loadingId, packagesReady, isPackageDiscovery: message.type === "sectorPackages" || message.type === "packageDependencies", isAsset, isRaw, copyChunks: true, urgent: message.type === "decodeCharacterEquipment" || message.type === "decodeSkill" && message.urgent });
+            this.pending.set(requestId, {
+                resolve,
+                reject,
+                workerIndex,
+                loadingId,
+                packagesReady,
+                isPackageDiscovery: message.type === "sectorPackages" || message.type === "packageDependencies",
+                isAsset,
+                isRaw,
+                copyChunks: true,
+                urgent: message.type === "decodeCharacterEquipment" || message.type === "decodeSkill" && message.urgent
+            });
 
             try {
                 flushForgottenTextures();

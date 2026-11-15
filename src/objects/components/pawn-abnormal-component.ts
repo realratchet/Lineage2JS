@@ -9,6 +9,9 @@ import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type EmitterActor from "../emitter-actor";
 import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
 
+const maxBodyScale = Math.fround(1.2);
+const basePawnSize = Math.sqrt(207);
+
 type AbnormalSize_T = { phase: number, radius: number, height: number, weaponScale: number };
 type AbnormalStat_T = { state: number, effect: GameObject, time: number, scale: number, size: AbnormalSize_T | null };
 
@@ -49,7 +52,11 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
         const asset = this.renderManager.getParent().getComponent("asset");
 
         if (abnormalState & ~this.abnormalState & (AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2)) asset.stopPawnSkill(this.getParent());
-        if ((abnormalState ^ this.abnormalState) & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 72 : 255, abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 105 : 255, abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 140 : 255);
+        if ((abnormalState ^ this.abnormalState) & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(
+            abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 72 : 255,
+            abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 105 : 255,
+            abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 140 : 255
+        );
 
         this.abnormalState = abnormalState;
 
@@ -174,7 +181,8 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
         stat.size = { phase: 1, radius: Math.fround(pawn.getCollisionRadius()), height: Math.fround(pawn.getCollisionHeight()), weaponScale: Math.fround(pawn.getUnrealScriptProperty("WeaponScale") as number) };
         const locationZ = Math.fround(pawn.position.z + pawn.getCollisionHeight());
-        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number), height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
+        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number);
+        const height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
 
         pawn.position.z = locationZ - height;
         pawn.setCollisionSize(radius, height);
@@ -187,7 +195,8 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             stat.time = Math.fround(stat.time + delta);
             return;
         }
-        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number), height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
+        const radius = Math.fround(pawn.getUnrealScriptProperty("OriCollisionRadius") as number);
+        const height = Math.fround(pawn.getUnrealScriptProperty("OriCollisionHeight") as number);
         const locationZ = Math.fround(pawn.position.z + pawn.getCollisionHeight());
 
         if (size.phase === 3) {
@@ -198,7 +207,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
         }
 
         if (size.phase === 1 || size.phase === 2) {
-            const shrinking = size.phase === 2, max = Math.fround(1.2);
+            const shrinking = size.phase === 2, max = maxBodyScale;
             const scale = shrinking ? stat.scale - delta * stat.time * 3 : stat.scale + delta * stat.time;
 
             stat.scale = Math.fround(scale);
@@ -250,7 +259,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
         switch (stat.state) {
             case AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5: case AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6: {
-                const scale = Math.sqrt(height * radius) / Math.sqrt(207);
+                const scale = Math.sqrt(height * radius) / basePawnSize;
 
                 parent.attachObjectToBone(effect, 0);
                 if (scale > 1) setSizeScale(effect, scale);

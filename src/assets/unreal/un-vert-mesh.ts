@@ -51,7 +51,8 @@ export abstract class UVertMesh extends ULodMesh {
         const groups: [number, number, number][] = [];
 
         if (!sequence || sequence.frameCount <= 0) throw new Error(`VertMesh '${this.objectName}' has no matching animation sequence.`);
-        if (this.verts.getElemCount() !== this.frameVerts * this.animFrames || this.animNormals.getElemCount() !== this.verts.getElemCount()) throw new Error(`VertMesh '${this.objectName}' has inconsistent animation frame data.`);
+        if (this.verts.getElemCount() !== this.frameVerts * this.animFrames || this.animNormals.getElemCount() !== this.verts.getElemCount())
+            throw new Error(`VertMesh '${this.objectName}' has inconsistent animation frame data.`);
         if (sequence.frameStart + sequence.frameCount > this.animFrames) throw new Error(`VertMesh '${this.objectName}' animation exceeds its frame data.`);
 
         for (let f = 0; f < sequence.frameCount; f++) {

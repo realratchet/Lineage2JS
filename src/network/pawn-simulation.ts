@@ -71,7 +71,54 @@ export class PawnSimulation {
                     const angle = this.random() * Math.PI * 2, distance = Math.sqrt(this.random()) * 200;
                     while (network.actors.hasServerObject(this.nextId)) this.nextId++;
                     const objectId = this.nextId++;
-                    const info: CharInfo_T = { objectId, name: `Crowd${objectId - 2146990000}`, title: "", race, classId, sex, hairStyle: Math.floor(this.random() * (sex ? 7 : 5)), hairColor: Math.floor(this.random() * 4), face: Math.floor(this.random() * 3), enchantLevel: this.random() < 0.2 ? 4 + Math.floor(this.random() * 12) : 0, x: origin.x + Math.cos(angle) * distance, y: origin.y + Math.sin(angle) * distance, z: origin.z, heading: Math.floor(this.random() * 65536), isRunning: this.random() < 0.7, isAlikeDead: false, isInCombat: false, mountType: 0, mountNpcId: 0, cubics: [], abnormalState: 0, paperdoll: this.createPaperdoll(pools), privateStoreType: 0, isSitting: false, runSpd: 160, walkSpd: 80, swimRunSpd: 100, swimWalkSpd: 50, airRunSpd: 300, airWalkSpd: 150, moveMultiplier: 1, attackSpeedMultiplier: 1, collisionRadius: 9, collisionHeight: 23, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffff, isHero: false, clanId: 0, clanCrestId: 0, allyId: 0, allyCrestId: 0, largeCrestId: 0, clanRelation: 0, team: 0 };
+                    const info: CharInfo_T = {
+                        objectId,
+                        name: `Crowd${objectId - 2146990000}`,
+                        title: "",
+                        race,
+                        classId,
+                        sex,
+                        hairStyle: Math.floor(this.random() * (sex ? 7 : 5)),
+                        hairColor: Math.floor(this.random() * 4),
+                        face: Math.floor(this.random() * 3),
+                        enchantLevel: this.random() < 0.2 ? 4 + Math.floor(this.random() * 12) : 0,
+                        x: origin.x + Math.cos(angle) * distance,
+                        y: origin.y + Math.sin(angle) * distance,
+                        z: origin.z,
+                        heading: Math.floor(this.random() * 65536),
+                        isRunning: this.random() < 0.7,
+                        isAlikeDead: false,
+                        isInCombat: false,
+                        mountType: 0,
+                        mountNpcId: 0,
+                        cubics: [],
+                        abnormalState: 0,
+                        paperdoll: this.createPaperdoll(pools),
+                        privateStoreType: 0,
+                        isSitting: false,
+                        runSpd: 160,
+                        walkSpd: 80,
+                        swimRunSpd: 100,
+                        swimWalkSpd: 50,
+                        airRunSpd: 300,
+                        airWalkSpd: 150,
+                        moveMultiplier: 1,
+                        attackSpeedMultiplier: 1,
+                        collisionRadius: 9,
+                        collisionHeight: 23,
+                        karma: 0,
+                        pvpFlag: 0,
+                        recommendations: 0,
+                        nameColor: 0xffffff,
+                        isHero: false,
+                        clanId: 0,
+                        clanCrestId: 0,
+                        allyId: 0,
+                        allyCrestId: 0,
+                        largeCrestId: 0,
+                        clanRelation: 0,
+                        team: 0
+                    };
                     const object = network.actors.spawnSimulatedPlayer(info);
                     this.objects.add(object);
                     const actor = await object.actorReady;
@@ -126,7 +173,11 @@ export class PawnSimulation {
                 if (other === object || other.isRemoved || !other.actor) continue;
                 this.counts.attack++;
                 const miss = this.random() < 0.15;
-                this.network.combat.startServerAttack(object, [{ targetObjectId: other.objectId, actionTarget: other.actor, damage: miss ? 0 : 100, isMiss: miss, isCritical: this.random() < 0.2, isShieldDefense: false, isSpirit: this.random() < 0.5, soulshotGrade: Math.floor(this.random() * 5) }], actor.position);
+                this.network.combat.startServerAttack(
+                    object,
+                    [{ targetObjectId: other.objectId, actionTarget: other.actor, damage: miss ? 0 : 100, isMiss: miss, isCritical: this.random() < 0.2, isShieldDefense: false, isSpirit: this.random() < 0.5, soulshotGrade: Math.floor(this.random() * 5) }],
+                    actor.position
+                );
             } else if (kind < 6) {
                 if (!skills.length) continue;
                 this.counts.skill++;

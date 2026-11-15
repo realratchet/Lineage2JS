@@ -88,7 +88,10 @@ async function getCacheDatabase(): Promise<IDBDatabase> {
         request.onsuccess = () => {
             const database = request.result;
 
-            database.onversionchange = () => { database.close(); cacheDatabase = null; };
+            database.onversionchange = () => {
+                database.close();
+                cacheDatabase = null;
+            };
             resolve(database);
         };
     });
@@ -494,7 +497,10 @@ class LazyFileSystemHandle implements ILazyAssetHandle {
 
         return requestWebLock(`asset-cache:${this.path}`, async () => {
             let isReadOnly = false;
-            const access = await this.fh.createSyncAccessHandle({ get mode() { isReadOnly = true; return "read-only" as const; } });
+            const access = await this.fh.createSyncAccessHandle({ get mode() {
+                isReadOnly = true;
+                return "read-only" as const;
+            } });
 
             if (isReadOnly) return new FileAssetSource(access, this.release);
 

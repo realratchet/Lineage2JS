@@ -55,7 +55,11 @@ const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
 const cacheBatchPacking = new WeakMap<BufferGeometry, BatchPacking_T>();
 
 function buildTranslucentBSPTree(nodes: BSPNodeData[], sections: TranslucentBSPSection_T[]): TranslucentBSPNode_T[] {
-    const used = new Uint8Array(nodes.length), roots = new Int32Array(nodes.length).fill(-1), stack = nodes.length ? [0] : [], order: number[] = [], tree: TranslucentBSPNode_T[] = [];
+    const used = new Uint8Array(nodes.length);
+    const roots = new Int32Array(nodes.length).fill(-1);
+    const stack = nodes.length ? [0] : [];
+    const order: number[] = [];
+    const tree: TranslucentBSPNode_T[] = [];
     for (const section of sections)
         if (section.order.length > 1) for (const node of section.nodes) used[node] = 1;
 
@@ -187,7 +191,10 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
     const ranges = index.updateRanges;
     if (ranges.length > 1) {
         let start = ranges[0].start, end = start + ranges[0].count;
-        for (let i = 1; i < ranges.length; i++) { start = Math.min(start, ranges[i].start); end = Math.max(end, ranges[i].start + ranges[i].count); }
+        for (let i = 1; i < ranges.length; i++) {
+            start = Math.min(start, ranges[i].start);
+            end = Math.max(end, ranges[i].start + ranges[i].count);
+        }
         ranges[0].start = start; ranges[0].count = end - start;
         ranges.length = 1;
     }
@@ -214,7 +221,12 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
             copyCount += group.count;
             dirtyCount += group.count;
         }
-        if (packed) { packed.offset = offset; packed.count = group.count; packed.stamp = stamp; packed.copied = !unchanged; }
+        if (packed) {
+            packed.offset = offset;
+            packed.count = group.count;
+            packed.stamp = stamp;
+            packed.copied = !unchanged;
+        }
         else packing.ranges.set(group.start, { offset, count: group.count, stamp, copied: true });
 
         if (run && run.materialIndex === group.materialIndex) {
@@ -241,7 +253,10 @@ function rebuildBatchGroups(object: any, geometry: BufferGeometry, visibleGroups
         offset += group.count;
     }
 
-    if (copyCount) { target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount); copied = true; }
+    if (copyCount) {
+        target.set(source.subarray(copyStart, copyStart + copyCount), offset - copyCount);
+        copied = true;
+    }
     if (dirtyCount) index.addUpdateRange(dirtyStart, dirtyCount);
 
     if (copied) index.needsUpdate = true;
@@ -1641,7 +1656,8 @@ export class SectorObject extends GameObject {
     }
 
     public updateFade(step: number): boolean {
-        const fade = Math.min(Math.max(this.fade + step, 0), 1), meshFade = this.staticMeshGroup ? Math.min(Math.max(this.meshFade + step, 0), fade) : 0;
+        const fade = Math.min(Math.max(this.fade + step, 0), 1);
+        const meshFade = this.staticMeshGroup ? Math.min(Math.max(this.meshFade + step, 0), fade) : 0;
         if (fade === this.fade && meshFade === this.meshFade) return false;
 
         this.fade = fade;
@@ -1649,7 +1665,8 @@ export class SectorObject extends GameObject {
         this.fadeAttribute.setX(0, fade).needsUpdate = true;
         this.meshFadeAttribute.setX(0, meshFade).needsUpdate = true;
         this.traverse(object => {
-            const mesh = object as any, attribute = mesh.isBatch ? this.meshFadeAttribute : mesh.isTerrainBatch || mesh.isBSPSection ? this.fadeAttribute : null;
+            const mesh = object as any;
+            const attribute = mesh.isBatch ? this.meshFadeAttribute : mesh.isTerrainBatch || mesh.isBSPSection ? this.fadeAttribute : null;
             if (attribute && mesh.geometry.getAttribute("sectorFade") !== attribute) mesh.geometry.setAttribute("sectorFade", attribute);
         });
 
@@ -1685,7 +1702,9 @@ export class SectorObject extends GameObject {
         for (const child of this.bspGroup.children as THREE.Mesh[]) {
             if ((child as any).priority !== "transparent" || !child.geometry.index) continue;
 
-            const index = child.geometry.index, source = (index.array as Uint16Array).slice(), nodeAttr = child.geometry.getAttribute("nodeIndex").array as Uint32Array;
+            const index = child.geometry.index;
+            const source = (index.array as Uint16Array).slice();
+            const nodeAttr = child.geometry.getAttribute("nodeIndex").array as Uint32Array;
             const nodes: number[] = [], starts: number[] = [], counts: number[] = [];
 
             for (let i = 0; i < source.length; i += 3) {
@@ -1712,7 +1731,9 @@ export class SectorObject extends GameObject {
         for (const section of sections) if (section.mesh.visible && section.order.length > 1) { hasVisible = true; break; }
         if (!hasVisible || !this.bspNodes.length) return;
 
-        const nodes = this.bspNodes, tree = this.arrTranslucentBSPNodes, ranks = this.arrBSPRanks || (this.arrBSPRanks = new Int32Array(nodes.length));
+        const nodes = this.bspNodes;
+        const tree = this.arrTranslucentBSPNodes;
+        const ranks = this.arrBSPRanks || (this.arrBSPRanks = new Int32Array(nodes.length));
         const x = cameraPosition.x, y = cameraPosition.y, z = cameraPosition.z;
         let top = 0, rank = 0;
 
@@ -1733,7 +1754,11 @@ export class SectorObject extends GameObject {
             const isFront = x * plane.x + y * plane.y + z * plane.z - plane.w > 0;
             const near = isFront ? node.front : node.back, far = isFront ? node.back : node.front;
 
-            if (top + 3 > arrBSPStack.length) { const grown = new Int32Array(arrBSPStack.length * 2); grown.set(arrBSPStack); arrBSPStack = grown; }
+            if (top + 3 > arrBSPStack.length) {
+                const grown = new Int32Array(arrBSPStack.length * 2);
+                grown.set(arrBSPStack);
+                arrBSPStack = grown;
+            }
             if (near >= 0) arrBSPStack[top++] = near;
             arrBSPStack[top++] = ~entry;
             if (far >= 0) arrBSPStack[top++] = far;
@@ -2010,7 +2035,10 @@ export class SectorObject extends GameObject {
 
                         if (inVisibleLeaves && !this.hiddenActorUuids.has(elem.uuid)) {
                             const isFrustumVisible = !frustumCullingEnabled || (elem.isRangeIgnored ? intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum, true) : batchVisibility.nodes.length ? batchVisibility.frustumVisible[ei] === 1 : intersectsActorBounds(elem.boundsMin, elem.boundsMax, cameraFrustum));
-                            const offset = ei * 3, x = cameraPosition.x - centers[offset], y = cameraPosition.y - centers[offset + 1], z = cameraPosition.z - centers[offset + 2];
+                            const offset = ei * 3;
+                            const x = cameraPosition.x - centers[offset];
+                            const y = cameraPosition.y - centers[offset + 1];
+                            const z = cameraPosition.z - centers[offset + 2];
                             distSq = x * x + y * y + z * z;
                             elemVisible = isFrustumVisible && (!frustumCullingEnabled || !elem.zoneMask || elem.zoneMask === finalZoneMask || !!(elem.zoneMask & finalZoneMask)) && this.zoneVisibility.intersectsBounds(elem.zoneMask, elem.boundsMin, elem.boundsMax) && (elem.isRangeIgnored || isActorInRange(elem.boundsMin, elem.boundsMax, cameraPosition, staticMeshCullDistanceSq));
                         }

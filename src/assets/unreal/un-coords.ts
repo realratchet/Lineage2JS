@@ -27,7 +27,10 @@ export abstract class FCoords extends UObject {
         getRotatorQuaternionElements(pitch, yaw, 0, tmpOrthoRotation);
         FVector.applyQuaternionElements(tmpOrthoAxisYInput, tmpOrthoRotation, tmpOrthoAxisY);
         // 0x1014f9f5..0x1014fa3f: atan2(ZAxis dot S.YAxis, YAxis dot S.YAxis).
-        const roll = Math.trunc(Math.atan2(m13 * tmpOrthoAxisY[0] + m23 * tmpOrthoAxisY[1] + m33 * tmpOrthoAxisY[2], m12 * tmpOrthoAxisY[0] + m22 * tmpOrthoAxisY[1] + m32 * tmpOrthoAxisY[2]) * 32768 / Math.PI);
+        const roll = Math.trunc(Math.atan2(
+            m13 * tmpOrthoAxisY[0] + m23 * tmpOrthoAxisY[1] + m33 * tmpOrthoAxisY[2],
+            m12 * tmpOrthoAxisY[0] + m22 * tmpOrthoAxisY[1] + m32 * tmpOrthoAxisY[2]
+        ) * 32768 / Math.PI);
 
         return getRotatorQuaternionElements(pitch, yaw, roll, out);
     }

@@ -405,13 +405,34 @@ export abstract class UFinalBlend extends UBaseModifier {
         let transparent = false;
         switch (this.frameBufferBlending.valueOf()) {
             case EFrameBufferBlending.FB_Overwrite: blendingMode = "normal"; break;
-            case EFrameBufferBlending.FB_Modulate: blendingMode = "modulate"; transparent = true; break;
-            case EFrameBufferBlending.FB_AlphaBlend: blendingMode = "normal"; transparent = true; break;
-            case EFrameBufferBlending.FB_AlphaModulate_MightNotFogCorrectly: blendingMode = "alphaModulate"; transparent = true; break;
-            case EFrameBufferBlending.FB_Translucent: blendingMode = "translucent"; transparent = true; break;
-            case EFrameBufferBlending.FB_Darken: blendingMode = "darken"; transparent = true; break;
-            case EFrameBufferBlending.FB_Brighten: blendingMode = "brighten"; transparent = true; break;
-            case EFrameBufferBlending.FB_Invisible: blendingMode = "invisible"; transparent = true; break;
+            case EFrameBufferBlending.FB_Modulate:
+                blendingMode = "modulate";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_AlphaBlend:
+                blendingMode = "normal";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_AlphaModulate_MightNotFogCorrectly:
+                blendingMode = "alphaModulate";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Translucent:
+                blendingMode = "translucent";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Darken:
+                blendingMode = "darken";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Brighten:
+                blendingMode = "brighten";
+                transparent = true;
+                break;
+            case EFrameBufferBlending.FB_Invisible:
+                blendingMode = "invisible";
+                transparent = true;
+                break;
             default: console.warn("Unknown FinalBlend blending mode:", this.frameBufferBlending); break;
         }
 

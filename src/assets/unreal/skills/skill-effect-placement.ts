@@ -74,7 +74,10 @@ export class SkillEffectPlacement {
         for (let i = this.trailers.length - 1; i >= 0; i--) {
             const { effect, host, sameRotation, relative, offset } = this.trailers[i];
 
-            if (!this.host.isAlive(effect) || !this.host.isAlive(host)) { this.trailers.splice(i, 1); continue; }
+            if (!this.host.isAlive(effect) || !this.host.isAlive(host)) {
+                this.trailers.splice(i, 1);
+                continue;
+            }
 
             this.host.getPosition(host, tmpPosition, true);
             if (relative) {
@@ -135,7 +138,15 @@ export class SkillEffectPlacement {
             const hasBone = (caster.getUnrealScriptProperty(boneProperty) as string).toLowerCase() !== "none";
             let actor: SkillActor_T;
 
-            this.spawn({ phase: "casting", effectClass: sticks ? shot.sticks : shot.books, host: "caster", location: [0, 0, 0], rotation: "zero", boneProperty: hasBone ? boneProperty : undefined, relativeRotation: hasBone && !sticks && i === 0 ? [0, 16384, 0] : undefined }, skill, caster, caster, 0, effect => {
+            this.spawn({
+                phase: "casting",
+                effectClass: sticks ? shot.sticks : shot.books,
+                host: "caster",
+                location: [0, 0, 0],
+                rotation: "zero",
+                boneProperty: hasBone ? boneProperty : undefined,
+                relativeRotation: hasBone && !sticks && i === 0 ? [0, 16384, 0] : undefined
+            }, skill, caster, caster, 0, effect => {
                 actor = effect;
                 this.host.addEffect(effect, caster);
             });
@@ -199,7 +210,8 @@ export class SkillEffectPlacement {
                 ] as Vector3Arr);
             }
             for (let i = 0; i < locations.length; i++)
-                if (!this.spawn({ ...info, locList: undefined, location: locations[i], delay: shotTime + info.locList.delay + i * info.locList.interval }, skill, caster, target, shotTime, addEffect, source, [], hitActor, impactActor)) return false;
+                if (!this.spawn({ ...info, locList: undefined, location: locations[i], delay: shotTime + info.locList.delay + i * info.locList.interval }, skill, caster, target, shotTime, addEffect, source, [], hitActor, impactActor))
+                    return false;
             return true;
         }
 
@@ -232,7 +244,12 @@ export class SkillEffectPlacement {
         if (damageOnly && effect === null) return true;
         const effectRotation = tmpRotation2;
         if (effect) this.host.getRotation(effect, effectRotation);
-        else { effectRotation[0] = 0; effectRotation[1] = 0; effectRotation[2] = 0; effectRotation[3] = 1; }
+        else {
+            effectRotation[0] = 0;
+            effectRotation[1] = 0;
+            effectRotation[2] = 0;
+            effectRotation[3] = 1;
+        }
         if (effect && info.speedRate !== undefined) effect.scriptProperties.set("SpeedRate", info.speedRate);
         if (effect && info.useSkillSpeed) {
             const pawn = info.useSkillSpeed === "sourceOwner" ? source.scriptOwner : info.useSkillSpeed === "sourceTarget" ? source.scriptProperties.get("TargetActor") : info.useSkillSpeed === "target" ? target : caster;
@@ -265,7 +282,10 @@ export class SkillEffectPlacement {
         else if (info.position === "meshOrigin") tmpPosition[2] += this.host.getCollisionHeight(effectHost) - getPawnMeshHeight(this.host, effectHost, false);
         else if (info.position === "lastTarget") FVector.setElements(tmpPosition, ...(source.scriptProperties.get("LastTargetLocation") as Vector3Arr));
         else if (info.position === "source") this.host.getPosition(source, tmpPosition, true);
-        if (hasPosition && info.height === "targetFeet") { this.host.getPosition(target, tmpPosition2, true); tmpPosition[2] = tmpPosition2[2]; }
+        if (hasPosition && info.height === "targetFeet") {
+            this.host.getPosition(target, tmpPosition2, true);
+            tmpPosition[2] = tmpPosition2[2];
+        }
         if (info.heightOffset !== undefined) tmpPosition[2] += info.heightOffset * this.host.getCollisionHeight(effectHost);
         if (effect && info.lifeSpan) effect.scriptProperties.set("LifeSpan", shotTime + (info.lifeSpanOffset || 0));
         if (effect && info.physics === "none") effect.scriptProperties.set("Physics", EPhysics_T.PHYS_None);
@@ -277,7 +297,12 @@ export class SkillEffectPlacement {
             tmpPosition[2] += height;
         }
 
-        if (info.rotation === "zero") { effectRotation[0] = 0; effectRotation[1] = 0; effectRotation[2] = 0; effectRotation[3] = 1; }
+        if (info.rotation === "zero") {
+            effectRotation[0] = 0;
+            effectRotation[1] = 0;
+            effectRotation[2] = 0;
+            effectRotation[3] = 1;
+        }
         else if (info.rotation === "hitActorNormal") {
             // Engine.dll 0x790881/0x790887: AMover.HitActorNormal (+0x410), FVector::Rotation.
             this.host.getHitNormal(impactActor, tmpNormal);
@@ -317,7 +342,10 @@ export class SkillEffectPlacement {
             FVector.applyQuaternionElements([distance, 0, 0], tmpRotation, tmpPosition2);
             if (info.attach === "trail") {
                 // Engine.dll 0x798449..0x798481: XY requires both nonzero; 0x79849b..0x7984a4 adds the supplied Z to TrailerPrePivot.Y.
-                if (tmpPosition2[0] !== 0 && tmpPosition2[1] !== 0) { tmpPosition[0] += tmpPosition2[0]; tmpPosition[1] += tmpPosition2[1]; }
+                if (tmpPosition2[0] !== 0 && tmpPosition2[1] !== 0) {
+                    tmpPosition[0] += tmpPosition2[0];
+                    tmpPosition[1] += tmpPosition2[1];
+                }
                 tmpPosition[1] += tmpPosition2[2];
             } else FVector.addElements(tmpPosition, tmpPosition2, tmpPosition);
         }
@@ -555,7 +583,10 @@ export class SkillEffectPlacement {
             tmpPosition[1] = offset[1];
             tmpPosition[2] = offset[2] * (hostIsPawn ? getPawnMeshHeight(this.host, attachHost) : attachHost.scriptProperties.get("CollisionHeight") as number);
             FVector.applyQuaternionElements(tmpPosition, tmpRotation, tmpPosition2);
-        } else { FVector.setElements(tmpPosition, ...offset); FVector.setElements(tmpPosition2, ...offset); }
+        } else {
+            FVector.setElements(tmpPosition, ...offset);
+            FVector.setElements(tmpPosition2, ...offset);
+        }
         // Engine.dll LocateEffect 0x796217 clears pitch after transforming the offset.
         FQuaternion.removeEulerY(tmpRotation, tmpRotation2);
         this.host.setRotation(effect, tmpRotation2);
@@ -563,7 +594,8 @@ export class SkillEffectPlacement {
         if (action.attachOn !== "none" && action.attachOn !== "trail") {
             let bone: string | number = action.attachBoneName;
             // Engine.dll 0x796401/0x79641d: pawn hand properties; AActor defaults at 0x5f6e50/0x5f6e80 return NAME_None.
-            if (action.attachOn === "rightHand" || action.attachOn === "leftHand") bone = hostIsPawn ? attachHost.getUnrealScriptProperty(action.attachOn === "rightHand" ? "RightHandBone" : "LeftHandBone") as string : "None";
+            if (action.attachOn === "rightHand" || action.attachOn === "leftHand")
+                bone = hostIsPawn ? attachHost.getUnrealScriptProperty(action.attachOn === "rightHand" ? "RightHandBone" : "LeftHandBone") as string : "None";
             if (action.attachOn === "aliasSpecified") {
                 // Engine.dll 0x7964b2/0x7964e7: resolve TagNames, then add only TagCoords.Origin.
                 FVector.setElements(tmpPosition, 0, 0, 0);
@@ -682,7 +714,20 @@ export class SkillEffectPlacement {
             FVector.subElements(tmpCasterPosition, tmpLightPosition, tmpLightDirection);
             FVector.normalElements(tmpLightDirection, tmpLightDirection);
         }
-        this.pawnLights.push({ actor: host, isCasting, light: this.host.addPawnLight(host, light.spot && !light.target ? null : effect, light.color, light.radius, light.lifeTime === undefined ? shotTime : light.lifeTime, light.spot ? tmpLightPosition : null, light.spot ? tmpLightDirection : null, light.target ? tmpCasterPosition : null) });
+        this.pawnLights.push({
+            actor: host,
+            isCasting,
+            light: this.host.addPawnLight(
+                host,
+                light.spot && !light.target ? null : effect,
+                light.color,
+                light.radius,
+                light.lifeTime === undefined ? shotTime : light.lifeTime,
+                light.spot ? tmpLightPosition : null,
+                light.spot ? tmpLightDirection : null,
+                light.target ? tmpCasterPosition : null
+            )
+        });
     }
 }
 

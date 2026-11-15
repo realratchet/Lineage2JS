@@ -243,7 +243,8 @@ export class BaseActor extends GameObject implements ICollidable {
         if (physics !== EPhysics_T.PHYS_None && physics !== EPhysics_T.PHYS_Rotating) return false;
 
         // AActor::Tick 0x86580f..0x865886.
-        return currentTime / 1000 - (this.getUnrealScriptProperty("LastRenderTime") as number) > 5 && (this.getUnrealScriptProperty("Level") as Actor).getUnrealScriptProperty("NetMode") === ENetMode_T.NM_Standalone;
+        return currentTime / 1000 - (this.getUnrealScriptProperty("LastRenderTime") as number) > 5 &&
+            (this.getUnrealScriptProperty("Level") as Actor).getUnrealScriptProperty("NetMode") === ENetMode_T.NM_Standalone;
     }
 
     public updatePresentation(currentTime: number, deltaTime: number) {

@@ -26,6 +26,8 @@ import { EPhysics_T } from "../assets/unreal/un-aactor";
 import BaseEmitter from "../objects/emitters/base-emitter";
 import type { Vector3Arr } from "@l2js/engine";
 
+const NEGATIVE_HALF_PI = -Math.PI / 2;
+
 const arrMoverPawns: BaseActor[] = [];
 const arrPhysicsVolumeClass: ScriptValue_T[] = ["PhysicsVolume"];
 const emptyPhysicsComponents = new Set<IPhysicsComponent<any>>();
@@ -181,12 +183,19 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
             let hasUnbonedActors = false;
             for (const actor of transform.getBasedActors()) {
                 const bone = (actor as BaseActor).getUnrealScriptProperty("AttachmentBone");
-                if (!bone || bone === "None") { hasUnbonedActors = true; break; }
+                if (!bone || bone === "None") {
+                    hasUnbonedActors = true;
+                    break;
+                }
             }
             if (!hasUnbonedActors) {
                 // ULevel::MoveActor 0x1058b598..0x1058b617 skips collision, zones and relative location.
                 const location = pawn.getUnrealScriptProperty("Location") as Vector3Arr;
-                query.location.set(Math.fround(Math.fround(location[0]) + Math.fround(query.delta.x)), Math.fround(Math.fround(location[1]) + Math.fround(query.delta.y)), Math.fround(Math.fround(location[2]) + Math.fround(query.delta.z)));
+                query.location.set(
+                    Math.fround(Math.fround(location[0]) + Math.fround(query.delta.x)),
+                    Math.fround(Math.fround(location[1]) + Math.fround(query.delta.y)),
+                    Math.fround(Math.fround(location[2]) + Math.fround(query.delta.z))
+                );
                 pawn.setUnrealScriptProperty("Location", query.location.toArray());
                 if (!test) this.manGame.getComponent("render").needsUpdate = true;
                 const changed = rotation && rotation.some((value, index) => value !== oldRotation[index]);
@@ -243,7 +252,7 @@ export class PhysicsManager implements IEngineComponent<GameManager> {
         const movement = pawn.findComponent<PawnMovementComponent>("pawnMovement");
         if (movement) {
             movement.syncRotationYaw(rotation[1]);
-            pawn.rotateZ(-Math.PI / 2);
+            pawn.rotateZ(NEGATIVE_HALF_PI);
             pawn.updateMatrixWorld(true);
             movement.syncCollisionLocation();
         } else (pawn as CollidingMesh).syncCollisionTransform();

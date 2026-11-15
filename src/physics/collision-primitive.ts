@@ -1,6 +1,9 @@
 import { Box3, Matrix3, Matrix4, Vector3 } from "three";
 import type { CollisionModel_T, CollisionPrimitive_T, CollisionTriangleIndex_T } from "../objects/objects";
 
+const CYLINDER_TANGENT_TOLERANCE = Math.fround(-0.1);
+const CYLINDER_HIT_TIME_BIAS = Math.fround(0.001);
+
 const tmpA = new Vector3();
 const tmpB = new Vector3();
 const tmpC = new Vector3();
@@ -752,7 +755,7 @@ function queryCylinder(primitive: Extract<CollisionPrimitive_T, { kind: "cylinde
     let discriminant = Math.fround(b * b - 4 * a * c);
 
     if (c < 1 && startZ > bottom && startZ < top) {
-        if (Math.fround(dx) * x + Math.fround(dy) * y >= Math.fround(-0.1)) return null;
+        if (Math.fround(dx) * x + Math.fround(dy) * y >= CYLINDER_TANGENT_TOLERANCE) return null;
 
         const nx = Math.fround(x), ny = Math.fround(y);
         const lengthSq = nx * nx + ny * ny;
@@ -794,7 +797,7 @@ function queryCylinder(primitive: Extract<CollisionPrimitive_T, { kind: "cylinde
         if (t0 >= t1) return null;
     }
 
-    const time = Math.max(0, Math.min(1, Math.fround(t0 - Math.fround(0.001))));
+    const time = Math.max(0, Math.min(1, Math.fround(t0 - CYLINDER_HIT_TIME_BIAS)));
 
     if (time > maxTime) return null;
 

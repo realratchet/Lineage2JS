@@ -196,7 +196,13 @@ export class NetworkCombat {
         if (!skill.visual) {
             const [loaded, loadedTarget] = await Promise.all([visual ? { ...skill, visual } : asset.loadPawnSkill(actor, cast.id, cast.level, isTransient), targetActor || target?.actorReady]);
 
-            if (!loaded || !loadedTarget || this.network.actors.getActionTarget(targetObjectId) !== loadedTarget || !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) || caster.isRemoved || target?.isRemoved || caster.actor !== actor || !attack.isAttached()) return;
+            if (!loaded || !loadedTarget || this.network.actors.getActionTarget(targetObjectId) !== loadedTarget ||
+                !isTransient && (caster.skill !== cast || request !== asset.getPawnSkillRequest(actor)) ||
+                caster.isRemoved ||
+                target?.isRemoved ||
+                caster.actor !== actor ||
+                !attack.isAttached())
+                return;
 
             if (isTransient && loaded.visual.transientRejected && request === asset.getPawnSkillRequest(actor)) this.stopSkill(caster.objectId);
 
@@ -475,7 +481,11 @@ export class NetworkCombat {
 
         switch (waitType) {
             case GamePackets.WaitType_T.WT_SITTING: field = object.chairStaticObjectId ? "ChairSitAnimName" : "SitAnimName"; rateField = "SitAnimRate"; break;
-            case GamePackets.WaitType_T.WT_STANDING: field = object.chairStaticObjectId ? "ChairStandAnimName" : "StandAnimName"; rateField = object.chairStaticObjectId ? "NonAttackSpeedRate" : "StandAnimRate"; object.chairStaticObjectId = 0; break;
+            case GamePackets.WaitType_T.WT_STANDING:
+                field = object.chairStaticObjectId ? "ChairStandAnimName" : "StandAnimName";
+                rateField = object.chairStaticObjectId ? "NonAttackSpeedRate" : "StandAnimRate";
+                object.chairStaticObjectId = 0;
+                break;
             case GamePackets.WaitType_T.WT_START_FAKEDEATH: field = "DeathAnimName"; break;
             case GamePackets.WaitType_T.WT_STOP_FAKEDEATH: field = "DeathStandAnimName"; object.chairStaticObjectId = 0; break;
             default: throw new Error(`Unknown wait type '${waitType}'.`);
@@ -502,7 +512,10 @@ export class NetworkCombat {
     }
 
     public playSocialAction(actor: BaseActor, actionId: number, isNpc = false) {
-        if (actionId === 15 || (actionId === 16 && !isNpc)) { void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a", actionId === 15 ? 20002 : 20004); return; } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
+        if (actionId === 15 || (actionId === 16 && !isNpc)) {
+            void this.spawnSocialEffect(actor, actionId === 15 ? "LineageEffect.e_u004_a" : "LineageEffect.e_u091_a", actionId === 15 ? 20002 : 20004);
+            return;
+        } // OnSocialAction 0x1046db47 -> SpawnNTransientEffect 0x4E22 / 0x4E24
         const prefix = isNpc ? "NpcSocial" : "PcSocial";
         const index = isNpc ? actionId - 1 : actionId;
         const names = actor.getUnrealScriptProperty(`${prefix}AnimName`) as string[];
@@ -514,7 +527,8 @@ export class NetworkCombat {
         actor.playAnimation(animation, isNpc ? 0.1 : 0.3, actor.getUnrealScriptProperty("NonAttackSpeedRate") as number, false, true); // OnSocialAction 0x73dbbc / 0x73dc4a.
         const equipment = actor.findComponent<PawnEquipmentComponent>("pawnEquipment");
 
-        if (equipment) equipment.hideForAnimation(animation, !!(actor.getUnrealScriptProperty(`${prefix}HideRightWeapon`) as number[])[index], !!(actor.getUnrealScriptProperty(`${prefix}HideLeftWeapon`) as number[])[index]);
+        if (equipment)
+            equipment.hideForAnimation(animation, !!(actor.getUnrealScriptProperty(`${prefix}HideRightWeapon`) as number[])[index], !!(actor.getUnrealScriptProperty(`${prefix}HideLeftWeapon`) as number[])[index]);
     }
 
     protected async spawnSocialEffect(actor: BaseActor, path: string, skillId: number) {

@@ -7,7 +7,10 @@ function decodeResources(buffer: ArrayBuffer) {
 
     function offset(rva: number, size: number) {
         for (let i = 0; i < sectionCount; i++) {
-            const section = sectionStart + i * 40, start = view.getUint32(section + 12, true), length = view.getUint32(section + 16, true), raw = view.getUint32(section + 20, true);
+            const section = sectionStart + i * 40;
+            const start = view.getUint32(section + 12, true);
+            const length = view.getUint32(section + 16, true);
+            const raw = view.getUint32(section + 20, true);
 
             if (rva >= start && rva - start + size <= length && raw + rva - start + size <= buffer.byteLength) return raw + rva - start;
         }

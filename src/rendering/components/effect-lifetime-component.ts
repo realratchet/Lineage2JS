@@ -98,7 +98,11 @@ export class EffectLifetimeComponent extends PhysicsComponent<IObject & THREE.Ob
         const camera = this.renderManager.camera;
 
         camera.getWorldDirection(tmpTrailerOffset);
-        tmpRotator.set(Math.round(Math.atan2(tmpTrailerOffset.z, Math.hypot(tmpTrailerOffset.x, tmpTrailerOffset.y)) * 32768 / Math.PI), Math.round(Math.atan2(tmpTrailerOffset.y, tmpTrailerOffset.x) * 32768 / Math.PI), 0).toQuaternion(effect.quaternion);
+        tmpRotator.set(
+            Math.round(Math.atan2(tmpTrailerOffset.z, Math.hypot(tmpTrailerOffset.x, tmpTrailerOffset.y)) * 32768 / Math.PI),
+            Math.round(Math.atan2(tmpTrailerOffset.y, tmpTrailerOffset.x) * 32768 / Math.PI),
+            0
+        ).toQuaternion(effect.quaternion);
         effect.position.copy(camera.position);
         if ((effect as any).isEmitterActor) updateEmitterMatrices(effect);
         else effect.updateMatrixWorld(true);

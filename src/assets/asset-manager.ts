@@ -203,7 +203,11 @@ async function loadCachedLibrary(cache: Map<string, CachedLibrary_T>, key: strin
 }
 
 function copyPawnLibrary(source: DecodeLibrary): DecodeLibrary {
-    const library = Object.assign(Object.create(Object.getPrototypeOf(source)), source, { sourceLibrary: source, npcSkillAttacks: source.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })), soundBlobCache: new Map() });
+    const library = Object.assign(
+        Object.create(Object.getPrototypeOf(source)),
+        source,
+        { sourceLibrary: source, npcSkillAttacks: source.npcSkillAttacks.map(skill => Object.assign({}, skill, { sounds: skill.sounds.slice() })), soundBlobCache: new Map() }
+    );
 
     for (const key of ["geometries", "geometryInstances", "materials", "materialModifiers", "scriptClasses", "scriptFunctions", "scriptStates", "scriptObjects", "effectTemplates", "actorTemplates", "scriptMeshes", "scriptMaterials", "sounds"] as const)
         library[key] = Object.assign({}, source[key]);
@@ -405,7 +409,12 @@ export class AssetManager implements IEngineComponent<GameManager> {
             loadStartup(6, (async () => {
                 const controller = await playerControllerLoad;
 
-                return await this.decodeWorker.decodeEffectTemplates(this.loadSettings, [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"], [controller.getUnderWaterLoopSound()], [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"]);
+                return await this.decodeWorker.decodeEffectTemplates(
+                    this.loadSettings,
+                    [...LANDMARK_EFFECTS, ...UNDERWATER_EFFECTS, ...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u056_a", "LineageEffect.e_u056_b", "LineageEffect.e_u088_a", "LineageEffect.e_u088_b", "LineageEffect.e_u091_aura"],
+                    [controller.getUnderWaterLoopSound()],
+                    [...SOCIAL_EFFECTS, ...APPENDIX_EFFECTS, ...CUBIC_EFFECTS, ...ABNORMAL_EFFECTS, RACE_WINNER_EFFECT, "LineageEffect.e_u091_aura"]
+                );
             })()),
             loadStartup(7, this.decodeWorker.decodeSector("skylevel", {
                 ...this.loadSettings, isSkyLevel: true,
@@ -712,7 +721,18 @@ export class AssetManager implements IEngineComponent<GameManager> {
     }
 
     protected async getCharacterLibrary(charIndex: number, faceVariant: number = 0, hairVariant: number = 0, hairColour: number = 0, armor: ICharacterArmorSelection = { chest: 0, legs: 0, gloves: 0, boots: 0 }, equipment: ICharacterEquipment = null): Promise<DecodeLibrary> {
-        const key = JSON.stringify([charIndex, faceVariant, hairVariant, hairColour, armor.chest, armor.legs, armor.gloves, armor.boots, equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.enchantLevel], this.loadSettings.rgbaTextures !== false]);
+        const key = JSON.stringify([
+            charIndex,
+            faceVariant,
+            hairVariant,
+            hairColour,
+            armor.chest,
+            armor.legs,
+            armor.gloves,
+            armor.boots,
+            equipment && [equipment.rightHand, equipment.leftHand, equipment.head, equipment.hair, equipment.enchantLevel],
+            this.loadSettings.rgbaTextures !== false
+        ]);
 
         return copyPawnLibrary(await loadCachedLibrary(this.cacheCharacterLibraries, key, () => this.decodeWorker.decodeCharacter(this.loadSettings, charIndex, faceVariant, hairVariant, hairColour, armor, equipment)));
     }
@@ -802,7 +822,8 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const { id, level } = record;
         const key = record.visualEffect.toLowerCase() === "none" ? JSON.stringify([id, record.name, record.castStyle === 0]) : record.visualEffect.toLowerCase();
 
-        if (urgent || !this.cacheSkillVisuals.has(key)) this.cacheSkillVisuals.set(key, this.decodeWorker.decodeSkill(this.loadSettings, id, level, urgent, Object.assign({}, record, { visual: null, assets: undefined })));
+        if (urgent || !this.cacheSkillVisuals.has(key))
+            this.cacheSkillVisuals.set(key, this.decodeWorker.decodeSkill(this.loadSettings, id, level, urgent, Object.assign({}, record, { visual: null, assets: undefined })));
 
         const library = await this.cacheSkillVisuals.get(key), prepared = library.npcSkillAttacks[0];
 
@@ -852,7 +873,9 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
     public async loadSkeletalActor(renderManager: RenderManager, packageName: string, meshName: string, idleAnimation: string, actor: BaseActor, scriptClassPath: string = null, texturePaths: string[] = [], npcId: number = null, enterAnimation: string = null, equipment: INpcEquipment | null = null, preloadSkills: boolean = true) {
         const localizationPromise = scriptClassPath ? this.getScriptLocalization(scriptClassPath) : null;
-        const libraryPromise = npcId === null ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment) : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, preloadSkills);
+        const libraryPromise = npcId === null
+            ? this.decodeWorker.decodeSkeletalMesh(this.loadSettings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment)
+            : this.getNpcLibrary(packageName, meshName, scriptClassPath, texturePaths, npcId, equipment, preloadSkills);
         const [library, localization] = await Promise.all([libraryPromise, localizationPromise]);
 
         library.anisotropy = this.glCapabilities.getMaxAnisotropy();

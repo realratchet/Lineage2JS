@@ -324,7 +324,8 @@ export class NetworkMovement {
         this.network.session.game.appearing();
 
         // Lisvus Appearing sends the destination known list before UserInfo.
-        while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (this.network.actors.teleportInfoPending || !render.areProgramsReady() || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) {
+        while (this.network.actors.inWorld && generation === this.network.actors.teleportGeneration && (
+            this.network.actors.teleportInfoPending || !render.areProgramsReady() || this.network.actors.npcSpawnCount > 0 || this.network.actors.npcSpawnWaiters.length > 0)) {
             if (this.teleportLoading) {
                 setLoadingProgress(0.9, this.network.actors.teleportInfoPending ? loadingTexts.destinationResponse() : loadingTexts.nearbyCharacters(this.network.actors.npcSpawnCount + this.network.actors.npcSpawnWaiters.length));
             }

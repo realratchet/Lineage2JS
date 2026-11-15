@@ -1,5 +1,8 @@
 import { BufferAttribute, BufferGeometry, StreamDrawUsage, Vector3 } from "three";
 
+const lineControlScale = Math.fround(2 / 3);
+const lineHalfWidth = Math.fround(0.1);
+
 const tmpControl = new Vector3();
 const tmpPoint = new Vector3();
 const tmpDirection = new Vector3();
@@ -35,7 +38,7 @@ export class NLineGeometry extends BufferGeometry {
 
     public update(floatPosition: Vector3, weaponPosition: Vector3, viewOrigin: Vector3): void {
         const distance = floatPosition.distanceTo(weaponPosition);
-        tmpControl.copy(floatPosition).sub(weaponPosition).multiplyScalar(Math.fround(2 / 3)).add(weaponPosition);
+        tmpControl.copy(floatPosition).sub(weaponPosition).multiplyScalar(lineControlScale).add(weaponPosition);
         tmpControl.z = floatPosition.z;
         if (distance > this.restLength) tmpControl.z += Math.min(distance - this.restLength, Math.fround(0.3 * (weaponPosition.z - floatPosition.z)));
         tmpControl.set(Math.fround(tmpControl.x), Math.fround(tmpControl.y), Math.fround(tmpControl.z));
@@ -53,7 +56,7 @@ export class NLineGeometry extends BufferGeometry {
             if (i < 30) {
                 tmpDirection.fromArray(this.arrPoints, (i + 1) * 3).sub(tmpPoint);
                 tmpView.copy(tmpPoint).sub(viewOrigin);
-                tmpSide.crossVectors(tmpDirection, tmpView).normalize().multiplyScalar(Math.fround(0.1));
+                tmpSide.crossVectors(tmpDirection, tmpView).normalize().multiplyScalar(lineHalfWidth);
             }
 
             this.positions.setXYZ(i * 2, tmpPoint.x + tmpSide.x, tmpPoint.y + tmpSide.y, tmpPoint.z + tmpSide.z);

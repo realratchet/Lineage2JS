@@ -94,7 +94,12 @@ export class NCTargetStatusWnd extends NCStatusWnd { // NCTargetStatusWnd: NCCon
     }
 
     protected update() {
-        const layer = this.layer, strings = layer.getManager().strings, target = this.target, W = this.width, H = this.isExpanded ? HEIGHT_EXPANDED : HEIGHT_COLLAPSED, barW = W - 22;
+        const layer = this.layer;
+        const strings = layer.getManager().strings;
+        const target = this.target;
+        const W = this.width;
+        const H = this.isExpanded ? HEIGHT_EXPANDED : HEIGHT_COLLAPSED;
+        const barW = W - 22;
         const [hpBack, hp, mpBack, mp] = this.arrBars;
 
         this.layoutFrame(H, this.isExpanded ? [TEX_EX_BACK1, TEX_EX_BACK2, TEX_EX_BACK3] : [TEX_BACK1, TEX_BACK2, TEX_BACK3], H);

@@ -30,6 +30,7 @@ export class PlayerController implements ScriptHost_T {
             this.setCameraMode(0);
             previous.getComponent<NpcLifecycleComponent>("npcLifecycle").setController(null);
         }
+
         this.scriptProperties.set("Pawn", pawn);
         this.scriptProperties.set("Level", pawn ? pawn.getUnrealScriptProperty("Level") : null);
         if (pawn) pawn.getComponent<NpcLifecycleComponent>("npcLifecycle").setController(this);
@@ -40,16 +41,20 @@ export class PlayerController implements ScriptHost_T {
         const properties = this.scriptProperties, pawn = properties.get("Pawn") as BaseActor;
 
         if (!pawn || !properties.get("Level")) return false;
+
         const walking = mode === 1;
 
         if (!walking && !properties.get("bCameraWalking")) return false;
+
         properties.set("bCameraWalking", walking);
         properties.set("bUseAutoTrackingPawn", false);
         if (walking) properties.set("CameraModeTarget", null);
+
         pawn.setUnrealScriptProperty("Physics", walking ? EPhysics_T.PHYS_Flying : EPhysics_T.PHYS_Walking);
         pawn.setUnrealScriptProperty("Environment", walking ? 2 : 0);
         pawn.setUnrealScriptProperty("fMaxAirSpeed", walking ? 800 : 120);
         pawn.setUnrealScriptProperty("AirSpeed", walking ? 0 : 120);
+
         const index = walking ? 1 : 0;
         const disableZoom = !!((properties.get("FixedDefaultCameraDisableZoom") as number[])[index] & 1);
 
@@ -57,6 +62,7 @@ export class PlayerController implements ScriptHost_T {
             properties.set(`DefaultCamera${field}`, (properties.get(`FixedDefaultCamera${field}`) as number[])[index]);
             properties.set(`bUseDefaultCamera${field}`, true);
         }
+
         properties.set("CameraViewHeightAdjust", (properties.get("FixedDefaultCameraViewHeight") as number[])[index]);
         properties.set("bDisableZoom", disableZoom);
         properties.set("bCameraMovingToDefault", true);
@@ -67,6 +73,7 @@ export class PlayerController implements ScriptHost_T {
             properties.set("SavedViewTargetYaw", rotation[1]);
             properties.set("SavedViewTargetPitch", rotation[0]);
         }
+
         this.isEnterChatting = walking;
         return true;
     }

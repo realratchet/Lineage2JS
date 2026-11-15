@@ -57,7 +57,12 @@ module.exports = function(source) {
             source = source.slice(0, start) + "\tfunction releaseProgram( program ) {\n\n\t\tprogram.usedTimes --;\n\n\t}\n" + source.slice(end);
             source = replaceOnce(source, name, "\t\t_customShaders.dispose();\n", "\t\tfor ( const program of programs ) program.destroy();\n\t\tprograms.length = 0;\n\t\tprogramsMap.clear();\n\t\t_customShaders.dispose();\n");
             source = replaceOnce(source, name, "\t\t\tprograms.push( program );\n", "\t\t\tprograms.push( program );\n\t\t\tprogram.parameters = { ...parameters, uniforms: undefined };\n");
-            source = replaceOnce(source, name, "\n\treturn {\n\t\tgetParameters: getParameters,\n", "\n\tfunction restoreProgram( parameters ) {\n\n\t\tparameters.customVertexShaderID = _customShaders.getVertexShaderStage( parameters ).id;\n\t\tparameters.customFragmentShaderID = _customShaders.getFragmentShaderStage( parameters ).id;\n\n\t\treturn acquireProgram( parameters, getProgramCacheKey( parameters ) );\n\n\t}\n\n\tfunction hasShaderStage( code ) {\n\n\t\treturn _customShaders.shaderCache.has( code );\n\n\t}\n\n\treturn {\n\t\tgetParameters: getParameters,\n");
+            source = replaceOnce(
+                source,
+                name,
+                "\n\treturn {\n\t\tgetParameters: getParameters,\n",
+                "\n\tfunction restoreProgram( parameters ) {\n\n\t\tparameters.customVertexShaderID = _customShaders.getVertexShaderStage( parameters ).id;\n\t\tparameters.customFragmentShaderID = _customShaders.getFragmentShaderStage( parameters ).id;\n\n\t\treturn acquireProgram( parameters, getProgramCacheKey( parameters ) );\n\n\t}\n\n\tfunction hasShaderStage( code ) {\n\n\t\treturn _customShaders.shaderCache.has( code );\n\n\t}\n\n\treturn {\n\t\tgetParameters: getParameters,\n"
+            );
             return replaceOnce(source, name, "\t\tacquireProgram: acquireProgram,\n", "\t\tacquireProgram: acquireProgram,\n\t\trestoreProgram: restoreProgram,\n\t\thasShaderStage: hasShaderStage,\n");
         }
         case "WebGLShaderCache.js": // a dropped stage gets a new id, which changes the program cache key

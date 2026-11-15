@@ -27,7 +27,11 @@ async function openCabinet(files: AssetFiles_T, header: [string, File]) {
 
     const cabinet = await InstallShieldCabinet.open(header[1], volumes);
 
-    return cabinet.files.map(file => ({ path: file.path, read: () => cabinet.extract(file, /\.(u|unr|utx|usx|uax|ukx|usk)$/i.test(file.path) ? `${assetSourceId}/v1-${file.index}` : null), open: () => cabinet.openFile(file, `${assetSourceId}/v1-${file.index}`) }));
+    return cabinet.files.map(file => ({
+        path: file.path,
+        read: () => cabinet.extract(file, /\.(u|unr|utx|usx|uax|ukx|usk)$/i.test(file.path) ? `${assetSourceId}/v1-${file.index}` : null),
+        open: () => cabinet.openFile(file, `${assetSourceId}/v1-${file.index}`)
+    }));
 }
 
 function indexInstall(files: AssetFiles_T) {

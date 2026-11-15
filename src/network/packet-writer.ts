@@ -13,10 +13,30 @@ export class PacketWriter {
         this.view = new DataView(bytes.buffer);
     }
 
-    public c(value: number): this { this.grow(1); this.view.setUint8(this.offset, value); this.offset += 1; return this; }
-    public h(value: number): this { this.grow(2); this.view.setUint16(this.offset, value, true); this.offset += 2; return this; }
-    public d(value: number): this { this.grow(4); this.view.setInt32(this.offset, value, true); this.offset += 4; return this; }
-    public f(value: number): this { this.grow(8); this.view.setFloat64(this.offset, value, true); this.offset += 8; return this; }
+    public c(value: number): this {
+        this.grow(1);
+        this.view.setUint8(this.offset, value);
+        this.offset += 1;
+        return this;
+    }
+    public h(value: number): this {
+        this.grow(2);
+        this.view.setUint16(this.offset, value, true);
+        this.offset += 2;
+        return this;
+    }
+    public d(value: number): this {
+        this.grow(4);
+        this.view.setInt32(this.offset, value, true);
+        this.offset += 4;
+        return this;
+    }
+    public f(value: number): this {
+        this.grow(8);
+        this.view.setFloat64(this.offset, value, true);
+        this.offset += 8;
+        return this;
+    }
 
     public b(value: Uint8Array): this {
         this.grow(value.length);

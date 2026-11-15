@@ -275,7 +275,19 @@ export class SkillEffectHost implements SkillEffectHost_T {
     }
 
     public addViewShakeState(duration: number, rotationScale: number, rotationFrequency: number, positionFrequency: number, amplitude: Vector3Arr, velocity: Vector3Arr, position: Vector3Arr, origin: Vector3Arr, strength: number, range: number, type?: "damage" | "upDown"): void {
-        this.renderManager.addViewShakeState(duration, rotationScale, rotationFrequency, positionFrequency, this.vector(amplitude, tmpAmplitude), this.vector(velocity, tmpVelocity), this.vector(position, tmpShakePosition), this.vector(origin, tmpShakeOrigin), strength, range, type);
+        this.renderManager.addViewShakeState(
+            duration,
+            rotationScale,
+            rotationFrequency,
+            positionFrequency,
+            this.vector(amplitude, tmpAmplitude),
+            this.vector(velocity, tmpVelocity),
+            this.vector(position, tmpShakePosition),
+            this.vector(origin, tmpShakeOrigin),
+            strength,
+            range,
+            type
+        );
     }
 
     public triggerL2Event(name: string, position: Vector3Arr, radius: number): void { this.renderManager.triggerL2Event(name, this.vector(position), radius); }
@@ -284,7 +296,15 @@ export class SkillEffectHost implements SkillEffectHost_T {
         const object = this.actor(actor);
         const component = object.findComponent<NPawnLightComponent>("nPawnLight") || object.addComponent(new NPawnLightComponent());
 
-        return component.add(owner ? this.object(owner) : null, color, radius, lifeTime, position ? this.vector(position, tmpLightPosition) : null, direction ? this.vector(direction, tmpLightDirection) : null, target ? this.vector(target, tmpLightTarget) : null);
+        return component.add(
+            owner ? this.object(owner) : null,
+            color,
+            radius,
+            lifeTime,
+            position ? this.vector(position, tmpLightPosition) : null,
+            direction ? this.vector(direction, tmpLightDirection) : null,
+            target ? this.vector(target, tmpLightTarget) : null
+        );
     }
 
     public hasPawnLight(actor: SkillActor_T, light: unknown): boolean { return !!this.actor(actor).findComponent<NPawnLightComponent>("nPawnLight")?.getLights().includes(light as PawnLight_T); }

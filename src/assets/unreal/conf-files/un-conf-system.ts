@@ -88,7 +88,8 @@ export class UConfigSystem extends BaseConfigFile {
 
             if (preset) {
                 const field = ["FixedDefaultCameraYaw", "FixedDefaultCameraPitch", "FixedDefaultCameraDist", "FixedDefaultCameraViewHeight", "FixedDefaultCameraHidePlayer", "FixedDefaultCameraDisableZoom"].find(field => field.toLowerCase() === preset[1].toLowerCase());
-                const index = Number(preset[2]), number = field === "FixedDefaultCameraDist" || field === "FixedDefaultCameraViewHeight" ? Math.fround(Number(value)) : Math.trunc(Number(value));
+                const index = Number(preset[2]);
+                const number = field === "FixedDefaultCameraDist" || field === "FixedDefaultCameraViewHeight" ? Math.fround(Number(value)) : Math.trunc(Number(value));
 
                 if (index >= 10 || !Number.isFinite(number)) throw new Error(`Invalid fixed camera '${key}=${value}'.`);
                 if (!this.fixedDefaultCamera[field]) this.fixedDefaultCamera[field] = [];
@@ -103,7 +104,10 @@ export class UConfigSystem extends BaseConfigFile {
                 if (!Number.isFinite(this[field])) throw new Error(`Invalid camera zoom limit '${value}'.`);
                 return;
             }
-            if (key.toLowerCase() === "buseautotrackingpawn") { this.useAutoTrackingPawn = value.toLowerCase() === "true"; return; }
+            if (key.toLowerCase() === "buseautotrackingpawn") {
+                this.useAutoTrackingPawn = value.toLowerCase() === "true";
+                return;
+            }
             if (key.toLowerCase() === "autotrackingpawnspeed") {
                 this.autoTrackingPawnSpeed = Math.fround(Number(value));
                 if (!Number.isFinite(this.autoTrackingPawnSpeed)) throw new Error(`Invalid camera tracking speed '${value}'.`);

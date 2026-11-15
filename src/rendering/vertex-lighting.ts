@@ -107,7 +107,8 @@ export class VertexLighting {
             yield;
         }
 
-        if (Math.max(offsets.length, indices.length, lights.length * 4) > this.width * this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE)) throw new Error(`Vertex lighting tables exceed GPU texture limits for '${this.geometry.name}'.`);
+        if (Math.max(offsets.length, indices.length, lights.length * 4) > this.width * this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE))
+            throw new Error(`Vertex lighting tables exceed GPU texture limits for '${this.geometry.name}'.`);
         this.offsets = offsets;
         this.indices = indices;
         yield* this.create();
@@ -146,7 +147,10 @@ export class VertexLighting {
     }
 
     protected createProgram(): VertexLightingProgram_T {
-        const gl = this.gl, program = gl.createProgram(), vertex = this.createShader(gl.VERTEX_SHADER, VERTEX_SHADER), fragment = this.createShader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+        const gl = this.gl,
+            program = gl.createProgram(),
+            vertex = this.createShader(gl.VERTEX_SHADER, VERTEX_SHADER),
+            fragment = this.createShader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
 
         gl.attachShader(program, vertex);
         gl.attachShader(program, fragment);
@@ -178,7 +182,8 @@ export class VertexLighting {
         this.vao = gl.createVertexArray();
         for (let i = 0; i < 2; i++) {
             const source = this.geometry.getAttribute(i === 0 ? "position" : "normal") as BufferAttribute;
-            if ((source as any).isInterleavedBufferAttribute || !(source.array instanceof Float32Array) || source.count !== this.glow.length || source.itemSize !== 3) throw new Error(`Invalid vertex lighting input for '${this.geometry.name}'.`);
+            if ((source as any).isInterleavedBufferAttribute || !(source.array instanceof Float32Array) || source.count !== this.glow.length || source.itemSize !== 3)
+                throw new Error(`Invalid vertex lighting input for '${this.geometry.name}'.`);
             gl.bindVertexArray(this.vao);
             this.attributes.push({ source, buffer: this.attribute(source.array, i, 3, gl.FLOAT), version: source.version });
             yield;

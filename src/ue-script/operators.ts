@@ -4,7 +4,11 @@ import { getRotatorQuaternionElements, sinRotator } from "@l2js/engine/utils/rot
 import type { QuaternionArr, Vector3Arr } from "@l2js/engine";
 import type { ScriptSlot_T } from "./vm";
 
+const f = Math.fround;
 const tmpRotation: QuaternionArr = [0, 0, 0, 1];
+const randScale = Math.fround(1 / 32767);
+const vectorRotationScale = 32767.5 / Math.PI;
+const coordsRotationScale = 32768 / Math.PI;
 
 type UNativeRegistry_T = typeof import("./native-registry").UNativeRegistry;
 type InterpCurve_T = { Points: { InVal: number, OutVal: number }[] };
@@ -94,7 +98,9 @@ function op_div_assign_int_float(a: number, b: number): number {
     if (Math.abs(value - Math.round(value)) > Math.abs(value) * Number.EPSILON * 2 || a === 0) return value | 0;
 
     // Core 0x1013b848 divides in x87 before converting to a signed 64-bit integer.
-    const exponent = Math.floor(Math.log2(Math.abs(b))), significand = BigInt(Math.abs(b) * Math.pow(2, 23 - exponent)), shift = 23 - exponent;
+    const exponent = Math.floor(Math.log2(Math.abs(b)));
+    const significand = BigInt(Math.abs(b) * Math.pow(2, 23 - exponent));
+    const shift = 23 - exponent;
     let numerator = BigInt(Math.abs(a)), denominator = significand, power = Math.floor(Math.log2(Math.abs(value)));
 
     if (shift >= 0) numerator <<= BigInt(shift);
@@ -152,7 +158,10 @@ function divideRotatorComponent(a: number, b: number): number {
     if (a === 0) return 0;
 
     // Core 0x1013f7b3 retains the 64-bit x87 reciprocal through all three integer conversions.
-    const exponent = Math.floor(Math.log2(Math.abs(b))), significand = BigInt(Math.abs(b) * Math.pow(2, 23 - exponent)), power = Math.floor(Math.log2(1 / Math.abs(b))) - 63, shift = 23 - exponent - power;
+    const exponent = Math.floor(Math.log2(Math.abs(b)));
+    const significand = BigInt(Math.abs(b) * Math.pow(2, 23 - exponent));
+    const power = Math.floor(Math.log2(1 / Math.abs(b))) - 63;
+    const shift = 23 - exponent - power;
     const inverse = shift >= 0 ? roundRotatorQuotient(1n << BigInt(shift), significand) : roundRotatorQuotient(1n, significand << BigInt(-shift));
     let result = BigInt(Math.abs(a)) * inverse, bits = result.toString(2).length - 64;
 
@@ -187,7 +196,10 @@ function op_clockwise_int_int(a: number, b: number): boolean {
 
 function op_vec_rot_lsh(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
     getRotatorQuaternionElements(b[0], b[1], b[2], tmpRotation);
-    tmpRotation[0] = -tmpRotation[0]; tmpRotation[1] = -tmpRotation[1]; tmpRotation[2] = -tmpRotation[2];
+    tmpRotation[0] = -tmpRotation[0];
+    tmpRotation[1] = -tmpRotation[1];
+    tmpRotation[2] = -tmpRotation[2];
+
     return FVector.applyQuaternionElements(a, tmpRotation, [0, 0, 0]);
 }
 function op_vec_rot_rsh(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
@@ -226,16 +238,16 @@ function VRand(): Vector3Arr {
         z = Math.fround(last);
     } while (x * x + y * y + last * z > 1);
 
-    const inverse = 1 / Math.sqrt(x * x + y * y + z * z), scale = Math.fround(inverse);
+    const inverse = 1 / Math.sqrt(x * x + y * y + z * z);
+    const scale = Math.fround(inverse);
 
     return [Math.fround(x * scale), Math.fround(y * scale), Math.fround(z * inverse)];
 }
 
 function Vector2Rotator(v: Vector3Arr): Vector3Arr {
     // Core FVector::Rotation 0x1014f310 uses 65535/(2*PI) and truncates.
-    const scale = 32767.5 / Math.PI;
-    const yaw = Math.trunc(Math.atan2(v[1], v[0]) * scale);
-    const pitch = Math.trunc(Math.atan2(v[2], Math.hypot(v[0], v[1])) * scale);
+    const yaw = Math.trunc(Math.atan2(v[1], v[0]) * vectorRotationScale);
+    const pitch = Math.trunc(Math.atan2(v[2], Math.hypot(v[0], v[1])) * vectorRotationScale);
 
     return [pitch, yaw, 0];
 }
@@ -249,45 +261,70 @@ function Rotator2Vector(r: Vector3Arr): Vector3Arr {
 }
 
 function getRotationAxes(a: Vector3Arr, isInverse = false): Vector3Arr[] {
-    const sp = sinRotator(a[0]), cp = sinRotator(a[0] + 16384), sy = sinRotator(a[1]), cy = sinRotator(a[1] + 16384), sr = sinRotator(a[2]), cr = sinRotator(a[2] + 16384), f = Math.fround;
+    const sp = sinRotator(a[0]);
+    const cp = sinRotator(a[0] + 16384);
+    const sy = sinRotator(a[1]);
+    const cy = sinRotator(a[1] + 16384);
+    const sr = sinRotator(a[2]);
+    const cr = sinRotator(a[2] + 16384);
 
     // Core FCoords 0x10111b30/0x10111650 round after each rotation, in opposite orders.
-    if (isInverse) return [[f(cp * cy), f(sr * f(sp * cy) - cr * sy), f(-cr * f(sp * cy) - sr * sy)], [f(cp * sy), f(sr * f(sp * sy) + cr * cy), f(sr * cy - cr * f(sp * sy))], [sp, f(-sr * cp), f(cr * cp)]];
+    if (isInverse) return [
+        [f(cp * cy), f(sr * f(sp * cy) - cr * sy), f(-cr * f(sp * cy) - sr * sy)],
+        [f(cp * sy), f(sr * f(sp * sy) + cr * cy), f(sr * cy - cr * f(sp * sy))],
+        [sp, f(-sr * cp), f(cr * cp)]
+    ];
 
-    return [[f(cp * cy), f(cp * sy), sp], [f(f(sr * sp) * cy - cr * sy), f(f(sr * sp) * sy + cr * cy), f(-sr * cp)], [f(-f(cr * sp) * cy - sr * sy), f(sr * cy - f(cr * sp) * sy), f(cr * cp)]];
+    return [
+        [f(cp * cy), f(cp * sy), sp],
+        [f(f(sr * sp) * cy - cr * sy), f(f(sr * sp) * sy + cr * cy), f(-sr * cp)],
+        [f(-f(cr * sp) * cy - sr * sy), f(sr * cy - f(cr * sp) * sy), f(cr * cp)]
+    ];
 }
 
 function GetAxes(a: Vector3Arr, x: ScriptSlot_T, y: ScriptSlot_T, z: ScriptSlot_T): void {
     const axes = getRotationAxes(a);
 
-    x.set(axes[0]); y.set(axes[1]); z.set(axes[2]);
+    x.set(axes[0]);
+    y.set(axes[1]);
+    z.set(axes[2]);
 }
 
 function GetUnAxes(a: Vector3Arr, x: ScriptSlot_T, y: ScriptSlot_T, z: ScriptSlot_T): void {
     const axes = getRotationAxes(a, true);
 
-    x.set(axes[0]); y.set(axes[1]); z.set(axes[2]);
+    x.set(axes[0]);
+    y.set(axes[1]);
+    z.set(axes[2]);
 }
 
 function vec_Invert(x: ScriptSlot_T, y: ScriptSlot_T, z: ScriptSlot_T): void {
-    const a = x.get() as Vector3Arr, b = y.get() as Vector3Arr, c = z.get() as Vector3Arr, f = Math.fround;
-    const determinant = (b[1] * c[2] - b[2] * c[1]) * a[0] + (b[2] * c[0] - b[0] * c[2]) * a[1] + (b[0] * c[1] - b[1] * c[0]) * a[2], scale = 1 / (determinant === 0 ? 1 : determinant);
-    const axes: Vector3Arr[] = [[f((b[1] * c[2] - b[2] * c[1]) * scale), f((a[2] * c[1] - a[1] * c[2]) * scale), f(f(a[1] * b[2] - a[2] * b[1]) * scale)], [f((b[2] * c[0] - b[0] * c[2]) * scale), f((a[0] * c[2] - a[2] * c[0]) * scale), f(f(a[2] * b[0] - a[0] * b[2]) * scale)], [f((b[0] * c[1] - b[1] * c[0]) * scale), f((a[1] * c[0] - a[0] * c[1]) * scale), f(f(a[0] * b[1] - a[1] * b[0]) * scale)]];
+    const a = x.get() as Vector3Arr, b = y.get() as Vector3Arr, c = z.get() as Vector3Arr;
+    const determinant = (b[1] * c[2] - b[2] * c[1]) * a[0] + (b[2] * c[0] - b[0] * c[2]) * a[1] + (b[0] * c[1] - b[1] * c[0]) * a[2];
+    const scale = 1 / (determinant === 0 ? 1 : determinant);
+    const axes: Vector3Arr[] = [
+        [f((b[1] * c[2] - b[2] * c[1]) * scale), f((a[2] * c[1] - a[1] * c[2]) * scale), f(f(a[1] * b[2] - a[2] * b[1]) * scale)],
+        [f((b[2] * c[0] - b[0] * c[2]) * scale), f((a[0] * c[2] - a[2] * c[0]) * scale), f(f(a[2] * b[0] - a[0] * b[2]) * scale)],
+        [f((b[0] * c[1] - b[1] * c[0]) * scale), f((a[1] * c[0] - a[0] * c[1]) * scale), f(f(a[0] * b[1] - a[1] * b[0]) * scale)]
+    ];
 
-    x.set(axes[0]); y.set(axes[1]); z.set(axes[2]);
+    x.set(axes[0]);
+    y.set(axes[1]);
+    z.set(axes[2]);
 }
 
 function vec_MirrorByNormal(a: Vector3Arr, b: Vector3Arr): Vector3Arr {
-    const n = Normal(b), f = Math.fround, dot = f(a[0] * n[0] + a[1] * n[1] + a[2] * n[2]);
+    const n = Normal(b), dot = f(a[0] * n[0] + a[1] * n[1] + a[2] * n[2]);
 
     return [f(a[0] - f(2 * n[0] * dot)), f(a[1] - 2 * n[1] * dot), f(a[2] - 2 * n[2] * dot)];
 }
 
 function rot_OrthoRotation(x: Vector3Arr, y: Vector3Arr, z: Vector3Arr): Vector3Arr {
     // Core FCoords::OrthoRotation 0x1014f971 uses 65536 units, unlike FVector::Rotation.
-    const scale = 32768 / Math.PI, rotation: Vector3Arr = [Math.trunc(Math.atan2(x[2], Math.hypot(x[0], x[1])) * scale), Math.trunc(Math.atan2(x[1], x[0]) * scale), 0], axis = getRotationAxes(rotation)[1];
+    const rotation: Vector3Arr = [Math.trunc(Math.atan2(x[2], Math.hypot(x[0], x[1])) * coordsRotationScale), Math.trunc(Math.atan2(x[1], x[0]) * coordsRotationScale), 0];
+    const axis = getRotationAxes(rotation)[1];
 
-    rotation[2] = Math.trunc(Math.atan2(axis[0] * z[0] + axis[1] * z[1] + axis[2] * z[2], axis[0] * y[0] + axis[1] * y[1] + axis[2] * y[2]) * scale);
+    rotation[2] = Math.trunc(Math.atan2(axis[0] * z[0] + axis[1] * z[1] + axis[2] * z[2], axis[0] * y[0] + axis[1] * y[1] + axis[2] * y[2]) * coordsRotationScale);
 
     return rotation;
 }
@@ -299,21 +336,34 @@ function RotRand(hasRoll = false): Vector3Arr {
 }
 
 function QuatProduct(a: QuaternionArr, b: QuaternionArr): QuaternionArr {
-    const f = Math.fround;
-
-    return [f(a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1]), f(a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0]), f(a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3]), f(a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2])];
+    return [
+        f(a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1]),
+        f(a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0]),
+        f(a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3]),
+        f(a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2])
+    ];
 }
 
 function QuatInvert(a: QuaternionArr): QuaternionArr { return [-a[0], -a[1], -a[2], a[3]]; }
 
 function QuatRotateVector(q: QuaternionArr, v: Vector3Arr): Vector3Arr {
-    const f = Math.fround, scale = f(q[3] * q[3] - (q[0] * q[0] + q[1] * q[1] + q[2] * q[2])), dot = 2 * (q[0] * v[0] + q[1] * v[1] + q[2] * v[2]), roundedDot = f(dot), w = f(q[3] * 2);
+    const scale = f(q[3] * q[3] - (q[0] * q[0] + q[1] * q[1] + q[2] * q[2]));
+    const dot = 2 * (q[0] * v[0] + q[1] * v[1] + q[2] * v[2]);
+    const roundedDot = f(dot);
+    const w = f(q[3] * 2);
 
-    return [f(f(v[0] * scale + f((q[1] * v[2] - q[2] * v[1]) * w)) + f(dot * q[0])), f(f(v[1] * scale + (q[2] * v[0] - q[0] * v[2]) * w) + roundedDot * q[1]), f(f(f(v[2] * scale) + f(q[0] * v[1] - q[1] * v[0]) * w) + roundedDot * q[2])];
+    return [
+        f(f(v[0] * scale + f((q[1] * v[2] - q[2] * v[1]) * w)) + f(dot * q[0])),
+        f(f(v[1] * scale + (q[2] * v[0] - q[0] * v[2]) * w) + roundedDot * q[1]),
+        f(f(f(v[2] * scale) + f(q[0] * v[1] - q[1] * v[0]) * w) + roundedDot * q[2])
+    ];
 }
 
 function QuatFindBetween(a: Vector3Arr, b: Vector3Arr): QuaternionArr {
-    const f = Math.fround, x = f(a[1] * b[2] - a[2] * b[1]), y = f(a[2] * b[0] - a[0] * b[2]), z = f(a[0] * b[1] - a[1] * b[0]), length = f(Math.sqrt(x * x + y * y + z * z));
+    const x = f(a[1] * b[2] - a[2] * b[1]);
+    const y = f(a[2] * b[0] - a[0] * b[2]);
+    const z = f(a[0] * b[1] - a[1] * b[0]);
+    const length = f(Math.sqrt(x * x + y * y + z * z));
 
     if (length < 0.0001) return [0, 0, 0, 1];
 
@@ -328,7 +378,7 @@ function QuatFindBetween(a: Vector3Arr, b: Vector3Arr): QuaternionArr {
 }
 
 function QuatFromAxisAndAngle(axis: Vector3Arr, angle: number): QuaternionArr {
-    const n = Normal(axis), sine = Math.fround(Math.sin(angle * 0.5)), f = Math.fround;
+    const n = Normal(axis), sine = Math.fround(Math.sin(angle * 0.5));
 
     return [f(n[0] * sine), f(n[1] * sine), f(n[2] * sine), f(Math.cos(angle * 0.5))];
 }
@@ -341,7 +391,9 @@ function InterpCurveEval(curve: InterpCurve_T, input: number): number {
     for (let i = 1; i < points.length; i++) {
         if (points[i].InVal < input) continue;
 
-        const previous = points[i - 1], current = points[i], alpha = Math.fround((input - previous.InVal) / (current.InVal - previous.InVal));
+        const previous = points[i - 1];
+        const current = points[i];
+        const alpha = Math.fround((input - previous.InVal) / (current.InVal - previous.InVal));
 
         if (!(alpha >= 0 && alpha <= 1)) throw new Error(`Invalid interpolation curve interval '${i}'.`);
 

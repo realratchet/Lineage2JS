@@ -137,7 +137,8 @@ export class NCPetStatusWnd extends NCStatusWnd {
             this.arrBarBacks[i].hidden = this.arrBarFills[i].hidden = !isShown;
             if (!isShown) continue;
 
-            const current = i === 0 ? info.curHp : i === 1 ? info.curMp : info.curFood, maximum = i === 0 ? info.maxHp : i === 1 ? info.maxMp : info.maxFood;
+            const current = i === 0 ? info.curHp : i === 1 ? info.curMp : info.curFood;
+            const maximum = i === 0 ? info.maxHp : i === 1 ? info.maxMp : info.maxFood;
 
             // NWindow 0x1010f930/0x1010f950/0x1010f975 leave zero-maximum widths undefined.
             if (!maximum) throw new Error(`Invalid pet status bar maximum ${maximum}.`);

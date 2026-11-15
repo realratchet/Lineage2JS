@@ -6,7 +6,14 @@ import { loadCachedPackage } from "../decode-worker/cache-storage";
 import { hydrateLibraryFile, hydrateLibraryFileSync, type SeekableLibrary_T } from "../decode-worker/library-serializer";
 
 export function packageIdentity(packages: APackage[]): string {
-    return JSON.stringify(packages.filter(pkg => !!pkg.header).map(pkg => ({ path: pkg.path, version: pkg.header.version, guid: Array.from(new Uint8Array(pkg.header.guid.bytes.buffer, pkg.header.guid.bytes.byteOffset, pkg.header.guid.bytes.byteLength)), exports: pkg.header.exportCount, imports: pkg.header.importCount, generations: pkg.header.generations })).sort((a, b) => a.path.localeCompare(b.path)));
+    return JSON.stringify(packages.filter(pkg => !!pkg.header).map(pkg => ({
+        path: pkg.path,
+        version: pkg.header.version,
+        guid: Array.from(new Uint8Array(pkg.header.guid.bytes.buffer, pkg.header.guid.bytes.byteOffset, pkg.header.guid.bytes.byteLength)),
+        exports: pkg.header.exportCount,
+        imports: pkg.header.importCount,
+        generations: pkg.header.generations
+    })).sort((a, b) => a.path.localeCompare(b.path)));
 }
 
 function isPackageFallback(pkg: APackage, entry: any): boolean {
@@ -20,7 +27,11 @@ function isPackageFallback(pkg: APackage, entry: any): boolean {
 }
 
 export function capturePackageResolver(pkg: APackage, converted: Set<number>): any {
-    const header = { ...pkg.header, generations: pkg.header.generations.map(generation => ({ exportCount: generation.exportCount, nameCount: generation.nameCount })), guid: Array.from(new Uint8Array(pkg.header.guid.bytes.buffer, pkg.header.guid.bytes.byteOffset, pkg.header.guid.bytes.byteLength)) };
+    const header = {
+        ...pkg.header,
+        generations: pkg.header.generations.map(generation => ({ exportCount: generation.exportCount, nameCount: generation.nameCount })),
+        guid: Array.from(new Uint8Array(pkg.header.guid.bytes.buffer, pkg.header.guid.bytes.byteOffset, pkg.header.guid.bytes.byteLength))
+    };
     const exports = pkg.exports.map(entry => ({ ...entry, object: null as UExport["object"] }));
     const bodies = [];
     const rawSafe = exports.every(entry => !entry.size || converted.has(entry.index) || isPackageFallback(pkg, entry));
@@ -31,7 +42,16 @@ export function capturePackageResolver(pkg: APackage, converted: Set<number>): a
         data.set(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
         bodies.push({ index: entry.index, data });
     }
-    return { header, exports, rawSafe, converted: [...converted], imports: pkg.imports.map(entry => ({ ...entry })), names: pkg.nameTable.map(entry => ({ ...entry })), size: Math.max(...exports.filter(entry => entry.size > 0).map(entry => entry.offset + entry.size), 0) + 4, bodies };
+    return {
+        header,
+        exports,
+        rawSafe,
+        converted: [...converted],
+        imports: pkg.imports.map(entry => ({ ...entry })),
+        names: pkg.nameTable.map(entry => ({ ...entry })),
+        size: Math.max(...exports.filter(entry => entry.size > 0).map(entry => entry.offset + entry.size), 0) + 4,
+        bodies
+    };
 }
 
 export function validatePackageResolver(data: any): void {
@@ -45,7 +65,8 @@ export function validatePackageResolver(data: any): void {
         if (!entry.size) continue;
         if (converted.has(entry.index)) {
             if (!entries.has(`${data.path}:${entry.index}`)) throw new Error(`Missing converted export '${data.path}:${entry.index}'.`);
-            if (data.entries[`${data.path}:${entry.index}:material`]?.result.source && !data.entries[`${data.path}:${entry.index}:frame`]) throw new Error(`Missing physical texture frame '${data.path}:${entry.index}'.`);
+            if (data.entries[`${data.path}:${entry.index}:material`]?.result.source && !data.entries[`${data.path}:${entry.index}:frame`])
+                throw new Error(`Missing physical texture frame '${data.path}:${entry.index}'.`);
         } else if (resolver.rawSafe && (bodies.get(entry.index) as any)?.data?.byteLength !== entry.size + 4)
             throw new Error(`Missing fallback export '${data.path}:${entry.index}'.`);
     }

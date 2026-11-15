@@ -6,6 +6,10 @@ import type { EmitterConfig_T } from "@l2js/engine/contracts/emitter";
 import type BaseActor from "../../base-actor";
 import type AnimationComponent from "../components/animation-component";
 
+const startBoneScale = Math.fround(0.53);
+const endBoneScale = Math.fround(1.06);
+const fadeInFraction = Math.fround(1 / 3);
+
 type RibbonSettings_T = {
     sampleRate: number, decayRate: number, numPoints: number, accDrop: "none" | "byPoint" | "byTime" | "byTimeDual", pointsDropRate: number, thresholdTime: number, minPoints: number, thresholdTime2: number,
     width: number, pointAxis: "ownerX" | "ownerY" | "ownerZ" | "boneNormal" | "startBoneDirection" | "axisNormal", axisNormal: number[], minSampleDist: number, minSampleDot: number, pointOriginOffset: number,
@@ -99,14 +103,14 @@ export class RibbonEmitter extends BaseEmitter {
     public attachTrailer(bone: string, length: number, shotTime: number, numPoints: number): void {
         const ribbon = this.ribbon;
         ribbon.boneNameStart = ribbon.boneNameEnd = bone;
-        ribbon.startBoneOffset = [Math.fround(length * Math.fround(0.53)), 0, 0];
-        ribbon.endBoneOffset = [Math.fround(length * Math.fround(1.06)), 0, 0];
+        ribbon.startBoneOffset = [Math.fround(length * startBoneScale), 0, 0];
+        ribbon.endBoneOffset = [Math.fround(length * endBoneScale), 0, 0];
         ribbon.width = ribbon.endBoneOffset[0];
         ribbon.thresholdTime = Math.fround(shotTime * 0.5);
         ribbon.thresholdTime2 = shotTime;
         if (numPoints > 0) this.pointLimit = ribbon.numPoints = numPoints;
         this.fadeOutStartTime = shotTime;
-        this.fadeInEndTime = Math.fround(shotTime * Math.fround(1 / 3));
+        this.fadeInEndTime = Math.fround(shotTime * fadeInFraction);
     }
 
     public getDrawMatrix(target: Matrix4): void {

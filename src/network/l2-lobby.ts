@@ -21,7 +21,9 @@ const PREVIEW_CLASS_IDS = [[0, 10], [18, 25], [31, 38], [44, 49], [53, 53]]; // 
 const RACE_EVENT_NAMES = ["HUMAN", "ELF", "DARKELF", "ORC", "DWARF"]; // NWindow 0x10262098 event-name tables.
 const RACE_MUSIC = ["CT_Human", "CT_Elf", "CT_Darkelf", "CT_Orc", "CT_Dwarf"]; // UL2ConsoleWnd::SetCurrentMakingRace 0x1042dba0
 const CLASS_EVENT_NAMES = ["KNIGHT", "WIZARD"];
-const SEX_EVENT_NAMES = ["MAN", "WOMAN"];
+const SEX_EVENT_NAMES = ["MAN", "WOMAN"]; // noooo not the hecking transpobia q_q literally shidding and farding
+const LOGIN_SCREEN_MUSIC = "assets/music/INTRO.ogg"; // game tries to play s28_f.ogg but it's missing in retail, but it generally should be "Call of Destinty" which is INTRO.ogg
+const CHARACTER_SELECT_MUSIC = "assets/music/nt_oren.ogg";
 
 const tmpLabelPosition = new Vector3();
 
@@ -82,6 +84,7 @@ export class L2Lobby {
 
         this.sector = sector;
         render.setLevel(sector);
+        while (!render.isSectorWarm(sector)) await new Promise(resolve => setTimeout(resolve, 50));
         const skyZone = (sector.zones.children as ZoneObject[]).find(zone => zone.isSkyZoneInfo);
 
         if (!skyZone) throw new Error(`Lobby SkyZoneInfo is missing`);
@@ -136,21 +139,23 @@ export class L2Lobby {
     }
 
     public showLogin() {
+        this.manGame.getComponent("render").skyRenderer.setSkyZoneCloudsVisible(false);
         this.manGame.getComponent("render").setHorizontalFov(50, 4 / 3); // widescreen fix
         this.isBackdropExpanded = true;
         this.resizeBackdrop();
         this.matinee.trigger("LogOn_Warp"); // MoveCameraByState 0x1042e9e0: to-state 2 fires LogOn_Warp, 4 fires Char_Select_Warp.
-        void this.manGame.getComponent("render").audioManager.playMusic("assets/music/s28_f.ogg", true, true); // SetState 0x1042e1d0: state 2 plays S28_F.
+        void this.manGame.getComponent("render").audioManager.playMusic(LOGIN_SCREEN_MUSIC, true, true); // SetState 0x1042e1d0: state 2 plays S28_F.
     }
 
     public async showSelect(characters: Appearance_T[]) {
         const render = this.manGame.getComponent("render");
+        render.skyRenderer.setSkyZoneCloudsVisible(true);
         render.setHorizontalFov(50);
         this.isBackdropExpanded = false;
         this.resizeBackdrop();
         this.matinee.trigger("Char_Select_Warp");
         this.clearPawns();
-        void render.audioManager.playMusic("assets/music/nt_oren.ogg", true, true); // SetState 0x1042e1d0: state 4 plays table 0x109f1348[1] NT_Oren.
+        void render.audioManager.playMusic(CHARACTER_SELECT_MUSIC, true, true); // SetState 0x1042e1d0: state 4 plays table 0x109f1348[1] NT_Oren.
 
         const generation = this.generation;
 
@@ -218,6 +223,7 @@ export class L2Lobby {
     }
 
     public showCreate() {
+        this.manGame.getComponent("render").skyRenderer.setSkyZoneCloudsVisible(false);
         this.manGame.getComponent("render").setHorizontalFov(50, 4 / 3); // widescreen fix
         this.isBackdropExpanded = true;
         this.resizeBackdrop();
@@ -225,7 +231,7 @@ export class L2Lobby {
         this.createSelection = null;
         this.createStage = 0;
         this.matinee.trigger("Char_Create_Warp");
-        void this.manGame.getComponent("render").audioManager.playMusic("assets/music/s28_f.ogg", true, true); // SetState 0x1042e1d0: 4 -> 3 plays S28_F.
+        void this.manGame.getComponent("render").audioManager.playMusic(LOGIN_SCREEN_MUSIC, true, true); // SetState 0x1042e1d0: 4 -> 3 plays S28_F.
     }
 
     protected getPreviewIndex(race: Race_T, isMystic: boolean, sex: number) { return race * 4 + (isMystic ? 1 : 0) * 2 + sex; }
@@ -255,7 +261,16 @@ export class L2Lobby {
 
         const height = actor.getCollisionHeight(), radius = actor.getCollisionRadius();
         // SpawnDefaultCharacter 0x1042e6fb..0x1042e7cf traces Z+60 to the row before placement.
-        const hit = render.getPhysicsManager().singleLineCheck({ location: new Vector3(x, y, z + SPAWN_TRACE_HEIGHT), delta: new Vector3(0, 0, -SPAWN_TRACE_HEIGHT), extent: new Vector3(radius, radius, height), sourceActor: actor, sourceIsPlayer: false, sourceProfile: actor.getCollisionProfile(), ignorePawns: true, traceWorld: true });
+        const hit = render.getPhysicsManager().singleLineCheck({
+            location: new Vector3(x, y, z + SPAWN_TRACE_HEIGHT),
+            delta: new Vector3(0, 0, -SPAWN_TRACE_HEIGHT),
+            extent: new Vector3(radius, radius, height),
+            sourceActor: actor,
+            sourceIsPlayer: false,
+            sourceProfile: actor.getCollisionProfile(),
+            ignorePawns: true,
+            traceWorld: true
+        });
 
         actor.position.set(x, y, hit ? hit.location.z - height + 2.15 : z);
         render.addPawn(actor);
@@ -288,6 +303,7 @@ export class L2Lobby {
         this.updatePreviewVisibility();
 
         if (selection.step === "race") {
+            this.manGame.getComponent("render").skyRenderer.setSkyZoneCloudsVisible(true);
             this.isBackdropExpanded = false;
             this.resizeBackdrop();
             this.triggerScene(race);

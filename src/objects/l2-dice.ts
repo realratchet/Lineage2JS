@@ -5,6 +5,8 @@ import type DecodeLibrary from "../assets/unreal/decode-library";
 import type RenderManager from "../rendering/render-manager";
 import type { ActorCollisionProfile_T } from "./objects";
 
+const minFloorDistance = Math.fround(1.9);
+
 const tmpStart = new Vector3();
 const tmpEnd = new Vector3();
 const tmpDelta = new Vector3();
@@ -52,7 +54,7 @@ export class L2Dice extends GroundPickup {
             if (!hit || hit.location.z === 0) continue;
 
             this.landingPosition.copy(hit.location);
-            this.landingPosition.z += Math.max(0, Math.fround(1.9) - hit.time * 12);
+            this.landingPosition.z += Math.max(0, minFloorDistance - hit.time * 12);
             const pitch = Math.trunc(Math.atan2(-hit.normal.x, Math.hypot(hit.normal.z, hit.normal.y)) * 32768 / Math.PI);
             const yaw = Math.trunc(Math.atan2(hit.normal.y, hit.normal.z) * 32768 / Math.PI);
             const heading = this.origin ? Math.trunc(Math.atan2(this.landingPosition.y - this.origin.y, this.landingPosition.x - this.origin.x) * 32768 / Math.PI) + 32768 : 0;

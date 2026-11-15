@@ -154,7 +154,9 @@ export class NCVIPShopWnd {
         });
     }
     protected getCatalogIndex(event: MouseEvent) {
-        const rect = this.catalog.getBoundingClientRect(), x = this.layer.toUI(event.clientX - rect.left), y = this.layer.toUI(event.clientY - rect.top);
+        const rect = this.catalog.getBoundingClientRect();
+        const x = this.layer.toUI(event.clientX - rect.left);
+        const y = this.layer.toUI(event.clientY - rect.top);
 
         return x >= 0 && x <= 222 && y >= 0 && y <= 315 ? (this.catalog.getScroll() / 35 + Math.min(8, Math.trunc(y / 35))) * 6 + Math.min(5, Math.trunc(x / 37)) : -1;
     }
@@ -219,7 +221,9 @@ export class NCVIPShopWnd {
         const baseName = (item.enchant > 0 && item.itemClass < 4 ? `+${item.enchant} ` : "") + item.name;
         const extra = item.info.addName, count = item.count > 0 ? `x${item.count}` : "";
         const grade = item.info.crystalType > 0 && item.info.crystalType < 5 ? getCrystalGradeSymbol(item.info.crystalType) : "";
-        const baseWidth = this.layer.measureText(baseName), extraWidth = baseWidth + (extra ? this.layer.measureText(extra) + 2 : 0), gradeWidth = extraWidth + (grade ? 14 : 0);
+        const baseWidth = this.layer.measureText(baseName);
+        const extraWidth = baseWidth + (extra ? this.layer.measureText(extra) + 2 : 0);
+        const gradeWidth = extraWidth + (grade ? 14 : 0);
         const overflow = gradeWidth + (count ? this.layer.measureText(count) + 2 : 0) - width;
         let reduction = 0, text = baseName;
 
@@ -260,7 +264,14 @@ export class NCVIPShopWnd {
             const label = `${line.label} : `;
 
             this.layer.text(parent, label, 0xffa3a3a3, FontType_T.SMALL, x, y);
-            this.layer.text(parent, line.value, [SysString_T.AttackSpeed, SysString_T.SoulshotUsed, SysString_T.SpiritshotUsed].some(id => this.layer.getManager().getSysString(id) === line.label) ? 0xffb09b79 : 0xffdcdcdc, FontType_T.SMALL, x + this.layer.measureText(label), y);
+            this.layer.text(
+                parent,
+                line.value,
+                [SysString_T.AttackSpeed, SysString_T.SoulshotUsed, SysString_T.SpiritshotUsed].some(id => this.layer.getManager().getSysString(id) === line.label) ? 0xffb09b79 : 0xffdcdcdc,
+                FontType_T.SMALL,
+                x + this.layer.measureText(label),
+                y
+            );
             if (index < lines.length - 1) y += height + 4;
             x = 10;
         });

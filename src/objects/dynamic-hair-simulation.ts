@@ -5,6 +5,8 @@ import { requireBonePose } from "./local-space-skeleton";
 import Rotator from "../utils/rotator";
 import { NActionList_T } from "../assets/unreal/un-pawn";
 
+const rotationUnit = 65535 / (2 * Math.PI);
+
 const tmpMatrix = new Matrix4();
 const tmpParentMatrix = new Matrix4();
 const tmpDeltaMatrix = new Matrix4();
@@ -713,7 +715,7 @@ export class DynamicHairSimulation {
 
             if (tmpDirection.lengthSq() === 0) continue;
 
-            const unit = 65535 / (2 * Math.PI);
+            const unit = rotationUnit;
 
             tmpRotation.set(Math.trunc(Math.atan2(tmpDirection.z, Math.sqrt(tmpDirection.x * tmpDirection.x + tmpDirection.y * tmpDirection.y)) * unit), Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * unit), 0).toQuaternion(tmpBoneQuaternion);
 

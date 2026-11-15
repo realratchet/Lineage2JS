@@ -49,6 +49,8 @@ import { EPathStyle_T, type USceneManager, type UActionMoveCamera } from "@l2js/
 import fetchAsset from "../asset-source";
 import { isFirefox } from "../../browser";
 
+const minPickupCollisionHeight = Math.fround(0.2);
+
 type BinarySector_T = { buffer: ArrayBuffer, fromCache: boolean };
 type SoundPath_T = { name: string, scriptObject: DecodeLibrary["scriptObjects"][string], sound: { uri: string, data: Uint8Array | Blob, mimeType: string, assetName?: string } };
 type CharacterBundle_T = {
@@ -414,8 +416,14 @@ function decodeTextureRGBA(info: ITextureDecodeInfo, useIntrinsicAlpha = true): 
 
         switch (fourCC) {
             case DDSConstants.FOURCC_DXT1: buffer = dxt1ToRgba(width, height, input).buffer as ArrayBuffer; break;
-            case DDSConstants.FOURCC_DXT3: buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = hasAlpha || useIntrinsicAlpha; break;
-            case DDSConstants.FOURCC_DXT5: buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer; hasAlpha = hasAlpha || useIntrinsicAlpha; break;
+            case DDSConstants.FOURCC_DXT3:
+                buffer = dxt3ToRgba(width, height, input).buffer as ArrayBuffer;
+                hasAlpha = hasAlpha || useIntrinsicAlpha;
+                break;
+            case DDSConstants.FOURCC_DXT5:
+                buffer = dxt5ToRgba(width, height, input).buffer as ArrayBuffer;
+                hasAlpha = hasAlpha || useIntrinsicAlpha;
+                break;
             default: throw new Error(`UI texture '${info.name}' has unsupported FourCC 0x${(fourCC >>> 0).toString(16)}.`);
         }
     }
@@ -446,7 +454,8 @@ function decodePetitionCategories(localization: UConfigLocalization): GameString
 
     return Array.from({ length: Number(count.value) }, (_, index) => {
         const properties = localization.getProperties(`Category${index + 1}`);
-        const title = properties.find(property => property.name.toLowerCase() === "title"), link = properties.find(property => property.name.toLowerCase() === "link");
+        const title = properties.find(property => property.name.toLowerCase() === "title");
+        const link = properties.find(property => property.name.toLowerCase() === "link");
 
         if (!title || !Number.isInteger(Number(title.value)) || !link || !link.value) throw new Error(`Invalid petition Category${index + 1} in localization.ini.`);
 
@@ -647,7 +656,8 @@ export class DecodeEngine {
 
         if (cached)
             for (const sound of cached.library.soundBlobCache.values())
-                if (!sound.assetName || !this.sentSoundIds.has(sound.assetName.toLowerCase())) sound.data = (sound.data as any).isLibraryChunk === true ? await getLibraryChunkBlob(cached, sound.data, sound.mimeType) : new Blob([sound.data], { type: sound.mimeType });
+                if (!sound.assetName || !this.sentSoundIds.has(sound.assetName.toLowerCase()))
+                    sound.data = (sound.data as any).isLibraryChunk === true ? await getLibraryChunkBlob(cached, sound.data, sound.mimeType) : new Blob([sound.data], { type: sound.mimeType });
 
         const library = cached ? await this.hydrateSectorTransfer(cached) : (await this.decodeSectorCore(sectorName, settings, false, onCache)).library;
         const { transfer, fresh } = this.prepareTransfer(library);
@@ -1129,7 +1139,12 @@ export class DecodeEngine {
     }
 
     protected async pullSkillVisuals(library: DecodeLibrary, builder: DecodeLibraryBuilder, attacks: readonly NpcSkillAttack_T[]): Promise<void> {
-        await decodeSkillVisuals(library, attacks, async packageName => { const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Effect")); await builder.preparePackageCache(pkg); return pkg; }, (path, pullScript, weaponId) => this.pullEffectTemplate(library, builder, path, pullScript, weaponId), (path, required) => this.pullSoundPath(builder, path, required));
+        await decodeSkillVisuals(library, attacks, async packageName => {
+            const pkg = await this.usingDecodePackage(this.assetLoader.getPackage(packageName, "Effect"));
+
+            await builder.preparePackageCache(pkg);
+            return pkg;
+        }, (path, pullScript, weaponId) => this.pullEffectTemplate(library, builder, path, pullScript, weaponId), (path, required) => this.pullSoundPath(builder, path, required));
     }
 
     protected async pullScriptActorTemplates(library: DecodeLibrary, builder: DecodeLibraryBuilder): Promise<void> {
@@ -1453,7 +1468,17 @@ export class DecodeEngine {
     }
 
     protected async decodeNpc(settings: LoadSettings_T, npcId: number, includeAnimations: boolean, equipment: INpcEquipment | null): Promise<DecodeLibrary> {
-        const library = await this.getStoredAssets("npc_runtime", JSON.stringify([npcId, equipment]), settings, () => this.decodeNpcAssets(settings, npcId, equipment), source => Object.assign(new DecodeLibrary(), source, { pawnActors: source.pawnActors.map(info => Object.assign({}, info, { animations: includeAnimations ? info.animations : {}, animationSequences: includeAnimations ? info.animationSequences : {}, animationNotifies: includeAnimations ? info.animationNotifies : {} })) }));
+        const library = await this.getStoredAssets(
+            "npc_runtime",
+            JSON.stringify([npcId, equipment]),
+            settings,
+            () => this.decodeNpcAssets(settings, npcId, equipment),
+            source => Object.assign(
+                new DecodeLibrary(),
+                source,
+                { pawnActors: source.pawnActors.map(info => Object.assign({}, info, { animations: includeAnimations ? info.animations : {}, animationSequences: includeAnimations ? info.animationSequences : {}, animationNotifies: includeAnimations ? info.animationNotifies : {} })) }
+            )
+        );
         const groups = Object.entries(library.materials).filter(([, material]) => material.materialType === "group" && (material as IMaterialGroupDecodeInfo).materials.includes(null));
 
         if (!groups.length) return library;
@@ -1632,7 +1657,14 @@ export class DecodeEngine {
         const skins = [row.drop_tex1 ?? row.drop_texture_1, row.drop_tex2 ?? row.drop_texture_2, row.drop_tex3 ?? row.drop_texture_3];
 
         library.name = `Item_${id}`;
-        library.pickup = { items: [], dropSound: row.drop_sound ?? row.item_sound, dropType: row.drop_type, dropAnimType: row.drop_anim_type, collisionRadius: Math.fround(row.drop_radius | 0), collisionHeight: Math.max(Math.fround(0.2), Math.fround(row.drop_height | 0)) };
+        library.pickup = {
+            items: [],
+            dropSound: row.drop_sound ?? row.item_sound,
+            dropType: row.drop_type,
+            dropAnimType: row.drop_anim_type,
+            collisionRadius: Math.fround(row.drop_radius | 0),
+            collisionHeight: Math.max(minPickupCollisionHeight, Math.fround(row.drop_height | 0))
+        };
 
         let collisionRadius = Math.fround(row.drop_radius | 0), collisionHeight = Math.fround(row.drop_height | 0);
 
@@ -1654,7 +1686,7 @@ export class DecodeEngine {
             }
             if (row.drop_type === 1 || row.drop_type === 2) collisionHeight = Math.fround(collisionHeight * 0.25);
             else if (row.drop_type === 3 || row.drop_type === 4) collisionHeight = Math.fround(collisionHeight * 0.5);
-            collisionHeight = Math.max(Math.fround(0.2), collisionHeight);
+            collisionHeight = Math.max(minPickupCollisionHeight, collisionHeight);
 
             library.scriptMeshes[path.toLowerCase()] = mesh;
             library.pickup.items.push({ mesh: path, skins: itemSkins, meshIndex: i, collisionRadius, collisionHeight });
@@ -2034,11 +2066,83 @@ export class DecodeEngine {
         ]);
         const itemInfos: Record<number, ItemInfo_T> = {};
 
-        for (const row of items) itemInfos[row.id] = { templateClass: null, addName: row.add_name, description: row.description.replace(/\\n/g, "\n"), popup: row.popup, isRecipe: false, isArrowOrLure: false, crystallizable: false, canShowEnchant: true, equipSound: "", meshTextures: [], equipmentIcons: [], weight: 0, crystalType: 0, consumeType: 0, etcType: -1, weaponType: 0, pAtk: 0, mAtk: 0, speed: 0, soulshots: 0, spiritshots: 0, mpConsume: 0, shieldPDef: 0, shieldRate: 0, avoidModify: 0, armorType: 0, bodyPart: 0, pDef: 0, mDef: 0, mpBonus: 0 }; // NWindow 0x1006b130 turns the literal "\n" into line breaks.
+        for (const row of items) itemInfos[row.id] = {
+            templateClass: null,
+            addName: row.add_name,
+            description: row.description.replace(/\\n/g, "\n"),
+            popup: row.popup,
+            isRecipe: false,
+            isArrowOrLure: false,
+            crystallizable: false,
+            canShowEnchant: true,
+            equipSound: "",
+            meshTextures: [],
+            equipmentIcons: [],
+            weight: 0,
+            crystalType: 0,
+            consumeType: 0,
+            etcType: -1,
+            weaponType: 0,
+            pAtk: 0,
+            mAtk: 0,
+            speed: 0,
+            soulshots: 0,
+            spiritshots: 0,
+            mpConsume: 0,
+            shieldPDef: 0,
+            shieldRate: 0,
+            avoidModify: 0,
+            armorType: 0,
+            bodyPart: 0,
+            pDef: 0,
+            mDef: 0,
+            mpBonus: 0
+        }; // NWindow 0x1006b130 turns the literal "\n" into line breaks.
 
-        for (const row of weapons) Object.assign(itemInfos[row.id], { templateClass: "weapon", equipmentIcons: row.icon.slice(1), crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, weaponType: row.weapon_type, pAtk: row.patt, mAtk: row.matt, speed: row.speed, soulshots: row.SS_count, spiritshots: row.SPS_count, mpConsume: row.mp_consume, shieldPDef: row.shield_pdef, shieldRate: row.shield_rate, avoidModify: row.avoid_mod });
-        for (const row of armor) Object.assign(itemInfos[row.id], { templateClass: "armor", equipmentIcons: [row.icon_2, row.icon_3, row.icon_4, row.icon_5], crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, weight: row.weight, crystalType: row.crystal_type, armorType: row.armor_type, bodyPart: row.body_part, pDef: row.physical_defence, mDef: row.magical_defence, mpBonus: row.mp_bonus });
-        for (const row of etcItems) Object.assign(itemInfos[row.id], { templateClass: "etc", crystallizable: row.crystallizable !== 0, equipSound: row.equip_sound, meshTextures: row.mesh_tex_pair[1], weight: row.weight, crystalType: row.grade, consumeType: row.stackable, etcType: row.family, canShowEnchant: row.family !== 7 && row.family !== 13 && row.family !== 14, isRecipe: row.family === 5, isArrowOrLure: row.family === 2 || row.family === 16 });
+        for (const row of weapons) Object.assign(itemInfos[row.id], {
+            templateClass: "weapon",
+            equipmentIcons: row.icon.slice(1),
+            crystallizable: row.crystallizable !== 0,
+            equipSound: row.equip_sound,
+            weight: row.weight,
+            crystalType: row.crystal_type,
+            weaponType: row.weapon_type,
+            pAtk: row.patt,
+            mAtk: row.matt,
+            speed: row.speed,
+            soulshots: row.SS_count,
+            spiritshots: row.SPS_count,
+            mpConsume: row.mp_consume,
+            shieldPDef: row.shield_pdef,
+            shieldRate: row.shield_rate,
+            avoidModify: row.avoid_mod
+        });
+        for (const row of armor) Object.assign(itemInfos[row.id], {
+            templateClass: "armor",
+            equipmentIcons: [row.icon_2, row.icon_3, row.icon_4, row.icon_5],
+            crystallizable: row.crystallizable !== 0,
+            equipSound: row.equip_sound,
+            weight: row.weight,
+            crystalType: row.crystal_type,
+            armorType: row.armor_type,
+            bodyPart: row.body_part,
+            pDef: row.physical_defence,
+            mDef: row.magical_defence,
+            mpBonus: row.mp_bonus
+        });
+        for (const row of etcItems) Object.assign(itemInfos[row.id], {
+            templateClass: "etc",
+            crystallizable: row.crystallizable !== 0,
+            equipSound: row.equip_sound,
+            meshTextures: row.mesh_tex_pair[1],
+            weight: row.weight,
+            crystalType: row.grade,
+            consumeType: row.stackable,
+            etcType: row.family,
+            canShowEnchant: row.family !== 7 && row.family !== 13 && row.family !== 14,
+            isRecipe: row.family === 5,
+            isArrowOrLure: row.family === 2 || row.family === 16
+        });
 
         const skillNames: Record<number, string> = {};
         const skillIcons: Record<number, string> = {};
@@ -2051,7 +2155,22 @@ export class DecodeEngine {
 
             if (text && [0, 1, 3].includes(row.oper_type)) skillRecords[`${row.skill_id}:${row.skill_level}`] = this.getSkillRecord(tables, row.skill_id, row.skill_level);
 
-            if (text) skillInfos[`${row.skill_id}:${row.skill_level}`] = { name: text.name, description: text.description.replace(/\\n/g, "\n"), icon: row.icon_name, type: row.is_magic ? 313 : row.oper_type === 2 ? 312 : 311, hpConsume: row.hp_consume, mpConsume: row.mp_consume, range: row.cast_range, isToggle: row.oper_type === 3, isDebuff: row.extra_eff !== 0, isEnchanted: row.is_ench !== 0, enchantName: text.desc_add1, enchantDescription: text.desc_add2.replace(/\\n/g, "\n"), enchantSkillLevel: row.ench_skill_id };
+            if (text)
+                skillInfos[`${row.skill_id}:${row.skill_level}`] = {
+                    name: text.name,
+                    description: text.description.replace(/\\n/g, "\n"),
+                    icon: row.icon_name,
+                    type: row.is_magic ? 313 : row.oper_type === 2 ? 312 : 311,
+                    hpConsume: row.hp_consume,
+                    mpConsume: row.mp_consume,
+                    range: row.cast_range,
+                    isToggle: row.oper_type === 3,
+                    isDebuff: row.extra_eff !== 0,
+                    isEnchanted: row.is_ench !== 0,
+                    enchantName: text.desc_add1,
+                    enchantDescription: text.desc_add2.replace(/\\n/g, "\n"),
+                    enchantSkillLevel: row.ench_skill_id
+                };
         }
 
         for (const row of tables.names)
@@ -2077,7 +2196,10 @@ export class DecodeEngine {
         return {
             petitionCategories: decodePetitionCategories(localization),
             trueFonts: trueFontInfo.fonts,
-            bitmapFonts: { small: { texture: getLanguageValue(localization, "Font"), glyph: getLanguageValue(localization, "Glyph") }, large: { texture: getLanguageValue(localization, "Font2"), glyph: getLanguageValue(localization, "Glyph2") } },
+            bitmapFonts: {
+                small: { texture: getLanguageValue(localization, "Font"), glyph: getLanguageValue(localization, "Glyph") },
+                large: { texture: getLanguageValue(localization, "Font2"), glyph: getLanguageValue(localization, "Glyph2") }
+            },
             zoneNames: zoneNames.datarows.map((row: any) => ({ id: row.nbr, color: row.zone_color_id, sectorX: row.x_world_grid, sectorY: row.y_world_grid, top: row.top_z, bottom: row.bottom_z, name: row.zone_name })),
             zoneNameMasks,
             socialSounds,
@@ -2101,7 +2223,32 @@ export class DecodeEngine {
             residences: Object.fromEntries(residences.datarows.slice().reverse().filter((row: any) => row.tag).map((row: any) => [row.id, row.castle_name])),
             recipes: recipes.datarows.map((row: any) => ({ id: row.id_mk, itemId: row.id_recipe, level: row.level, productId: row.id_item, count: row.count, mpCost: row.mp_cost, successRate: row.success_rate, materials: row.materials })),
             hennas: Object.fromEntries(hennas.datarows.map((row: any) => [row.id, { dyeItemId: row.dye_id, name: row.name, icon: row.icon, addName: row.symbol_add_name, description: row.symbol_add_desc.replace(/\\n/g, "\n") }])),
-            quests: quests.datarows.map((row: any) => ({ tag: row["tag_?"], id: row.quest_id, progressId: row.quest_prog | 0, title: row.main_name, progressTitle: row.prog_name, description: row.description.replace(/\\n/g, "\n"), itemIds: row.tab1, itemCounts: row.tab2, minLevel: row["UNK_npc1_?"] | 0, maxLevel: row["UNK_npc2_?"] | 0, classification: row["UNK_npc3_?"] | 0, entityName: row.entity_name, questX: row.quest_x, questY: row.quest_y, questZ: row.quest_z, unk0: row.UNK_0, unk1: row.UNK_1, unk2: row.UNK_2, unk3: row.UNK_3, entityX: row["entity_x_?"], entityY: row["entity_y_?"], entityZ: row["entity_z_?"], raceRestriction: row.race_restricion, shortDescription: row.short_description })),
+            quests: quests.datarows.map((row: any) => ({
+                tag: row["tag_?"],
+                id: row.quest_id,
+                progressId: row.quest_prog | 0,
+                title: row.main_name,
+                progressTitle: row.prog_name,
+                description: row.description.replace(/\\n/g, "\n"),
+                itemIds: row.tab1,
+                itemCounts: row.tab2,
+                minLevel: row["UNK_npc1_?"] | 0,
+                maxLevel: row["UNK_npc2_?"] | 0,
+                classification: row["UNK_npc3_?"] | 0,
+                entityName: row.entity_name,
+                questX: row.quest_x,
+                questY: row.quest_y,
+                questZ: row.quest_z,
+                unk0: row.UNK_0,
+                unk1: row.UNK_1,
+                unk2: row.UNK_2,
+                unk3: row.UNK_3,
+                entityX: row["entity_x_?"],
+                entityY: row["entity_y_?"],
+                entityZ: row["entity_z_?"],
+                raceRestriction: row.race_restricion,
+                shortDescription: row.short_description
+            })),
             actions: Object.fromEntries(actions.datarows.filter((row: any) => row.tag).map((row: any) => [row.id, { name: row.name.replace(/\\n/g, "\n"), icon: row.icon, type: row.type, category: row.category, allowedNpcIds: row.c, command: row.cmd, macroCommand: row.desc, requiresMount: row.c[0] === -1 }])),
             logonSpots: logon.datarows.map((row: any) => [row.x, row.y, row.z, row.yaw]),
             classNames: Object.fromEntries(classes.datarows.map((row: any) => [row.id, row.name])),
@@ -2145,7 +2292,15 @@ export class DecodeEngine {
 
             if (!name) throw new Error(`Player skill '${id}:${level}' has no skillname-e row.`);
 
-            return { id, level, name: name.name as string, animationCategory: row.ani_char as string, hitTime: row.hit_time as number, castRange: row.cast_range as number, previewTarget: mobSkillTable.get(id)?.target ? "self" : undefined };
+            return {
+                id,
+                level,
+                name: name.name as string,
+                animationCategory: row.ani_char as string,
+                hitTime: row.hit_time as number,
+                castRange: row.cast_range as number,
+                previewTarget: mobSkillTable.get(id)?.target ? "self" : undefined
+            };
         });
     }
 
@@ -2171,7 +2326,16 @@ export class DecodeEngine {
         for (const row of animations.datarows)
             if (row.seq_name && row.seq_name.toLowerCase() !== "none" && !animationNames.has(row.skill_id)) animationNames.set(row.skill_id, row.seq_name);
 
-        return { skills: skills.datarows, names: names.datarows, sounds: sounds.datarows, animations: animations.datarows, animationNames, skillRows, nameRows: new Map(names.datarows.map(row => [`${row.id}:${row.level}`, row])), soundRows: new Map(sounds.datarows.map(row => [`${row.skill_id}:${row.skill_level}`, row])) };
+        return {
+            skills: skills.datarows,
+            names: names.datarows,
+            sounds: sounds.datarows,
+            animations: animations.datarows,
+            animationNames,
+            skillRows,
+            nameRows: new Map(names.datarows.map(row => [`${row.id}:${row.level}`, row])),
+            soundRows: new Map(sounds.datarows.map(row => [`${row.skill_id}:${row.skill_level}`, row]))
+        };
     }
 
     protected getSkillRecord(tables: SkillTables_T, id: number, level: number): NpcSkillAttack_T {
@@ -2193,7 +2357,24 @@ export class DecodeEngine {
         const sounds = tables.soundRows.get(`${id}:${level}`) || tables.soundRows.get(`${id}:1`);
         // Server supplies cast duration; the offline preview uses skillgrp.hit_time.
         const serverSkill = mobSkillTable.get(id);
-        const attack: NpcSkillAttack_T = { id, level, name: name.name, animation: tables.animationNames.get(id) || "", animationCategory: row.ani_char, castStyle: row.cast_style, isMagic: row.is_magic !== 0, castRange: row.cast_range, hitTime: row.hit_time, isMultiShot: [8, 9, 10].includes(row.cast_style), flyingTime: 0, visualEffect, visual: null, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, sounds: [] };
+        const attack: NpcSkillAttack_T = {
+            id,
+            level,
+            name: name.name,
+            animation: tables.animationNames.get(id) || "",
+            animationCategory: row.ani_char,
+            castStyle: row.cast_style,
+            isMagic: row.is_magic !== 0,
+            castRange: row.cast_range,
+            hitTime: row.hit_time,
+            isMultiShot: [8, 9, 10].includes(row.cast_style),
+            flyingTime: 0,
+            visualEffect,
+            visual: null,
+            passive: serverSkill?.passive === true,
+            previewTarget: serverSkill?.target ? "self" : undefined,
+            sounds: []
+        };
 
         if (sounds) {
             const phases: [string, NpcSkillEffectPhase_T][] = [["spelleffect", "casting"], ["shoteffect", "shot"], ["expeffect", "explosion"]];
@@ -2246,7 +2427,8 @@ export class DecodeEngine {
 
             for (const row of tables.skills) {
                 if (![0, 1, 3].includes(row.oper_type) || !tables.nameRows.has(`${row.skill_id}:${row.skill_level}`)) continue;
-                if (visualEffect.toLowerCase() === "none" ? row.skill_id !== id || tables.nameRows.get(`${row.skill_id}:${row.skill_level}`).name !== attack.name : String(row.desc).toLowerCase() !== visualEffect.toLowerCase()) continue;
+                if (visualEffect.toLowerCase() === "none" ? row.skill_id !== id || tables.nameRows.get(`${row.skill_id}:${row.skill_level}`).name !== attack.name : String(row.desc).toLowerCase() !== visualEffect.toLowerCase())
+                    continue;
 
                 for (const sound of this.getSkillRecord(tables, row.skill_id, row.skill_level).sounds)
                     if (prepared.visual.actions !== null || prepared.visual.soundPhases.includes(sound.phase)) sounds.set(sound.sound, sound);
@@ -2527,7 +2709,8 @@ export class DecodeEngine {
     protected getCharacterPawnEffects(settings: LoadSettings_T, classPath: string): Promise<DecodeLibrary> {
         const key = classPath.toLowerCase();
 
-        if (!this.cacheCharacterPawnEffects.has(key)) this.cacheCharacterPawnEffects.set(key, this.getStoredAssets("character_effects", key, settings, () => this.decodeCharacterPawnEffects(settings, classPath)));
+        if (!this.cacheCharacterPawnEffects.has(key))
+            this.cacheCharacterPawnEffects.set(key, this.getStoredAssets("character_effects", key, settings, () => this.decodeCharacterPawnEffects(settings, classPath)));
 
         return this.cacheCharacterPawnEffects.get(key);
     }
@@ -2681,7 +2864,8 @@ export class DecodeEngine {
                 const pkgTexture = await this.usingDecodePackage(this.assetLoader.getPackage(texturePackage, "Texture"));
 
                 if (!pkgMesh.exportGroups.SkeletalMesh.some(entry => (entry.export.objectName as string).toLowerCase() === meshName.toLowerCase())) continue;
-                if (!pkgTexture.exports.some(entry => textureName.includes(".") ? pkgTexture.getObjectPath(entry).toLowerCase() === texture.toLowerCase() : (entry.objectName as string).toLowerCase() === textureName.toLowerCase())) continue;
+                if (!pkgTexture.exports.some(entry => textureName.includes(".") ? pkgTexture.getObjectPath(entry).toLowerCase() === texture.toLowerCase() : (entry.objectName as string).toLowerCase() === textureName.toLowerCase()))
+                    continue;
 
                 await this.pullScriptAssets(library, builder, null, { Mesh: mesh, Skins: [texture] });
             }
@@ -3186,7 +3370,14 @@ export class DecodeEngine {
         if (effectShow >= 0 && (isHero || level >= effectShow) && effect && effect.toLowerCase() !== "none") {
             if (!library.effectTemplates[effect]) await this.pullEffectTemplate(library, builder, effect, true);
 
-            item.enchantEffect = { path: effect, offset: weapon.enchantedEffectOffset[index], scale: weapon.enchantedEffectScale[index], velocityScale: weapon.enchantedEffectVelocityScale[index], opacity: isHero ? 1 : Number(values.opacity ?? 1), num: isHero ? 1 : Number(values.num ?? 1) };
+            item.enchantEffect = {
+                path: effect,
+                offset: weapon.enchantedEffectOffset[index],
+                scale: weapon.enchantedEffectScale[index],
+                velocityScale: weapon.enchantedEffectVelocityScale[index],
+                opacity: isHero ? 1 : Number(values.opacity ?? 1),
+                num: isHero ? 1 : Number(values.num ?? 1)
+            };
         }
     }
 
@@ -3343,7 +3534,15 @@ export class DecodeEngine {
             // Engine.dll cast_style -> MagicType: 0x7269dc, 0x79b471; IsCastingMultiShotSkill 0x796f00.
             // mobskillanimgrp has no level; preview the base level until server skill data supplies it.
             if (!current || current.level > level)
-                skillVisualsById.set(id, { level, hitTime: row.hit_time as number, animationCategory: row.ani_char as string, castStyle: row.cast_style as number, isMagic: row.is_magic !== 0, visualEffect: (row.desc as string) || "None", isMultiShot: [8, 9, 10].includes(row.cast_style as number) });
+                skillVisualsById.set(id, {
+                    level,
+                    hitTime: row.hit_time as number,
+                    animationCategory: row.ani_char as string,
+                    castStyle: row.cast_style as number,
+                    isMagic: row.is_magic !== 0,
+                    visualEffect: (row.desc as string) || "None",
+                    isMultiShot: [8, 9, 10].includes(row.cast_style as number)
+                });
         }
 
         for (const row of tables.animations) {
@@ -3352,7 +3551,23 @@ export class DecodeEngine {
             const id = row.skill_id as number;
             const visual = skillVisualsById.get(id);
             const serverSkill = mobSkillTable.get(id);
-            const attack: NpcSkillAttack_T = { id, level: visual ? visual.level : 1, name: row.skill_name as string, animation: row.seq_name as string, animationCategory: visual ? visual.animationCategory : "", castStyle: visual ? visual.castStyle : 0, isMagic: visual ? visual.isMagic : false, hitTime: visual ? visual.hitTime : 0, isMultiShot: visual ? visual.isMultiShot : false, flyingTime: 0, visualEffect: visual ? visual.visualEffect : "None", visual: null, passive: serverSkill?.passive === true, previewTarget: serverSkill?.target ? "self" : undefined, sounds: [] };
+            const attack: NpcSkillAttack_T = {
+                id,
+                level: visual ? visual.level : 1,
+                name: row.skill_name as string,
+                animation: row.seq_name as string,
+                animationCategory: visual ? visual.animationCategory : "",
+                castStyle: visual ? visual.castStyle : 0,
+                isMagic: visual ? visual.isMagic : false,
+                hitTime: visual ? visual.hitTime : 0,
+                isMultiShot: visual ? visual.isMultiShot : false,
+                flyingTime: 0,
+                visualEffect: visual ? visual.visualEffect : "None",
+                visual: null,
+                passive: serverSkill?.passive === true,
+                previewTarget: serverSkill?.target ? "self" : undefined,
+                sounds: []
+            };
             // Engine.dll 0x72e685: GetSkillSoundData matches level, then falls back to level 1.
             const sounds = soundsByIdAndLevel.get(`${id}:${attack.level}`) || soundsByIdAndLevel.get(`${id}:1`);
 

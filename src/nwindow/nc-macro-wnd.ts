@@ -61,7 +61,16 @@ export class NCMacroWnd {
         [this.element, this.editor, this.info].forEach((element, index) => {
             element.hidden = true;
             layer.tile(element, 0, 20, 256, index === 2 ? 141 : 381, 0, 0, 256, index === 2 ? 141 : 381, arrBack[index]);
-            NCFrameCtrl.createDOM(layer, element, 256, manager.getSysString(index === 2 ? SysString_T.MoreInfo : SysString_T.Macro), index !== 2, index === 1 ? () => this.setEditorVisible(false) : index === 0 ? () => this.setVisible(false) : null, null, index === 0 ? () => this.minimized.minimize() : index === 1 ? () => { this.setEditorVisible(false); this.editorMinimized.minimize(); } : null);
+            NCFrameCtrl.createDOM(
+                layer,
+                element,
+                256,
+                manager.getSysString(index === 2 ? SysString_T.MoreInfo : SysString_T.Macro),
+                index !== 2,
+                index === 1 ? () => this.setEditorVisible(false) : index === 0 ? () => this.setVisible(false) : null,
+                null,
+                index === 0 ? () => this.minimized.minimize() : index === 1 ? () => { this.setEditorVisible(false); this.editorMinimized.minimize(); } : null
+            );
         });
         layer.text(this.element, manager.getSysString(SysString_T.MacroList), 0xffdcdcdc, FontType_T.SMALL, 11, 32);
         this.count = layer.text(this.element, "(00/24)", 0xffdcdcdc, FontType_T.SMALL, 200, 32);

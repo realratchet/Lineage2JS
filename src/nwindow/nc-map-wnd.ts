@@ -7,6 +7,8 @@ import type { QuestLocation_T } from "./nc-quest-wnd";
 import { SKIN_SLOTS } from "./skin-textures";
 import SysString_T from "./sys-string";
 
+const markerHeadingOffset = Math.PI * 0.5;
+
 export type MapPartyMember_T = { objectId: number, name: string, x: number, y: number, z: number };
 type MapPartyMarker_T = { element: HTMLDivElement, x: number, y: number, memberIndex: number, caption: HTMLDivElement };
 
@@ -137,7 +139,8 @@ export class NCMapWnd {
             arr.push({ line, label, text: "" });
         }
         for (let i = 1; i < arrMapInfo.length; i++) {
-            const info = arrMapInfo[i], button = layer.button(map, info.x, info.y, 26, 26, TEX_ZOOM_IN, TEX_ZOOM_IN_DOWN, null, null, () => this.enterMap(i));
+            const info = arrMapInfo[i];
+            const button = layer.button(map, info.x, info.y, 26, 26, TEX_ZOOM_IN, TEX_ZOOM_IN_DOWN, null, null, () => this.enterMap(i));
 
             button.setAttribute("aria-label", `Open ${info.texture.split("map_")[1].replaceAll("_", " ")} map`);
             button.setAttribute("role", "button");
@@ -235,7 +238,10 @@ export class NCMapWnd {
             this.viewport.focus();
 
             const x = layer.toUI(event.clientX) + this.viewport.scrollLeft, y = layer.toUI(event.clientY) + this.viewport.scrollTop;
-            layer.beginDrag(e => { this.viewport.scrollLeft = x - layer.toUI(e.clientX); this.viewport.scrollTop = y - layer.toUI(e.clientY); }, () => layer.getManager().setCursor(""));
+            layer.beginDrag(e => {
+                this.viewport.scrollLeft = x - layer.toUI(e.clientX);
+                this.viewport.scrollTop = y - layer.toUI(e.clientY);
+            }, () => layer.getManager().setCursor(""));
             layer.getManager().setCursor(layer.getManager().getCursor(3));
         });
         this.viewport.addEventListener("keydown", event => {
@@ -262,7 +268,14 @@ export class NCMapWnd {
             this.paintPartyCaptions();
         });
         this.viewport.addEventListener("mouseleave", () => { this.mouseX = this.mouseY = -1; this.hideQuestCaption(); this.hidePartyCaptions(); });
-        this.viewport.addEventListener("scroll", () => { this.layer.place(this.returnButton, 301 + this.viewport.scrollLeft, 301 + this.viewport.scrollTop); this.paintGrid(); this.paintPlayerMarker(); this.paintTargetMarkers(); this.paintPartyMarkers(); this.paintQuestCaption(); });
+        this.viewport.addEventListener("scroll", () => {
+            this.layer.place(this.returnButton, 301 + this.viewport.scrollLeft, 301 + this.viewport.scrollTop);
+            this.paintGrid();
+            this.paintPlayerMarker();
+            this.paintTargetMarkers();
+            this.paintPartyMarkers();
+            this.paintQuestCaption();
+        });
     }
 
     public placeOnScreen(width: number, height: number) { this.minimized.place(Math.max(0, width - 354), Math.max(0, height * 0.5 - 252)); }
@@ -383,7 +396,9 @@ export class NCMapWnd {
         this.grid.hidden = this.mapId !== 0;
         if (this.mapId) return;
 
-        const spacing = Math.trunc(arrMapInfo[0].scaleX * (3 * 4096)), scrollX = Math.trunc(this.viewport.scrollLeft), scrollY = Math.trunc(this.viewport.scrollTop);
+        const spacing = Math.trunc(arrMapInfo[0].scaleX * (3 * 4096));
+        const scrollX = Math.trunc(this.viewport.scrollLeft);
+        const scrollY = Math.trunc(this.viewport.scrollTop);
 
         this.layer.place(this.grid, scrollX, scrollY);
         for (let axis = 0; axis < 2; axis++) {
@@ -393,7 +408,11 @@ export class NCMapWnd {
             for (const entry of arr) {
                 const text = `${index++}`;
 
-                if (entry.text !== text) { entry.text = text; this.layer.renderText(entry.label, text, 0xffdcdcdc); entry.label.setAttribute("aria-label", text); }
+                if (entry.text !== text) {
+                    entry.text = text;
+                    this.layer.renderText(entry.label, text, 0xffdcdcdc);
+                    entry.label.setAttribute("aria-label", text);
+                }
                 const width = Math.trunc(this.layer.measureText(text)), height = this.layer.getManager().canvas.getLineHeight();
 
                 entry.label.hidden = position <= (axis ? 20 : 15);
@@ -460,7 +479,7 @@ export class NCMapWnd {
         this.layer.text(this.questCaption, title, 0xffdcdcdc, undefined, 8, lineHeight + 10);
     }
 
-    public setFacing(yaw: number) { this.marker.style.transform = `rotate(${yaw + Math.PI * 0.5}rad)`; }
+    public setFacing(yaw: number) { this.marker.style.transform = `rotate(${yaw + markerHeadingOffset}rad)`; }
 
     public setTime(time: number) {
         let hour = Math.trunc(time), minute = Math.trunc((time - hour) * 60);

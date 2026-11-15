@@ -209,7 +209,8 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
         const bone = parent.getUnrealScriptProperty("AttachmentBone"), profile = base.getCollisionProfile ? base.getCollisionProfile() : null;
         if (profile && !profile.worldGeometry && !parent.scriptBase && (!bone || bone === "None") && !parent.getUnrealScriptProperty("bOnlyDrawIfAttached") && (!parent.getUnrealScriptProperty("bHardAttach") || parent.getUnrealScriptProperty("Role") === ENetRole_T.ROLE_Authority)) {
             // AActor::SetBase 0x105006f9..0x10500740 stores world-center differences.
-            const location = parent.getUnrealScriptProperty("Location") as Vector3Arr, baseLocation = (base as BaseActor).getUnrealScriptProperty("Location") as Vector3Arr;
+            const location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
+            const baseLocation = (base as BaseActor).getUnrealScriptProperty("Location") as Vector3Arr;
             parent.setUnrealScriptProperty("RelativeLocation", location.map((value, index) => Math.fround(Math.fround(value) - Math.fround(baseLocation[index]))) as Vector3Arr);
             this.updateRelativeRotation();
         }
@@ -243,7 +244,8 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
         if (!base || !base.getUnrealScriptProperty || parent.scriptBase || bone && bone !== "None" || parent.getUnrealScriptProperty("bOnlyDrawIfAttached")) return;
 
         // ULevel::MoveActor 0x1058c41d..0x1058c45c stores world-center differences.
-        const location = parent.getUnrealScriptProperty("Location") as Vector3Arr, baseLocation = base.getUnrealScriptProperty("Location") as Vector3Arr;
+        const location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
+        const baseLocation = base.getUnrealScriptProperty("Location") as Vector3Arr;
         const relative = parent.getUnrealScriptProperty("RelativeLocation") as Vector3Arr;
 
         for (let i = 0; i < 3; i++) relative[i] = Math.fround(Math.fround(location[i]) - Math.fround(baseLocation[i]));
@@ -263,7 +265,8 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
 
     public moveBasedActors(oldLocation: Vector3Arr, oldRotation: Vector3Arr): boolean {
         const parent = this.getParent(), physics = this.renderManager.getPhysicsManager();
-        const rotation = parent.getUnrealScriptProperty("Rotation") as Vector3Arr, location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
+        const rotation = parent.getUnrealScriptProperty("Rotation") as Vector3Arr;
+        const location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
         const changed = rotation.some((value, index) => value !== oldRotation[index]);
         const deltaRotation = rotation.map((value, index) => (value & 0xfffc) - (oldRotation[index] & 0xfffc)) as Vector3Arr;
         const delta = location.map((value, index) => Math.fround(Math.fround(value) - Math.fround(oldLocation[index]))) as Vector3Arr;
@@ -292,7 +295,9 @@ export class TransformComponent extends ObjectComponent<BaseActor | CollidingMes
                     // ULevel::MoveActor 0x1058bf5e..0x1058c0cb preserves these intermediate float stores.
                     tmpRotator.set(oldRotation[0], oldRotation[1], oldRotation[2]).rotateMatrix(tmpOldBaseCoords.identity());
                     tmpRotator.set(rotation[0], rotation[1], rotation[2]).rotateMatrix(tmpNewBaseCoords.identity());
-                    const a = tmpOldBaseCoords.elements, b = tmpNewBaseCoords.elements, relative = actor.getUnrealScriptProperty("RelativeLocation") as Vector3Arr;
+                    const a = tmpOldBaseCoords.elements;
+                    const b = tmpNewBaseCoords.elements;
+                    const relative = actor.getUnrealScriptProperty("RelativeLocation") as Vector3Arr;
                     const x = a[1] * relative[1] + a[2] * relative[2] + a[0] * relative[0];
                     const y = a[5] * relative[1] + a[6] * relative[2] + a[4] * relative[0];
                     const z = a[9] * relative[1] + a[10] * relative[2] + a[8] * relative[0];
@@ -462,7 +467,8 @@ export function beginTouch(parent: TouchActor_T, other: TouchActor_T): void {
 export function endTouch(parent: TouchActor_T, other: TouchActor_T, noNotifySelf = false): void {
     if (!other || other === parent) throw new Error(`Invalid touch actor '${other}'.`);
 
-    const touching = parent.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[], otherTouching = other.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[];
+    const touching = parent.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[];
+    const otherTouching = other.getUnrealScriptProperty("Touching") as unknown as TouchActor_T[];
     if (!noNotifySelf && touching.includes(other) && !parent.isPendingKill()) {
         const script = parent.getComponent<ScriptComponent>("script");
 

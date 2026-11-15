@@ -6,6 +6,9 @@ import { DEFAULT_CHAT_FILTERS, type ChatFilter_T } from "./nc-chat-filter-wnd";
 import SystemMessage_T from "./system-message";
 import SysString_T from "./sys-string";
 
+const chatScoreFactor = Math.fround(0.1);
+const chatTimerPeriod = 1000 * Math.fround(0.001);
+
 const TEX_BACK1 = "L2UI_CH3.ChatWnd.Chatting_Back1";
 const TEX_BACK2 = "L2UI_CH3.ChatWnd.Chatting_Back2";
 const TEX_BACK3 = "L2UI_CH3.ChatWnd.Chatting_Back3";
@@ -377,7 +380,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
 
     protected sendMessage(text: string, type: number, target: string) {
         if (type === Say2_T.ALL || type === Say2_T.SHOUT || type === Say2_T.TELL || type === Say2_T.TRADE) {
-            const factor = Math.fround(0.1), previous = this.chatScores.get(text);
+            const factor = chatScoreFactor, previous = this.chatScores.get(text);
             const score = previous === undefined ? 2000 : previous + Math.trunc(previous * factor + 2000) | 0;
 
             this.chatScore = this.chatScore + Math.trunc(this.chatScore * factor + (text.length * 60 + 100 | 0)) | 0;
@@ -401,7 +404,7 @@ export class NCChatWnd { // NCChatWnd (vtable 0x101acbc8): NCConsole 0x10062948 
     }
 
     public tick(deltaSeconds: number) { // NConsole 0x1007fa5c and NCChatWnd 0x10053e50; main-thread CTRL=0x027f.
-        const elapsed = Math.fround(deltaSeconds) + this.chatTimer, period = 1000 * Math.fround(0.001);
+        const elapsed = Math.fround(deltaSeconds) + this.chatTimer, period = chatTimerPeriod;
 
         this.chatTimer = Math.fround(elapsed);
         if (elapsed <= period) return;

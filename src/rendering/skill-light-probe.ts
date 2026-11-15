@@ -49,8 +49,15 @@ export class SkillLightProbe {
         this.hasLights = false;
 
         for (const [effect, light] of this.effects) {
-            if (!effect.parent) { this.effects.delete(effect); continue; }
-            if (!this.enabled) { light.color.setRGB(0, 0, 0); light.radius = 0; continue; }
+            if (!effect.parent) {
+                this.effects.delete(effect);
+                continue;
+            }
+            if (!this.enabled) {
+                light.color.setRGB(0, 0, 0);
+                light.radius = 0;
+                continue;
+            }
 
             tmpLightPosition.set(0, 0, 0);
             tmpLightColor.setRGB(0, 0, 0);
@@ -93,7 +100,11 @@ export class SkillLightProbe {
 
             light.color.lerp(tmpLightColor, 1 - Math.exp(-dt / (target > current ? 0.2 : 0.35)));
 
-            if (weight === 0 && Math.max(light.color.r, light.color.g, light.color.b) < 0.004) { light.color.setRGB(0, 0, 0); light.radius = 0; continue; }
+            if (weight === 0 && Math.max(light.color.r, light.color.g, light.color.b) < 0.004) {
+                light.color.setRGB(0, 0, 0);
+                light.radius = 0;
+                continue;
+            }
             if (light.radius > 0) this.hasLights = true;
         }
     }

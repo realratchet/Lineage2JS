@@ -6,6 +6,8 @@ import { SKIN_SLOTS } from "./skin-textures";
 import SystemMessage_T from "./system-message";
 import SysString_T from "./sys-string";
 
+const scoreBarScale = Math.fround(0.01) * 140;
+
 const TEX_BACK = "L2UI_CH3.SSQWnd.SSQ_back";
 const TEX_RECORD = "L2UI_CH3.SSQWnd.SSQ_back1";
 const TEX_PROJECTION = "L2UI_CH3.SSQWnd.SSQ_back1_1";
@@ -194,14 +196,20 @@ export class NCSSQMainBoard {
     protected seal(seal: number) { return this.layer.getManager().getSysString(seal >= 1 && seal <= 3 ? SysString_T.ArmyOfDusk + seal : SysString_T.None); }
     protected text(parent: HTMLElement, text: string, x: number, y: number, color = WHITE) { return this.layer.text(parent, text, color, FontType_T.SMALL, x, y); }
     protected lines(parent: HTMLElement, text: string, x: number, y: number, width: number, color = GRAY, isSpaced = false) { // UCanvas::DrawNormalText / GetTextSize: each new line adds the 'A' height, plus 6 when spaced.
-        const canvas = this.layer.getManager().canvas, lines = canvas.wrapText(text.replace(/\\n/g, "\n"), width), step = canvas.getLineHeight() + (isSpaced ? 6 : 0);
+        const canvas = this.layer.getManager().canvas;
+        const lines = canvas.wrapText(text.replace(/\\n/g, "\n"), width);
+        const step = canvas.getLineHeight() + (isSpaced ? 6 : 0);
 
         lines.forEach((line, index) => this.text(parent, line, x, y + index * step, color));
         return lines.length ? canvas.getLineHeight() + (lines.length - 1) * step : 0;
     }
 
     protected paintRecord() { // NCSSQStatusWnd paint 0x100fa620 / 0x100fb370.
-        const layer = this.layer, manager = layer.getManager(), record = this.record, content = this.content, height = manager.canvas.getLineHeight();
+        const layer = this.layer;
+        const manager = layer.getManager();
+        const record = this.record;
+        const content = this.content;
+        const height = manager.canvas.getLineHeight();
 
         content.replaceChildren();
         layer.setTile(this.recordBack, 256, 353, 0, 0, 256, 353, this.isProjection ? TEX_PROJECTION : TEX_RECORD);
@@ -281,7 +289,8 @@ export class NCSSQMainBoard {
         let y = 5;
 
         for (const groupId of this.festivalGroups) {
-            const groupLabel = groupId === 0 ? manager.getSysString(SysString_T.CompetitionResults) : "", groupExpanded = this.expandedFestivalGroups.has(groupId);
+            const groupLabel = groupId === 0 ? manager.getSysString(SysString_T.CompetitionResults) : "";
+            const groupExpanded = this.expandedFestivalGroups.has(groupId);
 
             this.treeButton(list.content, groupLabel || `Festival group ${groupId}`, 29, y, groupExpanded, (toggle = true) => {
                 this.selectedFestivalGroup = groupExpanded ? -1 : groupId;
@@ -303,7 +312,8 @@ export class NCSSQMainBoard {
                 if (festival.groupId !== groupId) continue;
 
                 const key = groupId * 256 + festival.id;
-                const label = manager.getSysString([SysString_T.Level31AndBelow, SysString_T.Level42AndBelow, SysString_T.Level53AndBelow, SysString_T.Level64AndBelow, SysString_T.NoLevelLimit][festival.id - 1]), expanded = this.expandedFestivals.has(key);
+                const label = manager.getSysString([SysString_T.Level31AndBelow, SysString_T.Level42AndBelow, SysString_T.Level53AndBelow, SysString_T.Level64AndBelow, SysString_T.NoLevelLimit][festival.id - 1]);
+                const expanded = this.expandedFestivals.has(key);
 
                 this.treeButton(list.content, label, 36, y, expanded, (toggle = true) => {
                     this.selectedFestival = expanded ? -1 : key;
@@ -325,7 +335,8 @@ export class NCSSQMainBoard {
                 if (!expanded) continue;
 
                 const duskMembers = festival.duskMembers.filter(Boolean).slice(0, 9), dawnMembers = festival.dawnMembers.filter(Boolean).slice(0, 9);
-                const panelHeight = (7 + duskMembers.length + dawnMembers.length) * (height + 4), panel = layer.createWindow(24, y - 3, 211, panelHeight, list.content);
+                const panelHeight = (7 + duskMembers.length + dawnMembers.length) * (height + 4);
+                const panel = layer.createWindow(24, y - 3, 211, panelHeight, list.content);
 
                 panel.style.overflow = "hidden";
                 layer.tile(panel, 0, 0, 211, 8, 0, 0, 211, 8, arrPanels[0]);
@@ -379,7 +390,7 @@ export class NCSSQMainBoard {
             y += height + 7;
             [seal.duskPercent, seal.dawnPercent].forEach((percent, index) => {
                 const cabal = index === 0 ? 2 : 1, limit = seal.owner === cabal ? this.retainLimit : this.claimLimit;
-                const scale = Math.fround(0.01) * 140, text = `${percent}%`, label = this.cabal(cabal);
+                const scale = scoreBarScale, text = `${percent}%`, label = this.cabal(cabal);
 
                 this.text(list.content, label, Math.min(15, 76 - layer.measureText(label)), y, GRAY);
                 layer.tile(list.content, 80, y, 140, 11, 0, 0, 8, 11, arrBars[index + 2]);
@@ -394,9 +405,13 @@ export class NCSSQMainBoard {
                 y += index === 0 ? height + 7 : 25;
             });
             if (expanded) { // NCSSQSealStatusTree 0x100fed9d..0x100ff1f1.
-                const count = seal.id === 1 ? 8 : seal.id === 2 ? 6 : 0, first = seal.id === 1 ? SysString_T.NecropolisOfSacrificeLevel2030 : SysString_T.HereticsCatacombLevel3040;
-                const description = manager.getSystemMessage(SystemMessage_T.SealValidationPeriod + seal.id), descriptionLines = manager.canvas.wrapText(description, 207).length, descriptionHeight = height + (descriptionLines - 1) * (height + 6);
-                const panelHeight = descriptionHeight + 24 + count * 2 * (height + 6), panel = layer.createWindow(10, y - 3, 236, panelHeight, list.content);
+                const count = seal.id === 1 ? 8 : seal.id === 2 ? 6 : 0;
+                const first = seal.id === 1 ? SysString_T.NecropolisOfSacrificeLevel2030 : SysString_T.HereticsCatacombLevel3040;
+                const description = manager.getSystemMessage(SystemMessage_T.SealValidationPeriod + seal.id);
+                const descriptionLines = manager.canvas.wrapText(description, 207).length;
+                const descriptionHeight = height + (descriptionLines - 1) * (height + 6);
+                const panelHeight = descriptionHeight + 24 + count * 2 * (height + 6);
+                const panel = layer.createWindow(10, y - 3, 236, panelHeight, list.content);
 
                 layer.tile(panel, 0, 0, 236, 8, 0, 0, 222, 8, arrPanels[0]);
                 layer.tile(panel, 0, 8, 236, panelHeight - 16, 0, 0, 222, 8, arrPanels[1]);

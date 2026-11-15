@@ -41,7 +41,9 @@ export function createClassTooltip(layer: NDomLayer, classId: number, x: number,
     const width = 184, height = canvas.getLineHeight() + 16;
     const y = anchorY - height < 0 ? anchorY + 32 : anchorY - height;
     const tooltip = layer.createWindow(Math.max(0, Math.min(x, canvas.width - width)) - layer.toUI(root.left), y - layer.toUI(root.top), width, height, layer.root);
-    const strings = layer.getManager().strings.sysStrings, label = strings[SysString_T.ClassAbbreviation], value = strings[(classId < 88 ? SysString_T.HumanFighter : CLASS_NAME_OFFSET) + classId];
+    const strings = layer.getManager().strings.sysStrings;
+    const label = strings[SysString_T.ClassAbbreviation];
+    const value = strings[(classId < 88 ? SysString_T.HumanFighter : CLASS_NAME_OFFSET) + classId];
 
     tooltip.classList.add("ndom-opaque", "ndom-tooltip");
     tooltip.setAttribute("role", "tooltip");
@@ -57,7 +59,14 @@ export function createClassTooltip(layer: NDomLayer, classId: number, x: number,
 }
 
 export class NCListCtrl {
-    public static getTextures() { return ([SKIN_SLOTS.listSelect, SKIN_SLOTS.listSelectEnd] as string[]).concat(["tab1", "tab2", "tab3", "tab1_down", "tab2_down", "tab3_down"].map(name => `${TEX_LIST}${name}`), [1, 2, 3].map(index => `?${TEX_LIST}tab${index}_over`), ["L2UI_CH3.Etc.textbackline"], arrClassIcons, NDOM_SCROLL_TEXTURES, TEX_TOOLTIP_SLICES); }
+    public static getTextures() { return ([SKIN_SLOTS.listSelect, SKIN_SLOTS.listSelectEnd] as string[]).concat(
+        ["tab1", "tab2", "tab3", "tab1_down", "tab2_down", "tab3_down"].map(name => `${TEX_LIST}${name}`),
+        [1, 2, 3].map(index => `?${TEX_LIST}tab${index}_over`),
+        ["L2UI_CH3.Etc.textbackline"],
+        arrClassIcons,
+        NDOM_SCROLL_TEXTURES,
+        TEX_TOOLTIP_SLICES
+    ); }
     public readonly element: HTMLDivElement;
     public onDoubleClick: (row: ListRow_T) => void = null;
     public onSelection: (row: ListRow_T) => void = null;
@@ -191,7 +200,8 @@ export class NCListCtrl {
         this.rows.sort((a, b) => {
             if (this.columns[column].numeric) return ((parseInt(a.cells[column], 10) || 0) - (parseInt(b.cells[column], 10) || 0)) * direction;
 
-            const left = a.cells[column].replace(/[A-Z]/g, value => value.toLowerCase()), right = b.cells[column].replace(/[A-Z]/g, value => value.toLowerCase());
+            const left = a.cells[column].replace(/[A-Z]/g, value => value.toLowerCase());
+            const right = b.cells[column].replace(/[A-Z]/g, value => value.toLowerCase());
 
             return (left < right ? -1 : left > right ? 1 : 0) * direction;
         });
@@ -241,7 +251,9 @@ export class NCListCtrl {
         if (this.tooltipRow === row) return;
 
         this.hideTooltip();
-        const rect = this.list.getBoundingClientRect(), x = this.layer.toUI(rect.left), y = this.layer.toUI(rect.top) + (this.hoverIndex - this.list.getScroll() / this.rowHeight) * this.rowHeight + 3;
+        const rect = this.list.getBoundingClientRect();
+        const x = this.layer.toUI(rect.left);
+        const y = this.layer.toUI(rect.top) + (this.hoverIndex - this.list.getScroll() / this.rowHeight) * this.rowHeight + 3;
 
         this.tooltipRow = row;
         this.tooltip = row.tooltip ? rowTooltip.createDOM(this.layer, this.layer.root, x, y, row.tooltip) : createClassTooltip(this.layer, row.classId, x, y); // row tooltip 0x10031b10

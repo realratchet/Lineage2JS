@@ -449,7 +449,8 @@ export class PawnCrowd extends Object3D {
         if (!textures.every(texture => isArrayable(texture) || isPlain(texture)) || !geometries.every(isPoolable)) return null;
 
         const layers = textures.map(texture => isArrayable(texture) ? this.retainLayer(texture) : null);
-        const arrays = new Set(layers.filter(layer => layer).map(layer => layer.array)), plains = new Set(textures.filter(texture => !isArrayable(texture)));
+        const arrays = new Set(layers.filter(layer => layer).map(layer => layer.array));
+        const plains = new Set(textures.filter(texture => !isArrayable(texture)));
         let group: PawnCrowdMesh = null, missing = Infinity;
 
         if (arrays.size > this.slots || plains.size > PLAIN_SLOTS) {
@@ -545,7 +546,8 @@ export class PawnCrowd extends Object3D {
     }
 
     protected registerPart(mesh: LitSkinnedMesh, index: number): void {
-        const source = mesh.actorRenderable.getSourceMaterial(mesh), material = (Array.isArray(source) ? source[index] : source) as MeshStaticMaterial;
+        const source = mesh.actorRenderable.getSourceMaterial(mesh);
+        const material = (Array.isArray(source) ? source[index] : source) as MeshStaticMaterial;
         const parts = this.cacheParts.get(mesh);
 
         parts[index] = null;
@@ -644,7 +646,9 @@ export class PawnCrowd extends Object3D {
     protected writeLights(uniforms: Record<string, THREE.IUniform>, modifier: Vector3): number {
         const data = this.dynamicData, light = this.lightBase + this.lightCount++ * LIGHT_TEXELS, count = uniforms.numActorLights.value as number;
         const ambient = uniforms.actorAmbient.value;
-        const positions = uniforms.actorLightPositions.value, directions = uniforms.actorLightDirections.value, colors = uniforms.actorLightColors.value;
+        const positions = uniforms.actorLightPositions.value;
+        const directions = uniforms.actorLightDirections.value;
+        const colors = uniforms.actorLightColors.value;
         const parameters = uniforms.actorLightParameters.value, attenuations = uniforms.actorLightAttenuations.value;
         let offset = light * 4;
 

@@ -67,7 +67,10 @@ export class NCCommunityWnd {
         this.folded.tabIndex = -1;
         this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.CommunityAltB));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, `${TEX_PATH}board_icon`);
-        const captionText = manager.getSysString(SysString_T.CommunityAltB), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
+        const captionText = manager.getSysString(SysString_T.CommunityAltB);
+        const width = layer.measureText(captionText);
+        const height = manager.canvas.getLineHeight();
+        const texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
         this.caption.hidden = true;

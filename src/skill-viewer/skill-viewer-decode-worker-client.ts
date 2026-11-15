@@ -59,7 +59,16 @@ export class SkillViewerDecodeWorkerClient extends DecodeWorkerClient {
 
         if (preload) this.cacheNpcPreloads.delete(npcId);
 
-        return this.consumeSkeletalMesh(preload ? preload.library : super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment), settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment);
+        return this.consumeSkeletalMesh(
+            preload ? preload.library : super.decodeSkeletalMesh(settings, packageName, meshName, scriptClassPath, texturePaths, npcId, equipment),
+            settings,
+            packageName,
+            meshName,
+            scriptClassPath,
+            texturePaths,
+            npcId,
+            equipment
+        );
     }
 
     // animations travel only with the first decode of a set, and only a consumed library reaches decodeObject3D's cache

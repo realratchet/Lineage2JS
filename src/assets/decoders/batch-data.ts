@@ -50,7 +50,10 @@ function groupActorsForBatching(
         const meshMaterials = actor.instance?.mesh?.materials;
         const meshGeometry = library.geometries[actor.instance?.mesh?.geometry];
         const collision = actor.collision;
-        const hasDistinctCollision = collision.useCylinderCollision || collision.blockZeroExtent !== collision.blockNonZeroExtent || !!meshGeometry?.staticMeshCollision?.collisionModel || !!(actor.scriptProperties.bOnlyAffectPawns ?? actor.sharedScriptProperties?.bOnlyAffectPawns);
+        const hasDistinctCollision = collision.useCylinderCollision
+            || collision.blockZeroExtent !== collision.blockNonZeroExtent
+            || !!meshGeometry?.staticMeshCollision?.collisionModel
+            || !!(actor.scriptProperties.bOnlyAffectPawns ?? actor.sharedScriptProperties?.bOnlyAffectPawns);
         const isBatchable = !(actor as any).dontBatch && !hasDistinctCollision && meshMaterials && meshGeometry && !(actor.ambient?.hardwareLighting && isReachedByDynamicLight(dynamicLights, (actor as any).bounds));
 
         if (!isBatchable) {
@@ -247,7 +250,10 @@ function mergeMeshLightFlags(
         globalVertex += vertexCounts[ai];
     }
 
-    if (rangeStart > rangeEnd) { rangeStart = 0; rangeEnd = 0; }
+    if (rangeStart > rangeEnd) {
+        rangeStart = 0;
+        rangeEnd = 0;
+    }
 
     const flagsOffset = rangeStart >> 3;
     const result = new Uint8Array(Math.ceil(rangeEnd / 8) - flagsOffset);

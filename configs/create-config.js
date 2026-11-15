@@ -22,7 +22,8 @@ const SUPPORTED_EXTENSIONS = ["UNR", "UTX", "USX", "UAX", "U", "UKX", "USK", "U"
 
 function createModuleConfig({ name, resolve, entry: _entry, library, isWorker }) {
     return function ({ bundleAnalyzer, mode, devtool, minimize, dirOutput, stats, httpAssets, defaultLoginServer, preloadSectors = [], characterCreationRaces = [0, 1, 2, 3, 4], loginExitUrl = "", clientDownloadUrl = "" }) {
-        if (!characterCreationRaces.length || characterCreationRaces.some(race => !Number.isInteger(race) || race < 0 || race > 4) || new Set(characterCreationRaces).size !== characterCreationRaces.length)
+        if (!characterCreationRaces.length || characterCreationRaces.some(race => !Number.isInteger(race) || race < 0 || race > 4) ||
+            new Set(characterCreationRaces).size !== characterCreationRaces.length)
             throw new Error(`Invalid character creation races: ${characterCreationRaces}`);
         if (preloadSectors.some(sector => !/^\d+_\d+$/.test(sector))) throw new Error(`Invalid preload sectors: ${preloadSectors}`);
 
@@ -35,7 +36,14 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
             ]);
 
         const dirAssets = path.resolve(__dirname, "../assets-c4") + path.sep;
-        const plugins = [new webpack.DefinePlugin({ BITMAP_NAMEPLATES: JSON.stringify(process.env.BITMAP_NAMEPLATES !== "0"), DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""), PRELOAD_SECTORS: JSON.stringify(preloadSectors), CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces), LOGIN_EXIT_URL: JSON.stringify(loginExitUrl), CLIENT_DOWNLOAD_URL: JSON.stringify(clientDownloadUrl) })];
+        const plugins = [new webpack.DefinePlugin({
+            BITMAP_NAMEPLATES: JSON.stringify(process.env.BITMAP_NAMEPLATES !== "0"),
+            DEFAULT_LOGIN_SERVER: JSON.stringify(defaultLoginServer || ""),
+            PRELOAD_SECTORS: JSON.stringify(preloadSectors),
+            CHARACTER_CREATION_RACES: JSON.stringify(characterCreationRaces),
+            LOGIN_EXIT_URL: JSON.stringify(loginExitUrl),
+            CLIENT_DOWNLOAD_URL: JSON.stringify(clientDownloadUrl)
+        })];
         const servedAssets = { files: Object.create(null), version: "" };
         if (prebuiltClasses) plugins.push(new prebuiltClasses.PrebuiltClassesPlugin());
         const dirThreeWasm = path.resolve(__dirname, "../node_modules/three-wasm/src");

@@ -115,7 +115,10 @@ export async function storeCachedPackage(path: string, settings: LoadSettings_T,
         const entries: Record<string, any> = {};
         for (const [key, entry] of Object.entries(data.entries) as [string, any][]) {
             const source = entry.result?.source;
-            if (!source) { entries[key] = entry; continue; }
+            if (!source) {
+                entries[key] = entry;
+                continue;
+            }
             const pixelIndex = sourcePixels.length;
             const pixels = source.pixelIndex === undefined ? source : data.sourcePixels[source.pixelIndex];
             sourcePixels.push({ data: pixels.data, paletteRed: pixels.paletteRed });

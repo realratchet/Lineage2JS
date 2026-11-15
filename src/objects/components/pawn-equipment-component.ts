@@ -11,6 +11,8 @@ import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type { IWeaponEnchantEffect, IWeaponEnchantMesh } from "@l2js/engine/contracts/pawn";
 import { EQUIPMENT_MESHES_CHANGED_EVENT } from "../../rendering/components/pawn-renderable-component";
 
+const basePawnSize = Math.fround(Math.sqrt(207));
+
 class EquippedItem extends GameObject {
     public readonly scriptProperties = new Map<string, any>();
 }
@@ -205,7 +207,7 @@ export class PawnEquipmentComponent extends ObjectComponent<BaseActor> {
     protected updateWeaponScale(): void {
         const parent = this.getParent();
         const weaponScale = Math.fround(parent.getUnrealScriptProperty("WeaponScale") as number);
-        const scale = weaponScale === 0 ? Math.fround(Math.fround(Math.sqrt(Math.fround(parent.getCollisionRadius()) * Math.fround(parent.getCollisionHeight()))) / Math.fround(Math.sqrt(207))) : weaponScale;
+        const scale = weaponScale === 0 ? Math.fround(Math.fround(Math.sqrt(Math.fround(parent.getCollisionRadius()) * Math.fround(parent.getCollisionHeight()))) / basePawnSize) : weaponScale;
 
         if (scale === this.weaponScale) return;
 

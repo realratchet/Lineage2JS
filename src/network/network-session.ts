@@ -323,7 +323,9 @@ export class NetworkSession {
                 throw new Error(`Replay camera key/action '${key}/${action}' is not implemented.`);
             }
         }
-        const info = GamePackets.readUserInfo(new PacketReader(first.payload)), render = this.network.getParent().getComponent("render"), input = this.network.getParent().getComponent("input");
+        const info = GamePackets.readUserInfo(new PacketReader(first.payload)),
+            render = this.network.getParent().getComponent("render"),
+            input = this.network.getParent().getComponent("input");
         const game = new GameClient();
 
         game.onPacket = (opcode, packet) => { if (this.game === game) this.network.onPacket(opcode, packet); };
@@ -398,7 +400,22 @@ export class NetworkSession {
         const zoom = properties.get("CurZoomingDist") as number;
         const fixedCamera = properties.get("CurFixedDefaultCameraNo") as number;
 
-        file.setScene({ position: render.camera.position.toArray(), yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI), pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI), zoom, desiredZoom: properties.get("DesiredZoomingDist") as number, hour: Math.floor(time / 3600), minute: Math.floor(time / 60) % 60, second: time % 60, duration: 0, cameraMode: properties.get("bCameraWalking") ? 1 : 0, firstPerson: fixedCamera === 1 ? 1 : 0, observerMode: this.network.movement.observation ? 1 : 0, actorYaw: render.player.getRotationYaw(), fixedCamera });
+        file.setScene({
+            position: render.camera.position.toArray(),
+            yaw: Math.trunc(Math.atan2(direction.y, direction.x) * 32768 / Math.PI),
+            pitch: Math.trunc(Math.atan2(direction.z, Math.hypot(direction.x, direction.y)) * 32768 / Math.PI),
+            zoom,
+            desiredZoom: properties.get("DesiredZoomingDist") as number,
+            hour: Math.floor(time / 3600),
+            minute: Math.floor(time / 60) % 60,
+            second: time % 60,
+            duration: 0,
+            cameraMode: properties.get("bCameraWalking") ? 1 : 0,
+            firstPerson: fixedCamera === 1 ? 1 : 0,
+            observerMode: this.network.movement.observation ? 1 : 0,
+            actorYaw: render.player.getRotationYaw(),
+            fixedCamera
+        });
         file.arrUserIds = [...this.network.actors.objects.keys()];
         this.game.startRecording(file);
         this.network.ui.setReplayRecording(true);

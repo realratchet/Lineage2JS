@@ -612,7 +612,14 @@ void main() {
             PawnMaterialData part = PawnMaterialData(vPawnColor, vPawnMaps, vPawnParameters, int(vPawnFlags.x), int(vPawnFlags.y), vPawnFlags.z > 0.5);
         #else
         int partRow = vPawnPart * 4;
-        PawnMaterialData part = PawnMaterialData(pawnMaterialData[partRow], pawnMaterialData[partRow + 1], pawnMaterialData[partRow + 2], int(pawnMaterialData[partRow + 3].x), int(pawnMaterialData[partRow + 3].y), pawnMaterialData[partRow + 3].z > 0.5);
+        PawnMaterialData part = PawnMaterialData(
+            pawnMaterialData[partRow],
+            pawnMaterialData[partRow + 1],
+            pawnMaterialData[partRow + 2],
+            int(pawnMaterialData[partRow + 3].x),
+            int(pawnMaterialData[partRow + 3].y),
+            pawnMaterialData[partRow + 3].z > 0.5
+        );
         #endif
         if (pawnSilhouette) { // same coverage as the per-part black FrontSide silhouette the shadow pass draws for unbatched meshes
             if (!part.visible || !gl_FrontFacing) discard;

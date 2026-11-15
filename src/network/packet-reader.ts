@@ -16,9 +16,24 @@ export class PacketReader {
     }
 
     public c(): number { this.need(1); return this.view.getUint8(this.offset++); }
-    public h(): number { this.need(2); const value = this.view.getUint16(this.offset, true); this.offset += 2; return value; }
-    public d(): number { this.need(4); const value = this.view.getInt32(this.offset, true); this.offset += 4; return value; }
-    public f(): number { this.need(8); const value = this.view.getFloat64(this.offset, true); this.offset += 8; return value; }
+    public h(): number {
+        this.need(2);
+        const value = this.view.getUint16(this.offset, true);
+        this.offset += 2;
+        return value;
+    }
+    public d(): number {
+        this.need(4);
+        const value = this.view.getInt32(this.offset, true);
+        this.offset += 4;
+        return value;
+    }
+    public f(): number {
+        this.need(8);
+        const value = this.view.getFloat64(this.offset, true);
+        this.offset += 8;
+        return value;
+    }
 
     public b(size: number): Uint8Array {
         this.need(size);

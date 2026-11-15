@@ -12,7 +12,10 @@ async function accessCabinetIndex(key: string, index: Float64Array = null): Prom
         request.onsuccess = () => {
             const database = request.result;
 
-            database.onversionchange = () => { database.close(); cacheDatabase = null; };
+            database.onversionchange = () => {
+                database.close();
+                cacheDatabase = null;
+            };
             resolve(database);
         };
     });

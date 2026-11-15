@@ -4,6 +4,9 @@ import { Vector3 } from "three";
 import * as GamePackets from "./game-packets";
 import { setVector } from "./network-location";
 
+const MIN_RACE_DELTA = Math.fround(0.0005);
+const MAX_RACE_DELTA = Math.fround(0.4);
+
 type Racer_T = { objectId: number, origin: Vector3, destination: Vector3, arrRatios: number[], groundSpeed: number, totalTime: number, segment: number, isFinished: boolean, isStartPending: boolean };
 
 const SEGMENT_LENGTH = 100;
@@ -25,7 +28,8 @@ export class NetworkMonRace { // race manager singleton 0x10ac419c: SetTime 0x10
         if (info.unknown2 !== -1) for (const runner of info.runners) {
             const heading = getYaw(runner.origin, runner.destination);
 
-            if (!this.network.actors.objects.has(runner.objectId)) this.network.actors.setNpc({ objectId: runner.objectId, npcId: runner.npcId, x: runner.origin.x, y: runner.origin.y, z: runner.origin.z, heading, name: "", title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0, abnormalState: 0, runSpd: runner.unknown, walkSpd: runner.unknown, swimRunSpd: runner.unknown, swimWalkSpd: runner.unknown, moveMultiplier: 1, attackSpeedMultiplier: 1, collisionRadius: runner.collisionRadius, collisionHeight: runner.collisionHeight, isAttackable: false, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false });
+            if (!this.network.actors.objects.has(runner.objectId))
+                this.network.actors.setNpc({ objectId: runner.objectId, npcId: runner.npcId, x: runner.origin.x, y: runner.origin.y, z: runner.origin.z, heading, name: "", title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0, abnormalState: 0, runSpd: runner.unknown, walkSpd: runner.unknown, swimRunSpd: runner.unknown, swimWalkSpd: runner.unknown, moveMultiplier: 1, attackSpeedMultiplier: 1, collisionRadius: runner.collisionRadius, collisionHeight: runner.collisionHeight, isAttackable: false, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false });
 
             this.setRacer(runner, heading);
         }
@@ -43,8 +47,8 @@ export class NetworkMonRace { // race manager singleton 0x10ac419c: SetTime 0x10
     }
 
     public tick(deltaTime: number) { // 0x1049aee0
-        if (deltaTime <= 0.0005) deltaTime = Math.fround(0.0005);
-        else if (deltaTime > 0.4) deltaTime = Math.fround(0.4);
+        if (deltaTime <= 0.0005) deltaTime = MIN_RACE_DELTA;
+        else if (deltaTime > 0.4) deltaTime = MAX_RACE_DELTA;
 
         if (!this.arrRacers.length || this.time < 0) return;
 
@@ -69,7 +73,8 @@ export class NetworkMonRace { // race manager singleton 0x10ac419c: SetTime 0x10
 
     protected setRacer(runner: GamePackets.MonRaceRunner_T, heading: number) { // SetRace 0x105e58b0 -> AddRacer 0x1049ad00 / reinit 0x104994f0
         const yaw = heading * Math.PI / 32768, groundSpeed = runner.unknown;
-        const racer = this.arrRacers.find(entry => entry.objectId === runner.objectId) || { objectId: runner.objectId, origin: new Vector3(), destination: new Vector3(), arrRatios: [], groundSpeed: 0, totalTime: 0, segment: 0, isFinished: false, isStartPending: false };
+        const racer = this.arrRacers.find(entry => entry.objectId === runner.objectId) ||
+            { objectId: runner.objectId, origin: new Vector3(), destination: new Vector3(), arrRatios: [], groundSpeed: 0, totalTime: 0, segment: 0, isFinished: false, isStartPending: false };
 
         setVector(racer.origin, runner.origin);
         setVector(racer.destination, runner.destination);

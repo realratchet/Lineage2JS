@@ -14,7 +14,8 @@ function decodeCursors(buffer: ArrayBuffer): CursorDecodeInfo_T[] {
         const width = header.getUint16(6, true), height = header.getUint16(8, true) / 2;
         const x = dib.getUint16(0, true), y = dib.getUint16(2, true);
 
-        if (image.length !== header.getUint32(14, true) || dib.getUint32(4, true) !== 40 || dib.getInt32(8, true) !== width || dib.getInt32(12, true) !== height * 2 || width <= 0 || width > 256 || height <= 0 || height > 256 || height % 1 || x >= width || y >= height) throw new Error(`Invalid cursor image ${id}.`);
+        if (image.length !== header.getUint32(14, true) || dib.getUint32(4, true) !== 40 || dib.getInt32(8, true) !== width || dib.getInt32(12, true) !== height * 2 || width <= 0 || width > 256 || height <= 0 || height > 256 || height % 1 || x >= width || y >= height)
+            throw new Error(`Invalid cursor image ${id}.`);
 
         const data = new Uint8Array(22 + image.length - 4), cursor = new DataView(data.buffer);
 

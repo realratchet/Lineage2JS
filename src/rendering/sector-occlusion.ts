@@ -3,7 +3,27 @@ import MeshBounds from "./mesh-bounds";
 import { SectorObject } from "../objects/zone-object";
 
 type Sector_T = { sector: SectorObject, bounds: Box3, objects: Object3D[], proxy: Mesh, query: WebGLQuery, hidden: boolean };
-type Occluder_T = { object: THREE.Mesh, geometry: THREE.BufferGeometry, material: THREE.Material, matrix: Matrix4, position: any, positionVersion: number, index: any, indexVersion: number, group: any, groupIndex: number, start: number, count: number, materialIndex: number, version: number, side: number, depthFunc: number, layers: number, drawStart: number, drawCount: number };
+type Occluder_T = {
+    object: THREE.Mesh,
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material,
+    matrix: Matrix4,
+    position: any,
+    positionVersion: number,
+    index: any,
+    indexVersion: number,
+    group: any,
+    groupIndex: number,
+    start: number,
+    count: number,
+    materialIndex: number,
+    version: number,
+    side: number,
+    depthFunc: number,
+    layers: number,
+    drawStart: number,
+    drawCount: number
+};
 const tmpBox = new Box3(), tmpMatrix = new Matrix4();
 
 function version(attribute: any): number { return attribute ? (attribute.isInterleavedBufferAttribute ? attribute.data : attribute).version : -1; }
@@ -14,7 +34,8 @@ function isStaticMesh(object: any): boolean {
     for (let parent = object; parent && !parent.isSectorObject; parent = parent.parent)
         if (parent.isMovableObject || parent.isRotatingObject || parent.isVehicleMesh || parent.isAgitStaticMeshActor || parent.particlePool) return false;
     const materials = Array.isArray(object.material) ? object.material : [object.material];
-    return materials.length > 0 && materials.every((material: THREE.Material & { isStaticMeshMaterial?: boolean, isTerrainMaterial?: boolean }) => material && (material.isStaticMeshMaterial || material.isTerrainMaterial));
+    return materials.length > 0 &&
+        materials.every((material: THREE.Material & { isStaticMeshMaterial?: boolean, isTerrainMaterial?: boolean }) => material && (material.isStaticMeshMaterial || material.isTerrainMaterial));
 }
 
 export class SectorOcclusion {
@@ -43,7 +64,10 @@ export class SectorOcclusion {
     protected height = 0;
     protected samples = 0;
     protected layers = 0;
-    protected readonly contextRestored = () => { for (const record of this.sectors.values()) record.query = null; this.invalidate(); };
+    protected readonly contextRestored = () => {
+        for (const record of this.sectors.values()) record.query = null;
+        this.invalidate();
+    };
 
     public constructor(protected readonly renderer: WebGLRenderer, protected readonly bounds: MeshBounds) {
         this.gl = renderer.getContext() as WebGL2RenderingContext;
@@ -95,7 +119,18 @@ export class SectorOcclusion {
 
     protected isOccluder(item: any): boolean {
         const object = item.object, material = item.material;
-        return this.owners.get(object) === this.activeSector && !object.isTerrainDecoration && this.bounds.isStatic(item.geometry) && material.visible && !material.transparent && material.depthTest && material.depthWrite && material.alphaTest === 0 && !material.alphaHash && !material.alphaToCoverage && !(material.defines && "USE_ALPHATEST" in material.defines) && !material.isSectorFallbackMaterial;
+        return this.owners.get(object) === this.activeSector &&
+            !object.isTerrainDecoration &&
+            this.bounds.isStatic(item.geometry) &&
+            material.visible &&
+            !material.transparent &&
+            material.depthTest &&
+            material.depthWrite &&
+            material.alphaTest === 0 &&
+            !material.alphaHash &&
+            !material.alphaToCoverage &&
+            !(material.defines && "USE_ALPHATEST" in material.defines) &&
+            !material.isSectorFallbackMaterial;
     }
 
     protected validOccluders(): boolean {
@@ -106,7 +141,8 @@ export class SectorOcclusion {
             if (object.layers.mask !== state.layers || state.material.side !== state.side || state.material.depthFunc !== state.depthFunc) return false;
             if (geometry.attributes.position !== state.position || version(state.position) !== state.positionVersion || geometry.index !== state.index || version(state.index) !== state.indexVersion) return false;
             if (geometry.drawRange.start !== state.drawStart || geometry.drawRange.count !== state.drawCount) return false;
-            if (state.group && (geometry.groups[state.groupIndex] !== state.group || state.group.start !== state.start || state.group.count !== state.count || state.group.materialIndex !== state.materialIndex)) return false;
+            if (state.group && (geometry.groups[state.groupIndex] !== state.group || state.group.start !== state.start || state.group.count !== state.count || state.group.materialIndex !== state.materialIndex))
+                return false;
             if (Array.isArray(object.material) ? object.material[state.materialIndex] !== state.material : object.material !== state.material) return false;
         }
         return true;
@@ -115,10 +151,22 @@ export class SectorOcclusion {
     public begin(camera: THREE.Camera, cullingCamera: THREE.Camera, sector: SectorObject): void {
         this.rejected = 0;
         this.active = this.enabled && !!sector && !this.renderer.getContext().isContextLost() && this.renderer.clippingPlanes.length === 0;
-        if (!this.active) { this.invalidate(); return; }
+        if (!this.active) {
+            this.invalidate();
+            return;
+        }
         const target = this.renderer.getRenderTarget();
-        const width = target ? target.width : this.gl.drawingBufferWidth, height = target ? target.height : this.gl.drawingBufferHeight, samples = target ? target.samples : 0;
-        if (this.activeSector !== sector || !this.view.equals(cullingCamera.matrixWorldInverse) || !this.projection.equals(cullingCamera.projectionMatrix) || this.layers !== cullingCamera.layers.mask || this.width !== width || this.height !== height || this.samples !== samples || !this.validOccluders()) this.invalidate();
+        const width = target ? target.width : this.gl.drawingBufferWidth,
+            height = target ? target.height : this.gl.drawingBufferHeight,
+            samples = target ? target.samples : 0;
+        if (this.activeSector !== sector ||
+            !this.view.equals(cullingCamera.matrixWorldInverse) ||
+            !this.projection.equals(cullingCamera.projectionMatrix) ||
+            this.layers !== cullingCamera.layers.mask ||
+            this.width !== width ||
+            this.height !== height ||
+            this.samples !== samples ||
+            !this.validOccluders()) this.invalidate();
         this.activeSector = sector;
         this.view.copy(cullingCamera.matrixWorldInverse);
         this.projection.copy(cullingCamera.projectionMatrix);

@@ -96,7 +96,20 @@ async function scan(source) {
             const lower = Object.fromEntries(names.map((name, index) => [name.toLowerCase(), index]));
             const propertyMap = Object.create(Constructor.prototype).getPropertyMap();
             const dependencies = Array.from(new Set(bases.map(base => base.pkg.name).concat(Array.from(properties.values()).map(ref => ref[0])))).filter(name => name !== "__native__");
-            const definition = { packages: dependencies, name: struct.friendlyName, native: lastNative ? reference(lastNative) : null, layout: { properties: Array.from(properties), unserialized }, defaults, inheretenceChain: bases.map(base => base.friendlyName), inheritedProps, propertyMap, mappedProperties: Object.entries(propertyMap), indices, lower, tag: Constructor === UObject ? struct.getDynamicTag(struct.friendlyName) : null };
+            const definition = {
+                packages: dependencies,
+                name: struct.friendlyName,
+                native: lastNative ? reference(lastNative) : null,
+                layout: { properties: Array.from(properties), unserialized },
+                defaults,
+                inheretenceChain: bases.map(base => base.friendlyName),
+                inheritedProps,
+                propertyMap,
+                mappedProperties: Object.entries(propertyMap),
+                indices,
+                lower,
+                tag: Constructor === UObject ? struct.getDynamicTag(struct.friendlyName) : null
+            };
 
             definitions[pkg.getObjectPath(exp).toLowerCase()] = definition;
         }

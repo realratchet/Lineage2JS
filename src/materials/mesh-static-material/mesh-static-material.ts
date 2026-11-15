@@ -10,6 +10,8 @@ import type DynamicLight from "../../objects/dynamic-light";
 import type ColorByte from "../../utils/color-byte";
 import type { PawnLight_T } from "../../rendering/components/pawn-light-component";
 
+const LIGHTMAP_HOUR_SCALE = Math.fround(1 / 24);
+
 const TRANSFORM_CHAIN_SLOTS = new Set(["shDiffuse", "shOpacity", "shSpecular", "shSpecularMask", "shDetail"]);
 
 // Actor.MaxLights - retail enables at most four per actor draw (L2.heine_fountain.trace call 192833)
@@ -423,7 +425,7 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         if (!this.arrLightmaps.length) return;
 
         // BSP draw 0x8fb824..0x8fb840 truncates hour * count * float(1/24), then takes the remainder.
-        const index = Math.trunc(time * this.arrLightmaps.length * Math.fround(1 / 24)) % this.arrLightmaps.length;
+        const index = Math.trunc(time * this.arrLightmaps.length * LIGHTMAP_HOUR_SCALE) % this.arrLightmaps.length;
         this.uniforms.lightMap.value = this.arrLightmaps[index];
     }
 
@@ -672,7 +674,10 @@ export default class MeshStaticMaterial extends ShaderMaterial {
 
     protected updateAlphaPasses() {
         if (this.alphaVersion === this.version) return;
-        if (this.alphaCore) { this.alphaCore.dispose(); this.alphaFringe.dispose(); }
+        if (this.alphaCore) {
+            this.alphaCore.dispose();
+            this.alphaFringe.dispose();
+        }
 
         this.alphaCore = this.createAlphaPass({ alphaTest: new Uniform(0) });
         this.alphaCore.blending = CustomBlending;
@@ -693,11 +698,17 @@ export default class MeshStaticMaterial extends ShaderMaterial {
         return this.alphaCore;
     }
 
-    public getAlphaFringe() { this.updateAlphaPasses(); return this.alphaFringe; }
+    public getAlphaFringe() {
+        this.updateAlphaPasses();
+        return this.alphaFringe;
+    }
 
     public dispose(): void {
         if (this.shadowMaterial) this.shadowMaterial.dispose();
-        if (this.alphaCore) { this.alphaCore.dispose(); this.alphaFringe.dispose(); }
+        if (this.alphaCore) {
+            this.alphaCore.dispose();
+            this.alphaFringe.dispose();
+        }
         super.dispose();
     }
 

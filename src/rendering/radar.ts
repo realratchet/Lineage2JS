@@ -2,6 +2,8 @@ import { DoubleSide, Object3D, PerspectiveCamera, Scene, Vector3, type WebGLRend
 import { ColorByte } from "../utils/color-byte";
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 
+const TAN_HALF_FOV = Math.tan(13.5 * Math.PI / 180);
+
 export type RadarState_T = { party: Vector3Like[], target: Vector3Like, markers: Vector3Like[] };
 
 type Vector3Like = { x: number, y: number, z: number };
@@ -57,7 +59,7 @@ export class Radar { // Engine.dll UCanvas::DrawRadarBack 0x7FDFF0, DrawRadarTar
         const pitch = Math.max(-0x2000, Math.min(-0x1200, Math.asin(Math.max(-1, Math.min(1, tmpDirection.z))) / UNREAL_TO_RADIANS - 0x800));
         const w = RADAR_WIDTH * this.uiScale, h = RADAR_HEIGHT * this.uiScale;
 
-        this.camera.fov = 2 * Math.atan(Math.tan(13.5 * Math.PI / 180) / (width / height)) * 180 / Math.PI; // FovAngle 27 horizontal, aspect from the full viewport (FCameraSceneNode 0x8E6168).
+        this.camera.fov = 2 * Math.atan(TAN_HALF_FOV / (width / height)) * 180 / Math.PI; // FovAngle 27 horizontal, aspect from the full viewport (FCameraSceneNode 0x8E6168).
         this.camera.aspect = width / height;
         this.camera.near = 1;
         this.camera.far = 1024;

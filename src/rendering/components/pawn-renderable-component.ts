@@ -13,6 +13,8 @@ import type { ScriptNativeCall_T } from "../../ue-script/vm";
 import { EActorViewType_T } from "../../assets/unreal/un-aactor";
 import MeshStaticMaterial from "../../materials/mesh-static-material/mesh-static-material";
 
+const HALF_PI = Math.PI / 2;
+
 export const EQUIPMENT_MESHES_CHANGED_EVENT = "equipmentMeshesChanged";
 
 const tmpSphere = new Sphere();
@@ -80,7 +82,11 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
     public tickActorView(deltaTime: number): void {
         const pawn = this.getParent(), type = pawn.getUnrealScriptProperty("L2ActorViewtype");
-        if (type !== EActorViewType_T.EAVT_InSighting && type !== EActorViewType_T.EAVT_OutSighting && type !== EActorViewType_T.EAVT_Hiding && type !== EActorViewType_T.EAVT_Showing && type !== EActorViewType_T.EAVT_Spawning) return;
+        if (type !== EActorViewType_T.EAVT_InSighting &&
+            type !== EActorViewType_T.EAVT_OutSighting &&
+            type !== EActorViewType_T.EAVT_Hiding &&
+            type !== EActorViewType_T.EAVT_Showing &&
+            type !== EActorViewType_T.EAVT_Spawning) return;
 
         if (type === EActorViewType_T.EAVT_Hiding && pawn.getUnrealScriptProperty("bHidden")) return;
 
@@ -90,13 +96,24 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (elapsed >= duration) {
             this.clearAlphaTexModifier();
             if (type === EActorViewType_T.EAVT_Hiding) pawn.setUnrealScriptProperty("bHidden", true);
-            else pawn.setUnrealScriptProperty("L2ActorViewtype", type === EActorViewType_T.EAVT_Spawning ? EActorViewType_T.EAVT_None : type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight);
+            else pawn.setUnrealScriptProperty(
+                "L2ActorViewtype",
+                type === EActorViewType_T.EAVT_Spawning ?
+                    EActorViewType_T.EAVT_None :
+                    type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing ? EActorViewType_T.EAVT_InSight : EActorViewType_T.EAVT_OutSight
+            );
             pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", 0);
             return;
         }
 
         pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", Math.fround(elapsed));
-        this.texModifierAlpha = Math.trunc(Math.max(0, Math.min(255, Math.fround(type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing || type === EActorViewType_T.EAVT_Spawning ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)))) / 255;
+        this.texModifierAlpha = Math.trunc(Math.max(
+            0,
+            Math.min(
+                255,
+                Math.fround(type === EActorViewType_T.EAVT_InSighting || type === EActorViewType_T.EAVT_Showing || type === EActorViewType_T.EAVT_Spawning ? elapsed / duration * 255 : 255 - 255 / duration * elapsed)
+            )
+        )) / 255;
     }
 
     public updateActorView(distance: number, range: number): boolean {
@@ -115,7 +132,9 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         if (type === EActorViewType_T.EAVT_Hiding || type === EActorViewType_T.EAVT_Showing) {
             if (type === previous) return this.prepareActorView(previous);
 
-            const elapsed = previous === EActorViewType_T.EAVT_Hiding || previous === EActorViewType_T.EAVT_Showing ? Math.fround((pawn.getUnrealScriptProperty("L2ActorViewDuration") as number) - (pawn.getUnrealScriptProperty("L2ActorViewElapsedTime") as number)) : 0;
+            const elapsed = previous === EActorViewType_T.EAVT_Hiding || previous === EActorViewType_T.EAVT_Showing ?
+                Math.fround((pawn.getUnrealScriptProperty("L2ActorViewDuration") as number) - (pawn.getUnrealScriptProperty("L2ActorViewElapsedTime") as number)) :
+                0;
 
             pawn.setUnrealScriptProperty("L2ActorViewtype", type);
             pawn.setUnrealScriptProperty("L2ActorViewElapsedTime", elapsed);
@@ -385,7 +404,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
         const mesh = this.meshes[0] as LitSkinnedMesh;
 
         mesh.updateMatrix();
-        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(Math.PI / 2)).multiply(mesh.matrix);
+        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(HALF_PI)).multiply(mesh.matrix);
         if (mesh.isLitSkinnedMesh) tmpMatrix.multiply(tmpOrigin.makeTranslation(-mesh.meshOrigin.x, -mesh.meshOrigin.y, -mesh.meshOrigin.z));
 
         // FDynamicActor::Update 0x8e7c75..0x8e7fad uses the primary MeshToWorld for all pawn parts.
@@ -421,7 +440,7 @@ export class PawnRenderableComponent extends ObjectComponent<BaseActor> {
 
         parent.updateWorldMatrix(true, false);
         mesh.updateMatrix();
-        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(Math.PI / 2)).multiply(mesh.matrix).multiply(tmpOrigin.makeTranslation(-mesh.meshOrigin.x, -mesh.meshOrigin.y, -mesh.meshOrigin.z));
+        tmpMatrix.multiplyMatrices(parent.matrixWorld, tmpOrigin.makeRotationZ(HALF_PI)).multiply(mesh.matrix).multiply(tmpOrigin.makeTranslation(-mesh.meshOrigin.x, -mesh.meshOrigin.y, -mesh.meshOrigin.z));
 
         const e = tmpMatrix.elements;
 

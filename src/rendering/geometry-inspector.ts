@@ -16,7 +16,15 @@ type MaterialSlot_T = { uuid: string, modifiers: string[] };
 type InspectMap_T = { slot: string, name: string, texture: THREE.Texture, layer: number };
 type HighlightGroup_T = { start: number, count: number, materialIndex: number };
 type InspectMaterial_T = { title: string, isHit: boolean, graph: string[], lines: string[], uniforms: string[], maps: InspectMap_T[], groups: HighlightGroup_T[] };
-type InspectHighlight_T = { object: THREE.Object3D, position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, index: THREE.BufferAttribute, groups: HighlightGroup_T[], local: Matrix4, skin?: LitSkinnedMesh, batch?: { start: number, count: number }[] };
+type InspectHighlight_T = {
+    object: THREE.Object3D,
+    position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+    index: THREE.BufferAttribute,
+    groups: HighlightGroup_T[],
+    local: Matrix4,
+    skin?: LitSkinnedMesh,
+    batch?: { start: number, count: number }[]
+};
 type InspectPart_T = { title: string, isHit: boolean, lines: string[], materials: InspectMaterial_T[], groups: HighlightGroup_T[] };
 type InspectSelection_T = { title: string, lines: string[], materials: InspectMaterial_T[], highlights: InspectHighlight_T[], parts?: InspectPart_T[] };
 type InspectPanel_T = { root: HTMLElement, title: HTMLElement, body: HTMLElement, button: HTMLButtonElement, groups: HighlightGroup_T[] };
@@ -302,7 +310,8 @@ function describeActor(actor: IStaticMeshActorDecodeInfo, lines: string[]): void
     lines.push(row("Actor", actor.name), row("Mesh", actor.instance.mesh.name));
     lines.push(row("Position", formatVector(info.position || [0, 0, 0])), row("Scale", formatVector(info.scale || [1, 1, 1])));
     if (actor.bounds && actor.bounds.isValid) lines.push(row("Bounds min", formatVector(actor.bounds.min)), row("Bounds max", formatVector(actor.bounds.max)));
-    if (actor.ambient) lines.push(row("Ambient", `${formatVector(actor.ambient.vector)}, glow ${formatNumber(actor.ambient.glow)}${actor.ambient.isUnlit ? ", unlit" : ""}${actor.ambient.hardwareLighting ? ", hardware lit" : ""}`));
+    if (actor.ambient)
+        lines.push(row("Ambient", `${formatVector(actor.ambient.vector)}, glow ${formatNumber(actor.ambient.glow)}${actor.ambient.isUnlit ? ", unlit" : ""}${actor.ambient.hardwareLighting ? ", hardware lit" : ""}`));
     lines.push(row("Scaled glow", formatNumber(actor.scaledGlow)));
     lines.push(row("Lights", actor.instance.lights ? `${actor.instance.lights.scene.length} scene, ${actor.instance.lights.environment.length} environment` : "none"));
     if (flags.length) lines.push(row("Flags", flags.join(", ")));
@@ -616,7 +625,15 @@ export class GeometryInspector {
         return {
             title: `${actor.name} (${actor.instance.mesh.name})`, lines,
             highlights: [{ object, position: object.geometry.getAttribute("position"), index: new Uint32BufferAttribute(indices, 1), groups: highlight, local: new Matrix4(), batch: [{ start: elementCount, count: indices.length - elementCount }] }],
-            materials: groups.map(({ group, slot }, index) => describeMaterial(library, materials[group.materialIndex], slots[slot], `Material ${index + 1}/${groups.length}: ${getMaterialName(library, materials[group.materialIndex], slots[slot])}`, index === hitGroup, [highlight[index]], layers ? layers.getX(object.batchIndices[group.start]) : 0))
+            materials: groups.map(({ group, slot }, index) => describeMaterial(
+                library,
+                materials[group.materialIndex],
+                slots[slot],
+                `Material ${index + 1}/${groups.length}: ${getMaterialName(library, materials[group.materialIndex], slots[slot])}`,
+                index === hitGroup,
+                [highlight[index]],
+                layers ? layers.getX(object.batchIndices[group.start]) : 0
+            ))
         };
     }
 
@@ -634,7 +651,14 @@ export class GeometryInspector {
 
         return {
             title: actor ? `${actor.name} (${actor.instance.mesh.name})` : object.name, lines, highlights: [highlight],
-            materials: materials.map((material, index) => describeMaterial(library, material, slots[index], `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slots[index])}`, index === hit.face.materialIndex, highlight.groups.filter(group => group.materialIndex === index)))
+            materials: materials.map((material, index) => describeMaterial(
+                library,
+                material,
+                slots[index],
+                `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slots[index])}`,
+                index === hit.face.materialIndex,
+                highlight.groups.filter(group => group.materialIndex === index)
+            ))
         };
     }
 
@@ -642,7 +666,14 @@ export class GeometryInspector {
         const library = (sector as any).decodeLibrary as DecodeLibrary, section = sector.bspSections[(object as any).sectionIndex];
         const slots = getMaterialSlots(library, section.material), materials = Array.isArray(object.material) ? object.material : [object.material];
         const nodes = object.geometry.getAttribute("nodeIndex"), node = nodes ? nodes.getX(hit.face.a) : -1, highlight = getMeshHighlight(object);
-        const lines = [row("Kind", "BSP section"), row("Section", `${(object as any).sectionIndex} of ${sector.bspSections.length}`), row("Name", section.sectionName), row("Priority", section.priority), row("Outdoor", !!section.isOutdoor), row("Unlit", !!section.isUnlit)];
+        const lines = [
+            row("Kind", "BSP section"),
+            row("Section", `${(object as any).sectionIndex} of ${sector.bspSections.length}`),
+            row("Name", section.sectionName),
+            row("Priority", section.priority),
+            row("Outdoor", !!section.isOutdoor),
+            row("Unlit", !!section.isUnlit)
+        ];
 
         if (section.blendingMode) lines.push(row("Blending", section.blendingMode));
         if (node >= 0) lines.push(row("Node", `${node}, zones ${sector.bspNodes[node].zones.join("/")}`));
@@ -662,16 +693,31 @@ export class GeometryInspector {
 
         return {
             title: `BSP section ${(object as any).sectionIndex}`, lines, highlights: [highlight],
-            materials: materials.map((material, index) => describeMaterial(library, material, slots[index], `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slots[index])}`, index === hit.face.materialIndex, highlight.groups.filter(group => group.materialIndex === index)))
+            materials: materials.map((material, index) => describeMaterial(
+                library,
+                material,
+                slots[index],
+                `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slots[index])}`,
+                index === hit.face.materialIndex,
+                highlight.groups.filter(group => group.materialIndex === index)
+            ))
         };
     }
 
     protected describeTerrain(sector: SectorObject, object: THREE.Mesh, hit: THREE.Intersection): InspectSelection_T {
         const library = (sector as any).decodeLibrary as DecodeLibrary, isBatch = !!(object as any).isTerrainBatch;
-        const segment: Terrain = isBatch ? (object as any).sectors.find((segment: Terrain) => hit.face.a >= segment.batchVertexOffset && hit.face.a < segment.batchVertexOffset + segment.geometry.getAttribute("position").count) : object as Terrain;
+        const segment: Terrain = isBatch ?
+            (object as any).sectors.find((segment: Terrain) => hit.face.a >= segment.batchVertexOffset && hit.face.a < segment.batchVertexOffset + segment.geometry.getAttribute("position").count) :
+            object as Terrain;
         const index = segment.geometry.index, materials = Array.isArray(segment.material) ? segment.material : [segment.material];
         const passes = materials.flatMap(material => [material, ...((material as any).passes || [])]);
-        const lines = [row("Kind", isBatch ? "Terrain (batched)" : "Terrain"), row("Segment", segment.name), row("Map", `${segment.mapX}, ${segment.mapY}`), row("Offset", `${segment.offsetX}, ${segment.offsetY}`), row("Heightmap", `${segment.heightmapX}, ${segment.heightmapY}`)];
+        const lines = [
+            row("Kind", isBatch ? "Terrain (batched)" : "Terrain"),
+            row("Segment", segment.name),
+            row("Map", `${segment.mapX}, ${segment.mapY}`),
+            row("Offset", `${segment.offsetX}, ${segment.offsetY}`),
+            row("Heightmap", `${segment.heightmapX}, ${segment.heightmapY}`)
+        ];
 
         lines.push(row("Bounds min", formatVector(segment.bounds.min.toArray())), row("Bounds max", formatVector(segment.bounds.max.toArray())));
         if (isBatch) lines.push(row("Batch", `${object.name}, segment ${segment.batchSectorIndex} of ${(object as any).sectors.length}`));
@@ -690,7 +736,15 @@ export class GeometryInspector {
         if (!object.forceRender && hit.point.distanceTo(this.render.camera.position) > object.fadeoutRadius[1]) return null;
 
         const library = (sector as any).decodeLibrary as DecodeLibrary, materials = Array.isArray(object.material) ? object.material : [object.material];
-        const lines = [row("Kind", "Terrain decoration"), row("Name", object.name), row("Instance", `${hit.instanceId} of ${object.count}`), row("Segment", object.terrainSegment), row("Fade range", formatVector(object.fadeoutRadius)), row("Force render", object.forceRender), row("Draw order", object.renderOrder)];
+        const lines = [
+            row("Kind", "Terrain decoration"),
+            row("Name", object.name),
+            row("Instance", `${hit.instanceId} of ${object.count}`),
+            row("Segment", object.terrainSegment),
+            row("Fade range", formatVector(object.fadeoutRadius)),
+            row("Force render", object.forceRender),
+            row("Draw order", object.renderOrder)
+        ];
         const highlight = getMeshHighlight(object);
 
         object.getMatrixAt(hit.instanceId, highlight.local);
@@ -702,7 +756,14 @@ export class GeometryInspector {
             materials: materials.map((material, index) => {
                 const slot = findMaterialSlot(library, material);
 
-                return describeMaterial(library, material, slot, `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slot)}`, index === hit.face.materialIndex, highlight.groups.filter(group => group.materialIndex === index));
+                return describeMaterial(
+                    library,
+                    material,
+                    slot,
+                    `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slot)}`,
+                    index === hit.face.materialIndex,
+                    highlight.groups.filter(group => group.materialIndex === index)
+                );
             })
         };
     }
@@ -712,7 +773,13 @@ export class GeometryInspector {
         const meshes = pawn.getComponent("animation").getMeshes() as LitSkinnedMesh[], batches = pawn.children.filter((child: any) => child.isPawnMesh) as PawnMesh[];
         const action = pawn.getAnimationAction() as THREE.AnimationAction, sector = render.getSector(hit.point);
         const arrAttachments: Attachment_T[] = [], highlights: InspectHighlight_T[] = [];
-        const lines = [row("Kind", pawn.isPlayer ? "Player" : "Pawn"), row("Name", pawn.name || "---"), row("Class", pawn.scriptClassId || "---"), row("Position", formatVector(pawn.getWorldPosition(tmpVertex).toArray())), row("Yaw", formatNumber(pawn.getRotationYaw()))];
+        const lines = [
+            row("Kind", pawn.isPlayer ? "Player" : "Pawn"),
+            row("Name", pawn.name || "---"),
+            row("Class", pawn.scriptClassId || "---"),
+            row("Position", formatVector(pawn.getWorldPosition(tmpVertex).toArray())),
+            row("Yaw", formatNumber(pawn.getRotationYaw()))
+        ];
 
         for (const mesh of meshes) collectAttachments(mesh, null, arrAttachments);
 
@@ -729,7 +796,11 @@ export class GeometryInspector {
 
         lines.push(row("Parts", `${meshes.length} body, ${arrAttachments.length} attached`));
         lines.push(row("Draws", batches.length ? `${batches.length} batched (${batches.map(batch => batch.parts.length).join(" + ")} parts)${batches.some(batch => batch.crowdEntry) ? ", crowd" : ""}` : "unbatched"));
-        lines.push(row("Sector", sector ? sector.name : "---"), row("Zone", sector ? sector.findPositionZone(hit.point) ?? "---" : "---"), row("Hit", `${formatVector(hit.point.toArray())} at ${formatNumber(hit.distance)}`));
+        lines.push(
+            row("Sector", sector ? sector.name : "---"),
+            row("Zone", sector ? sector.findPositionZone(hit.point) ?? "---" : "---"),
+            row("Hit", `${formatVector(hit.point.toArray())} at ${formatNumber(hit.distance)}`)
+        );
 
         const parts = meshes.map(mesh => this.describePawnPart(library, `Body: ${mesh.name}`, mesh, batches, hit, [], highlights));
 
@@ -740,7 +811,9 @@ export class GeometryInspector {
     }
 
     protected describePawnPart(library: DecodeLibrary, title: string, mesh: LitSkinnedMesh, batches: PawnMesh[], hit: PawnHit_T, lines: string[], highlights: InspectHighlight_T[]): InspectPart_T {
-        const geometry = mesh.geometry, materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material], batch = batches.find(batch => batch.sources.includes(mesh));
+        const geometry = mesh.geometry,
+            materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material],
+            batch = batches.find(batch => batch.sources.includes(mesh));
         const isHit = mesh === hit.mesh, isDrawn = !!batch || mesh.layers.mask !== 0, highlight = getMeshHighlight(mesh), groups = isDrawn ? highlight.groups : [];
 
         if (isDrawn) {
@@ -761,7 +834,14 @@ export class GeometryInspector {
 
                 const slot = findMaterialSlot(library, material);
 
-                return [describeMaterial(library, material, slot, `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slot)}`, isHit && index === hit.materialIndex, groups.filter(group => group.materialIndex === index))];
+                return [describeMaterial(
+                    library,
+                    material,
+                    slot,
+                    `Material ${index + 1}/${materials.length}: ${getMaterialName(library, material, slot)}`,
+                    isHit && index === hit.materialIndex,
+                    groups.filter(group => group.materialIndex === index)
+                )];
             })
         };
     }
@@ -770,7 +850,12 @@ export class GeometryInspector {
         const object = attachment.object as any, properties = object.scriptProperties as Map<string, any>, meshes: LitSkinnedMesh[] = [];
         const path = properties && properties.get("Mesh"), skins = properties && properties.get("Skins") as string[];
         const title = `Attachment: ${path || object.name || object.scriptClassId || object.type} on ${attachment.bone.name}`;
-        const lines = [row("Type", object.isActor ? "Pawn" : object.isEmitterActor ? "Emitter" : path ? "Mesh" : object.type), row("Bone", attachment.bone.name), row("Visible", isVisible(object)), row("Offset", formatVector(object.position.toArray()))];
+        const lines = [
+            row("Type", object.isActor ? "Pawn" : object.isEmitterActor ? "Emitter" : path ? "Mesh" : object.type),
+            row("Bone", attachment.bone.name),
+            row("Visible", isVisible(object)),
+            row("Offset", formatVector(object.position.toArray()))
+        ];
 
         object.traverse((child: any) => { if (child.isLitSkinnedMesh) meshes.push(child); });
 

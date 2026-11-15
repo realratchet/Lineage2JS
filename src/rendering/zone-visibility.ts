@@ -31,7 +31,10 @@ export class ZoneVisibility {
             this.portals.length = 0;
             for (const node of this.nodes) {
                 if (!(node.surfFlags & PolyFlags_T.PF_Portal) || node.zones[0] === node.zones[1]) continue;
-                if (node.zones.some(zone => zone < 0 || zone >= 64)) { this.nodes = null; return mask; }
+                if (node.zones.some(zone => zone < 0 || zone >= 64)) {
+                    this.nodes = null;
+                    return mask;
+                }
                 this.portals.push({ node, rect: { minX: 0, minY: 0, maxX: 1, maxY: 1 }, source: 0, target: 0, visible: false });
             }
         }
@@ -89,7 +92,10 @@ export class ZoneVisibility {
             for (const portal of this.portals) {
                 if (!portal.visible || portal.source !== source || !(mask & (1n << BigInt(portal.target)))) continue;
                 const rect = portal.rect, target = this.rects[portal.target];
-                const minX = Math.max(from.minX, rect.minX), minY = Math.max(from.minY, rect.minY), maxX = Math.min(from.maxX, rect.maxX), maxY = Math.min(from.maxY, rect.maxY);
+                const minX = Math.max(from.minX, rect.minX),
+                    minY = Math.max(from.minY, rect.minY),
+                    maxX = Math.min(from.maxX, rect.maxX),
+                    maxY = Math.min(from.maxY, rect.maxY);
                 if (minX > maxX || minY > maxY) continue;
                 if (minX >= target.minX && minY >= target.minY && maxX <= target.maxX && maxY <= target.maxY) continue;
                 target.minX = Math.min(target.minX, minX);
@@ -97,7 +103,10 @@ export class ZoneVisibility {
                 target.maxX = Math.max(target.maxX, maxX);
                 target.maxY = Math.max(target.maxY, maxY);
                 this.mask |= 1n << BigInt(portal.target);
-                if (!this.queued[portal.target]) { this.queue.push(portal.target); this.queued[portal.target] = 1; }
+                if (!this.queued[portal.target]) {
+                    this.queue.push(portal.target);
+                    this.queued[portal.target] = 1;
+                }
             }
         }
 
@@ -117,7 +126,10 @@ export class ZoneVisibility {
     }
 
     protected expandRect(rect: Rect_T, vertex: THREE.Vector3, planes: THREE.Plane[]): void {
-        const left = planes[1].distanceToPoint(vertex), right = planes[0].distanceToPoint(vertex), bottom = planes[2].distanceToPoint(vertex), top = planes[3].distanceToPoint(vertex);
+        const left = planes[1].distanceToPoint(vertex),
+            right = planes[0].distanceToPoint(vertex),
+            bottom = planes[2].distanceToPoint(vertex),
+            top = planes[3].distanceToPoint(vertex);
         const x = left / (left + right), y = bottom / (bottom + top);
         rect.minX = Math.min(rect.minX, x); rect.maxX = Math.max(rect.maxX, x);
         rect.minY = Math.min(rect.minY, y); rect.maxY = Math.max(rect.maxY, y);
@@ -143,7 +155,10 @@ export class ZoneVisibility {
             let visible = true;
             for (const plane of this.planes[zone]) {
                 const n = plane.normal;
-                if (n.x * (n.x > 0 ? max[0] : min[0]) + n.y * (n.y > 0 ? max[1] : min[1]) + n.z * (n.z > 0 ? max[2] : min[2]) + plane.constant < 0) { visible = false; break; }
+                if (n.x * (n.x > 0 ? max[0] : min[0]) + n.y * (n.y > 0 ? max[1] : min[1]) + n.z * (n.z > 0 ? max[2] : min[2]) + plane.constant < 0) {
+                    visible = false;
+                    break;
+                }
             }
             if (visible) return true;
         }

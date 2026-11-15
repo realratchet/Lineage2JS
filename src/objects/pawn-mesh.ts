@@ -101,7 +101,8 @@ export class PawnMesh extends LitSkinnedMesh {
 
     public constructor(parts: PawnPart_T[], textures: Texture[], maxParts: number, maxTextures: number) {
         const material = new MeshStaticMaterial();
-        const sources = parts.map(part => part.mesh), padded = Array.from({ length: maxParts }, (_value, i) => sources[Math.min(i, sources.length - 1)]);
+        const sources = parts.map(part => part.mesh);
+        const padded = Array.from({ length: maxParts }, (_value, i) => sources[Math.min(i, sources.length - 1)]);
         super(getGeometry(parts), material);
 
         (this as any).isPawnMesh = true;
@@ -236,7 +237,8 @@ export class PawnMesh extends LitSkinnedMesh {
 export function createPawnMeshes(meshes: THREE.Mesh[], renderer: WebGLRenderer): PawnMesh[] {
     const groups: PawnPart_T[][] = [], textures: Set<Texture>[] = [];
     const layouts: string[] = [];
-    const maxParts = Math.min(16, Math.floor((renderer.capabilities.maxVertexUniforms - 96) / 19)), maxTextures = Math.min(16, renderer.capabilities.maxTextures - 4);
+    const maxParts = Math.min(16, Math.floor((renderer.capabilities.maxVertexUniforms - 96) / 19));
+    const maxTextures = Math.min(16, renderer.capabilities.maxTextures - 4);
 
     for (const mesh of meshes as LitSkinnedMesh[]) {
         if (!mesh.isLitSkinnedMesh || !mesh.skeleton) continue;
@@ -262,7 +264,10 @@ export function createPawnMeshes(meshes: THREE.Mesh[], renderer: WebGLRenderer):
 
         if (owner >= 0 && groupIndex < 0) continue; // a skeleton packs into one bone atlas only
         if (groupIndex < 0) { groups.push(parts); textures.push(new Set(maps)); layouts.push(layout); }
-        else { groups[groupIndex].push(...parts); for (const texture of maps) textures[groupIndex].add(texture); }
+        else {
+            groups[groupIndex].push(...parts);
+            for (const texture of maps) textures[groupIndex].add(texture);
+        }
     }
 
     return groups.flatMap((group, i) => group.length > 1 ? [new PawnMesh(group, Array.from(textures[i]), maxParts, maxTextures)] : []);

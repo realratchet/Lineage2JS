@@ -147,7 +147,8 @@ export class NCRecipeShopWnd {
     }
     public async show(list: RecipeShopManageList_T) {
         this.setVisible(false);
-        const manager = this.layer.getManager(), title = manager.getSysString(list.isDwarven ? SysString_T.DwarfManufacture : SysString_T.GeneralManufacture);
+        const manager = this.layer.getManager();
+        const title = manager.getSysString(list.isDwarven ? SysString_T.DwarfManufacture : SysString_T.GeneralManufacture);
         const add = (side: number, recipeId: number, initialCount: number, price: number) => {
             const recipe = manager.strings.recipes.find(recipe => recipe.id === recipeId);
 

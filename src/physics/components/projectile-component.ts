@@ -12,6 +12,8 @@ import type { CollisionQuery_T } from "../collision-world";
 import type NMover from "../mover";
 import type { ICollidable } from "../../objects/objects";
 
+const QUARTER_PI = Math.PI / 4;
+
 export type ProjectileActor_T = Object3D & IObject & ScriptHost_T & { scriptProperties: Map<string, any> };
 
 const tmpDirection = new Vector3();
@@ -93,7 +95,7 @@ export class NProjectileComponent extends PhysicsComponent<ProjectileActor_T> {
         if (distance <= 550) return 0;
 
         // 0x78cbe8..0x78cc1a: float[0xaae7e0]=PI/4, angle then tangent.
-        const angle = Math.PI / 4 - Math.PI / 4 * factor / ((distance - 550) * Math.PI / 4 + factor);
+        const angle = QUARTER_PI - QUARTER_PI * factor / ((distance - 550) * Math.PI / 4 + factor);
         const height = distance * Math.tan(angle);
 
         properties.set("bHermiteInterpolation", true);

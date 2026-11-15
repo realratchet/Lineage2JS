@@ -29,12 +29,20 @@ function encodeBlockDXT1(colors: Uint8Array, out: DataView, offset: number) {
         for (let j = i + 1; j < 16; j++) {
             const dr = colors[i * 3] - colors[j * 3], dg = colors[i * 3 + 1] - colors[j * 3 + 1], db = colors[i * 3 + 2] - colors[j * 3 + 2], dist = dr * dr + dg * dg + db * db;
 
-            if (dist > best) { best = dist; first = i; second = j; }
+            if (dist > best) {
+                best = dist;
+                first = i;
+                second = j;
+            }
         }
 
     let color0 = encodeColor565(colors, first * 3), color1 = encodeColor565(colors, second * 3);
 
-    if (color0 < color1) { const swap = color0; color0 = color1; color1 = swap; }
+    if (color0 < color1) {
+        const swap = color0;
+        color0 = color1;
+        color1 = swap;
+    }
     if (color0 !== color1) { // c0 <= c1 would select 3-colour mode with index 3 transparent
         expandColor565(color0, tmpPalette, 0);
         expandColor565(color1, tmpPalette, 3);
@@ -48,7 +56,10 @@ function encodeBlockDXT1(colors: Uint8Array, out: DataView, offset: number) {
             let bestIndex = 0, bestDist = Infinity;
 
             for (let p = 0; p < 4; p++) {
-                const dr = colors[i * 3] - tmpPalette[p * 3], dg = colors[i * 3 + 1] - tmpPalette[p * 3 + 1], db = colors[i * 3 + 2] - tmpPalette[p * 3 + 2], dist = dr * dr + dg * dg + db * db;
+                const dr = colors[i * 3] - tmpPalette[p * 3],
+                    dg = colors[i * 3 + 1] - tmpPalette[p * 3 + 1],
+                    db = colors[i * 3 + 2] - tmpPalette[p * 3 + 2],
+                    dist = dr * dr + dg * dg + db * db;
 
                 if (dist < bestDist) { bestDist = dist; bestIndex = p; }
             }
@@ -82,7 +93,9 @@ function importBmp8(file: Uint8Array) {
     const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
     const width = view.getInt32(18, true), height = view.getInt32(22, true), offset = view.getUint32(10, true);
 
-    if (view.getUint16(0, true) !== 0x4d42 || width <= 0 || height <= 0 || (width & (width - 1)) || (height & (height - 1)) || view.getUint16(26, true) !== 1 || view.getUint16(28, true) !== 8 || view.getUint32(30, true) !== 0)
+    if (view.getUint16(0, true) !== 0x4d42 || width <= 0 || height <= 0 || (width & (width - 1)) || (height & (height - 1)) || view.getUint16(26, true) !== 1 ||
+        view.getUint16(28, true) !== 8 ||
+        view.getUint32(30, true) !== 0)
         throw new Error(`Unsupported crest BMP format`);
 
     const used = view.getInt32(46, true), count = used === 0 || used >= 256 ? 256 : Math.max(0, used), stride = (width + 3) & ~3;

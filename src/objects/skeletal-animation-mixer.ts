@@ -36,7 +36,11 @@ function evaluateTrack(channel: ChannelState_T, t: number): ArrayLike<number> { 
 
     if (channel.kind === 0) return interpolant.evaluate(t);
 
-    const times = interpolant.parameterPositions, values = interpolant.sampleValues, stride = interpolant.valueSize, result = interpolant.resultBuffer, last = times.length - 1;
+    const times = interpolant.parameterPositions;
+    const values = interpolant.sampleValues;
+    const stride = interpolant.valueSize;
+    const result = interpolant.resultBuffer;
+    const last = times.length - 1;
 
     if (t < times[0] || t >= times[last]) {
         const offset = t < times[0] ? 0 : last * stride;
@@ -370,7 +374,10 @@ export class SkeletalAnimationMixer extends AnimationMixer {
                     if (isLazyBone(channels[j].binding)) this.evaluateChannel(channels[j], clipTime, frame);
             }
             for (let i = 0; i < root.lazySlowActions.length; i++) {
-                const action = root.lazySlowActions[i], channels = this.getActionState(action).channels, clipTime = root.lazySlowTimes[i], weight = root.lazySlowWeights[i];
+                const action = root.lazySlowActions[i];
+                const channels = this.getActionState(action).channels;
+                const clipTime = root.lazySlowTimes[i];
+                const weight = root.lazySlowWeights[i];
 
                 for (let j = 0; j < channels.length; j++) {
                     if (!isLazyBone(channels[j].binding)) continue;
@@ -447,7 +454,10 @@ export class SkeletalAnimationMixer extends AnimationMixer {
 
         if (weight <= 0) return;
 
-        const channels = state.channels, interpolants = action._interpolants, bindings = action._propertyBindings, isAdditive = action.blendMode === AdditiveAnimationBlendMode;
+        const channels = state.channels;
+        const interpolants = action._interpolants;
+        const bindings = action._propertyBindings;
+        const isAdditive = action.blendMode === AdditiveAnimationBlendMode;
         let hasLazy = false;
 
         for (let j = 0; j < channels.length; j++) {

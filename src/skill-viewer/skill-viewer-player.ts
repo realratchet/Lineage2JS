@@ -83,7 +83,10 @@ export class PlayerSkillViewerStage extends SkillViewerStage {
 
             if (selected.names.some(name => name.toLowerCase() !== "none")) hasNamedAnimation = true;
             if (clips.every(clip => !clip) || selected.names.some((name, index) => name.toLowerCase() !== "none" && !clips[index])) continue;
-            if (needsPreShot && !clips.some(clip => clip && (clip as any).animationNotifies.some((notify: IAnimationNotifyDecodeInfo) => notify.object?.type === "native" && notify.object.className.toLowerCase() === "animnotify_attackpreshot"))) continue;
+            if (needsPreShot &&
+                !clips.some(clip => clip &&
+                (clip as any).animationNotifies.some((notify: IAnimationNotifyDecodeInfo) => notify.object?.type === "native" && notify.object.className.toLowerCase() === "animnotify_attackpreshot")))
+                continue;
             return;
         }
 

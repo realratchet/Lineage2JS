@@ -3,7 +3,22 @@ import { ObjectComponent } from "../../game/components";
 import type BaseActor from "../../base-actor";
 import { sinRotator } from "../../assets/unreal/utils/rotator";
 
-export type PawnLight_T = { owner: Object3D, position: Vector3, direction: Vector3, targetPosition: Vector3, cone: number, color: Color, radius: number, lifeTime: number, attenuation: Vector2, pulse: { color: Color, period: number, phase: number, time: number } | null };
+const lightCone = Math.cos(Math.fround(Math.PI / 2) / 2);
+const pulseBase = Math.fround(0.6);
+const pulseAmplitude = Math.fround(0.39);
+
+export type PawnLight_T = {
+    owner: Object3D,
+    position: Vector3,
+    direction: Vector3,
+    targetPosition: Vector3,
+    cone: number,
+    color: Color,
+    radius: number,
+    lifeTime: number,
+    attenuation: Vector2,
+    pulse: { color: Color, period: number, phase: number, time: number } | null
+};
 
 export class NPawnLightComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "nPawnLight";
@@ -12,7 +27,18 @@ export class NPawnLightComponent extends ObjectComponent<BaseActor> {
 
     public add(owner: Object3D, color: readonly number[], radius: number, lifeTime: number, position: Vector3 = null, direction: Vector3 = null, targetPosition: Vector3 = null): PawnLight_T {
         // Engine.dll 0x79583f / 0x79ed26: steady, owner-relative pawn lights.
-        const light: PawnLight_T = { owner, position: position ? position.clone() : new Vector3(), direction: direction ? direction.clone() : new Vector3(), targetPosition: targetPosition ? targetPosition.clone() : null, cone: direction ? Math.cos(Math.fround(Math.PI / 2) / 2) : -1, color: new Color(color[0], color[1], color[2]), radius: (radius + 1) * 25, lifeTime, attenuation: new Vector2(), pulse: null };
+        const light: PawnLight_T = {
+            owner,
+            position: position ? position.clone() : new Vector3(),
+            direction: direction ? direction.clone() : new Vector3(),
+            targetPosition: targetPosition ? targetPosition.clone() : null,
+            cone: direction ? lightCone : -1,
+            color: new Color(color[0], color[1], color[2]),
+            radius: (radius + 1) * 25,
+            lifeTime,
+            attenuation: new Vector2(),
+            pulse: null
+        };
 
         this.lights.unshift(light);
         this.version++;
@@ -21,7 +47,7 @@ export class NPawnLightComponent extends ObjectComponent<BaseActor> {
 
     public setPulse(light: PawnLight_T, period: number, phase: number): void {
         light.pulse = { color: light.color.clone(), period, phase, time: 0 };
-        light.color.multiplyScalar(Math.fround(0.6));
+        light.color.multiplyScalar(pulseBase);
         this.version++;
     }
 
@@ -34,7 +60,10 @@ export class NPawnLightComponent extends ObjectComponent<BaseActor> {
     }
 
     public getLights(): readonly PawnLight_T[] { return this.lights; }
-    public clear(): void { this.lights.length = 0; this.version++; }
+    public clear(): void {
+        this.lights.length = 0;
+        this.version++;
+    }
     public onDetach(): void { this.clear(); }
 
     public onUpdate(_currentTime: number, deltaTime: number): void {
@@ -55,7 +84,7 @@ export class NPawnLightComponent extends ObjectComponent<BaseActor> {
                 // FNPawnLight::GetIntensity 0x795600..0x795652.
                 const angle = Math.trunc(pulse.time * 2293760 / Math.max(1, pulse.period) + (pulse.phase << 8));
 
-                light.color.copy(pulse.color).multiplyScalar(Math.fround(Math.fround(0.39) * sinRotator(angle) + Math.fround(0.6)));
+                light.color.copy(pulse.color).multiplyScalar(Math.fround(pulseAmplitude * sinRotator(angle) + pulseBase));
             }
         }
     }

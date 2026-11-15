@@ -24,7 +24,10 @@ function post(message: WorkerToMainMessage_T, transfer?: Transferable[]) {
 async function handleProfiledMessage(message: MainToWorkerMessage_T): Promise<void> {
     if (!("requestId" in message) || message.type === "memoryStats") return handleMessage(message);
 
-    const requestId = message.requestId, started = performance.timeOrigin + performance.now(), steps: Record<string, { ms: number, count: number }> = {}, active = new Map<number, { kind: string, name: string }>();
+    const requestId = message.requestId;
+    const started = performance.timeOrigin + performance.now();
+    const steps: Record<string, { ms: number, count: number }> = {};
+    const active = new Map<number, { kind: string, name: string }>();
     let lastUpdate = 0, progressTimer = 0;
 
     function updateProgress(id: number = requestId) {
@@ -33,7 +36,16 @@ async function handleProfiledMessage(message: MainToWorkerMessage_T): Promise<vo
         clearTimeout(progressTimer);
         progressTimer = 0;
         lastUpdate = performance.now();
-        ctx.postMessage({ type: "loadingProgress", profile: { requestId, started, active: [...active.values()].map(step => step.kind === "lock" ? "Waiting for cache access" : `${loadingLabels[step.kind] || step.kind} ${step.name}`).slice(-1)[0] || message.type, steps, packages: [...active.values()].filter(step => step.kind !== "lock") } });
+        ctx.postMessage({
+            type: "loadingProgress",
+            profile: {
+                requestId,
+                started,
+                active: [...active.values()].map(step => step.kind === "lock" ? "Waiting for cache access" : `${loadingLabels[step.kind] || step.kind} ${step.name}`).slice(-1)[0] || message.type,
+                steps,
+                packages: [...active.values()].filter(step => step.kind !== "lock")
+            }
+        });
     }
 
     flushLoadingProgress = updateProgress;
@@ -105,7 +117,11 @@ async function handleMessage(msg: MainToWorkerMessage_T) {
         }
         case "sectorPackages": {
             try {
-                post({ type: "sectorPackagesListed", requestId: msg.requestId, packages: await engine.getSectorPackages(msg.sectorName, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } })) });
+                post({
+                    type: "sectorPackagesListed",
+                    requestId: msg.requestId,
+                    packages: await engine.getSectorPackages(msg.sectorName, msg.settings, packages => ctx.postMessage({ type: "sectorPackagesReady", ready: { requestId: msg.requestId, packages } }))
+                });
             } catch (error) {
                 post({ type: "decodeError", requestId: msg.requestId, message: (error as Error).message });
             }

@@ -1,7 +1,23 @@
 import { Color, Fog, Frustum, LinearFilter, PerspectiveCamera, Scene, Vector3, Vector4, WebGLRenderer, WebGLRenderTarget } from "three";
 import GLOBAL_UNIFORMS from "../materials/global-uniforms";
 
-type ViewObjectState_T = { object: any, visible: boolean, renderOrder: number, groups: any[], index: any, indexData: any, values: Record<string, any>, buffers: Record<string, any>, vectors: Record<string, Vector3>, batchGroupPool?: any[], batchRenderGroups?: any[], visibleBatchGroups?: any[], rangeFade?: number };
+const TAN_HALF_FOV = Math.tan(Math.PI / 6);
+
+type ViewObjectState_T = {
+    object: any,
+    visible: boolean,
+    renderOrder: number,
+    groups: any[],
+    index: any,
+    indexData: any,
+    values: Record<string, any>,
+    buffers: Record<string, any>,
+    vectors: Record<string, Vector3>,
+    batchGroupPool?: any[],
+    batchRenderGroups?: any[],
+    visibleBatchGroups?: any[],
+    rangeFade?: number
+};
 type ViewMaterialState_T = { material: THREE.Material, visible: boolean };
 
 const arrSectorProperties = ["lastZoneMask", "visibleLeaves", "visibleEmitterUuids", "visibilityCacheInitialized", "visibilityCacheFrustumCulling", "visibilityCacheTopLevelOnly", "visibilityCacheDistanceSq", "visibilityCacheEmitterDistanceSq", "visibilityCacheEnvVersion", "visibilityCacheTimeStep", "lastLoggedZone", "lastLoggedLeaf", "lastLoggedStaticMeshLeaf"];
@@ -59,7 +75,7 @@ export class ViewportWindow {
         if (!Number.isFinite(screenWidth) || screenWidth < 2) throw new Error(`Invalid viewport screen width ${screenWidth}`);
 
         // Engine.dll 10477D20: horizontal FOV for the 256-square camera target; the UI stretches it to 252x254.
-        this.camera.fov = 2 * Math.atan(Math.tan(Math.PI / 6) * 126 / Math.trunc(screenWidth / 2)) * 180 / Math.PI;
+        this.camera.fov = 2 * Math.atan(TAN_HALF_FOV * 126 / Math.trunc(screenWidth / 2)) * 180 / Math.PI;
         this.camera.updateProjectionMatrix();
         this.target.texture.name = "ViewportWindow.scene";
     }

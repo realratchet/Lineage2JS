@@ -108,7 +108,10 @@ export class NCPetWnd {
         this.folded.classList.add("ndom-opaque");
         this.folded.setAttribute("aria-label", manager.getSysString(SysString_T.Pets));
         layer.tile(this.folded, 0, 0, 32, 32, 0, 0, 32, 32, TEX_FOLDED);
-        const captionText = manager.getSysString(SysString_T.Pets), width = layer.measureText(captionText), height = manager.canvas.getLineHeight(), texture = manager.canvas.getTexture(TEX_CAPTION);
+        const captionText = manager.getSysString(SysString_T.Pets);
+        const width = layer.measureText(captionText);
+        const height = manager.canvas.getLineHeight();
+        const texture = manager.canvas.getTexture(TEX_CAPTION);
 
         this.caption = layer.createWindow(0, 32, width, height, this.folded);
         this.caption.hidden = true;
@@ -253,7 +256,9 @@ export class NCPetWnd {
             bar.hidden = width <= 0 || !Number.isFinite(width);
             if (bar.hidden) return;
 
-            const overflow = width > maximum, w = index === 4 ? width : Math.min(width, maximum), h = overflow && (index === 1 || index === 3) ? 10 : 12;
+            const overflow = width > maximum;
+            const w = index === 4 ? width : Math.min(width, maximum);
+            const h = overflow && (index === 1 || index === 3) ? 10 : 12;
             const sourceWidth = index === 2 && !overflow ? width : index === 1 && overflow ? 84 : 8;
 
             this.layer.place(bar, index === 4 ? 156 : 35, [51, 65, 79, 93, 51][index], w, h);

@@ -53,7 +53,11 @@ export class NCHennaInfoWnd {
     public isVisible() { return !this.element.hidden; }
     public setVisible(visible: boolean) { this.element.hidden = !visible; if (!visible) this.generation++; }
     public async show(info: HennaItemInfo_T, isRemove = false) {
-        const manager = this.layer.getManager(), strings = manager.strings, henna = strings.hennas[info.symbolId], dye = strings.itemInfos[info.dyeItemId], generation = ++this.generation;
+        const manager = this.layer.getManager();
+        const strings = manager.strings;
+        const henna = strings.hennas[info.symbolId];
+        const dye = strings.itemInfos[info.dyeItemId];
+        const generation = ++this.generation;
 
         this.isRemove = isRemove;
         this.adena = info.adena;

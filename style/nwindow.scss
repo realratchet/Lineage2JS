@@ -78,6 +78,8 @@ html.nwindow-default-cursor, html.nwindow-default-cursor * { cursor: default !im
 
 .ndom-button, .ndom-inventory-item { cursor: inherit; }
 
+.ndom-button[role="tab"] { outline: none; }
+
 .ndom-layer > .ndom-tooltip { pointer-events: none; }
 
 .ndom-tooltip[popover] {

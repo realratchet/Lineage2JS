@@ -52,7 +52,10 @@ export class NCTooltip { // Tooltip helper owned by every NCWnd ([wnd+0x8c], NCW
     }
 
     public static abnormal(strings: GameStrings_T, id: number, level: number, remaining: number, isSecondary = false): TooltipInfo_T {
-        const skill = strings.skillInfos[`${id}:${level}`], name = skill ? skill.name : "", addName = !isSecondary && skill && skill.isEnchanted ? skill.enchantName : "", shownLevel = addName ? skill.enchantSkillLevel : level;
+        const skill = strings.skillInfos[`${id}:${level}`];
+        const name = skill ? skill.name : "";
+        const addName = !isSecondary && skill && skill.isEnchanted ? skill.enchantName : "";
+        const shownLevel = addName ? skill.enchantSkillLevel : level;
         const titleRuns: TooltipInfo_T["titleRuns"] = [{ text: name, color: TEXT_COLOR }];
         const lines: TooltipInfo_T["lines"] = [];
         let title = name;

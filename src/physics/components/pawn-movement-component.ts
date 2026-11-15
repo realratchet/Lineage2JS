@@ -76,6 +76,11 @@ const FLOOR_CHECK_DISTANCE = MAX_STEP_HEIGHT + 2; // Retail APawn::physWalking 0
 const MIN_FLOOR_DISTANCE = 1.9; // Engine/Inc/UnPhysic.h; retail APawn::physWalking 0x8d5482.
 const MAX_FLOOR_DISTANCE = 2.4; // Engine/Inc/UnPhysic.h; retail APawn::physWalking 0x8d53d2.
 const FLOOR_DISTANCE = 0.5 * (MIN_FLOOR_DISTANCE + MAX_FLOOR_DISTANCE);
+const MIN_FLOOR_DISTANCE_FLOAT = Math.fround(MIN_FLOOR_DISTANCE);
+const MAX_FLOOR_DISTANCE_FLOAT = Math.fround(MAX_FLOOR_DISTANCE);
+const GROUND_MIN_SPEED_SCALE = Math.fround(2 / 3);
+const WALK_ANIMATION_FRAME_TIME = Math.fround(1 / 30);
+const HALF_PI = Math.PI / 2;
 const MIN_FLOOR_Z = 0.7; // EngineClasses.h UCONST_MINFLOORZ; retail APawn::physWalking 0x8d4df4.
 const MAX_STEP_SIDE_Z = MIN_FLOOR_Z; // Retail APawn::stepUp 0x8cf6c1; leaked UnPhysic.h instead has 0.08.
 const STEP_RECURSE_DIST_SQ = FLOOR_CHECK_DISTANCE * FLOOR_CHECK_DISTANCE; // Retail APawn::stepUp 0x8cfd2d.
@@ -475,13 +480,19 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected calcCameraWalkingVelocity(controller: ScriptHost_T, direction: Vector3, deltaTime: number, speed: number) { // APawn::calcVelocity 0x105ff0e9..0x105ff390.
-        const parent = this.getParent(), target = getProperty(controller, "MoveTarget") as ScriptHost_T;
-        const destination = getProperty(target || controller, target ? "Location" : "Destination") as Vector3Arr, location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
-        const dx = Math.fround(destination[0] - location[0]), dy = Math.fround(destination[1] - location[1]), dz = Math.fround(destination[2] - location[2]);
+        const parent = this.getParent();
+        const target = getProperty(controller, "MoveTarget") as ScriptHost_T;
+        const destination = getProperty(target || controller, target ? "Location" : "Destination") as Vector3Arr;
+        const location = parent.getUnrealScriptProperty("Location") as Vector3Arr;
+        const dx = Math.fround(destination[0] - location[0]);
+        const dy = Math.fround(destination[1] - location[1]);
+        const dz = Math.fround(destination[2] - location[2]);
         const distance = Math.fround(Math.sqrt(dx * dx + dy * dy + dz * dz));
-        const minimum = parent.getUnrealScriptProperty("fMinAirSpeed") as number, acceleration = parent.getUnrealScriptProperty("fAirSpeedAccel") as number;
+        const minimum = parent.getUnrealScriptProperty("fMinAirSpeed") as number;
+        const acceleration = parent.getUnrealScriptProperty("fAirSpeedAccel") as number;
 
         deltaTime = Math.fround(deltaTime);
+
         const nextMaximum = Math.fround((parent.getUnrealScriptProperty("fMaxAirSpeed") as number) + deltaTime * (parent.getUnrealScriptProperty("fMaxAirSpeedIncRate") as number));
         const maximum = nextMaximum < minimum ? minimum : Math.min(1000, nextMaximum);
         const mode = parent.getUnrealScriptProperty("CameraWalkingAccelMode") as number;
@@ -528,10 +539,13 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         tmpBaseDeltaQuaternion.copy(tmpBaseQuaternion).multiply(tmpBaseInverseQuaternion);
 
-        const yaw = Math.atan2(2 * (tmpBaseDeltaQuaternion.w * tmpBaseDeltaQuaternion.z + tmpBaseDeltaQuaternion.x * tmpBaseDeltaQuaternion.y), 1 - 2 * (tmpBaseDeltaQuaternion.y * tmpBaseDeltaQuaternion.y + tmpBaseDeltaQuaternion.z * tmpBaseDeltaQuaternion.z));
+        const yaw = Math.atan2(
+            2 * (tmpBaseDeltaQuaternion.w * tmpBaseDeltaQuaternion.z + tmpBaseDeltaQuaternion.x * tmpBaseDeltaQuaternion.y),
+            1 - 2 * (tmpBaseDeltaQuaternion.y * tmpBaseDeltaQuaternion.y + tmpBaseDeltaQuaternion.z * tmpBaseDeltaQuaternion.z)
+        );
 
         this.rotationYaw = (this.rotationYaw + Math.round(yaw * 32768 / Math.PI)) & 65535;
-        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - HALF_PI);
         transform.updateBaseTransform(tmpBasePosition, tmpBaseQuaternion);
     }
 
@@ -835,18 +849,28 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                 let x = destination[0] - location[0], y = destination[1] - location[1], z = destination[2] - location[2];
                 let square = x * x + y * y + z * z;
                 let length = Math.sqrt(square);
-                if (square >= 1e-8) { x /= length; y /= length; z /= length; }
+                if (square >= 1e-8) {
+                    x /= length;
+                    y /= length;
+                    z /= length;
+                }
                 else x = y = z = 0;
 
                 if (this.physicsMode === "walking") {
                     hitNormal[2] = z = 0;
                     square = hitNormal[0] * hitNormal[0] + hitNormal[1] * hitNormal[1];
                     length = Math.sqrt(square);
-                    if (square >= 1e-8) { hitNormal[0] /= length; hitNormal[1] /= length; }
+                    if (square >= 1e-8) {
+                        hitNormal[0] /= length;
+                        hitNormal[1] /= length;
+                    }
                     else hitNormal[0] = hitNormal[1] = 0;
                     square = x * x + y * y;
                     length = Math.sqrt(square);
-                    if (square >= 1e-8) { x /= length; y /= length; }
+                    if (square >= 1e-8) {
+                        x /= length;
+                        y /= length;
+                    }
                     else x = y = 0;
                 }
 
@@ -855,7 +879,10 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
                 if (this.physicsMode !== "falling") {
                     controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
-                    const tryCrouch = this.physicsMode === "walking" && parent.getUnrealScriptProperty("bCanCrouch") && !parent.getUnrealScriptProperty("bIsCrouched") && !(controller && vm.invokeNative(parent, controller, 303, "IsA", ["PlayerController"]));
+                    const tryCrouch = this.physicsMode === "walking" &&
+                        parent.getUnrealScriptProperty("bCanCrouch") &&
+                        !parent.getUnrealScriptProperty("bIsCrouched") &&
+                        !(controller && vm.invokeNative(parent, controller, 303, "IsA", ["PlayerController"]));
                     if (tryCrouch) {
                         tmpCrouchStart.fromArray(parent.getUnrealScriptProperty("Location") as Vector3Arr);
                         tmpCrouchEnd.set(tmpCrouchStart.x + this.collisionRadius * x, tmpCrouchStart.y + this.collisionRadius * y, tmpCrouchStart.z + this.collisionRadius * z);
@@ -1207,8 +1234,15 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         let hit: CheckResult_T;
         moveActorDepth++;
-        try { this.physicsManager.moveActor(query, this.getParent()); hit = query.hit; }
-        finally { moveActorDepth--; query.ignoreCollision = false; query.hit = null; }
+        try {
+            this.physicsManager.moveActor(query, this.getParent());
+            hit = query.hit;
+        }
+        finally {
+            moveActorDepth--;
+            query.ignoreCollision = false;
+            query.hit = null;
+        }
 
         position.copy(this.getPosition());
 
@@ -1280,7 +1314,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         const deltaRate = (parent as any).isPlayer ? Math.round((getProperty(controller, "EnemyTurnSpeed") as number) * 2 * deltaTime) : Math.trunc((parent.getUnrealScriptProperty("RotationRate") as Vector3Arr)[1] * deltaTime);
 
         this.rotationYaw = fixedTurn(this.rotationYaw, this.desiredRotationYaw, deltaRate);
-        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - HALF_PI);
 
         if (this.rotationYaw === this.desiredRotationYaw) this.hasDesiredRotation = false;
     }
@@ -1335,7 +1369,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         if (!this.actorState.locomotion && (action && action.loop === LoopOnce || this.findComponent<PawnAttackComponent>("pawnAttack")?.isAttacking())) return;
 
-        const state: PawnMovementState_T = !this.hasStartedPhysics ? "idle" : this.physicsMode === "falling" ? "falling" : this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : isTurning && this.getParent().scriptClassId ? "turning" : "idle";
+        const state: PawnMovementState_T = !this.hasStartedPhysics ?
+            "idle" :
+            this.physicsMode === "falling" ?
+                "falling" :
+                this.physicsMode === "swimming" ? isMoving ? "swimming" : "swimmingIdle" : isMoving ? this.isWalking ? "walking" : "running" : isTurning && this.getParent().scriptClassId ? "turning" : "idle";
 
         if (state === this.actorState.state && this.getComponent<AnimationComponent>("animation").isPlayingMovement(state)) return;
 
@@ -1396,7 +1434,8 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         desired.offset = source.offset;
         desired.faceMovement = source.faceMovement;
         desired.faceTarget = source.faceTarget;
-        const controller = this.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T, sourceController = component.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T;
+        const controller = this.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T,
+            sourceController = component.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T;
 
         if (controller && sourceController) setProperty(controller, "Destination", (getProperty(sourceController, "Destination") as Vector3Arr).slice());
     }
@@ -1464,9 +1503,14 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
         // APawn::TickMoveInVehicle 0x10593bc0 rotates the queued center by current vehicle yaw.
         const yaw = (vehicle.getUnrealScriptProperty("Rotation") as Vector3Arr)[1];
-        const sine = sinRotator(yaw), cosine = sinRotator(yaw + 16384), point = this.vehicleMovePoint;
+        const sine = sinRotator(yaw), cosine = sinRotator(yaw + 16384);
+        const point = this.vehicleMovePoint;
 
-        tmpVehicleDestination.set(Math.fround(Math.fround(point.x * cosine - point.y * sine) + vehicle.position.x), Math.fround(Math.fround(point.x * sine + point.y * cosine) + vehicle.position.y), Math.fround(point.z + vehicle.position.z) - this.collisionHeight);
+        tmpVehicleDestination.set(
+            Math.fround(Math.fround(point.x * cosine - point.y * sine) + vehicle.position.x),
+            Math.fround(Math.fround(point.x * sine + point.y * cosine) + vehicle.position.y),
+            Math.fround(point.z + vehicle.position.z) - this.collisionHeight
+        );
         this.goTo(tmpVehicleDestination);
         this.vehicleId = vehicleId;
     }
@@ -1521,7 +1565,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.rotationYaw = this.desiredRotationYaw = yaw & 65535;
         this.hasDesiredRotation = false;
         this.keyboardRotationDirection = this.keyboardRotationYaw = null;
-        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - Math.PI / 2);
+        this.getRotation().set(0, 0, this.rotationYaw * Math.PI / 32768 - HALF_PI);
     }
 
     public startRotating(direction: number, speed: number) {
@@ -1668,9 +1712,9 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         else tmpFloorPosition.copy(hit.location);
         if (hit && (!(teleport || validate) || i < 30)) {
             const distance = (teleport || validate ? Math.fround(hit.time) : hit.time) * 12;
-            const minimum = teleport || validate ? Math.fround(1.9) : 1.9;
+            const minimum = teleport || validate ? MIN_FLOOR_DISTANCE_FLOAT : 1.9;
 
-            if (distance < minimum) tmpFloorPosition.z += (teleport || validate ? (Math.fround(2.4) + minimum) * 0.5 : FLOOR_DISTANCE) - distance;
+            if (distance < minimum) tmpFloorPosition.z += (teleport || validate ? (MAX_FLOOR_DISTANCE_FLOAT + minimum) * 0.5 : FLOOR_DISTANCE) - distance;
         }
 
         return tmpFloorPosition;
@@ -1746,21 +1790,23 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     public getCurSpeed(environment = -1): number {
         const parent = this.getParent(), controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
-        if (parent.getUnrealScriptProperty("bNotRotationMoving")) return (parent.getUnrealScriptProperty("GroundMinSpeed") as number) * Math.fround(2 / 3);
+        if (parent.getUnrealScriptProperty("bNotRotationMoving")) return (parent.getUnrealScriptProperty("GroundMinSpeed") as number) * GROUND_MIN_SPEED_SCALE;
         if (environment === -1) environment = parent.getUnrealScriptProperty("Environment") as number;
 
         let isFast = !!controller && getProperty(controller, "MoveType") === PMoveType_T.PMT_FAST;
         if (isFast && !parent.getUnrealScriptProperty("bNpc") && environment !== 1 && environment !== 2) {
             const animation = (parent.getUnrealScriptProperty("WalkAnimName") as string[])[parent.getUnrealScriptProperty("CurWeaponType") as number];
             if (this.getComponent<AnimationComponent>("animation").getAnimationClip(animation))
-                isFast = (parent.getUnrealScriptProperty("MoveTimer") as number) > (parent.getUnrealScriptProperty("WalkAnimFrameInMove") as number) * Math.fround(1 / 30);
+                isFast = (parent.getUnrealScriptProperty("MoveTimer") as number) > (parent.getUnrealScriptProperty("WalkAnimFrameInMove") as number) * WALK_ANIMATION_FRAME_TIME;
         }
 
         return parent.getUnrealScriptProperty(environment === 2 ? isFast ? "AirMaxSpeed" : "AirMinSpeed" : environment === 1 ? isFast ? "WaterMaxSpeed" : "WaterMinSpeed" : isFast ? "GroundMaxSpeed" : "GroundMinSpeed") as number;
     }
 
     public addMoveTo(origin: Vector3, destination: Vector3): void {
-        const parent = this.getParent(), speed = Math.fround(this.getCurSpeed()), rate = parent.getUnrealScriptProperty("NonAttackSpeedRate") as number;
+        const parent = this.getParent();
+        const speed = Math.fround(this.getCurSpeed());
+        const rate = parent.getUnrealScriptProperty("NonAttackSpeedRate") as number;
         let time = 0, delta = 0;
 
         if (speed > 0) {
@@ -1867,7 +1913,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
                 if (!hit || hit.location.z === 0) continue;
 
                 const landing = hit.location.clone();
-                const time = Math.fround(hit.time) * 12, clearance = Math.fround(1.9);
+                const time = Math.fround(hit.time) * 12, clearance = MIN_FLOOR_DISTANCE_FLOAT;
                 if (time < clearance) landing.z += clearance - time;
                 landing.z -= this.collisionHeight;
                 const target = landing.clone();
@@ -1979,7 +2025,9 @@ function getDistance2D(a: Vector3, b: Vector3): number {
 }
 
 function getDistance(a: Vector3, b: Vector3): number {
-    const x = Math.fround(Math.fround(a.x) - Math.fround(b.x)), y = Math.fround(Math.fround(a.y) - Math.fround(b.y)), z = Math.fround(Math.fround(a.z) - Math.fround(b.z));
+    const x = Math.fround(Math.fround(a.x) - Math.fround(b.x)),
+        y = Math.fround(Math.fround(a.y) - Math.fround(b.y)),
+        z = Math.fround(Math.fround(a.z) - Math.fround(b.z));
     return Math.fround(Math.sqrt(x * x + y * y + z * z));
 }
 

@@ -15,6 +15,8 @@ import { EClassFlags_T } from "@l2js/core/unreal/un-class";
 import { EDetailMode_T } from "../../assets/unreal/un-aactor";
 import { ENetMode_T } from "../../assets/unreal/un-level-info";
 
+const NEGATIVE_HALF_PI = -Math.PI / 2;
+
 const ENTER_EFFECT_RADIUS_SCALE = 0.1;
 const tmpRotator = new Rotator();
 const tmpOffset = new Vector3();
@@ -190,7 +192,8 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
             const vm = script.getVM(), defaults = vm.getDefaultObject(call.args[0] as string);
 
             // ULevel::SpawnActor 0x105889ac..0x10588acc; gameplay admission precedes allocation.
-            if (vm.getLibrary().scriptClasses[defaults.scriptClassId].classFlags & EClassFlags_T.CLASS_Abstract || !vm.invokeNative(call.self, call.context, 258, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
+            if (vm.getLibrary().scriptClasses[defaults.scriptClassId].classFlags & EClassFlags_T.CLASS_Abstract ||
+                !vm.invokeNative(call.self, call.context, 258, "ClassIsChildOf", [defaults.scriptClassId, "engine.Actor"])) return null;
             if (getProperty(defaults, "bStatic") || getProperty(defaults, "bNoDelete")) return null;
             if (getProperty(defaults, "bHighDetail")) {
                 const level = getProperty(call.context, "Level") as ScriptHost_T;
@@ -221,7 +224,7 @@ export class EffectsComponent extends ObjectComponent<BaseActor> {
                     setProperty(object, "Rotation", (rotation as Vector3Arr).slice());
                     if ((actor as any).isActor) {
                         (actor as BaseActor).getComponent<PawnMovementComponent>("pawnMovement").syncRotationYaw(yaw);
-                        actor.rotateZ(-Math.PI / 2);
+                        actor.rotateZ(NEGATIVE_HALF_PI);
                     }
                 }
 

@@ -5,6 +5,8 @@ import type NetworkManager from "../../network/network-manager";
 import type { SpecialCamera_T } from "../../network/game-packets";
 import type { Vector3Arr, Vector4Arr } from "@l2js/engine";
 
+const MILLISECONDS_TO_SECONDS = Math.fround(0.001);
+
 const tmpDirection = new Vector3();
 const tmpLocation = new Vector3();
 const tmpDestination = new Vector3();
@@ -97,10 +99,13 @@ export class SpecialView {
                     tmpDirection.applyQuaternion(tmpRotation.fromArray(arrRotation));
                 }
 
-                this.targetRotation.set(request.isRelative ? Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * 32768 / Math.PI) : request.yaw, request.isRelative ? Math.trunc(Math.atan2(tmpDirection.z, Math.hypot(tmpDirection.x, tmpDirection.y)) * 32768 / Math.PI) : request.pitch);
+                this.targetRotation.set(
+                    request.isRelative ? Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * 32768 / Math.PI) : request.yaw,
+                    request.isRelative ? Math.trunc(Math.atan2(tmpDirection.z, Math.hypot(tmpDirection.x, tmpDirection.y)) * 32768 / Math.PI) : request.pitch
+                );
                 this.targetDistance = request.distance;
                 this.targetRelative.set(request.turn, request.rise);
-                const time = Math.fround(request.time * Math.fround(0.001));
+                const time = Math.fround(request.time * MILLISECONDS_TO_SECONDS);
 
                 if (this.objectId !== request.objectId || this.isReturning) {
                     this.baseRotation.copy(this.targetRotation);
@@ -110,9 +115,15 @@ export class SpecialView {
                 } else this.isMoving = false;
 
                 this.distanceSpeed = time > 0 ? Math.abs(this.targetDistance - this.distance) / time : 1000000;
-                this.rotationSpeed.set(time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.x - this.baseRotation.x)) / time) : 100 * 32768, time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.y - this.baseRotation.y)) / time) : 100 * 32768);
-                this.relativeSpeed.set(time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.x - this.relative.x)) / time) : 100 * 32768, time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.y - this.relative.y)) / time) : 100 * 32768);
-                this.duration = Math.fround(request.duration * Math.fround(0.001));
+                this.rotationSpeed.set(
+                    time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.x - this.baseRotation.x)) / time) : 100 * 32768,
+                    time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRotation.y - this.baseRotation.y)) / time) : 100 * 32768
+                );
+                this.relativeSpeed.set(
+                    time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.x - this.relative.x)) / time) : 100 * 32768,
+                    time > 0 ? Math.trunc(Math.abs(wrapAngle(this.targetRelative.y - this.relative.y)) / time) : 100 * 32768
+                );
+                this.duration = Math.fround(request.duration * MILLISECONDS_TO_SECONDS);
                 this.objectId = request.objectId;
                 this.isReturning = false;
             } else if (!request && this.isActive() && !this.isReturning) this.release(network);
@@ -145,7 +156,8 @@ export class SpecialView {
 
             camera.position.lerp(tmpDestination, distance === 0 ? 1 : Math.min(1, delta * (distance <= 40 ? 100 : distance * 2.5) / distance));
             tmpDirection.subVectors(tmpLocation, camera.position);
-            const yaw = Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * 32768 / Math.PI), pitch = Math.trunc(Math.atan2(tmpDirection.z, Math.hypot(tmpDirection.x, tmpDirection.y)) * 32768 / Math.PI);
+            const yaw = Math.trunc(Math.atan2(tmpDirection.y, tmpDirection.x) * 32768 / Math.PI),
+                pitch = Math.trunc(Math.atan2(tmpDirection.z, Math.hypot(tmpDirection.x, tmpDirection.y)) * 32768 / Math.PI);
 
             this.rotation.set(approachAngle(this.rotation.x, yaw, delta), approachAngle(this.rotation.y, pitch, delta));
             converged = camera.position.distanceToSquared(tmpDestination) === 0 && wrapAngle(this.rotation.x - yaw) === 0 && wrapAngle(this.rotation.y - pitch) === 0;
@@ -154,7 +166,10 @@ export class SpecialView {
             this.rotation.copy(this.baseRotation);
         }
 
-        this.relative.set(approachAngle(this.relative.x, this.targetRelative.x, delta, this.isMoving ? null : this.relativeSpeed.x), approachAngle(this.relative.y, this.targetRelative.y, delta, this.isMoving ? null : this.relativeSpeed.y));
+        this.relative.set(
+            approachAngle(this.relative.x, this.targetRelative.x, delta, this.isMoving ? null : this.relativeSpeed.x),
+            approachAngle(this.relative.y, this.targetRelative.y, delta, this.isMoving ? null : this.relativeSpeed.y)
+        );
         viewDirection(this.rotation.x + this.relative.x, this.rotation.y + this.relative.y, tmpDirection);
         camera.lookAt(tmpDestination.copy(camera.position).add(tmpDirection));
 

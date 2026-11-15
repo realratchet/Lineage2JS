@@ -315,7 +315,10 @@ export class NCClanWnd {
         if (user.pledgePrivileges[1] & 4) this.enabled[6] = this.enabled[7] = true;
         if (user.clanId <= 0) this.enabled.fill(false);
         if (user.isNoble) this.enabled[1] = this.enabled[2] = true;
-        this.buttons.forEach((button, index) => { button.setEnabled(this.enabled[index]); button.setAttribute("aria-disabled", String(!this.enabled[index])); });
+        this.buttons.forEach((button, index) => {
+            button.setEnabled(this.enabled[index]);
+            button.setAttribute("aria-disabled", String(!this.enabled[index]));
+        });
     }
 }
 

@@ -9,6 +9,9 @@ import type { IParticleSoundDecodeInfo, EmitterConfig_T } from "@l2js/engine/con
 import { findScriptPropertyKey, getScriptPropertyName } from "../../ue-script/script-properties";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 
+const minVelocityScale = Math.fround(0.001);
+const rotationUnit = Math.PI * 2 / 65536;
+
 const frozenUpdateMatrixWorld = function () { };
 
 const AXIS_X = new Vector3(1, 0, 0);
@@ -437,7 +440,7 @@ export abstract class BaseEmitter extends Object3D {
 
     public setSpeedScale(scale: number): void {
         if (!Number.isFinite(scale)) throw new Error(`Invalid emitter speed scale '${scale}'.`);
-        if (scale <= 0) scale = Math.fround(0.001);
+        if (scale <= 0) scale = minVelocityScale;
 
         const inverse = Math.fround(1 / scale);
         this.lifetimeRange.min = Math.fround(this.lifetimeRange.min * inverse);
@@ -1298,13 +1301,34 @@ export abstract class BaseEmitter extends Object3D {
         currentAcceleration.multiplyScalar(deltaTime);
 
         const drawStyle = this.drawStyle, maxAbsVelocity = this.maxAbsVelocity, sizeScale = this.sizeScale, opacity = this.opacity;
-        const velocityScale = this.velocityScale, scaleSizeByVelocityMultiplier = this.scaleSizeByVelocityMultiplier, revolutionScale = this.revolutionScale, colorScale = this.colorScale;
-        const fadeOutStartTime = this.fadeOutStartTime, scaleSizeXByVelocity = this.scaleSizeXByVelocity, scaleSizeYByVelocity = this.scaleSizeYByVelocity, scaleSizeZByVelocity = this.scaleSizeZByVelocity;
-        const fadeInEndTime = this.fadeInEndTime, fadeFactor = this.fadeFactor, isUsingSizeScale = this.isUsingSizeScale, isScaleSizeRegular = this.isScaleSizeRegular;
-        const useAbsoluteTimeForSizeScale = this.useAbsoluteTimeForSizeScale, sizeScaleRepeats = this.sizeScaleRepeats, isUsingVelocityScale = this.isUsingVelocityScale, velocityScaleRepeats = this.velocityScaleRepeats;
-        const isUsingRevolution = this.isUsingRevolution, isFadingOut = this.isFadingOut, isFadingIn = this.isFadingIn, fadeOutFactor = this.fadeOutFactor;
-        const fadeInFactor = this.fadeInFactor, isUsingRevolutionScale = this.isUsingRevolutionScale, revolutionScaleRepeats = this.revolutionScaleRepeats, isUsingColorScale = this.isUsingColorScale;
-        const colorScaleRepeats = this.colorScaleRepeats, determineVelocityByLocationDifference = this.determineVelocityByLocationDifference, isUsingCollision = this.isUsingCollision, particleGeometryRadius = this.particleGeometryRadius;
+        const velocityScale = this.velocityScale;
+        const scaleSizeByVelocityMultiplier = this.scaleSizeByVelocityMultiplier;
+        const revolutionScale = this.revolutionScale;
+        const colorScale = this.colorScale;
+        const fadeOutStartTime = this.fadeOutStartTime;
+        const scaleSizeXByVelocity = this.scaleSizeXByVelocity;
+        const scaleSizeYByVelocity = this.scaleSizeYByVelocity;
+        const scaleSizeZByVelocity = this.scaleSizeZByVelocity;
+        const fadeInEndTime = this.fadeInEndTime;
+        const fadeFactor = this.fadeFactor;
+        const isUsingSizeScale = this.isUsingSizeScale;
+        const isScaleSizeRegular = this.isScaleSizeRegular;
+        const useAbsoluteTimeForSizeScale = this.useAbsoluteTimeForSizeScale;
+        const sizeScaleRepeats = this.sizeScaleRepeats;
+        const isUsingVelocityScale = this.isUsingVelocityScale;
+        const velocityScaleRepeats = this.velocityScaleRepeats;
+        const isUsingRevolution = this.isUsingRevolution;
+        const isFadingOut = this.isFadingOut;
+        const isFadingIn = this.isFadingIn;
+        const fadeOutFactor = this.fadeOutFactor;
+        const fadeInFactor = this.fadeInFactor;
+        const isUsingRevolutionScale = this.isUsingRevolutionScale;
+        const revolutionScaleRepeats = this.revolutionScaleRepeats;
+        const isUsingColorScale = this.isUsingColorScale;
+        const colorScaleRepeats = this.colorScaleRepeats;
+        const determineVelocityByLocationDifference = this.determineVelocityByLocationDifference;
+        const isUsingCollision = this.isUsingCollision;
+        const particleGeometryRadius = this.particleGeometryRadius;
         const realVelocityLossRange = this.realVelocityLossRange, minSquaredVelocity = this.minSquaredVelocity;
 
         for (let index = 0; index < Math.min(this.maxActiveParticles, this.activeParticles); index++) {
@@ -1798,13 +1822,13 @@ export abstract class BaseEmitter extends Object3D {
                 const roll = settings.startSpin.z + settings.time * settings.spinsPerSecond.z;
 
                 if (this.isSpriteEmitter) {
-                    spin = roll * (Math.PI * 2 / 65536);
+                    spin = roll * (rotationUnit);
                     (p as any).spin = spin;
                 } else if (this.isMeshEmitter) {
                     // Engine.dll 0x880c37 / 0x9da422: particle X/Y/Z -> FRotator Yaw/Pitch/Roll.
                     tmpParticleRotator.set(Math.trunc(pitch), Math.trunc(yaw), Math.trunc(roll)).toQuaternion(p.quaternion);
                 } else {
-                    p.rotation.set(roll * (Math.PI * 2 / 65536), pitch * (Math.PI * 2 / 65536), yaw * (Math.PI * 2 / 65536), "XYZ");
+                    p.rotation.set(roll * (rotationUnit), pitch * (rotationUnit), yaw * (rotationUnit), "XYZ");
                 }
             }
 
@@ -1866,14 +1890,18 @@ export abstract class BaseEmitter extends Object3D {
                 tmpParticleQuaternion.identity();
 
                 // Engine.dll 0x880c37 / 0x9da422: particle X/Y/Z -> FRotator Yaw/Pitch/Roll.
-                if (isSpinning) tmpParticleRotator.set(Math.trunc(settings.startSpin.y + settings.time * settings.spinsPerSecond.y), Math.trunc(settings.startSpin.x + settings.time * settings.spinsPerSecond.x), Math.trunc(settings.startSpin.z + settings.time * settings.spinsPerSecond.z)).toQuaternion(tmpParticleQuaternion);
+                if (isSpinning) tmpParticleRotator.set(
+                    Math.trunc(settings.startSpin.y + settings.time * settings.spinsPerSecond.y),
+                    Math.trunc(settings.startSpin.x + settings.time * settings.spinsPerSecond.x),
+                    Math.trunc(settings.startSpin.z + settings.time * settings.spinsPerSecond.z)
+                ).toQuaternion(tmpParticleQuaternion);
 
                 (this.instancedMesh as InstancedMeshParticles).setInstance(i, settings.position, tmpParticleQuaternion, settings.scale, settings.color);
                 continue;
             }
 
             const sprites = this.instancedMesh as InstancedSpriteMesh;
-            const spin = isSpinning ? (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (Math.PI * 2 / 65536) : 0;
+            const spin = isSpinning ? (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (rotationUnit) : 0;
             const subdivision = this.resolveSubdivision(settings);
 
             this.computeSubdivUV(subdivision, tmpSubdivUV);

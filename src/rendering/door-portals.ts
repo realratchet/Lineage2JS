@@ -67,7 +67,8 @@ export function isPortalBlocked(portal: Portal_T, doors: MovableObject[]): boole
 
         for (const group of groups) {
             const material = materials[group.materialIndex] as THREE.ShaderMaterial;
-            if ((material as any).isSectorFallbackMaterial || !material.visible || material.transparent || !material.depthWrite || material.alphaTest > 0 || material.defines && "USE_ALPHATEST" in material.defines) continue;
+            if ((material as any).isSectorFallbackMaterial || !material.visible || material.transparent || !material.depthWrite || material.alphaTest > 0 || material.defines && "USE_ALPHATEST" in material.defines)
+                continue;
 
             for (let i = group.start; i + 2 < group.start + group.count; i += 3) {
                 const triangle: Point_T[] = [];

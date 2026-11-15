@@ -77,8 +77,10 @@ function fetchGeometry(info: IGeometryDecodeInfo) {
     if (info.attributes.vertexAlpha) geometry.setAttribute("vertexAlpha", new BufferAttribute(info.attributes.vertexAlpha, 1, true));
     if (info.attributes.normals) geometry.setAttribute("normal", new BufferAttribute(info.attributes.normals, 3));
     if (info.attributes.positions) geometry.setAttribute("position", new BufferAttribute(info.attributes.positions, 3));
-    if (info.attributes.colors) geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3, info.attributes.colors instanceof Uint8Array || info.attributes.colors instanceof Uint8ClampedArray));
-    if (info.attributes.colorsInstance) geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3, info.attributes.colorsInstance instanceof Uint8Array || info.attributes.colorsInstance instanceof Uint8ClampedArray));
+    if (info.attributes.colors)
+        geometry.setAttribute("color", new BufferAttribute(info.attributes.colors, 3, info.attributes.colors instanceof Uint8Array || info.attributes.colors instanceof Uint8ClampedArray));
+    if (info.attributes.colorsInstance)
+        geometry.setAttribute("colorInstance", new BufferAttribute(info.attributes.colorsInstance, 3, info.attributes.colorsInstance instanceof Uint8Array || info.attributes.colorsInstance instanceof Uint8ClampedArray));
     if (info.attributes.skinIndex) geometry.setAttribute("skinIndex", new BufferAttribute(info.attributes.skinIndex, 4));
     if (info.attributes.skinWeight) geometry.setAttribute("skinWeight", new BufferAttribute(info.attributes.skinWeight, 4));
     if (info.attributes.skinIndex2) geometry.setAttribute("skinIndex2", new BufferAttribute(info.attributes.skinIndex2, 4));
@@ -273,7 +275,18 @@ function decodeStaticMeshActor(library: DecodeLibrary, info: IStaticMeshActorDec
     const props = { geometry, materials, lightInfo: lights, colliderIndices: collider, scaledGlow, isSunAffected, isSpecialLit: info.isSpecialLit, permeatingLights: info.permeatingLights, forcedRegionTag: info.forcedRegionTag, forcedRegion: info.forcedRegion, ambient, collision: info.collision, staticMeshCollision, collisionIndex };
     const accessories = info.agit ? info.agit.accessories.map(accessory => {
         const decoded = decodeStaticMeshInstance(library, { ...instanceInfo, mesh: accessory.mesh, attributes: {}, lights: null }, fetchGeometry);
-        return new LitActorMesh({ geometry: decoded.geometry, materials: canonicalizeStaticMeshMaterials(decoded.materials), lightInfo: null, scaledGlow, isSunAffected, isSpecialLit: info.isSpecialLit, permeatingLights: info.permeatingLights, forcedRegionTag: info.forcedRegionTag, forcedRegion: info.forcedRegion, ambient: { ...ambient, hardwareLighting: true } });
+        return new LitActorMesh({
+            geometry: decoded.geometry,
+            materials: canonicalizeStaticMeshMaterials(decoded.materials),
+            lightInfo: null,
+            scaledGlow,
+            isSunAffected,
+            isSpecialLit: info.isSpecialLit,
+            permeatingLights: info.permeatingLights,
+            forcedRegionTag: info.forcedRegionTag,
+            forcedRegion: info.forcedRegion,
+            ambient: { ...ambient, hardwareLighting: true }
+        });
     }) : null;
     const object = info.agit ? new AgitStaticMeshActor(props, info.agit, accessories)
         : info.mover ? new MovableObject({ ...props, mover: info.mover })
@@ -958,7 +971,8 @@ export function decodeSkinnedMesh(library: DecodeLibrary, info: ISkinnedMeshObje
     }
 
     // LodMesh wire data is points + wedges only, UE builds vertex normals at load (UnMesh.cpp)
-    if (!geometry.getAttribute("normal")) geometry.setAttribute("normal", new BufferAttribute(computePointNormals(geometry.getAttribute("position").array as Float32Array, geometry.getIndex().array as Uint8Array | Uint16Array | Uint32Array), 3));
+    if (!geometry.getAttribute("normal"))
+        geometry.setAttribute("normal", new BufferAttribute(computePointNormals(geometry.getAttribute("position").array as Float32Array, geometry.getIndex().array as Uint8Array | Uint16Array | Uint32Array), 3));
 
     const materials = decodeMaterial(library, infoMats) || new MeshBasicMaterial({ color: 0xff00ff });
     const extendedBoneInfluences = geometry.getAttribute("skinWeight2") !== undefined;
@@ -1089,7 +1103,10 @@ function decodeVertMeshEmitter(library: DecodeLibrary, info: any) {
     const materials = info.mesh ? info.mesh.materials.map((material: string) => info.useMeshBlendMode
         ? decodeMaterial(library, library.materials[material])
         : decodeMaterial(library, { materialType: "particle", material, opacity: info.opacity, blendingMode: info.blendingMode } as IParticleMaterialDecodeInfo)) : [];
-    const emitter = new VertMeshEmitter(Object.assign(decodeEmitterConfig(info), { geometry, materials, framerate: info.mesh ? info.mesh.framerate : 0, useMeshBlendMode: info.useMeshBlendMode, renderTwoSided: info.renderTwoSided, useParticleColor: info.useParticleColor }));
+    const emitter = new VertMeshEmitter(Object.assign(
+        decodeEmitterConfig(info),
+        { geometry, materials, framerate: info.mesh ? info.mesh.framerate : 0, useMeshBlendMode: info.useMeshBlendMode, renderTwoSided: info.renderTwoSided, useParticleColor: info.useParticleColor }
+    ));
 
     applySimpleProperties(library, emitter, info);
 

@@ -9,11 +9,17 @@ import type LocalSpaceSkeleton from "./local-space-skeleton";
 import type MeshStaticMaterial from "../materials/mesh-static-material/mesh-static-material";
 import type { BatchRenderGroup_T } from "./lit-actor";
 
+const near = 10;
+const far = 65536;
+const zScale = Math.fround(far / (far - near));
+const zOffset = Math.fround(-near * far / (far - near));
+
 const PROJECTOR_CLIPPING_RANGE = 0.2; // AShadowProjector::CheckVisible 0x93dc80: GL2ProjectorCR * 32768 * 0.0625 kilounits.
 const SHADOW_RANGE = Math.fround(PROJECTOR_CLIPPING_RANGE) * 2048;
 const SHADOW_BAND_Z = 200;
 const LIGHT_DISTANCE = 704;
 const SHADOW_SIZE = 256;
+const VECTOR_ROTATION_SCALE = 32767.5 / Math.PI;
 const SHADOW_POOL_SIZE = 20; // UShadowBitmapMaterial::Get 0x93ec08..0x93ec51 reuses targets modulo20.
 
 const BLUR_VERTEX = `
@@ -116,7 +122,9 @@ export class ShadowProjector {
         const source = mesh.material as ShaderMaterial;
         if (!source.isShaderMaterial || !source.colorWrite || !(source as any).isStaticMeshMaterial && !(source as any).isTerrainMaterial || "USE_ACTOR_LIGHTS" in source.defines || "NO_SHADOW_RECEIVE" in source.defines) return [];
 
-        const material = this.getReceiverMaterial(source), instanced = this.getReceiverMaterial(source, renderer), programs: { isReady(): boolean }[] = [];
+        const material = this.getReceiverMaterial(source);
+        const instanced = this.getReceiverMaterial(source, renderer);
+        const programs: { isReady(): boolean }[] = [];
         try {
             for (const receiver of material === instanced ? [material] : [material, instanced]) {
                 mesh.material = receiver;
@@ -167,25 +175,50 @@ export class ShadowProjector {
         const actor = projector.actor, sphere = actor.getComponent<PawnRenderableComponent>("pawnRenderable").getPrimitiveRenderSphere();
         actor.getComponent<AnimationComponent>("animation").getBoneWorldMatrix(0, tmpBoneMatrix);
         const root = tmpCasterPos.setFromMatrixPosition(tmpBoneMatrix);
-        const scale = 32767.5 / Math.PI;
-        const pitch = Math.trunc(Math.atan2(lightDirection.z, Math.hypot(lightDirection.x, lightDirection.y)) * scale), yaw = Math.trunc(Math.atan2(lightDirection.y, lightDirection.x) * scale);
+        const pitch = Math.trunc(Math.atan2(lightDirection.z, Math.hypot(lightDirection.x, lightDirection.y)) * VECTOR_ROTATION_SCALE);
+        const yaw = Math.trunc(Math.atan2(lightDirection.y, lightDirection.x) * VECTOR_ROTATION_SCALE);
         const sp = sinRotator(pitch), cp = sinRotator(pitch + 16384), sy = sinRotator(yaw), cy = sinRotator(yaw + 16384);
         tmpDirection.set(Math.fround(cp * cy), Math.fround(cp * sy), sp);
         tmpUp.set(Math.fround(-sp * cy), Math.fround(-sp * sy), cp);
         tmpLeft.set(sy, -cy, 0);
 
         projector.fov = Math.trunc(Math.atan2(sphere.radius * 2 + 160, LIGHT_DISTANCE) * 180 / Math.PI + 5);
-        const halfAngle = projector.fov * Math.PI / 360, tangent = Math.fround(Math.tan(halfAngle)), halfSize = LIGHT_DISTANCE * tangent, factor = Math.fround(0.5 / tangent);
+        const halfAngle = projector.fov * Math.PI / 360;
+        const tangent = Math.fround(Math.tan(halfAngle));
+        const halfSize = LIGHT_DISTANCE * tangent;
+        const factor = Math.fround(0.5 / tangent);
         const origin = projector.origin.copy(root).addScaledVector(tmpDirection, -LIGHT_DISTANCE);
-        const u = tmpCorner.copy(tmpLeft).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5), v = tmpRay.copy(tmpUp).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5), d = tmpDirection;
+        const u = tmpCorner.copy(tmpLeft).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5);
+        const v = tmpRay.copy(tmpUp).multiplyScalar(-factor).addScaledVector(tmpDirection, 0.5);
+        const d = tmpDirection;
         projector.matrix.set(u.x, u.y, u.z, -u.dot(origin), v.x, v.y, v.z, -v.dot(origin), d.x, d.y, d.z, -d.dot(origin), 0, 0, 0, 1);
         projector.normals.set(u.x / u.length(), u.y / u.length(), u.z / u.length(), v.x / v.length(), v.y / v.length(), v.z / v.length(), -d.x, -d.y, -d.z);
         // FCameraSceneNode::UpdateMatrices uses inverse angles before SinTab quantization (Engine10615900).
         const cameraSp = sinRotator(-pitch), cameraCp = sinRotator(16384 - pitch), cameraSy = sinRotator(-yaw), cameraCy = sinRotator(16384 - yaw);
-        const xx = Math.fround(cameraCy * cameraCp), xz = Math.fround(cameraCy * cameraSp), yx = Math.fround(-cameraSy * cameraCp), yz = Math.fround(-cameraSy * cameraSp);
+        const xx = Math.fround(cameraCy * cameraCp);
+        const xz = Math.fround(cameraCy * cameraSp);
+        const yx = Math.fround(-cameraSy * cameraCp);
+        const yz = Math.fround(-cameraSy * cameraSp);
         const ox = Math.fround(origin.x), oy = Math.fround(origin.y), oz = Math.fround(origin.z);
-        projector.view.set(cameraSy, cameraCy, 0, Math.fround(-ox * cameraSy - oy * cameraCy), xz, yz, cameraCp, Math.fround(-ox * xz - oy * yz - oz * cameraCp), -xx, -yx, cameraSp, Math.fround(ox * xx + oy * yx - oz * cameraSp), 0, 0, 0, 1);
-        const near = 10, far = 65536, f = Math.fround(1 / Math.tan(Math.fround(halfAngle))), zScale = Math.fround(far / (far - near)), zOffset = Math.fround(-near * far / (far - near));
+        projector.view.set(
+            cameraSy,
+            cameraCy,
+            0,
+            Math.fround(-ox * cameraSy - oy * cameraCy),
+            xz,
+            yz,
+            cameraCp,
+            Math.fround(-ox * xz - oy * yz - oz * cameraCp),
+            -xx,
+            -yx,
+            cameraSp,
+            Math.fround(ox * xx + oy * yx - oz * cameraSp),
+            0,
+            0,
+            0,
+            1
+        );
+        const f = Math.fround(1 / Math.tan(Math.fround(halfAngle)));
         projector.projection.set(f, 0, -1 / SHADOW_SIZE, 0, 0, f, 1 / SHADOW_SIZE, 0, 0, 0, 1 - 2 * zScale, 2 * zOffset, 0, 0, -1, 0);
         const farOffset = LIGHT_DISTANCE / (Math.cos(halfAngle) * Math.sqrt(1 + 2 * tangent * tangent));
         projector.depth.set(LIGHT_DISTANCE, LIGHT_DISTANCE + farOffset);
@@ -334,7 +367,12 @@ export class ShadowProjector {
         const dispose = () => material.dispose();
         const entry: ReceiverMaterial_T = { material, version: source.version };
         source.addEventListener("dispose", dispose);
-        material.addEventListener("dispose", () => { source.removeEventListener("dispose", dispose); this.receiverMaterials.delete(material); this.cacheReceivers.delete(source); if (entry.instanced) entry.instanced.dispose(); });
+        material.addEventListener("dispose", () => {
+            source.removeEventListener("dispose", dispose);
+            this.receiverMaterials.delete(material);
+            this.cacheReceivers.delete(source);
+            if (entry.instanced) entry.instanced.dispose();
+        });
         this.receiverMaterials.add(material);
         this.cacheReceivers.set(source, entry);
         return this.getReceiverMaterial(source, renderer);
@@ -357,7 +395,10 @@ export class ShadowProjector {
 
     protected renderShadow(renderer: THREE.WebGLRenderer, caster: Object3D, camera: Camera, target: WebGLRenderTarget, reusePose: boolean = false): void {
         arrSwappedObjects.length = arrSwappedMaterials.length = arrHiddenAttachments.length = arrPawnMeshes.length = 0;
-        const previousTarget = renderer.getRenderTarget(), autoClear = renderer.autoClear, alpha = renderer.getClearAlpha(), visible = caster.visible;
+        const previousTarget = renderer.getRenderTarget();
+        const autoClear = renderer.autoClear;
+        const alpha = renderer.getClearAlpha();
+        const visible = caster.visible;
         const depth = renderer.state.buffers.depth, reversedDepth = depth.getReversed();
         renderer.getClearColor(tmpClearColor);
         this.renderingShadow = true;
@@ -417,12 +458,16 @@ export class ShadowProjector {
 }
 
 function createAttenuationCube(): CubeTexture {
-    const bases = [[1, 1, 1], [-1, 1, -1], [-1, 1, -1], [-1, -1, 1], [-1, 1, 1], [1, 1, -1]], xs = [[0, 0, -2], [0, 0, 2], [2, 0, 0], [2, 0, 0], [2, 0, 0], [-2, 0, 0]], ys = [[0, -2, 0], [0, -2, 0], [0, 0, 2], [0, 0, -2], [0, -2, 0], [0, -2, 0]];
+    const bases = [[1, 1, 1], [-1, 1, -1], [-1, 1, -1], [-1, -1, 1], [-1, 1, 1], [1, 1, -1]];
+    const xs = [[0, 0, -2], [0, 0, 2], [2, 0, 0], [2, 0, 0], [2, 0, 0], [-2, 0, 0]];
+    const ys = [[0, -2, 0], [0, -2, 0], [0, 0, 2], [0, 0, -2], [0, -2, 0], [0, -2, 0]];
     const mips: CubeTexture[] = [];
     for (const size of [32, 16]) {
         const faces: DataTexture[] = [];
         for (let face = 0; face < 6; face++) {
-            const bytes = new Uint8Array(size * size * 4), dx = xs[face].map(value => Math.fround(value / (size - 1))), dy = ys[face].map(value => Math.fround(value / (size - 1)));
+            const bytes = new Uint8Array(size * size * 4);
+            const dx = xs[face].map(value => Math.fround(value / (size - 1)));
+            const dy = ys[face].map(value => Math.fround(value / (size - 1)));
             for (let y = 0; y < size; y++) {
                 const v = bases[face].map((value, index) => Math.fround(Math.fround(value + Math.fround(dy[index] * (y + 0.5))) + Math.fround(dx[index] * 0.5)));
                 for (let x = 0; x < size; x++) {

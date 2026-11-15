@@ -7,6 +7,8 @@ import { getNativeEffectBinding, type NativeEffectBinding_T } from "./native-eff
 import createSkillVisualDefinition from "./skill-visual-definition";
 import UConfigLocalization from "../conf-files/un-conf-localization";
 
+const fishingVelocityScale = Math.fround(1 / 3);
+
 let cacheSoulShot: UConfigLocalization = null;
 
 async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: string, hands: number[][], velocityScale: number }> {
@@ -40,7 +42,7 @@ async function getSoulShotEffects(id: number): Promise<{ sticks: string, books: 
         });
     });
     // SpawnNTransientEffect 0x104c9cc7 scales fishing-rod metadata; an absent length retains30.
-    return { sticks: sticks.value, books: books.value, hands, velocityScale: fishing ? Math.fround(1 / 3) : 1 };
+    return { sticks: sticks.value, books: books.value, hands, velocityScale: fishing ? fishingVelocityScale : 1 };
 }
 
 type SkillVisualDecodeOps_T = {

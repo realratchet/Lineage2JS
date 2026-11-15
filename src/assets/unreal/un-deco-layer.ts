@@ -23,6 +23,7 @@ export type ITerrainDecorationDecodeInfo = IBaseObjectDecodeInfo & {
 
 type DecoRandom_T = { seed: number };
 
+const rotatorRadians = Math.PI / 32768;
 const tmpLocation: Vector3Arr = [0, 0, 0];
 const tmpNormal: Vector3Arr = [0, 0, 0];
 const tmpScale: Vector3Arr = [0, 0, 0];
@@ -42,11 +43,10 @@ function getRangeSRand(range: FRange, random: DecoRandom_T) {
 }
 
 function setDecorationMatrix(matrices: number[] | Float32Array, offset: number, location: Vector3Arr, normal: Vector3Arr, scale: Vector3Arr, randomYaw: boolean, random: DecoRandom_T) {
-    const rad = Math.PI / 32768;
-    const pitch = Math.atan2(normal[2], Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1])) / rad - 16384;
-    const yaw = randomYaw ? Math.floor(65535 * getSRand(random)) : Math.atan2(normal[1], normal[0]) / rad;
-    const sp = Math.sin(pitch * rad), cp = Math.cos(pitch * rad);
-    const sy = Math.sin(yaw * rad), cy = Math.cos(yaw * rad);
+    const pitch = Math.atan2(normal[2], Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1])) / rotatorRadians - 16384;
+    const yaw = randomYaw ? Math.floor(65535 * getSRand(random)) : Math.atan2(normal[1], normal[0]) / rotatorRadians;
+    const sp = Math.sin(pitch * rotatorRadians), cp = Math.cos(pitch * rotatorRadians);
+    const sy = Math.sin(yaw * rotatorRadians), cy = Math.cos(yaw * rotatorRadians);
 
     matrices[offset + 0] = cp * cy * scale[0];
     matrices[offset + 1] = cp * sy * scale[0];

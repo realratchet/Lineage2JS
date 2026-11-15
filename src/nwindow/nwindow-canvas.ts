@@ -27,7 +27,10 @@ function parseGlyphs(buffer: ArrayBuffer): Map<number, Glyph_T> { // NL2Font::Lo
         offset += 8;
 
         for (let i = 0; i < count; i++, offset += 16) {
-            const u = view.getInt32(offset, true), w = view.getInt32(offset + 4, true), v = view.getInt32(offset + 8, true), h = view.getInt32(offset + 12, true);
+            const u = view.getInt32(offset, true);
+            const w = view.getInt32(offset + 4, true);
+            const v = view.getInt32(offset + 8, true);
+            const h = view.getInt32(offset + 12, true);
 
             if (w > 0 && h > 0 && !glyphs.has(first + i)) glyphs.set(first + i, { u, v, w, h });
         }

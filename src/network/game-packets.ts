@@ -905,7 +905,16 @@ export function readPetInfo(packet: PacketReader): PetInfo_T { // Engine 0x1041c
 
     const level = packet.d(), exp = packet.d(), minExp = packet.d(), nextExp = packet.d();
     const weight = packet.d(), maxWeight = packet.d();
-    const pAtk = packet.d(), pDef = packet.d(), mAtk = packet.d(), mDef = packet.d(), accuracy = packet.d(), evasion = packet.d(), critical = packet.d(), speed = packet.d(), attackSpeed = packet.d(), castSpeed = packet.d();
+    const pAtk = packet.d(),
+        pDef = packet.d(),
+        mAtk = packet.d(),
+        mDef = packet.d(),
+        accuracy = packet.d(),
+        evasion = packet.d(),
+        critical = packet.d(),
+        speed = packet.d(),
+        attackSpeed = packet.d(),
+        castSpeed = packet.d();
 
     info.abnormalState = packet.d();
 
@@ -1010,7 +1019,14 @@ export type PrivateStoreBuyOffer_T = { itemId: number, enchantLevel: number, typ
 export type PrivateStoreSellOffer_T = { objectId: number, itemId: number, enchantLevel: number, type2: number, count: number, price: number };
 
 function readStorageItem(packet: PacketReader): StorageItem_T { // WareHouseDepositList/WareHouseWithdrawalList/PackageSendableList: trailing d repeats objectId.
-    const type1 = packet.h(), objectId = packet.d(), itemId = packet.d(), count = packet.d(), type2 = packet.h(), customType1 = packet.h(), bodyPart = packet.d(), enchantLevel = packet.h();
+    const type1 = packet.h(),
+        objectId = packet.d(),
+        itemId = packet.d(),
+        count = packet.d(),
+        type2 = packet.h(),
+        customType1 = packet.h(),
+        bodyPart = packet.d(),
+        enchantLevel = packet.h();
 
     packet.h();
 
@@ -1105,7 +1121,9 @@ export function readPrivateStoreListSell(packet: PacketReader): PrivateStoreSell
 function readPrivateStoreBuyItem(packet: PacketReader, isStoreList: boolean, hasPrice: boolean): PrivateStoreBuyItem_T {
     const objectId = isStoreList ? packet.d() : 0, itemId = packet.d(), enchantLevel = packet.h(), count = packet.d(), firstPrice = packet.d();
     const category = packet.h(), bodyPart = packet.d(), type1 = packet.h(), finalPrice = hasPrice ? packet.d() : 0, maxCount = hasPrice ? packet.d() : 0;
-    const type2 = isStoreList ? type1 : category, price = isStoreList ? finalPrice : hasPrice ? firstPrice : 0, referencePrice = !isStoreList && hasPrice ? finalPrice : firstPrice;
+    const type2 = isStoreList ? type1 : category,
+        price = isStoreList ? finalPrice : hasPrice ? firstPrice : 0,
+        referencePrice = !isStoreList && hasPrice ? finalPrice : firstPrice;
     if (isStoreList && objectId <= 0 || itemId <= 0 || count < 0 || price < 0) throw new Error(`Invalid private store buy item '${itemId}'.`);
 
     return { objectId, itemId, enchantLevel, count, referencePrice, bodyPart, type2, price, maxCount };
@@ -1408,13 +1426,30 @@ export function readSSQStatus(packet: PacketReader): SSQStatus_T {
 
 export function readClanHallDecoration(packet: PacketReader): ClanHallDecoration_T {
     const clanHallId = packet.d(), status = packet.b(20), fields = new PacketReader(status);
-    return { clanHallId, status, restoreHp: fields.c(), restoreMp: [fields.c(), fields.c()], restoreExp: fields.c(), teleport: fields.c(), unknown: fields.c(), curtains: fields.c(), itemCreate: fields.c(), support: [fields.c(), fields.c()], frontPlatform: fields.c(), itemCreate2: fields.c(), trailer: [fields.d(), fields.d()] };
+    return {
+        clanHallId,
+        status,
+        restoreHp: fields.c(),
+        restoreMp: [fields.c(), fields.c()],
+        restoreExp: fields.c(),
+        teleport: fields.c(),
+        unknown: fields.c(),
+        curtains: fields.c(),
+        itemCreate: fields.c(),
+        support: [fields.c(), fields.c()],
+        frontPlatform: fields.c(),
+        itemCreate2: fields.c(),
+        trailer: [fields.d(), fields.d()]
+    };
 }
 
 export function readSiegeInfo(packet: PacketReader): SiegeInfo_T {
     const castleId = packet.d(), ownerPrivileges = packet.d(), ownerId = packet.d();
     const hasOwner = packet.getRemaining() > 12; // SiegeInfo.java writes no owner block when the owner clan is missing from ClanTable.
-    const ownerName = hasOwner ? packet.S() : null, ownerLeaderName = hasOwner ? packet.S() : null, ownerAllyId = hasOwner ? packet.d() : 0, ownerAllyName = hasOwner ? packet.S() : null;
+    const ownerName = hasOwner ? packet.S() : null,
+        ownerLeaderName = hasOwner ? packet.S() : null,
+        ownerAllyId = hasOwner ? packet.d() : 0,
+        ownerAllyName = hasOwner ? packet.S() : null;
     const serverTime = packet.d(), siegeTime = packet.d(), choices = packet.d();
 
     if (packet.getRemaining()) throw new Error("Invalid SiegeInfo trailing data.");
@@ -1595,7 +1630,8 @@ export function readPartyMatchDetail(packet: PacketReader): PartyMatchDetail_T {
 export function readPartySpelled(packet: PacketReader): PartySpelled_T {
     const type = packet.d() as PartySpelledType_T, objectId = packet.d(), count = packet.d();
 
-    if (type < PartySpelledType_T.PLAYER || type > PartySpelledType_T.SUMMON || count < 0 || count !== packet.getRemaining() / 10) throw new Error(`Invalid PartySpelled payload (type ${type}, count ${count}).`);
+    if (type < PartySpelledType_T.PLAYER || type > PartySpelledType_T.SUMMON || count < 0 || count !== packet.getRemaining() / 10)
+        throw new Error(`Invalid PartySpelled payload (type ${type}, count ${count}).`);
 
     return { type, objectId, effects: Array.from({ length: count }, () => ({ id: packet.d(), level: packet.h(), duration: packet.d() })) };
 }

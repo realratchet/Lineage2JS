@@ -128,7 +128,10 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.mouseUpHandler = this.onHandleMouseUp.bind(this);
     }
 
-    public setParent(parent: GameManager): this { this.manGame = parent; return this; }
+    public setParent(parent: GameManager): this {
+        this.manGame = parent;
+        return this;
+    }
     public getParent(): GameManager { return this.manGame; }
 
     public async onInit(): Promise<this> {
@@ -235,6 +238,7 @@ export class InputManager implements IEngineComponent<GameManager> {
         renderManager.camera.position.set(-Math.cos(yaw) * FOLLOW_CAMERA_DISTANCE, -Math.sin(yaw) * FOLLOW_CAMERA_DISTANCE, FOLLOW_CAMERA_HEIGHT).add(this.controls.orbit.target);
         this.controls.orbit.unclippedDistance = 0;
         this.controls.orbit.update();
+
         const properties = this.manGame.getComponent("asset").playerController.scriptProperties;
         const zoom = Math.fround(renderManager.camera.position.distanceTo(this.controls.orbit.target) - 250);
 
@@ -251,7 +255,9 @@ export class InputManager implements IEngineComponent<GameManager> {
     }
 
     public startReplayCamera(scene: ReplayScene_T): void {
-        const render = this.renderManager, asset = this.manGame.getComponent("asset"), properties = asset.playerController.scriptProperties;
+        const render = this.renderManager,
+            asset = this.manGame.getComponent("asset"),
+            properties = asset.playerController.scriptProperties;
 
         if (this.replayCameraState) throw new Error(`Replay camera is already active.`);
         const preset: [string, any][] = ["CurFixedDefaultCameraNo", "bDisableZoom", "DefaultCameraYaw", "DefaultCameraPitch", "DefaultCameraDist", "bCameraMovingToDefault", "bUseDefaultCameraYaw", "bUseDefaultCameraPitch", "bUseDefaultCameraDist", "SavedViewTargetYaw", "SavedViewTargetPitch", "CurZoomingDist", "DesiredZoomingDist", "OldZoomingDist", "OldCameraRotation", "OldCameraLocation", "OldViewTargetLocation", "Location", "Rotation", "CurVolumeCameraRadius"].map(name => {
@@ -270,13 +276,22 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("DesiredZoomingDist", scene.desiredZoom);
         properties.set("OldZoomingDist", scene.zoom);
         if (scene.firstPerson) render.player.setUnrealScriptProperty("bHidden", true);
+
         render.player.getCameraTargetPosition(this.controls.orbit.target);
         this.controls.orbit.unclippedDistance = 0;
-        const location = render.player.getUnrealScriptProperty("Location") as number[], pitch = Math.trunc(scene.pitch), yaw = Math.trunc(scene.yaw), cosPitch = sinRotator(pitch + 16384), distance = Math.fround(scene.zoom + 250);
+
+        const location = render.player.getUnrealScriptProperty("Location") as number[],
+            pitch = Math.trunc(scene.pitch),
+            yaw = Math.trunc(scene.yaw),
+            cosPitch = sinRotator(pitch + 16384),
+            distance = Math.fround(scene.zoom + 250);
 
         dirForward.set(Math.fround(cosPitch * sinRotator(yaw + 16384)), Math.fround(cosPitch * sinRotator(yaw)), sinRotator(pitch));
 
-        properties.set("OldCameraLocation", [Math.fround(location[0] - dirForward.x * distance), Math.fround(location[1] - dirForward.y * distance), Math.fround(location[2] - Math.fround(dirForward.z * distance))]);
+        properties.set(
+            "OldCameraLocation",
+            [Math.fround(location[0] - dirForward.x * distance), Math.fround(location[1] - dirForward.y * distance), Math.fround(location[2] - Math.fround(dirForward.z * distance))]
+        );
         properties.set("Location", (properties.get("OldCameraLocation") as number[]).slice());
         properties.set("Rotation", [pitch, yaw, (properties.get("Rotation") as number[])[2]]);
         properties.set("OldViewTargetLocation", location.slice());
@@ -303,10 +318,12 @@ export class InputManager implements IEngineComponent<GameManager> {
         properties.set("ManuallyCameraYaw", state.yaw);
         properties.set("ManuallyCameraPitch", state.pitch);
         for (const [name, value] of state.preset) properties.set(name, value);
+
         const player = this.renderManager.player;
 
         player.setUnrealScriptProperty("bHidden", state.hidden);
         if (player.ridePawn) player.ridePawn.setUnrealScriptProperty("bHidden", state.hidden);
+
         this.controls.orbit.enableRotate = state.enableRotate;
         this.controls.orbit.unclippedOffset = null;
         this.isCameraHeightAdjusted = state.adjusted;
@@ -365,6 +382,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
         if (this.dirKeys.left) sidewaysVelocity -= 1;
         if (this.dirKeys.right) sidewaysVelocity += 1;
+
         if (this.dirKeys.up) forwardVelocity += 1;
         if (this.dirKeys.down) forwardVelocity -= 1;
 
@@ -382,6 +400,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
             if (this.isOrbitControls && this.followPlayer && !this.isCameraLocked)
                 this.controls.orbit.rotate(yaw * Math.PI / 32768, pitch * Math.PI / 32768);
+
             setProperty(controller, "CompensateYaw", 0);
             setProperty(controller, "CopmensatePitch", 0);
             setProperty(controller, "bUseHoldCamera", false);
@@ -411,6 +430,7 @@ export class InputManager implements IEngineComponent<GameManager> {
                 properties.set("ManuallyCameraPitch", 0);
             }
         }
+
         const manualYaw = this.controls.orbit.manualYaw;
 
         this.controls.orbit.manualYaw = 0;
@@ -426,17 +446,22 @@ export class InputManager implements IEngineComponent<GameManager> {
         const renderManager = this.renderManager;
 
         if (this.controls.orbit.unclippedOffset) renderManager.camera.position.copy(this.controls.orbit.target).add(this.controls.orbit.unclippedOffset);
+
         renderManager.player.getCameraTargetPosition(tmpMouseIntersection);
         cameraVelocity.copy(tmpMouseIntersection).sub(this.controls.orbit.target);
         if (!this.updateDefaultCamera(deltaTime / 1000, tmpMouseIntersection)) {
             this.updateAutoTrackingPawn(tmpMouseIntersection, manualYaw);
             renderManager.camera.position.add(cameraVelocity);
         }
+
         if (this.controls.orbit.unclippedOffset) this.controls.orbit.unclippedOffset.subVectors(renderManager.camera.position, tmpMouseIntersection);
+
         this.controls.orbit.target.copy(tmpMouseIntersection);
         this.controls.orbit.update();
         if (this.replayCameraState) {
-            const properties = controller.scriptProperties, oldRotation = properties.get("OldCameraRotation") as number[], oldLocation = properties.get("OldCameraLocation") as number[];
+            const properties = controller.scriptProperties,
+                oldRotation = properties.get("OldCameraRotation") as number[],
+                oldLocation = properties.get("OldCameraLocation") as number[];
 
             renderManager.camera.getWorldDirection(dirForward);
             tmpVolumeRotation[0] = Math.round(Math.atan2(dirForward.z, Math.hypot(dirForward.x, dirForward.y)) * 32768 / Math.PI);
@@ -444,15 +469,21 @@ export class InputManager implements IEngineComponent<GameManager> {
             tmpVolumeRotation[2] = 0;
             if (properties.get("bUseVolumeCamera")) this.volumeCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
             else this.behindViewCamera.update(controller, tmpVolumeRotation, this.controls.orbit.target, renderManager.camera.position);
-            const cosPitch = sinRotator(tmpVolumeRotation[0] + 16384), distance = Math.max(1e-6, Math.abs((properties.get("CurZoomingDist") as number) + 250));
+
+            const cosPitch = sinRotator(tmpVolumeRotation[0] + 16384),
+                distance = Math.max(1e-6, Math.abs((properties.get("CurZoomingDist") as number) + 250));
 
             dirForward.set(cosPitch * sinRotator(tmpVolumeRotation[1] + 16384), cosPitch * sinRotator(tmpVolumeRotation[1]), sinRotator(tmpVolumeRotation[0]));
             const orbitPitch = Math.min(tmpVolumeRotation[0] * Math.PI / 32768, Math.PI / 2 - 1e-6);
 
             tmpVolumeOffset.set(Math.cos(orbitPitch) * Math.cos(tmpVolumeRotation[1] * Math.PI / 32768), Math.cos(orbitPitch) * Math.sin(tmpVolumeRotation[1] * Math.PI / 32768), Math.sin(orbitPitch)).multiplyScalar(-distance);
             lookAtCameraRotation(renderManager.camera, tmpVolumeRotation[0], tmpVolumeRotation[1]);
-            for (let i = 0; i < 3; i++) { oldRotation[i] = tmpVolumeRotation[i]; oldLocation[i] = Math.fround(renderManager.camera.position.getComponent(i)); }
+            for (let i = 0; i < 3; i++) {
+                oldRotation[i] = tmpVolumeRotation[i];
+                oldLocation[i] = Math.fround(renderManager.camera.position.getComponent(i));
+            }
         } else this.hitCheckCamera();
+
         renderManager.updateCameraMatrices();
     }
 
@@ -460,10 +491,14 @@ export class InputManager implements IEngineComponent<GameManager> {
         const network = this.manGame.getComponent("network"), controller = this.manGame.getComponent("asset").playerController;
 
         if (!network.isInWorld() || !this.followPlayer || !this.isOrbitControls || this.isCameraLocked) return;
+
         const properties = controller.scriptProperties, count = properties.get("FixedDefaultViewNum") as number;
 
         if (count === 0 || properties.get("bCameraWalking") || properties.get("bCameraSpecialMove") || properties.get("bCameraMovingToSpecial")) return;
-        const orbit = this.controls.orbit, player = this.renderManager.player, rotation = player.getUnrealScriptProperty("Rotation") as number[];
+
+        const orbit = this.controls.orbit,
+            player = this.renderManager.player,
+            rotation = player.getUnrealScriptProperty("Rotation") as number[];
         const current = (properties.get("CurFixedDefaultCameraNo") as number) + direction;
         const index = current < 0 ? count - 1 : current >= count ? 0 : current;
         const yaw = ((Math.round((orbit.getAzimuthalAngle() + Math.PI / 2) * 32768 / Math.PI) + 32767) & 65535) - 32767;
@@ -478,12 +513,15 @@ export class InputManager implements IEngineComponent<GameManager> {
             properties.set(`DefaultCamera${field}`, (properties.get(`FixedDefaultCamera${field}`) as number[])[index]);
             properties.set(`bUseDefaultCamera${field}`, true);
         }
+
         properties.set("CameraViewHeightAdjust", (properties.get("FixedDefaultCameraViewHeight") as number[])[index]);
         properties.set("bDisableZoom", !!((properties.get("FixedDefaultCameraDisableZoom") as number[])[index] & 1));
+
         const hidden = !!((properties.get("FixedDefaultCameraHidePlayer") as number[])[index] & 1);
 
         player.setUnrealScriptProperty("bHidden", hidden);
         if (player.ridePawn) player.ridePawn.setUnrealScriptProperty("bHidden", hidden);
+
         properties.set("SavedViewTargetYaw", rotation[1]);
         properties.set("SavedViewTargetPitch", rotation[0]);
         properties.set("bCameraManuallyRotating", false);
@@ -514,7 +552,8 @@ export class InputManager implements IEngineComponent<GameManager> {
         const controller = this.manGame.getComponent("asset").playerController.scriptProperties;
         const speed = controller.get("AutoTrackingPawnSpeed") as number;
 
-        if (!controller.get("bUseAutoTrackingPawn") || speed === 0 || controller.get("bUseHoldCamera") || controller.get("bCameraMovingToDefault") || controller.get("bFixView") || controller.get("ManuallyCameraYaw")) return;
+        if (!controller.get("bUseAutoTrackingPawn") || speed === 0 || controller.get("bUseHoldCamera") ||
+            controller.get("bCameraMovingToDefault") || controller.get("bFixView") || controller.get("ManuallyCameraYaw")) return;
 
         const camera = this.renderManager.camera, previousTarget = this.controls.orbit.target;
         // OldCameraRotation.Yaw is integral; recover it from the floating camera basis.
@@ -567,6 +606,7 @@ export class InputManager implements IEngineComponent<GameManager> {
             this.setFollowPlayer(false);
             this.renderManager.setPawnCullingCamera(true);
         }
+
         this.isOrbitControls = false;
         this.controls.orbit.enabled = false;
         this.clearDirectionKeys();
@@ -574,6 +614,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
     protected onPointerControlsUnlocked(): void {
         if (!loginServer) this.isFreeCamera = false;
+
         this.isOrbitControls = true;
         this.controls.orbit.enabled = !this.isCameraLocked;
         if (this.isPawnFreeCamera && !this.isFreeCamera) {
@@ -585,6 +626,7 @@ export class InputManager implements IEngineComponent<GameManager> {
                 return;
             }
         }
+
         this.controls.fps.getDirection(this.controls.orbit.target).multiplyScalar(100).add(this.renderManager.camera.position);
         this.controls.orbit.update();
         this.clearDirectionKeys();
@@ -792,7 +834,11 @@ export class InputManager implements IEngineComponent<GameManager> {
             if (physicsIntersection) {
                 tmpMouseIntersection.copy(physicsIntersection.location);
                 network.requestMoveTo(tmpMouseIntersection, physicsIntersection.actor);
-                if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal, (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null);
+                if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(
+                    tmpMouseIntersection,
+                    physicsIntersection.normal,
+                    (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null
+                );
             } else if (pickDistance > 0 && (renderManager.player.isSwimmingMovement() || renderManager.player.isFlyingMovement())) {
                 tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
                 network.requestMoveTo(tmpMouseIntersection);
@@ -804,7 +850,11 @@ export class InputManager implements IEngineComponent<GameManager> {
         if (physicsIntersection) {
             tmpMouseIntersection.copy(physicsIntersection.location);
             renderManager.player.goTo(tmpMouseIntersection);
-            if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(tmpMouseIntersection, physicsIntersection.normal, (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null);
+            if (isLandmarkSurface(physicsIntersection.actor)) renderManager.player.addLandmark(
+                tmpMouseIntersection,
+                physicsIntersection.normal,
+                (physicsIntersection.actor as any).isVehicle ? physicsIntersection.actor as unknown as THREE.Object3D : null
+            );
         } else if (pickDistance > 0) {
             tmpMouseIntersection.copy(this.raycaster.ray.direction).multiplyScalar(pickDistance).add(this.raycaster.ray.origin);
             renderManager.player.goTo(tmpMouseIntersection);
@@ -861,7 +911,15 @@ export class InputManager implements IEngineComponent<GameManager> {
         this.mousePickDistance = this.getPickDistance(this.raycaster.ray.origin, this.raycaster.ray.direction);
 
         // UGameEngine::FindMouseTargetObject 0x829c88/0x829dfd uses UViewport.Actor (PlayerController), not its Pawn.
-        return this.mousePickDistance > 0 ? this.physicsManager.rayCheck(this.raycaster.ray.origin, this.raycaster.ray.direction, this.mousePickDistance, player.getCollider(), player.getRigidbody(), true, this.manGame.getComponent("asset").playerController) : null;
+        return this.mousePickDistance > 0 ? this.physicsManager.rayCheck(
+            this.raycaster.ray.origin,
+            this.raycaster.ray.direction,
+            this.mousePickDistance,
+            player.getCollider(),
+            player.getRigidbody(),
+            true,
+            this.manGame.getComponent("asset").playerController
+        ) : null;
     }
 
     public getMouseTarget(): ICollidable { return this.mouseTarget; }
@@ -895,7 +953,10 @@ export class InputManager implements IEngineComponent<GameManager> {
         const network = this.manGame.getComponent("network");
         const bounds = this.renderManager.renderer.domElement.getBoundingClientRect();
 
-        if (this.isMouseInViewport && this.isOrbitControls && !this.isFreeCamera && !this.isCameraLocked && this.mousePosition.x >= bounds.left && this.mousePosition.x < bounds.right && this.mousePosition.y >= bounds.top && this.mousePosition.y < bounds.bottom && !network.isMouseOverUI(this.mousePosition.x, this.mousePosition.y)) {
+        if (this.isMouseInViewport && this.isOrbitControls && !this.isFreeCamera && !this.isCameraLocked &&
+            this.mousePosition.x >= bounds.left && this.mousePosition.x < bounds.right &&
+            this.mousePosition.y >= bounds.top && this.mousePosition.y < bounds.bottom &&
+            !network.isMouseOverUI(this.mousePosition.x, this.mousePosition.y)) {
             tmpScreenPosition.set((this.mousePosition.x - bounds.left) / bounds.width * 2 - 1, 1 - (this.mousePosition.y - bounds.top) / bounds.height * 2);
             this.raycaster.setFromCamera(tmpScreenPosition, this.renderManager.camera);
 
@@ -903,6 +964,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
             pickup = network.getPickup(this.raycaster, hit ? hit.distance : this.mousePickDistance);
             if (!pickup && hit && hit.actor !== this.renderManager.player as ICollidable && network.getActorObjectId(hit.actor)) actor = hit.actor;
+
             cursor = pickup ? 3 : network.getMouseCursor(actor);
         }
 
@@ -944,6 +1006,7 @@ export class InputManager implements IEngineComponent<GameManager> {
 
             if (Math.abs(delta) < 1e-12) {
                 if (start < min || start > max) return 0;
+
                 continue;
             }
 

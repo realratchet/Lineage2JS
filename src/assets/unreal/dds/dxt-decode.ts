@@ -172,7 +172,7 @@ export function dxt5ToRgba(width: number, height: number, input: Uint8Array): Ui
             const alpha0 = input[offset];
             const alpha1 = input[offset + 1];
 
-            let alphaBits = BigInt(0);
+            let alphaBits = 0n;
             for (let j = 0; j < 6; j++) {
                 alphaBits |= BigInt(input[offset + 2 + j]) << BigInt(8 * j);
             }
@@ -222,7 +222,7 @@ export function dxt5ToRgba(width: number, height: number, input: Uint8Array): Ui
 
             for (let iy = 0; iy < 4; iy++) {
                 for (let ix = 0; ix < 4; ix++) {
-                    const alphaIndex = Number((alphaBits >> BigInt((iy * 4 + ix) * 3)) & BigInt(0x7));
+                    const alphaIndex = Number((alphaBits >> BigInt((iy * 4 + ix) * 3)) & 0x7n);
                     const alpha = alphas[alphaIndex];
 
                     const shift = (iy * 4 + ix) * 2;

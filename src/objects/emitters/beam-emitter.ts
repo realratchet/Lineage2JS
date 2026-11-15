@@ -314,7 +314,12 @@ export class BeamEmitter extends BaseEmitter {
     }
 }
 
-const tmpRight = new Vector3(), tmpUp = new Vector3(), tmpPrev = new Vector3(), tmpPoint = new Vector3(), tmpNoise = new Vector3(), tmpView = new Vector3();
+const tmpRight = new Vector3();
+const tmpUp = new Vector3();
+const tmpPrev = new Vector3();
+const tmpPoint = new Vector3();
+const tmpNoise = new Vector3();
+const tmpView = new Vector3();
 
 class BeamMesh extends Mesh<BufferGeometry, ParticleMaterial | AnimatedParticleMaterial> {
     public emitter: BeamEmitter = null;

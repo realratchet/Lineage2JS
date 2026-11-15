@@ -5,6 +5,12 @@ import type { Vector3Arr } from "../library-types";
 
 type FireCracker_T = { delay: number, velocity: number, height: number, offset: Vector3Arr, color: number, startTime: number, origin: Vector3Arr, seed: SkillActor_T, finished: boolean };
 
+// Engine.dll FireCrackerAction constructor 0x10471e90; slot defaults 0x1046c730.
+const arrDelays: readonly number[] = [1, 1.5, 2.5, 3, 4, 4.5, 5, 6];
+const arrHeights: readonly number[] = [110, 130, 110, 80, 110, 130, 80, 110];
+const arrVelocities: readonly number[] = [230, 170, 230, 170, 170, 230, 170, 170];
+const arrColors: readonly number[] = [0, 2, 1, 0, 3, 2, 1, 3];
+
 function random(count: number): number { return Math.floor(Math.random() * count); }
 
 export class FireCrackerAction {
@@ -16,16 +22,23 @@ export class FireCrackerAction {
     public constructor(protected readonly host: SkillEffectHost_T, protected readonly caster: SkillActor_T, protected readonly skill: NpcSkillAttack_T, protected readonly type: 1 | 2 | 3, currentTime: number) {
         this.lastTime = currentTime;
 
-        // Engine.dll FireCrackerAction constructor 0x10471e90; slot defaults 0x1046c730.
-        const delays = [1, 1.5, 2.5, 3, 4, 4.5, 5, 6], heights = [110, 130, 110, 80, 110, 130, 80, 110], velocities = [230, 170, 230, 170, 170, 230, 170, 170], colors = [0, 2, 1, 0, 3, 2, 1, 3];
-
         for (let i = 0; i < (type === 3 ? 8 : type); i++) {
-            const cracker: FireCracker_T = { delay: random(5) * 0.4, velocity: 200 + random(50), height: (20 + random(15)) * 4.5, offset: [(random(7) - 3) * 8, (random(7) - 3) * 8, 0], color: random(4), startTime: 0, origin: null, seed: null, finished: false };
+            const cracker: FireCracker_T = {
+                delay: random(5) * 0.4,
+                velocity: 200 + random(50),
+                height: (20 + random(15)) * 4.5,
+                offset: [(random(7) - 3) * 8, (random(7) - 3) * 8, 0],
+                color: random(4),
+                startTime: 0,
+                origin: null,
+                seed: null,
+                finished: false
+            };
 
-            cracker.delay = type === 3 ? delays[i] : 0;
-            cracker.height = (type === 3 ? heights[i] : i ? 30 : 20) + random(10);
-            cracker.velocity = (type === 3 ? velocities[i] : i ? 170 : 140) + random(10);
-            cracker.color = type === 3 ? colors[i] : i ? 2 : 0;
+            cracker.delay = type === 3 ? arrDelays[i] : 0;
+            cracker.height = (type === 3 ? arrHeights[i] : i ? 30 : 20) + random(10);
+            cracker.velocity = (type === 3 ? arrVelocities[i] : i ? 170 : 140) + random(10);
+            cracker.color = type === 3 ? arrColors[i] : i ? 2 : 0;
             if (type !== 3) cracker.offset = [0, 0, 0];
             this.crackers.push(cracker);
         }
@@ -58,7 +71,10 @@ export class FireCrackerAction {
     public update(currentTime: number): boolean {
         this.elapsed += (currentTime - this.lastTime) * 0.001;
         this.lastTime = currentTime;
-        if (!this.host.isAlive(this.caster)) { this.clear(); return false; }
+        if (!this.host.isAlive(this.caster)) {
+            this.clear();
+            return false;
+        }
 
         const origin = this.getOrigin();
         let finished = 0;
@@ -67,7 +83,10 @@ export class FireCrackerAction {
         for (let i = 0; i < this.crackers.length; i++) {
             const cracker = this.crackers[i];
 
-            if (cracker.finished) { finished++; continue; }
+            if (cracker.finished) {
+                finished++;
+                continue;
+            }
             if (!cracker.seed) {
                 if (cracker.delay >= this.elapsed) continue;
                 if (this.type === 2)

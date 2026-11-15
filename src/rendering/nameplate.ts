@@ -66,7 +66,8 @@ if (opaqueDepthEnabled) {
     }
 
     public update(canvas: NWindowCanvas, name: string, title: string, nameColor: number, titleColor: number, bracket: string, crest: HTMLCanvasElement = null, allyCrest: HTMLCanvasElement = null) {
-        if (name === this.nameText && title === this.titleText && nameColor === this.nameColor && titleColor === this.titleColor && bracket === this.bracket && crest === this.crest && allyCrest === this.allyCrest) return;
+        if (name === this.nameText && title === this.titleText && nameColor === this.nameColor && titleColor === this.titleColor && bracket === this.bracket && crest === this.crest && allyCrest === this.allyCrest)
+            return;
 
         this.nameText = name;
         this.titleText = title;

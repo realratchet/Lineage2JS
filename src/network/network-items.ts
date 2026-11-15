@@ -165,7 +165,8 @@ export class NetworkItems {
 
         const customType2 = packet.h();
 
-        if (objectId <= 0 || itemId <= 0 || count < 0 || count === 0 && !hasTradeType || hasTradeType && tradeType !== GamePackets.TradeChange_T.ADD && tradeType !== GamePackets.TradeChange_T.REMOVE && tradeType !== GamePackets.TradeChange_T.MODIFY)
+        if (objectId <= 0 || itemId <= 0 || count < 0 || count === 0 && !hasTradeType ||
+            hasTradeType && tradeType !== GamePackets.TradeChange_T.ADD && tradeType !== GamePackets.TradeChange_T.REMOVE && tradeType !== GamePackets.TradeChange_T.MODIFY)
             throw new Error(`Invalid trade item '${itemId}'.`);
 
         return { tradeType, type1, objectId, itemId, count, initialCount: count, type2, bodyPart, enchantLevel, customType2 };
@@ -797,7 +798,8 @@ export class NetworkItems {
         const source = this.shortcuts.get(index), target = this.shortcuts.get(targetIndex);
 
         if (!this.network.actors.inWorld || !source || index === targetIndex) return;
-        if (![page, targetPage].every(value => Number.isInteger(value) && value >= 0 && value < 10) || ![slot, targetSlot].every(value => Number.isInteger(value) && value >= 0 && value < 12)) throw new Error(`Invalid shortcut move ${page}:${slot} -> ${targetPage}:${targetSlot}.`);
+        if (![page, targetPage].every(value => Number.isInteger(value) && value >= 0 && value < 10) || ![slot, targetSlot].every(value => Number.isInteger(value) && value >= 0 && value < 12))
+            throw new Error(`Invalid shortcut move ${page}:${slot} -> ${targetPage}:${targetSlot}.`);
 
         this.requestShortCutReg(source.type, targetIndex, source.id, source.characterType ?? 1);
         this.network.session.game.requestShortCutDel(index);
@@ -919,7 +921,10 @@ export class NetworkItems {
 
     public requestTrade(objectId: number) { if (this.network.actors.inWorld) this.network.session.game.tradeRequest(objectId); }
 
-    public canAddTradeItem(objectId: number) { return this.network.actors.inWorld && this.tradePartnerId > 0 && this.tradeAvailableItems.some(item => item.objectId === objectId) && !this.tradeOwnItems.some(item => item.objectId === objectId); }
+    public canAddTradeItem(objectId: number) {
+        return this.network.actors.inWorld && this.tradePartnerId > 0 && this.tradeAvailableItems.some(item => item.objectId === objectId) &&
+            !this.tradeOwnItems.some(item => item.objectId === objectId);
+    }
 
     public addTradeItem(objectId: number, count: number) {
         if (!this.canAddTradeItem(objectId)) return;

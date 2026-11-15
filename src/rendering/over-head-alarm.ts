@@ -2,6 +2,9 @@ import { Object3D, OrthographicCamera, Scene, Uniform, Vector2, Vector3, type De
 import type LitSkinnedMesh from "../objects/lit-skinned-mesh";
 import { ColorByte } from "../utils/color-byte";
 
+const ACTOR_DISTANCE_SCALE = Math.fround(900.1);
+const ACTOR_MIN_SCALE = Math.fround(0.87);
+
 type AlarmMarker_T = { x: number, y: number, distance: number, anchor: Vector3 };
 
 const tmpOffset = new Vector3();
@@ -29,7 +32,10 @@ export class OverHeadAlarm {
 
     public isLoaded() { return this.actor.children.length > 0; }
     public clear() { this.count = 0; }
-    public setSize(width: number, height: number) { this.width = width; this.height = height; }
+    public setSize(width: number, height: number) {
+        this.width = width;
+        this.height = height;
+    }
 
     public setMesh(mesh: LitSkinnedMesh) {
         tmpOffset.copy(mesh.meshOrigin).multiply(mesh.scale).negate().applyQuaternion(mesh.quaternion);
@@ -93,7 +99,7 @@ ${shader.fragmentShader}`.replace("void main() {", `void main() {
 
             this.worldAnchor.value.copy(marker.anchor);
             this.actor.position.set(marker.x - this.width / 2, 0, this.height / 2 - marker.y);
-            this.actor.scale.setScalar(Math.fround(900.1) / marker.distance + Math.fround(0.87)); // UCanvas::DrawActor 0x7ed4d9..0x7ed50d; orthographic zoom1 at0x8e61f3.
+            this.actor.scale.setScalar(ACTOR_DISTANCE_SCALE / marker.distance + ACTOR_MIN_SCALE); // UCanvas::DrawActor 0x7ed4d9..0x7ed50d; orthographic zoom1 at0x8e61f3.
             renderer.render(this.scene, this.camera);
         }
     }

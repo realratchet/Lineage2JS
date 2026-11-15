@@ -28,6 +28,8 @@ import type MovableObject from "../objects/movable-object";
 import type { ICollidable } from "../objects/objects";
 import { getDistance } from "./network-location";
 
+const TARGET_COMMAND_DELAY = Math.fround(0.001);
+
 export class NetworkManager implements IEngineComponent<GameManager> {
     public readonly session = new NetworkSession(this);
     public readonly actors = new NetworkActors(this);
@@ -47,7 +49,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     protected nextTick: Promise<void> = null;
     protected resolveNextTick: () => void = null;
 
-    public setParent(parent: GameManager): this { this.manGame = parent; return this; }
+    public setParent(parent: GameManager): this {
+        this.manGame = parent;
+        return this;
+    }
     public getParent(): GameManager { return this.manGame; }
     public getGameClient() { return this.session.game; }
     public isInWorld() { return this.actors.inWorld; }
@@ -150,7 +155,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     public execCommand(text: string, isShift: boolean = false) {
         if (!this.actors.inWorld) return;
-        if (text.startsWith("//")) { this.sendBypassBuildCmd(text.slice(2)); return; }
+        if (text.startsWith("//")) {
+            this.sendBypassBuildCmd(text.slice(2));
+            return;
+        }
         if (!text.startsWith("/")) return;
 
         const tokens = getCommandTokens(text), strings = this.ui.getStrings();
@@ -198,7 +206,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case CommandType_T.clanwarstart: case CommandType_T.clanwarstop: this.ui.clanAction(type === CommandType_T.clanwarstart ? "declareWar" : "endWar", null); break;
             case CommandType_T.deletealliancecrest: this.community.setAllyCrest(new Uint8Array(0)); break;
             case CommandType_T.target: {
-                if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]); break; }
+                if (tokens.length < 2) {
+                    this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]);
+                    break;
+                }
 
                 const name = tokens.slice(1).join(" ").toLowerCase();
                 let target: NetObject_T = null;
@@ -216,9 +227,13 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 break;
             }
             case CommandType_T.partymatching: this.ui.openPartyMatch(); break;
-            case CommandType_T.Invite: if (tokens[1]) this.community.inviteToParty(tokens[1], this.ui.getGameOptions().partyLooting); else this.useAction(ActionType_T.partyinvite); break;
+            case CommandType_T.Invite:
+                if (tokens[1]) this.community.inviteToParty(tokens[1], this.ui.getGameOptions().partyLooting); else this.useAction(ActionType_T.partyinvite);
+                break;
             case CommandType_T.Leave: this.useAction(ActionType_T.partyleave); break;
-            case CommandType_T.Dismiss: if (tokens.length > 1) this.community.oustPartyMember(tokens.slice(1).join(" ")); else this.useAction(ActionType_T.partydismiss); break;
+            case CommandType_T.Dismiss:
+                if (tokens.length > 1) this.community.oustPartyMember(tokens.slice(1).join(" ")); else this.useAction(ActionType_T.partydismiss);
+                break;
             case CommandType_T.changepartyleader: if (tokens[1]) this.community.changePartyLeader(tokens[1]); else this.useAction(ActionType_T.leaderchange); break;
             case CommandType_T.vendor: this.useAction(ActionType_T.vendor); break;
             case CommandType_T.buy: this.useAction(ActionType_T.buy); break;
@@ -267,7 +282,12 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case CommandType_T.allblock: this.community.block(GamePackets.BlockType_T.ALLBLOCK); break;
             case CommandType_T.allunblock: this.community.block(GamePackets.BlockType_T.ALLUNBLOCK); break;
             case CommandType_T.socialhello: case CommandType_T.socialvictory: case CommandType_T.socialcharge: this.session.game.requestSocialAction(type - 19); break;
-            case CommandType_T.socialno: case CommandType_T.socialyes: case CommandType_T.socialbow: case CommandType_T.socialunaware: case CommandType_T.socialwaitinga: case CommandType_T.sociallaugh: this.session.game.requestSocialAction(type - 41); break;
+            case CommandType_T.socialno:
+            case CommandType_T.socialyes:
+            case CommandType_T.socialbow:
+            case CommandType_T.socialunaware:
+            case CommandType_T.socialwaitinga:
+            case CommandType_T.sociallaugh: this.session.game.requestSocialAction(type - 41); break;
             case CommandType_T.socialapplause: case CommandType_T.socialdance: case CommandType_T.socialsad: this.session.game.requestSocialAction(type - 43); break;
             case CommandType_T.sitstand: this.useAction(0); break;
             case CommandType_T.walkrun: this.useAction(ActionType_T.walkrun); break;
@@ -276,7 +296,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case CommandType_T.end_videorecording: this.session.stopReplayRecording(); break;
             case CommandType_T.startend_videorecording: this.useAction(55); break;
             case CommandType_T.useskill: case CommandType_T.useskillforce: case CommandType_T.useskillstand: {
-                if (tokens.length < 2) { this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]); break; }
+                if (tokens.length < 2) {
+                    this.ui.addSystemMessage(strings.systemMessages[1256], strings.systemMessageColors[1256]);
+                    break;
+                }
 
                 const id = getSkillCommandId(strings.skillCommands, tokens.slice(1).join(" "));
 
@@ -292,7 +315,29 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 }
                 break;
             }
-            case CommandType_T.loc: case CommandType_T.unstuck: case CommandType_T.Time: case CommandType_T.partyinfo: case CommandType_T.enemylist: case CommandType_T.attackerlist: case CommandType_T.clanwarlist: case CommandType_T.channeldelete: case CommandType_T.channelleave: case CommandType_T.clanpenalty: case CommandType_T["View Current Results"]: case CommandType_T.mount: case CommandType_T.dismount: case CommandType_T.summonsiege: case CommandType_T.skill4036: case CommandType_T.skill4138: case CommandType_T.delay: case CommandType_T.pledgewarinfo: case CommandType_T.allywarinfo: case CommandType_T.openchannel: case CommandType_T.selfnickname: case CommandType_T.warstatus: case CommandType_T.chinatime: this.session.game.requestUserCommand(type); break;
+            case CommandType_T.loc:
+            case CommandType_T.unstuck:
+            case CommandType_T.Time:
+            case CommandType_T.partyinfo:
+            case CommandType_T.enemylist:
+            case CommandType_T.attackerlist:
+            case CommandType_T.clanwarlist:
+            case CommandType_T.channeldelete:
+            case CommandType_T.channelleave:
+            case CommandType_T.clanpenalty:
+            case CommandType_T["View Current Results"]:
+            case CommandType_T.mount:
+            case CommandType_T.dismount:
+            case CommandType_T.summonsiege:
+            case CommandType_T.skill4036:
+            case CommandType_T.skill4138:
+            case CommandType_T.delay:
+            case CommandType_T.pledgewarinfo:
+            case CommandType_T.allywarinfo:
+            case CommandType_T.openchannel:
+            case CommandType_T.selfnickname:
+            case CommandType_T.warstatus:
+            case CommandType_T.chinatime: this.session.game.requestUserCommand(type); break;
             case CommandType_T.allywarstart: case CommandType_T.allywarstop: case CommandType_T.allywarsurrender: case CommandType_T.petspecial: case CommandType_T.channelinfo: break;
             default: debugger; break;
         }
@@ -431,8 +476,14 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             const distance = getDistance(object.actor.position, player.actor.position);
 
             if (!(distance >= 0)) continue;
-            if (distance < nearestDistance) { nearest = object; nearestDistance = distance; }
-            if (distance > lower && distance < nextDistance) { next = object; nextDistance = distance; }
+            if (distance < nearestDistance) {
+                nearest = object;
+                nearestDistance = distance;
+            }
+            if (distance > lower && distance < nextDistance) {
+                next = object;
+                nextDistance = distance;
+            }
         }
 
         const result = next || nearest;
@@ -453,7 +504,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
             const distance = getDistance(pickup.position, player.actor.position);
 
-            if (distance >= 0 && distance < nearestDistance) { nearest = pickup; nearestDistance = distance; }
+            if (distance >= 0 && distance < nearestDistance) {
+                nearest = pickup;
+                nearestDistance = distance;
+            }
         }
 
         return nearest;
@@ -461,7 +515,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
     protected updateGNOManager(deltaTime: number) { // Engine 0x103f9940.
         this.gnoElapsed = Math.fround(this.gnoElapsed + Math.fround(deltaTime / 1000));
-        if (this.gnoElapsed > 3) { this.gnoCategory = this.gnoElapsed = 0; this.gnoObjectId = -1; }
+        if (this.gnoElapsed > 3) {
+            this.gnoCategory = this.gnoElapsed = 0;
+            this.gnoObjectId = -1;
+        }
     }
 
     public leaveWorld() {
@@ -777,7 +834,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
 
                 this.nextTargetLock = false;
                 this.combat.setTarget(targetId, levelDifference);
-                this.macroExecutor.notifyCommand([CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist], Math.fround(0.001));
+                this.macroExecutor.notifyCommand([CommandType_T.target, CommandType_T.targetnext, CommandType_T.assist], TARGET_COMMAND_DELAY);
                 break;
             }
             case GamePackets.GameServerPacket_T.PartyMemberPosition: this.community.onPartyMemberPosition(packet); break;
@@ -844,19 +901,37 @@ export class NetworkManager implements IEngineComponent<GameManager> {
             case GamePackets.GameServerPacket_T.PledgeCrest: this.community.onPledgeCrest(packet); break;
             case GamePackets.GameServerPacket_T.AskJoinAlly: this.community.onAskJoinAlly(packet); break;
             case GamePackets.GameServerPacket_T.AllyCrest: this.community.onAllyCrest(packet); break;
-            case GamePackets.GameServerPacket_T.WareHouseDepositList: this.items.warehouseDeposit = GamePackets.readWarehouseList(packet); this.ui.showWarehouse(false, this.items.warehouseDeposit); break;
-            case GamePackets.GameServerPacket_T.WareHouseWithdrawalList: this.items.warehouseWithdraw = GamePackets.readWarehouseList(packet); this.ui.showWarehouse(true, this.items.warehouseWithdraw); break;
+            case GamePackets.GameServerPacket_T.WareHouseDepositList:
+                this.items.warehouseDeposit = GamePackets.readWarehouseList(packet);
+                this.ui.showWarehouse(false, this.items.warehouseDeposit);
+                break;
+            case GamePackets.GameServerPacket_T.WareHouseWithdrawalList:
+                this.items.warehouseWithdraw = GamePackets.readWarehouseList(packet);
+                this.ui.showWarehouse(true, this.items.warehouseWithdraw);
+                break;
             case GamePackets.GameServerPacket_T.WareHouseDone: this.items.onWareHouseDone(packet); break;
             case GamePackets.GameServerPacket_T.PrivateStoreManageListSell: this.items.onPrivateStoreManageListSell(packet); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreListSell: this.items.privateStoreSell = GamePackets.readPrivateStoreListSell(packet); this.ui.showPrivateStoreSell(this.items.privateStoreSell); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreListSell:
+                this.items.privateStoreSell = GamePackets.readPrivateStoreListSell(packet);
+                this.ui.showPrivateStoreSell(this.items.privateStoreSell);
+                break;
             case GamePackets.GameServerPacket_T.PrivateStoreMsgSell: this.items.onPrivateStoreMsg(packet, this.items.privateStoreSellMsgs); break;
             case GamePackets.GameServerPacket_T.PrivateStoreManageListBuy: this.items.onPrivateStoreManageListBuy(packet); break;
-            case GamePackets.GameServerPacket_T.PrivateStoreListBuy: this.items.privateStoreBuy = GamePackets.readPrivateStoreListBuy(packet); this.ui.showPrivateStoreBuy(this.items.privateStoreBuy); break;
+            case GamePackets.GameServerPacket_T.PrivateStoreListBuy:
+                this.items.privateStoreBuy = GamePackets.readPrivateStoreListBuy(packet);
+                this.ui.showPrivateStoreBuy(this.items.privateStoreBuy);
+                break;
             case GamePackets.GameServerPacket_T.PrivateStoreMsgBuy: this.items.onPrivateStoreMsg(packet, this.items.privateStoreBuyMsgs); break;
             case GamePackets.GameServerPacket_T.PackageToList: this.items.onPackageToList(packet); break;
-            case GamePackets.GameServerPacket_T.PackageSendableList: this.items.packageSendable = GamePackets.readPackageSendableList(packet); this.ui.showPackage(this.items.packageSendable); break;
+            case GamePackets.GameServerPacket_T.PackageSendableList:
+                this.items.packageSendable = GamePackets.readPackageSendableList(packet);
+                this.ui.showPackage(this.items.packageSendable);
+                break;
             case GamePackets.GameServerPacket_T.MultiSellList: this.items.onMultiSellList(packet); break;
-            case GamePackets.GameServerPacket_T.ShopPreviewList: this.items.shopPreview = GamePackets.readShopPreviewList(packet); this.ui.showPreviewShop(this.items.shopPreview); break;
+            case GamePackets.GameServerPacket_T.ShopPreviewList:
+                this.items.shopPreview = GamePackets.readShopPreviewList(packet);
+                this.ui.showPreviewShop(this.items.shopPreview);
+                break;
             case GamePackets.GameServerPacket_T.ShopPreviewInfo: this.items.onShopPreviewInfo(packet); break;
             case GamePackets.GameServerPacket_T.BuyListSeed:
                 this.items.seedShop = GamePackets.readBuyListSeed(packet);
@@ -891,7 +966,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 this.actors.dice = GamePackets.readDice(packet);
                 void this.actors.onDice(this.actors.dice);
                 break;
-            case GamePackets.GameServerPacket_T.MonRaceInfo: this.community.monRace = GamePackets.readMonRaceInfo(packet); this.monRace.onMonRaceInfo(this.community.monRace); break;
+            case GamePackets.GameServerPacket_T.MonRaceInfo:
+                this.community.monRace = GamePackets.readMonRaceInfo(packet);
+                this.monRace.onMonRaceInfo(this.community.monRace);
+                break;
             case GamePackets.GameServerPacket_T.SSQStatus: this.community.onSSQStatus(packet); break;
             case GamePackets.GameServerPacket_T.ClanHallDecoration: {
                 const info = GamePackets.readClanHallDecoration(packet);
@@ -899,18 +977,48 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 this.manGame.getComponent("render").updateClanHallDecorations();
                 break;
             }
-            case GamePackets.GameServerPacket_T.SiegeInfo: this.community.siegeInfo = GamePackets.readSiegeInfo(packet); this.ui.showSiegeInfo(this.community.siegeInfo); break;
-            case GamePackets.GameServerPacket_T.SiegeAttackerList: this.community.siegeAttackers = GamePackets.readSiegeClanList(packet, false); this.ui.addSiegeClans(false, this.community.siegeAttackers); break;
-            case GamePackets.GameServerPacket_T.SiegeDefenderList: this.community.siegeDefenders = GamePackets.readSiegeClanList(packet, true); this.ui.addSiegeClans(true, this.community.siegeDefenders); break;
+            case GamePackets.GameServerPacket_T.SiegeInfo:
+                this.community.siegeInfo = GamePackets.readSiegeInfo(packet);
+                this.ui.showSiegeInfo(this.community.siegeInfo);
+                break;
+            case GamePackets.GameServerPacket_T.SiegeAttackerList:
+                this.community.siegeAttackers = GamePackets.readSiegeClanList(packet, false);
+                this.ui.addSiegeClans(false, this.community.siegeAttackers);
+                break;
+            case GamePackets.GameServerPacket_T.SiegeDefenderList:
+                this.community.siegeDefenders = GamePackets.readSiegeClanList(packet, true);
+                this.ui.addSiegeClans(true, this.community.siegeDefenders);
+                break;
             case GamePackets.GameServerPacket_T.GameGuardQuery: this.community.onGameGuardQuery(packet); break;
-            case GamePackets.GameServerPacket_T.RecipeBookItemList: this.items.recipeBook = GamePackets.readRecipeBookItemList(packet); this.ui.showRecipeBook(this.items.recipeBook); break;
-            case GamePackets.GameServerPacket_T.RecipeItemMakeInfo: this.items.recipeItemMakeInfo = GamePackets.readRecipeItemMakeInfo(packet); this.ui.showRecipeManufacture(this.items.recipeItemMakeInfo); break;
-            case GamePackets.GameServerPacket_T.RecipeShopManageList: this.items.recipeShopManageList = GamePackets.readRecipeShopManageList(packet); this.ui.showRecipeShopManage(this.items.recipeShopManageList); break;
-            case GamePackets.GameServerPacket_T.RecipeShopSellList: this.items.recipeShopSellList = GamePackets.readRecipeShopSellList(packet); this.ui.showRecipeShopSellList(this.items.recipeShopSellList); break;
-            case GamePackets.GameServerPacket_T.RecipeShopItemInfo: this.items.recipeShopItemInfo = GamePackets.readRecipeShopItemInfo(packet); this.ui.showRecipeShopItemInfo(this.items.recipeShopItemInfo); break;
+            case GamePackets.GameServerPacket_T.RecipeBookItemList:
+                this.items.recipeBook = GamePackets.readRecipeBookItemList(packet);
+                this.ui.showRecipeBook(this.items.recipeBook);
+                break;
+            case GamePackets.GameServerPacket_T.RecipeItemMakeInfo:
+                this.items.recipeItemMakeInfo = GamePackets.readRecipeItemMakeInfo(packet);
+                this.ui.showRecipeManufacture(this.items.recipeItemMakeInfo);
+                break;
+            case GamePackets.GameServerPacket_T.RecipeShopManageList:
+                this.items.recipeShopManageList = GamePackets.readRecipeShopManageList(packet);
+                this.ui.showRecipeShopManage(this.items.recipeShopManageList);
+                break;
+            case GamePackets.GameServerPacket_T.RecipeShopSellList:
+                this.items.recipeShopSellList = GamePackets.readRecipeShopSellList(packet);
+                this.ui.showRecipeShopSellList(this.items.recipeShopSellList);
+                break;
+            case GamePackets.GameServerPacket_T.RecipeShopItemInfo:
+                this.items.recipeShopItemInfo = GamePackets.readRecipeShopItemInfo(packet);
+                this.ui.showRecipeShopItemInfo(this.items.recipeShopItemInfo);
+                break;
             case GamePackets.GameServerPacket_T.RecipeShopMsg: this.items.onRecipeShopMsg(packet); break;
-            case GamePackets.GameServerPacket_T.HennaEquipList: this.items.hennaEquipList = GamePackets.readHennaEquipList(packet); this.ui.showHennaList(this.items.hennaEquipList); break;
-            case GamePackets.GameServerPacket_T.HennaItemInfo: this.items.hennaItemInfo = GamePackets.readHennaItemInfo(packet); this.ui.showHennaInfo(this.items.hennaItemInfo); break;
+            case GamePackets.GameServerPacket_T.HennaEquipList:
+                this.items.hennaEquipList = GamePackets.readHennaEquipList(packet);
+                this.ui.showHennaList(this.items.hennaEquipList);
+                break;
+            case GamePackets.GameServerPacket_T.HennaItemInfo:
+                this.items.hennaItemInfo = GamePackets.readHennaItemInfo(packet);
+                this.ui.showHennaInfo(this.items.hennaItemInfo);
+                break;
             case GamePackets.GameServerPacket_T.HennaUnequipList: this.ui.showHennaList(GamePackets.readHennaEquipList(packet), true); break;
             case GamePackets.GameServerPacket_T.HennaUnequipInfo: this.ui.showHennaInfo(GamePackets.readHennaItemInfo(packet), true); break;
             case GamePackets.GameServerPacket_T.PartyMatchList: {
@@ -934,12 +1042,30 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                 break;
             }
             case GamePackets.GameServerPacket_T.TutorialEnableClientEvent: this.community.tutorialClientEvents = packet.d(); break;
-            case GamePackets.GameServerPacket_T.GMViewCharacterInfo: this.community.gmCharacterInfo = GamePackets.readGMViewCharacterInfo(packet); this.community.updateGMCharacterInfo(); break;
-            case GamePackets.GameServerPacket_T.GMViewPledgeInfo: this.community.gmPledgeInfo = GamePackets.readGMViewPledgeInfo(packet); this.ui.setGMPledgeInfo(this.community.gmPledgeInfo); break;
-            case GamePackets.GameServerPacket_T.GMViewSkillInfo: this.community.gmSkillInfo = GamePackets.readGMViewSkillInfo(packet); this.ui.setGMSkillInfo(this.community.gmSkillInfo); break;
-            case GamePackets.GameServerPacket_T.GMViewQuestList: this.community.gmQuestList = GamePackets.readGMViewQuestList(packet); this.ui.setGMQuestList(this.community.gmQuestList); break;
-            case GamePackets.GameServerPacket_T.GMViewItemList: this.community.gmItemList = GamePackets.readGMViewItemList(packet); this.ui.setGMInventoryInfo(this.community.gmItemList); break;
-            case GamePackets.GameServerPacket_T.GMViewWarehouseWithdrawList: this.community.gmWarehouseList = GamePackets.readGMViewWarehouseWithdrawList(packet); this.ui.setGMWarehouseInfo(this.community.gmWarehouseList); break;
+            case GamePackets.GameServerPacket_T.GMViewCharacterInfo:
+                this.community.gmCharacterInfo = GamePackets.readGMViewCharacterInfo(packet);
+                this.community.updateGMCharacterInfo();
+                break;
+            case GamePackets.GameServerPacket_T.GMViewPledgeInfo:
+                this.community.gmPledgeInfo = GamePackets.readGMViewPledgeInfo(packet);
+                this.ui.setGMPledgeInfo(this.community.gmPledgeInfo);
+                break;
+            case GamePackets.GameServerPacket_T.GMViewSkillInfo:
+                this.community.gmSkillInfo = GamePackets.readGMViewSkillInfo(packet);
+                this.ui.setGMSkillInfo(this.community.gmSkillInfo);
+                break;
+            case GamePackets.GameServerPacket_T.GMViewQuestList:
+                this.community.gmQuestList = GamePackets.readGMViewQuestList(packet);
+                this.ui.setGMQuestList(this.community.gmQuestList);
+                break;
+            case GamePackets.GameServerPacket_T.GMViewItemList:
+                this.community.gmItemList = GamePackets.readGMViewItemList(packet);
+                this.ui.setGMInventoryInfo(this.community.gmItemList);
+                break;
+            case GamePackets.GameServerPacket_T.GMViewWarehouseWithdrawList:
+                this.community.gmWarehouseList = GamePackets.readGMViewWarehouseWithdrawList(packet);
+                this.ui.setGMWarehouseInfo(this.community.gmWarehouseList);
+                break;
             case GamePackets.GameServerPacket_T.GMViewHennaInfo: this.community.gmHennaStatus = GamePackets.readGMViewHennaInfo(packet); break;
             case GamePackets.GameServerPacket_T.Snoop: this.community.onSnoop(packet); break;
             case GamePackets.GameServerPacket_T.Extended:
@@ -967,20 +1093,54 @@ export class NetworkManager implements IEngineComponent<GameManager> {
                     case GamePackets.GameServerExPacket_T.ExQuestInfo: if (packet.getRemaining()) throw new Error("Invalid ExQuestInfo payload."); this.ui.showQuestInfo(); break;
                     case GamePackets.GameServerExPacket_T.ExShowQuestMark: this.community.onShowQuestMark(packet); break;
                     case GamePackets.GameServerExPacket_T.ExSendManorList: this.items.manors = GamePackets.readManorList(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSeedInfo: this.items.manorSeedInfo = GamePackets.readShowSeedInfo(packet); this.ui.showManorSeedInfo(this.items.manorSeedInfo, this.items.manors); break;
-                    case GamePackets.GameServerExPacket_T.ExShowCropInfo: this.items.manorCropInfo = GamePackets.readShowCropInfo(packet); this.ui.showManorCropInfo(this.items.manorCropInfo, this.items.manors); break;
-                    case GamePackets.GameServerExPacket_T.ExShowManorDefaultInfo: this.items.manorDefaultInfo = GamePackets.readShowManorDefaultInfo(packet); this.ui.showManorDefaultInfo(this.items.manorDefaultInfo); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSeedSetting: this.items.manorSeedSettings = GamePackets.readShowSeedSetting(packet); this.ui.showManorSeedSetting(this.items.manorSeedSettings); break;
-                    case GamePackets.GameServerExPacket_T.ExShowCropSetting: this.items.manorCropSettings = GamePackets.readShowCropSetting(packet); this.ui.showManorCropSetting(this.items.manorCropSettings); break;
-                    case GamePackets.GameServerExPacket_T.ExShowSellCropList: this.items.manorSellCrops = GamePackets.readShowSellCropList(packet); this.ui.showManorSellCropList(this.items.manorSellCrops); break;
-                    case GamePackets.GameServerExPacket_T.ExShowProcureCropDetail: this.items.manorProcureCropDetail = GamePackets.readShowProcureCropDetail(packet); this.ui.showManorProcureCropDetail(this.items.manorProcureCropDetail); break;
+                    case GamePackets.GameServerExPacket_T.ExShowSeedInfo:
+                        this.items.manorSeedInfo = GamePackets.readShowSeedInfo(packet);
+                        this.ui.showManorSeedInfo(this.items.manorSeedInfo, this.items.manors);
+                        break;
+                    case GamePackets.GameServerExPacket_T.ExShowCropInfo:
+                        this.items.manorCropInfo = GamePackets.readShowCropInfo(packet);
+                        this.ui.showManorCropInfo(this.items.manorCropInfo, this.items.manors);
+                        break;
+                    case GamePackets.GameServerExPacket_T.ExShowManorDefaultInfo:
+                        this.items.manorDefaultInfo = GamePackets.readShowManorDefaultInfo(packet);
+                        this.ui.showManorDefaultInfo(this.items.manorDefaultInfo);
+                        break;
+                    case GamePackets.GameServerExPacket_T.ExShowSeedSetting:
+                        this.items.manorSeedSettings = GamePackets.readShowSeedSetting(packet);
+                        this.ui.showManorSeedSetting(this.items.manorSeedSettings);
+                        break;
+                    case GamePackets.GameServerExPacket_T.ExShowCropSetting:
+                        this.items.manorCropSettings = GamePackets.readShowCropSetting(packet);
+                        this.ui.showManorCropSetting(this.items.manorCropSettings);
+                        break;
+                    case GamePackets.GameServerExPacket_T.ExShowSellCropList:
+                        this.items.manorSellCrops = GamePackets.readShowSellCropList(packet);
+                        this.ui.showManorSellCropList(this.items.manorSellCrops);
+                        break;
+                    case GamePackets.GameServerExPacket_T.ExShowProcureCropDetail:
+                        this.items.manorProcureCropDetail = GamePackets.readShowProcureCropDetail(packet);
+                        this.ui.showManorProcureCropDetail(this.items.manorProcureCropDetail);
+                        break;
                     case GamePackets.GameServerExPacket_T.ExHeroList: this.community.heroes = GamePackets.readHeroList(packet); this.ui.showHeroList(this.community.heroes); break;
                     case GamePackets.GameServerExPacket_T.ExOpenMPCC: this.community.onOpenMPCC(packet); break;
                     case GamePackets.GameServerExPacket_T.ExCloseMPCC: this.community.onCloseMPCC(packet); break;
                     case GamePackets.GameServerExPacket_T.ExAskJoinMPCC: this.community.onAskJoinMPCC(packet); break;
-                    case GamePackets.GameServerExPacket_T.ExMultiPartyCommandChannelInfo: this.community.commandChannel = GamePackets.readCommandChannelInfo(packet); this.ui.setCommandChannelInfo(this.community.commandChannel); break;
-                    case GamePackets.GameServerExPacket_T.ExOlympiadUserInfo: { const info = GamePackets.readOlympiadUserInfo(packet); this.community.olympiadUsers.set(info.objectId, info); this.ui.setOlympiadUserInfo(info); break; }
-                    case GamePackets.GameServerExPacket_T.ExOlympiadSpelledInfo: { const info = GamePackets.readOlympiadSpelledInfo(packet); this.community.olympiadEffects.set(info.objectId, info.effects); this.ui.setOlympiadEffects(info.objectId, info.effects); break; }
+                    case GamePackets.GameServerExPacket_T.ExMultiPartyCommandChannelInfo:
+                        this.community.commandChannel = GamePackets.readCommandChannelInfo(packet);
+                        this.ui.setCommandChannelInfo(this.community.commandChannel);
+                        break;
+                    case GamePackets.GameServerExPacket_T.ExOlympiadUserInfo: {
+                        const info = GamePackets.readOlympiadUserInfo(packet);
+                        this.community.olympiadUsers.set(info.objectId, info);
+                        this.ui.setOlympiadUserInfo(info);
+                        break;
+                    }
+                    case GamePackets.GameServerExPacket_T.ExOlympiadSpelledInfo: {
+                        const info = GamePackets.readOlympiadSpelledInfo(packet);
+                        this.community.olympiadEffects.set(info.objectId, info.effects);
+                        this.ui.setOlympiadEffects(info.objectId, info.effects);
+                        break;
+                    }
                     case GamePackets.GameServerExPacket_T.ExOlympiadMode: this.community.onOlympiadMode(packet); break;
                     case GamePackets.GameServerExPacket_T.ExOlympiadMatchEnd: this.community.onOlympiadMatchEnd(packet); break;
                     case GamePackets.GameServerExPacket_T.ExMailArrived: this.community.onMailArrived(packet); break;
@@ -1349,7 +1509,10 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         if (this.session.getReplayRecordingTime() > 1800) this.session.stopReplayRecording(); // FL2ReplayManager::Tick 0x75f8a6.
         if (this.session.game?.isPlayingReplay() && !this.session.replayLoading) {
             if (this.session.replayStopAt >= 0) {
-                if (currentTime >= this.session.replayStopAt) { void this.session.stopReplayPlayback(); return; }
+                if (currentTime >= this.session.replayStopAt) {
+                    void this.session.stopReplayPlayback();
+                    return;
+                }
             } else if (!this.session.game.tickReplayPlayback(deltaTime / 1000)) {
                 this.session.requestReplayStop();
                 return;

@@ -34,7 +34,11 @@ export class PortalVisibility {
         let sector = object;
         while (sector && !sector.isSectorObject) sector = sector.parent;
         if (!sector || sector === currentSector) return true;
-        if ((!material.isStaticMeshMaterial && !material.isTerrainMaterial) || object.actorRenderable || object.isSkinnedMesh || object.morphTargetInfluences || (object.isInstancedMesh || geometry.isInstancedBufferGeometry) && !object.isTerrainDecoration) return true;
+        if ((!material.isStaticMeshMaterial && !material.isTerrainMaterial) ||
+            object.actorRenderable ||
+            object.isSkinnedMesh ||
+            object.morphTargetInfluences ||
+            (object.isInstancedMesh || geometry.isInstancedBufferGeometry) && !object.isTerrainDecoration) return true;
 
         if (!this.bounds.getBounds(item, tmpBox) || this.visibility.intersectsBox(this.outdoorMask, tmpBox)) return true;
         this.rejected++;

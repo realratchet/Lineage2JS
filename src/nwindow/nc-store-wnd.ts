@@ -42,7 +42,8 @@ export class NCStoreWnd extends NCShopWnd {
     }
     public async showWarehouse(isWithdraw: boolean, list: WarehouseList_T) {
         this.type = list.type;
-        const id = [0, SysString_T.PrivateWarehouse, SysString_T.ClanWarehouse, SysString_T.CastleWarehouse, SysString_T.Warehouse][list.type], title = this.layer.getManager().getSysString(id);
+        const id = [0, SysString_T.PrivateWarehouse, SysString_T.ClanWarehouse, SysString_T.CastleWarehouse, SysString_T.Warehouse][list.type];
+        const title = this.layer.getManager().getSysString(id);
 
         this.layer.renderText(this.caption, title, 0xffc8d2dc);
         this.element.setAttribute("aria-label", title);

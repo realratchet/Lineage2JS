@@ -85,7 +85,19 @@ export function printLoadingProfile(sinceLast: boolean = false): LoadingProfile_
     const visible = rows.filter(row => !sinceLast || !row.reported).sort((a, b) => (b.finished || now()) - b.queued - ((a.finished || now()) - a.queued));
 
     console.groupCollapsed(`[loading] ${visible.length} tasks · queue, work and phase timings`);
-    console.table(visible.slice(0, 30).map(row => ({ task: row.name, worker: row.worker, state: row.active, queue_s: row.started ? +((row.started - row.queued) / 1000).toFixed(2) : +((now() - row.queued) / 1000).toFixed(2), work_s: row.started ? +(((row.finished || now()) - row.started) / 1000).toFixed(2) : 0, dependencies_s: +((row.steps.dependencies?.ms || 0) / 1000).toFixed(2), read_s: +((row.steps.read?.ms || 0) / 1000).toFixed(2), convert_s: +((row.steps.convert?.ms || 0) / 1000).toFixed(2), cache_s: +((row.steps.cache?.ms || 0) / 1000).toFixed(2), lock_wait_s: +((row.steps.lock?.ms || 0) / 1000).toFixed(2), top_lock: getLoadingLock(row) })));
+    console.table(visible.slice(0, 30).map(row => ({
+        task: row.name,
+        worker: row.worker,
+        state: row.active,
+        queue_s: row.started ? +((row.started - row.queued) / 1000).toFixed(2) : +((now() - row.queued) / 1000).toFixed(2),
+        work_s: row.started ? +(((row.finished || now()) - row.started) / 1000).toFixed(2) : 0,
+        dependencies_s: +((row.steps.dependencies?.ms || 0) / 1000).toFixed(2),
+        read_s: +((row.steps.read?.ms || 0) / 1000).toFixed(2),
+        convert_s: +((row.steps.convert?.ms || 0) / 1000).toFixed(2),
+        cache_s: +((row.steps.cache?.ms || 0) / 1000).toFixed(2),
+        lock_wait_s: +((row.steps.lock?.ms || 0) / 1000).toFixed(2),
+        top_lock: getLoadingLock(row)
+    })));
     console.log(`[loading] Phase times overlap; loadingProfile() returns the last 200 completed tasks and all pending tasks.`);
     console.groupEnd();
 

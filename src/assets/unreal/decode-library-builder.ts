@@ -173,7 +173,10 @@ export class DecodeLibraryBuilder {
             if (!this.alphaPalettes.has(source.palettes[texture.name]) || texture.textureType !== "rgba") return texture;
             const data = new Uint8Array(texture.buffer);
             let differs = false;
-            for (let i = 0; i < data.length; i += 4) if (data[i] !== data[i + 3]) { differs = true; break; }
+            for (let i = 0; i < data.length; i += 4) if (data[i] !== data[i + 3]) {
+                differs = true;
+                break;
+            }
             if (!differs) return texture;
             const copy = data.slice();
             for (let i = 0; i < copy.length; i += 4) copy[i + 3] = copy[i];
@@ -224,7 +227,11 @@ export class DecodeLibraryBuilder {
             if (material) material.color = true;
         }
 
-        const metadata = { renderBounds: mesh.getRenderBoundingBox().getDecodeInfo(), collisionBounds: (mesh as any).collisionModel ? (mesh as any).collisionModel.loadSelf().getCollisionBoundingBox().getDecodeInfo() : null, useVertexColor: mesh.useVertexColor };
+        const metadata = {
+            renderBounds: mesh.getRenderBoundingBox().getDecodeInfo(),
+            collisionBounds: (mesh as any).collisionModel ? (mesh as any).collisionModel.loadSelf().getCollisionBoundingBox().getDecodeInfo() : null,
+            useVertexColor: mesh.useVertexColor
+        };
         this.staticMeshMetadata.set(mesh.uuid, metadata);
         this.packageCache?.end(mesh, this.library, { object: result.object, metadata, colorMaterials: result.colorMaterials });
         return this.packageCache ? this.getStaticMeshVariant(result.object, modifiers) : result.object;
@@ -404,7 +411,10 @@ export class DecodeLibraryBuilder {
 
         for (const actor of level.getActors()) {
             this.library.levelActorUuids.push(actor ? actor.uuid : null);
-            if (!actor) { this.library.levelActors.push(null); continue; }
+            if (!actor) {
+                this.library.levelActors.push(null);
+                continue;
+            }
 
             actor.loadSelf();
             const info: Pick<IBaseObjectDecodeInfo, "uuid" | "name" | "scriptClassId" | "scriptProperties" | "sharedScriptProperties" | "ownerUuid"> = { uuid: actor.uuid, name: actor.objectName };
@@ -548,7 +558,13 @@ export class DecodeLibraryBuilder {
 
                     if (!staticMeshActor.isDeleteMe && staticMeshActor.isCollidingActors && staticMeshActor.mesh) {
                         const mesh = staticMeshActor.mesh as UStaticMesh;
-                        this.library.staticMeshCollisionActors.push({ uuid: actor.uuid, name: actor.objectName, position: staticMeshActor.location.getElements(), collisionBounds: this.getStaticMeshBounds(mesh, staticMeshActor, true).getDecodeInfo(), collision: staticMeshActor.getCollisionDecodeInfo() });
+                        this.library.staticMeshCollisionActors.push({
+                            uuid: actor.uuid,
+                            name: actor.objectName,
+                            position: staticMeshActor.location.getElements(),
+                            collisionBounds: this.getStaticMeshBounds(mesh, staticMeshActor, true).getDecodeInfo(),
+                            collision: staticMeshActor.getCollisionDecodeInfo()
+                        });
                     }
 
                     if (this.settings.loadStaticModels === false) break;

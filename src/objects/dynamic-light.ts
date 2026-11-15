@@ -3,6 +3,11 @@ import { Color, Object3D, Vector2, Vector3 } from "three";
 import hsvToRgb from "@l2js/engine/utils/hsv-to-rgb";
 import ColorByte from "../utils/color-byte";
 
+const SUN_PITCH_RATE = Math.PI / 18;
+const SUN_POLAR_RATE = Math.PI / 6;
+const LIGHTNESS_SCALE = 1.4 / (Math.sqrt(1.4) + 0.01) * 0.7;
+const SPOT_CONE = Math.cos(Math.fround(Math.PI / 2) / 2);
+
 const tmpVec3_1 = new Vector3();
 const tmpColorByte_1 = new ColorByte();
 
@@ -12,8 +17,8 @@ type HardwareLight_T = { color: Color, attenuation: Vector2, cone: number };
 const DIRECTION_CHANGE_EPSILON_SQ = 3e-6;
 
 const DEG2RAD = Math.PI / 180;
-const HALF_PI = Math.PI / 2;  // 1.5707963267948966
-const NEG_PI = -Math.PI;      // -3.1415927
+const HALF_PI = Math.PI / 2;
+const NEG_PI = -Math.PI;
 
 // UL2NEnvManager::GetSunModifierInfo (0x7b74a0), baseYawDegrees comes from envManager.field_0x170, returns [polar, yaw, brightness] in radians
 export function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 180): [number, number, number] {
@@ -22,9 +27,9 @@ export function getSunModifierInfo(timeOfDay: number, baseYawDegrees: number = 1
     let pitch: number;
 
     if (timeOfDay >= 5.0 && timeOfDay < 24.0) {
-        pitch = (timeOfDay - 6.0) * (Math.PI / 18) - HALF_PI;
+        pitch = (timeOfDay - 6.0) * SUN_PITCH_RATE - HALF_PI;
     } else if (timeOfDay >= 1.0 && timeOfDay < 5.0) {
-        pitch = (timeOfDay + 24.0 - 6.0) * (Math.PI / 18) - HALF_PI;
+        pitch = (timeOfDay + 24.0 - 6.0) * SUN_PITCH_RATE - HALF_PI;
     } else {
         pitch = NEG_PI;
     }
@@ -41,7 +46,7 @@ export function getMoonModifierInfo(timeOfDay: number, baseYawDegrees: number = 
     if (timeOfDay >= 7.0 && timeOfDay < 23.0)
         polar = NEG_PI;
     else
-        polar = timeOfDay * (Math.PI / 6) - HALF_PI;
+        polar = timeOfDay * SUN_POLAR_RATE - HALF_PI;
 
     return [polar, yaw, brightness];
 }
@@ -99,7 +104,7 @@ export function hsvToColorPlane(hue: number, saturationByte: number, target: Col
     }
 
     // FGetHSV 0x106f3c00 returns an FPlane; FDynamicLight::Update supplies brightness255.
-    const lightness = 1.4 / (Math.sqrt(1.4) + 0.01) * 0.7;
+    const lightness = LIGHTNESS_SCALE;
 
     return target.setRGB(((1 - r) * saturation + r) * lightness, ((1 - g) * saturation + g) * lightness, ((1 - b) * saturation + b) * lightness);
 }
@@ -198,7 +203,7 @@ export class DynamicLight extends Object3D {
     public getHardwareLight(center: Vector3, radius: number, target: HardwareLight_T, isColorHalved: boolean = true) {
         target.color.copy(this.hardwareColor);
         if (!isColorHalved) target.color.multiplyScalar(2); // D3DDrv SetLight 0x1001b8eb halves GetLightColor only for color type 1; pawns pass 0
-        target.cone = this.lightEffect === LE_SPOTLIGHT || this.lightEffect === LE_STATIC_SPOT ? Math.cos(Math.fround(Math.PI / 2) / 2) : -1;
+        target.cone = this.lightEffect === LE_SPOTLIGHT || this.lightEffect === LE_STATIC_SPOT ? SPOT_CONE : -1;
 
         if (this.isSunlight) return;
 

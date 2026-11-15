@@ -6,6 +6,8 @@ import type { ICollidable } from "../../objects/objects";
 import type PlayerController from "../../objects/player-controller";
 import type { Vector3Arr } from "@l2js/engine";
 
+const CAMERA_TRACE_EXTENT = Math.fround(0.1);
+
 const tmpDirection = new Vector3();
 const tmpStart = new Vector3();
 const tmpDelta = new Vector3();
@@ -49,7 +51,7 @@ export class BehindViewCamera {
         if (properties.get("bUseHitCheckCamera")) {
             location(target, Math.fround(distance + 30), tmpEnd, true);
             tmpEnd.z = Math.fround(target.z - Math.fround(Math.fround(tmpDirection.z * Math.fround(distance + 30)) + 10));
-            if (this.trace(target, tmpEnd, Math.fround(0.1))) distance = Math.fround(Math.min(distance, projection(target)));
+            if (this.trace(target, tmpEnd, CAMERA_TRACE_EXTENT)) distance = Math.fround(Math.min(distance, projection(target)));
             location(target, distance - 30, output);
             return;
         }

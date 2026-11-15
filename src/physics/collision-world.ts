@@ -247,7 +247,20 @@ export class CollisionWorld {
         }
 
         const pawn = primitive.kind === "cylinder" && object.getCollisionProfile().isPawn;
-        const entry: AnalyticalEntry_T = { actor: object, primitive, bounds, order: this.nextOrder++, queryMark: 0, dynamic, active: !(object as Volume).isVolume || object.getCollisionProfile().collideActors, cells: [], cellRange: [], grid: pawn ? this.pawnCells : this.cells, cellSize: pawn ? PAWN_CELL_SIZE : CELL_SIZE, margin: pawn ? 0 : dynamic ? DYNAMIC_CELL_MARGIN : 0 };
+        const entry: AnalyticalEntry_T = {
+            actor: object,
+            primitive,
+            bounds,
+            order: this.nextOrder++,
+            queryMark: 0,
+            dynamic,
+            active: !(object as Volume).isVolume || object.getCollisionProfile().collideActors,
+            cells: [],
+            cellRange: [],
+            grid: pawn ? this.pawnCells : this.cells,
+            cellSize: pawn ? PAWN_CELL_SIZE : CELL_SIZE,
+            margin: pawn ? 0 : dynamic ? DYNAMIC_CELL_MARGIN : 0
+        };
 
         this.entriesByActor.set(object, entry);
         this.analyticalEntries.push(entry);
@@ -486,7 +499,16 @@ export class CollisionWorld {
                 const bounds = new Box3(new Vector3().fromArray(actor.bsp.bounds.min), new Vector3().fromArray(actor.bsp.bounds.max));
                 primitive = { kind: "bsp", model, bounds, supportsZeroExtent: true, supportsNonZeroExtent: true, supportsPointCheck: true };
             } else {
-                primitive = { kind: "cylinder", center: new Vector3().fromArray(getTraceProperty(actor, "Location") as number[]), radius: getTraceProperty(actor, "CollisionRadius") as number, halfHeight: getTraceProperty(actor, "CollisionHeight") as number, bounds: new Box3(), supportsZeroExtent: true, supportsNonZeroExtent: false, supportsPointCheck: false };
+                primitive = {
+                    kind: "cylinder",
+                    center: new Vector3().fromArray(getTraceProperty(actor, "Location") as number[]),
+                    radius: getTraceProperty(actor, "CollisionRadius") as number,
+                    halfHeight: getTraceProperty(actor, "CollisionHeight") as number,
+                    bounds: new Box3(),
+                    supportsZeroExtent: true,
+                    supportsNonZeroExtent: false,
+                    supportsPointCheck: false
+                };
             }
 
             const entry = actor.addComponent(new VolumeCollisionComponent(this, tree, actor, primitive));
@@ -717,7 +739,9 @@ export class CollisionWorld {
         if (getTraceProperty(target, "bOnlyAffectPawns") && !isActorClass(source, "Pawn", vm)) return false;
         if (!getTraceProperty(source, "bBlockNonZeroExtentTraces") || !getTraceProperty(target, "bBlockNonZeroExtentTraces")) return false;
 
-        const actualLocation = getTraceProperty(source, "Location") as number[], location = position || tmpOverlapOffset.fromArray(actualLocation), otherLocation = getTraceProperty(target, "Location") as number[];
+        const actualLocation = getTraceProperty(source, "Location") as number[],
+            location = position || tmpOverlapOffset.fromArray(actualLocation),
+            otherLocation = getTraceProperty(target, "Location") as number[];
         const radius = getTraceProperty(source, "CollisionRadius") as number, height = getTraceProperty(source, "CollisionHeight") as number;
         let primitiveActor: ScriptHost_T = null;
 
@@ -816,7 +840,8 @@ export class CollisionWorld {
                     const record = records[candidates[i]];
                     if (!tmpEncroachmentBounds.intersectsBox(record.primitive.bounds)) continue;
 
-                    const target = record.object || (vm ? (actor as CollidingMesh).getCollisionActor(record.firstTriangle) : record.actor), targetProfile = record.object ? record.object.getCollisionProfile() : record.actor.collision;
+                    const target = record.object || (vm ? (actor as CollidingMesh).getCollisionActor(record.firstTriangle) : record.actor),
+                        targetProfile = record.object ? record.object.getCollisionProfile() : record.actor.collision;
                     const targetPhysics = getTraceProperty(target, "Physics");
                     if (record.object) record.object.getWorldPosition(tmpEncroachmentCenter);
                     else tmpEncroachmentCenter.fromArray(record.actor.position);
@@ -878,7 +903,8 @@ export class CollisionWorld {
         for (const entries of this.physicsVolumes.values()) {
             for (const entry of entries) {
                 const actor = entry.actor, primitive = entry.primitive;
-                if (!entry.active || !getTraceProperty(actor, "bCollideActors") || !getTraceProperty(actor, "bBlockZeroExtentTraces") || getTraceProperty(actor, "bDeleteMe") || getTraceProperty(actor, "bPendingDelete")) continue;
+                if (!entry.active || !getTraceProperty(actor, "bCollideActors") || !getTraceProperty(actor, "bBlockZeroExtentTraces") || getTraceProperty(actor, "bDeleteMe") || getTraceProperty(actor, "bPendingDelete"))
+                    continue;
                 if (getTraceProperty(actor, "bOnlyAffectPawns") && source && !sourceIsPawn) continue;
 
                 if (isOwnedBy(source, actor)) continue;
@@ -1168,7 +1194,8 @@ export class CollisionWorld {
         const records = (entry.actor as any).collisionActors;
         const individual = records && records.length && (this.analyticalMoveHits || this.hasIgnoredCollisionActors(entry.actor));
 
-        if (!individual && !(this.analyticalMoveHits ? this.shouldTraceActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent))) return;
+        if (!individual &&
+            !(this.analyticalMoveHits ? this.shouldTraceActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(entry.actor, this.analyticalQuery, this.analyticalZeroExtent))) return;
 
         this.stats.analyticalCandidates++;
 
@@ -1186,7 +1213,8 @@ export class CollisionWorld {
                 const actor = record.object || entry.actor;
 
                 if (!sweptIntersectsBox(this.analyticalStart, this.analyticalEnd, this.analyticalExtent, record.primitive.bounds)) continue;
-                if (this.shouldIgnoreActor(actor, this.analyticalQuery) || !(this.analyticalMoveHits ? this.shouldTraceActor(actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(actor, this.analyticalQuery, this.analyticalZeroExtent))) continue;
+                if (this.shouldIgnoreActor(actor, this.analyticalQuery) ||
+                    !(this.analyticalMoveHits ? this.shouldTraceActor(actor, this.analyticalQuery, this.analyticalZeroExtent) : this.shouldBlockActor(actor, this.analyticalQuery, this.analyticalZeroExtent))) continue;
 
                 this.stats.analyticalPrimitiveTests++;
                 const hit = queryPrimitive(record.primitive, this.analyticalStart, this.analyticalEnd, this.analyticalExtent);
@@ -1265,8 +1293,12 @@ export class CollisionWorld {
 
     protected insertEntry(entry: AnalyticalEntry_T, margin: number) {
         const bounds = entry.bounds, cellSize = entry.cellSize, grid = entry.grid;
-        const minX = Math.floor((bounds.min.x - margin) / cellSize), minY = Math.floor((bounds.min.y - margin) / cellSize), minZ = Math.floor((bounds.min.z - margin) / cellSize);
-        const maxX = Math.floor((bounds.max.x + margin) / cellSize), maxY = Math.floor((bounds.max.y + margin) / cellSize), maxZ = Math.floor((bounds.max.z + margin) / cellSize);
+        const minX = Math.floor((bounds.min.x - margin) / cellSize),
+            minY = Math.floor((bounds.min.y - margin) / cellSize),
+            minZ = Math.floor((bounds.min.z - margin) / cellSize);
+        const maxX = Math.floor((bounds.max.x + margin) / cellSize),
+            maxY = Math.floor((bounds.max.y + margin) / cellSize),
+            maxZ = Math.floor((bounds.max.z + margin) / cellSize);
 
         entry.cellRange.length = 0;
         entry.cellRange.push(minX, minY, minZ, maxX, maxY, maxZ);

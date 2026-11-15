@@ -170,14 +170,19 @@ export class NCRecipeBuyListWnd {
 
         this.content.replaceChildren();
         this.items.slice(this.scroll, this.scroll + 5).forEach((row, index) => {
-            const y = index * 50, requestedIcon = strings.itemIcons[row.recipe.productId], icon = requestedIcon && layer.hasTexture(requestedIcon) ? requestedIcon : TEX_DEFAULT_ICON;
+            const y = index * 50;
+            const requestedIcon = strings.itemIcons[row.recipe.productId];
+            const icon = requestedIcon && layer.hasTexture(requestedIcon) ? requestedIcon : TEX_DEFAULT_ICON;
             const element = layer.createWindow(0, y, 223, 50, this.content);
 
             element.dataset.recipeId = String(row.recipeId);
             if (this.selected === this.scroll + index) layer.tile(element, 0, 4, 216, 46, 0, 0, 32, 40, TEX_SELECTED);
             layer.tile(element, 7, 11, 32, 32, 0, 0, 32, 32, icon);
             layer.text(element, strings.itemNames[row.recipe.productId] ?? "", 0xffdcdcdc, FontType_T.SMALL, 49, 7);
-            const costLabel = manager.getSysString(SysString_T.ManufacturingCost), separator = " : ", price = row.cost.toLocaleString("en-US"), digits = price.replace(/,/g, "").length;
+            const costLabel = manager.getSysString(SysString_T.ManufacturingCost);
+            const separator = " : ";
+            const price = row.cost.toLocaleString("en-US");
+            const digits = price.replace(/,/g, "").length;
             const color = digits < 5 ? 0xffdcdcdc : [0xffff80ff, 0xffffff00, 0xff00ff00, 0xff00ffff][(digits - 2) % 4];
             const separatorX = 49 + layer.measureText(costLabel), priceX = separatorX + layer.measureText(separator);
 

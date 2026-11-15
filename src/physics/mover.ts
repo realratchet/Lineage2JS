@@ -1,5 +1,8 @@
 import { Vector3 } from "three";
 
+const FULL_TURN = Math.PI * 2;
+const QUARTER_TURN = Math.PI / 2;
+
 const tmpDirection = new Vector3();
 const tmpOldPosition = new Vector3();
 
@@ -58,9 +61,9 @@ export class NMover {
             const point = this.arrPoints[i].lerpVectors(this.origin, target, fraction);
             let angle = Math.atan2(point.y - this.origin.y, point.x - this.origin.x);
 
-            if (angle < 0) angle += Math.PI * 2;
-            if (offset < 0) angle += Math.PI / 2;
-            else if (offset > 0) angle -= Math.PI / 2;
+            if (angle < 0) angle += FULL_TURN;
+            if (offset < 0) angle += QUARTER_TURN;
+            else if (offset > 0) angle -= QUARTER_TURN;
 
             point.x += Math.cos(angle) * Math.abs(offset);
             point.y += Math.sin(angle) * Math.abs(offset);

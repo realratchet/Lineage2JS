@@ -3,6 +3,8 @@ import { Camera, StreamDrawUsage, Group, InstancedBufferAttribute, InstancedBuff
 import { copyShaderMaterial } from "../../materials/global-uniforms";
 import { EParticleFlags_T } from "./base-emitter";
 
+const rotationUnit = Math.PI * 2 / 65536;
+
 const baseGeometry = new PlaneGeometry(2, 2);
 const DEPTH_BUCKET_SIZE = 2048;
 const BATCH_IDLE_MS = 5000;
@@ -184,7 +186,7 @@ class SpriteParticleBatch {
 
                 let angle = 0;
                 if (emitter.isSpinning || emitter.spinParticles)
-                    angle = (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (Math.PI * 2 / 65536);
+                    angle = (settings.startSpin.z + settings.time * settings.spinsPerSecond.z) * (rotationUnit);
                 const sin = Math.sin(angle);
                 const cos = Math.cos(angle);
                 right.copy(baseRight).multiplyScalar(cos).add(spinTemp.copy(baseUp).multiplyScalar(sin)).multiplyScalar(scaleX).applyMatrix3(tmpMatrix);

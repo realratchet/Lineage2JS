@@ -89,7 +89,10 @@ function storeJob(renderer: WebGLRenderer, geometry: BufferGeometry, target: Uin
 export function pollStaticLighting(): void {
     for (const job of pendingJobs) {
         const gl = job.gl;
-        if (gl.isContextLost()) { job.dispose(); continue; }
+        if (gl.isContextLost()) {
+            job.dispose();
+            continue;
+        }
         const status = gl.clientWaitSync(job.sync, 0, 0);
         if (status === gl.TIMEOUT_EXPIRED) continue;
 
@@ -99,7 +102,10 @@ export function pollStaticLighting(): void {
 
             gl.bindBuffer(gl.COPY_READ_BUFFER, job.output);
             gl.getBufferSubData(gl.COPY_READ_BUFFER, 0, values);
-            if (gl.isContextLost()) { job.dispose(); continue; }
+            if (gl.isContextLost()) {
+                job.dispose();
+                continue;
+            }
             checkError(gl, "readback");
             job.values = values;
             job.release();

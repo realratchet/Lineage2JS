@@ -68,7 +68,10 @@ export class TranslucentDrawList {
                 block.minimum = Math.min(block.minimum, a < this.nodes.length ? -Infinity : this.distances[a - this.nodes.length]);
                 following.minimum = Math.min(following.minimum, b < this.nodes.length ? -Infinity : this.distances[b - this.nodes.length]);
             }
-            if (index >= 32) { block = following; index -= 32; }
+            if (index >= 32) {
+                block = following;
+                index -= 32;
+            }
         }
         for (let i = block.count; i > index; i--) block.items[i] = block.items[i - 1];
         block.items[index] = entry;
@@ -97,7 +100,11 @@ export class TranslucentDrawList {
         }
 
         this.stamp = (this.stamp + 1) >>> 0;
-        if (!this.stamp) { this.stamps.fill(0); this.active.fill(0); this.stamp = 1; }
+        if (!this.stamp) {
+            this.stamps.fill(0);
+            this.active.fill(0);
+            this.stamp = 1;
+        }
 
         for (let i = 0, count = arrVisibleNodes ? arrVisibleNodes.length : this.nodes.length; i < count; i++) {
             const index = arrVisibleNodes ? arrVisibleNodes[i] : i;
@@ -153,7 +160,11 @@ export class TranslucentDrawList {
                                 } else if (!(distances[item - nodes.length] > key)) break search;
                                 previous = item;
                             }
-                            if (!block.following) { offset = block.count; item = -1; break; }
+                            if (!block.following) {
+                                offset = block.count;
+                                item = -1;
+                                break;
+                            }
                             block = block.following;
                         }
                     } else while (item >= 0) {
@@ -176,7 +187,10 @@ export class TranslucentDrawList {
                         useBlocks = true;
                         let block = firstBlock = this.getBlock();
                         for (let item = head; item >= 0; item = next[item]) {
-                            if (block.count === 64) { block.following = this.getBlock(); block = block.following; }
+                            if (block.count === 64) {
+                                block.following = this.getBlock();
+                                block = block.following;
+                            }
                             block.items[block.count++] = item;
                             block.minimum = Math.min(block.minimum, item < nodes.length ? -Infinity : distances[item - nodes.length]);
                         }

@@ -13,6 +13,8 @@ import type { DecodeLibrary } from "@l2js/engine";
 import type RenderManager from "../rendering/render-manager";
 import type LocalSpaceSkeleton from "./local-space-skeleton";
 
+const waterEffectInterval = Math.fround(0.05);
+
 type WaterTrace_T = (start: Vector3, end: Vector3, hit: Vector3) => void;
 
 const tmpWaterPosition = new Vector3();
@@ -169,7 +171,7 @@ export class FishingFloat extends GameObject {
             }
             this.renderManager.addTransientEffect(effect, this);
             this.oldEffectLocation.copy(tmpWaterPosition);
-            this.waterEffectTimer = this.state === TagState_T.L2TAG_WAIT ? 1 : Math.fround(0.05);
+            this.waterEffectTimer = this.state === TagState_T.L2TAG_WAIT ? 1 : waterEffectInterval;
         }
 
         this.waterEffectTimer = Math.fround(this.waterEffectTimer - dt);

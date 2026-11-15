@@ -51,7 +51,11 @@ export class NCShopWnd {
         this.element.hidden = true;
         layer.tile(this.element, 0, 20, 256, 381, 0, 0, 256, 381, TEX_BACK);
         this.caption = NCFrameCtrl.createDOM(layer, this.element, 256, layer.getManager().getSysString(isPreview ? SysString_T.TryingOn : SysString_T.Store), false, () => this.setVisible(false), () => { if (this.onClose) this.onClose(); });
-        this.labels.push(layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 32), layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 198), layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 0, 331));
+        this.labels.push(
+            layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 32),
+            layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 11, 198),
+            layer.text(this.element, "", 0xffdcdcdc, FontType_T.SMALL, 0, 331)
+        );
         const adena = layer.getManager().getSysString(SysString_T.Adena);
 
         layer.text(this.element, adena, 0xffdcdcdc, FontType_T.SMALL, 156 - layer.measureText(adena), 350);
@@ -218,7 +222,10 @@ export class NCShopWnd {
         if (!target || !(list.content.contains(target) || target === list && (list.children[1] as HTMLElement).hidden)) return;
         if (this.onMove) this.onMove(side, item, true, true);
     }
-    protected moveSelected(side: number) { const item = this.getPressedItem(side); if (item && this.onMove) this.onMove(side, item, false, false); }
+    protected moveSelected(side: number) {
+        const item = this.getPressedItem(side);
+        if (item && this.onMove) this.onMove(side, item, false, false);
+    }
     protected getLabelIds() { return this.isPreview ? [811, 812, 813] : [this.isSell ? 138 : 137, this.isSell ? 137 : 139, this.isSell ? 143 : 142]; }
     protected getTooltipContext(side: number): number { return this.isStore ? 0 : this.isSell ? 8 : side ? 4 : 7; }
     protected hoverItem(side: number, index: number, buttons: number) {

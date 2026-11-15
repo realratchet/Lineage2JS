@@ -1,5 +1,7 @@
 import { Vector3 } from "three";
 
+const MAX_MOVE_STEP = Math.fround(0.2);
+
 const tmpDirection = new Vector3();
 
 // shortcut: one target and constant acceleration; extend when target arrays or acceleration ramps are used.
@@ -28,7 +30,7 @@ export class L2NMover {
 
         // AL2NMover::MoveTick 0x794502..0x7948bc; shipped L2NMover defaults bound speed to 1..2000.
         while (deltaTime > 0) {
-            const step = Math.min(deltaTime, Math.fround(0.2));
+            const step = Math.min(deltaTime, MAX_MOVE_STEP);
             this.speed = Math.max(1, Math.min(2000, Math.fround(this.speed + step * this.acceleration)));
             tmpDirection.subVectors(this.target, this.position);
             const distance = tmpDirection.length(), travel = step * this.speed;

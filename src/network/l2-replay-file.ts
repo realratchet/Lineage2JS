@@ -10,11 +10,21 @@ export type ReplayCameraInstruction_T = { time: number, key: number, action: num
 export type ReplayScene_T = { position: number[], yaw: number, pitch: number, zoom: number, desiredZoom: number, hour: number, minute: number, second: number, duration: number, cameraMode: number, firstPerson: number, observerMode: number, actorYaw: number, fixedCamera: number };
 
 class ReplayReader extends PacketReader {
-    public float(): number { this.need(4); const value = this.view.getFloat32(this.offset, true); this.offset += 4; return value; }
+    public float(): number {
+        this.need(4);
+        const value = this.view.getFloat32(this.offset, true);
+        this.offset += 4;
+        return value;
+    }
 }
 
 class ReplayWriter extends PacketWriter {
-    public float(value: number): this { this.grow(4); this.view.setFloat32(this.offset, value, true); this.offset += 4; return this; }
+    public float(value: number): this {
+        this.grow(4);
+        this.view.setFloat32(this.offset, value, true);
+        this.offset += 4;
+        return this;
+    }
 }
 
 function readString(reader: PacketReader): string {
@@ -79,7 +89,22 @@ export class L2ReplayFile {
     public getScene(): ReplayScene_T {
         const reader = new ReplayReader(this.header);
 
-        return { position: [reader.float(), reader.float(), reader.float()], yaw: reader.float(), pitch: reader.float(), zoom: reader.float(), desiredZoom: reader.float(), hour: reader.c(), minute: reader.c(), second: reader.float(), duration: reader.f(), cameraMode: reader.d(), firstPerson: reader.d(), observerMode: reader.d(), actorYaw: reader.float(), fixedCamera: reader.d() };
+        return {
+            position: [reader.float(), reader.float(), reader.float()],
+            yaw: reader.float(),
+            pitch: reader.float(),
+            zoom: reader.float(),
+            desiredZoom: reader.float(),
+            hour: reader.c(),
+            minute: reader.c(),
+            second: reader.float(),
+            duration: reader.f(),
+            cameraMode: reader.d(),
+            firstPerson: reader.d(),
+            observerMode: reader.d(),
+            actorYaw: reader.float(),
+            fixedCamera: reader.d()
+        };
     }
 
     public setScene(scene: ReplayScene_T): void {
@@ -96,7 +121,20 @@ export class L2ReplayFile {
         const writer = new ReplayWriter();
 
         scene.position.forEach(value => writer.float(value));
-        writer.float(scene.yaw).float(scene.pitch).float(scene.zoom).float(scene.desiredZoom).c(scene.hour).c(scene.minute).float(scene.second).f(scene.duration).d(scene.cameraMode).d(scene.firstPerson).d(scene.observerMode).float(scene.actorYaw).d(scene.fixedCamera);
+        writer
+            .float(scene.yaw)
+            .float(scene.pitch)
+            .float(scene.zoom)
+            .float(scene.desiredZoom)
+            .c(scene.hour)
+            .c(scene.minute)
+            .float(scene.second)
+            .f(scene.duration)
+            .d(scene.cameraMode)
+            .d(scene.firstPerson)
+            .d(scene.observerMode)
+            .float(scene.actorYaw)
+            .d(scene.fixedCamera);
         this.header = writer.toBytes();
     }
 

@@ -34,9 +34,19 @@ export class MeshBounds {
             if (!sway || sway.getY(i) <= 0) continue;
             const angle = sway.getZ(i), phase = sway.getW(i);
             if (angle === 0) continue;
-            if (Math.abs(angle) >= 90) { cached.bounded = false; continue; }
-            if (angle !== lastAngle) { tangent = Math.abs(Math.tan(angle * Math.PI / 180)); lastAngle = angle; }
-            if (phase !== lastPhase) { x = Math.abs(Math.cos(phase)); y = Math.abs(Math.sin(phase)); lastPhase = phase; }
+            if (Math.abs(angle) >= 90) {
+                cached.bounded = false;
+                continue;
+            }
+            if (angle !== lastAngle) {
+                tangent = Math.abs(Math.tan(angle * Math.PI / 180));
+                lastAngle = angle;
+            }
+            if (phase !== lastPhase) {
+                x = Math.abs(Math.cos(phase));
+                y = Math.abs(Math.sin(phase));
+                lastPhase = phase;
+            }
             const distance = tangent * Math.max(tmpVertex.z - sway.getX(i), 0);
             cached.margin.x = Math.max(cached.margin.x, x * distance);
             cached.margin.y = Math.max(cached.margin.y, y * distance);
@@ -55,7 +65,12 @@ export class MeshBounds {
         for (const geometry of geometries) {
             const position = geometry.attributes.position, sway = geometry.attributes.sway, positionVersion = version(position), swayVersion = version(sway);
             const existing = this.cacheSway.get(geometry);
-            if (existing && existing.position === position && existing.sway === sway && existing.positionVersion === positionVersion && existing.swayVersion === swayVersion && (geometry.boundingSphere || geometry.morphAttributes.position?.length)) continue;
+            if (existing &&
+                existing.position === position &&
+                existing.sway === sway &&
+                existing.positionVersion === positionVersion &&
+                existing.swayVersion === swayVersion && (
+                geometry.boundingSphere || geometry.morphAttributes.position?.length)) continue;
             const cached: Sway_T = { position, sway, positionVersion, swayVersion, margin: new Vector3(), bounds: new Box3(), bounded: true };
             let lastAngle = NaN, lastPhase = NaN, tangent = 0, x = 0, y = 0;
             for (let start = 0; start < position.count; start += 8192) {
@@ -65,9 +80,19 @@ export class MeshBounds {
                     if (!sway || sway.getY(i) <= 0) continue;
                     const angle = sway.getZ(i), phase = sway.getW(i);
                     if (angle === 0) continue;
-                    if (Math.abs(angle) >= 90) { cached.bounded = false; continue; }
-                    if (angle !== lastAngle) { tangent = Math.abs(Math.tan(angle * Math.PI / 180)); lastAngle = angle; }
-                    if (phase !== lastPhase) { x = Math.abs(Math.cos(phase)); y = Math.abs(Math.sin(phase)); lastPhase = phase; }
+                    if (Math.abs(angle) >= 90) {
+                        cached.bounded = false;
+                        continue;
+                    }
+                    if (angle !== lastAngle) {
+                        tangent = Math.abs(Math.tan(angle * Math.PI / 180));
+                        lastAngle = angle;
+                    }
+                    if (phase !== lastPhase) {
+                        x = Math.abs(Math.cos(phase));
+                        y = Math.abs(Math.sin(phase));
+                        lastPhase = phase;
+                    }
                     const distance = tangent * Math.max(tmpVertex.z - sway.getX(i), 0);
                     cached.margin.x = Math.max(cached.margin.x, x * distance);
                     cached.margin.y = Math.max(cached.margin.y, y * distance);

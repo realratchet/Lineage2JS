@@ -109,7 +109,12 @@ export class NCDetailStatusWnd { // C4 NWindow RVA 0x110c90 (paint), 0x10def0 (t
 
         if (title) this.drawText(15, 9, title, 0xffa2f9ec);
         this.drawText(title ? layer.measureText(title) + 21 : 15, 9, name, (0xffff0000 | (255 - karmaColor) << 8 | (255 - karmaColor)) >>> 0);
-        this.drawText(layer.measureText(layer.getManager().getSysString(SysString_T.ClanNameLabel)) + 20, 25, this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(SysString_T.NoClan), 0xffdcdcdc);
+        this.drawText(
+            layer.measureText(layer.getManager().getSysString(SysString_T.ClanNameLabel)) + 20,
+            25,
+            this.clan && this.clan.clanId === info.clanId ? this.clan.name : layer.getManager().getSysString(SysString_T.NoClan),
+            0xffdcdcdc
+        );
         this.drawText(35, 46, `${info.level} ${layer.getManager().getClassName(info.classId)}`);
 
         [info.pAtk, info.pDef, info.accuracy, info.critical, info.atkSpd].forEach((value, index) => this.drawText(114, 132 + index * 15, String(value), VALUE_COLOR, "right"));

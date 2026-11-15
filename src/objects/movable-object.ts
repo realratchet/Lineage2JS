@@ -218,7 +218,9 @@ export class MovableObject extends CollidingMesh {
             } else remaining = 0;
 
             const blend = this.mover.isGliding ? Math.fround(3 * nextAlpha * nextAlpha - 2 * nextAlpha * nextAlpha * nextAlpha) : nextAlpha;
-            const key = this.getUnrealScriptProperty("KeyNum") as number, oldPos = this.getUnrealScriptProperty("OldPos") as number[], oldRot = this.getUnrealScriptProperty("OldRot") as number[];
+            const key = this.getUnrealScriptProperty("KeyNum") as number;
+            const oldPos = this.getUnrealScriptProperty("OldPos") as number[];
+            const oldRot = this.getUnrealScriptProperty("OldRot") as number[];
             const baseRot = this.getUnrealScriptProperty("BaseRot") as number[], keyRot = (this.getUnrealScriptProperty("KeyRot") as number[][])[key];
             const basePos = this.getUnrealScriptProperty("BasePos") as number[], target = (this.getUnrealScriptProperty("KeyPos") as number[][])[key];
 
@@ -229,7 +231,11 @@ export class MovableObject extends CollidingMesh {
 
             for (let i = 0; i < 3; i++) tmpPreviousRotation[i] = rotation[i];
             this.unfreezeMover();
-            this.position.set(Math.fround(oldPos[0] + Math.fround((Math.fround(basePos[0] + target[0]) - oldPos[0]) * blend)), Math.fround(oldPos[1] + Math.fround((Math.fround(basePos[1] + target[1]) - oldPos[1]) * blend)), Math.fround(oldPos[2] + Math.fround((Math.fround(basePos[2] + target[2]) - oldPos[2]) * blend)));
+            this.position.set(
+                Math.fround(oldPos[0] + Math.fround((Math.fround(basePos[0] + target[0]) - oldPos[0]) * blend)),
+                Math.fround(oldPos[1] + Math.fround((Math.fround(basePos[1] + target[1]) - oldPos[1]) * blend)),
+                Math.fround(oldPos[2] + Math.fround((Math.fround(basePos[2] + target[2]) - oldPos[2]) * blend))
+            );
             for (let i = 0; i < 3; i++) tmpRotation[i] = oldRot[i] + (Math.fround(((baseRot[i] + keyRot[i] - oldRot[i]) | 0) * blend) | 0) | 0;
             this.setRotation(tmpRotation);
             this.syncCollisionTransform();

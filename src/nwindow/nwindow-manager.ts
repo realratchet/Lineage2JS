@@ -177,7 +177,8 @@ export class NWindowManager {
             if (peer === owner || !peer.getClientRects().length) continue;
 
             const [otherX, otherY, otherWidth, otherHeight] = getWindowRect(peer);
-            const overlapX = Math.max(oldX, otherX) <= Math.min(oldX + width, otherX + otherWidth), overlapY = Math.max(oldY, otherY) <= Math.min(oldY + height, otherY + otherHeight);
+            const overlapX = Math.max(oldX, otherX) <= Math.min(oldX + width, otherX + otherWidth);
+            const overlapY = Math.max(oldY, otherY) <= Math.min(oldY + height, otherY + otherHeight);
             let released = false;
 
             for (const edge of [1, 0, 2, 3]) {
