@@ -2,6 +2,7 @@ import NCTooltip, { type TooltipInfo_T } from "./nc-tooltip";
 import { DIGIT_CELLS, DIGIT_FONTS, DigitFont_T, FontType_T } from "./nwindow-canvas";
 import type NWindowManager from "./nwindow-manager";
 import { SKIN_SLOTS } from "./skin-textures";
+import { getCanvasImageUrl, prepareCanvasImageUrls } from "./ui-image";
 
 const CARET_BLINK = 500;
 const TEXT_COLOR = 0xffdcdcdc;
@@ -13,29 +14,6 @@ const MIN_THUMB = 15;
 type AtlasFrame_T = { url: string, x: number, y: number, atlasWidth: number, atlasHeight: number };
 type AtlasEntry_T = AtlasFrame_T & { width: number, height: number, frames: AtlasFrame_T[], frameTime: number };
 type ModalWindow_T = { element: HTMLElement };
-
-function encodeBitmap(canvas: HTMLCanvasElement): Blob { // 32bpp BITMAPV4 with RGBA bitfields: raw canvas bytes, no PNG compression pass.
-    const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
-    const header = new DataView(new ArrayBuffer(122));
-
-    header.setUint16(0, 0x4d42, true);
-    header.setUint32(2, 122 + pixels.byteLength, true);
-    header.setUint32(10, 122, true);
-    header.setUint32(14, 108, true);
-    header.setInt32(18, canvas.width, true);
-    header.setInt32(22, -canvas.height, true);
-    header.setUint16(26, 1, true);
-    header.setUint16(28, 32, true);
-    header.setUint32(30, 3, true);
-    header.setUint32(34, pixels.byteLength, true);
-    header.setUint32(54, 0x000000ff, true);
-    header.setUint32(58, 0x0000ff00, true);
-    header.setUint32(62, 0x00ff0000, true);
-    header.setUint32(66, 0xff000000, true);
-    header.setUint32(70, 0x73524742, true);
-
-    return new Blob([header.buffer, pixels], { type: "image/bmp" });
-}
 
 function selectionHtml(x: number, width: number) { return `<b style="left:${x}px;top:2px;width:${width}px;height:12px"></b>`; } // NWindow.WhiteTexture at alpha 0x80.
 
@@ -329,7 +307,7 @@ export class NDomLayer {
     public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true, atlasWidth = ATLAS_WIDTH) { // tinted copies share atlas pages of the same call
         const canvas = this.manager.canvas;
 
-        await canvas.loadTextures([...paths, ...tinted.map(([path]) => path)], useIntrinsicAlpha);
+        await Promise.all([canvas.loadTextures([...paths, ...tinted.map(([path]) => path)], useIntrinsicAlpha), prepareCanvasImageUrls()]);
 
         const requests = [...new Map<string, [string, number]>([...paths.map(path => [path, 0xffffff] as [string, number]), ...tinted].map(([path, tint]) => {
             const key = path.replace(/^\?/, "").toLowerCase();
@@ -378,7 +356,7 @@ export class NDomLayer {
 
             page.forEach(i => context.drawImage(images[i], places[i][0], places[i][1]));
 
-            const url = URL.createObjectURL(encodeBitmap(atlas));
+            const url = getCanvasImageUrl(atlas);
 
             page.forEach(i => frames[i] = { url, x: places[i][0], y: places[i][1], atlasWidth: atlas.width, atlasHeight: atlas.height });
             atlas.width = atlas.height = 0;
@@ -487,7 +465,7 @@ export class NDomLayer {
     public getTintUrl(path: string, color: number, alphaRef: number = -1, useIntrinsicAlpha = true): string {
         const key = `${this.manager.canvas.getTextureKey(path, useIntrinsicAlpha)}:${color & 0xffffff}:${alphaRef}`;
 
-        if (!this.cacheTintUrls.has(key)) this.cacheTintUrls.set(key, URL.createObjectURL(encodeBitmap(this.manager.canvas.getTintedImage(path, color, alphaRef, useIntrinsicAlpha))));
+        if (!this.cacheTintUrls.has(key)) this.cacheTintUrls.set(key, getCanvasImageUrl(this.manager.canvas.getTintedImage(path, color, alphaRef, useIntrinsicAlpha)));
 
         return this.cacheTintUrls.get(key);
     }
