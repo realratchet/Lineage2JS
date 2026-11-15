@@ -1,15 +1,17 @@
 import { type APackage, type Constructable_T, type FlagDict_T, flagBitsToDict } from "@l2js/core";
 import { FPlane } from "../un-plane";
-import type { Vector4Arr } from "../library-types";
+import type { Vector3Arr, Vector4Arr } from "../library-types";
 import type { IBoxDecodeInfo } from "../un-box";
 
 export type IBSPNodeCollisionInfo_T = { flags: number[], bounds: IBoxDecodeInfo, boxPlanes?: Vector4Arr[] };
+export type IBSPNodeSurfaceDecodeInfo_T = { vertices: Float32Array, normal: Vector3Arr, material: string | null, nextCoplanar: number };
 export type IBSPNodeDecodeInfo_T = {
     children: [number, number],
     plane: Vector4Arr,
     leaves: [number, number],
     zones: [number, number],
     surfFlags: number,
+    surface?: IBSPNodeSurfaceDecodeInfo_T,
     portalVertices?: number[],
     iPlane: number,
     isCsg: boolean,

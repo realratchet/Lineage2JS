@@ -5,14 +5,16 @@ import type AudioManager from "../audio-manager";
 import type BaseActor from "../../base-actor";
 import type { ScriptNativeCall_T, ScriptValue_T } from "../../ue-script/vm";
 import type { DecodeLibrary } from "@l2js/engine";
-import type { IAnimationNotifyDecodeInfo, IAnimationSoundNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
+import type { IAnimationNotifyDecodeInfo, IAnimationSoundNotifyDecodeInfo, IAnimationAttackVoiceNotifyDecodeInfo, IAnimationSwimSoundNotifyDecodeInfo } from "@l2js/engine/contracts/anim-notify";
 import type { INpcEnterEvent, NpcSkillSound_T } from "@l2js/engine/contracts/pawn";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
 import type PawnMovementComponent from "../../physics/components/pawn-movement-component";
+import type Actor from "../../objects/actor";
 
 export const ANIMATION_NOTIFY_EVENT = "animationNotify";
 export const NPC_ENTER_EVENT = "npcEnter";
 const tmpPosition = new Vector3();
+const SOUND_VOLUME_SCALE = Math.fround(1 / 255);
 
 export class SoundComponent extends ObjectComponent<BaseActor> {
     public readonly componentName = "sound";
@@ -75,7 +77,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         actor.getWorldPosition(tmpPosition);
         tmpPosition.z += actor.getCollisionHeight();
         // Engine.dll APawn::PlaySkillSound 0x797e55: volume / 255, table radius, pitch 1.
-        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition, library, onStarted, true);
+        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Skill sound '${info.sound}'`, tmpPosition, library, onStarted, true, false, actor);
     }
 
     public onEvent(type: string, data: unknown): ComponentEventResult_T<ScriptValue_T | void> {
@@ -106,17 +108,55 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
                 if (sound) this.play(sound, set.volume / 255, 1, set.radius, set.radius * 100, true, `Pawn '${this.getParent().name}' attack item`, null, this.library, undefined, true);
                 return;
             case "sound": this.playAnimationSound(info); return;
+            case "attackVoice": this.playAttackVoice(info); return;
             case "swimSound": this.playSwimSound(info); return;
             default: return COMPONENT_EVENT_NOT_HANDLED;
         }
     }
 
+    protected playAttackVoice(info: IAnimationAttackVoiceNotifyDecodeInfo): void { // UAnimNotify_AttackVoice::Notify 0x94c940 / APawn::GetAttackVoiceSound 0x8add10.
+        const actor = this.getParent();
+
+        if (!actor.getComponent<ScriptComponent>("script").getVM().isA(actor, "Pawn")) return;
+        if (actor.getUnrealScriptProperty("bNpc")) return;
+
+        const network = this.audioManager.getParent().getComponent("network");
+
+        if (network.isInWorld() && !network.isPlayingReplay()) {
+            const target = actor.getComponent<PawnAttackComponent>("pawnAttack").getActionTarget();
+
+            if (!target || !target.getComponent<ScriptComponent>("script").getVM().isA(target, "Pawn")) return;
+        }
+
+        if (Math.floor(Math.random() * 32768) % 100 > info.random) return;
+
+        const profile = this.library.pawnSounds;
+
+        if (!profile) return;
+
+        const voices = profile.attackVoice;
+        const weapon = actor.getUnrealScriptProperty("CurWeaponType") as number;
+
+        if (!voices || !voices[weapon]) throw new Error(`Pawn '${actor.name}' has no attack voice profile for weapon '${weapon}'.`);
+        const sounds = voices[weapon];
+
+        if (sounds.length === 0) return;
+        const sound = sounds[Math.floor(Math.random() * 32768) % sounds.length];
+
+        if (!sound) return;
+
+        actor.getWorldPosition(tmpPosition);
+        tmpPosition.z += actor.getCollisionHeight();
+        this.play(sound, Math.fround(info.volume * SOUND_VOLUME_SCALE), 1, info.radius, info.radius * 100, true, `Pawn '${actor.name}' attack voice`, tmpPosition, this.library, undefined, true, true);
+    }
+
     protected playAnimationSound(info: IAnimationSoundNotifyDecodeInfo): void {
         const actor = this.getParent();
 
-        if (Math.random() * 100 >= info.random) return;
+        if (Math.floor(Math.random() * 32768) % 100 >= info.random) return;
 
         let soundName = info.sound;
+        let library = this.library;
 
         if (!soundName) {
             const boots = this.library.pawnSounds?.boots;
@@ -125,19 +165,55 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
             // Engine.dll AnimNotify_Sound 0x94d9f4..0x94dafd adds GetBootsSound before the surface step.
             if (bootsSound) this.play(bootsSound, info.volume / 255, 1, info.radius, info.radius * 100, true, `Pawn '${actor.name}' boots`);
 
-            const sounds = actor.isSwimmingMovement()
-                ? actor.isWalkingMovement() ? info.waterWalkSounds : info.waterRunSounds
-                : actor.isWalkingMovement() ? info.defaultWalkSounds : info.defaultRunSounds;
+            const isWalking = actor.isWalkingMovement(), isSwimming = actor.isSwimmingMovement();
+            let sounds: (string | null)[] = isSwimming
+                ? isWalking ? info.waterWalkSounds : info.waterRunSounds
+                : isWalking ? info.defaultWalkSounds : info.defaultRunSounds;
 
-            if (sounds.length === 0) return;
+            if (actor.scriptClassId && !isSwimming) {
+                const base = actor.getUnrealScriptProperty("Base") as unknown as Actor;
+                const foot = actor.getUnrealScriptProperty("FootVolume") as unknown as Actor;
+                const terrain = !!base && !!base.scriptClassId && actor.getComponent<ScriptComponent>("script").getVM().isA(base, "TerrainInfo");
+                const authored = base && base.scriptClassId && !terrain ? base.getStepSoundData() : null;
 
-            soundName = sounds[Math.floor(Math.random() * sounds.length)];
+                if (authored) {
+                    soundName = authored.sound;
+                    library = authored.library;
+                } else if (foot && foot.getUnrealScriptProperty("bL2WaterVolume")) sounds = isWalking ? info.waterWalkSounds : info.waterRunSounds;
+                else if (foot && foot.getUnrealScriptProperty("bL2StepVolume")) {
+                    const stepLibrary = foot.getComponent<ScriptComponent>("script").getVM().getLibrary();
+                    const stepSounds = stepLibrary.stepSounds[foot.getUnrealScriptProperty("StepSoundID") as number];
+
+                    if (stepSounds?.length) {
+                        sounds = stepSounds;
+                        library = stepLibrary;
+                    }
+                } else if (terrain) {
+                    const render = this.audioManager.getParent().getComponent("render");
+
+                    if (actor === render.player) {
+                        actor.getWorldPosition(tmpPosition);
+                        tmpPosition.z += actor.getCollisionHeight();
+                        const sector = render.getCurrentSWLevel(tmpPosition);
+                        const grassSounds = isWalking ? info.grassWalkSounds : info.grassRunSounds;
+
+                        if (sector && grassSounds.some(sound => sound) && sector.getDecoLayerAlpha(tmpPosition) > 1) sounds = grassSounds;
+                    }
+                }
+            }
+
+            if (!soundName) {
+                const available = sounds.filter(sound => sound);
+
+                if (available.length === 0) return;
+                soundName = available[Math.floor(Math.random() * available.length)];
+            }
         }
 
         const attack = actor.findComponent<PawnAttackComponent>("pawnAttack");
         const isCombat = !!info.sound && (!!attack && attack.isAttacking() || actor.getComponent<PawnMovementComponent>("pawnMovement").isDying());
 
-        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Pawn '${actor.name}'`, null, this.library, undefined, isCombat);
+        this.play(soundName, info.volume / 255, 1, info.radius, info.radius * 100, true, `Pawn '${actor.name}'`, null, library, undefined, isCombat);
     }
 
     protected playSwimSound(info: IAnimationSwimSoundNotifyDecodeInfo): void {
@@ -195,7 +271,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         this.play(soundName, volume, pitch, radius, radius * 100, attenuate, `UnrealScript ${call.name}`, null, library);
     }
 
-    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null, library: DecodeLibrary = this.library, onStarted?: (duration: number) => void, isCombat: boolean = false): void {
+    protected play(soundName: string, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean, source: string, position: Vector3 = null, library: DecodeLibrary = this.library, onStarted?: (duration: number) => void, isCombat: boolean = false, skipIfPlaying: boolean = false, owner: BaseActor = this.getParent()): void {
         if (!library) throw new Error(`${source} has no decode library.`);
 
         const sound = library.soundBlobCache.get(soundName);
@@ -203,7 +279,7 @@ export class SoundComponent extends ObjectComponent<BaseActor> {
         if (!sound || !sound.data && !sound.uri) throw new Error(`${source} has no decoded sound '${soundName}'.`);
 
         if (!position) this.getParent().getWorldPosition(tmpPosition);
-        this.audioManager.playOneShotSound(sound.data || sound.uri, position || tmpPosition, volume, pitch, refDistance, maxDistance, attenuate, onStarted, isCombat || this.audioManager.hasCombatSounds(this.getParent()));
+        this.audioManager.playOneShotSound(sound.data || sound.uri, position || tmpPosition, volume, pitch, refDistance, maxDistance, attenuate, onStarted, isCombat || this.audioManager.hasCombatSounds(this.getParent()), owner, soundName, skipIfPlaying);
     }
 }
 

@@ -155,8 +155,13 @@ export class NetworkMovement {
 
         this.adjustPawnLocation(object, object.position);
 
-        if (object.kind === "user") object.actor.goTo(destination);
-        else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveTo(object.position, destination);
+        if (object.kind === "user") {
+            const properties = this.network.getParent().getComponent("asset").playerController.scriptProperties;
+
+            // UGameEngine::OnMoveToLocation 0x1047898c..0x104789a0.
+            if (properties.get("bDesiredKeyboardMoving")) properties.set("bKeyboardMoving", true);
+            object.actor.goTo(destination);
+        } else object.actor.getComponent<PawnMovementComponent>("pawnMovement").addMoveTo(object.position, destination);
     }
 
     public async onMoveToPawn(packet: PacketReader) {

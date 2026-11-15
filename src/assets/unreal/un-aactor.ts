@@ -18,6 +18,13 @@ import type { UModel } from "./model/un-model";
 import type { Matrix4Arr, Vector3Arr } from "./library-types";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 
+export enum EL2GameAction_T {
+    LGA_SaintConsensusOpening,
+    LGA_SaintConsensusOpened,
+    LGA_SaintConsensusClosing,
+    LGA_SaintConsensusClosed
+}
+
 export enum EL2ObjectType_T {
     EL2_NORMAL,
     EL2_DOOR,

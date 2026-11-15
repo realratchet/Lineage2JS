@@ -67,6 +67,7 @@ export class BaseActor extends GameObject implements ICollidable {
         }
 
         const isOnVehicle = this.scriptComponent ? this.getStoredUnrealScriptProperty("bGetOnVehicle") : null;
+        const creatureId = this.scriptComponent ? this.getStoredUnrealScriptProperty("CreatureID") : null;
         const loadingResourceRef = this.scriptComponent ? this.getStoredUnrealScriptProperty("LoadingResourceRef") : null;
         const createdResource = this.scriptComponent ? this.getStoredUnrealScriptProperty("bCreatedResource") : null;
 
@@ -79,6 +80,7 @@ export class BaseActor extends GameObject implements ICollidable {
         this.scriptProperties = component.getProperties();
         this.addComponent(component);
         if (isOnVehicle !== null) this.setUnrealScriptProperty("bGetOnVehicle", isOnVehicle);
+        if (creatureId !== null) this.setUnrealScriptProperty("CreatureID", creatureId);
         if (loadingResourceRef !== null) this.setUnrealScriptProperty("LoadingResourceRef", loadingResourceRef);
         if (createdResource !== null) this.setUnrealScriptProperty("bCreatedResource", createdResource);
         for (const field of ["bCollideActors", "bCollideWorld", "bBlockActors", "bBlockPlayers", "bBlockZeroExtentTraces", "bBlockNonZeroExtentTraces", "bWorldGeometry"])
@@ -211,6 +213,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public getCollider(): RAPIER.Collider { return this.movementComponent.getCollider(); }
     public getRigidbody(): RAPIER.RigidBody { return this.movementComponent.getRigidbody(); }
     public getBaseActor(): ICollidable | null { return this.movementComponent.getBaseActor(); }
+    public getStepSoundData(): null { return null; }
     public getBasedActors(): ReadonlySet<ICollidable> { return this.movementComponent.getBasedActors(); }
     public addBasedActor(actor: ICollidable): void { this.movementComponent.addBasedActor(actor); }
     public removeBasedActor(actor: ICollidable): void { this.movementComponent.removeBasedActor(actor); }
@@ -223,6 +226,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public moveSmooth(movement: Vector3): void { this.movementComponent.moveSmooth(movement); }
     public moveActor(position: Vector3, movement: Vector3): CheckResult_T | null { return this.movementComponent.moveActor(position, movement); }
     public isInteractive(): boolean { return this.movementComponent.isInteractive(); }
+    public isEnterRising(): boolean { return this.movementComponent.isEnterRising(); }
 
     public checkLoadingResource(includeZero = true): boolean {
         if (!this.scriptComponent || !this.renderManager.getParent().getComponent("network")?.isInWorld()) return false;
@@ -358,6 +362,7 @@ export class BaseActor extends GameObject implements ICollidable {
     public moveInDirection(direction: Vector3, faceMovement: boolean = true): void { this.movementComponent.moveInDirection(direction, faceMovement); }
     public faceActor(actor: Object3D | null): void { this.movementComponent.faceActor(actor); }
     public stopMove(): void { this.movementComponent.stopMove(); }
+    public stopPlayerMove(): void { this.movementComponent.stopPlayerMove(); }
     public stopMoving(): void { this.movementComponent.stopMoving(); }
     public setWalking(isWalking: boolean): void { this.movementComponent.setWalking(isWalking); }
     public isIdle(): boolean { return this.movementComponent.isIdle(); }

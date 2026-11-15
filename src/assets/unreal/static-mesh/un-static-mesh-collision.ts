@@ -33,13 +33,14 @@ export class FStaticMeshCollisionTriangle implements Constructable_T {
     }
 }
 
-type StaticMeshCollisionData_T = { indices: Uint32Array, nodes: Int32Array, bounds: Float32Array };
+type StaticMeshCollisionData_T = { indices: Uint32Array, materialIndices: Int32Array, nodes: Int32Array, bounds: Float32Array };
 
 export class FStaticMeshCollisionData {
     declare protected pkg: APackage;
     declare protected trianglesOffset: number;
     declare protected nodesOffset: number;
     protected indices: Uint32Array = null;
+    protected materialIndices: Int32Array = null;
     protected nodes: Int32Array = null;
     protected bounds: Float32Array = null;
 
@@ -49,7 +50,10 @@ export class FStaticMeshCollisionData {
         if (lazy) {
             const trianglesEnd = pkg.read("int32");
             this.trianglesOffset = pkg.tell();
-            if (pkg.read("compat32") === 0) this.indices = new Uint32Array(0);
+            if (pkg.read("compat32") === 0) {
+                this.indices = new Uint32Array(0);
+                this.materialIndices = new Int32Array(0);
+            }
             pkg.seek(trianglesEnd, "set");
 
             const nodesEnd = pkg.read("int32");
@@ -70,11 +74,12 @@ export class FStaticMeshCollisionData {
     protected loadTriangles(pkg: APackage) {
         const count = pkg.read("compat32");
         const indices = new Uint32Array(count * 3);
+        const materialIndices = new Int32Array(count);
 
         for (let i = 0; i < count; i++) {
             pkg.seek(64);
             const v0 = pkg.read("compat32"), v1 = pkg.read("compat32"), v2 = pkg.read("compat32");
-            pkg.read("compat32");
+            materialIndices[i] = pkg.read("compat32");
 
             // winding is (v2,v1,v0): only that order reproduces the triangle's own stored plane
             indices[i * 3] = v2;
@@ -82,6 +87,7 @@ export class FStaticMeshCollisionData {
             indices[i * 3 + 2] = v0;
         }
         this.indices = indices;
+        this.materialIndices = materialIndices;
     }
 
     protected loadNodes(pkg: APackage) {
@@ -122,6 +128,6 @@ export class FStaticMeshCollisionData {
         }
 
         // Cached source buffers must survive transfers of each library.
-        return { indices: this.indices.slice(), nodes: this.nodes.slice(), bounds: this.bounds.slice() };
+        return { indices: this.indices.slice(), materialIndices: this.materialIndices.slice(), nodes: this.nodes.slice(), bounds: this.bounds.slice() };
     }
 }

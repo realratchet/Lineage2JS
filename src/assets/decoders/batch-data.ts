@@ -719,7 +719,7 @@ export function buildStaticMeshBatchData(library: DecodeLibrary): StaticMeshBatc
                 actors,
                 colliderIndices,
                 actorColliderIndices: mergedColliderIndices,
-                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < 384 ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index], true) }] : []),
+                actorColliders: actors.flatMap((actor, index) => actorColliderIndices[index]?.length ? [{ actor, indexCount: actorColliderIndices[index].length, collisionIndex: actorColliderIndices[index].length < 384 ? null : buildTriangleIndex(attributes.positions, actorColliderIndices[index], true), staticMeshCollision: library.geometries[actor.instance.mesh.geometry].staticMeshCollision }] : []),
                 lights: mergedLights,
                 staticLighting,
                 perActorAmbient,

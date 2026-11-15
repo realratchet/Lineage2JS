@@ -25,6 +25,9 @@ export type IStaticMeshSwayDecodeInfo = { pivotZ: number, frequency: number, max
 export type IMaterialInstancedDecodeInfo = IBaseMaterialDecodeInfo & { materialType: "instance", baseMaterial: string, modifiers: string[] };
 export type StaticMeshDecodeResult_T = { object: IStaticMeshObjectDecodeInfo, geometry: IGeometryDecodeInfo, materials: [string, IBaseMaterialDecodeInfo][], colorMaterials: string[] };
 export type IStaticMeshCollisionDecodeInfo = {
+    materialIndices: Int32Array;
+    materials: (string | null)[];
+    defaultMaterial: string | null;
     useSimpleLineCollision: boolean;
     useSimpleBoxCollision: boolean;
     collisionModel: IBSPCollisionModelDecodeInfo | null;
@@ -351,7 +354,9 @@ export abstract class UStaticMesh extends UPrimitive {
         for (let i = 0; i < countIndices; i++)
             indices[i] = this.indexStream.indices.getElem(i);
 
-        const { indices: collision, nodes: collisionNodes, bounds: collisionBounds } = this.collisionData.getDecodeInfo();
+        const { indices: collision, materialIndices, nodes: collisionNodes, bounds: collisionBounds } = this.collisionData.getDecodeInfo();
+        const materialClass = (this as any).pkg.loader.getEnginePackage().fetchObjectByType("Class", "Material").loadSelf();
+        builder.pullScriptClasses([materialClass]);
 
         // const verts = face.vertices;//.map(vi => positions.slice(vi * 3, vi * 3 + 3));
         // collision[offset + 0] = verts[0][0];
@@ -375,9 +380,12 @@ export abstract class UStaticMesh extends UPrimitive {
             indices,
             colliderIndices: collision,
             staticMeshCollision: {
+                materialIndices,
+                materials: this.materials.map(material => builder.pullScriptObject(material.propertyDict.get("Material"))),
+                defaultMaterial: builder.pullScriptObject(materialClass.propertyDict.get("DefaultMaterial")),
                 useSimpleLineCollision: this.useSimpleLineCollision,
                 useSimpleBoxCollision: this.UseSimpleBoxCollision,
-                collisionModel: this.collisionModel ? this.collisionModel.loadSelf().getCollisionModelDecodeInfo() : null,
+                collisionModel: this.collisionModel ? this.collisionModel.loadSelf().getCollisionModelDecodeInfo(builder) : null,
                 nodes: collisionNodes,
                 bounds: collisionBounds
             },

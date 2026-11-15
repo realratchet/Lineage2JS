@@ -1,4 +1,5 @@
 import type DynamicLight from "./dynamic-light";
+import type Terrain from "./terrain";
 import type { L2Environment } from "../rendering/l2-env";
 import { Box3, Color, Fog, InstancedBufferAttribute, Object3D, Sphere, Vector3, Vector4, Mesh, Quaternion, BufferGeometry, Material } from "three";
 import type { TerrainDecoration } from "./terrain-decoration";
@@ -16,13 +17,20 @@ import { setScriptObjectProperty } from "./actor-properties";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 
 import { ColorByte } from "../utils/color-byte";
-import UnScriptVM, { getProperty, setProperty, setLevelActors, deleteLevelActors, registerLevelActor, updateLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
+import UnScriptVM, { getProperty, setProperty, setLevelActors, deleteLevelActors, registerLevelActor, updateLevelActor, unregisterLevelActor, type ScriptHost_T, type ScriptValue_T, type ScriptTraceQuery_T, type ScriptTraceResult_T } from "../ue-script/vm";
 import type { DecodeLibrary, Vector3Arr, ColorArr, IAmbientSoundObjectDecodeInfo } from "@l2js/engine";
 import type { LightType_T, LightEffect_T } from "@l2js/engine/contracts/light";
 import type { IMusicVolumeDecodeInfo, IWaterVolumeDecodeInfo, PhysicsVolumeDecodeInfo_T } from "@l2js/engine/contracts/volume";
 import type { IBaseZoneDecodeInfo, IBSPSectionDecodeInfo_T, IBSPZoneDecodeInfo_T, IBSPNodeDecodeInfo_T, IBSPLeafDecodeInfo_T } from "@l2js/engine/contracts/zone";
+import type PhysicsManager from "../physics/physics-manager";
+import type { CollisionQuery_T, CheckResult_T } from "../physics/collision-world";
+import { getScriptActor, type ICollidable } from "./objects";
 
 const tmpColor = new Color();
+const tmpTraceStart = new Vector3();
+const tmpTraceDelta = new Vector3();
+const tmpTraceExtent = new Vector3();
+const traceQuery: CollisionQuery_T = { location: tmpTraceStart, delta: tmpTraceDelta, extent: tmpTraceExtent, sourceIsPlayer: false };
 const tmpColorByte = new ColorByte();
 const tmpColorByte2 = new ColorByte();
 const tmpVec3 = new Vector3();
@@ -53,6 +61,55 @@ type BatchBounds_T = { position: THREE.BufferAttribute | THREE.InterleavedBuffer
 type BatchPacking_T = { source: BatchBounds_T["source"], index: THREE.BufferAttribute, indexVersion: number, stamp: number, ranges: Map<number, { offset: number, count: number, stamp: number, copied: boolean }> };
 const cacheBatchBounds = new WeakMap<BufferGeometry, BatchBounds_T>();
 const cacheBatchPacking = new WeakMap<BufferGeometry, BatchPacking_T>();
+
+function sortTerrainSectorKeys(keys: number[]) {
+    const stack = [0, keys.length - 1];
+
+    // Engine.dll 0x9a4a50..0x9a4bce, signed subtraction comparisons.
+    while (stack.length) {
+        let high = stack.pop(), low = stack.pop();
+
+        while (low < high) {
+            if (high - low < 8) {
+                while (low < high) {
+                    let largest = low;
+
+                    for (let i = low + 1; i <= high; i++)
+                        if (((keys[i] - keys[largest]) | 0) > 0) largest = i;
+                    const value = keys[high];
+                    keys[high--] = keys[largest];
+                    keys[largest] = value;
+                }
+                break;
+            }
+
+            const middle = low + Math.floor((high - low + 1) / 2);
+            const pivot = keys[middle];
+            keys[middle] = keys[low];
+            keys[low] = pivot;
+            let left = low, right = high + 1;
+
+            for (; ;) {
+                do { left++; } while (left <= high && ((keys[left] - keys[low]) | 0) <= 0);
+                do { right--; } while (right > low && ((keys[right] - keys[low]) | 0) >= 0);
+                if (left > right) break;
+                const value = keys[left];
+                keys[left] = keys[right];
+                keys[right] = value;
+            }
+
+            keys[low] = keys[right];
+            keys[right] = pivot;
+            if (right - low - 1 >= high - left) {
+                if (low + 1 < right) stack.push(low, right - 1);
+                low = left;
+            } else {
+                if (left < high) stack.push(left, high);
+                high = right - 1;
+            }
+        }
+    }
+}
 
 function buildTranslucentBSPTree(nodes: BSPNodeData[], sections: TranslucentBSPSection_T[]): TranslucentBSPNode_T[] {
     const used = new Uint8Array(nodes.length);
@@ -429,12 +486,14 @@ export class SectorObject extends GameObject {
     public readonly type = "Sector";
     public neverUnload = false; // exempt from distance-based unloading (setAlwaysLoaded)
     public isRetired = false;
+    public hasFinishedLoading = false;
     public lastInRangeTime = 0;
     public fade = 0;
     public meshFade = 0;
-    protected readonly fadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1);
-    protected readonly meshFadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1);
+    protected readonly fadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1, false, 4); // shadow receivers draw 4 projector instances, three clamps to meshPerAttribute * count
+    protected readonly meshFadeAttribute = new InstancedBufferAttribute(new Float32Array([1]), 1, false, 4);
     public scriptVM: UnScriptVM;
+    public physicsManager: PhysicsManager = null;
     public readonly zones = new Object3D();
     public readonly helpers = new Object3D();
     public readonly pawns = new Object3D(); // players/mobs - scene-graph home only, visibility resolved live (RenderManager.updatePawnVisibility)
@@ -500,6 +559,8 @@ export class SectorObject extends GameObject {
     protected renderDeco = true;
     protected sortTransparent = true;
     protected readonly cacheTerrainVisibility = new WeakMap<Mesh, TerrainVisibility_T>();
+    protected cacheTerrainSegments: Map<string, Terrain[]>;
+    protected readonly arrTerrainSectorKeys: number[] = [];
     protected terrainRenderables?: { batches: THREE.Mesh[], standalone: any[], decorations: Map<string, TerrainDecoration[]> };
     protected staticMeshVisibilityEntries?: StaticMeshVisibilityEntry_T[];
     protected readonly cacheStaticActorIndices = new Map<string, number>();
@@ -672,6 +733,52 @@ export class SectorObject extends GameObject {
 
         if (index < 0) throw new Error(`Actor '${actor.scriptClassId}' is absent from '${this.name}'`);
         this.arrLevelActors[index] = null;
+    }
+
+    public getDecoLayerAlpha(location: THREE.Vector3, radius: number = 0): number {
+        let uuid: string = null;
+
+        for (let i = 0; i < this.bspZones.length; i++) {
+            const terrains = this.bspZones[i].zoneInfo.terrains;
+
+            if (!terrains || !terrains.length) continue;
+            uuid = terrains[0];
+            break;
+        }
+        if (!uuid) return 0;
+
+        if (!this.cacheTerrainSegments) {
+            const segments = new Map<string, Terrain[]>();
+            const add = (terrain: Terrain) => {
+                if (!segments.has(terrain.terrainInfoUuid)) segments.set(terrain.terrainInfoUuid, []);
+                segments.get(terrain.terrainInfoUuid).push(terrain);
+            };
+
+            this.zones.traverse(object => {
+                if ((object as any).isTerrainBatch) (object as any).sectors.forEach(add);
+                else if ((object as any).isTerrain && !(object as any).batchGeometry) add(object as Terrain);
+            });
+            for (const terrains of segments.values()) terrains.sort((a, b) => a.terrainSectorIndex - b.terrainSectorIndex);
+            this.cacheTerrainSegments = segments;
+        }
+
+        const terrains = this.cacheTerrainSegments.get(uuid);
+
+        if (!terrains) throw new Error(`TerrainInfo '${uuid}' has no decoded sectors.`);
+        const keys = this.arrTerrainSectorKeys;
+        keys.length = terrains.length;
+        for (let i = 0; i < terrains.length; i++) {
+            const terrain = terrains[i];
+
+            if (terrain.terrainSectorIndex !== i) throw new Error(`TerrainInfo '${uuid}' has no sector '${i}'.`);
+            const dx = terrain.decorationCenter.x - location.x;
+            const dy = terrain.decorationCenter.y - location.y;
+            const dz = terrain.decorationCenter.z - location.z;
+
+            keys[i] = (Math.trunc(Math.sqrt(dz * dz + dy * dy + dx * dx)) << 16) + i | 0;
+        }
+        sortTerrainSectorKeys(keys);
+        return terrains[keys[0] & 0xffff].getDecoLayerAlpha(location, radius);
     }
 
     public getTerrainInfoActor(uuid: string): ScriptHost_T {
@@ -1001,6 +1108,36 @@ export class SectorObject extends GameObject {
         this.pawns.name = "SectorPawns";
 
         this.add(this.helpers, this.zones, this.pawns);
+    }
+
+    public singleLineCheck(query: ScriptTraceQuery_T): ScriptTraceResult_T | null {
+        if (!this.physicsManager) throw new Error(`Level '${this.name}' has no collision world.`);
+        tmpTraceStart.fromArray(query.start);
+        tmpTraceDelta.fromArray(query.end).sub(tmpTraceStart);
+        tmpTraceExtent.fromArray(query.extent);
+        traceQuery.sourceActor = query.sourceActor;
+        const source = query.sourceActor as ICollidable;
+
+        traceQuery.sourceProfile = source.getCollisionProfile ? source.getCollisionProfile() : undefined;
+        traceQuery.traceActors = query.traceActors;
+        traceQuery.traceMaterial = query.material;
+        let hit: CheckResult_T | null;
+
+        try {
+            hit = this.physicsManager.singleLineCheck(traceQuery);
+        } finally {
+            traceQuery.sourceActor = undefined;
+            traceQuery.sourceProfile = undefined;
+        }
+
+        if (!hit) return null;
+
+        return {
+            actor: getScriptActor(hit.actor),
+            location: hit.location.toArray().map(Math.fround) as Vector3Arr,
+            normal: hit.normal.toArray().map(Math.fround) as Vector3Arr,
+            material: query.material ? hit.material : null
+        };
     }
 
     public setBSPInfo(bspZones: IBSPZoneDecodeInfo_T[], bspNodes: IBSPNodeDecodeInfo_T[], bspLeaves: IBSPLeafDecodeInfo_T[]) {
@@ -1657,17 +1794,28 @@ export class SectorObject extends GameObject {
 
     public updateFade(step: number): boolean {
         const fade = Math.min(Math.max(this.fade + step, 0), 1);
-        const meshFade = this.staticMeshGroup ? Math.min(Math.max(this.meshFade + step, 0), fade) : 0;
-        if (fade === this.fade && meshFade === this.meshFade) return false;
+        const meshFade = this.staticMeshGroup
+            ? Math.min(Math.max(this.meshFade + step, 0), fade)
+            : 0;
+
+        if (fade === this.fade && meshFade === this.meshFade)
+            return false;
 
         this.fade = fade;
         this.meshFade = meshFade;
         this.fadeAttribute.setX(0, fade).needsUpdate = true;
         this.meshFadeAttribute.setX(0, meshFade).needsUpdate = true;
+
         this.traverse(object => {
             const mesh = object as any;
-            const attribute = mesh.isBatch ? this.meshFadeAttribute : mesh.isTerrainBatch || mesh.isBSPSection ? this.fadeAttribute : null;
-            if (attribute && mesh.geometry.getAttribute("sectorFade") !== attribute) mesh.geometry.setAttribute("sectorFade", attribute);
+            const attribute = mesh.isBatch
+                ? this.meshFadeAttribute
+                : mesh.isTerrainBatch || mesh.isBSPSection
+                    ? this.fadeAttribute
+                    : null;
+
+            if (attribute && mesh.geometry.getAttribute("sectorFade") !== attribute)
+                mesh.geometry.setAttribute("sectorFade", attribute);
         });
 
         return true;

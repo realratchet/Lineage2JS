@@ -144,6 +144,7 @@ export class PawnAttackComponent extends ObjectComponent<BaseActor> {
     public isAttacking(): boolean { return this.currentAttack !== null; }
     public hasAction(): boolean { return this.isActive || this.currentAttack !== null; }
     public isPhysicalAttacking(): boolean { return this.currentAttack !== null && !this.currentAttack.skill; }
+    public getActionTarget(): AttackTarget_T { return this.target; }
 
     public addSkill(skill: NpcSkillAttack_T): number {
         const animation = skill.animation || null;

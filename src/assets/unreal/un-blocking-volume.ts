@@ -3,6 +3,7 @@ import type { IBoxDecodeInfo } from "./un-box";
 import type { IActorCollisionDecodeInfo } from "./un-aactor";
 import type { IBaseObjectDecodeInfo } from "./decode-library";
 import type { IBSPCollisionNodeDecodeInfo_T } from "./model/un-model";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 export type IBlockingVolumeDecodeInfo = IBaseObjectDecodeInfo & {
     type: "BlockingVolume",
@@ -23,9 +24,9 @@ export abstract class UBlockingVolume extends UVolume {
     //     });
     // }
 
-    public getDecodeInfo(): IBlockingVolumeDecodeInfo {
-        const worldBsp = this.getWorldBspInfo();
-        const nodes: IBSPCollisionNodeDecodeInfo_T[] = worldBsp.nodes.map(node => ({ plane: node.plane, children: [node.iFront, node.iBack], isCsg: node.isCsg, collision: node.collision }));
+    public getDecodeInfo(builder: DecodeLibraryBuilder): IBlockingVolumeDecodeInfo {
+        const worldBsp = this.getWorldBspInfo(builder);
+        const nodes: IBSPCollisionNodeDecodeInfo_T[] = worldBsp.nodes.map(node => ({ plane: node.plane, children: [node.iFront, node.iBack], isCsg: node.isCsg, collision: node.collision, surface: node.surface }));
 
         return {
             uuid: this.uuid,

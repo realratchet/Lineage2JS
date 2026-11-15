@@ -296,6 +296,10 @@ export abstract class UStaticMeshActor extends UAActor {
             }
         }
 
+        if (builder.getSettings().loadAudio !== false)
+            for (const sound of [this.stepSound1, this.stepSound2, this.stepSound3])
+                if (sound && !builder.pullSound(sound)) throw new Error(`StaticMeshActor '${this.name}' has no audio data for '${sound.name}'.`);
+
         // physicsRotation only runs when bRotateToDesired or bFixedRotationDir is set (UnPhysic.cpp:401);
         // fixed-dir spin is `result += deltaRate` per axis, 65536 units per revolution (fixedTurn, UnPhysic.cpp:460)
         const rotating = this.physics === EPhysics_T.PHYS_Rotating && this.isFixedRotationDir && this.rotationRate && (this.rotationRate.pitch !== 0 || this.rotationRate.yaw !== 0 || this.rotationRate.roll !== 0)

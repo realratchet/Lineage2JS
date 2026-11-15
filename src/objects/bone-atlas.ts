@@ -195,7 +195,7 @@ export class BoneAtlas {
             start = this.clipRanges.allocate(count);
         }
 
-        const size = track.getValueSize(), interpolant = track.createInterpolant();
+        const size = track.getValueSize(), interpolant: THREE.Interpolant = (track as any).createInterpolant();
 
         for (let frame = 0; frame <= lastFrame; frame++) {
             const value = track.times.length === count ? track.values.subarray(frame * size, frame * size + size) : interpolant.evaluate(frame / framerate);

@@ -6,7 +6,7 @@ import { ColliderComponent } from "../physics/components/physics-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { IBSPCollisionNodeDecodeInfo_T } from "@l2js/engine/contracts/mesh";
 import buildCollisionModel from "../physics/collision-model";
-import type { ScriptValue_T, default as UnScriptVM } from "../ue-script/vm";
+import type { ScriptHost_T, ScriptValue_T, default as UnScriptVM } from "../ue-script/vm";
 import type { ScriptObjectFactory_T } from "../game/script-component";
 import Volume from "./volume";
 import { releaseTouching } from "./components/transform-component";
@@ -27,6 +27,7 @@ export class BSPCollider extends GameObject implements ICollidable {
     public scriptProperties: Map<string, ScriptValue_T> = null;
     public actorUuid: string = null;
     public scriptActor: Volume = null;
+    public levelInfoActor: ScriptHost_T = null;
 
     protected readonly colliderDescs: BSPColliderDesc_T[] = [];
     protected readonly analyticalPrimitive: CollisionPrimitive_T<"bsp">;
@@ -45,6 +46,7 @@ export class BSPCollider extends GameObject implements ICollidable {
         this.collisionProfile = collisionProfile;
 
         (this as any).isCollidable = true;
+        (this as any).isBSPCollider = true;
 
         this.name = "BSPCollision";
 

@@ -81,6 +81,20 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         return user ? user.selectedId : 0;
     }
 
+    public getSelectedActor() {
+        const id = this.getTargetId();
+
+        if (!id) return null;
+        const actor = this.actors.getActionTarget(id) || this.actors.pickups.get(id);
+
+        if (actor) return actor;
+
+        for (const [realId, objectId] of this.actors.staticObjects)
+            if (objectId === id) return this.manGame.getComponent("render").findLevelActorByRealId(realId);
+
+        return null;
+    }
+
     public showLogin(url: string) { return this.session.showLogin(url); }
     public connectLogin(account: string, password: string) { return this.session.connectLogin(account, password); }
     public cancelLogin() { return this.session.cancelLogin(); }
@@ -358,6 +372,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         }
 
         this.session.game.moveBackwardToLocation(point, player.position);
+        if (!this.isPlayingReplay()) this.checkTutorialClientEvent(1); // UInput::Exec PlayerPawnMoveTo 0x84b90b..0x84b91f
     }
 
     public getActorObjectId(actor: Object3D | null): number {
@@ -526,6 +541,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
         this.movement.cancelTeleport();
         const render = this.manGame.getComponent("render");
 
+        this.manGame.getComponent("input").resetInput();
         this.session.stopReplayRecording();
         this.actors.worldLoad = null;
         this.actors.clearDisappearNpcActions();
@@ -1449,6 +1465,7 @@ export class NetworkManager implements IEngineComponent<GameManager> {
     public tutorialLink(link: string) { return this.community.tutorialLink(link); }
     public tutorialPassCmd(command: string) { return this.community.tutorialPassCmd(command); }
     public tutorialClientEvent(eventId: number) { return this.community.tutorialClientEvent(eventId); }
+    public checkTutorialClientEvent(eventId: number) { return this.community.checkTutorialClientEvent(eventId); }
     public tutorialQuestionMark(id: number) { return this.community.tutorialQuestionMark(id); }
     public gmCommand(targetName: string, command: number) { return this.community.gmCommand(targetName, command); }
     public requestGmList() { return this.community.requestGmList(); }

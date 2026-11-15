@@ -1,6 +1,7 @@
 import FZoneInfo, { type IInfo, type IBaseZoneDecodeInfo } from "./un-zone-info";
 import type { ULevel } from "./un-level";
 import type { DecodeLibrary } from "./decode-library";
+import FColor from "./un-color";
 
 export enum ENetMode_T { NM_Standalone = 0, NM_DedicatedServer = 1, NM_ListenServer = 2, NM_Client = 3 };
 
@@ -26,6 +27,7 @@ export abstract class ULevelInfo extends FZoneInfo implements IInfo {
                 max: [-Infinity, -Infinity, -Infinity]
             },
             children: [],
+            ambient: this.ambientVector ? FColor.fromFloating(this.ambientVector.x, this.ambientVector.y, this.ambientVector.z).toArray() as number[] : undefined, // AActor::UpdateRenderData 0x7d00ac..0x7d011f: a zone without a ZoneActor takes Actors(0)'s AmbientVector
             fog: null
         };
     }

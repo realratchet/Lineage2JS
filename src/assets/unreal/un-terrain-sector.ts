@@ -17,6 +17,8 @@ export type ITerrainSegmentDecodeInfo = IBaseMeshObjectDecodeInfo & {
     type: "TerrainSegment",
     terrainInfoUuid?: string,
     collisionRadius: number,
+    terrainSectorIndex: number,
+    decorationCenter: Vector3Arr,
     lighting?: {
         lights: { light: string, flags: Uint8Array }[],
         shadowMaps: Uint8Array[],
@@ -103,6 +105,19 @@ export abstract class UTerrainSector extends UObject {
         const library = builder.library;
         const center = this.boundingBox.getCenter();
         const { x: ox, y: oy, z: oz } = center;
+        const terrainSectorIndex = info.getTerrainSectorIndex(this);
+        const v = FVector.make();
+        // UTerrainSector::Serialize 0x9b6ad4..0x9b6adc forces 16 runtime quads for the seamless client.
+        const corners = [[0, 0], [0, 16], [16, 0]].map(([x, y]) => {
+            const hmx = x + this.offsetX, hmy = y + this.offsetY;
+            const offset = Math.min(hmy, iTerrainMap.width - 1) * iTerrainMap.width + Math.min(hmx, iTerrainMap.width - 1);
+            return v.set(hmx, hmy, data[offset]).transformBy(info.toWorld, v).getElements().map(Math.fround);
+        });
+        // UTerrainSector::CalcLocation 0x9a36c2..0x9a376f.
+        const decorationCenter = corners[0].map((value, i) => {
+            const first = Math.fround(value + Math.fround((corners[1][i] - value) / 2));
+            return Math.fround(first + Math.fround((corners[2][i] - value) / 2));
+        }) as Vector3Arr;
 
 
         if (this.uuid in library.geometries) return {
@@ -111,6 +126,8 @@ export abstract class UTerrainSector extends UObject {
                 name: this.objectName,
                 type: "TerrainSegment",
                 collisionRadius: info.collisionRadius,
+                terrainSectorIndex,
+                decorationCenter,
                 geometry: this.uuid,
                 materials: this.uuid,
                 position: [ox, oy, oz]
@@ -133,8 +150,6 @@ export abstract class UTerrainSector extends UObject {
         const trueBoundingBox = FBox.make();
         const tmpVector = FVector.make();
 
-
-        const v = FVector.make();
 
         // let iii = 0;
 
@@ -347,6 +362,8 @@ export abstract class UTerrainSector extends UObject {
             terrainInfoUuid: info.uuid,
             // Engine.dll MultiPointCheck 0x85f6f9..0x85f6fc: terrain hits return ATerrainInfo.
             collisionRadius: info.collisionRadius,
+            terrainSectorIndex,
+            decorationCenter,
             type: "TerrainSegment",
             geometry: this.uuid,
             materials: this.uuid,

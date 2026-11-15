@@ -16,10 +16,15 @@ import PacketReader from "./packet-reader";
 import type { ICharacterArmorSelection, INpcDefinition } from "@l2js/engine/contracts/pawn";
 import type MovableObject from "../objects/movable-object";
 import { setVector } from "./network-location";
-import { EActorViewType_T } from "../assets/unreal/un-aactor";
+import { EActorViewType_T, EL2GameAction_T } from "../assets/unreal/un-aactor";
+import type { ScriptComponent } from "../game/script-component";
 import { PawnMeshType_T } from "../assets/unreal/un-pawn";
 import type PawnRenderableComponent from "../rendering/components/pawn-renderable-component";
 import type { CollisionQuery_T } from "../physics/collision-world";
+
+const MIN_ACTOR_DELTA = Math.fround(0.0005);
+const MAX_ACTOR_DELTA = Math.fround(0.4);
+const arrGameActions = [EL2GameAction_T.LGA_SaintConsensusClosed, EL2GameAction_T.LGA_SaintConsensusOpened, EL2GameAction_T.LGA_SaintConsensusClosing, EL2GameAction_T.LGA_SaintConsensusOpening];
 
 type NetObjectKind_T = "user" | "player" | "npc";
 
@@ -314,6 +319,7 @@ export class NetworkActors {
 
         if (generation !== this.teleportGeneration) return;
 
+        asset.playerController.call("Possess", [render.player]);
         this.userAppearanceLoad = null;
         if (this.network.session.game.isPlayingReplay()) this.network.items.skillListLoad = this.network.items.resolveSkillList = null;
         else this.network.items.skillListLoad = new Promise(resolve => this.network.items.resolveSkillList = resolve);
@@ -466,6 +472,7 @@ export class NetworkActors {
         if (!object) {
             object = this.createObject(info.objectId, "user", info);
             object.actor = player;
+            player.setUnrealScriptProperty("CreatureID", info.objectId);
             object.resolveActor(player);
             object.appearanceKey = this.getAppearanceKey(this.network.session.game.isPlayingReplay() ? info : this.network.session.characters[this.network.session.selectedSlot]);
         }
@@ -699,6 +706,11 @@ export class NetworkActors {
 
         object.curHp = info.curHp;
         object.maxHp = info.maxHp;
+        // ServerObjectInfo 0x6ee613..0x6ee676 only notifies an existing pawn.
+        if (object.actor && info.objectType === 3 && info.state >= 0 && info.state < arrGameActions.length) {
+            object.actor.getComponent<ScriptComponent>("script").call("L2GameActionNotify", [arrGameActions[info.state]]);
+            this.network.combat.setIdleAnimation(object);
+        }
         if (object.objectId === this.network.getTargetId()) this.network.combat.updateTarget();
     }
 
@@ -943,6 +955,7 @@ export class NetworkActors {
     protected attachActor(object: NetObject_T, actor: BaseActor, position: Vector3 = null) {
         object.actor = actor;
 
+        actor.setUnrealScriptProperty("CreatureID", object.objectId);
         actor.setUnrealScriptProperty("bNpc", object.kind === "npc");
         if (object.environment !== null) actor.setUnrealScriptProperty("Environment", object.environment);
         if (!(object.speeds as GamePackets.CharInfo_T).mountType) this.network.community.applySpeeds(actor, object.speeds, object.isRunning);
@@ -1134,7 +1147,7 @@ export class NetworkActors {
 
         const level = render.getLevel();
         const dilation = level ? level.levelInfoActor.getUnrealScriptProperty("TimeDilation") as number : 1;
-        const delta = Math.fround(Math.max(Math.fround(0.0005), Math.min(Math.fround(0.4), Math.fround(Math.fround(deltaTime / 1000) * dilation))));
+        const delta = Math.fround(Math.max(MIN_ACTOR_DELTA, Math.min(MAX_ACTOR_DELTA, Math.fround(Math.fround(deltaTime / 1000) * dilation))));
 
         // DisappearNpcAction::Tick 0x10499f90..0x1049a08d.
         for (const [actor, previous] of this.disappearNpcActions) {

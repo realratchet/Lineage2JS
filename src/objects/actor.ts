@@ -8,9 +8,11 @@ import { setActorOwner, type OwnedActor_T } from "./components/actor-ownership-c
 import { setScriptObjectProperty } from "./actor-properties";
 import { beginTouch, endTouch, releaseTouching, TouchActor_T } from "./components/transform-component";
 import { EL2EventCmd_T } from "../assets/unreal/un-aactor";
+import type { DecodeLibrary } from "@l2js/engine";
 
 type ActorInfo_T = { uuid: string; name?: string; scriptClassId?: string; scriptProperties?: Record<string, ScriptValue_T> | null; sharedScriptProperties?: Record<string, ScriptValue_T> };
 export type L2GameEvent_T = { EventID: number, EventCmd: EL2EventCmd_T };
+export type StepSoundData_T = { sound: string, library: DecodeLibrary };
 type L2EventActor_T = ScriptHost_T & { l2EventShow?(value: number): void, l2EventPlay?(value: number): void };
 
 export function execL2GameEvent(actor: L2EventActor_T, command: EL2EventCmd_T, value: number): void {
@@ -107,6 +109,25 @@ export class Actor extends GameObject {
         const key = findScriptPropertyKey(this.scriptProperties, getScriptPropertyName(id));
 
         return key === undefined ? null : this.scriptProperties.get(key);
+    }
+
+    public getStepSoundData(): StepSoundData_T | null {
+        const vm = this.scriptComponent.getVM();
+
+        if (!vm.isA(this, "StaticMeshActor")) return null;
+        const first = this.getUnrealScriptProperty("StepSound_1");
+        const second = this.getUnrealScriptProperty("StepSound_2");
+        let sound = this.getUnrealScriptProperty("StepSound_3");
+
+        // AStaticMeshActor::GetStepSoundData 0x97e3e0 returns StepSound_1 on both winning branches.
+        if (first && Math.floor(Math.random() * 32768) % 3 === 2) sound = first;
+        else if (second && Math.floor(Math.random() * 32768) % 2 === 1) sound = first;
+
+        if (!sound) return null;
+        const path = typeof sound === "string" ? sound : (sound as any).scriptObjectPath;
+
+        if (typeof path !== "string") throw new Error(`Actor '${this.name}' has an invalid stepping sound.`);
+        return { sound: path, library: vm.getLibrary() };
     }
 
     public getBaseActor(): ICollidable | null {

@@ -185,6 +185,40 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const context = call.context as any;
         const name = call.name.toLowerCase();
 
+        if (name === "animisingroup") {
+            if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' animation.`);
+            const channel = Number(call.args[0]);
+
+            if (channel !== 0) throw new Error(`UnrealScript AnimIsInGroup channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
+            const action = this.animationNotifyAction;
+
+            if (!action || action.getClip().name.toLowerCase() === "none") return false;
+            const clip = this.getAnimationClip(action.getClip().name);
+
+            if (!clip) return false;
+            const groups = (clip as any).groupNames as string[], group = (call.args[1] as string).toLowerCase();
+
+            if (!groups) throw new Error(`Animation '${clip.name}' has no decoded group names.`);
+            return groups.some(name => name.toLowerCase() === group);
+        }
+
+        if (name === "playanimum") { // APawn::execPlayAnimUM 0x92f280..0x92f38c.
+            if (context !== this.getParent()) throw new Error(`'${context.scriptClassId}' cannot use '${this.getParent().type}' animation.`);
+            const sequence = call.args[0] as string;
+            const updateMovement = call.args[1] === undefined ? 0 : Number(call.args[1]) | 0;
+            const rate = call.args[2] === undefined ? 1 : Number(call.args[2]);
+            const tweenTime = call.args[3] === undefined ? 0 : Number(call.args[3]);
+            const channel = call.args[4] === undefined ? 0 : Number(call.args[4]);
+
+            if (channel !== 0) throw new Error(`UnrealScript PlayAnimUM channel '${channel}' is not implemented for '${context.scriptClassId}'.`);
+            if (sequence.toLowerCase() === "none") return;
+
+            context.setUnrealScriptProperty("UpdateMovementAnimType", updateMovement & 255);
+            context.setUnrealScriptProperty("bUpdateMovementAnim", updateMovement !== 0);
+            this.play(sequence, tweenTime, rate, false, true);
+            return;
+        }
+
         if (call.index === 259 || call.index === 260 || name === "playanim" || name === "loopanim") {
             const sequence = call.args[0] as string;
             const rate = call.args.length > 1 ? Number(call.args[1]) : 1;

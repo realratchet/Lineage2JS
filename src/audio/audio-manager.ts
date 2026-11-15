@@ -38,6 +38,7 @@ type AmbientChannel_T = {
 type AmbientCandidate_T = { component: AmbientSoundComponent, priority: number };
 type VoiceRequest_T = { path: string, isStream: boolean, id: number };
 type MusicBuffer_T = { path: string, pending: Promise<Blob | null> };
+type SoundData_T = string | Uint8Array | Blob;
 
 export class AudioManager implements IEngineComponent<GameManager> {
     protected readonly musicFiles: Record<number, string[]> = {};
@@ -48,6 +49,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
     protected combatGainNode: GainNode;
     protected backgroundAudio: BackgroundAudio_T = "notices";
     protected readonly combatSoundObjects = new WeakSet<Object3D>();
+    protected readonly activeOneShotSounds = new WeakMap<Object3D, Map<string, number>>();
     protected soundscapeGainNode: GainNode;
     protected musicGainNode: GainNode;
     protected ambientGainNode: GainNode;
@@ -982,7 +984,18 @@ export class AudioManager implements IEngineComponent<GameManager> {
         await this.playOneShotSound(uri, [0, 0, 0], 1, 1, 0, 0, false); // Engine.dll OnInterfacePlaySound 0x74711b: SOUND_No3D, pitch 1.
     }
 
-    public async playOneShotSound(dataUri: string | Uint8Array | Blob, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true, onStarted?: (duration: number) => void, isCombat: boolean = false) {
+    public isPlaying(owner: Object3D, soundName: string): boolean {
+        const sounds = this.activeOneShotSounds.get(owner);
+
+        return !!sounds && sounds.has(soundName.toLowerCase());
+    }
+
+    public async playOneShotSound(dataUri: SoundData_T, position: [number, number, number] | { x: number, y: number, z: number }, volume: number, pitch: number, refDistance: number, maxDistance: number, attenuate: boolean = true, onStarted?: (duration: number) => void, isCombat: boolean = false, owner: Object3D = null, soundName: string = null, skipIfPlaying: boolean = false) {
+        if (owner && !soundName) throw new Error(`Actor sound requires its sound name.`);
+        if (skipIfPlaying && owner && this.isPlaying(owner, soundName)) return;
+
+        const soundId = soundName && soundName.toLowerCase();
+
         const sourcePosition = position as any;
         const x = sourcePosition.x === undefined ? sourcePosition[0] : sourcePosition.x;
         const y = sourcePosition.y === undefined ? sourcePosition[1] : sourcePosition.y;
@@ -997,6 +1010,7 @@ export class AudioManager implements IEngineComponent<GameManager> {
         if (buffer && onStarted) onStarted(buffer.duration);
         await pendingUnlock;
         if (!buffer || this.gameManager.isWorldLoading()) return;
+        if (skipIfPlaying && owner && this.isPlaying(owner, soundName)) return;
 
         const nodes = this.acquireChannelNodes(isCombat ? this.combatGainNode : this.effectsGainNode, volume, attenuate, x, y, z, sourceRadius, sourceMaxDistance);
 
@@ -1009,9 +1023,22 @@ export class AudioManager implements IEngineComponent<GameManager> {
         source.onended = () => {
             source.disconnect();
             this.releaseChannelNodes(nodes);
+            if (owner) {
+                const sounds = this.activeOneShotSounds.get(owner)!, count = sounds.get(soundId)! - 1;
+
+                if (count > 0) sounds.set(soundId, count);
+                else sounds.delete(soundId);
+                if (sounds.size === 0) this.activeOneShotSounds.delete(owner);
+            }
         };
 
         source.start(0);
+        if (owner) {
+            if (!this.activeOneShotSounds.has(owner)) this.activeOneShotSounds.set(owner, new Map());
+            const sounds = this.activeOneShotSounds.get(owner)!;
+
+            sounds.set(soundId, (sounds.get(soundId) || 0) + 1);
+        }
     }
 
     public stopAmbientSound(id: string) {

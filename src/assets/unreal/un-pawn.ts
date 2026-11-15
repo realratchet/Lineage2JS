@@ -154,6 +154,7 @@ export type IPawnSoundSetDecodeInfo = {
 
 export type IPawnSoundsDecodeInfo = {
     attack?: IPawnSoundSetDecodeInfo;
+    attackVoice?: (string | null)[][];
     defense: IPawnSoundSetDecodeInfo;
     damage: IPawnSoundSetDecodeInfo & { random: number };
     item: IPawnSoundSetDecodeInfo | null;

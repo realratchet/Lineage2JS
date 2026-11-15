@@ -6,10 +6,6 @@ import type { NDomButton_T } from "./ndom";
 
 const TEXT_COLOR = 0xffdcdcdc;
 const TEX_BACK = "L2UI_CH3.ShortcutWnd.shortcut_back";
-const TEX_JOYPAD = "L2UI_CH3.Joypad.joypad_back";
-const TEX_JOYPAD_SWITCH = "L2UI_CH3.ShortcutWnd.shortcut_joypad";
-const TEX_JOYPAD_LEFT = "L2UI_CH3.Joypad.joypad_L";
-const TEX_JOYPAD_RIGHT = "L2UI_CH3.Joypad.joypad_R";
 const TEX_BACKV = "L2UI_CH3.ShortcutWnd.shortcut_backv";
 const TEX_OUTLINE = "L2UI_CH3.Etc.menu_outline";
 const TEX_OUTLINE_DOWN = "L2UI_CH3.Etc.menu_outline_down";

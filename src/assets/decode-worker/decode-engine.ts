@@ -467,6 +467,7 @@ export class DecodeEngine {
     protected assetLoader: AssetLoader = null;
     protected hasSweptCache = false;
     protected cacheCharGrpRows: Record<string, any>[] = null;
+    protected cacheMusicInfoRows: Record<string, any>[] = null;
     protected cacheCharGroups: ICharacterGroup[] = null;
     protected cacheArmorGrpRows: Record<string, any>[] = null;
     protected cacheWeaponGrpRows: Record<string, any>[] = null;
@@ -1041,7 +1042,14 @@ export class DecodeEngine {
             shield: shield && shield.tag === 0 ? { sounds: shield.item_sound, volume: itemConfig.volume, radius: itemConfig.radius } : null
         });
 
-        if (boots && boots.tag === 1) library.pawnSounds.boots = await Promise.all(boots.item_sound.map((path: string) => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
+        library.pawnSounds.attackVoice = await Promise.all(["voice_snd_hand", "voice_snd_1hs", "voice_snd_2hs", "voice_snd_dual", "voice_snd_pole", "voice_snd_bow", "voice_snd_unknown", "voice_snd_fist"].map(async field => {
+            const paths = row[field] as string[];
+
+            return await Promise.all(paths.map(path => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
+        }));
+
+        if (boots && boots.tag === 1)
+            library.pawnSounds.boots = await Promise.all(boots.item_sound.map((path: string) => path && path.toLowerCase() !== "none" ? this.pullSoundPath(builder, path, false) : null));
     }
 
     protected async pullSoundPath(builder: DecodeLibraryBuilder, path: string, required: boolean = true, isMetadataOnly = false): Promise<string> {
@@ -1260,10 +1268,10 @@ export class DecodeEngine {
     }
 
     protected async pullSectorScriptAssets(library: DecodeLibrary, settings: LoadSettings_T, packageCache: PackageCache = null): Promise<void> {
-        const [, cls] = await this.fetchScriptClass("Engine.DefaultPhysicsVolume");
+        const [, cls] = await this.fetchScriptClass("Engine.DefaultPhysicsVolume"), [, modifier] = await this.fetchScriptClass("Engine.L2ColorModifier");
         const builder = this.createDecodeBuilder(library, settings, packageCache);
 
-        builder.pullScriptClasses([cls]);
+        builder.pullScriptClasses([cls, modifier]);
         const sounds = new Set<string>();
 
         for (const actor of library.levelActors) {
@@ -1283,7 +1291,48 @@ export class DecodeEngine {
             }
         }
         for (const sound of sounds) library.sounds[sound] = await this.pullSoundPath(builder, sound, false, settings.loadAudio === false);
+        await this.pullStepSounds(library, builder, settings);
         await this.pullWaterVolumeEffects(library, settings);
+    }
+
+    protected async pullStepSounds(library: DecodeLibrary, builder: DecodeLibraryBuilder, settings: LoadSettings_T): Promise<void> {
+        if (settings.loadAudio === false) return;
+
+        const ids = new Set<number>();
+
+        for (const actor of library.levelActors) {
+            if (!actor) continue;
+
+            let cls = library.scriptClasses[actor.scriptClassId];
+
+            while (cls && cls.id !== "engine.PhysicsVolume") cls = library.scriptClasses[cls.superClassId];
+            if (!cls) continue;
+
+            const properties = actor.sharedScriptProperties ? { ...actor.sharedScriptProperties, ...actor.scriptProperties } : actor.scriptProperties;
+            let enabled = properties.bL2StepVolume, id = properties.StepSoundID as number;
+
+            for (let cls = library.scriptClasses[actor.scriptClassId]; cls && (enabled === undefined || id === undefined); cls = library.scriptClasses[cls.superClassId]) {
+                if (enabled === undefined) enabled = cls.defaults.bL2StepVolume;
+                if (id === undefined) id = cls.defaults.StepSoundID as number;
+            }
+            if (enabled && Number.isInteger(id) && id >= 1 && id <= 1000) ids.add(id);
+        }
+        if (!ids.size) return;
+
+        const rows = await this.getMusicInfoRows();
+
+        for (const row of rows) {
+            if (!ids.has(row.id)) continue;
+
+            const names = row.sounds as string[];
+
+            if (names.length < 1 || names.length > 10) throw new Error(`Invalid step sound count '${row.id}/${names.length}'.`);
+            library.stepSounds[row.id] = await Promise.all(names.map(name => {
+                if (!name || name.toLowerCase() === "none" || !name.includes(".")) return null;
+
+                return this.pullSoundPath(builder, name, false);
+            }));
+        }
     }
 
     protected async pullWaterVolumeEffects(library: DecodeLibrary, settings: LoadSettings_T): Promise<void> {
@@ -3449,10 +3498,19 @@ export class DecodeEngine {
         library.npcBow = { weaponMesh: weapon.wpn_mesh[0], weaponSkins: weapon.wpn_tex.slice(), curvature: weapon.curvature, attackRange: equipment.attackRange, ammo };
     }
 
-    public async decodeMusicInfo(): Promise<Record<number, string[]>> {
+    protected async getMusicInfoRows(): Promise<Record<string, any>[]> {
+        if (this.cacheMusicInfoRows) return this.cacheMusicInfoRows;
+
         const file = await (new UDataFile(SchemasC4.SCHEMA_MUSICINFO_DAT, "assets/system/musicinfo.dat").asReadable()).decode();
 
-        return Object.fromEntries(file.datarows.map((row: any) => [
+        this.cacheMusicInfoRows = file.datarows;
+        return this.cacheMusicInfoRows;
+    }
+
+    public async decodeMusicInfo(): Promise<Record<number, string[]>> {
+        const rows = await this.getMusicInfoRows();
+
+        return Object.fromEntries(rows.map((row: any) => [
             row.id,
             (row.sounds as string[]).map(sound => this.assetLoader.getPackage(sound, "Music").path)
         ]));

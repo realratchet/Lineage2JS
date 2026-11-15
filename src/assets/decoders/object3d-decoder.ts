@@ -389,6 +389,7 @@ function decodeBSPSection(library: DecodeLibrary, sectionInfo: IBSPSectionDecode
         const material = m as any;
         if (material.defines && material.defines.USE_RANGE_FADE === undefined) {
             material.defines.USE_RANGE_FADE = "";
+            material.defines.USE_RANGE_FADE_FRAGMENT = ""; // BSP polygons are too large to interpolate the distance per vertex
             if (!sectionInfo.isOutdoor) material.defines.USE_INDOOR_RANGE_IGNORED = "";
             material.needsUpdate = true;
         }
@@ -806,6 +807,9 @@ function decodeTerrainSegment(library: DecodeLibrary, info: IStaticMeshObjectDec
     applySimpleProperties(library, terrain, info);
     terrain.terrainSegmentUuid = info.uuid;
     terrain.terrainInfoUuid = terrainInfo.terrainInfoUuid;
+    if (!Number.isInteger(terrainInfo.terrainSectorIndex) || !terrainInfo.decorationCenter || terrainInfo.decorationCenter.length !== 3) throw new Error(`Terrain '${info.name}' has no decoration sector data.`);
+    terrain.terrainSectorIndex = terrainInfo.terrainSectorIndex;
+    terrain.decorationCenter.fromArray(terrainInfo.decorationCenter);
 
     return terrain;
 }
@@ -912,6 +916,7 @@ function decodeAnimation(_library: DecodeLibrary, name: string, info: IKeyframeD
     (clip as any).attackEffectFrame = sequence.attackEffectFrame;
     (clip as any).attackEndEffectFrame = sequence.attackEndEffectFrame;
     (clip as any).framerate = sequence.framerate;
+    (clip as any).groupNames = sequence.groupNames;
     (clip as any).animationNotifies = notifications;
     (clip as any).skinNotify = skinNotify;
 

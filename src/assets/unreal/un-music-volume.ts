@@ -1,5 +1,6 @@
 import UVolume, { type IVolumeBspDecodeInfo } from "./un-volume";
-import type { DecodeLibrary, IAudioDecodeInfo, IBaseObjectDecodeInfo } from "./decode-library";
+import type { IAudioDecodeInfo, IBaseObjectDecodeInfo } from "./decode-library";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 import type { IBoundsDecodeInfo } from "./un-primitive";
 
 export type IMusicVolumeDecodeInfo = IAudioDecodeInfo & Pick<IBaseObjectDecodeInfo, "scriptClassId" | "scriptProperties" | "ownerUuid"> & {
@@ -26,7 +27,7 @@ export abstract class UMusicVolume extends UVolume {
         })
     }
 
-    public getDecodeInfo(_library: DecodeLibrary) {
+    public getDecodeInfo(builder: DecodeLibraryBuilder) {
         const region = this.getRegion()?.loadSelf();
         const decodeInfo: IMusicVolumeDecodeInfo = {
             ...super.getDecodeInfo(),
@@ -37,7 +38,7 @@ export abstract class UMusicVolume extends UVolume {
             zoneNumber: region.getZoneNumber(),
             leafIndex: region.getLeaf(),
             priority: this.locationPriority,
-            bsp: this.getWorldBspInfo()
+            bsp: this.getWorldBspInfo(builder)
         };
 
         return decodeInfo;

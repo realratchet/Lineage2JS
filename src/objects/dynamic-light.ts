@@ -161,6 +161,7 @@ export class DynamicLight extends Object3D {
     public readonly isSunlight: boolean;
     public isTimeBased: boolean = false;
     public needsUpdate: boolean = true;
+    public version: number = 0;
 
     protected strobeState: { lastUpdateTime: number, toggle: number } | null = null;
     protected flickerTime?: number;
@@ -380,6 +381,8 @@ export class DynamicLight extends Object3D {
                 }
             }
         }
+
+        if (this.needsUpdate && !this.isDynamic) this.version++;
     }
 
     public worldLightRadius() { return 25 * (this.radius + 1); }

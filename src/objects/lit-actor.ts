@@ -312,11 +312,20 @@ export class LitActorMesh extends GameMesh {
     protected lastStaticEnvIndex: number = -1;
     protected lastStaticEnvNextIndex: number = -1;
     protected lastStaticEnvLerp: number = -1;
+    protected lastDynamicEnvVersion: number = -1;
+    protected lastSeenTime: number = -1;
 
     public needsInitialLighting(): boolean {
         if (this.ambient?.hardwareLighting) return this.lastEnvVersion < 0;
 
         return this.staticLightingPending || !!this.vertexLighting && this.vertexLighting.isBuilding() || !this.staticLightingCache && (!!this.lightInfo || !!this.ambient || this.isSunAffected);
+    }
+
+    public needsSeenLighting(currentTime: number, previousTime: number): boolean {
+        const wasSeen = this.lastSeenTime === previousTime;
+
+        this.lastSeenTime = currentTime;
+        return !wasSeen;
     }
 
     public cancelPendingLighting(): void {
@@ -431,7 +440,11 @@ export class LitActorMesh extends GameMesh {
             }
         }
 
-        let anyDynamicLightNeedsUpdate = false;
+        let dynamicEnvVersion = 0;
+
+        for (const { instance: light } of dynamicEnv) dynamicEnvVersion += light.version;
+
+        let anyDynamicLightNeedsUpdate = this.lastDynamicEnvVersion !== dynamicEnvVersion;
         for (const { instance: light } of allLights) {
             if (!light) continue;
 
@@ -567,6 +580,7 @@ export class LitActorMesh extends GameMesh {
                 return;
             }
             this.geometry.setAttribute("lighting", this.vertexLighting.output as any);
+            this.lastDynamicEnvVersion = dynamicEnvVersion;
             this.needsRelightPass = false;
             if (this.elemRelight) this.elemRelight.fill(0);
             return;
@@ -618,6 +632,7 @@ export class LitActorMesh extends GameMesh {
         attrColors.clearUpdateRanges();
         if (rangeCount >= 0) attrColors.addUpdateRange(rangeOffset, rangeCount);
         attrColors.needsUpdate = true;
+        this.lastDynamicEnvVersion = dynamicEnvVersion;
     }
 
     protected sampleIntensity(light: DynamicLight, samplingPoint: Vector3, samplingNormal: Vector3): number {

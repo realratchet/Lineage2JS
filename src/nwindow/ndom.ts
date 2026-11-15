@@ -326,7 +326,7 @@ export class NDomLayer {
         for (const [element, position] of this.windowPositions) this.place(element, position[0], position[1]);
     }
 
-    public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true) { // tinted copies share atlas pages of the same call
+    public async loadTextures(paths: string[], tinted: [string, number][] = [], useIntrinsicAlpha = true, atlasWidth = ATLAS_WIDTH) { // tinted copies share atlas pages of the same call
         const canvas = this.manager.canvas;
 
         await canvas.loadTextures([...paths, ...tinted.map(([path]) => path)], useIntrinsicAlpha);
@@ -349,13 +349,13 @@ export class NDomLayer {
         let x = 0, y = 0, shelf = 0;
 
         for (const i of images.map((_, i) => i).sort((a, b) => images[b].height - images[a].height)) {
-            if (x > 0 && x + images[i].width > ATLAS_WIDTH) {
+            if (x > 0 && x + images[i].width > atlasWidth) {
                 x = 0;
                 y += shelf + 1;
                 shelf = 0;
             }
 
-            if (y > 0 && y + images[i].height > ATLAS_WIDTH) {
+            if (y > 0 && y + images[i].height > atlasWidth) {
                 arrPages.push([]);
                 x = y = shelf = 0;
             }

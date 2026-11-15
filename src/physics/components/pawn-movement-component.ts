@@ -15,10 +15,12 @@ import type Vehicle from "../../objects/vehicle";
 import type RenderManager from "../../rendering/render-manager";
 import { getScriptActor, type ActorCollisionProfile_T, type CollisionPrimitive_T, type ICollidable } from "../../objects/objects";
 import type { CheckResult_T, CollisionQuery_T } from "../collision-world";
-import { getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
+import { getLatentAction, getProperty, setProperty, type ScriptHost_T, type ScriptNativeCall_T, type ScriptValue_T } from "../../ue-script/vm";
 import type TransformComponent from "../../objects/components/transform-component";
 import type AnimationComponent from "../../objects/components/animation-component";
 import type PawnAttackComponent from "../../objects/components/pawn-attack-component";
+import type PlayerController from "../../objects/player-controller";
+import type LandmarkComponent from "../../rendering/components/landmark-component";
 import type { Vector3Arr } from "@l2js/engine";
 import type { IWaterVolumeDecodeInfo } from "@l2js/engine/contracts/volume";
 
@@ -252,6 +254,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
 
     protected updatePhysics(currentTime: number, deltaTime: number) {
         this.updateSpeedCorrection(deltaTime);
+        this.updateTurning(deltaTime);
         this.updateValidateLocation();
 
         if (this.flyDestination && this.isInteractive() && this.renderManager.isSectorCollisionReady(this.flyDestination)) this.startNMover();
@@ -329,6 +332,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public removeIgnoredActor(actor: ICollidable): void { this.ignoredActors.delete(actor); }
+    public isEnterRising(): boolean { return this.enterRiseTargetZ !== null; }
 
     public moveSmooth(movement: Vector3) {
         if (!this.isInteractive()) return;
@@ -1305,12 +1309,33 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.hasDesiredRotation = true;
     }
 
+    protected updateTurning(deltaTime: number) {
+        const parent = this.getParent(), controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (!controller || !parent.getUnrealScriptProperty("bTurning") || getLatentAction(controller) || this.actorState.locomotion || this.findComponent<PawnAttackComponent>("pawnAttack")?.isAttacking()) return;
+        const rotation = parent.getUnrealScriptProperty("Rotation") as Vector3Arr;
+        const rate = (parent.getUnrealScriptProperty("KayboardRotationRate") as Vector3Arr)[1];
+        const direction = parent.getUnrealScriptProperty("TurningDir") as number;
+        const delta = direction * rate * Math.fround(deltaTime);
+        const desired: Vector3Arr = [rotation[0], Math.trunc(rotation[1] + delta) | 0, rotation[2]];
+
+        // APawn::Tick 0x10595fdc..0x1059606d.
+        parent.setUnrealScriptProperty("DesiredRotation", desired);
+        this.desiredRotationYaw = desired[1] & 65535;
+        this.hasDesiredRotation = true;
+        if ((controller as any).isPlayerController) setProperty(controller, "ManuallyCameraYaw", Math.fround((getProperty(controller, "ManuallyCameraYaw") as number) + delta));
+    }
+
     protected physicsRotation(deltaTime: number) {
         if (this.keyboardRotationDirection !== null || this.keyboardRotationYaw !== null) this.updateKeyboardRotation(deltaTime);
-        if (!this.hasDesiredRotation) return;
 
         const parent = this.getParent();
         const controller = parent.getUnrealScriptProperty("Controller") as ScriptHost_T;
+        if (controller && parent.getUnrealScriptProperty("bTurning") && (getProperty(controller, "bKeyboardMoving") || getProperty(controller, "bKeyboardMovingPermanently"))) {
+            this.desiredRotationYaw = (parent.getUnrealScriptProperty("DesiredRotation") as Vector3Arr)[1] & 65535;
+            this.hasDesiredRotation = true;
+        }
+        if (!this.hasDesiredRotation) return;
         const deltaRate = (parent as any).isPlayer ? Math.round((getProperty(controller, "EnemyTurnSpeed") as number) * 2 * deltaTime) : Math.trunc((parent.getUnrealScriptProperty("RotationRate") as Vector3Arr)[1] * deltaTime);
 
         this.rotationYaw = fixedTurn(this.rotationYaw, this.desiredRotationYaw, deltaRate);
@@ -1320,6 +1345,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     protected updateKeyboardRotation(deltaTime: number) {
+        if (this.getParent().getUnrealScriptProperty("bTurning") && this.getParent().getUnrealScriptProperty("Controller")) return;
         if (this.actorState.locomotion || this.findComponent<PawnAttackComponent>("pawnAttack")?.isAttacking()) return;
 
         const rate = (this.getParent().getUnrealScriptProperty("KayboardRotationRate") as Vector3Arr)[1];
@@ -1394,7 +1420,11 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.actorState.desired.faceTarget = null;
         const controller = this.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T;
 
-        if (controller) setProperty(controller, "Destination", position.toArray().map(Math.fround));
+        if (controller) {
+            setProperty(controller, "Destination", position.toArray().map(Math.fround));
+            // AController::MoveTo 0x1053425e keeps Destination in center space.
+            if (getProperty(controller, "bCameraWalking")) this.actorState.desired.position.z -= this.collisionHeight;
+        }
     }
 
     public goToActor(actor: Object3D, offset: number = 0) {
@@ -1477,6 +1507,39 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.hasDesiredRotation = false;
         this.adjustToFloor = this.teleportLanding = false;
         this.validateLocationPending = false;
+        const controller = this.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (controller && (controller as any).isPlayerController) (controller as PlayerController).stopMove();
+    }
+
+    public stopPlayerMove() {
+        this.stopMove();
+        const controller = this.getParent().getUnrealScriptProperty("Controller") as ScriptHost_T;
+
+        if (controller && (controller as any).isPlayerController) {
+            if (getProperty(controller, "Pawn") && getProperty(controller, "Level")) {
+                const parent = this.getParent(), game = this.renderManager.getParent().getComponent("network").getGameClient();
+
+                if (game.isConnected() && !game.isPlayingReplay()) {
+                    const base = parent.getBaseActor() as Vehicle;
+
+                    tmpPosition.fromArray(parent.getUnrealScriptProperty("Location") as Vector3Arr);
+                    if (parent.getUnrealScriptProperty("bGetOnVehicle")) {
+                        if (base && base.isVehicle) {
+                            base.getLocalLocation(tmpPosition, tmpPosition);
+                            game.validatePosition(tmpPosition, parent.getRotationYaw(), base.getUnrealScriptProperty("L2ServerObjectID") as number);
+                        }
+                    } else game.validatePosition(tmpPosition, parent.getRotationYaw());
+                }
+            }
+            if ((this.getParent() as any).isPlayer) this.getParent().getComponent<LandmarkComponent>("landmark").deleteLandmark(false);
+            // ALineagePlayerController::StopMove 0x1053b8f2..0x1053b91e follows validation and landmark deletion.
+            setProperty(controller, "bKeyboardMovingPermanently", false);
+            setProperty(controller, "bDesiredKeyboardMovingPermanently", false);
+            const pawn = getProperty(controller, "Pawn") as BaseActor;
+
+            if (getProperty(controller, "bCameraWalking") && pawn) pawn.setUnrealScriptProperty("AirSpeed", 0);
+        }
     }
 
     public stopMoving() {
@@ -1569,8 +1632,15 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
     }
 
     public startRotating(direction: number, speed: number) {
-        this.keyboardRotationDirection = direction;
+        const parent = this.getParent(), controller = parent.scriptClassId ? parent.getUnrealScriptProperty("Controller") as ScriptHost_T : null;
+        const isPlayerTurn = !!controller && !!(controller as any).isPlayerController;
+
+        this.keyboardRotationDirection = isPlayerTurn ? null : direction;
         this.keyboardRotationSpeed = speed;
+        if (isPlayerTurn) {
+            parent.setUnrealScriptProperty("bTurning", true);
+            parent.setUnrealScriptProperty("TurningDir", direction);
+        }
     }
 
     public finishRotating(yaw: number, speed: number) {
@@ -1585,6 +1655,7 @@ export class PawnMovementComponent extends PhysicsComponent<BaseActor> {
         this.keyboardRotationDirection = null;
         this.desiredRotationYaw = this.rotationYaw;
         this.hasDesiredRotation = false;
+        if (this.getParent().scriptClassId && this.getParent().getUnrealScriptProperty("bTurning")) this.getParent().setUnrealScriptProperty("bTurning", false);
     }
 
     public resetRotationYaw(yaw: number) { // ResetDefaultCharacterYaw 0x1042d920 queues keyboard yaw correction, retaining the held direction.

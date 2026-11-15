@@ -123,7 +123,7 @@ class PawnTextureArray {
     }
 
     protected createTexture(source: CompressedTexture): CompressedArrayTexture {
-        const texture = new CompressedArrayTexture(source.mipmaps.map(mip => ({ width: mip.width, height: mip.height, data: null })) as any, source.image.width, source.image.height, this.depth, source.format, source.type);
+        const texture = new CompressedArrayTexture(source.mipmaps.map((mip): THREE.CompressedTextureMipmap => ({ width: mip.width, height: mip.height, data: null })), source.image.width, source.image.height, this.depth, source.format, source.type);
 
         texture.source.dataReady = false; // three only allocates the storage, layers are uploaded one by one
         texture.wrapS = source.wrapS;

@@ -232,9 +232,9 @@ function VRand(): Vector3Arr {
     let x: number, y: number, z: number, last: number;
 
     do {
-        x = Math.fround(rand_int(32768) * 0.000030518509447574615 * 2 - 1);
-        y = Math.fround(rand_int(32768) * 0.000030518509447574615 * 2 - 1);
-        last = rand_int(32768) * 0.000030518509447574615 * 2 - 1;
+        x = Math.fround(rand_int(32768) * randScale * 2 - 1);
+        y = Math.fround(rand_int(32768) * randScale * 2 - 1);
+        last = rand_int(32768) * randScale * 2 - 1;
         z = Math.fround(last);
     } while (x * x + y * y + last * z > 1);
 
@@ -253,11 +253,13 @@ function Vector2Rotator(v: Vector3Arr): Vector3Arr {
 }
 
 function Rotator2Vector(r: Vector3Arr): Vector3Arr {
-    const pitch = r[0] * Math.PI / 32768;
-    const yaw = r[1] * Math.PI / 32768;
-    const cosPitch = Math.cos(pitch);
+    const sinPitch = sinRotator(r[0]);
+    const cosPitch = sinRotator(r[0] + 16384);
+    const sinYaw = sinRotator(r[1]);
+    const cosYaw = sinRotator(r[1] + 16384);
 
-    return [cosPitch * Math.cos(yaw), cosPitch * Math.sin(yaw), Math.sin(pitch)];
+    // Core 0x1013dc30/0x10110af0: (UnitCoords / R).XAxis, including signed-zero dot products.
+    return [Math.fround(cosPitch * cosYaw + 0 * -sinYaw + sinPitch * 0), Math.fround(cosPitch * sinYaw + 0 * cosYaw + sinPitch * 0), sinPitch];
 }
 
 function getRotationAxes(a: Vector3Arr, isInverse = false): Vector3Arr[] {
@@ -457,7 +459,6 @@ function op_neq_name_name(a: string, b: string) { return !op_eq_name_name(a, b);
 export function registerNativeFuncs(registry: UNativeRegistry_T) {
     const native = registry.registerNativeFunc.bind(registry);
 
-    // boolean operators
     native(129, pre_op_not_bool);
     native(242, op_eq_bool_bool);
     native(243, op_not_eq_bool_bool);
@@ -465,7 +466,6 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(131, op_xor_bool_bool);
     native(132, op_or_bool_bool);
 
-    // byte operators
     native(133, op_mul_byte_byte);
     native(134, op_div_byte_byte);
     native(135, op_add_byte_byte);
@@ -476,7 +476,6 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(140, op_dec_byte);
     native(141, op_inv_num);
 
-    // integer operators
     native(143, pre_op_sub_int);
     native(144, op_mul_int_int);
     native(145, op_div_int_int);
@@ -503,13 +502,11 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(165, op_inc_int);
     native(166, op_dec_int);
 
-    // integer functions
     native(167, rand_int);
     native(249, min_num);
     native(250, max_num);
     native(251, clamp_num);
 
-    // float operators
     native(169, pre_op_sub_num);
     native(170, op_pow_num_num);
     native(171, op_mul_num_num);
@@ -529,7 +526,6 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(184, op_add_num_num);
     native(185, op_sub_num_num);
 
-    // float functions
     native(186, Abs);
     native(187, Sin);
     native("Asin", Asin);
@@ -548,7 +544,6 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(247, Lerp);
     native(248, Smerp);
 
-    // vector operators
     native(211, pre_op_sub_vector);
     native(212, op_mul_vector_float);
     native(213, op_mul_float_vector);
@@ -568,14 +563,12 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(223, op_add_vector_vector);
     native(224, op_sub_vector_vector);
 
-    // vector functions
     native(225, VSize);
     native(226, Normal);
-    native(227, vec_Invert); // Invert
+    native(227, vec_Invert);
     native(252, VRand);
-    native(300, vec_MirrorByNormal); // MirrorByNormal
+    native(300, vec_MirrorByNormal);
 
-    // Rotator operators and functions.
     native(142, op_eq_rotator_rotator); // static final operator(24) bool ==     ( rotator A, rotator B );
     native(203, op_neq_rotator_rotator); // static final operator(26) bool !=     ( rotator A, rotator B );
     native(287, op_mul_rotator_float); // static final operator(16) rotator *   ( rotator A, float    B );
@@ -597,7 +590,6 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native("Rotator2Vector", Rotator2Vector); //      static final function vector Rotator2Vector( rotator R );
 
 
-    // String operators.
     native(112, op_cat_str_str);
     native(168, op_scat_str_str);
     native(115, op_le_str_str);
@@ -608,7 +600,6 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(123, op_neq_str_str);
     native(124, op_eq_case_str_str);
 
-    // String functions.
     native(125, Len); // static final function int    Len    ( coerce string S );
     native(126, InStr); // static final function int    InStr  ( coerce string S, coerce string t );
     native(127, Mid); // static final function string Mid    ( coerce string S, int i, optional int j );
@@ -618,52 +609,42 @@ export function registerNativeFuncs(registry: UNativeRegistry_T) {
     native(236, Chr); // static final function string Chr    ( int i );
     native(237, Asc); // static final function int    Asc    ( string S );
 
-    // Object operators.
     native(114, op_eq_object_object); // static final operator(24) bool == ( Object A, Object B );
     native(119, op_neq_object_object); // static final operator(26) bool != ( Object A, Object B );
 
-    // Name operators.
     native(254, op_eq_name_name); // static final operator(24) bool == ( name A, name B );
     native(255, op_neq_name_name); // static final operator(26) bool != ( name A, name B );
 
-    // InterpCurve operator
     native("InterpCurveEval", InterpCurveEval); //   static final function float InterpCurveEval( InterpCurve curve, float input );
     native("InterpCurveGetOutputRange", InterpCurveGetOutputRange); // static final function InterpCurveGetOutputRange( InterpCurve curve, out float min, out float max );
     native("InterpCurveGetInputDomain", InterpCurveGetInputDomain); // static final function InterpCurveGetInputDomain( InterpCurve curve, out float min, out float max );
 
-    // Quaternion functions
     native("QuatProduct", QuatProduct); //   static final function Quat QuatProduct( Quat A, Quat B );
     native("QuatInvert", QuatInvert); //    static final function Quat QuatInvert( Quat A );
     native("QuatRotateVector", QuatRotateVector); //  static final function vector QuatRotateVector( Quat A, vector B );
     native("QuatFindBetween", QuatFindBetween); //   static final function Quat QuatFindBetween( Vector A, Vector B );
     native("QuatFromAxisAndAngle", QuatFromAxisAndAngle); //  static final function Quat QuatFromAxisAndAngle( Vector Axis, Float Angle );
 
-    // Logging.
     native(231, Log); // final static function Log(coerce string S, optional name Tag);
     native(232, Warn); // final static function Warn(coerce string S);
     native("Localize", function Localize() { fn_not_implemented() }); // static function string Localize(string SectionName, string KeyName, string PackageName);
 
-    // Goto state and label.
     native(113, fn_not_implemented); // final function GotoState(optional name NewState, optional name Label);
     native(281, fn_not_implemented); // final function bool IsInState(name TestState);
     native(284, fn_not_implemented); // final function name GetStateName();
 
-    // Objects.
     native(258, fn_not_implemented); // static final function bool ClassIsChildOf(class TestClass, class ParentClass );
     native(303, fn_not_implemented); // final function bool IsA(name ClassName);
 
-    // Probe messages.
     native(117, fn_not_implemented); // final function Enable(name ProbeFunc);
     native(118, fn_not_implemented); // final function Disable(name ProbeFunc);
 
-    // Properties.
     native("GetPropertyText", function GetPropertyText() { fn_not_implemented() }); //    final function string GetPropertyText( string PropName );
     native("SetPropertyText", function SetPropertyText() { fn_not_implemented() }); // final function SetPropertyText( string PropName, string PropValue );
     native("GetEnum", function GetEnum() { fn_not_implemented() }); // static final function name GetEnum( object E, int i );
     native("DynamicLoadObject", function DynamicLoadObject(objectName: string) { return objectName; }); // static final function object DynamicLoadObject( string ObjectName, class ObjectClass, optional bool MayFail );
     native("FindObject", function FindObject() { fn_not_implemented() }); // static final function object FindObject( string ObjectName, class ObjectClass );
 
-    // Configuration.
     native(536, fn_not_implemented);    // final function SaveConfig();
     native("StaticSaveConfig", function StaticSaveConfig() { fn_not_implemented() });   // static final function StaticSaveConfig();
     native("ResetConfig", function ResetConfig() { fn_not_implemented() });    // static final function ResetConfig();

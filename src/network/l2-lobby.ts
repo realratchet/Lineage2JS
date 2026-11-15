@@ -82,9 +82,9 @@ export class L2Lobby {
 
         const [sector, scenes] = await Promise.all([asset.setAlwaysLoaded(render, LOBBY_LEVEL, [x, y]), asset.decodeMatineeScenes(LOBBY_LEVEL)]);
 
-        this.sector = sector;
         render.setLevel(sector);
         while (!render.isSectorWarm(sector)) await new Promise(resolve => setTimeout(resolve, 50));
+        this.sector = sector;
         const skyZone = (sector.zones.children as ZoneObject[]).find(zone => zone.isSkyZoneInfo);
 
         if (!skyZone) throw new Error(`Lobby SkyZoneInfo is missing`);

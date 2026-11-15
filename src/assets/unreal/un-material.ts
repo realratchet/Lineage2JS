@@ -917,3 +917,4 @@ export abstract class UStaticMeshMaterial extends UBaseMaterial {
 export default UMaterial;
 
 (UBaseMaterial.prototype as any).isPackageAsset = true;
+(UBaseMaterial.prototype as any).isMaterial = true;

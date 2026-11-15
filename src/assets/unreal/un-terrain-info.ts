@@ -817,6 +817,8 @@ export abstract class ATerrainInfo extends AInfo {
         // debugger;
     }
 
+    public getTerrainSectorIndex(sector: UTerrainSector): number { return this.sectors.indexOf(sector); }
+
     public getDecodeInfo(builder: DecodeLibraryBuilder): TerrainInfoDecodeResult_T {
         const library = builder.library;
         const terrainLayers = this.layers.filter(x => x);

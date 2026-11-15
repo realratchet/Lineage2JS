@@ -13,7 +13,7 @@ import type { IGeometryDecodeInfo, IBaseObjectDecodeInfo } from "../decode-libra
 import type { ArrGeometryGroup, Vector3Arr, QuaternionArr } from "../library-types";
 import type { IDynamicHairConfigDecodeInfo } from "../conf-files/un-conf-hair";
 
-export type IAnimationSequenceDecodeInfo = { attackEffectFrame: number; attackEndEffectFrame: number; framerate: number; };
+export type IAnimationSequenceDecodeInfo = { attackEffectFrame: number; attackEndEffectFrame: number; framerate: number; groupNames: string[]; };
 export type IDynamicHairDecodeInfo = { type: number; config: IDynamicHairConfigDecodeInfo; };
 export type ISkinnedMeshObjectDecodeInfo = IBaseObjectDecodeInfo & {
     type: "SkinnedMesh";
@@ -510,6 +510,7 @@ export abstract class USkeletalMesh extends ULodMesh {
                 const animName = sequence.name;
 
                 animationSequences[animName] = {
+                    groupNames: sequence.groupNames,
                     attackEffectFrame: sequence.frameCount > 0 ? sequence.unkVar0 / sequence.frameCount : 0,
                     attackEndEffectFrame: sequence.frameCount > 0 ? sequence.unkVar1 / sequence.frameCount : 0,
                     framerate: sequence.framerate

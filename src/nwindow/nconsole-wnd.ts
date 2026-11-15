@@ -427,7 +427,14 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         this.nwindow.playWindowSound();
         wnd.element.focus();
     }
-    public hidePet() { this.petWnd.setVisible(false); this.summonedWnd.setVisible(false); this.petStatusWnd.setVisible(false); this.summonedStatusWnd.setVisible(false); this.summonedStatusWnd.resetGauge(); this.nwindow.playWindowCloseSound(); }
+    public hidePet() {
+        this.petWnd.setVisible(false);
+        this.summonedWnd.setVisible(false);
+        this.petStatusWnd.setVisible(false);
+        this.summonedStatusWnd.setVisible(false);
+        this.summonedStatusWnd.resetGauge();
+        this.nwindow.playWindowCloseSound();
+    }
     public getInputModifiers() { return [this.inputCtrl, this.inputShift]; }
     public sendMacroText(text: string) { this.chatWnd.sendText(text, this.inputShift); }
 
@@ -1592,7 +1599,7 @@ export class NConsoleWnd implements IEngineComponent<GameManager> {
         const showConsole = !isReplay || game.useChatData();
 
         this.layer.consoleRoot.hidden = !showConsole;
-        void this.layer.loadTextures(NCCoolTimeIcon.getTextures(), NCCoolTimeIcon.getFinishTextures().map(path => [path, NCCoolTimeIcon.FINISH_COLOR]));
+        void this.layer.loadTextures(NCCoolTimeIcon.getTextures(), NCCoolTimeIcon.getFinishTextures().map(path => [path, NCCoolTimeIcon.FINISH_COLOR]), true, 1024);
         void this.manNetwork.getParent().getComponent("asset").loadSound("ItemSound.cooltime_end");
         this.show("world");
         this.messageWnd.hide();

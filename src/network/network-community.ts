@@ -966,6 +966,13 @@ export class NetworkCommunity {
 
     public tutorialClientEvent(eventId: number) { if (this.network.actors.inWorld) this.network.session.game.requestTutorialClientEvent(eventId); }
 
+    public checkTutorialClientEvent(eventId: number) {
+        if (!(this.tutorialClientEvents & eventId)) return;
+
+        this.tutorialClientEvent(eventId);
+        this.tutorialClientEvents ^= eventId;
+    }
+
     public tutorialQuestionMark(id: number) {
         if (!this.network.actors.inWorld) return;
 

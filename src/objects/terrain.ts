@@ -1,4 +1,5 @@
 import DynamicLight from "./dynamic-light";
+import type TerrainDecoration from "./terrain-decoration";
 import { SectorObject } from "./zone-object";
 import type { L2Environment } from "../rendering/l2-env";
 import { Box3, DynamicDrawUsage, Vector3 } from "three";
@@ -8,7 +9,7 @@ import { ColorByte } from "../utils/color-byte";
 import buildTriangleIndex from "../physics/triangle-index";
 import { GameMesh } from "../game/components";
 import { ColliderComponent } from "../physics/components/physics-component";
-import type { ScriptHost_T } from "../ue-script/vm";
+import { getProperty, type ScriptHost_T, type ScriptValue_T } from "../ue-script/vm";
 
 const tmpVertex = new Vector3();
 const tmpNormal = new Vector3();
@@ -79,6 +80,9 @@ export class Terrain extends GameMesh implements ICollidable {
     public offsetY: number = 0;
     public heightmapX: number = 0;
     public heightmapY: number = 0;
+    public terrainSectorIndex: number;
+    public readonly decorationCenter = new Vector3();
+    public readonly decorations: TerrainDecoration[] = [];
     public terrainSegmentUuid: string;
     public terrainInfoUuid: string;
     public terrainInfoActor: ScriptHost_T = null;
@@ -125,6 +129,13 @@ export class Terrain extends GameMesh implements ICollidable {
         if (offsetY !== undefined) this.offsetY = offsetY;
         if (heightmapX !== undefined) this.heightmapX = heightmapX;
         if (heightmapY !== undefined) this.heightmapY = heightmapY;
+    }
+
+    public getDecoLayerAlpha(location: THREE.Vector3, radius: number = 0): number {
+        let count = 0;
+
+        for (const decoration of this.decorations) count += decoration.getDecoLayerAlpha(location, radius);
+        return count;
     }
 
     public needsInitialLighting(): boolean {
@@ -400,6 +411,23 @@ export class Terrain extends GameMesh implements ICollidable {
     public getCollisionRadius(): number { return this.collisionRadius; }
     public getRigidbody(): RAPIER.RigidBody { return this.rigidbody; }
 
+    public getTraceMaterial(item: number): ScriptValue_T {
+        const bitmap = getProperty(this.terrainInfoActor, "QuadDomMaterialBitmap");
+
+        // ATerrainInfo::GetQuadDomMaterialBitmap 0x6457d0; retail PostLoad does not generate the leak's bitmap.
+        if (bitmap === null) return null;
+        if (!Array.isArray(bitmap)) throw new Error(`Terrain '${this.name}' has an invalid dominant material bitmap.`);
+        if (!bitmap.length) return null;
+        if (!Number.isInteger(item) || item < 0 || item >= this.analyticalIndices.length / 3) throw new Error(`Terrain '${this.name}' has invalid hit triangle '${item}'.`);
+
+        const quad = Math.floor(item / 2);
+        const index = this.offsetX + quad % 16 + (this.offsetY + Math.floor(quad / 16)) * this.heightmapX;
+
+        if (index < 0 || index >= bitmap.length) throw new Error(`Terrain '${this.name}' has no dominant material for quad '${index}'.`);
+
+        return bitmap[index];
+    }
+
     public createCollider(physicsWorld: RAPIER.World) {
         this.rigidbody = physicsWorld.createRigidBody(this.rigidbodyDesc);
         this.collider = physicsWorld.createCollider(this.colliderDesc, this.rigidbody);
@@ -432,6 +460,17 @@ export class Terrain extends GameMesh implements ICollidable {
 
             attrPositions.needsUpdate = true;
             this.geometry.computeVertexNormals();
+        }
+
+        const positions = attrPositions.array;
+        for (let i = 0; i < 3; i++) {
+            const origin = this.position.getComponent(i);
+            const a = Math.fround(positions[i] + origin);
+            const b = Math.fround(positions[16 * 17 * 3 + i] + origin);
+            const d = Math.fround(positions[16 * 3 + i] + origin);
+            const first = Math.fround(a + Math.fround((b - a) / 2));
+
+            this.decorationCenter.setComponent(i, Math.fround(first + Math.fround((d - a) / 2)));
         }
 
         this.geometry.computeBoundingBox();

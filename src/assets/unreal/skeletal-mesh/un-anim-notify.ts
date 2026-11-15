@@ -6,8 +6,17 @@ import type { FColor } from "../un-color";
 import type { DecodeLibraryBuilder } from "../decode-library-builder";
 import type { Vector3Arr, Vector4Arr } from "../library-types";
 
-export type IAnimationNotifyObjectDecodeInfo = IAnimationSoundNotifyDecodeInfo | IAnimationSwimSoundNotifyDecodeInfo | IAnimationScreenFadeNotifyDecodeInfo | IAnimationViewShakeNotifyDecodeInfo | IAnimationEffectNotifyDecodeInfo | IAnimationNativeNotifyDecodeInfo;
+export type IAnimationNotifyObjectDecodeInfo = IAnimationSoundNotifyDecodeInfo | IAnimationAttackVoiceNotifyDecodeInfo | IAnimationSwimSoundNotifyDecodeInfo | IAnimationScreenFadeNotifyDecodeInfo | IAnimationViewShakeNotifyDecodeInfo | IAnimationEffectNotifyDecodeInfo | IAnimationNativeNotifyDecodeInfo;
 export type IAnimationNativeNotifyDecodeInfo = { type: "native"; className: string; objectName: string; };
+
+export type IAnimationAttackVoiceNotifyDecodeInfo = {
+    type: "attackVoice";
+    className: "AnimNotify_AttackVoice";
+    objectName: string;
+    volume: number;
+    radius: number;
+    random: number;
+};
 
 export type IAnimationSoundNotifyDecodeInfo = {
     type: "sound";
@@ -17,14 +26,14 @@ export type IAnimationSoundNotifyDecodeInfo = {
     volume: number;
     radius: number;
     random: number;
-    defaultWalkSounds: string[];
-    defaultRunSounds: string[];
-    grassWalkSounds: string[];
-    grassRunSounds: string[];
-    waterWalkSounds: string[];
-    waterRunSounds: string[];
-    defaultActorWalkSounds: string[];
-    defaultActorRunSounds: string[];
+    defaultWalkSounds: (string | null)[];
+    defaultRunSounds: (string | null)[];
+    grassWalkSounds: (string | null)[];
+    grassRunSounds: (string | null)[];
+    waterWalkSounds: (string | null)[];
+    waterRunSounds: (string | null)[];
+    defaultActorWalkSounds: (string | null)[];
+    defaultActorRunSounds: (string | null)[];
 };
 
 export type IAnimationSwimSoundNotifyDecodeInfo = {
@@ -95,13 +104,11 @@ function pullSound(builder: DecodeLibraryBuilder, value: USound | null): string 
     return builder.pullSound(sound) ? soundName : null;
 }
 
-function pullSounds(builder: DecodeLibraryBuilder, values: (USound | null)[]): string[] {
-    const names: string[] = [];
+function pullSounds(builder: DecodeLibraryBuilder, values: (USound | null)[]): (string | null)[] {
+    const names: (string | null)[] = [];
 
     for (let i = 0, len = values.length; i < len; i++) {
-        const name = pullSound(builder, values[i]);
-
-        if (name) names.push(name);
+        names.push(pullSound(builder, values[i]));
     }
 
     return names;
@@ -237,7 +244,19 @@ export abstract class UAnimNotifyEffect extends UAnimNotify {
     }
 }
 
-export abstract class UAnimNotifyAttackVoice extends UAnimNotify { }
+export abstract class UAnimNotifyAttackVoice extends UAnimNotify {
+    declare protected volume: number;
+    declare protected radius: number;
+    declare protected random: number;
+
+    protected getPropertyMap(): Record<string, string> {
+        return Object.assign({}, super.getPropertyMap(), { "Volume": "volume", "Radius": "radius", "Random": "random" });
+    }
+
+    public getDecodeInfo(_builder: DecodeLibraryBuilder): IAnimationAttackVoiceNotifyDecodeInfo {
+        return { type: "attackVoice", className: "AnimNotify_AttackVoice", objectName: this.name, volume: requireNotifyProperty(this, "Volume", this.volume), radius: requireNotifyProperty(this, "Radius", this.radius), random: requireNotifyProperty(this, "Random", this.random) };
+    }
+}
 export abstract class UAnimNotifyChanneling extends UAnimNotify { }
 export abstract class UAnimNotifyAttackPreShot extends UAnimNotify { }
 export abstract class UAnimNotifyAttackShot extends UAnimNotify { }

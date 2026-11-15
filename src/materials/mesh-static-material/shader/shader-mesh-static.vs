@@ -390,6 +390,9 @@
 
 #ifdef USE_RANGE_FADE
     varying float vRangeAlpha;
+    #ifdef USE_RANGE_FADE_FRAGMENT
+        varying vec3 vRangeOffset;
+    #endif
     uniform vec4 clippingSphere;
     uniform float clippingFade;
     uniform float indoorRangeIgnored;
@@ -1070,13 +1073,18 @@ void main() {
 
     #include <fog_vertex>
     #ifdef USE_RANGE_FADE
-        vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
-        #ifdef USE_LIT_ATTRIBUTES
-            vRangeAlpha = max(actorRangeIgnored, vRangeAlpha);
+        #ifdef USE_RANGE_FADE_FRAGMENT
+            vRangeOffset = mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz;
+            vRangeAlpha = sectorFade;
+        #else
+            vRangeAlpha = (clippingSphere.w - length(mvPosition.xyz - (viewMatrix * vec4(clippingSphere.xyz, 1.0)).xyz)) / clippingFade;
+            #ifdef USE_LIT_ATTRIBUTES
+                vRangeAlpha = max(actorRangeIgnored, vRangeAlpha);
+            #endif
+            #ifdef USE_INDOOR_RANGE_IGNORED
+                vRangeAlpha = max(indoorRangeIgnored, vRangeAlpha);
+            #endif
+            vRangeAlpha = min(vRangeAlpha, sectorFade);
         #endif
-        #ifdef USE_INDOOR_RANGE_IGNORED
-            vRangeAlpha = max(indoorRangeIgnored, vRangeAlpha);
-        #endif
-        vRangeAlpha = min(vRangeAlpha, sectorFade);
     #endif
 }

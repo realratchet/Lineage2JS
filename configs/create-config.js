@@ -257,13 +257,22 @@ function createModuleConfig({ name, resolve, entry: _entry, library, isWorker })
                 setupMiddlewares: (middlewares, devServer) => {
                     // middlewares.unshift(initChunkerMiddleware(dirAssets));
 
+                    const httpAssetPaths = Object.create(null);
+
+                    if (httpAssets)
+                        for (const fname of walkSync(dirAssets)) {
+                            const relPath = path.relative(dirAssets, fname).split(path.sep).join("/");
+
+                            httpAssetPaths[relPath.toLowerCase()] = relPath;
+                        }
+
                     middlewares.unshift({ name: "served-assets", path: "/assets", middleware: (req, res, next) => {
                         let assetPath;
 
                         try { assetPath = decodeURIComponent(req.url.split("?")[0]).slice(1).toLowerCase(); }
                         catch (e) { return res.sendStatus(400); }
 
-                        const file = servedAssets.files[assetPath];
+                        const file = servedAssets.files[assetPath] || httpAssetPaths[assetPath];
 
                         if (file) return res.sendFile(path.resolve(dirAssets, file));
                         if (httpAssets) return next();

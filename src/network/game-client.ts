@@ -89,6 +89,7 @@ export class GameClient {
     }
 
     public isReplayPaused() { return !!this.replayPlayback?.paused; }
+    public useCameraInst() { return !!this.replayPlayback?.lockCamera; }
     public getReplayPlaySpeed() { return this.replayPlayback?.speed ?? 1; }
     public inputReplay(key: number, action: number): boolean {
         const playback = this.replayPlayback;
@@ -199,8 +200,8 @@ export class GameClient {
         if (this.replayRecorder) this.replayRecorder.addCameraInput(action, yaw, pitch, performance.now() / 1000);
     }
 
-    public recordCameraKey(key: number, action: number): void {
-        if (this.replayRecorder) this.replayRecorder.addCameraKey(key, action, performance.now() / 1000);
+    public recordCameraKey(key: number, action: number, amount = 0): void {
+        if (this.replayRecorder) this.replayRecorder.addCameraKey(key, action, performance.now() / 1000, amount);
     }
 
     public isRecording() { return this.replayRecorder !== null; }
@@ -249,11 +250,31 @@ export class GameClient {
     public requestItemList() { this.send(this.write(GamePackets.GameClientPacket_T.RequestItemList)); }
 
     public characterCreate(info: CharacterCreate_T) {
-        this.send(this.write(GamePackets.GameClientPacket_T.CharacterCreate).S(info.name).d(info.race).d(info.sex).d(info.classId).d(info.INT).d(info.STR).d(info.CON).d(info.MEN).d(info.DEX).d(info.WIT).d(info.hairStyle).d(info.hairColor).d(info.face));
+        this.send(this.write(GamePackets.GameClientPacket_T.CharacterCreate)
+            .S(info.name)
+            .d(info.race)
+            .d(info.sex)
+            .d(info.classId)
+            .d(info.INT)
+            .d(info.STR)
+            .d(info.CON)
+            .d(info.MEN)
+            .d(info.DEX)
+            .d(info.WIT)
+            .d(info.hairStyle)
+            .d(info.hairColor)
+            .d(info.face));
     }
 
-    public moveBackwardToLocation(target: GamePackets.Location_T, origin: GamePackets.Location_T) { // Omitting moveType flags the client as L2Walker.
-        this.send(this.write(GamePackets.GameClientPacket_T.MoveBackwardToLocation).d(Math.round(target.x)).d(Math.round(target.y)).d(Math.round(target.z)).d(Math.round(origin.x)).d(Math.round(origin.y)).d(Math.round(origin.z)).d(1));
+    public moveBackwardToLocation(target: GamePackets.Location_T, origin: GamePackets.Location_T, isKeyboard = false) { // Omitting moveType flags the client as L2Walker.
+        this.send(this.write(GamePackets.GameClientPacket_T.MoveBackwardToLocation)
+            .d(Math.round(target.x))
+            .d(Math.round(target.y))
+            .d(Math.round(target.z))
+            .d(Math.round(origin.x))
+            .d(Math.round(origin.y))
+            .d(Math.round(origin.z))
+            .d(isKeyboard ? 0 : 1));
     }
 
     public validatePosition(position: GamePackets.Location_T, heading: number, vehicleId: number = 0) {

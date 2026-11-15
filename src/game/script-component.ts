@@ -66,6 +66,13 @@ export class ScriptComponent<TParent extends IObject & ScriptHost_T = IObject & 
 
         if (this.vm.hasTickFunction(parent)) this.call("Tick", [deltaTime]);
         this.vm.processState(parent, deltaTime);
+        this.updateTimers(deltaTime);
+    }
+
+    public updateTimers(deltaTime: number): void {
+        if (!this.hasBegunPlay || this.isDestroyed) return;
+
+        const parent = this.getParent();
 
         const rate = Math.fround(getProperty(parent, "TimerRate") as number);
 

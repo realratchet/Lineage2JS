@@ -1,6 +1,9 @@
 import { EInputKey_T, EInputAction_T } from "@l2js/engine/un-interactions";
 import L2ReplayFile from "./l2-replay-file";
 import PacketReader from "./packet-reader";
+import { isReplayCameraInput } from "./l2-replay-input";
+
+const CAMERA_ROTATION_INPUT_SCALE = Math.fround(0.01);
 
 // FL2ReplayManager::MakeUsePacketTable 0x754f40, extended indices are 255 + subopcode.
 const arrPacketIds = new Set([1, 3, 4, 5, 6, 7, 11, 12, 13, 18, 22, 28, 29, 40, 41, 43, 44, 45, 46, 47, 71, 72, 73, 75, 76, 77, 89, 90, 91, 92, 93, 96, 97, 98, 99, 113, 114, 115, 118, 127, 134, 137, 140, 152, 153, 159, 181, 182, 186, 196, 197, 199, 200, 212, 221, 225, 241, 247, 264, 266, 274, 275, 276, 277]);
@@ -72,9 +75,9 @@ export class L2ReplayRecorder {
             const angle = this.arrCameraAngles[i] + (i === 0 ? yaw : pitch), next = Math.trunc(angle), delta = next - this.arrRecordedCameraAngles[i];
 
             if (!Number.isSafeInteger(next) || Math.abs(delta) > 0x7fffffff) throw new Error(`Replay camera rotation exceeds native input range.`);
-            const amount = Math.fround((delta + Math.sign(delta) * 0.5) / (3600 * Math.fround(0.01)));
+            const amount = Math.fround((delta + Math.sign(delta) * 0.5) / (3600 * CAMERA_ROTATION_INPUT_SCALE));
 
-            if (Math.trunc(amount * 3600 * Math.fround(0.01)) !== delta) throw new Error(`Replay camera input loses native precision.`);
+            if (Math.trunc(amount * 3600 * CAMERA_ROTATION_INPUT_SCALE) !== delta) throw new Error(`Replay camera input loses native precision.`);
             this.arrCameraAngles[i] = angle;
             this.arrRecordedCameraAngles[i] = next;
             if (delta === 0) continue;
@@ -83,12 +86,16 @@ export class L2ReplayRecorder {
         }
     }
 
-    public addCameraKey(key: number, action: number, time: number): void {
-        if (key !== EInputKey_T.IK_PageUp && key !== EInputKey_T.IK_PageDown && key !== EInputKey_T.IK_Home || action !== EInputAction_T.IST_Press && action !== EInputAction_T.IST_Hold && action !== EInputAction_T.IST_Release || !Number.isFinite(time)) throw new Error(`Invalid replay camera key '${key}/${action}'.`);
+    public addCameraKey(key: number, action: number, time: number, amount = 0): void {
+        if (!isReplayCameraInput(key, action, true) || !Number.isFinite(time) || !Number.isFinite(Math.fround(amount)))
+            throw new Error(`Invalid replay camera key '${key}/${action}'.`);
+        if (key === EInputKey_T.IK_NumLock) return;
         if (this.startTime === null) return;
         if (time < this.startTime) throw new Error(`Replay clock precedes recording start.`);
 
-        this.file.arrCameraInstructions.push({ time: time - this.startTime, key, action, amount: 0 });
+        if (key === EInputKey_T.IK_RightMouse && (action === EInputAction_T.IST_Press || action === EInputAction_T.IST_Release)) this.isCameraRotating = action === EInputAction_T.IST_Press;
+
+        this.file.arrCameraInstructions.push({ time: time - this.startTime, key, action, amount: Math.fround(amount) });
     }
 
     public finish(time: number): L2ReplayFile {

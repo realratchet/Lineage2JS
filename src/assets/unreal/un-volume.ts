@@ -1,9 +1,10 @@
 import UBrush from "./un-brush";
 import type { IActorCollisionDecodeInfo } from "./un-aactor";
 import FPlane from "./un-plane";
-import type { IBSPNodeCollisionInfo_T } from "./bsp/un-bsp-node";
+import type { IBSPNodeCollisionInfo_T, IBSPNodeSurfaceDecodeInfo_T } from "./bsp/un-bsp-node";
 import type { Vector4Arr, Matrix4Arr } from "./library-types";
 import type { IBoxDecodeInfo } from "./un-box";
+import type { DecodeLibraryBuilder } from "./decode-library-builder";
 
 export type IMusicVolumeBspNode = {
     plane: Vector4Arr;
@@ -11,6 +12,7 @@ export type IMusicVolumeBspNode = {
     iBack: number;
     isCsg: boolean;
     collision?: IBSPNodeCollisionInfo_T;
+    surface?: IBSPNodeSurfaceDecodeInfo_T;
 };
 
 export type IVolumeBspDecodeInfo = {
@@ -44,14 +46,17 @@ export abstract class UVolume extends UBrush {
         };
     }
 
-    protected getWorldBspInfo(): IVolumeBspDecodeInfo {
+    protected getWorldBspInfo(builder: DecodeLibraryBuilder): IVolumeBspDecodeInfo {
         const brush = this.brush.loadSelf();
         const localToWorld = this.localToWorld();
         const matrixTA = localToWorld.transposeAdjoint();
         const tmpPlane = FPlane.make();
+        const hasMaterials = brush.hasSurfaceMaterials();
 
         const nodes: IMusicVolumeBspNode[] = brush.getBspNodes().map((node: any) => {
             const info: IMusicVolumeBspNode = { plane: node.plane.transformByUsingAdjointT(localToWorld, matrixTA, tmpPlane).getElements(), iFront: node.iFront, iBack: node.iBack, isCsg: brush.isCsg(node) };
+
+            if (hasMaterials) info.surface = brush.getNodeSurface(builder, node);
 
             if (node.iCollisionBound < 0) return info;
 

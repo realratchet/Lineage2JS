@@ -556,6 +556,12 @@ uniform float opacity;
 
 #ifdef USE_RANGE_FADE
     varying float vRangeAlpha;
+    #ifdef USE_RANGE_FADE_FRAGMENT
+        varying vec3 vRangeOffset;
+        uniform vec4 clippingSphere;
+        uniform float clippingFade;
+        uniform float indoorRangeIgnored;
+    #endif
 #endif
 #if defined(USE_LIT_ATTRIBUTES) || defined(USE_ACTOR_LIGHTS)
     varying vec3 vLitColor;
@@ -602,7 +608,15 @@ vec3 getFadeColor(FadeData fade) {
 void main() {
     #include <clipping_planes_fragment>
     #ifdef USE_RANGE_FADE
-        if (vRangeAlpha < 1.0 && vRangeAlpha <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
+        float rangeAlpha = vRangeAlpha;
+        #ifdef USE_RANGE_FADE_FRAGMENT
+            rangeAlpha = (clippingSphere.w - length(vRangeOffset)) / clippingFade;
+            #ifdef USE_INDOOR_RANGE_IGNORED
+                rangeAlpha = max(indoorRangeIgnored, rangeAlpha);
+            #endif
+            rangeAlpha = min(rangeAlpha, vRangeAlpha);
+        #endif
+        if (rangeAlpha < 1.0 && rangeAlpha <= fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))) discard;
     #endif
     vec4 diffuseColor = vec4( diffuse, opacity );
     #include <logdepthbuf_fragment>

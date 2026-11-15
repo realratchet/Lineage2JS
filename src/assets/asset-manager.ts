@@ -320,7 +320,7 @@ export class AssetManager implements IEngineComponent<GameManager> {
 
                 progress.total++;
                 const sector = isCenter ? renderManager.getSector(position) : renderManager.getSectorByCoords(x, y);
-                const isWarm = sector && sector.staticMeshGroup && renderManager.isSectorWarm(sector);
+                const isWarm = sector && sector.hasFinishedLoading && renderManager.isSectorWarm(sector);
 
                 if (!isWarm && this.decodeWorker.isBuildingSector(`${x}_${y}`)) progress.building++;
 
@@ -376,8 +376,17 @@ export class AssetManager implements IEngineComponent<GameManager> {
         const playerControllerLoad = (async () => {
             const [library, config] = await Promise.all([this.decodeWorker.decodeEffectTemplates(this.loadSettings, [], [], [PLAYER_CONTROLLER_CLASS]), clientConfigLoad]);
 
-            UnScriptVM.setConfig(new ConfigCache(config.scriptConfig, "l2.ini", "user.ini", localStorage, `unrealConfig:${getAssetSourceId()}`));
-            return new PlayerController(library);
+            const scriptConfig = new ConfigCache(config.scriptConfig, "l2.ini", "user.ini", localStorage, `unrealConfig:${getAssetSourceId()}`);
+
+            UnScriptVM.setConfig(scriptConfig);
+            this.getParent().getComponent("input").initBindings(scriptConfig);
+            const controller = new PlayerController(library);
+            const inputClass = controller.scriptProperties.get("InputClass") as string;
+
+            if (!inputClass) throw new Error(`Player controller has no InputClass.`);
+            mergePawnLibrary(library, await this.decodeWorker.decodeScriptClass(this.loadSettings, inputClass));
+            controller.initInputSystem();
+            return controller;
         })();
         const arrPending = ["settings", "character data", "environment", "music", "player model", "player scripts", "effects", "sky", "game text", "login scene"];
         if (isLogin) arrPending[4] = null;
@@ -1209,9 +1218,11 @@ export class AssetManager implements IEngineComponent<GameManager> {
     protected *stepSectorScriptRuntime(renderManager: RenderManager, library: DecodeLibrary, sector: SectorObject): Generator<void, void> {
         const objects: any[] = [];
 
+        sector.physicsManager = renderManager.getPhysicsManager();
         sector.setPhysicsVolumeScriptRuntime(classId => this.createScriptObject(renderManager, library, classId, sector.scriptVM));
         sector.traverse(object => { objects.push(object); });
         for (const object of objects) {
+            if (object.isBSPCollider && !object.isVolume) object.levelInfoActor = sector.levelInfoActor;
             if (object.isTerrain) object.terrainInfoActor = sector.getTerrainInfoActor(object.terrainInfoUuid);
             if (object.isTerrainBatch)
                 for (const terrain of object.sectors) terrain.terrainInfoActor = sector.getTerrainInfoActor(terrain.terrainInfoUuid);

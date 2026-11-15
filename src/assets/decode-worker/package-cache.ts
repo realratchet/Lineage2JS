@@ -192,6 +192,15 @@ export class PackageCache {
         return { ...source, data: stored.data, paletteRed: stored.paletteRed };
     }
 
+    public readScriptObject(object: any): DecodeLibrary["scriptObjects"][string] | null {
+        const key = this.key(object, "material"), entry = key ? this.entries.get(key) : null;
+        if (!entry) return null;
+        const info = entry.result.scriptObject, seekable = this.seekable.get(this.owners.get(key));
+        if (!info?.properties) throw new Error(`Missing material script properties for '${key}'.`);
+        if (seekable) hydrateLibraryFileSync(seekable, info);
+        return info;
+    }
+
     protected available(key: string, seen: Set<string>): boolean {
         if (seen.has(key)) return true;
         seen.add(key);

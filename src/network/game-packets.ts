@@ -612,7 +612,7 @@ export type UserInfo_T = CreatureInfo_T & Appearance_T & { level: number, exp: n
 export type CharInfo_T = CreatureInfo_T & Appearance_T & { isHero: boolean, clanId: number, clanCrestId: number, allyId: number, allyCrestId: number, clanRelation: number, largeCrestId: number, isSitting: boolean, mountType: number, mountNpcId: number, privateStoreType: PrivateStoreType_T, cubics: number[], team: number };
 
 export type NpcInfo_T = CreatureInfo_T & { npcId: number, isAttackable: boolean, rightHand: number, chest: number, leftHand: number, spawnType: number, isSummon: boolean };
-export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number };
+export type ServerObjectInfo_T = NpcInfo_T & { curHp: number, maxHp: number, objectType: number, state: number };
 
 export type CharTemplate_T = { race: Race_T, classId: number, STR: number, DEX: number, CON: number, INT: number, WIT: number, MEN: number };
 
@@ -880,13 +880,20 @@ export function readServerObjectInfo(packet: PacketReader): ServerObjectInfo_T {
     const moveMultiplier = packet.f(), attackSpeedMultiplier = packet.f(), collisionRadius = packet.f(), collisionHeight = packet.f();
     const curHp = packet.d(), maxHp = packet.d();
 
-    packet.d();
-    packet.d();
+    const objectType = packet.d(), state = packet.d();
 
-    if (objectId <= 0 || npcId <= 0 || !Number.isFinite(moveMultiplier) || moveMultiplier <= 0 || !Number.isFinite(attackSpeedMultiplier) || attackSpeedMultiplier <= 0 || !Number.isFinite(collisionRadius) || collisionRadius <= 0 || !Number.isFinite(collisionHeight) || collisionHeight <= 0 || curHp < 0 || maxHp < 0 || curHp > maxHp || packet.getRemaining())
+    if (objectId <= 0 || npcId <= 0 || !Number.isFinite(moveMultiplier) || moveMultiplier <= 0 || !Number.isFinite(attackSpeedMultiplier) || attackSpeedMultiplier <= 0 ||
+        !Number.isFinite(collisionRadius) ||
+        collisionRadius <= 0 ||
+        !Number.isFinite(collisionHeight) ||
+        collisionHeight <= 0 ||
+        curHp < 0 ||
+        maxHp < 0 ||
+        curHp > maxHp ||
+        packet.getRemaining())
         throw new Error("Invalid ServerObjectInfo payload.");
 
-    return { objectId, npcId, isAttackable, x, y, z, heading, name, title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffffff, runSpd: 0, walkSpd: 0, swimRunSpd: 0, swimWalkSpd: 0, moveMultiplier, attackSpeedMultiplier, collisionRadius, collisionHeight, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false, abnormalState: 0, curHp, maxHp };
+    return { objectId, npcId, isAttackable, x, y, z, heading, name, title: "", isRunning: true, isInCombat: false, isAlikeDead: false, karma: 0, pvpFlag: 0, recommendations: 0, nameColor: 0xffffffff, runSpd: 0, walkSpd: 0, swimRunSpd: 0, swimWalkSpd: 0, moveMultiplier, attackSpeedMultiplier, collisionRadius, collisionHeight, rightHand: 0, chest: 0, leftHand: 0, spawnType: 0, isSummon: false, abnormalState: 0, curHp, maxHp, objectType, state };
 }
 
 export type PetStatus_T = { objectId: number, npcId: number, name: string, x: number, y: number, z: number, statusType: number, curFood: number, maxFood: number, curHp: number, maxHp: number, curMp: number, maxMp: number, field42: number, level: number, exp: number, minExp: number, nextExp: number, weight: number, maxWeight: number, pAtk: number, pDef: number, mAtk: number, mDef: number, accuracy: number, evasion: number, critical: number, speed: number, attackSpeed: number, castSpeed: number, field60: number, isMountable: boolean, soulshotsUsed: number, spiritshotsUsed: number };

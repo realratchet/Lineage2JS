@@ -3,7 +3,7 @@ import ConfigCache from "./config-cache";
 import { CastToken_T, ExprToken_T, EStateFlags_T, ObjectFlags_T, PropertyFlags_T } from "@l2js/core";
 import { EClassFlags_T } from "@l2js/core/unreal/un-class";
 import { ENetRole_T } from "../assets/unreal/un-aactor";
-import type { DecodeLibrary } from "@l2js/engine";
+import type { DecodeLibrary, Vector3Arr } from "@l2js/engine";
 import type { ScriptPropertyValue_T, IScriptBytecodeOffsetDecodeInfo, IScriptFunctionDecodeInfo, ScriptBytecodeValue_T, IScriptBytecodeEntryDecodeInfo, IScriptClassDecodeInfo, IScriptStateDecodeInfo } from "@l2js/engine/contracts/script";
 
 export type ScriptValue_T = ScriptPropertyValue_T | IScriptBytecodeOffsetDecodeInfo | ScriptHost_T | ScriptValue_T[] | { [key: string]: ScriptValue_T } | undefined;
@@ -64,7 +64,8 @@ const postAssignmentNatives = new Set([139, 140, 165, 166]);
 
 enum EPollSlowFuncs {
     EPOLL_Sleep = 384,
-    EPOLL_FinishInterpolation = 302
+    EPOLL_FinishInterpolation = 302,
+    AI_PollFinishRotation = 509
 }
 
 type StateFrame_T = { node: IScriptStateDecodeInfo, cls: IScriptClassDecodeInfo, vm: UnScriptVM, probeMask: bigint, execution: ScriptExecutor | null, latentAction: number, isEndingState: boolean, stateChanged: boolean, hasTick: boolean };
@@ -73,6 +74,9 @@ type ScriptObjectClasses_T = { parents: Map<string, string | null>, aliases: Map
 type ScriptResource_T = ScriptHost_T & { isScriptResource: true, scriptObjectPath: string };
 
 export type ScriptLevelActors_T = { getFirstDynamicActor(): number, getLevelActorCount(): number, getLevelActor(index: number): ScriptHost_T | null, addLevelActor(actor: ScriptHost_T): void, removeLevelActor(actor: ScriptHost_T): void };
+export type ScriptTraceQuery_T = { sourceActor: ScriptHost_T, start: Vector3Arr, end: Vector3Arr, extent: Vector3Arr, traceActors: boolean, material: boolean };
+export type ScriptTraceResult_T = { actor: ScriptHost_T, location: Vector3Arr, normal: Vector3Arr, material: ScriptValue_T };
+export type ScriptLevel_T = ScriptLevelActors_T & { singleLineCheck(query: ScriptTraceQuery_T): ScriptTraceResult_T | null };
 
 const cacheLevelActors = new WeakMap<ScriptHost_T, ScriptLevelActors_T>();
 const cacheActorLevels = new WeakMap<ScriptHost_T, ScriptLevelActors_T | null>();
@@ -82,6 +86,7 @@ const objectNames = new FinalizationRegistry<ObjectName_T>(entry => {
     if (entry.names.get(entry.name) === entry.object) entry.names.delete(entry.name);
 });
 const transientPackage: ScriptHost_T = { scriptClassId: "core.Package", isLevelActor: false, scriptProperties: { Name: "Transient", Outer: null, Class: "core.Package", ObjectFlags: 0 } };
+let colorModifier: ScriptHost_T = null;
 
 export function setLevelActors(level: ScriptHost_T, actors: ScriptLevelActors_T): void { cacheLevelActors.set(level, actors); }
 export function deleteLevelActors(level: ScriptHost_T): void { cacheLevelActors.delete(level); }
@@ -164,6 +169,7 @@ const scriptVMFinalizer = new FinalizationRegistry<WeakRef<UnScriptVM>>(referenc
 const registeredScriptObjects = new Set<WeakRef<ScriptHost_T>>();
 const cacheScriptObjects = new WeakMap<ScriptHost_T, WeakRef<ScriptHost_T>>();
 const cacheScriptObjectClasses = new WeakMap<ScriptHost_T, ScriptObjectClasses_T>();
+const cacheInputProperties = new WeakMap<IScriptClassDecodeInfo, IScriptClassDecodeInfo["fields"]>();
 const cacheScriptResources = new Map<string, WeakRef<ScriptHost_T>>();
 const cacheScriptResourceAliases = new WeakMap<WeakRef<ScriptHost_T>, Set<string>>();
 const cacheResourceProperties = new WeakSet<ScriptHost_T>();
@@ -187,6 +193,25 @@ function registerScriptObject(object: ScriptHost_T, classes: ScriptObjectClasses
     cacheScriptObjects.set(object, reference);
     registeredScriptObjects.add(reference);
     scriptObjectFinalizer.register(object, reference);
+}
+
+export function getInputProperties(context: ScriptHost_T): IScriptClassDecodeInfo["fields"] {
+    const vm = cacheScriptObjectClasses.get(context)?.vm?.deref();
+
+    if (!vm) throw new Error(`Input property host '${context.scriptClassId}' has no script VM.`);
+    const library = vm.getLibrary(), cls = library.scriptClasses[context.scriptClassId];
+
+    if (!cls) throw new Error(`Input property class '${context.scriptClassId}' is not in the decode library.`);
+    let properties = cacheInputProperties.get(cls);
+
+    if (properties) return properties;
+    properties = [];
+    for (let owner = cls; owner; owner = owner.superClassId ? library.scriptClasses[owner.superClassId] : null)
+        for (const field of owner.fields)
+            if (field.flags & PropertyFlags_T.CPF_Input) properties.push(field);
+
+    cacheInputProperties.set(cls, properties);
+    return properties;
 }
 
 function getClassParents(parents: Record<string, string | null>): [string, string | null][] {
@@ -214,6 +239,7 @@ function loadClassParents(parents: Record<string, string | null>, cache: ClassPa
 }
 
 export function getScriptResource(path: string): ScriptHost_T | null { return cacheScriptResources.get(path.toLowerCase())?.deref() || null; }
+export function getScriptVM(host: ScriptHost_T): UnScriptVM | null { return cacheStateFrames.get(host)?.vm || null; }
 
 function registerScriptResourceAlias(id: string, object: ScriptHost_T): void {
     id = id.toLowerCase();
@@ -308,14 +334,14 @@ function getSwitchValue(value: ScriptValue_T, size: number): ScriptValue_T {
     throw new Error(`Unsupported ${size}-byte UnrealScript Switch value.`);
 }
 
-function parseScriptInteger(text: string): number {
+export function parseScriptInteger(text: string): number {
     // MSVCR70 0x7c039472 includes NBSP in its wide whitespace table.
     const match = /^[\t\n\v\f\r \u00a0]*([+-]?[0-9]+)/.exec(text);
 
     return match ? Number(BigInt(match[1]) & 0xffffffffn) | 0 : 0;
 }
 
-function parseScriptFloat(text: string): number {
+export function parseScriptFloat(text: string): number {
     // Core.dll 0x10156346 bounds appToAnsi's temporary buffer to 1023 bytes.
     const match = /^[\t\n\v\f\r ]*[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eEdD][+-]?[0-9]+)?/.exec(text.slice(0, 1023));
 
@@ -360,6 +386,14 @@ function getScriptPathName(value: ScriptValue_T, id: string): string {
         value = getProperty(object, "Outer");
     }
     return names.join(".");
+}
+
+export function getLatentAction(host: ScriptHost_T): number { return cacheStateFrames.get(host)?.latentAction || 0; }
+
+export function resetLatentAction(host: ScriptHost_T): void {
+    const frame = cacheStateFrames.get(host);
+
+    if (frame) frame.latentAction = 0;
 }
 
 export function getProperty(host: ScriptHost_T, id: string): ScriptValue_T {
@@ -452,6 +486,7 @@ function isOffset(value: ScriptBytecodeValue_T): value is IScriptBytecodeOffsetD
 }
 
 function asHost(value: ScriptValue_T): ScriptHost_T {
+    if (typeof value === "string") value = getScriptResource(value);
     if (value === null || value === undefined || typeof value !== "object" || !("scriptClassId" in value))
         throw new Error("UnrealScript context is not a script host");
 
@@ -541,11 +576,14 @@ class ScriptExecutor {
             case ExprToken_T.Context: {
                 const contextValue = this.evalToken();
 
-                this.readOffset();
+                const target = this.readOffset();
                 this.next();
 
-                if (contextValue === null || contextValue === undefined)
-                    throw new Error(`UnrealScript '${this.frame.fn.id}' cannot write through a null context at '${entry.virtualOffset}'`);
+                if (contextValue === null || contextValue === undefined) {
+                    if (target.entryIndex < 0) throw new Error(`UnrealScript '${this.frame.fn.id}' cannot skip null context to non-expression offset '${target.virtualOffset}'.`);
+                    this.pc = target.entryIndex;
+                    return { get: () => null, set: () => { } };
+                }
 
                 const previous = this.frame.context;
 
@@ -665,7 +703,7 @@ class ScriptExecutor {
 
         let args: ScriptArgument_T[];
 
-        if (script || fn.nativeIndex === 278) {
+        if (script || fn.nativeIndex === 278 || fn.nativeIndex === NATIVE_Trace) {
             this.frame.context = this.frame.self;
 
             try {
@@ -710,7 +748,7 @@ class ScriptExecutor {
 
         let args: ScriptArgument_T[];
 
-        if (index === 278) {
+        if (index === 278 || index === NATIVE_Trace) {
             const context = this.frame.context;
 
             this.frame.context = this.frame.self;
@@ -739,7 +777,7 @@ class ScriptExecutor {
             const target = this.readOffset(), start = this.pc, pop = this.entries[target.entryIndex];
 
             if (!pop || pop.type !== "token" || pop.value !== ExprToken_T.IteratorPop) throw new Error(`UnrealScript '${this.frame.fn.id}' has no IteratorPop at '${target.virtualOffset}'`);
-            if (!this.vm.getLibrary().scriptClasses[baseClass]) throw new Error(`UnrealScript iterator class '${baseClass}' is not in the decode library`);
+            if (!this.vm.metaCast(baseClass, baseClass)) throw new Error(`UnrealScript iterator class '${baseClass}' is not in the decode library`);
 
             let index = nativeIndex === 313 ? getLevelActors(context).getFirstDynamicActor() : 0;
 
@@ -818,8 +856,9 @@ class ScriptExecutor {
 
             const isTransform = isSpawn && (args.length === 3 || args.length === 4);
             const fallback = isTransform ? cloneScriptValue(getProperty(context, args.length === 3 ? "Location" : "Rotation")) : undefined;
-            const isOut = field ? field.flags & CPF_OutParm : nativeIndex === 227 || (nativeIndex === 229 || nativeIndex === 230) && args.length > 0;
-            const isEmpty = isScript && entry.type === "token" && entry.value === ExprToken_T.Nothing;
+            const isTraceOut = nativeIndex === NATIVE_Trace && (args.length < 2 || args.length === 6);
+            const isOut = field ? field.flags & CPF_OutParm : isTraceOut || nativeIndex === 227 || (nativeIndex === 229 || nativeIndex === 230) && args.length > 0;
+            const isEmpty = (isScript || nativeIndex === NATIVE_Trace) && entry.type === "token" && entry.value === ExprToken_T.Nothing;
             let value: ScriptArgument_T = isOut && !isEmpty ? this.evalLValue() : this.evalToken();
 
             if (isScript) {
@@ -863,6 +902,7 @@ class ScriptExecutor {
         const value = this.evalToken();
 
         switch (cast) {
+            case CastToken_T.RotatorToVector: return UNativeRegistry.getNativeFunc("Rotator2Vector")(value);
             case CastToken_T.VectorToRotator: return UNativeRegistry.getNativeFunc("Vector2Rotator")(value);
             case CastToken_T.FloatToInt: return Math.fround(Number(value)) | 0;
             case CastToken_T.FloatToByte: return (Math.fround(Number(value)) | 0) & 255;
@@ -1195,24 +1235,42 @@ export class UnScriptVM {
         // Core.dll execNew 0x101454d0; StaticAllocateObject 0x101687f0; MakeUniqueObjectName 0x1015ef10.
         if (typeof classId !== "string" || !this.library.scriptClasses[classId]) throw new Error(`UnrealScript class '${classId}' is not in the decode library`);
         if (outer !== null && (!outer || typeof outer !== "object" || typeof outer.scriptClassId !== "string" || !outer.scriptClassId)) throw new Error(`Invalid UnrealScript object outer.`);
-        if (typeof name !== "string" || !Number.isInteger(flags) || flags < -0x80000000 || flags > 0x7fffffff || flags & ~ObjectFlags_T.RF_ScriptMask) throw new Error(`Invalid UnrealScript object name or flags.`);
-        // shortcut: unnamed script objects; native replacement and derived native constructors remain unsupported.
+        if (typeof name !== "string" || !Number.isInteger(flags) || flags < -0x80000000 || flags > 0x7fffffff || flags & ~ObjectFlags_T.RF_ScriptMask)
+            throw new Error(`Invalid UnrealScript object name or flags.`);
+        // Named construction requires StaticAllocateObject's existing-object replacement path.
         if (name) throw new Error(`UnrealScript construction of named objects is not implemented.`);
 
         const cls = this.library.scriptClasses[classId];
 
         if (cls.classFlags & EClassFlags_T.CLASS_Abstract) throw new Error(`Cannot construct abstract UnrealScript class '${classId}'.`);
-        if (cls.classFlags & EClassFlags_T.CLASS_PerObjectConfig) throw new Error(`Per-object configuration for '${classId}' is not implemented.`);
         this.validateConstructorOuter(cls, outer || transientPackage);
         this.validateConstructorTemplate(cls, template, superObject);
+        // Engine.dll UPlayerInput 0x1034db00, UL2ColorModifier 0x10347640 and UMaterial 0x105a8780 only call their base and install a vtable.
         for (let parent = cls; parent; parent = this.library.scriptClasses[parent.superClassId])
-            if (parent.isNative && parent.superClassId) throw new Error(`UnrealScript native constructor '${parent.id}' is not implemented.`);
+            if (parent.isNative && parent.superClassId && !["engine.playerinput", "engine.l2colormodifier", "engine.modifier", "engine.material"].includes(parent.id.toLowerCase())) throw new Error(`UnrealScript native constructor '${parent.id}' is not implemented.`);
 
         const object: ScriptHost_T = { scriptClassId: classId, isLevelActor: false, scriptProperties: new Map() };
 
         this.initializeObject(object, outer, flags);
         this.initializeTemplate(object, template || this.getDefaultObject(classId), superObject);
+        if (cls.classFlags & EClassFlags_T.CLASS_PerObjectConfig) {
+            this.loadConfig(object);
+            this.loadLocalized(object);
+        }
         return object;
+    }
+
+    public getModifiedTextureMaterial(modify: Record<string, any>, material: ScriptValue_T): ScriptHost_T { // Engine.dll 0x104ff670..0x104ff75a: one object shared by every actor
+        if (!colorModifier) colorModifier = this.constructObject("engine.L2ColorModifier", null, "", 0);
+
+        setProperty(colorModifier, "RenderTwoSided", modify.bTwoSide);
+        setProperty(colorModifier, "Color", cloneScriptValue(modify.Color));
+        setProperty(colorModifier, "AlphaBlend", modify.bAlphaBlend);
+        setProperty(colorModifier, "AlphaOp", modify.AlphaOp);
+        setProperty(colorModifier, "ColorOp", modify.ColorOp);
+        setProperty(colorModifier, "Material", material);
+
+        return colorModifier;
     }
 
     public constructActor(object: ScriptHost_T, outer: ScriptHost_T, template: ScriptHost_T = null): void {
@@ -1221,7 +1279,6 @@ export class UnScriptVM {
         if (!cls) throw new Error(`UnrealScript class '${object.scriptClassId}' is not in the decode library`);
         if (outer !== null && (!outer || typeof outer !== "object" || typeof outer.scriptClassId !== "string" || !outer.scriptClassId)) throw new Error(`Invalid UnrealScript object outer.`);
         if (cls.classFlags & EClassFlags_T.CLASS_Abstract) throw new Error(`Cannot construct abstract UnrealScript class '${cls.id}'.`);
-        if (cls.classFlags & EClassFlags_T.CLASS_PerObjectConfig) throw new Error(`Per-object configuration for '${cls.id}' is not implemented.`);
         const properties = getProperties(object);
 
         if (object.isClassDefaultObject || (properties instanceof Map ? properties.size : Object.keys(properties).length)) throw new Error(`Actor construction requires uninitialized property storage.`);
@@ -1239,6 +1296,10 @@ export class UnScriptVM {
 
         this.initializeObject(object, outer, 0);
         this.initializeTemplate(object, template || this.getDefaultObject(cls.id), null);
+        if (cls.classFlags & EClassFlags_T.CLASS_PerObjectConfig) {
+            this.loadConfig(object);
+            this.loadLocalized(object);
+        }
 
         const modify = getProperty(object, "TexModifyInfo") as Record<string, any>;
 
@@ -1776,6 +1837,48 @@ export class UnScriptVM {
         if (value !== undefined) return value.split("\0", 1)[0].slice(0, 1023);
         console.warn(`No localization: ${packageName}.${section}.${key} (int)`);
         return `<?int?${packageName}.${section}.${key}?>`;
+    }
+
+    public loadLocalized(context: ScriptHost_T): void {
+        const source = this.library.scriptClasses[context.scriptClassId];
+
+        if (!(source.classFlags & EClassFlags_T.CLASS_Localized) || !scriptLocalization) return;
+        const outer = getProperty(context, "Outer") as ScriptHost_T;
+        const parent = outer && getProperty(outer, "Outer") as ScriptHost_T;
+        const perObject = !context.isClassDefaultObject && (getProperty(context, "ObjectFlags") as number) & ObjectFlags_T.RF_PerObjectLocalized && parent;
+        const packageName = context.isClassDefaultObject ? source.id.slice(0, source.id.indexOf(".")) : getProperty(perObject ? parent : outer, "Name") as string;
+        const section = context.isClassDefaultObject ? source.name : getProperty(perObject ? outer : context, "Name") as string;
+        const prefix = perObject ? getProperty(context, "Name") as string : null;
+        const entries = scriptLocalization.get(packageName.toLowerCase())?.get(section.toLowerCase());
+
+        if (!entries) return;
+        // Core StaticAllocateObject 0x10168cc9 loads config before localized instance properties.
+        for (let cls = source; cls; cls = this.library.scriptClasses[cls.superClassId])
+            for (const field of cls.fields)
+                this.loadLocalizedProperty(cls.propertyFields, cls.propertyFields[field.id], getProperty(context, field.id), prefix, entries, value => setProperty(context, field.id, value));
+    }
+
+    protected loadLocalizedProperty(fields: IScriptClassDecodeInfo["propertyFields"], field: IScriptClassDecodeInfo["fields"][number], value: ScriptValue_T, prefix: string, entries: Map<string, string>, onWrite: (value: ScriptValue_T) => void): void {
+        for (let index = 0; index < field.arrayDimensions; index++) {
+            const key = (prefix === null ? "" : prefix + ".") + field.name + (field.arrayDimensions > 1 ? `[${index}]` : "");
+            const current = field.arrayDimensions > 1 ? (value as ScriptValue_T[])[index] : value;
+            function write(next: ScriptValue_T): void {
+                if (field.arrayDimensions > 1) { (value as ScriptValue_T[])[index] = next; onWrite(value); }
+                else onWrite(next);
+            }
+
+            if ((field.type as string) === "Struct") {
+                for (const id of field.structFieldIds) {
+                    const child = fields[id], member = getStructMemberKey(current, child.id);
+
+                    this.loadLocalizedProperty(fields, child, (current as any)[member], key, entries, next => { (current as any)[member] = next; write(current); });
+                }
+            } else if (field.flags & PropertyFlags_T.CPF_Localized) {
+                const translation = entries.get(key.toLowerCase()), text = translation && translation.split("\0", 1)[0].slice(0, 1023);
+
+                if (text) this.importPropertyText(field, text, current, false, fields, write);
+            }
+        }
     }
 
     public findObject(name: string, classId: string): ScriptValue_T {
@@ -2611,6 +2714,18 @@ export class UnScriptVM {
                 case EPollSlowFuncs.EPOLL_FinishInterpolation:
                     if (!getProperty(context, "bInterpolating")) frame.latentAction = 0;
                     break;
+                case EPollSlowFuncs.AI_PollFinishRotation: { // AController::execPollFinishRotation 0x10535630..0x10535691.
+                    const pawn = getProperty(context, "Pawn") as ScriptHost_T;
+
+                    if (!pawn) frame.latentAction = 0;
+                    else {
+                        let delta = ((getProperty(pawn, "DesiredRotation") as number[])[1] - ((getProperty(pawn, "Rotation") as number[])[1] & 65535)) | 0;
+
+                        if (delta < 0) delta = -delta | 0;
+                        if (delta < 2000 || delta > 63535) frame.latentAction = 0;
+                    }
+                    break;
+                }
                 default: debugger; throw new Error(`Unimplemented latent action '${frame.latentAction}' for '${context.scriptClassId}'`);
             }
         }
@@ -2630,7 +2745,7 @@ export class UnScriptVM {
         }
     }
 
-    protected isA(context: ScriptHost_T, className: string): boolean {
+    public isA(context: ScriptHost_T, className: string): boolean {
         const script = typeof (context as any).findComponent === "function" ? (context as any).findComponent("script") : null;
         const vm = cacheStateFrames.get(context)?.vm || (script ? script.getVM() as UnScriptVM : this);
         let cache = vm.cacheIsA.get(context.scriptClassId);
@@ -2662,6 +2777,32 @@ export class UnScriptVM {
             return context.callUnrealNative!({ index, name, args, self, context });
 
         if (index === 303 && name === "IsA") return this.isA(context, args[0] as string);
+
+        if (index === NATIVE_Trace) {
+            // AActor::execTrace 0x1066a0e0..0x1066a3d8.
+            const level = getLevelActors(context) as ScriptLevel_T;
+            const start = (args[3] === undefined ? getProperty(context, "Location") : args[3]) as Vector3Arr;
+            const end = args[2] as Vector3Arr;
+            const extent = (args[5] === undefined ? [0, 0, 0] : args[5]) as Vector3Arr;
+            const traceActors = args[4] === undefined ? !!getProperty(context, "bCollideActors") : !!args[4];
+            const pawn = this.isA(context, "Controller") ? getProperty(context, "Pawn") : null;
+            const source = pawn ? asHost(pawn) : context;
+
+            if (!level.singleLineCheck) throw new Error(`Actor.Trace requires an initialized collision world for '${context.scriptClassId}'.`);
+            const hit = level.singleLineCheck({
+                sourceActor: source,
+                start: start.map(Math.fround) as Vector3Arr,
+                end: end.map(Math.fround) as Vector3Arr,
+                extent: extent.map(Math.fround) as Vector3Arr,
+                traceActors,
+                material: isScriptSlot(args[6])
+            });
+
+            if (isScriptSlot(args[0])) args[0].set(hit ? hit.location : [0, 0, 0]);
+            if (isScriptSlot(args[1])) args[1].set(hit ? hit.normal : [0, 0, 0]);
+            if (isScriptSlot(args[6])) args[6].set(hit ? hit.material : null);
+            return hit ? hit.actor : null;
+        }
 
         if (name.toLowerCase() === "getpropertytext") return this.getPropertyText(context, args[0] as string);
         if (name.toLowerCase() === "setpropertytext") return this.setPropertyText(context, args[0] as string, args[1] as string) as undefined;
@@ -2720,6 +2861,14 @@ export class UnScriptVM {
 
             if (!frame) throw new Error(`UnrealScript FinishInterpolation requires an initialized state frame for '${context.scriptClassId}'`);
             frame.latentAction = EPollSlowFuncs.EPOLL_FinishInterpolation;
+            return undefined;
+        }
+
+        if (index === NATIVE_FinishRotation) {
+            const frame = cacheStateFrames.get(context);
+
+            if (!frame) throw new Error(`UnrealScript FinishRotation requires an initialized state frame for '${context.scriptClassId}'`);
+            frame.latentAction = EPollSlowFuncs.AI_PollFinishRotation;
             return undefined;
         }
 
