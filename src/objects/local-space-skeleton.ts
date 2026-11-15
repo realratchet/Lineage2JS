@@ -559,7 +559,10 @@ export class LocalSpaceSkeleton extends Skeleton {
         this.attachments = [];
         this.ownsBones = bones[0].parent === this.mesh;
 
-        if (!this.ownsBones) return; // a loose chain attached onto some other skeleton's bone, see attachLooseBoneChains
+        if (!this.ownsBones) {
+            this.parents.fill(-1);
+            return; // a loose chain attached onto some other skeleton's bone, see attachLooseBoneChains
+        }
 
         for (let i = 0, len = bones.length; i < len; i++) indices.set(bones[i], i);
 
