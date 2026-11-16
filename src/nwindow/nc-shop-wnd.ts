@@ -90,7 +90,7 @@ export class NCShopWnd {
 
                 this.pressed[side] = index;
                 this.heldSide = side;
-                if (event.detail === 2) {
+                if (event.detail > 0 && event.detail % 2 === 0) {
                     this.doubleClicked[side] = true;
                     this.endDrag();
                     if (item && this.onMove) this.onMove(side, item, true, false);
