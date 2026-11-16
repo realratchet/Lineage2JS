@@ -8,6 +8,7 @@ import { MESHES_CHANGED_EVENT, type default as AnimationComponent } from "./anim
 import type LitSkinnedMesh from "../lit-skinned-mesh";
 import type EmitterActor from "../emitter-actor";
 import type PawnRenderableComponent from "../../rendering/components/pawn-renderable-component";
+import type NpcLifecycleComponent from "./npc-lifecycle-component";
 
 const maxBodyScale = Math.fround(1.2);
 const basePawnSize = Math.sqrt(207);
@@ -33,7 +34,6 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     protected library: DecodeLibrary = null;
     protected abnormalState = 0;
     protected bigHeadMaxSize: number = null;
-    protected sameAnimState = 0;
     protected readonly npcSkins: { mesh: Mesh, materials: Material | Material[] }[] = [];
 
     public constructor(renderManager: RenderManager) {
@@ -53,7 +53,10 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     public async setAbnormalState(abnormalState: number): Promise<void> {
         const asset = this.renderManager.getParent().getComponent("asset");
 
-        if (abnormalState & ~this.abnormalState & (AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2)) asset.stopPawnSkill(this.getParent());
+        if (abnormalState & ~this.abnormalState & HOLD_STATES) {
+            this.setFrozen(true); // before the stop below replays the idle animation
+            asset.stopPawnSkill(this.getParent());
+        }
         if ((abnormalState ^ this.abnormalState) & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(
             abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 72 : 255,
             abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2 ? 105 : 255,
@@ -167,12 +170,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             stat.time += deltaTime;
         }
 
-        const animation = this.getComponent<AnimationComponent>("animation");
-
-        if (this.abnormalState & HOLD_STATES && animation.getAction()) { // APawn::CheckSameAnim 0x8c0d89..0x8c0e88: channel 0 freezes from the second tick
-            if (this.sameAnimState < 2) this.sameAnimState++;
-        } else this.sameAnimState = 0;
-        this.setFrozen(this.sameAnimState === 2);
+        this.setFrozen(!!(this.abnormalState & HOLD_STATES) && !this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.isDead()); // APawn::CheckSameAnim 0x8c0ca7..0x8c0dab: the death states come before the hold states
 
         if (releasedSize && !this.abnormalState && !this.stats.length) this.getParent().removeComponent(this);
     }

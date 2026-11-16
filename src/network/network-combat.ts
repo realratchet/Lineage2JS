@@ -371,18 +371,18 @@ export class NetworkCombat {
     }
 
     public updateAbnormalState(object: NetObject_T, abnormalState: number = object.abnormalState) {
-        if (abnormalState & ~object.abnormalState & (GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2)) {
-            object.pendingAttack = null;
-            this.stopSkill(object.objectId);
-        }
-        object.abnormalState = abnormalState;
-
+        const isHeld = abnormalState & ~object.abnormalState & (GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2);
         const actor = object.actor;
 
-        if (!actor) return;
+        object.abnormalState = abnormalState;
+        if (actor) {
+            if (actor.ridePawn) this.setActorAbnormalState(actor.ridePawn, object.abnormalState & GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD); // FNAbnormalStat Init/Update/destructor select the flagged rider at APawn+660.
+            this.setActorAbnormalState(actor, actor.ridePawn ? object.abnormalState & ~GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD : object.abnormalState);
+        }
+        if (!isHeld) return;
 
-        if (actor.ridePawn) this.setActorAbnormalState(actor.ridePawn, object.abnormalState & GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD); // FNAbnormalStat Init/Update/destructor select the flagged rider at APawn+660.
-        this.setActorAbnormalState(actor, actor.ridePawn ? object.abnormalState & ~GamePackets.AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD : object.abnormalState);
+        object.pendingAttack = null;
+        this.stopSkill(object.objectId); // after the actor is frozen, the stop replays the idle animation
     }
 
     protected setActorAbnormalState(actor: BaseActor, abnormalState: number): void {

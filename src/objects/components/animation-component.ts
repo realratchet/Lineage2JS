@@ -129,20 +129,19 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         this.tweenTimeScales.clear();
     }
 
-    public setFrozen(isFrozen: boolean): void { // USkeletalMeshInstance::FreezeAnimAt 0x9431f0, frame as APawn::CheckSameAnim 0x8c0ecb..0x8c0f0e passes it: NumFrames * AnimRate
-        this.isFrozen = isFrozen;
-        if (!isFrozen) return;
+    public setFrozen(isFrozen: boolean): void { // APawn::CheckSameAnim 0x8c0d89..0x8c0f14 freezes channel 0 while a hold state is set
+        if (isFrozen === this.isFrozen) return;
 
+        this.isFrozen = isFrozen;
+        if (isFrozen) this.freezeActions();
+    }
+
+    protected freezeActions(): void {
         for (const mesh of this.meshes) {
             const action = this.currAnimations.get(mesh);
 
-            if (!action || action.paused) continue;
-            const timeScale = this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale();
-
-            action.time = Math.min(timeScale, action.getClip().duration);
-            this.holdFirstFrame(action, timeScale);
+            if (action && !action.paused) this.holdFirstFrame(action, this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale());
         }
-        if (this.animationNotifyAction) this.animationNotifyTime = this.animationNotifyAction.time;
     }
 
     public onUpdate(_currentTime: number, _deltaTime: number): void {
@@ -574,6 +573,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     public play(animationName: string, tweenTime: number = MOVEMENT_TWEEN_TIME, rate: number = 1, loop: boolean = true, restart: boolean = false, isDeathAnimation: boolean = false): void {
         if (!this.isAnimationsInit) return;
         if (!isDeathAnimation && this.findComponent<NpcLifecycleComponent>("npcLifecycle")?.isDead()) return;
+        if (this.isFrozen && !isDeathAnimation && this.animationNotifyAction) return;
 
         const resolvedName = this.findAnimationName(animationName);
 
@@ -662,6 +662,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
         const script = this.findComponent<ScriptComponent<BaseActor>>("script");
 
         if (didBegin && script?.hasFunction("AnimBegin")) script.call("AnimBegin", [resolvedName]);
+        if (this.isFrozen && !isDeathAnimation) this.freezeActions();
         if (suspended) this.setSimulationEnabled(false);
     }
 
