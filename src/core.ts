@@ -10,12 +10,14 @@ import fetchAsset from "./assets/asset-source";
 import pickAssetSource from "./asset-source-picker";
 import { setLoadingProgress, hideLoadingProgress, loadingTexts } from "./loading-progress";
 import loginServer from "./network/login-server";
+import { initializeBrowserCapabilities } from "./browser";
 // import { ensureWasmInitialized } from "@l2js/core";
 
 
 
 
 export async function startCore(interactive: boolean = true): Promise<RenderManager | null> {
+    await initializeBrowserCapabilities();
     // await ensureWasmInitialized();
 
     if (globalThis.isSecureContext && "storage" in navigator && !await navigator.storage.persisted()) {
