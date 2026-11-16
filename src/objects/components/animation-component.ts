@@ -99,6 +99,7 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     protected animationNotifyTime = 0;
     protected animationTweenEndTime = 0;
     protected simulationSuspendedAt: number = null;
+    protected isFrozen = false;
     protected readonly boneScalers = new Map<string | number, BoneScaler_T>();
     protected readonly tweenTimeScales = new Map<AnimationAction, number>();
     protected isAnimationsInit = false;
@@ -121,11 +122,27 @@ export class AnimationComponent extends ObjectComponent<BaseActor> {
     }
 
     protected releaseTween(): void {
-        if (this.tweenTimeScales.size === 0 || this.simulationSuspendedAt !== null || this.mixer.time < this.animationTweenEndTime) return;
+        if (this.tweenTimeScales.size === 0 || this.isFrozen || this.simulationSuspendedAt !== null || this.mixer.time < this.animationTweenEndTime) return;
 
         for (const [tweened, timeScale] of this.tweenTimeScales) tweened.setEffectiveTimeScale(timeScale);
 
         this.tweenTimeScales.clear();
+    }
+
+    public setFrozen(isFrozen: boolean): void { // USkeletalMeshInstance::FreezeAnimAt 0x9431f0, frame as APawn::CheckSameAnim 0x8c0ecb..0x8c0f0e passes it: NumFrames * AnimRate
+        this.isFrozen = isFrozen;
+        if (!isFrozen) return;
+
+        for (const mesh of this.meshes) {
+            const action = this.currAnimations.get(mesh);
+
+            if (!action || action.paused) continue;
+            const timeScale = this.tweenTimeScales.get(action) ?? action.getEffectiveTimeScale();
+
+            action.time = Math.min(timeScale, action.getClip().duration);
+            this.holdFirstFrame(action, timeScale);
+        }
+        if (this.animationNotifyAction) this.animationNotifyTime = this.animationNotifyAction.time;
     }
 
     public onUpdate(_currentTime: number, _deltaTime: number): void {

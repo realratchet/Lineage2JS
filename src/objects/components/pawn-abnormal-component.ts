@@ -17,6 +17,7 @@ type AbnormalStat_T = { state: number, effect: GameObject, time: number, scale: 
 
 const ABNORMAL_EFFECTS: Record<number, string> = { [AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_POISON]: "LineageEffect.a_u000_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5]: "LineageEffect.a_u001_a", [AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6]: "LineageEffect.a_u008_a", [AbnormalEffect_T.ABNORMAL_EFFECT_STUN]: "LineageEffect.a_u002_a", [AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP]: "LineageEffect.a_u004_a", [AbnormalEffect_T.ABNORMAL_EFFECT_MUTED]: "LineageEffect.a_u005_a", [AbnormalEffect_T.ABNORMAL_EFFECT_ROOT]: "LineageEffect.a_u006_a", [AbnormalEffect_T.ABNORMAL_EFFECT_FLAME]: "LineageEffect.a_u007_a" }; // FNAbnormalStat::Init 0x763b40 / Update 0x764970
 const PULSE_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_BLEEDING | AbnormalEffect_T.ABNORMAL_EFFECT_POISON | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_3 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_4 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_5 | AbnormalEffect_T.ABNORMAL_EFFECT_UNKNOWN_6 | AbnormalEffect_T.ABNORMAL_EFFECT_FLAME;
+const HOLD_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_1 | AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2;
 const E_BONE_STATES = AbnormalEffect_T.ABNORMAL_EFFECT_POISON | AbnormalEffect_T.ABNORMAL_EFFECT_STUN | AbnormalEffect_T.ABNORMAL_EFFECT_SLEEP | AbnormalEffect_T.ABNORMAL_EFFECT_MUTED | AbnormalEffect_T.ABNORMAL_EFFECT_FLAME;
 
 function setSizeScale(effect: GameObject, scale: number): void {
@@ -32,6 +33,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
     protected library: DecodeLibrary = null;
     protected abnormalState = 0;
     protected bigHeadMaxSize: number = null;
+    protected sameAnimState = 0;
     protected readonly npcSkins: { mesh: Mesh, materials: Material | Material[] }[] = [];
 
     public constructor(renderManager: RenderManager) {
@@ -165,7 +167,22 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
             stat.time += deltaTime;
         }
 
+        const animation = this.getComponent<AnimationComponent>("animation");
+
+        if (this.abnormalState & HOLD_STATES && animation.getAction()) { // APawn::CheckSameAnim 0x8c0d89..0x8c0e88: channel 0 freezes from the second tick
+            if (this.sameAnimState < 2) this.sameAnimState++;
+        } else this.sameAnimState = 0;
+        this.setFrozen(this.sameAnimState === 2);
+
         if (releasedSize && !this.abnormalState && !this.stats.length) this.getParent().removeComponent(this);
+    }
+
+    protected setFrozen(isFrozen: boolean): void {
+        const parent = this.getParent();
+
+        if (parent.getUnrealScriptProperty("bRide")) return; // APawn::CheckSameAnim 0x8c0bff: a rider is frozen by its mount
+        parent.getComponent<AnimationComponent>("animation").setFrozen(isFrozen);
+        if (parent.ridePawn) parent.ridePawn.getComponent<AnimationComponent>("animation").setFrozen(isFrozen);
     }
 
     public hasPendingSizeChange(): boolean { return this.stats.some(stat => stat.size && stat.size.phase !== 0); }
@@ -299,6 +316,7 @@ export class PawnAbnormalComponent extends ObjectComponent<BaseActor> {
 
     public onDetach(): void {
         this.restoreNpcSkins();
+        this.setFrozen(false);
         if (this.abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_HOLD_2) this.setOverlayColor(255, 255, 255);
         if (this.abnormalState & AbnormalEffect_T.ABNORMAL_EFFECT_BIG_HEAD) this.setHeadScale(1);
         for (const stat of this.stats) {
